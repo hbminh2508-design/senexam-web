@@ -231,100 +231,106 @@ export default function AdminDashboard() {
     }))
   }
 
-  // 🌟 SEN MAGIC PASTE ĐÃ NÂNG CẤP NHẬN DIỆN "CÂU", "BÀI"
+  // 🌟 SEN MAGIC PASTE: THUẬT TOÁN TỰ ĐỘNG CHUYỂN DẠNG CÂU VÀ CHIA VÙNG HỖN HỢP
   const handleProcessAutoFill = () => {
     if (!autoFillModalId) return
     const section = examStructure.find(s => s.id === autoFillModalId)
     if (!section) return
 
-    const newAnswers = { ...section.correctAnswers }
     const rawText = autoFillText.trim()
 
     try {
-      // 🌟 Regex thông minh mới: Tự động bỏ qua "Câu", "Bài", "Question", "Q" nếu có
-      const regexPattern = /(?:^|\s)(?:câu|bài|question|q)?\s*([1-9]\d*)[\.\:\-\)]\s*([\s\S]*?)(?=(?:\s(?:câu|bài|question|q)?\s*[1-9]\d*[\.\:\-\)])|$)/gi
+      // Bắt mọi định dạng tiền tố: Câu 1, Bài 2, Q3, Question 4 đi liền với số và đáp án
+      const regexPattern = /(?:^|\s)(?:câu|bài|question|q)?\s*([1-9]\d*)[\.\:\-\)]\s*([\s\S]*?)(?=(?:\s*(?:câu|bài|question|q)?\s*[1-9]\d*[\.\:\-\)])|$)/gi
       const matches = [...rawText.matchAll(regexPattern)]
       
-      if (matches.length === 0) throw new Error("Không tìm thấy đáp án hợp lệ")
+      if (matches.length === 0) {
+        alert("Hệ thống không tìm thấy mẫu đáp án nào. Đảm bảo bạn đã nhập dạng 'Câu 1: A' hoặc '1. B' ...")
+        return
+      }
 
-      if (section.type === 'mixed') {
-        const detectedTypes: Record<number, string> = {}
-        
-        matches.forEach(match => {
-          const qNum = parseInt(match[1]) - 1
-          if (qNum >= 0 && qNum < section.questionCount) {
-            let content = match[2].trim()
-            let upperContent = content.toUpperCase().replace(/Đ/g, 'D')
+      const detectedTypes: Record<number, string> = {}
+      const newAnswers: Record<number, any> = { ...section.correctAnswers }
 
-            if (/^[A-D]$/.test(upperContent)) {
-               detectedTypes[qNum] = 'single_choice'
-               newAnswers[qNum] = upperContent
-            } 
-            else if (/^([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])$/.test(upperContent)) {
-               detectedTypes[qNum] = 'true_false'
-               const parts = upperContent.match(/([DS])/g)
-               newAnswers[qNum] = {
-                 a: parts![0] === 'D' ? 'Đ' : 'S',
-                 b: parts![1] === 'D' ? 'Đ' : 'S',
-                 c: parts![2] === 'D' ? 'Đ' : 'S',
-                 d: parts![3] === 'D' ? 'Đ' : 'S'
-               }
-            } 
-            else {
-               detectedTypes[qNum] = 'short_answer'
-               newAnswers[qNum] = content 
-            }
-          }
-        })
+      matches.forEach(match => {
+        const qNum = parseInt(match[1]) - 1
+        if (qNum >= 0 && qNum < section.questionCount) {
+          let content = match[2].trim()
+          let upperContent = content.toUpperCase().replace(/Đ/g, 'D')
 
-        const newRanges = []
-        let currentRange: any = null
-
-        for (let i = 0; i < section.questionCount; i++) {
-          const type = detectedTypes[i] || 'short_answer'
-          if (!currentRange) {
-            currentRange = { start: i + 1, end: i + 1, type, optionsCount: 4 }
-          } else if (currentRange.type === type) {
-            currentRange.end = i + 1
-          } else {
-            newRanges.push(currentRange)
-            currentRange = { start: i + 1, end: i + 1, type, optionsCount: 4 }
+          // Trắc nghiệm 1 đáp án
+          if (/^[A-D]$/.test(upperContent)) {
+             detectedTypes[qNum] = 'single_choice'
+             newAnswers[qNum] = upperContent
+          } 
+          // Đúng/Sai 4 ý (Chấp nhận: D S D S, D-S-D-S, D,S,D,S)
+          else if (/^([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])$/.test(upperContent)) {
+             detectedTypes[qNum] = 'true_false'
+             const parts = upperContent.match(/([DS])/g)
+             newAnswers[qNum] = {
+               a: parts![0] === 'D' ? 'Đ' : 'S',
+               b: parts![1] === 'D' ? 'Đ' : 'S',
+               c: parts![2] === 'D' ? 'Đ' : 'S',
+               d: parts![3] === 'D' ? 'Đ' : 'S'
+             }
+          } 
+          // Còn lại xem như trả lời ngắn
+          else {
+             detectedTypes[qNum] = 'short_answer'
+             newAnswers[qNum] = content 
           }
         }
-        if (currentRange) newRanges.push(currentRange)
+      })
 
-        updateSection(section.id, 'mixedRanges', newRanges)
-        updateSection(section.id, 'correctAnswers', newAnswers)
-      } 
-      else {
-        matches.forEach(match => {
-          const qNum = parseInt(match[1]) - 1
-          if (qNum >= 0 && qNum < section.questionCount) {
-            let content = match[2].trim()
-            if (section.type === 'single_choice') {
-              newAnswers[qNum] = content.toUpperCase().replace(/[^A-D]/g, '')[0]
-            } else if (section.type === 'true_false') {
-              const upperContent = content.toUpperCase().replace(/Đ/g, 'D')
-              const parts = upperContent.match(/([DS])/g)
-              if (parts && parts.length === 4) {
-                newAnswers[qNum] = {
-                  a: parts[0] === 'D' ? 'Đ' : 'S', b: parts[1] === 'D' ? 'Đ' : 'S',
-                  c: parts[2] === 'D' ? 'Đ' : 'S', d: parts[3] === 'D' ? 'Đ' : 'S'
-                }
+      // Gom nhóm và tự động thay đổi Type của Phần thi
+      const uniqueTypes = new Set(Object.values(detectedTypes))
+      
+      setExamStructure(prev => prev.map(s => {
+        if (s.id === section.id) {
+          // TH1: Toàn bộ đáp án có chung 1 loại (VD: Toàn trắc nghiệm)
+          if (uniqueTypes.size === 1) {
+            const dominantType = Array.from(uniqueTypes)[0]
+            return {
+              ...s,
+              type: dominantType, // Tự động đổi Type
+              mixedRanges: [],
+              correctAnswers: newAnswers
+            }
+          } 
+          // TH2: Có từ 2 loại trở lên (Giống HSA / TSA)
+          else if (uniqueTypes.size > 1) {
+            const newRanges = []
+            let currentRange: any = null
+
+            for (let i = 0; i < s.questionCount; i++) {
+              const qType = detectedTypes[i] || 'short_answer'
+              if (!currentRange) {
+                currentRange = { start: i + 1, end: i + 1, type: qType, optionsCount: 4 }
+              } else if (currentRange.type === qType) {
+                currentRange.end = i + 1
+              } else {
+                newRanges.push(currentRange)
+                currentRange = { start: i + 1, end: i + 1, type: qType, optionsCount: 4 }
               }
-            } else {
-              newAnswers[qNum] = content
+            }
+            if (currentRange) newRanges.push(currentRange)
+
+            return {
+              ...s,
+              type: 'mixed', // Tự động đổi Type sang Câu Hỗn Hợp
+              mixedRanges: newRanges,
+              correctAnswers: newAnswers
             }
           }
-        })
-        updateSection(section.id, 'correctAnswers', newAnswers)
-      }
+        }
+        return s
+      }))
 
       setAutoFillModalId(null)
       setAutoFillText('')
-      alert('🌟 Sen Magic Paste đã phân tích và điền đáp án thành công!')
+      alert('🌟 Sen Magic Paste đã tự động nhận diện dạng câu, chia vùng và điền đáp án thành công!')
     } catch (err) {
-      alert('Lỗi định dạng. Vui lòng kiểm tra lại cấu trúc văn bản hoặc đảm bảo đã nhập đúng định dạng.')
+      alert('Lỗi định dạng cấu trúc. Vui lòng kiểm tra lại văn bản!')
     }
   }
 
@@ -493,7 +499,6 @@ export default function AdminDashboard() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 font-bold">Xác thực quyền quản trị...</div>
 
-  // MÀN HÌNH CHẤM BÀI SPLIT-SCREEN
   if (selectedSubForGrading) {
     const pdfUrl = `https://drive.google.com/file/d/${selectedSubForGrading.exams?.drive_file_id}/preview`
     return (
@@ -632,9 +637,6 @@ export default function AdminDashboard() {
                   <UploadCloud className="w-4 h-4"/> Tải file Text (.txt) lên
                   <input type="file" accept=".txt,.csv" onChange={handleAnswerFileRead} className="hidden" />
                 </label>
-                {examStructure.find(s => s.id === autoFillModalId)?.type === 'mixed' && (
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Chế độ phân tích Câu Hỗn Hợp đang Bật</span>
-                )}
               </div>
             </div>
 
