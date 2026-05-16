@@ -246,7 +246,7 @@ export default function ExamRoomPage() {
 
   const pdfUrl = `https://drive.google.com/file/d/${exam?.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`
 
-  // 🌟 KHU VỰC ĐÃ CẬP NHẬT: MÀN HÌNH PHÒNG CHỜ THI (QUY CHẾ CHUẨN HÓA TOÀN DIỆN)
+  // PHÒNG CHỜ THI
   if (!hasStarted) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-center">
@@ -258,7 +258,7 @@ export default function ExamRoomPage() {
           <div className="bg-slate-900 p-6 rounded-2xl text-left border border-slate-700 mb-8">
             <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> Quy chế phòng thi nghiêm ngặt (Bảo mật hệ thống):</h3>
             <ul className="text-slate-300 text-sm space-y-3.5 font-medium list-disc pl-5 leading-relaxed">
-              <li>Hệ thống sẽ tự động kích hoạt và ép chế độ <b className="text-white">Toàn màn hình (Full-screen)</b> ngay khi bắt đầu. Mọi hành vi kéo vuốt tải lại trang trên các thiết bị di động đã bị phong tỏa.</li>
+              <li>Hệ thống sẽ tự động kích hoạt và ép chế độ <b className="text-white">Toàn màn hình (Full-screen)</b> ngay khi bắt đầu. Mọi hành vi kéo vuốt mép màn hình gây reload bài trên thiết bị di động đã bị phong tỏa.</li>
               <li>Nghiêm cấm tuyệt đối các hành vi rời khỏi màn hình, chuyển đổi Tab, mở ứng dụng khác hoặc thu nhỏ trình duyệt trong suốt thời gian làm bài.</li>
               <li>Trường hợp mất trạng thái Toàn màn hình do sự cố phần cứng, hệ thống cấp <b className="text-emerald-400">3 giây ân hạn</b> để thí sinh chủ động nhấn nút khôi phục bảo mật.</li>
               <li>Nếu quá thời gian ân hạn hoặc cố tình vi phạm, hệ thống sẽ ghi nhận 1 lần cảnh báo. Đủ <b>3 lần vi phạm</b>, bài thi sẽ lập tức bị khóa, tự động thu bài và hủy lượt thi.</li>
@@ -320,12 +320,21 @@ export default function ExamRoomPage() {
         </div>
       </header>
 
+      {/* --- PHÂN CHIA KHÔNG GIAN SÂN THI --- */}
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
-        <div className="flex-1 h-[35vh] md:h-full relative"><iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none"></iframe></div>
-        <div className="w-full md:w-[450px] lg:w-[500px] h-[65vh] md:h-full bg-white dark:bg-slate-900 overflow-y-auto flex flex-col border-l dark:border-slate-800">
+        {/* Khung trái: Hiển thị PDF đề thi */}
+        <div className="flex-1 h-[35vh] md:h-full relative">
+          <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none"></iframe>
+        </div>
+        
+        {/* Khung phải: Toàn bộ bảng đáp án và Quick Nav (Được bao bọc bằng Flexbox chống nén) */}
+        <div className="w-full md:w-[450px] lg:w-[500px] h-[65vh] md:h-full bg-white dark:bg-slate-900 flex flex-col border-l dark:border-slate-800 overflow-hidden">
           
-          <div className="sticky top-0 bg-white/95 backdrop-blur-md p-5 border-b z-20 shadow-sm max-h-[250px] overflow-y-auto custom-scrollbar dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-xs font-black text-slate-400 mb-3"><LayoutList className="w-4 h-4 text-blue-500" /> Bảng điều hướng nhanh (Chạm câu)</div>
+          {/* 🌟 FIX CHI TIẾT: Biến bảng điều hướng thành khối SHRINK-0 riêng biệt, cho phép mở rộng đến 40% chiều cao màn hình */}
+          <div className="shrink-0 bg-white/95 dark:bg-slate-900 border-b p-5 z-20 shadow-sm max-h-[40vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center gap-2 text-xs font-black text-slate-400 mb-3">
+              <LayoutList className="w-4 h-4 text-blue-500" /> Bảng điều hướng nhanh (Chạm câu để nhảy vị trí)
+            </div>
             <div className="space-y-4">
               {exam?.exam_structure?.map((section: any) => (
                 <div key={section.id} className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border dark:border-slate-700">
@@ -339,7 +348,10 @@ export default function ExamRoomPage() {
                       return (
                         <button 
                           key={qIdx} 
-                          onClick={() => document.getElementById(`q-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} 
+                          onClick={() => {
+                            const targetEl = document.getElementById(`q-${key}`);
+                            if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }} 
                           className={`w-10 h-10 text-xs font-black rounded-xl border-2 transition-all transform active:scale-95 flex items-center justify-center shrink-0 ${
                             savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500 shadow-md' : 
                             isAnswered ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 
@@ -356,24 +368,30 @@ export default function ExamRoomPage() {
             </div>
           </div>
 
-          <div className="flex-1 p-6 space-y-8">
+          {/* 🌟 FIX CHI TIẾT: Hộp chứa danh sách câu hỏi chi tiết cuộn độc lập bên dưới, không lo lấn chiếm không gian */}
+          <div className="flex-1 p-6 space-y-8 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
             {exam?.exam_structure?.map((section: any) => (
               <div key={section.id} className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border dark:border-slate-700">
-                <h3 className="font-extrabold text-blue-700 dark:text-blue-400 flex items-center gap-2 mb-5 pb-3 border-b dark:border-slate-700"><FileQuestion className="w-5 h-5"/> {section.name}</h3>
+                <h3 className="font-extrabold text-blue-700 dark:text-blue-400 flex items-center gap-2 mb-5 pb-3 border-b dark:border-slate-700">
+                  <FileQuestion className="w-5 h-5"/> {section.name}
+                </h3>
                 <div className="space-y-6">
                   {Array.from({ length: section.questionCount }).map((_, qIdx) => {
-                    const key = `${section.id}-${qIdx}`; const currentAns = answers[key]
+                    const key = `${section.id}-${qIdx}`; 
+                    const currentAns = answers[key];
                     const globalQNumber = qIdx + mainIndexOffset(exam, section.id) + 1;
                     
                     return (
                       <div key={qIdx} id={`q-${key}`} className={`flex flex-col gap-2 p-4 bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-xl shadow-sm transition-all ${savedQuestions[key] ? 'ring-2 ring-amber-400' : ''}`}>
                         <div className="flex justify-between items-center">
                           <span className="font-extrabold text-sm text-slate-600 dark:text-slate-400">Câu hỏi {globalQNumber}:</span>
-                          <button onClick={() => toggleSaveQuestion(section.id, qIdx)} className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 'text-slate-500 border-slate-200 dark:border-slate-700'}`}><Bookmark className="w-3.5 h-3.5"/> Lưu</button>
+                          <button onClick={() => toggleSaveQuestion(section.id, qIdx)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50">
+                            <Bookmark className="w-3.5 h-3.5"/> Lưu
+                          </button>
                         </div>
                         <div className="mt-2">
                           {section.type === 'single_choice' && <div className="flex gap-3 flex-wrap">{Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className={`w-11 h-11 rounded-full border-2 text-sm font-bold transition-all ${currentAns === l ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>{l}</button> })}</div>}
-                          {section.type === 'multiple_choice' && <div className="flex gap-3 flex-wrap">{Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-11 h-11 rounded-xl border-2 text-sm font-bold transition-all ${isSel ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700'}`}>{l}</button> })}</div>}
+                          {section.type === 'multiple_choice' && <div className="flex gap-3 flex-wrap">{Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-11 h-11 rounded-xl border-2 text-sm font-bold transition-all ${isSel ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700 border-slate-200 dark:border-slate-700'}`}>{l}</button> })}</div>}
                           
                           {section.type === 'true_false' && (
                             <div className="flex flex-col gap-3">
@@ -400,6 +418,7 @@ export default function ExamRoomPage() {
               </div>
             ))}
           </div>
+
         </div>
       </div>
     </div>
