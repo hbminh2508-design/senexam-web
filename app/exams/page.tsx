@@ -29,10 +29,11 @@ export default function ExamsLibraryPage() {
         return
       }
 
-      // 1. Lấy toàn bộ danh sách đề thi trên hệ thống
+      // 1. Lấy toàn bộ danh sách đề thi (ĐÃ TÍCH HỢP BỘ LỌC ẨN ĐỀ PRIVATE)
       const { data: examsData } = await supabase
         .from('exams')
         .select('*')
+        .or('is_hidden.eq.false,is_hidden.is.null') // 🔒 Khiên bảo mật: Chặn đề thi có mã truy cập
         .order('created_at', { ascending: false })
 
       // 2. Lấy lịch sử làm bài của CHÍNH HỌC SINH NÀY để đếm số lượt thi
