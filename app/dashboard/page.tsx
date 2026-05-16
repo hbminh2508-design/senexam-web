@@ -376,7 +376,7 @@ export default function DashboardPage() {
                   Cộng Đồng <ChevronRight className="w-5 h-5 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400 text-sm font-medium leading-relaxed">
-                  Giao lưu, chia sẻ mọi tài liệu 1GB và giải thắc mắc bài tập thực chiến cùng thủ khoa.
+                  Nơi giao lưu của mọi người
                 </p>
               </div>
             </div>
