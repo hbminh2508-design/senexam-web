@@ -7,7 +7,7 @@ import {
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
   CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
-  Wand2, Sparkles 
+  Wand2, Sparkles
 } from 'lucide-react'
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
@@ -70,7 +70,7 @@ export default function AdminDashboard() {
     scoringMode: 'auto_divide' | 'custom', 
     sectionTotalPoints: number,            
     customPoints: Record<number, number>,
-    mixedRanges?: MixedRange[] 
+    mixedRanges?: MixedRange[]
   }[]>([])
 
   useEffect(() => {
@@ -231,7 +231,6 @@ export default function AdminDashboard() {
     }))
   }
 
-  // 🌟 SEN MAGIC PASTE: THUẬT TOÁN NHẬN DIỆN "CÂU", "BÀI" VÀ AUTO-MORPHING (TỰ ĐỔI DẠNG)
   const handleProcessAutoFill = () => {
     if (!autoFillModalId) return
     const section = examStructure.find(s => s.id === autoFillModalId)
@@ -240,56 +239,49 @@ export default function AdminDashboard() {
     const rawText = autoFillText.trim()
 
     try {
-      // 1. Regex tách từng câu thông minh. Hỗ trợ "Câu 1:", "Bài 2.", "Question 3-", "4)"
-      const tokens = rawText.match(/(?:^|\s)(?:Câu|Bài|Question|Q)?\s*\d+[\.\:\-\)]\s*[\s\S]*?(?=(?:\s(?:Câu|Bài|Question|Q)?\s*\d+[\.\:\-\)])|$)/gi)
+      const regexPattern = /(?:^|\s)(?:câu|bài|question|q)?\s*([1-9]\d*)[\.\:\-\)]\s*([\s\S]*?)(?=(?:\s*(?:câu|bài|question|q)?\s*[1-9]\d*[\.\:\-\)])|$)/gi
+      const matches = [...rawText.matchAll(regexPattern)]
       
-      if (!tokens || tokens.length === 0) throw new Error("Không tìm thấy cấu trúc câu hợp lệ.")
+      if (matches.length === 0) {
+        alert("Hệ thống không tìm thấy mẫu đáp án nào. Đảm bảo bạn đã nhập dạng 'Câu 1: A' hoặc '1. B' ...")
+        return
+      }
 
-      const newAnswers = { ...section.correctAnswers }
       const detectedTypes: Record<number, string> = {}
-      
-      tokens.forEach(token => {
-        // 2. Tách Lấy Số thứ tự câu và Nội dung đáp án (Loại bỏ các chữ Câu, Bài)
-        const match = token.trim().match(/^(?:Câu|Bài|Question|Q)?\s*(\d+)[\.\:\-\)]\s*([\s\S]*)$/i)
-        
-        if (match) {
-          const qNum = parseInt(match[1]) - 1 // Mảng bắt đầu từ 0
-          if (qNum >= 0 && qNum < section.questionCount) {
-            let content = match[2].trim()
-            let upperContent = content.toUpperCase().replace(/Đ/g, 'D')
+      const newAnswers: Record<number, any> = { ...section.correctAnswers }
 
-            // Phân loại: Trắc nghiệm 1 đáp án
-            if (/^[A-D]$/.test(upperContent)) {
-               detectedTypes[qNum] = 'single_choice'
-               newAnswers[qNum] = upperContent
-            } 
-            // Phân loại: Đúng / Sai 4 ý (Chấp nhận: D S D S, D-S-D-S, D,S,D,S)
-            else if (/^([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])$/.test(upperContent)) {
-               detectedTypes[qNum] = 'true_false'
-               const parts = upperContent.match(/([DS])/g)
-               newAnswers[qNum] = {
-                 a: parts![0] === 'D' ? 'Đ' : 'S',
-                 b: parts![1] === 'D' ? 'Đ' : 'S',
-                 c: parts![2] === 'D' ? 'Đ' : 'S',
-                 d: parts![3] === 'D' ? 'Đ' : 'S'
-               }
-            } 
-            // Phân loại: Trả lời ngắn (Bất kỳ thứ gì còn lại)
-            else {
-               detectedTypes[qNum] = 'short_answer'
-               newAnswers[qNum] = content 
-            }
+      matches.forEach(match => {
+        const qNum = parseInt(match[1]) - 1 
+        if (qNum >= 0 && qNum < section.questionCount) {
+          let content = match[2].trim()
+          let upperContent = content.toUpperCase().replace(/Đ/g, 'D')
+
+          if (/^[A-D]$/.test(upperContent)) {
+             detectedTypes[qNum] = 'single_choice'
+             newAnswers[qNum] = upperContent
+          } 
+          else if (/^([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])$/.test(upperContent)) {
+             detectedTypes[qNum] = 'true_false'
+             const parts = upperContent.match(/([DS])/g)
+             newAnswers[qNum] = {
+               a: parts![0] === 'D' ? 'Đ' : 'S',
+               b: parts![1] === 'D' ? 'Đ' : 'S',
+               c: parts![2] === 'D' ? 'Đ' : 'S',
+               d: parts![3] === 'D' ? 'Đ' : 'S'
+             }
+          } 
+          else {
+             detectedTypes[qNum] = 'short_answer'
+             newAnswers[qNum] = content 
           }
         }
       })
 
-      // 3. Tự động thay đổi Type của Phần thi và gom nhóm vùng câu hỏi (Mixed Ranges)
       const uniqueTypes = new Set(Object.values(detectedTypes))
       if (uniqueTypes.size === 0) throw new Error("Không giải mã được dữ liệu.")
 
       setExamStructure(prev => prev.map(s => {
         if (s.id === section.id) {
-          // Nếu toàn bộ paste vào chỉ có 1 dạng câu (Ví dụ: Tất cả đều là trắc nghiệm) -> Đổi form về dạng đó
           if (uniqueTypes.size === 1) {
             const dominantType = Array.from(uniqueTypes)[0]
             return {
@@ -299,13 +291,12 @@ export default function AdminDashboard() {
               correctAnswers: newAnswers
             }
           } 
-          // Nếu có từ 2 dạng trở lên -> Tự động chuyển Form thành "Câu hỗn hợp" và tự chia khoảng (Range)
           else {
             const newRanges = []
             let currentRange: any = null
 
             for (let i = 0; i < s.questionCount; i++) {
-              const qType = detectedTypes[i] || 'short_answer' // Default nếu trống
+              const qType = detectedTypes[i] || 'short_answer' 
               if (!currentRange) {
                 currentRange = { start: i + 1, end: i + 1, type: qType, optionsCount: 4 }
               } else if (currentRange.type === qType) {
@@ -355,7 +346,7 @@ export default function AdminDashboard() {
     }
   }
 
-  // 🌟 NÂNG CẤP XỬ LÝ LỖI SUBMIT CHẶT CHẼ HƠN, NGĂN CHẶN CRASH DOM
+  // 🌟 NÂNG CẤP HÀM UPLOAD: Bắt mọi lỗi Server (504, 413) để chuẩn hóa JSON Response
   const handleUploadExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !file || selectedSubjects.length === 0 || examStructure.length === 0) {
@@ -364,7 +355,7 @@ export default function AdminDashboard() {
     }
 
     try {
-      setUploadStatus({ type: 'uploading', message: 'Đang kết nối hệ thống và tải tệp lên Google Drive...' })
+      setUploadStatus({ type: 'uploading', message: 'Đang tải tệp lên Google Drive. Vui lòng không đóng trang...' })
       
       const formData = new FormData()
       formData.append('file', file)
@@ -372,21 +363,27 @@ export default function AdminDashboard() {
 
       const response = await fetch('/api/upload-exam', { method: 'POST', body: formData })
       
-      // Bắt lỗi an toàn nếu API phản hồi không phải JSON
+      // Bắt lỗi hệ thống Vercel trả về HTML thay vì JSON (Timeout, File Too Large)
       const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-         throw new Error("Lỗi API: Máy chủ không trả về dữ liệu chuẩn JSON.")
-      }
+      let result;
       
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Lỗi kết nối API Google Drive')
+      if (contentType && contentType.includes("application/json")) {
+         result = await response.json();
+         if (!response.ok) throw new Error(result.error || 'Lỗi API Google Drive (JSON)');
+      } else {
+         const textError = await response.text();
+         console.error("Lỗi từ Vercel:", textError);
+         if (response.status === 504) throw new Error("Vercel Timeout (504): Quá thời gian tải lên Google Drive (Giới hạn 10s). Vui lòng dùng file PDF nhẹ hơn.");
+         if (response.status === 413) throw new Error("Vercel Payload Too Large (413): File PDF quá nặng (Giới hạn 4.5MB). Vui lòng nén file lại.");
+         throw new Error(`Lỗi Server (${response.status}): Vercel từ chối kết nối mạng.`);
+      }
 
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) throw new Error("Phiên đăng nhập hết hạn, vui lòng tải lại trang.")
 
       const generatedAccessCode = isHiddenExam ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
 
-      // Loại bỏ các trường tham chiếu thừa để tương thích tuyệt đối với PostgreSQL
+      // Loại bỏ các property dư thừa để bảo vệ CSDL
       const cleanExamStructure = examStructure.map(s => ({...s}))
 
       const { error: dbError } = await supabase.from('exams').insert({
@@ -404,7 +401,6 @@ export default function AdminDashboard() {
       setUploadStatus({ type: 'success', message: successMsg })
       setTitle(''); setFile(null); setPdfPreviewUrl(null); setSelectedSubjects([]); setExamStructure([]); setMaxAttempts(1); setGradingMethod('highest'); setIsHiddenExam(false);
     } catch (error: any) {
-      // Đảm bảo thông báo lỗi luôn là string minh bạch
       setUploadStatus({ type: 'error', message: error?.message || 'Có lỗi hệ thống nội bộ xảy ra.' })
     }
   }
@@ -613,7 +609,6 @@ export default function AdminDashboard() {
     )
   }
 
-  // TRANG QUẢN TRỊ CHÍNH
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 relative">
       
@@ -817,7 +812,7 @@ export default function AdminDashboard() {
                                   <option value="true_false">Đúng / Sai (4 Ý)</option>
                                   <option value="short_answer">Trả lời ngắn</option>
                                   <option value="essay">Tự luận dài</option>
-                                  <option value="mixed">Câu hỗn hợp (HSA/TSA/ĐGNL)</option>
+                                  {(examType === 'HSA' || examType === 'TSA') && <option value="mixed">Câu hỗn hợp (HSA/TSA)</option>}
                                 </select>
                               </div>
                               <div><label className="block text-xs font-bold text-slate-400 mb-1">Tổng số câu hỏi</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold" /></div>
