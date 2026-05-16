@@ -51,7 +51,7 @@ export default function ExamRoomPage() {
     return () => clearInterval(timer)
   }, [hasStarted, loading, timeLeft, isKicked, submitting])
 
-  // HỆ THỐNG GIÁM SÁT ANTI-CHEAT
+  // 🌟 HỆ THỐNG GIÁM SÁT ANTI-CHEAT ĐÃ ĐƯỢC NÂNG CẤP CHO IPAD/SAFARI
   useEffect(() => {
     if (!hasStarted || isKicked || submitting) return;
 
@@ -99,11 +99,20 @@ export default function ExamRoomPage() {
       if (document.hidden) triggerViolation()
     }
 
+    // Nâng cấp: Tương thích Webkit của Apple
     const handleFullscreenChange = () => {
-      const isFull = !!document.fullscreenElement
+      const doc = document as any;
+      const isFull = !!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
       setIsFullscreen(isFull)
       
       if (!isFull) {
+        // 🌟 MIỄN NHIỄM (IMMUNITY): Kiểm tra xem sự kiện thoát Fullscreen có phải do bàn phím ảo bật lên không?
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        if (activeTag === 'input' || activeTag === 'textarea') {
+          // Bỏ qua, không đếm ngược, không phạt nếu người dùng đang nhập đáp án
+          return; 
+        }
+
         setGraceCountdown(3)
         if (graceTimerRef.current) clearInterval(graceTimerRef.current)
         
@@ -130,7 +139,12 @@ export default function ExamRoomPage() {
     document.addEventListener('keydown', handleKeyDown)
     document.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    // Gắn đủ 4 loại Event Listener cho mọi hệ điều hành
     document.addEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
 
     return () => {
       document.head.removeChild(style)
@@ -138,6 +152,9 @@ export default function ExamRoomPage() {
       document.removeEventListener('contextmenu', handleContextMenu)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
       if (graceTimerRef.current) clearInterval(graceTimerRef.current)
     }
   }, [hasStarted, isKicked, submitting])
@@ -160,17 +177,24 @@ export default function ExamRoomPage() {
 
   const requestFullscreenMode = async () => {
     try {
-      if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen()
-        setIsFullscreen(true)
-        if (graceTimerRef.current) {
-          clearInterval(graceTimerRef.current)
-          graceTimerRef.current = null
-        }
-        setGraceCountdown(null)
+      const docEl = document.documentElement as any;
+      if (docEl.requestFullscreen) {
+        await docEl.requestFullscreen();
+      } else if (docEl.webkitRequestFullscreen) { // Dành cho iPad/Safari
+        await docEl.webkitRequestFullscreen();
+      } else if (docEl.mozRequestFullScreen) {
+        await docEl.mozRequestFullScreen();
+      } else if (docEl.msRequestFullscreen) {
+        await docEl.msRequestFullscreen();
       }
+      setIsFullscreen(true)
+      if (graceTimerRef.current) {
+        clearInterval(graceTimerRef.current)
+        graceTimerRef.current = null
+      }
+      setGraceCountdown(null)
     } catch (e) {
-      console.error("Không thể ép chế độ Fullscreen")
+      console.error("Không thể ép chế độ Fullscreen", e)
     }
   }
 
@@ -185,11 +209,14 @@ export default function ExamRoomPage() {
     await processSubmit(false)
   }
 
-  // 🌟 NÂNG CẤP HỆ THỐNG CHẤM ĐIỂM TỰ ĐỘNG ĐỂ NHẬN DIỆN CÂU HỖN HỢP (MIXED)
   const processSubmit = async (isForced: boolean) => {
     setSubmitting(true)
     try {
-      if (document.fullscreenElement) { document.exitFullscreen().catch(()=>{}) }
+      const doc = document as any;
+      if (doc.fullscreenElement || doc.webkitFullscreenElement) { 
+        if (doc.exitFullscreen) doc.exitFullscreen().catch(()=>{});
+        else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen().catch(()=>{});
+      }
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Phiên đăng nhập đã hết hạn!')
@@ -206,7 +233,6 @@ export default function ExamRoomPage() {
           let qPoint = section.scoringMode === 'custom' ? (section.customPoints?.[qIdx] || 0) : perQuestionPoints
           let earned = 0
 
-          // Phân tách Logic xem câu này thuộc dạng gì
           let currentType = section.type;
           if (section.type === 'mixed' && section.mixedRanges) {
             const range = section.mixedRanges.find((r: any) => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
@@ -232,7 +258,6 @@ export default function ExamRoomPage() {
             } else if (currentType === 'multiple_choice') {
               if (Array.isArray(studentAns) && Array.isArray(correctAns) && studentAns.length === correctAns.length && studentAns.every(v => correctAns.includes(v))) earned = qPoint
             } else {
-              // So sánh text (In hoa 2 vế để chống sai lệch)
               if (studentAns !== undefined && studentAns !== null && String(studentAns).trim().toUpperCase() === String(correctAns).trim().toUpperCase()) earned = qPoint
             }
           }
@@ -310,10 +335,9 @@ export default function ExamRoomPage() {
 
       <header className="h-16 bg-white dark:bg-slate-900 border-b flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
         <div className="flex items-center gap-4">
-          <button onClick={() => { if(confirm("Thoát phòng thi sẽ không lưu lại bài làm?")) { if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); router.push('/exams') } }} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
+          <button onClick={() => { if(confirm("Thoát phòng thi sẽ không lưu lại bài làm?")) { const doc = document as any; if(doc.fullscreenElement || doc.webkitFullscreenElement) { if(doc.exitFullscreen) doc.exitFullscreen().catch(()=>{}); else if(doc.webkitExitFullscreen) doc.webkitExitFullscreen().catch(()=>{}); } router.push('/exams') } }} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
           
           <div className="flex items-center gap-3 shrink-0">
-            {/* THƯƠNG HIỆU LOGO Ở GÓC TRÁI PHÒNG THI */}
             <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0">
               <img src="/logo.png" alt="SenExam Logo" className="w-full h-full object-contain" />
             </div>
@@ -396,7 +420,6 @@ export default function ExamRoomPage() {
                     const currentAns = answers[key];
                     const globalQNumber = qIdx + mainIndexOffset(exam, section.id) + 1;
                     
-                    // 🌟 VẼ GIAO DIỆN TÙY BIẾN THEO RANGE ĐÃ CẤU HÌNH Ở ADMIN
                     let currentType = section.type;
                     let currentOptionsCount = section.optionsCount || 4;
                     
@@ -406,7 +429,7 @@ export default function ExamRoomPage() {
                         currentType = range.type;
                         currentOptionsCount = range.optionsCount || 4;
                       } else {
-                        currentType = 'short_answer'; // Default nếu không rơi vào vùng nào
+                        currentType = 'short_answer'; 
                       }
                     }
 
