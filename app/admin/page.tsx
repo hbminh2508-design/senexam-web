@@ -52,6 +52,9 @@ export default function AdminDashboard() {
 
   const [editingKeysSectionId, setEditingKeysSectionId] = useState<string | null>(null)
   
+  // 🌟 KHAI BÁO STATE CHO ĐỀ THI ẨN
+  const [isHiddenExam, setIsHiddenExam] = useState(false)
+  
   const [examStructure, setExamStructure] = useState<{
     id: string, 
     type: string, 
@@ -169,7 +172,6 @@ export default function AdminDashboard() {
     }))
   }
 
-  // 🌟 KHÔI PHỤC: Hàm thiết lập đáp án Đúng/Sai cho 4 ý a, b, c, d
   const handleSetCorrectAnswerTF = (sectionId: string, qIdx: number, subLabel: string, value: string) => {
     setExamStructure(examStructure.map(s => {
       if (s.id === sectionId) {
@@ -192,6 +194,7 @@ export default function AdminDashboard() {
     }
   }
 
+  // 🌟 CẬP NHẬT LOGIC XUẤT BẢN ĐỀ THI
   const handleUploadExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !file || selectedSubjects.length === 0 || examStructure.length === 0) {
@@ -212,13 +215,25 @@ export default function AdminDashboard() {
 
       const { data: { user } } = await supabase.auth.getUser()
 
+      // Tự động sinh mã truy cập ngẫu nhiên 6 ký tự nếu bật chế độ Đề Ẩn
+      const generatedAccessCode = isHiddenExam ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
+
       const { error: dbError } = await supabase.from('exams').insert({
-        title, exam_type: examType, duration, allow_review: allowReview, max_attempts: maxAttempts, grading_method: gradingMethod, subjects: selectedSubjects, exam_structure: examStructure, drive_file_id: result.driveFileId, created_by: user?.id
+        title, exam_type: examType, duration, allow_review: allowReview, max_attempts: maxAttempts, grading_method: gradingMethod, subjects: selectedSubjects, exam_structure: examStructure, drive_file_id: result.driveFileId, created_by: user?.id,
+        is_hidden: isHiddenExam,
+        access_code: generatedAccessCode
       })
 
       if (dbError) throw dbError
-      setUploadStatus({ type: 'success', message: 'Xuất bản đề thi thành công!' })
-      setTitle(''); setFile(null); setPdfPreviewUrl(null); setSelectedSubjects([]); setExamStructure([]); setMaxAttempts(1); setGradingMethod('highest');
+      
+      const successMsg = isHiddenExam 
+        ? `Xuất bản thành công! Mã truy cập cho học sinh: ${generatedAccessCode}` 
+        : 'Xuất bản đề thi thành công!';
+        
+      setUploadStatus({ type: 'success', message: successMsg })
+      
+      // Reset form
+      setTitle(''); setFile(null); setPdfPreviewUrl(null); setSelectedSubjects([]); setExamStructure([]); setMaxAttempts(1); setGradingMethod('highest'); setIsHiddenExam(false);
     } catch (error: any) {
       setUploadStatus({ type: 'error', message: error.message || 'Có lỗi xảy ra.' })
     }
@@ -236,7 +251,6 @@ export default function AdminDashboard() {
     if (!error) setUsersList(usersList.map(u => u.id === userId ? { ...u, role: newRole } : u))
   }
 
-  // 🌟 KHÔI PHỤC: Logic chấm điểm tự động tích hợp 4 ý Đúng/Sai THPTQG
   const openGradingView = (submission: any) => {
     setSelectedSubForGrading(submission)
     const initialScores: Record<string, string> = {}
@@ -258,7 +272,6 @@ export default function AdminDashboard() {
             const studentAns = submission.answers?.[key]; 
             const correctAns = section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)]; 
             
-            // Chấm Đúng/Sai 4 ý (1=10%, 2=25%, 3=50%, 4=100%)
             if (section.type === 'true_false') {
               let correctSubCount = 0;
               if (studentAns && typeof studentAns === 'object' && correctAns && typeof correctAns === 'object') {
@@ -304,7 +317,6 @@ export default function AdminDashboard() {
     setIsSavingGrade(false)
   }
 
-  // Khôi phục: Phân rã hiển thị đáp án Đúng/Sai trên form
   const parseStudentAnswer = (ans: any, type?: string) => {
     if (!ans) return 'Bỏ trống'
     if (type === 'true_false' && typeof ans === 'object' && !Array.isArray(ans)) {
@@ -496,6 +508,15 @@ export default function AdminDashboard() {
                     <input type="checkbox" checked={allowReview} onChange={(e) => setAllowReview(e.target.checked)} className="w-5 h-5 accent-blue-600 cursor-pointer" />
                   </div>
 
+                  {/* 🌟 TÍCH HỢP TÙY CHỌN BẬT CHẾ ĐỘ ĐỀ THI ẨN (CÓ MÃ TRUY CẬP) */}
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl flex items-center justify-between border dark:border-slate-700 mt-4">
+                    <div>
+                      <p className="text-sm font-bold text-red-600 dark:text-red-400">Phát hành ở chế độ Đề thi Ẩn (Private Exam)</p>
+                      <p className="text-xs text-slate-500">Chỉ học sinh được cung cấp mã truy cập (Access Code) mới được phép vào thi.</p>
+                    </div>
+                    <input type="checkbox" checked={isHiddenExam} onChange={(e) => setIsHiddenExam(e.target.checked)} className="w-5 h-5 accent-red-600 cursor-pointer" />
+                  </div>
+
                   <div>
                     <label className="block text-sm font-bold mb-2">Phân vùng Cấu trúc môn học (*)</label>
                     <div className="flex flex-wrap gap-2">
@@ -607,7 +628,7 @@ export default function AdminDashboard() {
                                         {section.type === 'single_choice' && Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded-full border text-[10px] font-bold transition-all shrink-0 ${section.correctAnswers[qIdx] === label ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
                                         {section.type === 'multiple_choice' && Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded border text-[10px] font-bold transition-all shrink-0 ${(section.correctAnswers[qIdx] || []).includes(label) ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
                                         
-                                        {/* 🌟 NÂNG CẤP ĐÚNG SAI 4 Ý TRONG KHUNG ADMIN */}
+                                        {/* ĐÚNG SAI 4 Ý */}
                                         {section.type === 'true_false' && (
                                           <div className="flex flex-col gap-1 w-full mt-2">
                                             {['a', 'b', 'c', 'd'].map(subLabel => {
@@ -687,7 +708,10 @@ export default function AdminDashboard() {
                     <tbody>
                       {filteredExams.map((exam) => (
                         <tr key={exam.id} className="border-b hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
-                          <td className="p-4 font-bold max-w-xs truncate">{exam.title}</td>
+                          <td className="p-4 font-bold max-w-xs truncate">
+                            {exam.title}
+                            {exam.is_hidden && <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 text-[10px] rounded-lg">Mã ẩn: {exam.access_code}</span>}
+                          </td>
                           <td className="p-4"><div className="flex flex-wrap gap-1">{exam.subjects?.map((s: string) => <span key={s} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-bold border">{s}</span>)}</div></td>
                           <td className="p-4"><span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold">{exam.exam_type}</span></td>
                           <td className="p-4 flex justify-end gap-2"><button onClick={() => handleDeleteExam(exam.id)} className="p-2 text-red-500"><Trash2 className="w-5 h-5" /></button></td>
@@ -700,7 +724,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* TAB 3: QUẢN LÝ BÀI NỘP + CHẤM BÀI CHIA ĐÔI MÀN HÌNH */}
+          {/* TAB 3: QUẢN LÝ BÀI NỘP */}
           {activeTab === 'submissions' && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">

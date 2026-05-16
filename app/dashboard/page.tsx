@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   BookOpen, Clock, Trophy, Target, LogOut, User, 
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle,
-  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye
+  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound
 } from 'lucide-react'
 
 const PROVINCES = [
@@ -37,6 +37,11 @@ export default function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [studentHistoryList, setStudentHistoryList] = useState<any[]>([])
+
+  // 🌟 STATES CHO TÍNH NĂNG NHẬP MÃ ĐỀ THI ẨN
+  const [showCodeModal, setShowCodeModal] = useState(false)
+  const [examCode, setExamCode] = useState('')
+  const [codeLoading, setCodeLoading] = useState(false)
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -175,6 +180,24 @@ export default function DashboardPage() {
     }
   }
 
+  // 🌟 HÀM XỬ LÝ VÀO PHÒNG THI ẨN
+  const handleJoinHiddenExam = async () => {
+    if (!examCode.trim()) return
+    setCodeLoading(true)
+    const { data, error } = await supabase
+      .from('exams')
+      .select('id, title')
+      .eq('access_code', examCode.trim().toUpperCase())
+      .single()
+    
+    if (error || !data) {
+      alert('Mã đề thi không hợp lệ hoặc đã bị vô hiệu hóa!')
+      setCodeLoading(false)
+    } else {
+      router.push(`/exams/${data.id}`)
+    }
+  }
+
   if (isDataLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -193,6 +216,30 @@ export default function DashboardPage() {
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/40 to-indigo-400/30 dark:from-blue-800/40 dark:to-indigo-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
       <div className="fixed top-[25%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-purple-400/40 to-pink-400/30 dark:from-purple-800/40 dark:to-pink-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
       <div className="fixed bottom-[-15%] left-[20%] w-[700px] h-[700px] bg-gradient-to-t from-emerald-300/30 to-teal-400/20 dark:from-emerald-900/30 dark:to-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '4s' }}></div>
+
+      {/* 🌟 MODAL NHẬP MÃ ĐỀ THI ẨN */}
+      {showCodeModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 relative shadow-2xl`}>
+              <button onClick={() => setShowCodeModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center mb-4"><KeyRound className="w-6 h-6 text-blue-600 dark:text-blue-400"/></div>
+              <h3 className="text-2xl font-black mb-2">Đề thi nội bộ</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-6">Nhập mã truy cập do giáo viên cung cấp để mở khóa phòng thi.</p>
+              
+              <input 
+                type="text" 
+                value={examCode} 
+                onChange={(e) => setExamCode(e.target.value.toUpperCase())} 
+                placeholder="VD: SEN2026" 
+                className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300/50 dark:border-slate-700/50 rounded-xl px-4 py-3 text-slate-900 dark:text-white font-black tracking-widest text-center text-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 mb-6 uppercase shadow-inner" 
+              />
+              
+              <button onClick={handleJoinHiddenExam} disabled={codeLoading || !examCode} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 disabled:opacity-50 shadow-md transition-all active:scale-95">
+                {codeLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ChevronRight className="w-5 h-5" />} Xác nhận vào thi
+              </button>
+           </div>
+        </div>
+      )}
 
       <div className="relative z-10 p-4 md:p-6 max-w-[1400px] mx-auto">
         
@@ -297,17 +344,25 @@ export default function DashboardPage() {
         )}
 
         {/* --- MAIN DASHBOARD (LIQUID GLASS PANELS) --- */}
-        <div className={`transition-all duration-500 ${(showOnboarding || showProfile) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
+        <div className={`transition-all duration-500 ${(showOnboarding || showProfile || showCodeModal) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
           
-          {/* HEADER NAV */}
+          {/* 🌟 CẬP NHẬT HEADER KÈM LOGO */}
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
-            <div>
-              <h1 className="text-4xl font-extrabold tracking-tight drop-shadow-sm">SenExam<span className="text-blue-600 dark:text-blue-400 drop-shadow-md">.COM</span></h1>
-              <p className="text-slate-700 dark:text-slate-300 flex items-center gap-2 mt-2 font-bold bg-white/40 dark:bg-slate-800/40 w-fit px-3.5 py-1.5 rounded-full backdrop-blur-xl border border-white/60 dark:border-white/10 shadow-sm"><User className="w-4 h-4 text-blue-500" /> {userEmail || 'Đang tải...'}</p>
+            <div className="flex items-center gap-3 cursor-pointer select-none group shrink-0" onClick={() => router.push('/dashboard')}>
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-white/50 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl flex items-center justify-center p-1 backdrop-blur-md shadow-sm group-hover:scale-105 transition-transform duration-300">
+                <img src="/logo.png" alt="SenExam Logo" className="w-full h-full object-contain" />
+              </div>
+              <div className="flex flex-col justify-center">
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight drop-shadow-sm leading-none text-slate-900 dark:text-white">
+                  SenExam<span className="text-blue-600 dark:text-blue-400 drop-shadow-md">.COM</span>
+                </h1>
+                <span className="text-[9px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
+                  Học tập & Thi cử trực tuyến
+                </span>
+              </div>
             </div>
             
             <div className="flex gap-3 items-center flex-wrap">
-              {/* 🌟 THÊM: NÚT ĐIỀU HƯỚNG NHANH VÀO FORUM Ở HEADER TRÊN CÙNG */}
               <button onClick={() => router.push('/forum')} className={`${glassButtonStyles} flex items-center justify-center gap-2 px-5 py-2.5 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-sm`}>
                 <MessageSquare className="w-4 h-4" /> Thảo luận Forum
               </button>
@@ -340,9 +395,16 @@ export default function DashboardPage() {
                     Dữ liệu đề thi đã được cá nhân hóa. Sẵn sàng đo lường năng lực của bạn ngay hôm nay!
                   </p>
                 </div>
-                <button onClick={() => router.push('/exams')} className="bg-white/20 hover:bg-white/30 backdrop-blur-2xl border border-white/40 text-white px-8 py-4 rounded-2xl font-black shadow-[0_4px_15px_rgba(0,0,0,0.1)] flex items-center justify-center gap-3 w-fit group text-base transition-all">
-                  <Target className="w-5 h-5 group-hover:scale-110 transition-transform" /> Vào kho đề thi <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
+                
+                {/* 🌟 NÚT VÀO KHO ĐỀ & NHẬP MÃ ĐỀ ẨN */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button onClick={() => router.push('/exams')} className="bg-white/20 hover:bg-white/30 backdrop-blur-2xl border border-white/40 text-white px-8 py-4 rounded-2xl font-black shadow-[0_4px_15px_rgba(0,0,0,0.1)] flex items-center justify-center gap-3 group text-base transition-all">
+                    <Target className="w-5 h-5 group-hover:scale-110 transition-transform" /> Vào kho đề thi <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                  <button onClick={() => setShowCodeModal(true)} className="bg-white/10 hover:bg-white/20 backdrop-blur-2xl border border-white/30 text-white px-6 py-4 rounded-2xl font-bold shadow-sm flex items-center justify-center gap-2 transition-all">
+                    <KeyRound className="w-5 h-5" /> Đề thi riêng
+                  </button>
+                </div>
               </div>
               <BookOpen className="absolute -right-12 -bottom-12 w-72 h-72 text-white/10 transform -rotate-12 blur-[2px]" />
             </div>
@@ -362,7 +424,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🌟 NÂNG CẤP: BIẾN THẺ CỘNG ĐỒNG BENTO THÀNH THẺ LIQUID GLASS ĐỘNG CÓ THỂ CLICK VÀO FORUM */}
             <div 
               onClick={() => router.push('/forum')}
               className={`${glassCardStyles} rounded-[2.5rem] p-8 flex flex-col justify-between hover:-translate-y-1 hover:shadow-[0_8px_32px_0_rgba(59,130,246,0.2)] transition-all duration-300 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 group cursor-pointer relative overflow-hidden`}
