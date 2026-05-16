@@ -7,7 +7,7 @@ import {
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
   CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
-  Wand2, Sparkles // Thêm icon đũa thần và lấp lánh
+  Wand2, Sparkles
 } from 'lucide-react'
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
@@ -56,7 +56,6 @@ export default function AdminDashboard() {
   const [editingKeysSectionId, setEditingKeysSectionId] = useState<string | null>(null)
   const [isHiddenExam, setIsHiddenExam] = useState(false)
   
-  // 🌟 STATES CHO TÍNH NĂNG NHẬN DIỆN ĐÁP ÁN THÔNG MINH
   const [autoFillModalId, setAutoFillModalId] = useState<string | null>(null)
   const [autoFillText, setAutoFillText] = useState('')
 
@@ -71,7 +70,7 @@ export default function AdminDashboard() {
     scoringMode: 'auto_divide' | 'custom', 
     sectionTotalPoints: number,            
     customPoints: Record<number, number>,
-    mixedRanges?: MixedRange[] // Thêm cấu trúc lưu vùng câu hỗn hợp
+    mixedRanges?: MixedRange[]
   }[]>([])
 
   useEffect(() => {
@@ -163,7 +162,6 @@ export default function AdminDashboard() {
     setExamStructure(examStructure.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
-  // Quản lý vùng cấu trúc hỗn hợp (Mixed Ranges)
   const handleAddMixedRange = (sectionId: string) => {
     setExamStructure(examStructure.map(s => {
       if (s.id === sectionId) {
@@ -202,7 +200,6 @@ export default function AdminDashboard() {
       if (s.id === sectionId) {
         const updatedAnswers = { ...s.correctAnswers }
         
-        // Cần xác định type của câu hỏi hiện tại (xét trường hợp mixed)
         let cType = s.type
         if (s.type === 'mixed' && s.mixedRanges) {
           const range = s.mixedRanges.find(r => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
@@ -234,7 +231,7 @@ export default function AdminDashboard() {
     }))
   }
 
-  // 🌟 SEN MAGIC PASTE: THUẬT TOÁN NHẬN DIỆN VÀ PHÂN LOẠI ĐÁP ÁN SIÊU THÔNG MINH
+  // 🌟 SEN MAGIC PASTE ĐÃ NÂNG CẤP NHẬN DIỆN "CÂU", "BÀI"
   const handleProcessAutoFill = () => {
     if (!autoFillModalId) return
     const section = examStructure.find(s => s.id === autoFillModalId)
@@ -244,8 +241,9 @@ export default function AdminDashboard() {
     const rawText = autoFillText.trim()
 
     try {
-      // Dùng Regex trích xuất tất cả các mẫu: <Số câu><dấu chấm/hai chấm><Nội dung đáp án>
-      const matches = [...rawText.matchAll(/(?:^|\s)(0*[1-9]\d*)[\.\:\-\)]\s*([^]*?)(?=(?:\s0*[1-9]\d*[\.\:\-\)])|$)/gi)]
+      // 🌟 Regex thông minh mới: Tự động bỏ qua "Câu", "Bài", "Question", "Q" nếu có
+      const regexPattern = /(?:^|\s)(?:câu|bài|question|q)?\s*([1-9]\d*)[\.\:\-\)]\s*([\s\S]*?)(?=(?:\s(?:câu|bài|question|q)?\s*[1-9]\d*[\.\:\-\)])|$)/gi
+      const matches = [...rawText.matchAll(regexPattern)]
       
       if (matches.length === 0) throw new Error("Không tìm thấy đáp án hợp lệ")
 
@@ -258,12 +256,10 @@ export default function AdminDashboard() {
             let content = match[2].trim()
             let upperContent = content.toUpperCase().replace(/Đ/g, 'D')
 
-            // Nhận diện Trắc nghiệm 1 đáp án
             if (/^[A-D]$/.test(upperContent)) {
                detectedTypes[qNum] = 'single_choice'
                newAnswers[qNum] = upperContent
             } 
-            // Nhận diện Đúng/Sai 4 ý (Cho phép cách nhau bằng khoảng trắng, dấu phẩy, dấu chấm)
             else if (/^([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])$/.test(upperContent)) {
                detectedTypes[qNum] = 'true_false'
                const parts = upperContent.match(/([DS])/g)
@@ -274,15 +270,13 @@ export default function AdminDashboard() {
                  d: parts![3] === 'D' ? 'Đ' : 'S'
                }
             } 
-            // Còn lại mặc định là trả lời ngắn
             else {
                detectedTypes[qNum] = 'short_answer'
-               newAnswers[qNum] = content // Giữ nguyên chữ hoa thường
+               newAnswers[qNum] = content 
             }
           }
         })
 
-        // Tự động gom nhóm các câu hỏi cùng dạng vào `mixedRanges`
         const newRanges = []
         let currentRange: any = null
 
@@ -302,7 +296,6 @@ export default function AdminDashboard() {
         updateSection(section.id, 'mixedRanges', newRanges)
         updateSection(section.id, 'correctAnswers', newAnswers)
       } 
-      // Xử lý nạp tự động cho các loại cố định (Như trước đây)
       else {
         matches.forEach(match => {
           const qNum = parseInt(match[1]) - 1
@@ -331,7 +324,7 @@ export default function AdminDashboard() {
       setAutoFillText('')
       alert('🌟 Sen Magic Paste đã phân tích và điền đáp án thành công!')
     } catch (err) {
-      alert('Lỗi định dạng. Vui lòng kiểm tra lại cấu trúc văn bản hoặc đảm bảo đã nhập đúng số lượng câu hỏi.')
+      alert('Lỗi định dạng. Vui lòng kiểm tra lại cấu trúc văn bản hoặc đảm bảo đã nhập đúng định dạng.')
     }
   }
 
@@ -406,7 +399,6 @@ export default function AdminDashboard() {
     if (!error) setUsersList(usersList.map(u => u.id === userId ? { ...u, role: newRole } : u))
   }
 
-  // 🌟 NÂNG CẤP CHẤM BÀI HỖ TRỢ CÂU HỖN HỢP
   const openGradingView = (submission: any) => {
     setSelectedSubForGrading(submission)
     const initialScores: Record<string, string> = {}
@@ -623,9 +615,9 @@ export default function AdminDashboard() {
             <div className="space-y-4 mb-6">
               <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl text-xs font-medium text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30">
                 <span className="font-bold">Gợi ý định dạng copy-paste siêu tốc:</span><br/>
-                - Trắc nghiệm: <code>1A 2.B 3-C 4:D</code><br/>
-                - Đúng/Sai 4 ý: <code>1: Đ S Đ S</code> hoặc <code>1: D S D S</code><br/>
-                - Trả lời ngắn: <code>1: 15.5</code> (Nhớ xuống dòng cho câu tiếp theo)
+                - Trắc nghiệm: <code>Câu 1: A</code> hoặc <code>Bài 2. B</code> hoặc <code>3-C</code><br/>
+                - Đúng/Sai 4 ý: <code>Câu 1: Đ S Đ S</code> hoặc <code>1: D S D S</code><br/>
+                - Trả lời ngắn: <code>Câu 1: 15.5</code> (Nhớ xuống dòng cho câu tiếp theo)
               </div>
               
               <textarea 
@@ -805,7 +797,6 @@ export default function AdminDashboard() {
                                   <option value="true_false">Đúng / Sai (4 Ý)</option>
                                   <option value="short_answer">Trả lời ngắn</option>
                                   <option value="essay">Tự luận dài</option>
-                                  {/* 🌟 CHỈ HIỆN CÂU HỖN HỢP NẾU LÀ HSA HOẶC TSA */}
                                   {(examType === 'HSA' || examType === 'TSA') && <option value="mixed">Câu hỗn hợp (HSA/TSA)</option>}
                                 </select>
                               </div>
@@ -814,7 +805,6 @@ export default function AdminDashboard() {
                             </div>
                           </div>
 
-                          {/* 🌟 KHUNG QUẢN LÝ VÙNG CÂU HỎI HỖN HỢP (CHỈ HIỂN THỊ KHI CHỌN TYPE MIXED) */}
                           {section.type === 'mixed' && (
                             <div className="mt-4 p-4 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl space-y-3 mb-4">
                               <div className="flex justify-between items-center border-b border-indigo-100 dark:border-indigo-800/50 pb-2">
@@ -881,7 +871,6 @@ export default function AdminDashboard() {
                               <div className="flex items-center flex-wrap gap-2">
                                 <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-xs font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"><KeyRound className="w-4 h-4"/> {editingKeysSectionId === section.id ? 'Thu gọn bảng đáp án đúng' : 'Cấu hình đáp án đúng'}</button>
                                 
-                                {/* 🌟 NÚT ĐŨA THẦN MỞ POPUP SMART PARSER */}
                                 <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-xs font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-amber-200 transition-colors shadow-sm border border-amber-200 dark:border-amber-800">
                                   <Sparkles className="w-4 h-4"/> Sen Magic Paste
                                 </button>
@@ -891,7 +880,6 @@ export default function AdminDashboard() {
                                 <div className="mt-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-80 overflow-y-auto">
                                   {Array.from({ length: section.questionCount }).map((_, qIdx) => {
                                     
-                                    // 🌟 Xác định dạng câu hỏi và số lượng lựa chọn cho từng câu dựa theo Mixed Ranges
                                     let currentType = section.type;
                                     let currentOptionsCount = section.optionsCount || 4;
                                     
@@ -901,7 +889,7 @@ export default function AdminDashboard() {
                                         currentType = range.type
                                         currentOptionsCount = range.optionsCount || 4
                                       } else {
-                                        currentType = 'short_answer' // Default nếu rơi ra ngoài vùng
+                                        currentType = 'short_answer'
                                       }
                                     }
 
