@@ -26,7 +26,7 @@ export default function ExamRoomPage() {
   const [isFullscreen, setIsFullscreen] = useState(false) 
   const violationsRef = useRef(0)
 
-  // 🌟 STATE THỜI GIAN ÂN HẠN CHỐNG BẮT NHẦM TRÊN IPAD
+  // STATE THỜI GIAN ÂN HẠN CHỐNG BẮT NHẦM TRÊN THIẾT BỊ CẢM ỨNG
   const [graceCountdown, setGraceCountdown] = useState<number | null>(null)
   const graceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -51,11 +51,11 @@ export default function ExamRoomPage() {
     return () => clearInterval(timer)
   }, [hasStarted, loading, timeLeft, isKicked, submitting])
 
-  // 🌟 HỆ THỐNG GIÁM SÁT ANTI-CHEAT ĐƯỢC FIX LỖI IPAD RELOAD
+  // HỆ THỐNG GIÁM SÁT ANTI-CHEAT
   useEffect(() => {
     if (!hasStarted || isKicked || submitting) return;
 
-    // KHOÁ CỨNG ROOT HỆ THỐNG KHÔNG CHO PHÉP BOUNCE HOẶC PULL-TO-REFRESH TRÊN SAFARI
+    // Phong tỏa Pull-to-refresh ở tầng core
     const style = document.createElement('style')
     style.innerHTML = `
       html, body {
@@ -89,7 +89,7 @@ export default function ExamRoomPage() {
 
       if (violationsRef.current >= 3) {
         setIsKicked(true)
-        alert('⛔ BẠN ĐÃ BỊ ĐÌNH CHỈ THI! \nBạn đã vi phạm quy chế quá 3 lần. Hệ thống tự động thu bài và đóng lượt thi.')
+        alert('⛔ BẠN ĐÃ BỊ ĐÌNH CHỈ THI! \nBạn đã vi phạm quy chế (Rời khỏi màn hình) quá 3 lần. Hệ thống tự động thu bài và đóng lượt thi.')
         handleForceSubmit()
       } else {
         alert(`⚠️ CẢNH BÁO VI PHẠM LẦN ${violationsRef.current}/3 ⚠️\nBạn không được phép rời màn hình thi!`)
@@ -100,13 +100,11 @@ export default function ExamRoomPage() {
       if (document.hidden) triggerViolation()
     }
 
-    // CẤU HÌNH THỜI GIAN ÂN HẠN TOÀN MÀN HÌNH KHÔNG CHO PHẠT SAI
     const handleFullscreenChange = () => {
       const isFull = !!document.fullscreenElement
       setIsFullscreen(isFull)
       
       if (!isFull) {
-        // Kích hoạt 3 giây ân hạn cho iPad khôi phục trạng thái
         setGraceCountdown(3)
         if (graceTimerRef.current) clearInterval(graceTimerRef.current)
         
@@ -118,11 +116,10 @@ export default function ExamRoomPage() {
             clearInterval(graceTimerRef.current!)
             graceTimerRef.current = null
             setGraceCountdown(null)
-            triggerViolation() // Hết hạn 3 giây không bật lại -> Phạt thẻ vàng!
+            triggerViolation() 
           }
         }, 1000)
       } else {
-        // Nếu bật lại kịp thời -> Hủy lệnh phạt
         if (graceTimerRef.current) {
           clearInterval(graceTimerRef.current)
           graceTimerRef.current = null
@@ -249,24 +246,27 @@ export default function ExamRoomPage() {
 
   const pdfUrl = `https://drive.google.com/file/d/${exam?.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`
 
-  // PHÒNG CHỜ THI
+  // 🌟 KHU VỰC ĐÃ CẬP NHẬT: MÀN HÌNH PHÒNG CHỜ THI (QUY CHẾ CHUẨN HÓA TOÀN DIỆN)
   if (!hasStarted) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-center">
-        <div className="bg-slate-800 p-8 md:p-12 rounded-[2rem] max-w-2xl border border-slate-700 shadow-2xl">
+        <div className="bg-slate-800 p-8 md:p-12 rounded-[2rem] max-w-2xl border border-slate-700 shadow-2xl animate-in fade-in zoom-in-95 duration-350">
           <ShieldAlert className="w-16 h-16 text-blue-500 mx-auto mb-6" />
           <h1 className="text-3xl font-extrabold text-white mb-2">{exam?.title}</h1>
-          <p className="text-slate-400 mb-8 font-medium">Thời gian: {exam?.duration} phút • Cấu trúc: {exam?.exam_type}</p>
+          <p className="text-slate-400 mb-8 font-medium">Thời gian làm bài: {exam?.duration} phút • Cấu trúc đề: {exam?.exam_type}</p>
+          
           <div className="bg-slate-900 p-6 rounded-2xl text-left border border-slate-700 mb-8">
-            <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> Quy chế phòng thi độc quyền iPad:</h3>
-            <ul className="text-slate-300 text-sm space-y-2 font-medium list-disc pl-5">
-              <li>Hệ thống ép chế độ <b className="text-white">Toàn màn hình</b>. Đã chặn 100% hành vi kéo vuốt tải lại trang của iPad.</li>
-              <li>Nếu chẳng may lỡ tay bấm nhầm thoát Full-screen, hệ thống cấp <b className="text-emerald-400">3 giây ân hạn</b> để ấn nút khôi phục mà không tính lỗi.</li>
-              <li>Quá 3 giây cố tình không khôi phục, bạn sẽ bị phạt tính 1 lần vi phạm. Đủ 3 lần hủy bài ngay lập tức.</li>
+            <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> Quy chế phòng thi nghiêm ngặt (Bảo mật hệ thống):</h3>
+            <ul className="text-slate-300 text-sm space-y-3.5 font-medium list-disc pl-5 leading-relaxed">
+              <li>Hệ thống sẽ tự động kích hoạt và ép chế độ <b className="text-white">Toàn màn hình (Full-screen)</b> ngay khi bắt đầu. Mọi hành vi kéo vuốt tải lại trang trên các thiết bị di động đã bị phong tỏa.</li>
+              <li>Nghiêm cấm tuyệt đối các hành vi rời khỏi màn hình, chuyển đổi Tab, mở ứng dụng khác hoặc thu nhỏ trình duyệt trong suốt thời gian làm bài.</li>
+              <li>Trường hợp mất trạng thái Toàn màn hình do sự cố phần cứng, hệ thống cấp <b className="text-emerald-400">3 giây ân hạn</b> để thí sinh chủ động nhấn nút khôi phục bảo mật.</li>
+              <li>Nếu quá thời gian ân hạn hoặc cố tình vi phạm, hệ thống sẽ ghi nhận 1 lần cảnh báo. Đủ <b>3 lần vi phạm</b>, bài thi sẽ lập tức bị khóa, tự động thu bài và hủy lượt thi.</li>
             </ul>
           </div>
-          <button onClick={handleStartExam} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-lg flex items-center justify-center gap-2">
-            <PlayCircle className="w-6 h-6" /> Tôi đã hiểu, Bắt đầu thi
+          
+          <button onClick={handleStartExam} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-transform transform active:scale-[0.99]">
+            <PlayCircle className="w-6 h-6" /> Tôi đã đọc và cam kết tuân thủ quy chế
           </button>
         </div>
       </div>
@@ -276,7 +276,7 @@ export default function ExamRoomPage() {
   return (
     <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none" style={{ overscrollBehaviorY: 'contain' }}>
       
-      {/* 🌟 POPUP THỜI GIAN ÂN HẠN: NỔI LÊN TRÊN IPAD KHI BỊ VĂNG FULLSCREEN */}
+      {/* POPUP THỜI GIAN ÂN HẠN KHI BỊ THOÁT FULLSCREEN */}
       {graceCountdown !== null && (
         <div className="fixed inset-0 z-[999] bg-red-950/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
           <div className="bg-slate-900/80 p-8 rounded-[2rem] border border-red-500/40 max-w-md shadow-2xl space-y-6">
@@ -304,7 +304,7 @@ export default function ExamRoomPage() {
           <div>
             <h1 className="font-extrabold text-sm line-clamp-1">{exam?.title}</h1>
             <div className="flex gap-2 mt-0.5">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${violations > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-emerald-100 text-emerald-600'}`}>Vi phạm: {violations}/3</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${violations > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-emerald-100 text-emerald-700'}`}>Vi phạm: {violations}/3</span>
               {!isFullscreen && (
                 <button onClick={requestFullscreenMode} className="text-[10px] bg-blue-100 text-blue-700 font-black px-2 py-0.5 rounded flex items-center gap-1 border border-blue-300">
                   <Maximize2 className="w-2.5 h-2.5"/> Bật lại Fullscreen
@@ -373,7 +373,7 @@ export default function ExamRoomPage() {
                         </div>
                         <div className="mt-2">
                           {section.type === 'single_choice' && <div className="flex gap-3 flex-wrap">{Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className={`w-11 h-11 rounded-full border-2 text-sm font-bold transition-all ${currentAns === l ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>{l}</button> })}</div>}
-                          {section.type === 'multiple_choice' && <div className="flex gap-3 flex-wrap">{Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-11 h-11 rounded-xl border-2 text-sm font-bold transition-all ${isSel ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700 border-slate-200 dark:border-slate-700'}`}>{l}</button> })}</div>}
+                          {section.type === 'multiple_choice' && <div className="flex gap-3 flex-wrap">{Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-11 h-11 rounded-xl border-2 text-sm font-bold transition-all ${isSel ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700'}`}>{l}</button> })}</div>}
                           
                           {section.type === 'true_false' && (
                             <div className="flex flex-col gap-3">
