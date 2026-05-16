@@ -23,9 +23,90 @@ const EXAMS = ['THPTQG', 'HSA', 'TSA', 'SPT']
 const THPTQG_SUBJECTS = ['Toán', 'Ngữ Văn', 'Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí', 'Tiếng Anh', 'GDKT&PL', 'Tin Học', 'Công Nghệ']
 const HSA_SCIENCE_SUBJECTS = ['Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí']
 
-// 🌟 APPLE'S LIQUID GLASS CSS CONSTANTS
 const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
 const glassButtonStyles = "bg-white/40 dark:bg-slate-800/50 backdrop-blur-xl backdrop-saturate-[1.2] border border-white/60 dark:border-white/10 shadow-sm hover:bg-white/60 dark:hover:bg-slate-700/50 transition-all duration-300"
+
+// ==========================================
+// 🌟 COMPONENT: ĐẾM NGƯỢC THỜI GIAN THỰC
+// ==========================================
+export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
+  const [now, setNow] = useState(Date.now())
+  
+  useEffect(() => { 
+    const timer = setInterval(() => setNow(Date.now()), 1000); 
+    return () => clearInterval(timer) 
+  }, [])
+  
+  const target = new Date(targetDate).getTime()
+  if (isNaN(target)) return <span className="text-red-500 font-bold">[Lỗi định dạng ngày]</span>
+  
+  const diff = target - now
+  if (diff <= 0) return <span className="inline-block bg-slate-200 dark:bg-slate-800 text-slate-500 font-black px-3 py-1 rounded-xl shadow-inner mx-1 text-sm">⏳ Sự kiện đã diễn ra</span>
+  
+  const d = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const h = Math.floor((diff / (1000 * 60 * 60)) % 24)
+  const m = Math.floor((diff / 1000 / 60) % 60)
+  const s = Math.floor((diff / 1000) % 60)
+  
+  return (
+    <span className="inline-block bg-gradient-to-r from-red-600 to-orange-600 text-white font-black px-3 py-1.5 rounded-xl shadow-[0_4px_15px_rgba(239,68,68,0.4)] mx-1 text-sm animate-pulse">
+      ⏳ {d} Ngày {h} Giờ {m} Phút {s} Giây
+    </span>
+  )
+}
+
+// ==========================================
+// 🌟 BỘ XỬ LÝ CÚ PHÁP THÔNG BÁO TỪ ADMIN
+// ==========================================
+export const AnnouncementRenderer = ({ text }: { text: string }) => {
+  const renderLine = (line: string, idx: number) => {
+    let isH1 = false, isH2 = false, isH3 = false;
+    let content = line;
+    
+    if (content.startsWith('###(H1)')) { isH1 = true; content = content.replace('###(H1)', '').trim() }
+    else if (content.startsWith('##(H2)')) { isH2 = true; content = content.replace('##(H2)', '').trim() }
+    else if (content.startsWith('#(H3)')) { isH3 = true; content = content.replace('#(H3)', '').trim() }
+
+    const parseTags = (str: string) => {
+      const regex = /{(time_|Quoc_Khanh|Bold|Underline):\s*([^}]+)}/gi;
+      const parts = []; let lastIndex = 0; let match;
+      
+      while ((match = regex.exec(str)) !== null) {
+        if (match.index > lastIndex) parts.push(<span key={`text-${lastIndex}`}>{str.substring(lastIndex, match.index)}</span>)
+        
+        const tag = match[1].toLowerCase(); 
+        const val = match[2];
+        
+        if (tag === 'time_') {
+          parts.push(<CountdownTimer key={`time-${match.index}`} targetDate={val} />)
+        }
+        else if (tag === 'quoc_khanh') {
+          parts.push(<span key={`qk-${match.index}`} className="text-yellow-300 font-black px-3 py-1 inline-flex items-center gap-2 mx-1 bg-red-600 rounded-lg shadow-md uppercase tracking-wider">🇻🇳 🚜 314 {val} 🚩 🇻🇳</span>)
+        }
+        else if (tag === 'bold') {
+          parts.push(<strong key={`b-${match.index}`} className="uppercase font-black text-blue-600 dark:text-blue-400 tracking-wide">{val}</strong>)
+        }
+        else if (tag === 'underline') {
+          parts.push(<u key={`u-${match.index}`} className="underline-offset-4 decoration-2 decoration-blue-500">{val}</u>)
+        }
+        
+        lastIndex = regex.lastIndex;
+      }
+      if (lastIndex < str.length) parts.push(<span key={`text-${lastIndex}`}>{str.substring(lastIndex)}</span>)
+      return parts;
+    };
+
+    const baseClass = isH1 ? "text-3xl md:text-4xl font-black text-blue-700 dark:text-blue-400 uppercase tracking-tight my-4 drop-shadow-md text-center" :
+                      isH2 ? "text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-slate-100 my-3 text-center" :
+                      isH3 ? "text-xl font-bold text-slate-700 dark:text-slate-300 my-2" :
+                      "text-base font-medium text-slate-700 dark:text-slate-300 my-1 leading-relaxed";
+
+    return <div key={idx} className={baseClass}>{parseTags(content)}</div>;
+  }
+  
+  return <div className="w-full">{text.split('\n').map((line, idx) => renderLine(line, idx))}</div>
+}
+
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -37,65 +118,64 @@ export default function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [studentHistoryList, setStudentHistoryList] = useState<any[]>([])
+  
+  // 🌟 STATE: Lưu trữ thông báo tải từ DB
+  const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
 
-  // 🌟 STATES CHO TÍNH NĂNG NHẬP MÃ ĐỀ THI ẨN
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [examCode, setExamCode] = useState('')
   const [codeLoading, setCodeLoading] = useState(false)
 
   const [formData, setFormData] = useState({
-    fullName: '',
-    dob: '',
-    cccd: '',
-    province: '',
-    school: '',
-    aspiration: '',
-    targetExams: [] as string[],
-    targetSubjects: [] as string[],
-    hsaOption: '' as 'Tiếng Anh' | 'Khoa học' | '',
-    hsaScienceSubjects: [] as string[]
+    fullName: '', dob: '', cccd: '', province: '', school: '', aspiration: '',
+    targetExams: [] as string[], targetSubjects: [] as string[],
+    hsaOption: '' as 'Tiếng Anh' | 'Khoa học' | '', hsaScienceSubjects: [] as string[]
   })
 
   useEffect(() => {
     const fetchUserData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-        return
-      }
-      userEmail ?? setUserEmail(user.email ?? null)
+      if (!user) { router.push('/login'); return }
+      setUserEmail(user.email ?? null)
 
+      // 1. Tải Profile Học sinh
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
       if (profile) {
         setUserRole(profile.role || 'student')
-
         setFormData({
-          fullName: profile.full_name || '',
-          dob: profile.dob || '',
-          cccd: profile.cccd || '',
-          province: profile.province || '',
-          school: profile.school || '',
-          aspiration: profile.aspiration || '',
-          targetExams: profile.target_exams || [],
-          targetSubjects: profile.target_subjects || [],
-          hsaOption: profile.hsa_option || '',
-          hsaScienceSubjects: profile.hsa_science_subjects || []
+          fullName: profile.full_name || '', dob: profile.dob || '', cccd: profile.cccd || '',
+          province: profile.province || '', school: profile.school || '', aspiration: profile.aspiration || '',
+          targetExams: profile.target_exams || [], targetSubjects: profile.target_subjects || [],
+          hsaOption: profile.hsa_option || '', hsaScienceSubjects: profile.hsa_science_subjects || []
         })
 
-        if (!profile.full_name || !profile.target_exams || profile.target_exams.length === 0) {
-          setShowOnboarding(true)
-        }
+        if (!profile.full_name || !profile.target_exams || profile.target_exams.length === 0) { setShowOnboarding(true) }
 
+        // 2. Tải Lịch sử thi
         const { data: subHistory } = await supabase
           .from('submissions')
           .select('*, exams(title, exam_type, allow_review)')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
         
-          setStudentHistoryList(subHistory || [])
-      } else {
-        setShowOnboarding(true)
+        setStudentHistoryList(subHistory || [])
+      } else { setShowOnboarding(true) }
+
+      // 🌟 3. TẢI THÔNG BÁO TỪ ADMIN (Nếu thỏa mãn điều kiện thời gian)
+      const nowISO = new Date().toISOString()
+      const { data: notifData } = await supabase
+        .from('announcements')
+        .select('content')
+        .eq('is_active', true)
+        .or(`start_time.is.null,start_time.lte.${nowISO}`)
+        .or(`end_time.is.null,end_time.gte.${nowISO}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (notifData) {
+        setActiveAnnouncement(notifData.content)
       }
 
       setIsDataLoading(false)
@@ -104,40 +184,19 @@ export default function DashboardPage() {
     fetchUserData()
 
     if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
-      setIsDarkMode(true)
-      document.documentElement.classList.add('dark')
+      setIsDarkMode(true); document.documentElement.classList.add('dark')
     }
   }, [router])
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login') }
 
   const toggleDarkMode = () => {
-    if (isDarkMode) {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-      setIsDarkMode(false)
-    } else {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-      setIsDarkMode(true)
-    }
+    if (isDarkMode) { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); setIsDarkMode(false) } 
+    else { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); setIsDarkMode(true) }
   }
 
-  const toggleExam = (exam: string) => {
-    setFormData(prev => ({
-      ...prev,
-      targetExams: prev.targetExams.includes(exam) ? prev.targetExams.filter(e => e !== exam) : [...prev.targetExams, exam]
-    }))
-  }
-  const toggleSubject = (subject: string) => {
-    setFormData(prev => ({
-      ...prev,
-      targetSubjects: prev.targetSubjects.includes(subject) ? prev.targetSubjects.filter(s => s !== subject) : [...prev.targetSubjects, subject]
-    }))
-  }
+  const toggleExam = (exam: string) => { setFormData(prev => ({ ...prev, targetExams: prev.targetExams.includes(exam) ? prev.targetExams.filter(e => e !== exam) : [...prev.targetExams, exam] })) }
+  const toggleSubject = (subject: string) => { setFormData(prev => ({ ...prev, targetSubjects: prev.targetSubjects.includes(subject) ? prev.targetSubjects.filter(s => s !== subject) : [...prev.targetSubjects, subject] })) }
   const toggleHsaScienceSubject = (subject: string) => {
     setFormData(prev => {
       const isSelected = prev.hsaScienceSubjects.includes(subject)
@@ -148,54 +207,23 @@ export default function DashboardPage() {
   }
 
   const handleSaveProfile = async () => {
-    if (formData.targetExams.includes('HSA') && formData.hsaOption === 'Khoa học' && formData.hsaScienceSubjects.length !== 3) {
-      alert("Vui lòng chọn đủ 3 môn trong phần thi Khoa học của HSA!")
-      return
-    }
-
+    if (formData.targetExams.includes('HSA') && formData.hsaOption === 'Khoa học' && formData.hsaScienceSubjects.length !== 3) { alert("Vui lòng chọn đủ 3 môn trong phần thi Khoa học của HSA!"); return }
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    const { error } = await supabase.from('profiles').update({
+        full_name: formData.fullName, dob: formData.dob || null, cccd: formData.cccd, province: formData.province, school: formData.school, aspiration: formData.aspiration, target_exams: formData.targetExams, target_subjects: formData.targetSubjects, hsa_option: formData.hsaOption, hsa_science_subjects: formData.hsaScienceSubjects
+      }).eq('id', user.id)
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: formData.fullName,
-        dob: formData.dob || null,
-        cccd: formData.cccd,
-        province: formData.province,
-        school: formData.school,
-        aspiration: formData.aspiration,
-        target_exams: formData.targetExams,
-        target_subjects: formData.targetSubjects,
-        hsa_option: formData.hsaOption,
-        hsa_science_subjects: formData.hsaScienceSubjects
-      })
-      .eq('id', user.id)
-
-    if (error) {
-      alert("Có lỗi xảy ra: " + error.message)
-    } else {
-      setShowOnboarding(false)
-      setShowProfile(false)
-    }
+    if (error) alert("Có lỗi xảy ra: " + error.message)
+    else { setShowOnboarding(false); setShowProfile(false) }
   }
 
-  // 🌟 HÀM XỬ LÝ VÀO PHÒNG THI ẨN
   const handleJoinHiddenExam = async () => {
     if (!examCode.trim()) return
     setCodeLoading(true)
-    const { data, error } = await supabase
-      .from('exams')
-      .select('id, title')
-      .eq('access_code', examCode.trim().toUpperCase())
-      .single()
-    
-    if (error || !data) {
-      alert('Mã đề thi không hợp lệ hoặc đã bị vô hiệu hóa!')
-      setCodeLoading(false)
-    } else {
-      router.push(`/exams/${data.id}`)
-    }
+    const { data, error } = await supabase.from('exams').select('id, title').eq('access_code', examCode.trim().toUpperCase()).single()
+    if (error || !data) { alert('Mã đề thi không hợp lệ hoặc đã bị vô hiệu hóa!'); setCodeLoading(false) } 
+    else { router.push(`/exams/${data.id}`) }
   }
 
   if (isDataLoading) {
@@ -217,7 +245,7 @@ export default function DashboardPage() {
       <div className="fixed top-[25%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-purple-400/40 to-pink-400/30 dark:from-purple-800/40 dark:to-pink-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
       <div className="fixed bottom-[-15%] left-[20%] w-[700px] h-[700px] bg-gradient-to-t from-emerald-300/30 to-teal-400/20 dark:from-emerald-900/30 dark:to-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '4s' }}></div>
 
-      {/* 🌟 MODAL NHẬP MÃ ĐỀ THI ẨN */}
+      {/* MODAL NHẬP MÃ ĐỀ THI ẨN */}
       {showCodeModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
            <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 relative shadow-2xl`}>
@@ -243,7 +271,7 @@ export default function DashboardPage() {
 
       <div className="relative z-10 p-4 md:p-6 max-w-[1400px] mx-auto">
         
-        {/* --- POPUP ONBOARDING (LIQUID GLASS) --- */}
+        {/* POPUP ONBOARDING (LIQUID GLASS) */}
         {showOnboarding && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
              <div className={`${glassCardStyles} rounded-[2rem] w-full max-w-5xl max-h-[95vh] overflow-y-auto custom-scrollbar border-t-white/70 border-l-white/70 dark:border-t-white/20 dark:border-l-white/20`}>
@@ -308,7 +336,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* --- SETTINGS SIDE PANEL (LIQUID GLASS) --- */}
+        {/* SETTINGS SIDE PANEL */}
         {showProfile && (
           <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/20 backdrop-blur-sm transition-all duration-300">
             <div className="w-full max-w-md h-full bg-white/50 dark:bg-slate-900/50 backdrop-blur-[40px] backdrop-saturate-[1.5] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto border-l border-white/60 dark:border-white/10 flex flex-col">
@@ -343,10 +371,8 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* --- MAIN DASHBOARD (LIQUID GLASS PANELS) --- */}
         <div className={`transition-all duration-500 ${(showOnboarding || showProfile || showCodeModal) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
           
-          {/* 🌟 CẬP NHẬT HEADER KÈM LOGO */}
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div className="flex items-center gap-3 cursor-pointer select-none group shrink-0" onClick={() => router.push('/dashboard')}>
               <div className="w-10 h-10 md:w-12 md:h-12 bg-white/50 dark:bg-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl flex items-center justify-center p-1 backdrop-blur-md shadow-sm group-hover:scale-105 transition-transform duration-300">
@@ -376,10 +402,19 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* 🌟 BẢNG THÔNG BÁO TIN TỨC ĐỘC LẬP TỪ ADMIN */}
+          {activeAnnouncement && (
+            <div className="mb-8 w-full animate-in fade-in slide-in-from-top-4 duration-500 relative z-20">
+              <div className="bg-white/40 dark:bg-slate-800/40 backdrop-blur-3xl backdrop-saturate-200 border border-white/60 dark:border-white/10 rounded-[2.5rem] p-8 md:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.1)] relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500"></div>
+                <AnnouncementRenderer text={activeAnnouncement} />
+              </div>
+            </div>
+          )}
+
           {/* BENTO GRID */}
           <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-6">
             
-            {/* LARGE HERO CARD - DEEP GLASSMORPHISM */}
             <div className="md:col-span-2 md:row-span-2 bg-gradient-to-br from-blue-500/60 to-indigo-600/60 dark:from-blue-700/50 dark:to-indigo-900/50 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] p-8 md:p-12 text-white relative overflow-hidden shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] border border-white/40 border-b-white/10 border-r-white/10 transition-all hover:shadow-[0_8px_32px_0_rgba(31,38,135,0.3)]">
               <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 transform translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000 ease-in-out"></div>
               
@@ -396,7 +431,6 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 
-                {/* 🌟 NÚT VÀO KHO ĐỀ & NHẬP MÃ ĐỀ ẨN */}
                 <div className="flex flex-wrap items-center gap-3">
                   <button onClick={() => router.push('/exams')} className="bg-white/20 hover:bg-white/30 backdrop-blur-2xl border border-white/40 text-white px-8 py-4 rounded-2xl font-black shadow-[0_4px_15px_rgba(0,0,0,0.1)] flex items-center justify-center gap-3 group text-base transition-all">
                     <Target className="w-5 h-5 group-hover:scale-110 transition-transform" /> Vào kho đề thi <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -409,7 +443,6 @@ export default function DashboardPage() {
               <BookOpen className="absolute -right-12 -bottom-12 w-72 h-72 text-white/10 transform -rotate-12 blur-[2px]" />
             </div>
 
-            {/* SMALL GLASS CARD 1 */}
             <div className={`${glassCardStyles} rounded-[2.5rem] p-8 flex flex-col justify-between hover:-translate-y-1 transition-transform duration-300 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
               <div className="flex justify-between items-start">
                 <div className="p-4 bg-gradient-to-br from-orange-400/30 to-red-500/30 text-orange-600 dark:text-orange-400 rounded-2xl backdrop-blur-md border border-orange-200/50 dark:border-orange-500/20 shadow-inner">
@@ -442,7 +475,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* RECENT HISTORY CARD (LONG) */}
             <div className={`${glassCardStyles} md:col-span-2 rounded-[2.5rem] p-8 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
               <h3 className="text-lg font-extrabold flex items-center gap-2 mb-4 text-slate-900 dark:text-white drop-shadow-sm">
                 <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" /> Lịch sử phân tích điểm
