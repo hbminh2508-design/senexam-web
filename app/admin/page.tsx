@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
-  CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2
+  CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
+  Wand2 // Thêm icon đũa thần
 } from 'lucide-react'
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
@@ -51,10 +52,12 @@ export default function AdminDashboard() {
   const [uploadStatus, setUploadStatus] = useState<{type: 'idle' | 'uploading' | 'success' | 'error', message: string}>({ type: 'idle', message: '' })
 
   const [editingKeysSectionId, setEditingKeysSectionId] = useState<string | null>(null)
-  
-  // 🌟 KHAI BÁO STATE CHO ĐỀ THI ẨN
   const [isHiddenExam, setIsHiddenExam] = useState(false)
   
+  // 🌟 STATES CHO TÍNH NĂNG NHẬN DIỆN ĐÁP ÁN THÔNG MINH
+  const [autoFillModalId, setAutoFillModalId] = useState<string | null>(null)
+  const [autoFillText, setAutoFillText] = useState('')
+
   const [examStructure, setExamStructure] = useState<{
     id: string, 
     type: string, 
@@ -185,6 +188,80 @@ export default function AdminDashboard() {
     }))
   }
 
+  // 🌟 THUẬT TOÁN NHẬN DIỆN ĐÁP ÁN (SMART PARSER)
+  const handleProcessAutoFill = () => {
+    if (!autoFillModalId) return
+    const section = examStructure.find(s => s.id === autoFillModalId)
+    if (!section) return
+
+    const newAnswers = { ...section.correctAnswers }
+    const rawText = autoFillText.trim()
+
+    try {
+      if (section.type === 'single_choice') {
+        // Nhận diện định dạng: 1A 2B 3.C 4-D 5: A
+        const regex = /(\d+)[\.\-\:\s]*([A-D])/gi
+        let match
+        while ((match = regex.exec(rawText)) !== null) {
+          const qNum = parseInt(match[1]) - 1
+          if (qNum >= 0 && qNum < section.questionCount) {
+            newAnswers[qNum] = match[2].toUpperCase()
+          }
+        }
+      } 
+      else if (section.type === 'true_false') {
+        // Nhận diện định dạng: 1: Đ S Đ S, 1: D,S,D,S, hoặc 1. D S D S
+        // Hỗ trợ cả chữ D và Đ (Vì Unikey gõ D thành Đ rất phổ biến)
+        const normalizedText = rawText.replace(/Đ/gi, 'D')
+        const regex = /(\d+)[\.\-\:\s]*([DS])[\s\,]*([DS])[\s\,]*([DS])[\s\,]*([DS])/gi
+        let match
+        while ((match = regex.exec(normalizedText)) !== null) {
+          const qNum = parseInt(match[1]) - 1
+          if (qNum >= 0 && qNum < section.questionCount) {
+            newAnswers[qNum] = {
+              a: match[2].toUpperCase() === 'D' ? 'Đ' : 'S',
+              b: match[3].toUpperCase() === 'D' ? 'Đ' : 'S',
+              c: match[4].toUpperCase() === 'D' ? 'Đ' : 'S',
+              d: match[5].toUpperCase() === 'D' ? 'Đ' : 'S'
+            }
+          }
+        }
+      }
+      else if (section.type === 'short_answer') {
+        // Nhận diện định dạng từng dòng: 1: 15.5 \n 2: 10 \n 3: XYZ
+        const lines = rawText.split('\n')
+        lines.forEach(line => {
+          const parts = line.split(/[\:\-]/)
+          if (parts.length >= 2) {
+            const qNum = parseInt(parts[0].replace(/[^\d]/g, '')) - 1
+            const ans = parts.slice(1).join(':').trim()
+            if (!isNaN(qNum) && qNum >= 0 && qNum < section.questionCount) {
+              newAnswers[qNum] = ans
+            }
+          }
+        })
+      }
+
+      updateSection(section.id, 'correctAnswers', newAnswers)
+      setAutoFillModalId(null)
+      setAutoFillText('')
+      alert('Đã quét và điền đáp án tự động thành công!')
+    } catch (err) {
+      alert('Lỗi định dạng. Vui lòng kiểm tra lại văn bản.')
+    }
+  }
+
+  // Đọc file .txt đáp án
+  const handleAnswerFileRead = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      if (evt.target?.result) setAutoFillText(evt.target.result as string)
+    }
+    reader.readAsText(file)
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0]
@@ -194,7 +271,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // 🌟 CẬP NHẬT LOGIC XUẤT BẢN ĐỀ THI
   const handleUploadExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !file || selectedSubjects.length === 0 || examStructure.length === 0) {
@@ -214,8 +290,6 @@ export default function AdminDashboard() {
       if (!response.ok) throw new Error(result.error || 'Lỗi kết nối API Google Drive')
 
       const { data: { user } } = await supabase.auth.getUser()
-
-      // Tự động sinh mã truy cập ngẫu nhiên 6 ký tự nếu bật chế độ Đề Ẩn
       const generatedAccessCode = isHiddenExam ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
 
       const { error: dbError } = await supabase.from('exams').insert({
@@ -231,8 +305,6 @@ export default function AdminDashboard() {
         : 'Xuất bản đề thi thành công!';
         
       setUploadStatus({ type: 'success', message: successMsg })
-      
-      // Reset form
       setTitle(''); setFile(null); setPdfPreviewUrl(null); setSelectedSubjects([]); setExamStructure([]); setMaxAttempts(1); setGradingMethod('highest'); setIsHiddenExam(false);
     } catch (error: any) {
       setUploadStatus({ type: 'error', message: error.message || 'Có lỗi xảy ra.' })
@@ -434,8 +506,54 @@ export default function AdminDashboard() {
 
   // TRANG QUẢN TRỊ CHÍNH
   return (
-    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+    <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 relative">
       
+      {/* 🌟 MODAL CỦA TÍNH NĂNG ĐIỀN ĐÁP ÁN THÔNG MINH */}
+      {autoFillModalId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 relative">
+            <button onClick={() => setAutoFillModalId(null)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
+            
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center">
+                <Wand2 className="w-6 h-6 text-amber-600 dark:text-amber-400"/>
+              </div>
+              <div>
+                <h2 className="text-xl font-black">Nhận diện đáp án thông minh</h2>
+                <p className="text-sm font-medium text-slate-500">Copy paste nội dung hoặc tải lên file (.txt) để hệ thống tự động quét.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                <span className="font-bold text-slate-900 dark:text-white">Gợi ý định dạng hỗ trợ:</span><br/>
+                - Trắc nghiệm: <code>1A 2.B 3-C 4:D</code><br/>
+                - Đúng/Sai 4 ý: <code>1: Đ S Đ S</code> hoặc <code>1: D S D S</code><br/>
+                - Trả lời ngắn: <code>1: 15.5</code> (Xuống dòng cho câu tiếp theo)
+              </div>
+              
+              <textarea 
+                value={autoFillText} 
+                onChange={(e) => setAutoFillText(e.target.value)} 
+                placeholder="Dán nội dung đáp án vào đây..." 
+                className="w-full h-48 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500 custom-scrollbar"
+              />
+              
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-500 flex items-center gap-2 cursor-pointer hover:text-amber-600 transition-colors">
+                  <UploadCloud className="w-4 h-4"/> Tải file Text (.txt) lên
+                  <input type="file" accept=".txt,.csv" onChange={handleAnswerFileRead} className="hidden" />
+                </label>
+              </div>
+            </div>
+
+            <button onClick={handleProcessAutoFill} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95">
+              Xử lý & Khớp đáp án
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col hidden md:flex shrink-0">
         <h1 className="text-2xl font-black text-blue-600 dark:text-blue-500 mb-8">SenExam Admin</h1>
         <nav className="flex-grow space-y-1">
@@ -508,7 +626,6 @@ export default function AdminDashboard() {
                     <input type="checkbox" checked={allowReview} onChange={(e) => setAllowReview(e.target.checked)} className="w-5 h-5 accent-blue-600 cursor-pointer" />
                   </div>
 
-                  {/* 🌟 TÍCH HỢP TÙY CHỌN BẬT CHẾ ĐỘ ĐỀ THI ẨN (CÓ MÃ TRUY CẬP) */}
                   <div className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl flex items-center justify-between border dark:border-slate-700 mt-4">
                     <div>
                       <p className="text-sm font-bold text-red-600 dark:text-red-400">Phát hành ở chế độ Đề thi Ẩn (Private Exam)</p>
@@ -616,8 +733,13 @@ export default function AdminDashboard() {
 
                           {section.type !== 'essay' && (
                             <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-                              <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-xs font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"><KeyRound className="w-4 h-4"/> {editingKeysSectionId === section.id ? 'Thu gọn bảng đáp án đúng' : 'Cấu hình đáp án đúng'}</button>
-                              
+                              <div className="flex items-center flex-wrap gap-2">
+                                <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-xs font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"><KeyRound className="w-4 h-4"/> {editingKeysSectionId === section.id ? 'Thu gọn bảng đáp án đúng' : 'Cấu hình đáp án đúng'}</button>
+                                
+                                {/* 🌟 NÚT ĐŨA THẦN MỞ POPUP SMART PARSER */}
+                                <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-xs font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-amber-200 transition-colors"><Wand2 className="w-4 h-4"/> Nhận diện tự động (Smart Paste)</button>
+                              </div>
+
                               {editingKeysSectionId === section.id && (
                                 <div className="mt-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-80 overflow-y-auto">
                                   {Array.from({ length: section.questionCount }).map((_, qIdx) => (
@@ -628,7 +750,6 @@ export default function AdminDashboard() {
                                         {section.type === 'single_choice' && Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded-full border text-[10px] font-bold transition-all shrink-0 ${section.correctAnswers[qIdx] === label ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
                                         {section.type === 'multiple_choice' && Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded border text-[10px] font-bold transition-all shrink-0 ${(section.correctAnswers[qIdx] || []).includes(label) ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
                                         
-                                        {/* ĐÚNG SAI 4 Ý */}
                                         {section.type === 'true_false' && (
                                           <div className="flex flex-col gap-1 w-full mt-2">
                                             {['a', 'b', 'c', 'd'].map(subLabel => {
