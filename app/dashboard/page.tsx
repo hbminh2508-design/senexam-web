@@ -58,7 +58,7 @@ export default function DashboardPage() {
         router.push('/login')
         return
       }
-      setUserEmail(user.email ?? null)
+      userEmail ?? setUserEmail(user.email ?? null)
 
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
@@ -88,7 +88,7 @@ export default function DashboardPage() {
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
         
-        setStudentHistoryList(subHistory || [])
+          setStudentHistoryList(subHistory || [])
       } else {
         setShowOnboarding(true)
       }
@@ -190,7 +190,6 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 p-4 md:p-8 relative text-slate-900 dark:text-slate-100 transition-colors duration-500 overflow-x-hidden font-sans">
       
       {/* 🌟 APPLE LIQUID GLASS ORBS BACKGROUND 🌟 */}
-      {/* Các khối màu này sẽ hòa quyện phía sau kính để tạo hiệu ứng Vibrancy */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/40 to-indigo-400/30 dark:from-blue-800/40 dark:to-indigo-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
       <div className="fixed top-[25%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-purple-400/40 to-pink-400/30 dark:from-purple-800/40 dark:to-pink-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
       <div className="fixed bottom-[-15%] left-[20%] w-[700px] h-[700px] bg-gradient-to-t from-emerald-300/30 to-teal-400/20 dark:from-emerald-900/30 dark:to-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '4s' }}></div>
@@ -308,6 +307,10 @@ export default function DashboardPage() {
             </div>
             
             <div className="flex gap-3 items-center flex-wrap">
+              {/* 🌟 THÊM: NÚT ĐIỀU HƯỚNG NHANH VÀO FORUM Ở HEADER TRÊN CÙNG */}
+              <button onClick={() => router.push('/forum')} className={`${glassButtonStyles} flex items-center justify-center gap-2 px-5 py-2.5 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-sm`}>
+                <MessageSquare className="w-4 h-4" /> Thảo luận Forum
+              </button>
               {(userRole === 'admin' || userRole === 'collab') && (
                 <button onClick={() => router.push('/admin')} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500/90 to-orange-500/90 backdrop-blur-md border border-white/30 text-white rounded-2xl shadow-[0_4px_15px_rgba(239,68,68,0.3)] font-black hover:scale-105 transition-transform text-sm">
                   <ShieldCheck className="w-4 h-4" /> Trạm Admin
@@ -323,7 +326,6 @@ export default function DashboardPage() {
             
             {/* LARGE HERO CARD - DEEP GLASSMORPHISM */}
             <div className="md:col-span-2 md:row-span-2 bg-gradient-to-br from-blue-500/60 to-indigo-600/60 dark:from-blue-700/50 dark:to-indigo-900/50 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] p-8 md:p-12 text-white relative overflow-hidden shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] border border-white/40 border-b-white/10 border-r-white/10 transition-all hover:shadow-[0_8px_32px_0_rgba(31,38,135,0.3)]">
-              {/* Glass Reflection Highlight */}
               <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 transform translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000 ease-in-out"></div>
               
               <div className="relative z-10 h-full flex flex-col justify-between">
@@ -360,15 +362,22 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* SMALL GLASS CARD 2 */}
-            <div className="bg-slate-900/60 dark:bg-slate-950/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-lg flex flex-col justify-between border border-white/20 hover:-translate-y-1 transition-transform duration-300">
-              <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-500/40 rounded-full blur-3xl animate-pulse"></div>
+            {/* 🌟 NÂNG CẤP: BIẾN THẺ CỘNG ĐỒNG BENTO THÀNH THẺ LIQUID GLASS ĐỘNG CÓ THỂ CLICK VÀO FORUM */}
+            <div 
+              onClick={() => router.push('/forum')}
+              className={`${glassCardStyles} rounded-[2.5rem] p-8 flex flex-col justify-between hover:-translate-y-1 hover:shadow-[0_8px_32px_0_rgba(59,130,246,0.2)] transition-all duration-300 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 group cursor-pointer relative overflow-hidden`}
+            >
+              <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-colors"></div>
               <div className="z-10">
-                <div className="p-3 bg-white/10 border border-white/20 backdrop-blur-md rounded-xl w-fit mb-5 shadow-inner">
-                  <MessageSquare className="w-6 h-6 text-blue-300" />
+                <div className="p-4 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 text-blue-600 dark:text-blue-400 rounded-2xl border border-blue-200/30 shadow-inner w-fit mb-5 group-hover:scale-105 transition-transform">
+                  <MessageSquare className="w-8 h-8 drop-shadow-md" />
                 </div>
-                <h3 className="text-xl font-extrabold mb-2 drop-shadow-sm">Cộng Đồng</h3>
-                <p className="text-slate-300 text-sm leading-relaxed font-medium">Bàn luận và giải đề thực chiến.</p>
+                <h3 className="text-2xl font-black mb-2 text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  Cộng Đồng <ChevronRight className="w-5 h-5 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm font-medium leading-relaxed">
+                  Giao lưu, chia sẻ mọi tài liệu 1GB và giải thắc mắc bài tập thực chiến cùng thủ khoa.
+                </p>
               </div>
             </div>
 
