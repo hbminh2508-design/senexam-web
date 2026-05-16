@@ -7,7 +7,7 @@ import {
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
   CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
-  Wand2 // Thêm icon đũa thần
+  Wand2, Sparkles // Thêm icon đũa thần và lấp lánh
 } from 'lucide-react'
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
@@ -17,6 +17,8 @@ const SUBJECT_GROUPS: Record<string, string[]> = {
   'HSA': ['Tư duy Định lượng', 'Tư duy Định tính', 'Khoa học'],
   'TSA': ['Toán học', 'Đọc hiểu', 'Khoa học giải quyết vấn đề']
 }
+
+type MixedRange = { start: number, end: number, type: string, optionsCount: number }
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -68,7 +70,8 @@ export default function AdminDashboard() {
     correctAnswers: Record<number, any>,
     scoringMode: 'auto_divide' | 'custom', 
     sectionTotalPoints: number,            
-    customPoints: Record<number, number>   
+    customPoints: Record<number, number>,
+    mixedRanges?: MixedRange[] // Thêm cấu trúc lưu vùng câu hỗn hợp
   }[]>([])
 
   useEffect(() => {
@@ -146,7 +149,8 @@ export default function AdminDashboard() {
       correctAnswers: {},
       scoringMode: 'auto_divide',
       sectionTotalPoints: 10,
-      customPoints: {}
+      customPoints: {},
+      mixedRanges: []
     }])
   }
 
@@ -159,11 +163,53 @@ export default function AdminDashboard() {
     setExamStructure(examStructure.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
+  // Quản lý vùng cấu trúc hỗn hợp (Mixed Ranges)
+  const handleAddMixedRange = (sectionId: string) => {
+    setExamStructure(examStructure.map(s => {
+      if (s.id === sectionId) {
+        const ranges = s.mixedRanges || []
+        const lastEnd = ranges.length > 0 ? ranges[ranges.length - 1].end : 0
+        return { ...s, mixedRanges: [...ranges, { start: lastEnd + 1, end: lastEnd + 5, type: 'single_choice', optionsCount: 4 }] }
+      }
+      return s
+    }))
+  }
+
+  const handleUpdateMixedRange = (sectionId: string, rIdx: number, field: keyof MixedRange, value: any) => {
+    setExamStructure(examStructure.map(s => {
+      if (s.id === sectionId && s.mixedRanges) {
+        const newRanges = [...s.mixedRanges]
+        newRanges[rIdx] = { ...newRanges[rIdx], [field]: value }
+        return { ...s, mixedRanges: newRanges }
+      }
+      return s
+    }))
+  }
+
+  const handleRemoveMixedRange = (sectionId: string, rIdx: number) => {
+    setExamStructure(examStructure.map(s => {
+      if (s.id === sectionId && s.mixedRanges) {
+        const newRanges = [...s.mixedRanges]
+        newRanges.splice(rIdx, 1)
+        return { ...s, mixedRanges: newRanges }
+      }
+      return s
+    }))
+  }
+
   const handleSetCorrectAnswer = (sectionId: string, qIdx: number, value: any) => {
     setExamStructure(examStructure.map(s => {
       if (s.id === sectionId) {
         const updatedAnswers = { ...s.correctAnswers }
-        if (s.type === 'multiple_choice') {
+        
+        // Cần xác định type của câu hỏi hiện tại (xét trường hợp mixed)
+        let cType = s.type
+        if (s.type === 'mixed' && s.mixedRanges) {
+          const range = s.mixedRanges.find(r => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
+          if (range) cType = range.type
+        }
+
+        if (cType === 'multiple_choice') {
           const currentArr = updatedAnswers[qIdx] || []
           updatedAnswers[qIdx] = currentArr.includes(value) ? currentArr.filter((item: any) => item !== value) : [...currentArr, value].sort()
         } else {
@@ -188,7 +234,7 @@ export default function AdminDashboard() {
     }))
   }
 
-  // 🌟 THUẬT TOÁN NHẬN DIỆN ĐÁP ÁN (SMART PARSER)
+  // 🌟 SEN MAGIC PASTE: THUẬT TOÁN NHẬN DIỆN VÀ PHÂN LOẠI ĐÁP ÁN SIÊU THÔNG MINH
   const handleProcessAutoFill = () => {
     if (!autoFillModalId) return
     const section = examStructure.find(s => s.id === autoFillModalId)
@@ -198,60 +244,97 @@ export default function AdminDashboard() {
     const rawText = autoFillText.trim()
 
     try {
-      if (section.type === 'single_choice') {
-        // Nhận diện định dạng: 1A 2B 3.C 4-D 5: A
-        const regex = /(\d+)[\.\-\:\s]*([A-D])/gi
-        let match
-        while ((match = regex.exec(rawText)) !== null) {
+      // Dùng Regex trích xuất tất cả các mẫu: <Số câu><dấu chấm/hai chấm><Nội dung đáp án>
+      const matches = [...rawText.matchAll(/(?:^|\s)(0*[1-9]\d*)[\.\:\-\)]\s*([^]*?)(?=(?:\s0*[1-9]\d*[\.\:\-\)])|$)/gi)]
+      
+      if (matches.length === 0) throw new Error("Không tìm thấy đáp án hợp lệ")
+
+      if (section.type === 'mixed') {
+        const detectedTypes: Record<number, string> = {}
+        
+        matches.forEach(match => {
           const qNum = parseInt(match[1]) - 1
           if (qNum >= 0 && qNum < section.questionCount) {
-            newAnswers[qNum] = match[2].toUpperCase()
-          }
-        }
-      } 
-      else if (section.type === 'true_false') {
-        // Nhận diện định dạng: 1: Đ S Đ S, 1: D,S,D,S, hoặc 1. D S D S
-        // Hỗ trợ cả chữ D và Đ (Vì Unikey gõ D thành Đ rất phổ biến)
-        const normalizedText = rawText.replace(/Đ/gi, 'D')
-        const regex = /(\d+)[\.\-\:\s]*([DS])[\s\,]*([DS])[\s\,]*([DS])[\s\,]*([DS])/gi
-        let match
-        while ((match = regex.exec(normalizedText)) !== null) {
-          const qNum = parseInt(match[1]) - 1
-          if (qNum >= 0 && qNum < section.questionCount) {
-            newAnswers[qNum] = {
-              a: match[2].toUpperCase() === 'D' ? 'Đ' : 'S',
-              b: match[3].toUpperCase() === 'D' ? 'Đ' : 'S',
-              c: match[4].toUpperCase() === 'D' ? 'Đ' : 'S',
-              d: match[5].toUpperCase() === 'D' ? 'Đ' : 'S'
-            }
-          }
-        }
-      }
-      else if (section.type === 'short_answer') {
-        // Nhận diện định dạng từng dòng: 1: 15.5 \n 2: 10 \n 3: XYZ
-        const lines = rawText.split('\n')
-        lines.forEach(line => {
-          const parts = line.split(/[\:\-]/)
-          if (parts.length >= 2) {
-            const qNum = parseInt(parts[0].replace(/[^\d]/g, '')) - 1
-            const ans = parts.slice(1).join(':').trim()
-            if (!isNaN(qNum) && qNum >= 0 && qNum < section.questionCount) {
-              newAnswers[qNum] = ans
+            let content = match[2].trim()
+            let upperContent = content.toUpperCase().replace(/Đ/g, 'D')
+
+            // Nhận diện Trắc nghiệm 1 đáp án
+            if (/^[A-D]$/.test(upperContent)) {
+               detectedTypes[qNum] = 'single_choice'
+               newAnswers[qNum] = upperContent
+            } 
+            // Nhận diện Đúng/Sai 4 ý (Cho phép cách nhau bằng khoảng trắng, dấu phẩy, dấu chấm)
+            else if (/^([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])[\s\,\.\-]*([DS])$/.test(upperContent)) {
+               detectedTypes[qNum] = 'true_false'
+               const parts = upperContent.match(/([DS])/g)
+               newAnswers[qNum] = {
+                 a: parts![0] === 'D' ? 'Đ' : 'S',
+                 b: parts![1] === 'D' ? 'Đ' : 'S',
+                 c: parts![2] === 'D' ? 'Đ' : 'S',
+                 d: parts![3] === 'D' ? 'Đ' : 'S'
+               }
+            } 
+            // Còn lại mặc định là trả lời ngắn
+            else {
+               detectedTypes[qNum] = 'short_answer'
+               newAnswers[qNum] = content // Giữ nguyên chữ hoa thường
             }
           }
         })
+
+        // Tự động gom nhóm các câu hỏi cùng dạng vào `mixedRanges`
+        const newRanges = []
+        let currentRange: any = null
+
+        for (let i = 0; i < section.questionCount; i++) {
+          const type = detectedTypes[i] || 'short_answer'
+          if (!currentRange) {
+            currentRange = { start: i + 1, end: i + 1, type, optionsCount: 4 }
+          } else if (currentRange.type === type) {
+            currentRange.end = i + 1
+          } else {
+            newRanges.push(currentRange)
+            currentRange = { start: i + 1, end: i + 1, type, optionsCount: 4 }
+          }
+        }
+        if (currentRange) newRanges.push(currentRange)
+
+        updateSection(section.id, 'mixedRanges', newRanges)
+        updateSection(section.id, 'correctAnswers', newAnswers)
+      } 
+      // Xử lý nạp tự động cho các loại cố định (Như trước đây)
+      else {
+        matches.forEach(match => {
+          const qNum = parseInt(match[1]) - 1
+          if (qNum >= 0 && qNum < section.questionCount) {
+            let content = match[2].trim()
+            if (section.type === 'single_choice') {
+              newAnswers[qNum] = content.toUpperCase().replace(/[^A-D]/g, '')[0]
+            } else if (section.type === 'true_false') {
+              const upperContent = content.toUpperCase().replace(/Đ/g, 'D')
+              const parts = upperContent.match(/([DS])/g)
+              if (parts && parts.length === 4) {
+                newAnswers[qNum] = {
+                  a: parts[0] === 'D' ? 'Đ' : 'S', b: parts[1] === 'D' ? 'Đ' : 'S',
+                  c: parts[2] === 'D' ? 'Đ' : 'S', d: parts[3] === 'D' ? 'Đ' : 'S'
+                }
+              }
+            } else {
+              newAnswers[qNum] = content
+            }
+          }
+        })
+        updateSection(section.id, 'correctAnswers', newAnswers)
       }
 
-      updateSection(section.id, 'correctAnswers', newAnswers)
       setAutoFillModalId(null)
       setAutoFillText('')
-      alert('Đã quét và điền đáp án tự động thành công!')
+      alert('🌟 Sen Magic Paste đã phân tích và điền đáp án thành công!')
     } catch (err) {
-      alert('Lỗi định dạng. Vui lòng kiểm tra lại văn bản.')
+      alert('Lỗi định dạng. Vui lòng kiểm tra lại cấu trúc văn bản hoặc đảm bảo đã nhập đúng số lượng câu hỏi.')
     }
   }
 
-  // Đọc file .txt đáp án
   const handleAnswerFileRead = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -323,6 +406,7 @@ export default function AdminDashboard() {
     if (!error) setUsersList(usersList.map(u => u.id === userId ? { ...u, role: newRole } : u))
   }
 
+  // 🌟 NÂNG CẤP CHẤM BÀI HỖ TRỢ CÂU HỖN HỢP
   const openGradingView = (submission: any) => {
     setSelectedSubForGrading(submission)
     const initialScores: Record<string, string> = {}
@@ -336,7 +420,13 @@ export default function AdminDashboard() {
         if (submission.detailed_scores?.[key] !== undefined) {
           initialScores[key] = String(submission.detailed_scores[key]).replace('.', ',')
         } else {
-          if (section.type === 'essay') { 
+          let currentType = section.type;
+          if (section.type === 'mixed' && section.mixedRanges) {
+            const range = section.mixedRanges.find((r: any) => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
+            currentType = range ? range.type : 'short_answer'
+          }
+
+          if (currentType === 'essay') { 
             initialScores[key] = '0' 
           } else {
             let qPoint = section.scoringMode === 'custom' ? (section.customPoints?.[qIdx] || 0) : perQuestionPoints;
@@ -344,7 +434,7 @@ export default function AdminDashboard() {
             const studentAns = submission.answers?.[key]; 
             const correctAns = section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)]; 
             
-            if (section.type === 'true_false') {
+            if (currentType === 'true_false') {
               let correctSubCount = 0;
               if (studentAns && typeof studentAns === 'object' && correctAns && typeof correctAns === 'object') {
                 ['a','b','c','d'].forEach(sub => { if (studentAns[sub] === correctAns[sub]) correctSubCount++; })
@@ -353,7 +443,7 @@ export default function AdminDashboard() {
               else if (correctSubCount === 2) earned = qPoint * 0.25;
               else if (correctSubCount === 3) earned = qPoint * 0.5;
               else if (correctSubCount === 4) earned = qPoint * 1.0;
-            } else if (section.type === 'multiple_choice') {
+            } else if (currentType === 'multiple_choice') {
               if (Array.isArray(studentAns) && Array.isArray(correctAns) && studentAns.length === correctAns.length && studentAns.every(v => correctAns.includes(v))) earned = qPoint;
             } else { 
               if (studentAns !== undefined && studentAns !== null && String(studentAns).trim() === String(correctAns).trim()) earned = qPoint; 
@@ -456,6 +546,12 @@ export default function AdminDashboard() {
                       const key = `${section.id}-${qIdx}`
                       const studentAnswer = selectedSubForGrading.answers?.[key]
                       const correctAnswer = section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)]
+                      
+                      let currentType = section.type;
+                      if (section.type === 'mixed' && section.mixedRanges) {
+                        const range = section.mixedRanges.find((r: any) => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
+                        currentType = range ? range.type : 'short_answer'
+                      }
 
                       return (
                         <div key={qIdx} className="flex flex-col gap-2 p-3 bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-xl shadow-sm">
@@ -477,13 +573,13 @@ export default function AdminDashboard() {
                           </div>
 
                           <div className="text-xs font-medium space-y-1 mt-1">
-                            <p><span className="text-slate-400">Thí sinh điền/tô:</span> <span className="font-bold text-blue-600 dark:text-blue-400">{parseStudentAnswer(studentAnswer, section.type)}</span></p>
-                            {section.type !== 'essay' && (
+                            <p><span className="text-slate-400">Thí sinh điền/tô:</span> <span className="font-bold text-blue-600 dark:text-blue-400">{parseStudentAnswer(studentAnswer, currentType)}</span></p>
+                            {currentType !== 'essay' && (
                               <p><span className="text-slate-400">Đáp án gốc:</span> <span className="font-bold text-emerald-600">
                                 {typeof correctAnswer === 'object' && !Array.isArray(correctAnswer) ? parseStudentAnswer(correctAnswer, 'true_false') : JSON.stringify(correctAnswer)}
                               </span></p>
                             )}
-                            {section.type === 'essay' && selectedSubForGrading.file_url && (
+                            {currentType === 'essay' && selectedSubForGrading.file_url && (
                               <div className="mt-2 pt-2 border-t border-dashed dark:border-slate-800">
                                 <a href={selectedSubForGrading.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded text-xs font-bold">
                                   Mở file tự luận scan của thí sinh <ExternalLink className="w-3 h-3"/>
@@ -508,35 +604,35 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 relative">
       
-      {/* 🌟 MODAL CỦA TÍNH NĂNG ĐIỀN ĐÁP ÁN THÔNG MINH */}
+      {/* 🌟 MODAL SEN MAGIC PASTE: THUẬT TOÁN NHẬN DIỆN VÀ ĐIỀN ĐÁP ÁN TỰ ĐỘNG */}
       {autoFillModalId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 relative">
             <button onClick={() => setAutoFillModalId(null)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
             
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center">
-                <Wand2 className="w-6 h-6 text-amber-600 dark:text-amber-400"/>
+              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center shadow-inner border border-amber-200 dark:border-amber-800">
+                <Sparkles className="w-6 h-6 text-amber-500 drop-shadow-sm"/>
               </div>
               <div>
-                <h2 className="text-xl font-black">Nhận diện đáp án thông minh</h2>
-                <p className="text-sm font-medium text-slate-500">Copy paste nội dung hoặc tải lên file (.txt) để hệ thống tự động quét.</p>
+                <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-orange-500">Sen Magic Paste</h2>
+                <p className="text-sm font-medium text-slate-500">Công nghệ tự nhận diện dạng câu hỏi và điền đáp án.</p>
               </div>
             </div>
 
             <div className="space-y-4 mb-6">
-              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                <span className="font-bold text-slate-900 dark:text-white">Gợi ý định dạng hỗ trợ:</span><br/>
+              <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl text-xs font-medium text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30">
+                <span className="font-bold">Gợi ý định dạng copy-paste siêu tốc:</span><br/>
                 - Trắc nghiệm: <code>1A 2.B 3-C 4:D</code><br/>
                 - Đúng/Sai 4 ý: <code>1: Đ S Đ S</code> hoặc <code>1: D S D S</code><br/>
-                - Trả lời ngắn: <code>1: 15.5</code> (Xuống dòng cho câu tiếp theo)
+                - Trả lời ngắn: <code>1: 15.5</code> (Nhớ xuống dòng cho câu tiếp theo)
               </div>
               
               <textarea 
                 value={autoFillText} 
                 onChange={(e) => setAutoFillText(e.target.value)} 
-                placeholder="Dán nội dung đáp án vào đây..." 
-                className="w-full h-48 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500 custom-scrollbar"
+                placeholder="Dán nội dung đáp án của giáo viên vào đây..." 
+                className="w-full h-48 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500 custom-scrollbar shadow-inner"
               />
               
               <div className="flex items-center justify-between">
@@ -544,11 +640,14 @@ export default function AdminDashboard() {
                   <UploadCloud className="w-4 h-4"/> Tải file Text (.txt) lên
                   <input type="file" accept=".txt,.csv" onChange={handleAnswerFileRead} className="hidden" />
                 </label>
+                {examStructure.find(s => s.id === autoFillModalId)?.type === 'mixed' && (
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Chế độ phân tích Câu Hỗn Hợp đang Bật</span>
+                )}
               </div>
             </div>
 
-            <button onClick={handleProcessAutoFill} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95">
-              Xử lý & Khớp đáp án
+            <button onClick={handleProcessAutoFill} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3.5 rounded-xl shadow-[0_4px_15px_rgba(245,158,11,0.3)] transition-transform active:scale-95 flex items-center justify-center gap-2">
+              <Wand2 className="w-5 h-5"/> Xử lý & Khớp đáp án
             </button>
           </div>
         </div>
@@ -698,11 +797,57 @@ export default function AdminDashboard() {
                             
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                               <div><label className="block text-xs font-bold text-slate-400 mb-1">Môn học</label><select value={section.subject} onChange={(e) => updateSection(section.id, 'subject', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold"><option value="">-- Chọn môn --</option>{selectedSubjects.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                              <div><label className="block text-xs font-bold text-slate-400 mb-1">Dạng câu hỏi</label><select value={section.type} onChange={(e) => updateSection(section.id, 'type', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold"><option value="single_choice">Trắc nghiệm (1 đáp án)</option><option value="multiple_choice">Trắc nghiệm (Nhiều đáp án)</option><option value="true_false">Đúng / Sai (4 Ý)</option><option value="short_answer">Trả lời ngắn</option><option value="essay">Tự luận dài</option></select></div>
-                              <div><label className="block text-xs font-bold text-slate-400 mb-1">Số câu hỏi</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold" /></div>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">Dạng câu hỏi</label>
+                                <select value={section.type} onChange={(e) => updateSection(section.id, 'type', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold">
+                                  <option value="single_choice">Trắc nghiệm (1 đáp án)</option>
+                                  <option value="multiple_choice">Trắc nghiệm (Nhiều đáp án)</option>
+                                  <option value="true_false">Đúng / Sai (4 Ý)</option>
+                                  <option value="short_answer">Trả lời ngắn</option>
+                                  <option value="essay">Tự luận dài</option>
+                                  {/* 🌟 CHỈ HIỆN CÂU HỖN HỢP NẾU LÀ HSA HOẶC TSA */}
+                                  {(examType === 'HSA' || examType === 'TSA') && <option value="mixed">Câu hỗn hợp (HSA/TSA)</option>}
+                                </select>
+                              </div>
+                              <div><label className="block text-xs font-bold text-slate-400 mb-1">Tổng số câu hỏi</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold" /></div>
                               {(section.type === 'single_choice' || section.type === 'multiple_choice') && <div><label className="block text-xs font-bold text-slate-400 mb-1">Số lựa chọn</label><input type="number" min="2" value={section.optionsCount} onChange={(e) => updateSection(section.id, 'optionsCount', parseInt(e.target.value) || 4)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold" /></div>}
                             </div>
                           </div>
+
+                          {/* 🌟 KHUNG QUẢN LÝ VÙNG CÂU HỎI HỖN HỢP (CHỈ HIỂN THỊ KHI CHỌN TYPE MIXED) */}
+                          {section.type === 'mixed' && (
+                            <div className="mt-4 p-4 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl space-y-3 mb-4">
+                              <div className="flex justify-between items-center border-b border-indigo-100 dark:border-indigo-800/50 pb-2">
+                                <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400">Phân vùng câu hỏi hỗn hợp (Thủ công)</p>
+                                <button type="button" onClick={() => handleAddMixedRange(section.id)} className="text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400 px-3 py-1 rounded-lg hover:bg-indigo-200 transition-colors">
+                                  + Thêm vùng
+                                </button>
+                              </div>
+                              
+                              {section.mixedRanges?.map((range, rIdx) => (
+                                <div key={rIdx} className="flex flex-wrap items-center gap-3">
+                                  <span className="text-xs font-bold text-slate-500">Từ câu</span>
+                                  <input type="number" min="1" value={range.start} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'start', parseInt(e.target.value)||1)} className="w-16 p-1.5 text-xs font-bold border rounded-lg text-center dark:bg-slate-900 dark:border-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"/>
+                                  <span className="text-xs font-bold text-slate-500">đến</span>
+                                  <input type="number" min="1" value={range.end} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'end', parseInt(e.target.value)||1)} className="w-16 p-1.5 text-xs font-bold border rounded-lg text-center dark:bg-slate-900 dark:border-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"/>
+                                  <select value={range.type} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'type', e.target.value)} className="flex-1 p-1.5 text-xs font-bold border rounded-lg dark:bg-slate-900 dark:border-slate-700 outline-none focus:ring-1 focus:ring-indigo-500">
+                                    <option value="single_choice">Trắc nghiệm (1 đáp án)</option>
+                                    <option value="multiple_choice">Nhiều đáp án</option>
+                                    <option value="true_false">Đúng / Sai (4 Ý)</option>
+                                    <option value="short_answer">Trả lời ngắn</option>
+                                  </select>
+                                  {(range.type === 'single_choice' || range.type === 'multiple_choice') && (
+                                    <input type="number" min="2" value={range.optionsCount || 4} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'optionsCount', parseInt(e.target.value)||4)} placeholder="Số LC" className="w-16 p-1.5 text-xs font-bold border rounded-lg text-center dark:bg-slate-900 dark:border-slate-700"/>
+                                  )}
+                                  <button type="button" onClick={() => handleRemoveMixedRange(section.id, rIdx)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 dark:bg-red-900/20 rounded-lg"><X className="w-4 h-4"/></button>
+                                </div>
+                              ))}
+                              
+                              {(!section.mixedRanges || section.mixedRanges.length === 0) && (
+                                <p className="text-[11px] font-medium text-slate-400 italic">Chưa có vùng nào được cấu hình. Bạn có thể tự thêm hoặc dùng Sen Magic Paste để hệ thống tự chia.</p>
+                              )}
+                            </div>
+                          )}
 
                           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -737,51 +882,70 @@ export default function AdminDashboard() {
                                 <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-xs font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"><KeyRound className="w-4 h-4"/> {editingKeysSectionId === section.id ? 'Thu gọn bảng đáp án đúng' : 'Cấu hình đáp án đúng'}</button>
                                 
                                 {/* 🌟 NÚT ĐŨA THẦN MỞ POPUP SMART PARSER */}
-                                <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-xs font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-amber-200 transition-colors"><Wand2 className="w-4 h-4"/> Nhận diện tự động (Smart Paste)</button>
+                                <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-xs font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-amber-200 transition-colors shadow-sm border border-amber-200 dark:border-amber-800">
+                                  <Sparkles className="w-4 h-4"/> Sen Magic Paste
+                                </button>
                               </div>
 
                               {editingKeysSectionId === section.id && (
                                 <div className="mt-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-80 overflow-y-auto">
-                                  {Array.from({ length: section.questionCount }).map((_, qIdx) => (
-                                    <div key={qIdx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700">
-                                      <span className="text-xs font-bold text-slate-500 w-12 shrink-0">Câu {qIdx + 1}:</span>
-                                      
-                                      <div className="flex-1 flex gap-1 flex-wrap">
-                                        {section.type === 'single_choice' && Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded-full border text-[10px] font-bold transition-all shrink-0 ${section.correctAnswers[qIdx] === label ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
-                                        {section.type === 'multiple_choice' && Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded border text-[10px] font-bold transition-all shrink-0 ${(section.correctAnswers[qIdx] || []).includes(label) ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
-                                        
-                                        {section.type === 'true_false' && (
-                                          <div className="flex flex-col gap-1 w-full mt-2">
-                                            {['a', 'b', 'c', 'd'].map(subLabel => {
-                                              const curVal = section.correctAnswers[qIdx]?.[subLabel];
-                                              return (
-                                                <div key={subLabel} className="flex items-center gap-2">
-                                                  <span className="text-[10px] font-bold w-10">Ý {subLabel}:</span>
-                                                  <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, subLabel, 'Đ')} className={`px-2 py-0.5 rounded border text-[10px] font-bold transition-all ${curVal === 'Đ' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>Đúng</button>
-                                                  <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, subLabel, 'S')} className={`px-2 py-0.5 rounded border text-[10px] font-bold transition-all ${curVal === 'S' ? 'bg-red-600 border-red-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>Sai</button>
-                                                </div>
-                                              )
-                                            })}
-                                          </div>
-                                        )}
-                                        {section.type === 'short_answer' && <input type="text" value={section.correctAnswers[qIdx] || ''} onChange={(e) => handleSetCorrectAnswer(section.id, qIdx, e.target.value)} placeholder="Nhập chuỗi..." className="border border-slate-200 dark:border-slate-600 rounded px-2 py-1 w-full dark:bg-slate-900 outline-none focus:border-blue-500 text-xs font-bold" />}
-                                      </div>
+                                  {Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                                    
+                                    // 🌟 Xác định dạng câu hỏi và số lượng lựa chọn cho từng câu dựa theo Mixed Ranges
+                                    let currentType = section.type;
+                                    let currentOptionsCount = section.optionsCount || 4;
+                                    
+                                    if (section.type === 'mixed' && section.mixedRanges) {
+                                      const range = section.mixedRanges.find(r => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
+                                      if (range) {
+                                        currentType = range.type
+                                        currentOptionsCount = range.optionsCount || 4
+                                      } else {
+                                        currentType = 'short_answer' // Default nếu rơi ra ngoài vùng
+                                      }
+                                    }
 
-                                      {section.scoringMode === 'custom' && (
-                                        <input 
-                                          type="number" step="0.01" min="0" 
-                                          value={section.customPoints?.[qIdx] !== undefined ? section.customPoints[qIdx] : ''} 
-                                          onChange={(e) => {
-                                            const newCustomPoints = { ...(section.customPoints || {}) };
-                                            newCustomPoints[qIdx] = parseFloat(e.target.value) || 0;
-                                            updateSection(section.id, 'customPoints', newCustomPoints);
-                                          }} 
-                                          placeholder="Điểm" 
-                                          className="w-14 ml-auto border border-slate-300 dark:border-slate-600 rounded px-1.5 py-1 outline-none text-[10px] font-bold text-center text-blue-600 dark:bg-slate-900" 
-                                        />
-                                      )}
-                                    </div>
-                                  ))}
+                                    return (
+                                      <div key={qIdx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <span className="text-xs font-bold text-slate-500 w-12 shrink-0">Câu {qIdx + 1}:</span>
+                                        
+                                        <div className="flex-1 flex gap-1 flex-wrap">
+                                          {currentType === 'single_choice' && Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded-full border text-[10px] font-bold transition-all shrink-0 ${section.correctAnswers[qIdx] === label ? 'bg-blue-600 border-blue-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
+                                          {currentType === 'multiple_choice' && Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const label = String.fromCharCode(65 + oIdx); return <button type="button" key={label} onClick={() => handleSetCorrectAnswer(section.id, qIdx, label)} className={`w-7 h-7 rounded border text-[10px] font-bold transition-all shrink-0 ${(section.correctAnswers[qIdx] || []).includes(label) ? 'bg-purple-600 border-purple-600 text-white shadow-sm' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>{label}</button> })}
+                                          
+                                          {currentType === 'true_false' && (
+                                            <div className="flex flex-col gap-1 w-full mt-2">
+                                              {['a', 'b', 'c', 'd'].map(subLabel => {
+                                                const curVal = section.correctAnswers[qIdx]?.[subLabel];
+                                                return (
+                                                  <div key={subLabel} className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-bold w-10 text-slate-400">Ý {subLabel}:</span>
+                                                    <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, subLabel, 'Đ')} className={`px-2 py-0.5 rounded border text-[10px] font-bold transition-all ${curVal === 'Đ' ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>Đúng</button>
+                                                    <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, subLabel, 'S')} className={`px-2 py-0.5 rounded border text-[10px] font-bold transition-all ${curVal === 'S' ? 'bg-red-600 border-red-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600'}`}>Sai</button>
+                                                  </div>
+                                                )
+                                              })}
+                                            </div>
+                                          )}
+                                          {currentType === 'short_answer' && <input type="text" value={section.correctAnswers[qIdx] || ''} onChange={(e) => handleSetCorrectAnswer(section.id, qIdx, e.target.value)} placeholder="Nhập chuỗi..." className="border border-slate-300 dark:border-slate-600 rounded px-2 py-1 w-full dark:bg-slate-900 outline-none focus:border-blue-500 text-xs font-bold" />}
+                                        </div>
+
+                                        {section.scoringMode === 'custom' && (
+                                          <input 
+                                            type="number" step="0.01" min="0" 
+                                            value={section.customPoints?.[qIdx] !== undefined ? section.customPoints[qIdx] : ''} 
+                                            onChange={(e) => {
+                                              const newCustomPoints = { ...(section.customPoints || {}) };
+                                              newCustomPoints[qIdx] = parseFloat(e.target.value) || 0;
+                                              updateSection(section.id, 'customPoints', newCustomPoints);
+                                            }} 
+                                            placeholder="Điểm" 
+                                            className="w-14 ml-auto border border-slate-300 dark:border-slate-600 rounded px-1.5 py-1 outline-none text-[10px] font-bold text-center text-blue-600 dark:bg-slate-900 shadow-inner" 
+                                          />
+                                        )}
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               )}
                             </div>
