@@ -1,0 +1,311 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
+import { 
+  MessageSquare, Edit3, Search, ChevronLeft, 
+  MessageCircle, Clock, User, Filter, X, Loader2, Send, Paperclip, FileIcon, Download,
+  Pin, PinOff, Trash2
+} from 'lucide-react'
+
+const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
+const CATEGORIES = ['Tất cả', 'Hỏi đáp bài tập', 'Chia sẻ tài liệu', 'Thảo luận chung', 'Góc tâm sự']
+
+export default function ForumPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [posts, setPosts] = useState<any[]>([])
+  
+  const [currentUserRole, setCurrentUserRole] = useState('student')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeCategory, setActiveCategory] = useState('Tất cả')
+
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newContent, setNewContent] = useState('')
+  const [newCategory, setNewCategory] = useState('Hỏi đáp bài tập')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState('')
+
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
+
+  const fetchPosts = async () => {
+    // Sắp xếp ưu tiên bài được ghim (is_pinned) lên trước, sau đó mới tới thời gian mới nhất
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        profiles:user_id (full_name, school, role),
+        comments (count)
+      `)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      setPosts(data)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    const initData = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+        setCurrentUserRole(profile?.role || 'student')
+      }
+      await fetchPosts()
+    }
+    initData()
+
+    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
+      document.documentElement.classList.add('dark')
+    }
+  }, [])
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0]
+      if (file.size > 1024 * 1024 * 1024) {
+        alert('File quá lớn! Vui lòng chọn file có dung lượng dưới 1GB.')
+        setAttachedFile(null); e.target.value = ''; return
+      }
+      setAttachedFile(file)
+    }
+  }
+
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (!+bytes) return '0 Bytes'
+    const k = 1024; const dm = decimals < 0 ? 0 : decimals; const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+  }
+
+  const handleCreatePost = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTitle.trim() || !newContent.trim()) return
+    setIsSubmitting(true)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+
+      let driveFileId = null; let fileName = null; let fileSize = null
+
+      if (attachedFile) {
+        setUploadStatus('Đang tải tài liệu lên Google Drive...')
+        const formData = new FormData()
+        formData.append('file', attachedFile)
+        formData.append('title', attachedFile.name) 
+
+        const response = await fetch('/api/upload-exam', { method: 'POST', body: formData })
+        const result = await response.json()
+
+        if (!response.ok) throw new Error(result.error || 'Lỗi upload Drive')
+        driveFileId = result.driveFileId; fileName = attachedFile.name; fileSize = formatBytes(attachedFile.size)
+      }
+
+      setUploadStatus('Đang lưu bài viết...')
+      const { error } = await supabase.from('posts').insert({
+        title: newTitle, content: newContent, category: newCategory, user_id: user.id, drive_file_id: driveFileId, file_name: fileName, file_size: fileSize
+      })
+
+      if (error) throw error
+      setShowCreateModal(false); setNewTitle(''); setNewContent(''); setAttachedFile(null); setUploadStatus('')
+      await fetchPosts()
+    } catch (err: any) { alert('Lỗi đăng bài: ' + err.message); setUploadStatus('') } 
+    finally { setIsSubmitting(false) }
+  }
+
+  // 🌟 HÀM XÓA BÀI VIẾT CHO ADMIN/COLLAB
+  const handleDeletePost = async (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation() // Ngăn không cho click chuyển trang
+    if (!confirm('Bạn có chắc chắn muốn xóa vĩnh viễn bài đăng này khỏi hệ thống?')) return
+    
+    const { error } = await supabase.from('posts').delete().eq('id', postId)
+    if (error) alert('Lỗi xóa bài: ' + error.message)
+    else await fetchPosts()
+  }
+
+  // 🌟 HÀM GHIM / BỎ GHIM BÀI VIẾT CHO ADMIN/COLLAB
+  const handleTogglePin = async (e: React.MouseEvent, postId: string, currentPinStatus: boolean) => {
+    e.stopPropagation()
+    const { error } = await supabase.from('posts').update({ is_pinned: !currentPinStatus }).eq('id', postId)
+    if (error) alert('Lỗi ghim bài: ' + error.message)
+    else await fetchPosts()
+  }
+
+  const filteredPosts = posts.filter(post => {
+    const matchCat = activeCategory === 'Tất cả' || post.category === activeCategory
+    const matchSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) || post.content.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchCat && matchSearch
+  })
+
+  const timeAgo = (dateString: string) => {
+    const now = new Date(); const past = new Date(dateString)
+    const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000)
+    if (diffInSeconds < 60) return `${diffInSeconds} giây trước`
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút trước`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ trước`
+    return past.toLocaleDateString('vi-VN')
+  }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
+
+  const canManage = currentUserRole === 'admin' || currentUserRole === 'collab'
+
+  return (
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 relative font-sans overflow-x-hidden pb-20">
+      
+      {/* BACKGROUND ORBS */}
+      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/40 to-indigo-400/30 dark:from-blue-800/40 dark:to-indigo-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
+      <div className="fixed bottom-[-15%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-t from-purple-300/30 to-pink-400/20 dark:from-purple-900/30 dark:to-pink-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '3s' }}></div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
+           <div className={`${glassCardStyles} rounded-[2rem] w-full max-w-3xl max-h-[95vh] overflow-y-auto custom-scrollbar border-t-white/70 border-l-white/70 dark:border-t-white/20 dark:border-l-white/20`}>
+            <div className="p-8">
+              <div className="flex justify-between items-center mb-6 border-b border-slate-300/50 dark:border-white/20 pb-4">
+                <h2 className="text-2xl font-extrabold flex items-center gap-2"><Edit3 className="w-6 h-6 text-blue-600 dark:text-blue-500"/> Khởi tạo chủ đề thảo luận</h2>
+                <button onClick={() => setShowCreateModal(false)} className="p-2 bg-white/40 hover:bg-white/60 dark:bg-slate-800/50 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+              </div>
+              
+              <form onSubmit={handleCreatePost} className="space-y-5">
+                <div><label className="block text-sm font-bold mb-2">Chủ đề bài viết (*)</label><input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full bg-white/50 dark:bg-slate-900/50 border border-white/50 dark:border-slate-700/50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-md shadow-inner" placeholder="VD: Xin tài liệu ôn tập Toán ĐGNL..." required /></div>
+                <div><label className="block text-sm font-bold mb-2">Chuyên mục phân loại</label><select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="w-full sm:w-1/2 bg-white/50 dark:bg-slate-900/50 border border-white/50 dark:border-slate-700/50 rounded-xl px-4 py-3 outline-none backdrop-blur-md shadow-inner font-bold text-sm">{CATEGORIES.filter(c => c !== 'Tất cả').map(c => <option key={c} value={c} className="dark:bg-slate-800">{c}</option>)}</select></div>
+                <div><label className="block text-sm font-bold mb-2">Nội dung chi tiết (*)</label><textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full min-h-[150px] bg-white/50 dark:bg-slate-900/50 border border-white/50 dark:border-slate-700/50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-md shadow-inner resize-y" placeholder="Nhập nội dung chia sẻ hoặc câu hỏi của bạn vào đây..." required /></div>
+                
+                <div>
+                  <label className="block text-sm font-bold mb-2">Đính kèm tài liệu (Mọi định dạng, Max 1GB)</label>
+                  <div className="relative flex items-center justify-center p-6 border-2 border-dashed border-blue-400/50 dark:border-blue-500/30 rounded-2xl bg-blue-50/30 dark:bg-blue-900/10 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer group">
+                    <input type="file" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                    <div className="flex flex-col items-center gap-2 pointer-events-none">
+                      {attachedFile ? (
+                        <><div className="w-12 h-12 bg-blue-500 text-white rounded-xl flex items-center justify-center shadow-lg"><FileIcon className="w-6 h-6"/></div><p className="font-bold text-sm text-blue-700 dark:text-blue-400 truncate max-w-[250px]">{attachedFile.name}</p><p className="text-xs font-bold text-slate-500">{formatBytes(attachedFile.size)}</p></>
+                      ) : (
+                        <><div className="w-12 h-12 bg-white/50 dark:bg-slate-800/50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"><Paperclip className="w-5 h-5 text-blue-500"/></div><p className="font-bold text-sm text-slate-600 dark:text-slate-300">Nhấn hoặc kéo thả file đính kèm vào đây</p><p className="text-xs font-medium text-slate-500">Hỗ trợ PDF, Word, Excel, Video, ZIP...</p></>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {isSubmitting && (<div className="p-3 bg-blue-100/80 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-800 rounded-xl text-blue-800 dark:text-blue-300 text-sm font-bold flex items-center gap-2 animate-pulse"><Loader2 className="w-4 h-4 animate-spin" /> {uploadStatus}</div>)}
+
+                <div className="flex justify-end pt-4 border-t border-slate-300/50 dark:border-white/10">
+                  <button type="submit" disabled={isSubmitting || !newTitle || !newContent} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 disabled:from-slate-400 disabled:to-slate-500 text-white px-8 py-3 rounded-xl font-bold shadow-[0_4px_15px_rgba(59,130,246,0.4)] flex items-center gap-2 transition-all hover:-translate-y-0.5">
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>} Xuất bản bài viết
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`relative z-10 p-4 md:p-8 max-w-6xl mx-auto transition-all duration-500 ${showCreateModal ? 'blur-sm opacity-50 pointer-events-none scale-[0.98]' : ''}`}>
+        
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+          <div>
+            <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors mb-3"><ChevronLeft className="w-4 h-4" /> Trở về Dashboard</button>
+            <h1 className="text-4xl font-extrabold tracking-tight drop-shadow-sm flex items-center gap-3">Hội Sĩ Tử <MessageSquare className="w-8 h-8 text-blue-600 dark:text-blue-400 drop-shadow-md" /></h1>
+            <p className="text-slate-600 dark:text-slate-300 font-medium mt-2 bg-white/40 dark:bg-slate-900/40 w-fit px-4 py-1.5 rounded-full backdrop-blur-md border border-white/30 dark:border-slate-700/50">Nơi giải đáp thắc mắc, chia sẻ tài liệu và thảo luận đề thi toàn quốc.</p>
+          </div>
+          <button onClick={() => setShowCreateModal(true)} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl text-blue-700 dark:text-blue-400 border border-white/50 dark:border-white/10 px-6 py-3.5 rounded-2xl font-black shadow-[0_8px_30px_rgb(0,0,0,0.05)] flex items-center gap-2 hover:bg-white dark:hover:bg-slate-700 transition-all hover:-translate-y-1"><Edit3 className="w-5 h-5"/> Đăng chủ đề mới</button>
+        </div>
+
+        <div className={`${glassCardStyles} rounded-2xl p-4 flex flex-col sm:flex-row gap-4 mb-8 border-t-white/60 border-l-white/60`}>
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 dark:text-slate-400" />
+            <input type="text" placeholder="Tìm kiếm câu hỏi, môn học, tài liệu..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/50 dark:bg-slate-900/50 border border-white/50 dark:border-slate-700/50 rounded-xl pl-10 pr-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm font-bold transition-all shadow-inner placeholder-slate-400" />
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+            {CATEGORIES.map(cat => (
+              <button key={cat} onClick={() => setActiveCategory(cat)} className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${activeCategory === cat ? 'bg-gradient-to-r from-blue-500 to-indigo-500 border-blue-500 text-white shadow-md' : 'bg-white/40 dark:bg-slate-800/40 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-700'}`}>{cat}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          {filteredPosts.length === 0 ? (
+            <div className={`${glassCardStyles} rounded-[2rem] p-16 text-center flex flex-col items-center justify-center border-t-white/60 border-l-white/60`}>
+              <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-4 border border-blue-100 dark:border-blue-800"><MessageCircle className="w-10 h-10 text-blue-400" /></div>
+              <h3 className="text-xl font-extrabold text-slate-800 dark:text-slate-200">Chưa có bài thảo luận nào</h3>
+              <p className="text-sm text-slate-500 mt-2 font-medium">Hãy là người đầu tiên khơi mào chủ đề này trên diễn đàn!</p>
+            </div>
+          ) : (
+            filteredPosts.map((post) => (
+              <div 
+                key={post.id} 
+                onClick={() => router.push(`/forum/${post.id}`)}
+                className={`${glassCardStyles} ${post.is_pinned ? 'ring-2 ring-orange-400/50 dark:ring-orange-500/30' : ''} rounded-[1.5rem] p-6 hover:-translate-y-1 transition-all duration-300 border-t-white/60 border-l-white/60 cursor-pointer group hover:shadow-[0_8px_30px_rgba(59,130,246,0.15)]`}
+              >
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <h3 className="text-xl font-extrabold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 drop-shadow-sm flex items-center gap-2">
+                    {post.is_pinned && <Pin className="w-4 h-4 text-orange-500 fill-orange-500 rotate-45 shrink-0" />}
+                    {post.title}
+                  </h3>
+                  
+                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                    <span className="shrink-0 px-3 py-1 bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 shadow-sm backdrop-blur-md">
+                      {post.category}
+                    </span>
+                    
+                    {/* 🌟 NÚT QUẢN LÝ CHO ADMIN/COLLAB (GHIM & XÓA) */}
+                    {canManage && (
+                      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={(e) => handleTogglePin(e, post.id, post.is_pinned)} 
+                          title={post.is_pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+                          className="p-1.5 bg-white/60 dark:bg-slate-700/60 hover:bg-orange-100 dark:hover:bg-orange-900/40 text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 rounded-md border border-white/40 dark:border-slate-600 transition-colors backdrop-blur-sm"
+                        >
+                          {post.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeletePost(e, post.id)} 
+                          title="Xóa bài viết"
+                          className="p-1.5 bg-white/60 dark:bg-slate-700/60 hover:bg-red-100 dark:hover:bg-red-900/40 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 rounded-md border border-white/40 dark:border-slate-600 transition-colors backdrop-blur-sm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2 mb-4 font-medium leading-relaxed">
+                  {post.content}
+                </p>
+
+                {post.drive_file_id && (
+                  <div className="mb-4 inline-flex items-center gap-2 bg-blue-50/80 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 px-3 py-2 rounded-xl backdrop-blur-sm">
+                    <div className="p-1.5 bg-blue-500 rounded-lg text-white"><Download className="w-3.5 h-3.5"/></div>
+                    <span className="text-xs font-bold text-blue-700 dark:text-blue-300 truncate max-w-[200px] sm:max-w-[300px]">Đính kèm: {post.file_name}</span>
+                    <span className="text-[10px] font-bold text-slate-400 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded-md ml-2">{post.file_size}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-4 border-t border-slate-300/50 dark:border-slate-700/50">
+                  <div className="flex items-center gap-4 text-xs font-bold text-slate-500 dark:text-slate-400">
+                    <span className="flex items-center gap-1.5 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 rounded-lg shadow-sm">
+                      <User className="w-3.5 h-3.5 text-slate-400" /> 
+                      <span className={post.profiles?.role === 'admin' || post.profiles?.role === 'collab' ? 'text-red-500' : 'text-slate-700 dark:text-slate-300'}>
+                        {post.profiles?.full_name || 'Thành viên ẩn danh'}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-400" /> {timeAgo(post.created_at)}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-300 text-sm font-black bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-blue-200/50 dark:border-blue-800/50 shadow-sm px-4 py-1.5 rounded-xl">
+                    <MessageCircle className="w-4 h-4" /> {post.comments?.[0]?.count || 0}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
+}
