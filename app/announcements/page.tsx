@@ -28,18 +28,25 @@ export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   const s = Math.floor((diff / 1000) % 60)
   
   return (
-    <span className="inline-block bg-gradient-to-r from-red-600 to-orange-600 text-white font-black px-3 py-1.5 rounded-xl shadow-[0_4px_15px_rgba(239,68,68,0.4)] mx-1 text-sm animate-pulse">
+    <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-red-500 to-orange-500 text-white font-black px-3.5 py-1.5 rounded-xl shadow-[0_4px_15px_rgba(239,68,68,0.4)] mx-1 text-sm animate-pulse whitespace-nowrap">
       ⏳ {d} Ngày {h} Giờ {m} Phút {s} Giây
     </span>
   )
 }
 
-// 🌟 BỘ XỬ LÝ CÚ PHÁP (PARSER)
+// 🌟 BỘ XỬ LÝ CÚ PHÁP (PARSER) ĐÃ TÍCH HỢP {CENTER: }
 export const AnnouncementRenderer = ({ text }: { text: string }) => {
   const renderLine = (line: string, idx: number) => {
-    let isH1 = false, isH2 = false, isH3 = false;
-    let content = line;
+    let isH1 = false, isH2 = false, isH3 = false, isCenter = false;
+    let content = line.trim();
     
+    // 🌟 Kiểm tra và bóc tách thẻ {Center: ...}
+    const centerMatch = content.match(/{Center:\s*(.*)}/i);
+    if (centerMatch) {
+      isCenter = true;
+      content = content.replace(/{Center:\s*(.*)}/i, '$1').trim();
+    }
+
     if (content.startsWith('###(H1)')) { isH1 = true; content = content.replace('###(H1)', '').trim() }
     else if (content.startsWith('##(H2)')) { isH2 = true; content = content.replace('##(H2)', '').trim() }
     else if (content.startsWith('#(H3)')) { isH3 = true; content = content.replace('#(H3)', '').trim() }
@@ -73,15 +80,19 @@ export const AnnouncementRenderer = ({ text }: { text: string }) => {
       return parts;
     };
 
-    const baseClass = isH1 ? "text-3xl md:text-4xl font-black text-blue-700 dark:text-blue-400 uppercase tracking-tight my-4 drop-shadow-md text-center" :
-                      isH2 ? "text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-slate-100 my-3 text-center" :
+    let baseClass = isH1 ? "text-3xl md:text-4xl font-black text-blue-700 dark:text-blue-400 uppercase tracking-tight my-4 drop-shadow-md text-center w-full" :
+                      isH2 ? "text-2xl md:text-3xl font-extrabold text-slate-800 dark:text-slate-100 my-3 text-center w-full" :
                       isH3 ? "text-xl font-bold text-slate-700 dark:text-slate-300 my-2" :
                       "text-base font-medium text-slate-700 dark:text-slate-300 my-1 leading-relaxed";
+
+    if (isCenter) {
+      baseClass += " flex justify-center items-center flex-wrap gap-2 text-center w-full";
+    }
 
     return <div key={idx} className={baseClass}>{parseTags(content)}</div>;
   }
   
-  return <div className="w-full">{text.split('\n').map((line, idx) => renderLine(line, idx))}</div>
+  return <div className="w-full space-y-1">{text.split('\n').map((line, idx) => renderLine(line, idx))}</div>
 }
 
 export default function AnnouncementsAdminPage() {
@@ -91,7 +102,7 @@ export default function AnnouncementsAdminPage() {
   
   const [announcements, setAnnouncements] = useState<any[]>([])
   
-  const [content, setContent] = useState('###(H1) CHÀO MỪNG ĐẾN VỚI SENEXAM\n\nĐây là thông báo mẫu. Kỳ thi THPT Quốc Gia sẽ diễn ra sau:\n{time_: 2026-06-25T08:00}\n\n{Quoc_Khanh: Chào mừng ngày Giải phóng miền Nam}')
+  const [content, setContent] = useState('###(H1) CHÚNG TA CÒN\n{Center: {time_: 2026-06-25T08:00} là tới ngày thi tốt nghiệp THPT}\n##(H2) CHÚC MỌI NGƯỜI ÔN TẬP TỐT !')
   const [isActive, setIsActive] = useState(true)
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
@@ -160,6 +171,7 @@ export default function AnnouncementsAdminPage() {
               <h2 className="text-lg font-black mb-4 border-b dark:border-slate-700 pb-2">Bảng Hướng Dẫn Cú Pháp</h2>
               <ul className="space-y-3 text-xs font-medium text-slate-600 dark:text-slate-400">
                 <li><code className="text-blue-500 font-black bg-blue-50 px-1 py-0.5 rounded">###(H1) Nội dung</code> - Tạo Tiêu đề to nhất (H1, H2, H3).</li>
+                <li><code className="text-emerald-600 font-black bg-emerald-50 px-1 py-0.5 rounded">{`{Center: Nội dung}`}</code> - Căn giữa nội dung nằm trong ngoặc.</li>
                 <li><code className="text-red-500 font-black bg-red-50 px-1 py-0.5 rounded">{`{time_: 2026-06-25T08:00}`}</code> - Bộ đếm ngược thời gian tới ngày được chỉ định (YYYY-MM-DDTHH:mm).</li>
                 <li><code className="text-yellow-600 font-black bg-yellow-50 px-1 py-0.5 rounded">{`{Quoc_Khanh: Ngày Độc Lập}`}</code> - Gắn cờ, xe tăng 314 và nền đỏ chữ vàng.</li>
                 <li><code className="font-black bg-slate-100 px-1 py-0.5 rounded">{`{Bold: Chú ý}`}</code> - Viết HOA và In đậm chữ.</li>

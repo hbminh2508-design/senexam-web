@@ -56,14 +56,13 @@ export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
 }
 
 // ==========================================
-// 🌟 BỘ XỬ LÝ CÚ PHÁP THÔNG BÁO TỪ ADMIN (ĐÃ THÊM LỆNH CENTER)
+// 🌟 BỘ XỬ LÝ CÚ PHÁP THÔNG BÁO TỪ ADMIN
 // ==========================================
 export const AnnouncementRenderer = ({ text }: { text: string }) => {
   const renderLine = (line: string, idx: number) => {
     let isH1 = false, isH2 = false, isH3 = false, isCenter = false;
     let content = line.trim();
     
-    // 🌟 Kiểm tra và bóc tách thẻ {Center: ...}
     const centerMatch = content.match(/{Center:\s*(.*)}/i);
     if (centerMatch) {
       isCenter = true;
@@ -108,7 +107,6 @@ export const AnnouncementRenderer = ({ text }: { text: string }) => {
                       isH3 ? "text-xl font-bold text-slate-700 dark:text-slate-300 my-2" :
                       "text-base font-medium text-slate-700 dark:text-slate-300 my-1 leading-relaxed";
 
-    // Kích hoạt Flex căn giữa hoàn hảo cho các chữ và đồng hồ
     if (isCenter) {
       baseClass += " flex justify-center items-center flex-wrap gap-2 text-center w-full";
     }
@@ -118,6 +116,7 @@ export const AnnouncementRenderer = ({ text }: { text: string }) => {
   
   return <div className="w-full space-y-1">{text.split('\n').map((line, idx) => renderLine(line, idx))}</div>
 }
+
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -129,7 +128,6 @@ export default function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false)
   
   // 🌟 STATE: Lưu trữ thông báo tải từ DB
-  const [showNotifications, setShowNotifications] = useState(false)
   const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
   
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -175,7 +173,7 @@ export default function DashboardPage() {
         setStudentHistoryList(subHistory || [])
       } else { setShowOnboarding(true) }
 
-      // 🌟 3. TẢI THÔNG BÁO TỪ ADMIN (Nếu thỏa mãn điều kiện thời gian)
+      // 🌟 3. TẢI THÔNG BÁO TỪ ADMIN
       const nowISO = new Date().toISOString()
       const { data: notifData } = await supabase
         .from('announcements')
@@ -384,33 +382,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* 🌟 THÔNG BÁO SIDE PANEL (NOTIFICATIONS BOARD) */}
-        {showNotifications && (
-          <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/20 backdrop-blur-sm transition-all duration-300">
-            <div className="w-full max-w-[500px] h-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-3xl backdrop-saturate-[2] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto border-l border-white/60 dark:border-white/10 flex flex-col animate-in slide-in-from-right duration-300">
-              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center sticky top-0 z-10 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md">
-                <h2 className="text-2xl font-extrabold flex items-center gap-3 drop-shadow-sm"><Bell className="w-6 h-6 text-red-500 fill-red-500 animate-pulse" /> Bảng Thông Báo</h2>
-                <button onClick={() => setShowNotifications(false)} className="p-2 rounded-full bg-white/40 dark:bg-slate-800/50 hover:bg-white/70 dark:hover:bg-slate-700 transition-colors border border-white/50 dark:border-white/10"><X className="w-5 h-5 text-slate-700 dark:text-slate-300" /></button>
-              </div>
-
-              <div className="p-6 flex-grow">
-                {activeAnnouncement ? (
-                  <div className="bg-white/60 dark:bg-slate-800/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 shadow-lg relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500"></div>
-                    <AnnouncementRenderer text={activeAnnouncement} />
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500">
-                    <Bell className="w-12 h-12 mb-4 opacity-30" />
-                    <p className="font-bold">Hiện không có thông báo nào từ hệ thống.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className={`transition-all duration-500 ${(showOnboarding || showProfile || showCodeModal || showNotifications) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
+        <div className={`transition-all duration-500 ${(showOnboarding || showProfile || showCodeModal) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
           
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div className="flex items-center gap-3 cursor-pointer select-none group shrink-0" onClick={() => router.push('/dashboard')}>
@@ -431,17 +403,18 @@ export default function DashboardPage() {
               <button onClick={() => router.push('/forum')} className={`${glassButtonStyles} flex items-center justify-center gap-2 px-5 py-2.5 text-blue-600 dark:text-blue-400 rounded-2xl font-black text-sm`}>
                 <MessageSquare className="w-4 h-4" /> Thảo luận Forum
               </button>
-              {(userRole === 'admin' || userRole === 'collab') && (
-                <button onClick={() => router.push('/admin')} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500/90 to-orange-500/90 backdrop-blur-md border border-white/30 text-white rounded-2xl shadow-[0_4px_15px_rgba(239,68,68,0.3)] font-black hover:scale-105 transition-transform text-sm">
-                  <ShieldCheck className="w-4 h-4" /> Trạm Admin
-                </button>
-              )}
               
-              {/* 🌟 NÚT QUẢ CHUÔNG THÔNG BÁO GÓC PHẢI TRÊN */}
-              <button onClick={() => setShowNotifications(true)} className={`${glassButtonStyles} relative flex items-center justify-center p-2.5 text-slate-800 dark:text-slate-200 rounded-2xl`}>
-                <Bell className="w-5 h-5" />
-                {activeAnnouncement && <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 animate-pulse"></span>}
-              </button>
+              {/* 🌟 NÚT CHUÔNG & TRẠM ADMIN CHỈ DÀNH CHO QUẢN TRỊ VIÊN */}
+              {(userRole === 'admin' || userRole === 'collab') && (
+                <>
+                  <button onClick={() => router.push('/announcements')} className={`${glassButtonStyles} flex items-center justify-center p-2.5 text-red-500 dark:text-red-400 rounded-2xl transition-all hover:scale-105`} title="Trạm Phát Sóng Thông Báo">
+                    <Bell className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => router.push('/admin')} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500/90 to-orange-500/90 backdrop-blur-md border border-white/30 text-white rounded-2xl shadow-[0_4px_15px_rgba(239,68,68,0.3)] font-black hover:scale-105 transition-transform text-sm">
+                    <ShieldCheck className="w-4 h-4" /> Trạm Admin
+                  </button>
+                </>
+              )}
 
               <button onClick={() => setShowProfile(true)} className={`${glassButtonStyles} flex items-center justify-center gap-2 px-5 py-2.5 text-slate-800 dark:text-slate-200 rounded-2xl font-bold text-sm`}><Settings className="w-4 h-4" /> Cài đặt</button>
               <button onClick={handleLogout} className={`${glassButtonStyles} flex items-center justify-center gap-2 px-5 py-2.5 text-red-600 dark:text-red-400 rounded-2xl font-bold text-sm`}><LogOut className="w-4 h-4" /></button>
