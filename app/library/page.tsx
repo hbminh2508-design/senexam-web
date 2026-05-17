@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
   UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
-  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit
+  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown
 } from 'lucide-react'
 
 const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
@@ -25,13 +25,16 @@ export default function LibraryPage() {
   const currentFolderId = folderPath[folderPath.length - 1].id
 
   const [searchQuery, setSearchQuery] = useState('')
+  
+  // 🌟 STATE: TÍNH NĂNG GỌN GÀNG (SẮP XẾP A-Z)
+  const [sortByName, setSortByName] = useState(false)
 
   // Modal Create/Upload
   const [showFolderModal, setShowFolderModal] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [showDocModal, setShowDocModal] = useState(false)
   const [docTitle, setDocTitle] = useState('')
-  const [docFiles, setDocFiles] = useState<File[]>([]) // 🌟 ĐÃ ĐỔI THÀNH MẢNG ĐỂ NHẬN NHIỀU FILE
+  const [docFiles, setDocFiles] = useState<File[]>([])
   const [uploadStatus, setUploadStatus] = useState<{type: 'idle' | 'uploading' | 'success' | 'error', message: string}>({ type: 'idle', message: '' })
 
   // Drag & Drop
@@ -43,7 +46,7 @@ export default function LibraryPage() {
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
   const [clipboard, setClipboard] = useState<{action: 'cut' | 'copy', items: SelectedItem[]} | null>(null)
 
-  // 🌟 STATE: ĐỔI TÊN THƯ MỤC/FILE
+  // Rename
   const [showRenameModal, setShowRenameModal] = useState(false)
   const [renameTarget, setRenameTarget] = useState<SelectedItem | null>(null)
   const [renameInput, setRenameInput] = useState('')
@@ -102,7 +105,6 @@ export default function LibraryPage() {
     } else { alert("Lỗi tạo thư mục: " + error.message) }
   }
 
-  // 🌟 NÂNG CẤP: TẢI NHIỀU FILE CÙNG LÚC QUA VÒNG LẶP BYPASS
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault()
     if (docFiles.length === 0) return
@@ -113,7 +115,6 @@ export default function LibraryPage() {
 
       for (let i = 0; i < docFiles.length; i++) {
         const file = docFiles[i];
-        // Nếu user nhập tên và chỉ up 1 file thì lấy tên đó. Nếu up nhiều file thì tự động lấy tên gốc của file
         const finalTitle = (docFiles.length === 1 && docTitle.trim()) ? docTitle.trim() : file.name;
 
         setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang cấp phép tải file: ${file.name}...` })
@@ -146,7 +147,6 @@ export default function LibraryPage() {
     } catch (err: any) { setUploadStatus({ type: 'error', message: err.message || 'Có lỗi xảy ra.' }) }
   }
 
-  // 🌟 TÍNH NĂNG ĐỔI TÊN THƯ MỤC / FILE
   const handleRename = async () => {
     if (!renameInput.trim() || !renameTarget) return;
     try {
@@ -162,7 +162,6 @@ export default function LibraryPage() {
     }
   }
 
-  // KÉO THẢ TÀI LIỆU
   const handleDragStart = (e: React.DragEvent, id: string, type: 'folder' | 'document') => {
     if (userRole !== 'admin' && userRole !== 'collab') return;
     setDraggedItem({ id, type }); e.dataTransfer.effectAllowed = "move"
@@ -181,7 +180,6 @@ export default function LibraryPage() {
     setDraggedItem(null)
   }
 
-  // CHẾ ĐỘ SẮP XẾP (CHỌN NHIỀU)
   const toggleSelection = (id: string, type: 'folder' | 'document', data: any) => {
     setSelectedItems(prev => {
       const exists = prev.find(i => i.id === id);
@@ -243,8 +241,14 @@ export default function LibraryPage() {
     if (!error) setDocuments(documents.filter(d => d.id !== id))
   }
 
-  const filteredFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  const filteredDocuments = documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
+  // 🌟 ÁP DỤNG THUẬT TOÁN TÌM KIẾM & SẮP XẾP TỰ NHIÊN (NATURAL SORT)
+  let displayFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  let displayDocuments = documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
+
+  if (sortByName) {
+    displayFolders.sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' }));
+    displayDocuments.sort((a, b) => a.title.localeCompare(b.title, 'vi', { numeric: true, sensitivity: 'base' }));
+  }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50 dark:bg-slate-950">Đang khởi tạo thư viện số...</div>
 
@@ -253,12 +257,10 @@ export default function LibraryPage() {
       <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-bl from-blue-400/40 to-cyan-400/30 dark:from-blue-800/40 dark:to-cyan-900/30 rounded-full blur-[120px] pointer-events-none"></div>
 
       {/* --- FLOATING ACTION BARS --- */}
-      {/* 1. Màn hình chọn file (Select Mode) */}
       {isSelectMode && selectedItems.length > 0 && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10">
            <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
            
-           {/* NÚT ĐỔI TÊN (Chỉ hiện khi chọn đúng 1 file/folder) */}
            {selectedItems.length === 1 && (userRole === 'admin' || userRole === 'collab') && (
              <button onClick={() => {
                setRenameTarget(selectedItems[0]);
@@ -283,7 +285,6 @@ export default function LibraryPage() {
         </div>
       )}
 
-      {/* 2. Màn hình chờ Dán (Paste Mode) */}
       {clipboard && !isSelectMode && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-blue-400/50 px-6 py-4 rounded-3xl shadow-[0_10px_40px_rgba(59,130,246,0.3)] flex items-center gap-4 z-[90] animate-bounce">
            <div className="flex flex-col">
@@ -332,8 +333,6 @@ export default function LibraryPage() {
             <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center mb-4"><UploadCloud className="w-6 h-6 text-emerald-600 dark:text-emerald-400"/></div>
             <h3 className="text-xl font-black mb-4">Tải tài liệu lên</h3>
             <form onSubmit={handleUploadDocument} className="space-y-4">
-              
-              {/* NẾU CHỈ UP 1 FILE THÌ CHO PHÉP NHẬP TÊN, NẾU NHIỀU THÌ TỰ ĐỘNG LẤY THEO FILE */}
               {docFiles.length <= 1 && (
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Tên tài liệu hiển thị</label>
@@ -378,7 +377,7 @@ export default function LibraryPage() {
               Thư Viện Số <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </h1>
             
-            {/* Breadcrumb - CÓ THỂ DROP FILE VÀO ĐÂY ĐỂ ĐẨY RA NGOÀI */}
+            {/* Breadcrumb */}
             <div className="flex items-center flex-wrap gap-2 text-sm font-bold bg-white/40 dark:bg-slate-800/40 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/60 dark:border-slate-700/50 w-fit">
               {folderPath.map((step, index) => (
                 <div key={index} className="flex items-center gap-2"
@@ -405,9 +404,16 @@ export default function LibraryPage() {
 
             {(userRole === 'admin' || userRole === 'collab') && (
               <>
-                <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isSelectMode ? 'bg-amber-100 text-amber-700 border-amber-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
-                  <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp'}
+                {/* 🌟 NÚT GỌN GÀNG (SẮP XẾP A-Z) */}
+                <button onClick={() => setSortByName(!sortByName)} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${sortByName ? 'bg-indigo-100 text-indigo-700 border-indigo-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
+                  <ArrowUpDown className="w-5 h-5" /> {sortByName ? 'Xếp theo Ngày' : 'Gọn gàng (A-Z)'}
                 </button>
+
+                {/* NÚT CHỌN NHIỀU */}
+                <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isSelectMode ? 'bg-amber-100 text-amber-700 border-amber-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
+                  <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp (Chọn)'}
+                </button>
+
                 <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-white/60 transition-colors">
                   <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
                 </button>
@@ -422,7 +428,7 @@ export default function LibraryPage() {
         {/* --- MAIN CONTENT AREA --- */}
         <div className={`${glassCardStyles} rounded-[2.5rem] p-6 md:p-10 min-h-[60vh] border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
           
-          {filteredFolders.length === 0 && filteredDocuments.length === 0 ? (
+          {displayFolders.length === 0 && displayDocuments.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-20">
               <Search className="w-16 h-16 mb-4" />
               <p className="font-bold text-lg">Không tìm thấy thư mục hay tài liệu nào.</p>
@@ -430,11 +436,11 @@ export default function LibraryPage() {
           ) : (
             <>
               {/* LƯỚI THƯ MỤC */}
-              {filteredFolders.length > 0 && (
+              {displayFolders.length > 0 && (
                 <div className="mb-10">
                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Thư mục</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {filteredFolders.map(folder => {
+                    {displayFolders.map(folder => {
                       const isSelected = selectedItems.some(i => i.id === folder.id);
                       return (
                         <div key={folder.id} 
@@ -467,11 +473,11 @@ export default function LibraryPage() {
               )}
 
               {/* LƯỚI TÀI LIỆU */}
-              {filteredDocuments.length > 0 && (
+              {displayDocuments.length > 0 && (
                 <div>
                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Tài liệu</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredDocuments.map(doc => {
+                    {displayDocuments.map(doc => {
                       const isSelected = selectedItems.some(i => i.id === doc.id);
                       return (
                         <div key={doc.id} 
