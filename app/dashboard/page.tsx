@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   BookOpen, Clock, Trophy, Target, LogOut, User, 
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle,
-  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen
+  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen,
+  Bot, Send, Sparkles
 } from 'lucide-react'
 
 const PROVINCES = [
@@ -111,6 +112,7 @@ export const AnnouncementRenderer = ({ text }: { text: string }) => {
   return <div className="w-full space-y-1">{text.split('\n').map((line, idx) => renderLine(line, idx))}</div>
 }
 
+
 export default function DashboardPage() {
   const router = useRouter()
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -129,6 +131,15 @@ export default function DashboardPage() {
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [examCode, setExamCode] = useState('')
   const [codeLoading, setCodeLoading] = useState(false)
+
+  // 🌟 STATE CHO SEN AI CHATBOT
+  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [chatMessages, setChatMessages] = useState<{role: 'user' | 'model', text: string}[]>([
+    { role: 'model', text: 'Chào bạn! Mình là Sen AI - trợ lý ảo của hệ thống SenExam. Bạn cần mình hướng dẫn tính năng nào không?' }
+  ])
+  const [isChatLoading, setIsChatLoading] = useState(false)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
 
   const [formData, setFormData] = useState({
     fullName: '', dob: '', cccd: '', province: '', school: '', aspiration: '',
@@ -189,6 +200,13 @@ export default function DashboardPage() {
     }
   }, [router])
 
+  // Tự động cuộn xuống cuối khi có tin nhắn mới
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages])
+
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login') }
 
   const toggleDarkMode = () => {
@@ -225,6 +243,35 @@ export default function DashboardPage() {
     const { data, error } = await supabase.from('exams').select('id, title').eq('access_code', examCode.trim().toUpperCase()).single()
     if (error || !data) { alert('Mã đề thi không hợp lệ hoặc đã bị vô hiệu hóa!'); setCodeLoading(false) } 
     else { router.push(`/exams/${data.id}`) }
+  }
+
+  // 🌟 GỬI TIN NHẮN TỚI API SEN AI 🌟
+  const handleSendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!chatInput.trim() || isChatLoading) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    const newHistory = [...chatMessages, { role: 'user' as const, text: userMessage }];
+    setChatMessages(newHistory);
+    setIsChatLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Gửi toàn bộ lịch sử (trừ câu hiện tại) để AI nhớ bối cảnh
+        body: JSON.stringify({ message: userMessage, history: chatMessages })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setChatMessages([...newHistory, { role: 'model', text: data.text }]);
+    } catch (err) {
+      setChatMessages([...newHistory, { role: 'model', text: 'Xin lỗi, hệ thống AI đang bảo trì hoặc quá tải. Bạn chờ chút rồi thử lại nhé!' }]);
+    }
+    setIsChatLoading(false);
   }
 
   if (isDataLoading) {
@@ -540,7 +587,7 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            {/* 🌟 THƯ VIỆN SỐ (BENTO MỚI TRẢI DÀI) */}
+            {/* 🌟 THƯ VIỆN SỐ */}
             <div 
               onClick={() => router.push('/library')}
               className={`${glassCardStyles} md:col-span-4 rounded-[2.5rem] p-6 md:p-8 flex items-center justify-between hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(14,165,233,0.2)] transition-all duration-300 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 group cursor-pointer overflow-hidden relative`}
@@ -566,6 +613,79 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* 🌟 NÚT NỔI & CỬA SỔ CHAT SEN AI 🌟 */}
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+        {/* Khung chat */}
+        {isChatOpen && (
+          <div className="mb-4 w-[350px] sm:w-[400px] h-[500px] bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/60 dark:border-slate-700/50 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
+            {/* Chat Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 flex items-center justify-between shadow-md">
+              <div className="flex items-center gap-2 text-white">
+                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Trợ lý Sen AI</h3>
+                  <p className="text-[10px] text-blue-100">Luôn sẵn sàng hỗ trợ bạn</p>
+                </div>
+              </div>
+              <button onClick={() => setIsChatOpen(false)} className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-slate-950/50" ref={chatScrollRef}>
+              {chatMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-md' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none shadow-sm'}`}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {isChatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2.5 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                    <span className="text-xs text-slate-500 font-bold">Sen AI đang suy nghĩ...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input */}
+            <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+              <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 relative">
+                <input 
+                  type="text" 
+                  value={chatInput} 
+                  onChange={(e) => setChatInput(e.target.value)} 
+                  placeholder="Hỏi Sen AI bất cứ điều gì..." 
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-full pl-4 pr-12 py-3 text-sm font-medium outline-none focus:border-blue-500 focus:bg-white transition-all shadow-inner"
+                />
+                <button type="submit" disabled={!chatInput.trim() || isChatLoading} className="absolute right-2 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-full transition-transform active:scale-95 shadow-md">
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Nút bật/tắt lơ lửng */}
+        <button 
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className={`flex items-center justify-center gap-2 px-5 py-3.5 rounded-full shadow-[0_8px_30px_rgba(37,99,235,0.4)] text-white font-black transition-all duration-300 hover:scale-105 active:scale-95 ${isChatOpen ? 'bg-slate-800 hover:bg-slate-700' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500'}`}
+        >
+          {isChatOpen ? <X className="w-6 h-6" /> : (
+            <>
+              <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse" />
+              Trợ lý Sen AI
+            </>
+          )}
+        </button>
+      </div>
+
     </div>
   )
 }
