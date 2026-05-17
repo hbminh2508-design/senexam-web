@@ -86,10 +86,11 @@ export default function LibraryPage() {
     if (!docTitle || !docFile || !currentFolder) return
 
     try {
-      // BƯỚC 1: XIN ĐƯỜNG DẪN BÍ MẬT
+      // BƯỚC 1: XIN ĐƯỜNG DẪN BÍ MẬT TỪ API CHUNG
       setUploadStatus({ type: 'uploading', message: 'Đang xin cấp phép tải lên từ Google Drive...' })
       
-      const initRes = await fetch('/api/init-upload', {
+      // Đã sửa lại đường dẫn trỏ đúng vào API upload-exam đã gộp
+      const initRes = await fetch('/api/upload-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName: docTitle, mimeType: docFile.type })
@@ -126,7 +127,7 @@ export default function LibraryPage() {
 
       if (dbError) throw new Error(dbError.message)
       
-      setUploadStatus({ type: 'success', message: 'Đã tải thành công tài liệu khổng lồ!' })
+      setUploadStatus({ type: 'success', message: 'Đã tải thành công tài liệu!' })
       setDocTitle(''); setDocFile(null); setShowDocModal(false);
       fetchDocuments(currentFolder.id)
     } catch (err: any) {
@@ -153,6 +154,7 @@ export default function LibraryPage() {
       
       <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-bl from-blue-400/40 to-cyan-400/30 dark:from-blue-800/40 dark:to-cyan-900/30 rounded-full blur-[120px] pointer-events-none"></div>
 
+      {/* --- MODAL TẠO THƯ MỤC MỚI --- */}
       {showFolderModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 shadow-2xl relative`}>
@@ -165,6 +167,7 @@ export default function LibraryPage() {
         </div>
       )}
 
+      {/* --- MODAL UPLOAD TÀI LIỆU --- */}
       {showDocModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`${glassCardStyles} rounded-3xl w-full max-w-md p-8 shadow-2xl relative`}>
@@ -200,6 +203,8 @@ export default function LibraryPage() {
       )}
 
       <div className="relative z-10 max-w-[1400px] mx-auto">
+        
+        {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors mb-3">
@@ -209,6 +214,7 @@ export default function LibraryPage() {
               Thư Viện Số <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </h1>
             
+            {/* Breadcrumb */}
             <div className="flex items-center gap-2 mt-4 text-sm font-bold">
               <span onClick={handleBackToRoot} className={`cursor-pointer transition-colors ${currentFolder ? 'text-slate-400 hover:text-blue-600 dark:hover:text-blue-400' : 'text-blue-600 dark:text-blue-400'}`}>
                 Trang chủ Thư viện
@@ -223,6 +229,7 @@ export default function LibraryPage() {
           </div>
 
           <div className="flex gap-3">
+            {/* COLLAB VÀ ADMIN */}
             {(userRole === 'admin' || userRole === 'collab') && (
               <>
                 {!currentFolder ? (
@@ -239,7 +246,10 @@ export default function LibraryPage() {
           </div>
         </div>
 
+        {/* --- MAIN CONTENT AREA --- */}
         <div className={`${glassCardStyles} rounded-[2.5rem] p-6 md:p-10 min-h-[60vh] border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
+          
+          {/* VIEW: MÀN HÌNH ROOT (HIỂN THỊ THƯ MỤC) */}
           {!currentFolder ? (
             folders.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-20">
@@ -251,42 +261,19 @@ export default function LibraryPage() {
                 {folders.map(folder => (
                   <div key={folder.id} onClick={() => handleOpenFolder(folder)} className="group cursor-pointer flex flex-col items-center gap-3 relative">
                     
-                    {/* SVG MACOS FOLDER ICON ĐƯỢC VẼ TRỰC TIẾP */}
-                    <div className="relative transform group-hover:scale-110 group-hover:-translate-y-2 transition-all duration-300 drop-shadow-xl w-32 h-24">
-                      <svg viewBox="0 0 250 180" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-                        <defs>
-                          <linearGradient id={`gradBody-${folder.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" style={{ stopColor: '#75c9f5', stopOpacity: 1 }} />
-                            <stop offset="100%" style={{ stopColor: '#22a2e3', stopOpacity: 1 }} />
-                          </linearGradient>
-                          <linearGradient id={`gradTab-${folder.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" style={{ stopColor: '#75c9f5', stopOpacity: 1 }} />
-                            <stop offset="100%" style={{ stopColor: '#6dbdef', stopOpacity: 1 }} />
-                          </linearGradient>
-                          <filter id={`shadow-${folder.id}`} x="-10%" y="-10%" width="120%" height="120%">
-                            <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="rgba(0,0,0,0.3)" />
-                          </filter>
-                        </defs>
-                        
-                        <path d="M10,21 C10,9.954 18.954,1 30,1 L70,1 C81.046,1 90,9.954 90,21 L90,25 L10,25 Z" 
-                              fill={`url(#gradTab-${folder.id})`} stroke="#1a8cc7" strokeWidth="1" />
-                        
-                        <rect x="0" y="21" width="250" height="159" rx="15" 
-                              fill={`url(#gradBody-${folder.id})`} stroke="#1a8cc7" strokeWidth="1" filter={`url(#shadow-${folder.id})`} />
-                        
-                        <rect x="105" y="70" width="40" height="40" rx="8" 
-                              fill="rgba(255, 255, 255, 0.6)" stroke="#75c9f5" strokeWidth="1" />
-                        <text x="125" y="99" fontFamily="sans-serif" fontSize="28" fontWeight="bold" fill="#1a8cc7" textAnchor="middle">?</text>
-                      </svg>
+                    {/* 🌟 VẼ THƯ MỤC BẰNG LUCIDE REACT 🌟 */}
+                    <div className="relative transform group-hover:scale-110 group-hover:-translate-y-2 transition-all duration-300 w-28 h-28 md:w-32 md:h-32 flex items-center justify-center">
+                      <Folder className="w-full h-full text-blue-400/80 fill-blue-500/90 drop-shadow-[0_10px_15px_rgba(59,130,246,0.3)]" strokeWidth={1} />
                       
+                      {/* Nút thùng rác */}
                       {userRole === 'admin' && (
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }} className="absolute -top-4 -right-4 bg-red-100 text-red-600 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-200 hover:scale-110 z-10" title="Xóa thư mục">
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }} className="absolute -top-1 -right-1 bg-white/90 dark:bg-slate-800/90 text-red-500 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-50 hover:text-red-600 hover:scale-110 z-10 border border-slate-200 dark:border-slate-700" title="Xóa thư mục">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       )}
                     </div>
 
-                    <p className="font-black text-sm text-center text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 px-2 mt-2">
+                    <p className="font-black text-sm text-center text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 px-2 mt-1">
                       {folder.name}
                     </p>
                   </div>
@@ -295,6 +282,7 @@ export default function LibraryPage() {
             )
           ) : (
             
+            /* VIEW: BÊN TRONG THƯ MỤC (HIỂN THỊ TÀI LIỆU) */
             documents.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-20">
                 <FileText className="w-16 h-16 mb-4" />
