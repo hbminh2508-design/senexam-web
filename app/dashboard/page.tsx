@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   BookOpen, Clock, Trophy, Target, LogOut, User, 
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle,
-  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell
+  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen
 } from 'lucide-react'
 
 const PROVINCES = [
@@ -26,9 +26,6 @@ const HSA_SCIENCE_SUBJECTS = ['Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch S
 const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
 const glassButtonStyles = "bg-white/40 dark:bg-slate-800/50 backdrop-blur-xl backdrop-saturate-[1.2] border border-white/60 dark:border-white/10 shadow-sm hover:bg-white/60 dark:hover:bg-slate-700/50 transition-all duration-300"
 
-// ==========================================
-// 🌟 COMPONENT: ĐẾM NGƯỢC THỜI GIAN THỰC
-// ==========================================
 export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   const [now, setNow] = useState(Date.now())
   
@@ -55,9 +52,6 @@ export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   )
 }
 
-// ==========================================
-// 🌟 BỘ XỬ LÝ CÚ PHÁP THÔNG BÁO TỪ ADMIN
-// ==========================================
 export const AnnouncementRenderer = ({ text }: { text: string }) => {
   const renderLine = (line: string, idx: number) => {
     let isH1 = false, isH2 = false, isH3 = false, isCenter = false;
@@ -117,7 +111,6 @@ export const AnnouncementRenderer = ({ text }: { text: string }) => {
   return <div className="w-full space-y-1">{text.split('\n').map((line, idx) => renderLine(line, idx))}</div>
 }
 
-
 export default function DashboardPage() {
   const router = useRouter()
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -127,7 +120,7 @@ export default function DashboardPage() {
   const [showOnboarding, setShowOnboarding] = useState(false) 
   const [showProfile, setShowProfile] = useState(false)
   
-  // 🌟 STATE: Lưu trữ thông báo tải từ DB
+  const [showNotifications, setShowNotifications] = useState(false)
   const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
   
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -149,7 +142,6 @@ export default function DashboardPage() {
       if (!user) { router.push('/login'); return }
       setUserEmail(user.email ?? null)
 
-      // 1. Tải Profile Học sinh
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
       if (profile) {
@@ -163,7 +155,6 @@ export default function DashboardPage() {
 
         if (!profile.full_name || !profile.target_exams || profile.target_exams.length === 0) { setShowOnboarding(true) }
 
-        // 2. Tải Lịch sử thi
         const { data: subHistory } = await supabase
           .from('submissions')
           .select('*, exams(title, exam_type, allow_review)')
@@ -173,7 +164,6 @@ export default function DashboardPage() {
         setStudentHistoryList(subHistory || [])
       } else { setShowOnboarding(true) }
 
-      // 🌟 3. TẢI THÔNG BÁO TỪ ADMIN
       const nowISO = new Date().toISOString()
       const { data: notifData } = await supabase
         .from('announcements')
@@ -242,7 +232,7 @@ export default function DashboardPage() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="flex flex-col items-center gap-4 text-blue-600 dark:text-blue-500">
           <Loader2 className="w-10 h-10 animate-spin" />
-          <p className="font-bold">Đang tải kiến trúc Liquid Glass...</p>
+          <p className="font-bold">Bạn chờ chút nhé, Sen đang dẫn bạn tới ngay đây …</p>
         </div>
       </div>
     )
@@ -251,12 +241,10 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 p-4 md:p-8 relative text-slate-900 dark:text-slate-100 transition-colors duration-500 overflow-x-hidden font-sans">
       
-      {/* 🌟 APPLE LIQUID GLASS ORBS BACKGROUND 🌟 */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/40 to-indigo-400/30 dark:from-blue-800/40 dark:to-indigo-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
       <div className="fixed top-[25%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-purple-400/40 to-pink-400/30 dark:from-purple-800/40 dark:to-pink-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
       <div className="fixed bottom-[-15%] left-[20%] w-[700px] h-[700px] bg-gradient-to-t from-emerald-300/30 to-teal-400/20 dark:from-emerald-900/30 dark:to-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '4s' }}></div>
 
-      {/* MODAL NHẬP MÃ ĐỀ THI ẨN */}
       {showCodeModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
            <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 relative shadow-2xl`}>
@@ -282,7 +270,6 @@ export default function DashboardPage() {
 
       <div className="relative z-10 p-4 md:p-6 max-w-[1400px] mx-auto">
         
-        {/* POPUP ONBOARDING (LIQUID GLASS) */}
         {showOnboarding && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
              <div className={`${glassCardStyles} rounded-[2rem] w-full max-w-5xl max-h-[95vh] overflow-y-auto custom-scrollbar border-t-white/70 border-l-white/70 dark:border-t-white/20 dark:border-l-white/20`}>
@@ -347,7 +334,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* SETTINGS SIDE PANEL */}
         {showProfile && (
           <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/20 backdrop-blur-sm transition-all duration-300">
             <div className="w-full max-w-md h-full bg-white/50 dark:bg-slate-900/50 backdrop-blur-[40px] backdrop-saturate-[1.5] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto border-l border-white/60 dark:border-white/10 flex flex-col">
@@ -382,7 +368,32 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className={`transition-all duration-500 ${(showOnboarding || showProfile || showCodeModal) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
+        {showNotifications && (
+          <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/20 backdrop-blur-sm transition-all duration-300">
+            <div className="w-full max-w-[500px] h-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-3xl backdrop-saturate-[2] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto border-l border-white/60 dark:border-white/10 flex flex-col animate-in slide-in-from-right duration-300">
+              <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center sticky top-0 z-10 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md">
+                <h2 className="text-2xl font-extrabold flex items-center gap-3 drop-shadow-sm"><Bell className="w-6 h-6 text-red-500 fill-red-500 animate-pulse" /> Bảng Thông Báo</h2>
+                <button onClick={() => setShowNotifications(false)} className="p-2 rounded-full bg-white/40 dark:bg-slate-800/50 hover:bg-white/70 dark:hover:bg-slate-700 transition-colors border border-white/50 dark:border-white/10"><X className="w-5 h-5 text-slate-700 dark:text-slate-300" /></button>
+              </div>
+
+              <div className="p-6 flex-grow">
+                {activeAnnouncement ? (
+                  <div className="bg-white/60 dark:bg-slate-800/60 p-6 rounded-3xl border border-white/60 dark:border-slate-700/50 shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500"></div>
+                    <AnnouncementRenderer text={activeAnnouncement} />
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                    <Bell className="w-12 h-12 mb-4 opacity-30" />
+                    <p className="font-bold">Hiện không có thông báo nào từ hệ thống.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={`transition-all duration-500 ${(showOnboarding || showProfile || showCodeModal || showNotifications) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
           
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div className="flex items-center gap-3 cursor-pointer select-none group shrink-0" onClick={() => router.push('/dashboard')}>
@@ -404,7 +415,6 @@ export default function DashboardPage() {
                 <MessageSquare className="w-4 h-4" /> Thảo luận Forum
               </button>
               
-              {/* 🌟 NÚT CHUÔNG & TRẠM ADMIN CHỈ DÀNH CHO QUẢN TRỊ VIÊN */}
               {(userRole === 'admin' || userRole === 'collab') && (
                 <>
                   <button onClick={() => router.push('/announcements')} className={`${glassButtonStyles} flex items-center justify-center p-2.5 text-red-500 dark:text-red-400 rounded-2xl transition-all hover:scale-105`} title="Trạm Phát Sóng Thông Báo">
@@ -421,7 +431,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 🌟 BẢNG THÔNG BÁO TIN TỨC ĐỘC LẬP TỪ ADMIN */}
           {activeAnnouncement && (
             <div className="mb-8 w-full animate-in fade-in slide-in-from-top-4 duration-500 relative z-20">
               <div className="bg-white/40 dark:bg-slate-800/40 backdrop-blur-3xl backdrop-saturate-200 border border-white/60 dark:border-white/10 rounded-[2.5rem] p-8 md:p-10 shadow-[0_12px_40px_rgba(0,0,0,0.1)] relative overflow-hidden">
@@ -431,7 +440,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* BENTO GRID */}
           <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-6">
             
             <div className="md:col-span-2 md:row-span-2 bg-gradient-to-br from-blue-500/60 to-indigo-600/60 dark:from-blue-700/50 dark:to-indigo-900/50 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] p-8 md:p-12 text-white relative overflow-hidden shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] border border-white/40 border-b-white/10 border-r-white/10 transition-all hover:shadow-[0_8px_32px_0_rgba(31,38,135,0.3)]">
@@ -529,6 +537,29 @@ export default function DashboardPage() {
                     )
                   })
                 )}
+              </div>
+            </div>
+            
+            {/* 🌟 THƯ VIỆN SỐ (BENTO MỚI TRẢI DÀI) */}
+            <div 
+              onClick={() => router.push('/library')}
+              className={`${glassCardStyles} md:col-span-4 rounded-[2.5rem] p-6 md:p-8 flex items-center justify-between hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(14,165,233,0.2)] transition-all duration-300 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 group cursor-pointer overflow-hidden relative`}
+            >
+              <div className="absolute right-0 top-0 w-64 h-64 bg-cyan-400/10 dark:bg-cyan-600/10 rounded-full blur-3xl group-hover:bg-cyan-400/20 transition-colors"></div>
+              
+              <div className="flex items-center gap-6 relative z-10 w-full">
+                <div className="p-5 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 text-cyan-600 dark:text-cyan-400 rounded-[1.5rem] border border-cyan-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+                  <FolderOpen className="w-10 h-10 drop-shadow-md" />
+                </div>
+                
+                <div className="flex-1">
+                  <h3 className="text-2xl font-black mb-1.5 text-slate-900 dark:text-white flex items-center gap-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                    Thư Viện Số Trực Tuyến <ChevronRight className="w-5 h-5 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm font-medium leading-relaxed max-w-2xl">
+                    Kho tàng tài liệu, chuyên đề, sách tham khảo và bài tập tự luyện đồ sộ. Được phân loại chi tiết giúp bạn tra cứu dễ dàng.
+                  </p>
+                </div>
               </div>
             </div>
 
