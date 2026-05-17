@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
   UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
-  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2
+  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit
 } from 'lucide-react'
 
 const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
@@ -26,20 +26,27 @@ export default function LibraryPage() {
 
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Modal Create/Upload
   const [showFolderModal, setShowFolderModal] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [showDocModal, setShowDocModal] = useState(false)
   const [docTitle, setDocTitle] = useState('')
-  const [docFile, setDocFile] = useState<File | null>(null)
+  const [docFiles, setDocFiles] = useState<File[]>([]) // 🌟 ĐÃ ĐỔI THÀNH MẢNG ĐỂ NHẬN NHIỀU FILE
   const [uploadStatus, setUploadStatus] = useState<{type: 'idle' | 'uploading' | 'success' | 'error', message: string}>({ type: 'idle', message: '' })
 
+  // Drag & Drop
   const [draggedItem, setDraggedItem] = useState<{id: string, type: 'folder' | 'document'} | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
 
-  // 🌟 STATES CHO CHẾ ĐỘ SẮP XẾP (CẮT / DÁN / XOÁ NHIỀU FILE)
+  // Select Mode & Clipboard
   const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
   const [clipboard, setClipboard] = useState<{action: 'cut' | 'copy', items: SelectedItem[]} | null>(null)
+
+  // 🌟 STATE: ĐỔI TÊN THƯ MỤC/FILE
+  const [showRenameModal, setShowRenameModal] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<SelectedItem | null>(null)
+  const [renameInput, setRenameInput] = useState('')
 
   useEffect(() => {
     const init = async () => {
@@ -95,31 +102,67 @@ export default function LibraryPage() {
     } else { alert("Lỗi tạo thư mục: " + error.message) }
   }
 
+  // 🌟 NÂNG CẤP: TẢI NHIỀU FILE CÙNG LÚC QUA VÒNG LẶP BYPASS
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!docTitle || !docFile) return
+    if (docFiles.length === 0) return
+
     try {
-      setUploadStatus({ type: 'uploading', message: 'Đang xin cấp phép tải lên từ Google Drive...' })
-      const initRes = await fetch('/api/upload-exam', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: docTitle, mimeType: docFile.type }) });
-      if (!initRes.ok) throw new Error("Không thể khởi tạo kết nối với Google Drive.");
-      const { uploadUrl } = await initRes.json();
-
-      setUploadStatus({ type: 'uploading', message: `Đang đẩy trực tiếp file ${docFile.name} lên Đám mây...` })
-      const uploadRes = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': docFile.type }, body: docFile });
-      if (!uploadRes.ok) throw new Error("Quá trình đẩy dữ liệu bị đứt đoạn. Vui lòng thử lại.");
-      
-      const fileId = (await uploadRes.json()).id;
-
-      setUploadStatus({ type: 'uploading', message: 'Đang đồng bộ dữ liệu vào Thư Viện...' })
+      setUploadStatus({ type: 'uploading', message: `Bắt đầu xử lý ${docFiles.length} tài liệu...` })
       const { data: { user } } = await supabase.auth.getUser()
-      const { error: dbError } = await supabase.from('library_documents').insert({ folder_id: currentFolderId, title: docTitle, drive_file_id: fileId, created_by: user?.id })
 
-      if (dbError) throw new Error(dbError.message)
-      setUploadStatus({ type: 'success', message: 'Đã tải thành công tài liệu!' })
-      setDocTitle(''); setDocFile(null); setShowDocModal(false); fetchContents(currentFolderId)
+      for (let i = 0; i < docFiles.length; i++) {
+        const file = docFiles[i];
+        // Nếu user nhập tên và chỉ up 1 file thì lấy tên đó. Nếu up nhiều file thì tự động lấy tên gốc của file
+        const finalTitle = (docFiles.length === 1 && docTitle.trim()) ? docTitle.trim() : file.name;
+
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang cấp phép tải file: ${file.name}...` })
+        const initRes = await fetch('/api/upload-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: finalTitle, mimeType: file.type })
+        });
+        
+        if (!initRes.ok) throw new Error("Không thể khởi tạo kết nối Google Drive.");
+        const { uploadUrl } = await initRes.json();
+
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file lên Đám mây...` })
+        const uploadRes = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+        if (!uploadRes.ok) throw new Error("Lỗi đứt đoạn đường truyền.");
+        
+        const fileId = (await uploadRes.json()).id;
+
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
+        const { error: dbError } = await supabase.from('library_documents').insert({
+          folder_id: currentFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
+        })
+        if (dbError) throw new Error(dbError.message)
+      }
+      
+      setUploadStatus({ type: 'success', message: `Tuyệt vời! Đã tải thành công ${docFiles.length} tài liệu!` })
+      setDocTitle(''); setDocFiles([]); 
+      setTimeout(() => { setShowDocModal(false); setUploadStatus({type: 'idle', message: ''}) }, 2000);
+      fetchContents(currentFolderId)
     } catch (err: any) { setUploadStatus({ type: 'error', message: err.message || 'Có lỗi xảy ra.' }) }
   }
 
+  // 🌟 TÍNH NĂNG ĐỔI TÊN THƯ MỤC / FILE
+  const handleRename = async () => {
+    if (!renameInput.trim() || !renameTarget) return;
+    try {
+      if (renameTarget.type === 'folder') {
+        await supabase.from('library_folders').update({ name: renameInput.trim() }).eq('id', renameTarget.id);
+      } else {
+        await supabase.from('library_documents').update({ title: renameInput.trim() }).eq('id', renameTarget.id);
+      }
+      setShowRenameModal(false); setIsSelectMode(false); setSelectedItems([]);
+      fetchContents(currentFolderId);
+    } catch (e) {
+      alert("Lỗi đổi tên!");
+    }
+  }
+
+  // KÉO THẢ TÀI LIỆU
   const handleDragStart = (e: React.DragEvent, id: string, type: 'folder' | 'document') => {
     if (userRole !== 'admin' && userRole !== 'collab') return;
     setDraggedItem({ id, type }); e.dataTransfer.effectAllowed = "move"
@@ -128,7 +171,7 @@ export default function LibraryPage() {
   const handleDrop = async (e: React.DragEvent, targetFolderId: string | null) => {
     e.preventDefault(); e.stopPropagation(); setDragOverId(null);
     if (!draggedItem) return;
-    if (draggedItem.type === 'folder' && draggedItem.id === targetFolderId) return;
+    if (draggedItem.type === 'folder' && draggedItem.id === targetFolderId) return; 
 
     try {
       if (draggedItem.type === 'document') await supabase.from('library_documents').update({ folder_id: targetFolderId }).eq('id', draggedItem.id);
@@ -138,9 +181,7 @@ export default function LibraryPage() {
     setDraggedItem(null)
   }
 
-  // ====================================================================
-  // 🌟 THUẬT TOÁN SELECT, CUT, COPY, PASTE
-  // ====================================================================
+  // CHẾ ĐỘ SẮP XẾP (CHỌN NHIỀU)
   const toggleSelection = (id: string, type: 'folder' | 'document', data: any) => {
     setSelectedItems(prev => {
       const exists = prev.find(i => i.id === id);
@@ -156,22 +197,17 @@ export default function LibraryPage() {
 
   const handlePaste = async () => {
     if (!clipboard) return;
-    
-    // Ngăn chặn việc cắt Folder rồi dán lại vào chính nó
     if (clipboard.action === 'cut' && clipboard.items.some(i => i.type === 'folder' && i.id === currentFolderId)) {
       alert("Lỗi Logic: Không thể di chuyển thư mục vào bên trong chính nó!"); return;
     }
-
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser()
       for (const item of clipboard.items) {
         if (clipboard.action === 'cut') {
-          // Lệnh CUT (Di chuyển)
           if (item.type === 'folder') await supabase.from('library_folders').update({ parent_id: currentFolderId }).eq('id', item.id);
           else await supabase.from('library_documents').update({ folder_id: currentFolderId }).eq('id', item.id);
         } else {
-          // Lệnh COPY (Sao chép) - Thêm chữ (Bản sao)
           if (item.type === 'folder') await supabase.from('library_folders').insert({ name: item.data.name + ' (Bản sao)', parent_id: currentFolderId, created_by: user?.id });
           else await supabase.from('library_documents').insert({ title: item.data.title + ' (Bản sao)', drive_file_id: item.data.drive_file_id, folder_id: currentFolderId, created_by: user?.id });
         }
@@ -196,6 +232,16 @@ export default function LibraryPage() {
     setLoading(false);
   }
 
+  const handleDeleteFolder = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xoá Thư mục này cùng toàn bộ tài liệu bên trong?')) return
+    const { error } = await supabase.from('library_folders').delete().eq('id', id)
+    if (!error) setFolders(folders.filter(f => f.id !== id))
+  }
+  const handleDeleteDocument = async (id: string) => {
+    if (!confirm('Xoá vĩnh viễn tài liệu này khỏi hệ thống?')) return
+    const { error } = await supabase.from('library_documents').delete().eq('id', id)
+    if (!error) setDocuments(documents.filter(d => d.id !== id))
+  }
 
   const filteredFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
   const filteredDocuments = documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -212,16 +258,25 @@ export default function LibraryPage() {
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10">
            <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
            
+           {/* NÚT ĐỔI TÊN (Chỉ hiện khi chọn đúng 1 file/folder) */}
+           {selectedItems.length === 1 && (userRole === 'admin' || userRole === 'collab') && (
+             <button onClick={() => {
+               setRenameTarget(selectedItems[0]);
+               setRenameInput(selectedItems[0].type === 'folder' ? selectedItems[0].data.name : selectedItems[0].data.title);
+               setShowRenameModal(true);
+             }} className="flex items-center gap-2 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-4 py-2.5 rounded-xl hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors font-bold text-sm">
+               <Edit className="w-4 h-4"/> Đổi tên
+             </button>
+           )}
+
            {userRole === 'admin' && (
              <button onClick={handleBulkDelete} className="flex items-center gap-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-bold text-sm">
                <Trash2 className="w-4 h-4"/> Xóa
              </button>
            )}
-           
            <button onClick={() => handleSetClipboard('cut')} className="flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-4 py-2.5 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-bold text-sm">
              <Scissors className="w-4 h-4"/> Cắt
            </button>
-           
            <button onClick={() => handleSetClipboard('copy')} className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 py-2.5 rounded-xl hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors font-bold text-sm">
              <Copy className="w-4 h-4"/> Sao chép
            </button>
@@ -235,14 +290,25 @@ export default function LibraryPage() {
              <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400">Đang lưu {clipboard.items.length} mục</span>
              <span className="text-[10px] font-bold text-slate-500 uppercase">Lệnh: {clipboard.action === 'cut' ? 'Cắt (Di chuyển)' : 'Sao chép'}</span>
            </div>
-           
            <button onClick={handlePaste} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:scale-105 transition-transform font-bold text-sm shadow-md">
              <ClipboardPaste className="w-4 h-4"/> Dán vào đây
            </button>
-           
            <button onClick={() => setClipboard(null)} className="p-3 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
              <X className="w-4 h-4"/>
            </button>
+        </div>
+      )}
+
+      {/* --- MODAL ĐỔI TÊN --- */}
+      {showRenameModal && renameTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 shadow-2xl relative`}>
+            <button onClick={() => setShowRenameModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
+            <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center mb-4"><Edit className="w-6 h-6 text-amber-600 dark:text-amber-400"/></div>
+            <h3 className="text-xl font-black mb-2">Đổi tên {renameTarget.type === 'folder' ? 'thư mục' : 'tài liệu'}</h3>
+            <input type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-amber-500 mb-6 shadow-inner" />
+            <button onClick={handleRename} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 shadow-md transition-all active:scale-95">Lưu Tên Mới</button>
+          </div>
         </div>
       )}
 
@@ -262,22 +328,35 @@ export default function LibraryPage() {
       {showDocModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`${glassCardStyles} rounded-3xl w-full max-w-md p-8 shadow-2xl relative`}>
-            <button onClick={() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}) }} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
+            <button onClick={() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}); setDocFiles([]) }} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
             <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center mb-4"><UploadCloud className="w-6 h-6 text-emerald-600 dark:text-emerald-400"/></div>
             <h3 className="text-xl font-black mb-4">Tải tài liệu lên</h3>
             <form onSubmit={handleUploadDocument} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Tên tài liệu hiển thị</label>
-                <input type="text" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="VD: Sách Luyện Thi THPT..." className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner" />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">File tài liệu (PDF)</label>
-                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <input type="file" accept=".pdf" onChange={(e) => setDocFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  <FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">{docFile ? docFile.name : 'Nhấn chọn file'}</p>
+              
+              {/* NẾU CHỈ UP 1 FILE THÌ CHO PHÉP NHẬP TÊN, NẾU NHIỀU THÌ TỰ ĐỘNG LẤY THEO FILE */}
+              {docFiles.length <= 1 && (
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Tên tài liệu hiển thị</label>
+                  <input type="text" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="Nếu bỏ trống sẽ lấy tên gốc của file..." className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner" />
                 </div>
+              )}
+              
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">File tài liệu (Có thể quét chọn nhiều file)</label>
+                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <input type="file" accept=".pdf" multiple onChange={(e) => setDocFiles(Array.from(e.target.files || []))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">
+                    {docFiles.length > 0 ? `Đã chọn ${docFiles.length} file tài liệu` : 'Nhấn vào đây để chọn file'}
+                  </p>
+                </div>
+                {docFiles.length > 0 && (
+                  <div className="mt-2 max-h-24 overflow-y-auto custom-scrollbar text-[11px] font-bold text-slate-500 space-y-1">
+                    {docFiles.map(f => <div key={f.name} className="truncate">📄 {f.name}</div>)}
+                  </div>
+                )}
               </div>
+              
               {uploadStatus.type !== 'idle' && <div className={`p-3 rounded-xl text-xs font-bold ${uploadStatus.type === 'uploading' ? 'bg-blue-50 text-blue-600' : uploadStatus.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{uploadStatus.message}</div>}
               <button type="submit" disabled={uploadStatus.type === 'uploading'} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 shadow-md transition-all active:scale-95 mt-4">
                 {uploadStatus.type === 'uploading' ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Bắt đầu tải lên'}
@@ -326,7 +405,6 @@ export default function LibraryPage() {
 
             {(userRole === 'admin' || userRole === 'collab') && (
               <>
-                {/* 🌟 NÚT SẮP XẾP */}
                 <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isSelectMode ? 'bg-amber-100 text-amber-700 border-amber-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
                   <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp'}
                 </button>
@@ -371,7 +449,6 @@ export default function LibraryPage() {
                             }} 
                             className={`group cursor-pointer flex flex-col items-center gap-3 relative p-4 rounded-3xl transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40'}`}>
                           
-                          {/* CHECKBOX HIỂN THỊ KHI ĐANG TRONG CHẾ ĐỘ CHỌN */}
                           {isSelectMode && (
                             <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
                               {isSelected && <CheckCircle2 className="w-3 h-3" />}
@@ -406,7 +483,6 @@ export default function LibraryPage() {
                             }} 
                             className={`backdrop-blur-md rounded-2xl p-4 transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-1 hover:shadow-lg'}`}>
                           
-                          {/* CHECKBOX HIỂN THỊ KHI ĐANG TRONG CHẾ ĐỘ CHỌN */}
                           {isSelectMode && (
                             <div className={`absolute top-1/2 -translate-y-1/2 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
                               {isSelected && <CheckCircle2 className="w-3 h-3" />}
