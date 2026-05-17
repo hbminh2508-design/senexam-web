@@ -7,7 +7,7 @@ import {
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
   CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
-  Wand2, Sparkles
+  Wand2, Sparkles, Crown
 } from 'lucide-react'
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
@@ -346,7 +346,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // 🌟 NÂNG CẤP HÀM UPLOAD: Bắt mọi lỗi Server (504, 413) để chuẩn hóa JSON Response
   const handleUploadExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !file || selectedSubjects.length === 0 || examStructure.length === 0) {
@@ -363,7 +362,6 @@ export default function AdminDashboard() {
 
       const response = await fetch('/api/upload-exam', { method: 'POST', body: formData })
       
-      // Bắt lỗi hệ thống Vercel trả về HTML thay vì JSON (Timeout, File Too Large)
       const contentType = response.headers.get("content-type");
       let result;
       
@@ -383,7 +381,6 @@ export default function AdminDashboard() {
 
       const generatedAccessCode = isHiddenExam ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
 
-      // Loại bỏ các property dư thừa để bảo vệ CSDL
       const cleanExamStructure = examStructure.map(s => ({...s}))
 
       const { error: dbError } = await supabase.from('exams').insert({
@@ -815,7 +812,7 @@ export default function AdminDashboard() {
                                   {(examType === 'HSA' || examType === 'TSA') && <option value="mixed">Câu hỗn hợp (HSA/TSA)</option>}
                                 </select>
                               </div>
-                              <div><label className="block text-xs font-bold text-slate-400 mb-1">Tổng số câu hỏi</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold" /></div>
+                              <div><label className="block text-xs font-bold text-slate-400 mb-1">Tổng số câu</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold" /></div>
                               {(section.type === 'single_choice' || section.type === 'multiple_choice') && <div><label className="block text-xs font-bold text-slate-400 mb-1">Số lựa chọn</label><input type="number" min="2" value={section.optionsCount} onChange={(e) => updateSection(section.id, 'optionsCount', parseInt(e.target.value) || 4)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold" /></div>}
                             </div>
                           </div>
@@ -857,7 +854,7 @@ export default function AdminDashboard() {
                           <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div>
-                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Chế độ tính điểm của phần này</label>
+                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Chế độ tính điểm</label>
                                 <select 
                                   value={section.scoringMode || 'auto_divide'} 
                                   onChange={(e) => updateSection(section.id, 'scoringMode', e.target.value)} 
@@ -1077,10 +1074,30 @@ export default function AdminDashboard() {
                     <tbody>
                       {usersList.map((u) => (
                         <tr key={u.id} className="border-b hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
-                          <td className="p-4 font-bold flex items-center gap-2">{u.full_name || 'Chưa lập hồ sơ'}{u.role === 'admin' && <span title="Admin"><ShieldAlert className="w-4 h-4 text-red-500" /></span>}</td>
+                          <td className="p-4 font-bold flex items-center gap-2">{u.full_name || 'Chưa lập hồ sơ'}
+                            {u.role === 'admin' && <span title="Admin Tối Cao"><ShieldAlert className="w-4 h-4 text-red-500" /></span>}
+                            {u.role === 'premium_student' && <span title="Học Sinh Premium"><Crown className="w-4 h-4 text-yellow-500 fill-yellow-500" /></span>}
+                          </td>
                           <td className="p-4 text-sm text-slate-500">{u.school || '---'}<br/><span className="text-xs opacity-70">{u.province}</span></td>
-                          <td className="p-4"><span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${u.role === 'admin' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : u.role === 'collab' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>{u.role || 'student'}</span></td>
-                          <td className="p-4 text-right">{currentUserRole === 'admin' && u.role !== 'admin' && <select value={u.role || 'student'} onChange={(e) => handleUpdateRole(u.id, e.target.value)} className="bg-slate-50 dark:bg-slate-800 border rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer focus:ring-2 focus:ring-blue-500 transition-colors"><option value="student">Học sinh</option><option value="collab">Cộng tác viên (Collab)</option></select>}</td>
+                          <td className="p-4">
+                            <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                              u.role === 'admin' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 
+                              u.role === 'collab' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400' : 
+                              u.role === 'premium_student' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400' :
+                              'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            }`}>
+                              {u.role === 'premium_student' ? 'Premium' : (u.role || 'student')}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            {currentUserRole === 'admin' && u.role !== 'admin' && (
+                              <select value={u.role || 'student'} onChange={(e) => handleUpdateRole(u.id, e.target.value)} className="bg-slate-50 dark:bg-slate-800 border rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer focus:ring-2 focus:ring-blue-500 transition-colors">
+                                <option value="student">Học sinh</option>
+                                <option value="premium_student">Học sinh Premium</option>
+                                <option value="collab">Cộng tác viên (Collab)</option>
+                              </select>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
