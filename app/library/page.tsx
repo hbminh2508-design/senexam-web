@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
-  UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search
+  UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
+  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2
 } from 'lucide-react'
 
 const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
+
+type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
 
 export default function LibraryPage() {
   const router = useRouter()
@@ -18,14 +21,11 @@ export default function LibraryPage() {
   const [folders, setFolders] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
   
-  // 🌟 ĐÃ NÂNG CẤP: Dùng Mảng để lưu Đường dẫn thư mục lồng nhau
   const [folderPath, setFolderPath] = useState<{id: string | null, name: string}[]>([{ id: null, name: 'Trang chủ Thư viện' }])
   const currentFolderId = folderPath[folderPath.length - 1].id
 
-  // 🌟 THANH TÌM KIẾM
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Modal States
   const [showFolderModal, setShowFolderModal] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [showDocModal, setShowDocModal] = useState(false)
@@ -33,9 +33,13 @@ export default function LibraryPage() {
   const [docFile, setDocFile] = useState<File | null>(null)
   const [uploadStatus, setUploadStatus] = useState<{type: 'idle' | 'uploading' | 'success' | 'error', message: string}>({ type: 'idle', message: '' })
 
-  // 🌟 DRAG & DROP STATES
   const [draggedItem, setDraggedItem] = useState<{id: string, type: 'folder' | 'document'} | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+
+  // 🌟 STATES CHO CHẾ ĐỘ SẮP XẾP (CẮT / DÁN / XOÁ NHIỀU FILE)
+  const [isSelectMode, setIsSelectMode] = useState(false)
+  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
+  const [clipboard, setClipboard] = useState<{action: 'cut' | 'copy', items: SelectedItem[]} | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -55,7 +59,6 @@ export default function LibraryPage() {
     init()
   }, [router])
 
-  // Lấy dữ liệu theo ID thư mục hiện tại
   const fetchContents = async (folderId: string | null) => {
     const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
     if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null);
@@ -68,16 +71,14 @@ export default function LibraryPage() {
     setDocuments(docRes.data || [])
   }
 
-  // Chuyển hướng thư mục
   const handleOpenFolder = async (folderId: string, folderName: string) => {
-    setSearchQuery('')
+    setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
     setFolderPath([...folderPath, { id: folderId, name: folderName }])
     await fetchContents(folderId)
   }
 
-  // Bấm vào thanh Breadcrumb để quay lại
   const handleNavigateBreadcrumb = async (index: number) => {
-    setSearchQuery('')
+    setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
     const newPath = folderPath.slice(0, index + 1)
     setFolderPath(newPath)
     await fetchContents(newPath[newPath.length - 1].id)
@@ -87,28 +88,19 @@ export default function LibraryPage() {
     if (!newFolderName.trim()) return
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('library_folders').insert({ 
-      name: newFolderName, 
-      created_by: user?.id,
-      parent_id: currentFolderId 
+      name: newFolderName, created_by: user?.id, parent_id: currentFolderId 
     })
     if (!error) {
       setShowFolderModal(false); setNewFolderName(''); fetchContents(currentFolderId)
     } else { alert("Lỗi tạo thư mục: " + error.message) }
   }
 
-  // TẢI FILE BYPASS VERCEL
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!docTitle || !docFile) return
-
     try {
       setUploadStatus({ type: 'uploading', message: 'Đang xin cấp phép tải lên từ Google Drive...' })
-      const initRes = await fetch('/api/upload-exam', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: docTitle, mimeType: docFile.type })
-      });
-      
+      const initRes = await fetch('/api/upload-exam', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: docTitle, mimeType: docFile.type }) });
       if (!initRes.ok) throw new Error("Không thể khởi tạo kết nối với Google Drive.");
       const { uploadUrl } = await initRes.json();
 
@@ -120,64 +112,141 @@ export default function LibraryPage() {
 
       setUploadStatus({ type: 'uploading', message: 'Đang đồng bộ dữ liệu vào Thư Viện...' })
       const { data: { user } } = await supabase.auth.getUser()
-      const { error: dbError } = await supabase.from('library_documents').insert({
-        folder_id: currentFolderId, title: docTitle, drive_file_id: fileId, created_by: user?.id
-      })
+      const { error: dbError } = await supabase.from('library_documents').insert({ folder_id: currentFolderId, title: docTitle, drive_file_id: fileId, created_by: user?.id })
 
       if (dbError) throw new Error(dbError.message)
-      
       setUploadStatus({ type: 'success', message: 'Đã tải thành công tài liệu!' })
-      setDocTitle(''); setDocFile(null); setShowDocModal(false);
-      fetchContents(currentFolderId)
+      setDocTitle(''); setDocFile(null); setShowDocModal(false); fetchContents(currentFolderId)
     } catch (err: any) { setUploadStatus({ type: 'error', message: err.message || 'Có lỗi xảy ra.' }) }
   }
 
-  // --- ACTIONS XÓA ---
-  const handleDeleteFolder = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xoá Thư mục này cùng toàn bộ tài liệu bên trong?')) return
-    const { error } = await supabase.from('library_folders').delete().eq('id', id)
-    if (!error) setFolders(folders.filter(f => f.id !== id))
-  }
-  const handleDeleteDocument = async (id: string) => {
-    if (!confirm('Xoá vĩnh viễn tài liệu này khỏi hệ thống?')) return
-    const { error } = await supabase.from('library_documents').delete().eq('id', id)
-    if (!error) setDocuments(documents.filter(d => d.id !== id))
-  }
-
-  // --- DRAG & DROP TÍNH NĂNG ---
   const handleDragStart = (e: React.DragEvent, id: string, type: 'folder' | 'document') => {
     if (userRole !== 'admin' && userRole !== 'collab') return;
-    setDraggedItem({ id, type })
-    e.dataTransfer.effectAllowed = "move"
+    setDraggedItem({ id, type }); e.dataTransfer.effectAllowed = "move"
   }
 
   const handleDrop = async (e: React.DragEvent, targetFolderId: string | null) => {
     e.preventDefault(); e.stopPropagation(); setDragOverId(null);
     if (!draggedItem) return;
-    if (draggedItem.type === 'folder' && draggedItem.id === targetFolderId) return; // Chống drop vào chính nó
+    if (draggedItem.type === 'folder' && draggedItem.id === targetFolderId) return;
 
     try {
-      if (draggedItem.type === 'document') {
-        await supabase.from('library_documents').update({ folder_id: targetFolderId }).eq('id', draggedItem.id);
-      } else if (draggedItem.type === 'folder') {
-        await supabase.from('library_folders').update({ parent_id: targetFolderId }).eq('id', draggedItem.id);
-      }
+      if (draggedItem.type === 'document') await supabase.from('library_documents').update({ folder_id: targetFolderId }).eq('id', draggedItem.id);
+      else if (draggedItem.type === 'folder') await supabase.from('library_folders').update({ parent_id: targetFolderId }).eq('id', draggedItem.id);
       fetchContents(currentFolderId);
     } catch (err) { alert("Lỗi khi di chuyển dữ liệu") }
     setDraggedItem(null)
   }
 
-  // Lọc dữ liệu theo Search
+  // ====================================================================
+  // 🌟 THUẬT TOÁN SELECT, CUT, COPY, PASTE
+  // ====================================================================
+  const toggleSelection = (id: string, type: 'folder' | 'document', data: any) => {
+    setSelectedItems(prev => {
+      const exists = prev.find(i => i.id === id);
+      if (exists) return prev.filter(i => i.id !== id);
+      return [...prev, { id, type, data }];
+    })
+  }
+
+  const handleSetClipboard = (action: 'cut' | 'copy') => {
+    setClipboard({ action, items: selectedItems });
+    setSelectedItems([]); setIsSelectMode(false);
+  }
+
+  const handlePaste = async () => {
+    if (!clipboard) return;
+    
+    // Ngăn chặn việc cắt Folder rồi dán lại vào chính nó
+    if (clipboard.action === 'cut' && clipboard.items.some(i => i.type === 'folder' && i.id === currentFolderId)) {
+      alert("Lỗi Logic: Không thể di chuyển thư mục vào bên trong chính nó!"); return;
+    }
+
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      for (const item of clipboard.items) {
+        if (clipboard.action === 'cut') {
+          // Lệnh CUT (Di chuyển)
+          if (item.type === 'folder') await supabase.from('library_folders').update({ parent_id: currentFolderId }).eq('id', item.id);
+          else await supabase.from('library_documents').update({ folder_id: currentFolderId }).eq('id', item.id);
+        } else {
+          // Lệnh COPY (Sao chép) - Thêm chữ (Bản sao)
+          if (item.type === 'folder') await supabase.from('library_folders').insert({ name: item.data.name + ' (Bản sao)', parent_id: currentFolderId, created_by: user?.id });
+          else await supabase.from('library_documents').insert({ title: item.data.title + ' (Bản sao)', drive_file_id: item.data.drive_file_id, folder_id: currentFolderId, created_by: user?.id });
+        }
+      }
+      setClipboard(null); await fetchContents(currentFolderId);
+    } catch (err: any) { alert("Có lỗi khi dán: " + err.message); }
+    setLoading(false);
+  }
+
+  const handleBulkDelete = async () => {
+    if (userRole !== 'admin') return alert("Chỉ Admin mới có quyền xóa tài liệu!");
+    if (!confirm(`Xóa vĩnh viễn ${selectedItems.length} mục đã chọn khỏi hệ thống?`)) return;
+    
+    setLoading(true);
+    try {
+      for (const item of selectedItems) {
+        if (item.type === 'folder') await supabase.from('library_folders').delete().eq('id', item.id);
+        else await supabase.from('library_documents').delete().eq('id', item.id);
+      }
+      setSelectedItems([]); setIsSelectMode(false); await fetchContents(currentFolderId);
+    } catch (err) { alert("Lỗi khi xóa hệ thống"); }
+    setLoading(false);
+  }
+
+
   const filteredFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
   const filteredDocuments = documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50 dark:bg-slate-950">Đang khởi tạo thư viện số...</div>
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32">
       <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-bl from-blue-400/40 to-cyan-400/30 dark:from-blue-800/40 dark:to-cyan-900/30 rounded-full blur-[120px] pointer-events-none"></div>
 
-      {/* --- MODALS --- */}
+      {/* --- FLOATING ACTION BARS --- */}
+      {/* 1. Màn hình chọn file (Select Mode) */}
+      {isSelectMode && selectedItems.length > 0 && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10">
+           <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
+           
+           {userRole === 'admin' && (
+             <button onClick={handleBulkDelete} className="flex items-center gap-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-bold text-sm">
+               <Trash2 className="w-4 h-4"/> Xóa
+             </button>
+           )}
+           
+           <button onClick={() => handleSetClipboard('cut')} className="flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-4 py-2.5 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-bold text-sm">
+             <Scissors className="w-4 h-4"/> Cắt
+           </button>
+           
+           <button onClick={() => handleSetClipboard('copy')} className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 py-2.5 rounded-xl hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors font-bold text-sm">
+             <Copy className="w-4 h-4"/> Sao chép
+           </button>
+        </div>
+      )}
+
+      {/* 2. Màn hình chờ Dán (Paste Mode) */}
+      {clipboard && !isSelectMode && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-blue-400/50 px-6 py-4 rounded-3xl shadow-[0_10px_40px_rgba(59,130,246,0.3)] flex items-center gap-4 z-[90] animate-bounce">
+           <div className="flex flex-col">
+             <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400">Đang lưu {clipboard.items.length} mục</span>
+             <span className="text-[10px] font-bold text-slate-500 uppercase">Lệnh: {clipboard.action === 'cut' ? 'Cắt (Di chuyển)' : 'Sao chép'}</span>
+           </div>
+           
+           <button onClick={handlePaste} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:scale-105 transition-transform font-bold text-sm shadow-md">
+             <ClipboardPaste className="w-4 h-4"/> Dán vào đây
+           </button>
+           
+           <button onClick={() => setClipboard(null)} className="p-3 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
+             <X className="w-4 h-4"/>
+           </button>
+        </div>
+      )}
+
+      {/* --- MODALS CREATE/UPLOAD --- */}
       {showFolderModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 shadow-2xl relative`}>
@@ -257,8 +326,12 @@ export default function LibraryPage() {
 
             {(userRole === 'admin' || userRole === 'collab') && (
               <>
+                {/* 🌟 NÚT SẮP XẾP */}
+                <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isSelectMode ? 'bg-amber-100 text-amber-700 border-amber-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
+                  <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp'}
+                </button>
                 <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-white/60 transition-colors">
-                  <PlusCircle className="w-5 h-5 text-blue-600" /> Tạo Thư Mục
+                  <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
                 </button>
                 <button onClick={() => setShowDocModal(true)} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(37,99,235,0.3)] transition-colors">
                   <UploadCloud className="w-5 h-5" /> Tải Lên
@@ -283,27 +356,35 @@ export default function LibraryPage() {
                 <div className="mb-10">
                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Thư mục</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {filteredFolders.map(folder => (
-                      <div key={folder.id} 
-                           draggable={userRole === 'admin' || userRole === 'collab'}
-                           onDragStart={(e) => handleDragStart(e, folder.id, 'folder')}
-                           onDragOver={(e) => { e.preventDefault(); setDragOverId(folder.id) }}
-                           onDragLeave={() => setDragOverId(null)}
-                           onDrop={(e) => handleDrop(e, folder.id)}
-                           onClick={() => handleOpenFolder(folder.id, folder.name)} 
-                           className={`group cursor-pointer flex flex-col items-center gap-3 relative p-4 rounded-3xl transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : 'hover:bg-white/40 dark:hover:bg-slate-800/40'}`}>
-                        
-                        <div className="relative w-24 h-20 flex items-center justify-center">
-                          <Folder className="w-full h-full text-blue-400/80 fill-blue-500/90 drop-shadow-[0_10px_15px_rgba(59,130,246,0.3)] transition-transform group-hover:scale-110" strokeWidth={1} />
-                          {userRole === 'admin' && (
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }} className="absolute -top-1 -right-1 bg-white/90 dark:bg-slate-800/90 text-red-500 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:scale-110 z-10 border border-slate-200">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                    {filteredFolders.map(folder => {
+                      const isSelected = selectedItems.some(i => i.id === folder.id);
+                      return (
+                        <div key={folder.id} 
+                            draggable={!isSelectMode && (userRole === 'admin' || userRole === 'collab')}
+                            onDragStart={(e) => handleDragStart(e, folder.id, 'folder')}
+                            onDragOver={(e) => { if (!isSelectMode) { e.preventDefault(); setDragOverId(folder.id); } }}
+                            onDragLeave={() => setDragOverId(null)}
+                            onDrop={(e) => { if (!isSelectMode) handleDrop(e, folder.id); }}
+                            onClick={(e) => {
+                              if (isSelectMode) { e.preventDefault(); toggleSelection(folder.id, 'folder', folder); } 
+                              else { handleOpenFolder(folder.id, folder.name); }
+                            }} 
+                            className={`group cursor-pointer flex flex-col items-center gap-3 relative p-4 rounded-3xl transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40'}`}>
+                          
+                          {/* CHECKBOX HIỂN THỊ KHI ĐANG TRONG CHẾ ĐỘ CHỌN */}
+                          {isSelectMode && (
+                            <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                              {isSelected && <CheckCircle2 className="w-3 h-3" />}
+                            </div>
                           )}
+
+                          <div className="relative w-24 h-20 flex items-center justify-center">
+                            <Folder className={`w-full h-full drop-shadow-[0_10px_15px_rgba(59,130,246,0.3)] transition-transform group-hover:scale-110 ${isSelected ? 'text-blue-500 fill-blue-500' : 'text-blue-400/80 fill-blue-500/90'}`} strokeWidth={1} />
+                          </div>
+                          <p className="font-black text-sm text-center text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1">{folder.name}</p>
                         </div>
-                        <p className="font-black text-sm text-center text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1">{folder.name}</p>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -313,26 +394,35 @@ export default function LibraryPage() {
                 <div>
                   <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Tài liệu</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredDocuments.map(doc => (
-                      <div key={doc.id} 
-                           draggable={userRole === 'admin' || userRole === 'collab'}
-                           onDragStart={(e) => handleDragStart(e, doc.id, 'document')}
-                           onClick={() => window.open(`https://drive.google.com/file/d/${doc.drive_file_id}/view`, '_blank')} 
-                           className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-white/50 dark:border-slate-700 rounded-2xl p-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-pointer group relative flex items-center gap-4">
-                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-xl flex items-center justify-center shrink-0">
-                          <FileText className="w-6 h-6" />
+                    {filteredDocuments.map(doc => {
+                      const isSelected = selectedItems.some(i => i.id === doc.id);
+                      return (
+                        <div key={doc.id} 
+                            draggable={!isSelectMode && (userRole === 'admin' || userRole === 'collab')}
+                            onDragStart={(e) => handleDragStart(e, doc.id, 'document')}
+                            onClick={(e) => {
+                              if (isSelectMode) { e.preventDefault(); toggleSelection(doc.id, 'document', doc); }
+                              else { window.open(`https://drive.google.com/file/d/${doc.drive_file_id}/view`, '_blank'); }
+                            }} 
+                            className={`backdrop-blur-md rounded-2xl p-4 transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-1 hover:shadow-lg'}`}>
+                          
+                          {/* CHECKBOX HIỂN THỊ KHI ĐANG TRONG CHẾ ĐỘ CHỌN */}
+                          {isSelectMode && (
+                            <div className={`absolute top-1/2 -translate-y-1/2 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
+                              {isSelected && <CheckCircle2 className="w-3 h-3" />}
+                            </div>
+                          )}
+
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-blue-100 text-blue-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
+                            <FileText className="w-6 h-6" />
+                          </div>
+                          <div className={`flex-1 overflow-hidden transition-all ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
+                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm">{doc.title}</h3>
+                            <span className="text-[10px] font-bold text-slate-400 mt-1 block">{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
+                          </div>
                         </div>
-                        <div className="flex-1 overflow-hidden pr-6">
-                          <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm">{doc.title}</h3>
-                          <span className="text-[10px] font-bold text-slate-400 mt-1 block">{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
-                        </div>
-                        {userRole === 'admin' && (
-                          <button onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id) }} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-300 hover:text-red-500 transition-colors z-10 bg-white/50 dark:bg-slate-900/50 p-1.5 rounded-lg opacity-0 group-hover:opacity-100">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
