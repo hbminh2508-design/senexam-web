@@ -9,7 +9,7 @@ const oauth2Client = new google.auth.OAuth2(
   'https://developers.google.com/oauthplayground' // Phải khớp với Redirect URI đã thiết lập
 )
 
-// 2. Nạp Refresh Token (Chìa khóa vạn năng)
+// 2. Nạp Refresh Token (Chìa khóa vạn năng của tài khoản 5TB)
 oauth2Client.setCredentials({
   refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
 })
@@ -19,6 +19,54 @@ const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
 export async function POST(request: Request) {
   try {
+    // Phân tích header để biết Client đang dùng tính năng nào
+    const contentType = request.headers.get('content-type') || ''
+
+    // ====================================================================
+    // 🚀 LUỒNG 1: BYPASS VERCEL (TẢI FILE KHỔNG LỒ TỪ LIBRARY)
+    // Nếu Frontend gửi lên JSON, hệ thống sẽ cấp Link tải trực tiếp
+    // ====================================================================
+    if (contentType.includes('application/json')) {
+      const { fileName, mimeType } = await request.json()
+
+      if (!fileName || !mimeType) {
+        return NextResponse.json({ error: 'Thiếu thông tin file JSON' }, { status: 400 })
+      }
+
+      // Lấy Access Token tươi từ OAuth2
+      const { token: accessToken } = await oauth2Client.getAccessToken()
+      if (!accessToken) throw new Error("Không thể lấy Access Token từ OAuth2")
+
+      const metadata = {
+        name: fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`,
+        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!]
+      }
+
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Type': mimeType
+        },
+        body: JSON.stringify(metadata)
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(`Lỗi khởi tạo Google Drive: ${errText}`)
+      }
+
+      const uploadUrl = res.headers.get('Location')
+      if (!uploadUrl) throw new Error("Google không trả về URL tải lên")
+
+      return NextResponse.json({ uploadUrl })
+    }
+
+    // ====================================================================
+    // 📦 LUỒNG 2: DIRECT UPLOAD CŨ (TẢI ĐỀ THI NHẸ TỪ ADMIN DASHBOARD)
+    // Nếu Frontend gửi lên FormData, hệ thống chạy code Stream cũ của bạn
+    // ====================================================================
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const title = formData.get('title') as string

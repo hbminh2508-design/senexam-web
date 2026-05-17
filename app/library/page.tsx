@@ -69,7 +69,6 @@ export default function LibraryPage() {
     await fetchFolders()
   }
 
-  // --- ACTIONS CHO ADMIN & COLLAB ---
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return
     const { data: { user } } = await supabase.auth.getUser()
@@ -81,32 +80,53 @@ export default function LibraryPage() {
     } else { alert("Lỗi tạo thư mục: " + error.message) }
   }
 
+  // 🌟 THUẬT TOÁN BYPASS VERCEL - TẢI FILE KHỔNG LỒ TRỰC TIẾP LÊN GOOGLE DRIVE 🌟
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!docTitle || !docFile || !currentFolder) return
 
     try {
-      setUploadStatus({ type: 'uploading', message: 'Đang đẩy tài liệu lên kho lưu trữ đám mây...' })
-      const formData = new FormData()
-      formData.append('file', docFile)
-      formData.append('title', docTitle)
-
-      const response = await fetch('/api/upload-exam', { method: 'POST', body: formData })
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-         throw new Error("Tài liệu quá lớn hoặc hệ thống quá tải (Lỗi Server).");
+      // BƯỚC 1: XIN ĐƯỜNG DẪN BÍ MẬT
+      setUploadStatus({ type: 'uploading', message: 'Đang xin cấp phép tải lên từ Google Drive...' })
+      
+      const initRes = await fetch('/api/init-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: docTitle, mimeType: docFile.type })
+      });
+      
+      if (!initRes.ok) {
+         const errData = await initRes.json().catch(()=>({}));
+         throw new Error(errData.error || "Không thể khởi tạo kết nối với Google Drive.");
       }
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Lỗi API Google Drive')
+      const { uploadUrl } = await initRes.json();
 
+      // BƯỚC 2: TRÌNH DUYỆT BƠM THẲNG FILE CHO GOOGLE
+      setUploadStatus({ type: 'uploading', message: `Đang đẩy trực tiếp file ${docFile.name} lên Đám mây (Đừng đóng trang nhé)...` })
+      
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': docFile.type,
+        },
+        body: docFile, 
+      });
+
+      if (!uploadRes.ok) throw new Error("Quá trình đẩy dữ liệu bị đứt đoạn. Vui lòng thử lại.");
+      
+      // BƯỚC 3: LẤY ID FILE VÀ LƯU VÀO DATABASE
+      const resultData = await uploadRes.json();
+      const fileId = resultData.id;
+
+      setUploadStatus({ type: 'uploading', message: 'Đang đồng bộ dữ liệu vào Thư Viện...' })
       const { data: { user } } = await supabase.auth.getUser()
       const { error: dbError } = await supabase.from('library_documents').insert({
-        folder_id: currentFolder.id, title: docTitle, drive_file_id: result.driveFileId, created_by: user?.id
+        folder_id: currentFolder.id, title: docTitle, drive_file_id: fileId, created_by: user?.id
       })
 
       if (dbError) throw new Error(dbError.message)
       
-      setUploadStatus({ type: 'success', message: 'Tải tài liệu lên thành công!' })
+      setUploadStatus({ type: 'success', message: 'Đã tải thành công tài liệu khổng lồ!' })
       setDocTitle(''); setDocFile(null); setShowDocModal(false);
       fetchDocuments(currentFolder.id)
     } catch (err: any) {
@@ -114,7 +134,6 @@ export default function LibraryPage() {
     }
   }
 
-  // --- DELETE ACTIONS (CHỈ DÀNH CHO ADMIN) ---
   const handleDeleteFolder = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xoá Thư mục này cùng toàn bộ tài liệu bên trong?')) return
     const { error } = await supabase.from('library_folders').delete().eq('id', id)
@@ -134,7 +153,6 @@ export default function LibraryPage() {
       
       <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-bl from-blue-400/40 to-cyan-400/30 dark:from-blue-800/40 dark:to-cyan-900/30 rounded-full blur-[120px] pointer-events-none"></div>
 
-      {/* --- MODAL TẠO THƯ MỤC MỚI --- */}
       {showFolderModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 shadow-2xl relative`}>
@@ -147,7 +165,6 @@ export default function LibraryPage() {
         </div>
       )}
 
-      {/* --- MODAL UPLOAD TÀI LIỆU --- */}
       {showDocModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`${glassCardStyles} rounded-3xl w-full max-w-md p-8 shadow-2xl relative`}>
@@ -164,7 +181,7 @@ export default function LibraryPage() {
                 <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <input type="file" accept=".pdf" onChange={(e) => setDocFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   <FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">{docFile ? docFile.name : 'Nhấn chọn file'}</p>
+                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">{docFile ? docFile.name : 'Nhấn chọn file (Hỗ trợ >100MB)'}</p>
                 </div>
               </div>
               
@@ -183,8 +200,6 @@ export default function LibraryPage() {
       )}
 
       <div className="relative z-10 max-w-[1400px] mx-auto">
-        
-        {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors mb-3">
@@ -194,7 +209,6 @@ export default function LibraryPage() {
               Thư Viện Số <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </h1>
             
-            {/* Breadcrumb hiện đại */}
             <div className="flex items-center gap-2 mt-4 text-sm font-bold">
               <span onClick={handleBackToRoot} className={`cursor-pointer transition-colors ${currentFolder ? 'text-slate-400 hover:text-blue-600 dark:hover:text-blue-400' : 'text-blue-600 dark:text-blue-400'}`}>
                 Trang chủ Thư viện
@@ -209,7 +223,6 @@ export default function LibraryPage() {
           </div>
 
           <div className="flex gap-3">
-            {/* COLLAB VÀ ADMIN MỚI THẤY NÚT NÀY */}
             {(userRole === 'admin' || userRole === 'collab') && (
               <>
                 {!currentFolder ? (
@@ -226,10 +239,7 @@ export default function LibraryPage() {
           </div>
         </div>
 
-        {/* --- MAIN CONTENT AREA --- */}
         <div className={`${glassCardStyles} rounded-[2.5rem] p-6 md:p-10 min-h-[60vh] border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
-          
-          {/* VIEW: MÀN HÌNH ROOT (HIỂN THỊ THƯ MỤC DƯỚI DẠNG SVG MAC FOLDER) */}
           {!currentFolder ? (
             folders.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-20">
@@ -241,7 +251,7 @@ export default function LibraryPage() {
                 {folders.map(folder => (
                   <div key={folder.id} onClick={() => handleOpenFolder(folder)} className="group cursor-pointer flex flex-col items-center gap-3 relative">
                     
-                    {/* SVG MACOS FOLDER ICON ĐƯỢC VẼ TRỰC TIẾP (KHÔNG CẦN TẢI ẢNH) */}
+                    {/* SVG MACOS FOLDER ICON ĐƯỢC VẼ TRỰC TIẾP */}
                     <div className="relative transform group-hover:scale-110 group-hover:-translate-y-2 transition-all duration-300 drop-shadow-xl w-32 h-24">
                       <svg viewBox="0 0 250 180" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
                         <defs>
@@ -258,21 +268,17 @@ export default function LibraryPage() {
                           </filter>
                         </defs>
                         
-                        {/* Tab phía trên bên trái */}
                         <path d="M10,21 C10,9.954 18.954,1 30,1 L70,1 C81.046,1 90,9.954 90,21 L90,25 L10,25 Z" 
                               fill={`url(#gradTab-${folder.id})`} stroke="#1a8cc7" strokeWidth="1" />
                         
-                        {/* Thân folder chính */}
                         <rect x="0" y="21" width="250" height="159" rx="15" 
                               fill={`url(#gradBody-${folder.id})`} stroke="#1a8cc7" strokeWidth="1" filter={`url(#shadow-${folder.id})`} />
                         
-                        {/* Khối content màu trắng đục có dấu hỏi chấm ở giữa */}
                         <rect x="105" y="70" width="40" height="40" rx="8" 
                               fill="rgba(255, 255, 255, 0.6)" stroke="#75c9f5" strokeWidth="1" />
                         <text x="125" y="99" fontFamily="sans-serif" fontSize="28" fontWeight="bold" fill="#1a8cc7" textAnchor="middle">?</text>
                       </svg>
                       
-                      {/* CHỈ ADMIN MỚI ĐƯỢC XOÁ */}
                       {userRole === 'admin' && (
                         <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }} className="absolute -top-4 -right-4 bg-red-100 text-red-600 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-200 hover:scale-110 z-10" title="Xóa thư mục">
                           <Trash2 className="w-4 h-4" />
@@ -289,7 +295,6 @@ export default function LibraryPage() {
             )
           ) : (
             
-            /* VIEW: BÊN TRONG THƯ MỤC (HIỂN THỊ TÀI LIỆU) */
             documents.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-20">
                 <FileText className="w-16 h-16 mb-4" />
@@ -311,7 +316,6 @@ export default function LibraryPage() {
                       <Download className="w-4 h-4 text-slate-400 group-hover:text-blue-500" />
                     </div>
 
-                    {/* CHỈ ADMIN MỚI ĐƯỢC XOÁ */}
                     {userRole === 'admin' && (
                       <button onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id) }} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors z-10 bg-white/50 dark:bg-slate-900/50 p-1.5 rounded-md opacity-0 group-hover:opacity-100">
                         <Trash2 className="w-4 h-4" />
