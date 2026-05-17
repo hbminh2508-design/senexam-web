@@ -21,10 +21,12 @@ export async function POST(request: Request) {
   try {
     // Phân tích header để biết Client đang dùng tính năng nào
     const contentType = request.headers.get('content-type') || ''
+    
+    // 🌟 LẤY TÊN MIỀN HIỆN TẠI (VD: https://senexam.me) ĐỂ BẢO LÃNH CORS
+    const origin = request.headers.get('origin') || '*' 
 
     // ====================================================================
     // 🚀 LUỒNG 1: BYPASS VERCEL (TẢI FILE KHỔNG LỒ TỪ LIBRARY)
-    // Nếu Frontend gửi lên JSON, hệ thống sẽ cấp Link tải trực tiếp
     // ====================================================================
     if (contentType.includes('application/json')) {
       const { fileName, mimeType } = await request.json()
@@ -47,7 +49,8 @@ export async function POST(request: Request) {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json; charset=UTF-8',
-          'X-Upload-Content-Type': mimeType
+          'X-Upload-Content-Type': mimeType,
+          'Origin': origin // 🌟 CHÌA KHÓA MỞ KHÓA CORS CHO TRÌNH DUYỆT Ở ĐÂY
         },
         body: JSON.stringify(metadata)
       })
@@ -65,7 +68,6 @@ export async function POST(request: Request) {
 
     // ====================================================================
     // 📦 LUỒNG 2: DIRECT UPLOAD CŨ (TẢI ĐỀ THI NHẸ TỪ ADMIN DASHBOARD)
-    // Nếu Frontend gửi lên FormData, hệ thống chạy code Stream cũ của bạn
     // ====================================================================
     const formData = await request.formData()
     const file = formData.get('file') as File | null
