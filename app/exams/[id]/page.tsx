@@ -8,6 +8,9 @@ import {
   UploadCloud, Bookmark, AlertTriangle, ShieldAlert, PlayCircle, Maximize2 
 } from 'lucide-react'
 
+// 🌟 IMPORT LINH KIỆN GIÁM THỊ AI
+import ProctorCamera from '@/app/components/ProctorCamera'
+
 export default function ExamRoomPage() {
   const params = useParams()
   const router = useRouter()
@@ -106,10 +109,9 @@ export default function ExamRoomPage() {
       setIsFullscreen(isFull)
       
       if (!isFull) {
-        // 🌟 MIỄN NHIỄM (IMMUNITY): Kiểm tra xem sự kiện thoát Fullscreen có phải do bàn phím ảo bật lên không?
+        // MIỄN NHIỄM (IMMUNITY): Kiểm tra xem sự kiện thoát Fullscreen có phải do bàn phím ảo bật lên không?
         const activeTag = document.activeElement?.tagName?.toLowerCase();
         if (activeTag === 'input' || activeTag === 'textarea') {
-          // Bỏ qua, không đếm ngược, không phạt nếu người dùng đang nhập đáp án
           return; 
         }
 
@@ -140,7 +142,6 @@ export default function ExamRoomPage() {
     document.addEventListener('contextmenu', handleContextMenu)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     
-    // Gắn đủ 4 loại Event Listener cho mọi hệ điều hành
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
     document.addEventListener('mozfullscreenchange', handleFullscreenChange)
@@ -180,7 +181,7 @@ export default function ExamRoomPage() {
       const docEl = document.documentElement as any;
       if (docEl.requestFullscreen) {
         await docEl.requestFullscreen();
-      } else if (docEl.webkitRequestFullscreen) { // Dành cho iPad/Safari
+      } else if (docEl.webkitRequestFullscreen) {
         await docEl.webkitRequestFullscreen();
       } else if (docEl.mozRequestFullScreen) {
         await docEl.mozRequestFullScreen();
@@ -204,9 +205,26 @@ export default function ExamRoomPage() {
   }
 
   const handleForceSubmit = async () => { await processSubmit(true) }
+  
   const handleManualSubmit = async () => {
     if (!confirm('Xác nhận nộp bài thi? Hệ thống sẽ đóng giao diện làm bài.')) return
     await processSubmit(false)
+  }
+
+  // 🌟 HÀM XỬ LÝ VI PHẠM TỪ GIÁM THỊ AI
+  const handleProctorViolation = (message: string) => {
+    if (violationsRef.current >= 3) return;
+    
+    violationsRef.current += 1;
+    setViolations(violationsRef.current);
+
+    if (violationsRef.current >= 3) {
+      setIsKicked(true);
+      alert(`⛔ BẠN ĐÃ BỊ ĐÌNH CHỈ THI!\nLý do: ${message}\nBạn đã vi phạm quy chế quá 3 lần. Hệ thống tự động thu bài và đóng lượt thi.`);
+      handleForceSubmit();
+    } else {
+      alert(`⚠️ CẢNH BÁO VI PHẠM LẦN ${violationsRef.current}/3 ⚠️\nChi tiết: ${message}`);
+    }
   }
 
   const processSubmit = async (isForced: boolean) => {
@@ -291,12 +309,15 @@ export default function ExamRoomPage() {
           <p className="text-slate-400 mb-8 font-medium">Thời gian làm bài: {exam?.duration} phút • Cấu trúc đề: {exam?.exam_type}</p>
           
           <div className="bg-slate-900 p-6 rounded-2xl text-left border border-slate-700 mb-8">
-            <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> Quy chế phòng thi nghiêm ngặt (Bảo mật hệ thống):</h3>
+            <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> Quy chế phòng thi nghiêm ngặt:</h3>
             <ul className="text-slate-300 text-sm space-y-3.5 font-medium list-disc pl-5 leading-relaxed">
-              <li>Hệ thống sẽ tự động kích hoạt và ép chế độ <b className="text-white">Toàn màn hình (Full-screen)</b> ngay khi bắt đầu. Mọi hành vi kéo vuốt mép màn hình gây reload bài trên thiết bị di động đã bị phong tỏa.</li>
-              <li>Nghiêm cấm tuyệt đối các hành vi rời khỏi màn hình, chuyển đổi Tab, mở ứng dụng khác hoặc thu nhỏ trình duyệt trong suốt thời gian làm bài.</li>
-              <li>Trường hợp mất trạng thái Toàn màn hình do sự cố phần cứng, hệ thống cấp <b className="text-emerald-400">3 giây ân hạn</b> để thí sinh chủ động nhấn nút khôi phục bảo mật.</li>
-              <li>Nếu quá thời gian ân hạn hoặc cố tình vi phạm, hệ thống sẽ ghi nhận 1 lần cảnh báo. Đủ <b>3 lần vi phạm</b>, bài thi sẽ lập tức bị khóa, tự động thu bài và hủy lượt thi.</li>
+              <li>Hệ thống sẽ tự động kích hoạt chế độ <b className="text-white">Toàn màn hình (Full-screen)</b>.</li>
+              <li>Nghiêm cấm hành vi rời khỏi màn hình, chuyển đổi Tab hoặc mở ứng dụng khác.</li>
+              <li>Được cấp <b className="text-emerald-400">3 giây ân hạn</b> nếu lỡ tay thoát toàn màn hình để khôi phục bảo mật.</li>
+              {exam?.require_proctoring && (
+                <li><b className="text-purple-400">Hệ thống Giám thị AI đang hoạt động.</b> Vui lòng cấp quyền Camera. Mọi hành vi sử dụng điện thoại hoặc có người lạ trong khung hình sẽ bị AI quét và ghi nhận vi phạm!</li>
+              )}
+              <li>Đủ <b>3 lần vi phạm</b>, bài thi sẽ lập tức bị khóa và tự động thu bài.</li>
             </ul>
           </div>
           
@@ -330,6 +351,13 @@ export default function ExamRoomPage() {
               <Maximize2 className="w-5 h-5"/> Khôi phục Toàn màn hình
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 🌟 NÚT NỔI GIÁM THỊ AI (Chỉ hiện nếu Đề thi yêu cầu bật Camera) */}
+      {hasStarted && exam?.require_proctoring && (
+        <div className="fixed bottom-6 left-6 z-[100] animate-in slide-in-from-bottom-5 duration-500">
+          <ProctorCamera onViolation={handleProctorViolation} />
         </div>
       )}
 
