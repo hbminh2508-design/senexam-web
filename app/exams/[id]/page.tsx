@@ -29,12 +29,16 @@ export default function ExamRoomPage() {
   const [isFullscreen, setIsFullscreen] = useState(false) 
   const violationsRef = useRef(0)
 
-  // STATE THỜI GIAN ÂN HẠN CHỐNG BẮT NHẦM TRÊN THIẾT BỊ CẢM ỨNG
+  // STATE THỜI GIAN ÂN HẠN
   const [graceCountdown, setGraceCountdown] = useState<number | null>(null)
   const graceTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // STATE CHỜ CẤP QUYỀN CAMERA
   const [isRequestingCam, setIsRequestingCam] = useState(false)
+
+  // 🌟 HỆ THỐNG POPUP ẢO (IN-DOM MODAL) ĐỂ TRÁNH MẤT FULLSCREEN TRÊN IPAD 🌟
+  const [violationAlert, setViolationAlert] = useState<{title: string, desc: string, isFatal: boolean} | null>(null)
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
 
   useEffect(() => {
     const fetchExam = async () => {
@@ -49,7 +53,6 @@ export default function ExamRoomPage() {
     fetchExam()
   }, [params.id, router])
 
-  // Timer đếm ngược giờ thi
   useEffect(() => {
     if (!hasStarted || loading || timeLeft <= 0 || isKicked || submitting) return
     const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000)
@@ -57,7 +60,7 @@ export default function ExamRoomPage() {
     return () => clearInterval(timer)
   }, [hasStarted, loading, timeLeft, isKicked, submitting])
 
-  // 🌟 HỆ THỐNG GIÁM SÁT ANTI-CHEAT ĐÃ ĐƯỢC NÂNG CẤP CHO IPAD/SAFARI
+  // HỆ THỐNG GIÁM SÁT ANTI-CHEAT
   useEffect(() => {
     if (!hasStarted || isKicked || submitting) return;
 
@@ -94,10 +97,18 @@ export default function ExamRoomPage() {
 
       if (violationsRef.current >= 3) {
         setIsKicked(true)
-        alert('⛔ BẠN ĐÃ BỊ ĐÌNH CHỈ THI! \nBạn đã vi phạm quy chế (Rời khỏi màn hình) quá 3 lần. Hệ thống tự động thu bài và đóng lượt thi.')
-        handleForceSubmit()
+        setViolationAlert({
+          title: '⛔ BẠN ĐÃ BỊ ĐÌNH CHỈ THI!',
+          desc: 'Bạn đã vi phạm quy chế (Thoát màn hình) quá 3 lần. Hệ thống đang tự động thu bài.',
+          isFatal: true
+        })
+        setTimeout(() => handleForceSubmit(), 3000) // Trễ 3s để học sinh kịp đọc thông báo
       } else {
-        alert(`⚠️ CẢNH BÁO VI PHẠM LẦN ${violationsRef.current}/3 ⚠️\nBạn không được phép rời màn hình thi!`)
+        setViolationAlert({
+          title: `⚠️ CẢNH BÁO VI PHẠM LẦN ${violationsRef.current}/3`,
+          desc: 'Tuyệt đối không được phép rời màn hình thi!',
+          isFatal: false
+        })
       }
     }
 
@@ -200,35 +211,31 @@ export default function ExamRoomPage() {
     }
   }
 
-  // 🌟 GIẢI QUYẾT VẤN ĐỀ CẤP QUYỀN CAMERA (XIN QUYỀN TRƯỚC KHI VÀO THI)
   const handleStartExam = async () => {
     if (exam?.require_proctoring) {
       setIsRequestingCam(true);
       try {
-        // Xin quyền Camera ở chế độ phòng chờ
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-        // Cấp quyền xong thì tắt đi để nhường lại cho ProctorCamera
         stream.getTracks().forEach(track => track.stop());
       } catch (e) {
         alert('❌ BẠN BẮT BUỘC PHẢI CẤP QUYỀN CAMERA ĐỂ THI!\nTrình duyệt đã chặn Camera. Vui lòng cấp quyền ở biểu tượng ổ khóa cạnh thanh địa chỉ web và thử lại.');
         setIsRequestingCam(false);
-        return; // Dừng lại, không cho vào phòng thi
+        return; 
       }
       setIsRequestingCam(false);
     }
-
-    // Khi đã có quyền rồi, popup sẽ không hiện nữa -> An toàn để bật Anti-Cheat
     await requestFullscreenMode()
     setHasStarted(true)
   }
 
   const handleForceSubmit = async () => { await processSubmit(true) }
   
-  const handleManualSubmit = async () => {
-    if (!confirm('Xác nhận nộp bài thi? Hệ thống sẽ đóng giao diện làm bài.')) return
-    await processSubmit(false)
+  // 🌟 NÂNG CẤP XÓA BỎ CONFIRM() GÂY MẤT FULLSCREEN
+  const handleManualSubmit = () => {
+    setShowSubmitConfirm(true);
   }
 
+  // 🌟 HÀM XỬ LÝ VI PHẠM TỪ GIÁM THỊ AI (DÙNG MODAL ẢO)
   const handleProctorViolation = (message: string) => {
     if (violationsRef.current >= 3) return;
     
@@ -237,10 +244,18 @@ export default function ExamRoomPage() {
 
     if (violationsRef.current >= 3) {
       setIsKicked(true);
-      alert(`⛔ BẠN ĐÃ BỊ ĐÌNH CHỈ THI!\nLý do: ${message}\nBạn đã vi phạm quy chế quá 3 lần. Hệ thống tự động thu bài và đóng lượt thi.`);
-      handleForceSubmit();
+      setViolationAlert({
+        title: '⛔ BẠN ĐÃ BỊ ĐÌNH CHỈ THI!',
+        desc: `${message}\n\nBạn đã vi phạm quy chế quá 3 lần. Hệ thống tự động thu bài.`,
+        isFatal: true
+      })
+      setTimeout(() => handleForceSubmit(), 3000);
     } else {
-      alert(`⚠️ CẢNH BÁO VI PHẠM LẦN ${violationsRef.current}/3 ⚠️\nChi tiết: ${message}`);
+      setViolationAlert({
+        title: `⚠️ CẢNH BÁO VI PHẠM LẦN ${violationsRef.current}/3`,
+        desc: message,
+        isFatal: false
+      })
     }
   }
 
@@ -316,7 +331,6 @@ export default function ExamRoomPage() {
 
   const pdfUrl = `https://drive.google.com/file/d/${exam?.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`
 
-  // PHÒNG CHỜ THI
   if (!hasStarted) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-center">
@@ -354,8 +368,49 @@ export default function ExamRoomPage() {
   return (
     <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none" style={{ overscrollBehaviorY: 'contain' }}>
       
+      {/* 🌟 OVERLAY XÁC NHẬN NỘP BÀI (THAY THẾ LỆNH CONFIRM GÂY MẤT FULLSCREEN) */}
+      {showSubmitConfirm && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-800 text-center">
+            <Send className="w-12 h-12 text-blue-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-black mb-2 text-slate-900 dark:text-white">Xác nhận nộp bài?</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-8">Bạn có chắc chắn muốn nộp bài ngay bây giờ? Sau khi nộp sẽ không thể sửa lại.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowSubmitConfirm(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-3.5 rounded-xl font-bold transition-colors">Hủy bỏ</button>
+              <button onClick={() => { setShowSubmitConfirm(false); processSubmit(false); }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition-transform active:scale-95 shadow-md">Nộp luôn</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 OVERLAY THÔNG BÁO VI PHẠM (THAY THẾ LỆNH ALERT GÂY MẤT FULLSCREEN/CAMERA) */}
+      {violationAlert && (
+        <div className="fixed inset-0 z-[9999] bg-red-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+          <div className="bg-slate-900 p-8 rounded-[2rem] border border-red-500/40 max-w-md w-full shadow-2xl space-y-6">
+            <ShieldAlert className="w-16 h-16 text-red-500 mx-auto animate-bounce" />
+            <h2 className="text-2xl font-black text-white">{violationAlert.title}</h2>
+            <p className="text-sm font-medium text-slate-300 leading-relaxed whitespace-pre-wrap">
+              {violationAlert.desc}
+            </p>
+            
+            {!violationAlert.isFatal ? (
+              <button 
+                onClick={() => setViolationAlert(null)}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-xl shadow-lg transition-transform active:scale-95 text-base"
+              >
+                Tôi đã hiểu & Quay lại làm bài
+              </button>
+            ) : (
+              <div className="flex items-center justify-center gap-2 text-red-500 font-bold bg-red-500/10 py-4 rounded-xl border border-red-500/20">
+                <Loader2 className="w-5 h-5 animate-spin" /> Hệ thống đang thu bài...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* POPUP THỜI GIAN ÂN HẠN KHI BỊ THOÁT FULLSCREEN */}
-      {graceCountdown !== null && (
+      {graceCountdown !== null && !violationAlert && (
         <div className="fixed inset-0 z-[999] bg-red-950/80 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
           <div className="bg-slate-900/80 p-8 rounded-[2rem] border border-red-500/40 max-w-md shadow-2xl space-y-6">
             <AlertTriangle className="w-16 h-16 text-red-500 mx-auto animate-bounce" />
@@ -376,7 +431,7 @@ export default function ExamRoomPage() {
         </div>
       )}
 
-      {/* 🌟 NÚT NỔI GIÁM THỊ AI (Chỉ hiện nếu Đề thi yêu cầu bật Camera) */}
+      {/* 🌟 NÚT NỔI GIÁM THỊ AI */}
       {hasStarted && exam?.require_proctoring && (
         <div className="fixed bottom-6 left-6 z-[100] animate-in slide-in-from-bottom-5 duration-500">
           <ProctorCamera onViolation={handleProctorViolation} />
