@@ -7,7 +7,7 @@ import {
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
   CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
-  Wand2, Sparkles, Crown
+  Wand2, Sparkles, Crown, Camera // 🌟 Đã import icon Camera
 } from 'lucide-react'
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
@@ -55,6 +55,9 @@ export default function AdminDashboard() {
 
   const [editingKeysSectionId, setEditingKeysSectionId] = useState<string | null>(null)
   const [isHiddenExam, setIsHiddenExam] = useState(false)
+  
+  // 🌟 STATE MỚI: Bật/Tắt Giám thị ảo AI
+  const [requireProctoring, setRequireProctoring] = useState(false)
   
   const [autoFillModalId, setAutoFillModalId] = useState<string | null>(null)
   const [autoFillText, setAutoFillText] = useState('')
@@ -383,10 +386,12 @@ export default function AdminDashboard() {
 
       const cleanExamStructure = examStructure.map(s => ({...s}))
 
+      // 🌟 ĐÃ CẬP NHẬT: Thêm trường require_proctoring vào cơ sở dữ liệu
       const { error: dbError } = await supabase.from('exams').insert({
         title, exam_type: examType, duration, allow_review: allowReview, max_attempts: maxAttempts, grading_method: gradingMethod, subjects: selectedSubjects, exam_structure: cleanExamStructure, drive_file_id: result.driveFileId, created_by: user.id,
         is_hidden: isHiddenExam,
-        access_code: generatedAccessCode
+        access_code: generatedAccessCode,
+        require_proctoring: requireProctoring
       })
 
       if (dbError) throw new Error(dbError.message)
@@ -396,7 +401,7 @@ export default function AdminDashboard() {
         : 'Xuất bản đề thi thành công!';
         
       setUploadStatus({ type: 'success', message: successMsg })
-      setTitle(''); setFile(null); setPdfPreviewUrl(null); setSelectedSubjects([]); setExamStructure([]); setMaxAttempts(1); setGradingMethod('highest'); setIsHiddenExam(false);
+      setTitle(''); setFile(null); setPdfPreviewUrl(null); setSelectedSubjects([]); setExamStructure([]); setMaxAttempts(1); setGradingMethod('highest'); setIsHiddenExam(false); setRequireProctoring(false);
     } catch (error: any) {
       setUploadStatus({ type: 'error', message: error?.message || 'Có lỗi hệ thống nội bộ xảy ra.' })
     }
@@ -735,6 +740,15 @@ export default function AdminDashboard() {
                       <p className="text-xs text-slate-500">Chỉ học sinh được cung cấp mã truy cập (Access Code) mới được phép vào thi.</p>
                     </div>
                     <input type="checkbox" checked={isHiddenExam} onChange={(e) => setIsHiddenExam(e.target.checked)} className="w-5 h-5 accent-red-600 cursor-pointer" />
+                  </div>
+
+                  {/* 🌟 NÚT BẬT GIÁM THỊ ẢO (CAMERA AI) */}
+                  <div className="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl flex items-center justify-between border border-purple-200 dark:border-purple-800/30 mt-4">
+                    <div>
+                      <p className="text-sm font-bold text-purple-700 dark:text-purple-400 flex items-center gap-1.5"><Camera className="w-4 h-4"/> Giám thị ảo (Camera AI)</p>
+                      <p className="text-xs text-purple-600/70 dark:text-purple-400/70 mt-1">Yêu cầu bật Camera khi thi. Hệ thống tự động phát hiện học sinh dùng điện thoại hoặc rời khỏi khung hình.</p>
+                    </div>
+                    <input type="checkbox" checked={requireProctoring} onChange={(e) => setRequireProctoring(e.target.checked)} className="w-5 h-5 accent-purple-600 cursor-pointer" />
                   </div>
 
                   <div>
