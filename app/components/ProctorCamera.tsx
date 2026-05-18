@@ -22,7 +22,6 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
 
     const setupCameraAndAI = async () => {
       try {
-        // 1. TỐI ƯU LẠI: Nâng độ phân giải lên 640x480 (Cân bằng giữa Độ nét và Hiệu năng)
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             facingMode: "user",
@@ -38,7 +37,6 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
         }
 
         await tf.ready();
-        // Tải mô hình AI base của Google
         model = await cocossd.load();
         if (isMounted) setStatus('monitoring');
 
@@ -47,33 +45,43 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
 
           if (videoRef.current && model && videoRef.current.readyState === 4) {
             try {
-              // 2. TĂNG ĐỘ NHẠY: Bắt đa đa 20 vật thể, chỉ cần AI tin tưởng 40% (0.4) là báo cáo!
-              const predictions = await model.detect(videoRef.current, 20, 0.4);
+              // Ép độ nhạy thiết bị xuống 25% (0.25) để quét cực gắt các vật thể cầm tay
+              const predictions = await model.detect(videoRef.current, 20, 0.25);
               
-              const persons = predictions.filter(p => p.class === 'person');
-              const phones = predictions.filter(p => p.class === 'cell phone');
+              // Người thì vẫn cần chuẩn 40% để tránh bắt nhầm bóng ma
+              const persons = predictions.filter(p => p.class === 'person' && p.score > 0.4);
+              
+              // Mở rộng bắt gian lận: Điện thoại, Laptop, Màn hình, Điều khiển
+              const forbiddenDevices = predictions.filter(p => 
+                ['cell phone', 'laptop', 'tv', 'remote'].includes(p.class)
+              );
 
               const now = Date.now();
               if (now - lastAlertTime > 5000) {
-                if (phones.length > 0) {
-                  // Đính kèm luôn độ tự tin của AI để bạn dễ test
-                  const score = Math.round(phones[0].score * 100);
-                  onViolation(`🔴 AI PHÁT HIỆN: Điện thoại trong khung hình! (Độ chắc chắn: ${score}%)`);
+                
+                // ƯU TIÊN 1: Bắt thiết bị điện tử (Bất chấp có người hay không)
+                if (forbiddenDevices.length > 0) {
+                  const device = forbiddenDevices[0];
+                  const score = Math.round(device.score * 100);
+                  const deviceName = device.class === 'cell phone' ? 'điện thoại' : 'thiết bị lạ';
+                  
+                  onViolation(`🔴 AI PHÁT HIỆN: Bạn đang cầm ${deviceName} để chụp/tra cứu! (Tỷ lệ: ${score}%)`);
                   lastAlertTime = now;
-                } else if (persons.length > 1) {
-                  onViolation('🔴 AI PHÁT HIỆN: Có người lạ xuất hiện trong khu vực thi!');
-                  lastAlertTime = now;
-                } else if (persons.length === 0) {
-                  onViolation('🟡 NHẮC NHỞ: Không tìm thấy khuôn mặt. Vui lòng ngồi thẳng vào giữa màn hình!');
+                } 
+                // ƯU TIÊN 2: Bắt người lạ hỗ trợ làm bài
+                else if (persons.length > 1) {
+                  onViolation('🔴 AI PHÁT HIỆN: Có người lạ xuất hiện trong khu vực thi để hỗ trợ!');
                   lastAlertTime = now;
                 }
+                
+                // 🌟 ĐÃ XÓA BỎ LỆNH PHẠT KHI KHÔNG THẤY MẶT (Cho phép học sinh thoải mái cúi nháp bài)
               }
             } catch (e) {
               console.error("Lỗi AI khi quét:", e);
             }
           }
 
-          // Rút ngắn thời gian quét xuống còn 2 giây/lần để bắt quả tang nhanh hơn
+          // Quét 2 giây 1 lần
           setTimeout(scanFrame, 2000);
         };
 
