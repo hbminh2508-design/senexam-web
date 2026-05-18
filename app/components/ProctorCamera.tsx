@@ -15,13 +15,21 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
   const [status, setStatus] = useState<'loading' | 'monitoring' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // 🌟 GIẢI PHÁP CHỐNG NHẤP NHÁY: Lưu hàm phạt vào Ref để không làm khởi động lại Camera
+  const onViolationRef = useRef(onViolation);
+  useEffect(() => {
+    onViolationRef.current = onViolation;
+  }, [onViolation]);
+
   useEffect(() => {
     let isMounted = true;
     let model: cocossd.ObjectDetection | null = null;
     let lastAlertTime = 0; 
+    let scanTimer: NodeJS.Timeout;
 
     const setupCameraAndAI = async () => {
       try {
+        // 1. Chỉ xin quyền và bật Camera ĐÚNG 1 LẦN DUY NHẤT
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             facingMode: "user",
@@ -45,44 +53,36 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
 
           if (videoRef.current && model && videoRef.current.readyState === 4) {
             try {
-              // Ép độ nhạy thiết bị xuống 25% (0.25) để quét cực gắt các vật thể cầm tay
+              // 2. AI ĐỌC ẢNH TỪ CAMERA CŨ (Không tắt bật Camera)
               const predictions = await model.detect(videoRef.current, 20, 0.25);
               
-              // Người thì vẫn cần chuẩn 40% để tránh bắt nhầm bóng ma
               const persons = predictions.filter(p => p.class === 'person' && p.score > 0.4);
-              
-              // Mở rộng bắt gian lận: Điện thoại, Laptop, Màn hình, Điều khiển
               const forbiddenDevices = predictions.filter(p => 
                 ['cell phone', 'laptop', 'tv', 'remote'].includes(p.class)
               );
 
               const now = Date.now();
               if (now - lastAlertTime > 5000) {
-                
-                // ƯU TIÊN 1: Bắt thiết bị điện tử (Bất chấp có người hay không)
                 if (forbiddenDevices.length > 0) {
                   const device = forbiddenDevices[0];
                   const score = Math.round(device.score * 100);
                   const deviceName = device.class === 'cell phone' ? 'điện thoại' : 'thiết bị lạ';
                   
-                  onViolation(`🔴 AI PHÁT HIỆN: Bạn đang cầm ${deviceName} để chụp/tra cứu! (Tỷ lệ: ${score}%)`);
+                  onViolationRef.current(`🔴 AI PHÁT HIỆN: Bạn đang cầm ${deviceName} để chụp/tra cứu! (Tỷ lệ: ${score}%)`);
                   lastAlertTime = now;
                 } 
-                // ƯU TIÊN 2: Bắt người lạ hỗ trợ làm bài
                 else if (persons.length > 1) {
-                  onViolation('🔴 AI PHÁT HIỆN: Có người lạ xuất hiện trong khu vực thi để hỗ trợ!');
+                  onViolationRef.current('🔴 AI PHÁT HIỆN: Có người lạ xuất hiện trong khu vực thi để hỗ trợ!');
                   lastAlertTime = now;
                 }
-                
-                // 🌟 ĐÃ XÓA BỎ LỆNH PHẠT KHI KHÔNG THẤY MẶT (Cho phép học sinh thoải mái cúi nháp bài)
               }
             } catch (e) {
               console.error("Lỗi AI khi quét:", e);
             }
           }
 
-          // Quét 2 giây 1 lần
-          setTimeout(scanFrame, 2000);
+          // 3. Chu kỳ 3 giây lặp lại việc AI trích xuất ảnh 1 lần
+          scanTimer = setTimeout(scanFrame, 3000);
         };
 
         scanFrame();
@@ -97,13 +97,15 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
 
     setupCameraAndAI();
 
+    // 4. CHỈ TẮT CAMERA KHI HỌC SINH NỘP BÀI HOẶC THOÁT KHỎI PHÒNG THI
     return () => {
       isMounted = false;
+      clearTimeout(scanTimer);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [onViolation]);
+  }, []); // 🌟 DEPENDENCY RỖNG: Đây là mấu chốt giúp Camera tuyệt đối không bị khởi động lại!
 
   return (
     <div className="bg-slate-900 rounded-2xl overflow-hidden relative shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-700 w-[240px] md:w-[300px]">
