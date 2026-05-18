@@ -5,10 +5,10 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Clock, ArrowLeft, Send, FileQuestion, LayoutList, 
-  UploadCloud, Bookmark, AlertTriangle, ShieldAlert, PlayCircle, Maximize2 
+  UploadCloud, Bookmark, AlertTriangle, ShieldAlert, PlayCircle, Maximize2, Loader2 
 } from 'lucide-react'
 
-// 🌟 IMPORT LINH KIỆN GIÁM THỊ AI
+// IMPORT LINH KIỆN GIÁM THỊ AI
 import ProctorCamera from '@/app/components/ProctorCamera'
 
 export default function ExamRoomPage() {
@@ -32,6 +32,9 @@ export default function ExamRoomPage() {
   // STATE THỜI GIAN ÂN HẠN CHỐNG BẮT NHẦM TRÊN THIẾT BỊ CẢM ỨNG
   const [graceCountdown, setGraceCountdown] = useState<number | null>(null)
   const graceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // STATE CHỜ CẤP QUYỀN CAMERA
+  const [isRequestingCam, setIsRequestingCam] = useState(false)
 
   useEffect(() => {
     const fetchExam = async () => {
@@ -102,14 +105,12 @@ export default function ExamRoomPage() {
       if (document.hidden) triggerViolation()
     }
 
-    // Nâng cấp: Tương thích Webkit của Apple
     const handleFullscreenChange = () => {
       const doc = document as any;
       const isFull = !!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
       setIsFullscreen(isFull)
       
       if (!isFull) {
-        // MIỄN NHIỄM (IMMUNITY): Kiểm tra xem sự kiện thoát Fullscreen có phải do bàn phím ảo bật lên không?
         const activeTag = document.activeElement?.tagName?.toLowerCase();
         if (activeTag === 'input' || activeTag === 'textarea') {
           return; 
@@ -199,7 +200,24 @@ export default function ExamRoomPage() {
     }
   }
 
+  // 🌟 GIẢI QUYẾT VẤN ĐỀ CẤP QUYỀN CAMERA (XIN QUYỀN TRƯỚC KHI VÀO THI)
   const handleStartExam = async () => {
+    if (exam?.require_proctoring) {
+      setIsRequestingCam(true);
+      try {
+        // Xin quyền Camera ở chế độ phòng chờ
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        // Cấp quyền xong thì tắt đi để nhường lại cho ProctorCamera
+        stream.getTracks().forEach(track => track.stop());
+      } catch (e) {
+        alert('❌ BẠN BẮT BUỘC PHẢI CẤP QUYỀN CAMERA ĐỂ THI!\nTrình duyệt đã chặn Camera. Vui lòng cấp quyền ở biểu tượng ổ khóa cạnh thanh địa chỉ web và thử lại.');
+        setIsRequestingCam(false);
+        return; // Dừng lại, không cho vào phòng thi
+      }
+      setIsRequestingCam(false);
+    }
+
+    // Khi đã có quyền rồi, popup sẽ không hiện nữa -> An toàn để bật Anti-Cheat
     await requestFullscreenMode()
     setHasStarted(true)
   }
@@ -211,7 +229,6 @@ export default function ExamRoomPage() {
     await processSubmit(false)
   }
 
-  // 🌟 HÀM XỬ LÝ VI PHẠM TỪ GIÁM THỊ AI
   const handleProctorViolation = (message: string) => {
     if (violationsRef.current >= 3) return;
     
@@ -315,14 +332,19 @@ export default function ExamRoomPage() {
               <li>Nghiêm cấm hành vi rời khỏi màn hình, chuyển đổi Tab hoặc mở ứng dụng khác.</li>
               <li>Được cấp <b className="text-emerald-400">3 giây ân hạn</b> nếu lỡ tay thoát toàn màn hình để khôi phục bảo mật.</li>
               {exam?.require_proctoring && (
-                <li><b className="text-purple-400">Hệ thống Giám thị AI đang hoạt động.</b> Vui lòng cấp quyền Camera. Mọi hành vi sử dụng điện thoại hoặc có người lạ trong khung hình sẽ bị AI quét và ghi nhận vi phạm!</li>
+                <li><b className="text-purple-400">Hệ thống Giám thị AI đang hoạt động.</b> Trình duyệt sẽ xin cấp quyền Camera để nhận diện khuôn mặt và điện thoại. Mọi vi phạm sẽ được quét tự động!</li>
               )}
               <li>Đủ <b>3 lần vi phạm</b>, bài thi sẽ lập tức bị khóa và tự động thu bài.</li>
             </ul>
           </div>
           
-          <button onClick={handleStartExam} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-transform transform active:scale-[0.99]">
-            <PlayCircle className="w-6 h-6" /> Tôi đã đọc và cam kết tuân thủ quy chế
+          <button 
+            onClick={handleStartExam} 
+            disabled={isRequestingCam}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white py-4 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-transform transform active:scale-[0.99]"
+          >
+            {isRequestingCam ? <Loader2 className="w-6 h-6 animate-spin" /> : <PlayCircle className="w-6 h-6" />} 
+            {isRequestingCam ? 'Đang xác thực quyền Camera...' : 'Tôi đã đọc và cam kết tuân thủ quy chế'}
           </button>
         </div>
       </div>

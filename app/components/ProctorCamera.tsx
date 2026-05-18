@@ -11,84 +11,102 @@ interface ProctorCameraProps {
 
 export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null); // 🌟 Giữ luồng Camera cố định, không chớp nháy
   const [status, setStatus] = useState<'loading' | 'monitoring' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
     let model: cocossd.ObjectDetection | null = null;
-    let detectionInterval: NodeJS.Timeout;
-    let lastAlertTime = 0; // Chống spam cảnh báo liên tục
+    let lastAlertTime = 0; // Chống spam cảnh báo
 
-    const initProctoring = async () => {
+    const setupCameraAndAI = async () => {
       try {
-        // 1. Xin quyền truy cập Camera của thí sinh
+        // 1. TỐI ƯU 1: Ép độ phân giải thấp (320x240) để giảm tải 80% CPU cho máy học sinh
         const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: "user" }, // Ưu tiên camera trước
+          video: { 
+            facingMode: "user",
+            width: { ideal: 320 },
+            height: { ideal: 240 }
+          }, 
           audio: false 
         });
         
+        streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
 
-        // 2. Tải mô hình AI nhận diện vật thể (Lần đầu mất khoảng vài giây)
+        // 2. Tải mô hình AI nhận diện (Sẽ mất vài giây tùy mạng)
         await tf.ready();
         model = await cocossd.load();
-        setStatus('monitoring');
+        if (isMounted) setStatus('monitoring');
 
-        // 3. Vòng lặp quét Camera (Mỗi 2.5 giây 1 lần)
-        detectionInterval = setInterval(async () => {
+        // 3. TỐI ƯU 2: Vòng lặp đệ quy thông minh (Chống treo máy)
+        const scanFrame = async () => {
+          if (!isMounted) return; // Nếu học sinh nộp bài, lập tức ngắt AI
+
           if (videoRef.current && model && videoRef.current.readyState === 4) {
-            const predictions = await model.detect(videoRef.current);
-            
-            // Lọc ra người và điện thoại từ AI
-            const persons = predictions.filter(p => p.class === 'person');
-            const phones = predictions.filter(p => p.class === 'cell phone');
+            try {
+              // Bắt đầu quét khung hình
+              const predictions = await model.detect(videoRef.current);
+              
+              const persons = predictions.filter(p => p.class === 'person');
+              const phones = predictions.filter(p => p.class === 'cell phone');
 
-            const now = Date.now();
-            // Nếu phát hiện gian lận, báo cáo (Giới hạn 5 giây mới báo 1 lần để không bị spam màn hình)
-            if (now - lastAlertTime > 5000) {
-              if (phones.length > 0) {
-                onViolation('🔴 CẢNH BÁO: Phát hiện thí sinh sử dụng điện thoại!');
-                lastAlertTime = now;
-              } else if (persons.length > 1) {
-                onViolation('🔴 CẢNH BÁO: Phát hiện có người lạ trong khu vực thi!');
-                lastAlertTime = now;
-              } else if (persons.length === 0) {
-                onViolation('🟡 NHẮC NHỞ: Không tìm thấy khuôn mặt thí sinh. Yêu cầu ngồi ngay ngắn!');
-                lastAlertTime = now;
+              const now = Date.now();
+              // Chỉ báo lỗi nếu khoảng cách giữa 2 lần quá 5 giây (Tránh hù dọa học sinh liên tục)
+              if (now - lastAlertTime > 5000) {
+                if (phones.length > 0) {
+                  onViolation('🔴 AI PHÁT HIỆN: Bạn đang cầm thiết bị nghi là điện thoại!');
+                  lastAlertTime = now;
+                } else if (persons.length > 1) {
+                  onViolation('🔴 AI PHÁT HIỆN: Có người lạ xuất hiện trong khung hình của bạn!');
+                  lastAlertTime = now;
+                } else if (persons.length === 0) {
+                  onViolation('🟡 NHẮC NHỞ: Không tìm thấy khuôn mặt. Vui lòng ngồi thẳng vào giữa màn hình!');
+                  lastAlertTime = now;
+                }
               }
+            } catch (e) {
+              console.error("Lỗi AI khi quét:", e);
             }
           }
-        }, 2500);
+
+          // CHỈ KHI quét xong, mới hẹn giờ 3 giây sau quét tiếp. Tránh chồng chéo lệnh.
+          setTimeout(scanFrame, 3000);
+        };
+
+        // Kích hoạt nhịp đập của AI
+        scanFrame();
 
       } catch (err: any) {
-        setStatus('error');
-        setErrorMessage('Không thể bật Camera. Hãy cấp quyền trong trình duyệt để thi!');
-        onViolation('LỖI CAMERA: Học sinh từ chối cấp quyền hoặc Camera bị hỏng!');
+        if (isMounted) {
+          setStatus('error');
+          setErrorMessage('Không thể bật Camera. Vui lòng kiểm tra quyền trình duyệt!');
+        }
       }
     };
 
-    initProctoring();
+    setupCameraAndAI();
 
-    // Dọn dẹp bộ nhớ và tắt Camera khi học sinh nộp bài hoặc rời trang
+    // 4. TỐI ƯU 3: Dọn dẹp cực kỳ cẩn thận khi Component bị đóng
     return () => {
-      if (detectionInterval) clearInterval(detectionInterval);
-      if (videoRef.current?.srcObject) {
-        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-        tracks.forEach(track => track.stop());
+      isMounted = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, [onViolation]);
 
   return (
-    <div className="bg-slate-900 rounded-2xl overflow-hidden relative shadow-lg border border-slate-700 w-[240px] md:w-[300px]">
+    <div className="bg-slate-900 rounded-2xl overflow-hidden relative shadow-[0_10px_40px_rgba(0,0,0,0.5)] border border-slate-700 w-[240px] md:w-[300px]">
       <video 
         ref={videoRef} 
         autoPlay 
         muted 
         playsInline 
-        className="w-full h-40 md:h-48 object-cover transform scale-x-[-1]" // Lật ngược video như gương
+        className="w-full h-40 md:h-48 object-cover transform scale-x-[-1]" // Lật video như soi gương
       />
       
       {/* Overlay Trạng thái AI */}
@@ -103,10 +121,10 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
            <Loader2 className="w-3 h-3 animate-spin"/>}
            
           {status === 'monitoring' ? 'AI Đang Giám Sát' : 
-           status === 'error' ? 'Lỗi Camera' : 'Đang tải Mô hình AI...'}
+           status === 'error' ? 'Lỗi Camera' : 'Đang tải AI...'}
         </div>
         
-        {/* Nút đỏ nhấp nháy mô phỏng Camera đang quay */}
+        {/* Nút đỏ nhấp nháy mô phỏng Camera đang ghi hình */}
         <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
       </div>
 
