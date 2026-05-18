@@ -11,23 +11,23 @@ interface ProctorCameraProps {
 
 export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null); // 🌟 Giữ luồng Camera cố định, không chớp nháy
+  const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<'loading' | 'monitoring' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
     let model: cocossd.ObjectDetection | null = null;
-    let lastAlertTime = 0; // Chống spam cảnh báo
+    let lastAlertTime = 0; 
 
     const setupCameraAndAI = async () => {
       try {
-        // 1. TỐI ƯU 1: Ép độ phân giải thấp (320x240) để giảm tải 80% CPU cho máy học sinh
+        // 1. TỐI ƯU LẠI: Nâng độ phân giải lên 640x480 (Cân bằng giữa Độ nét và Hiệu năng)
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             facingMode: "user",
-            width: { ideal: 320 },
-            height: { ideal: 240 }
+            width: { ideal: 640 }, 
+            height: { ideal: 480 } 
           }, 
           audio: false 
         });
@@ -37,31 +37,31 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
           videoRef.current.srcObject = stream;
         }
 
-        // 2. Tải mô hình AI nhận diện (Sẽ mất vài giây tùy mạng)
         await tf.ready();
+        // Tải mô hình AI base của Google
         model = await cocossd.load();
         if (isMounted) setStatus('monitoring');
 
-        // 3. TỐI ƯU 2: Vòng lặp đệ quy thông minh (Chống treo máy)
         const scanFrame = async () => {
-          if (!isMounted) return; // Nếu học sinh nộp bài, lập tức ngắt AI
+          if (!isMounted) return; 
 
           if (videoRef.current && model && videoRef.current.readyState === 4) {
             try {
-              // Bắt đầu quét khung hình
-              const predictions = await model.detect(videoRef.current);
+              // 2. TĂNG ĐỘ NHẠY: Bắt đa đa 20 vật thể, chỉ cần AI tin tưởng 40% (0.4) là báo cáo!
+              const predictions = await model.detect(videoRef.current, 20, 0.4);
               
               const persons = predictions.filter(p => p.class === 'person');
               const phones = predictions.filter(p => p.class === 'cell phone');
 
               const now = Date.now();
-              // Chỉ báo lỗi nếu khoảng cách giữa 2 lần quá 5 giây (Tránh hù dọa học sinh liên tục)
               if (now - lastAlertTime > 5000) {
                 if (phones.length > 0) {
-                  onViolation('🔴 AI PHÁT HIỆN: Bạn đang cầm thiết bị nghi là điện thoại!');
+                  // Đính kèm luôn độ tự tin của AI để bạn dễ test
+                  const score = Math.round(phones[0].score * 100);
+                  onViolation(`🔴 AI PHÁT HIỆN: Điện thoại trong khung hình! (Độ chắc chắn: ${score}%)`);
                   lastAlertTime = now;
                 } else if (persons.length > 1) {
-                  onViolation('🔴 AI PHÁT HIỆN: Có người lạ xuất hiện trong khung hình của bạn!');
+                  onViolation('🔴 AI PHÁT HIỆN: Có người lạ xuất hiện trong khu vực thi!');
                   lastAlertTime = now;
                 } else if (persons.length === 0) {
                   onViolation('🟡 NHẮC NHỞ: Không tìm thấy khuôn mặt. Vui lòng ngồi thẳng vào giữa màn hình!');
@@ -73,11 +73,10 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
             }
           }
 
-          // CHỈ KHI quét xong, mới hẹn giờ 3 giây sau quét tiếp. Tránh chồng chéo lệnh.
-          setTimeout(scanFrame, 3000);
+          // Rút ngắn thời gian quét xuống còn 2 giây/lần để bắt quả tang nhanh hơn
+          setTimeout(scanFrame, 2000);
         };
 
-        // Kích hoạt nhịp đập của AI
         scanFrame();
 
       } catch (err: any) {
@@ -90,7 +89,6 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
 
     setupCameraAndAI();
 
-    // 4. TỐI ƯU 3: Dọn dẹp cực kỳ cẩn thận khi Component bị đóng
     return () => {
       isMounted = false;
       if (streamRef.current) {
@@ -106,10 +104,9 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
         autoPlay 
         muted 
         playsInline 
-        className="w-full h-40 md:h-48 object-cover transform scale-x-[-1]" // Lật video như soi gương
+        className="w-full h-40 md:h-48 object-cover transform scale-x-[-1]" 
       />
       
-      {/* Overlay Trạng thái AI */}
       <div className="absolute top-2 left-2 right-2 flex justify-between items-center z-10">
         <div className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 backdrop-blur-md border ${
           status === 'monitoring' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 
@@ -124,7 +121,6 @@ export default function ProctorCamera({ onViolation }: ProctorCameraProps) {
            status === 'error' ? 'Lỗi Camera' : 'Đang tải AI...'}
         </div>
         
-        {/* Nút đỏ nhấp nháy mô phỏng Camera đang ghi hình */}
         <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
       </div>
 
