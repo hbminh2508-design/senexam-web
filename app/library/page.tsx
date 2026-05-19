@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
   UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
-  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown
+  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink
 } from 'lucide-react'
 
 const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
@@ -26,7 +26,7 @@ export default function LibraryPage() {
 
   const [searchQuery, setSearchQuery] = useState('')
   
-  // 🌟 STATE: TÍNH NĂNG GỌN GÀNG (SẮP XẾP A-Z)
+  // STATE: SẮP XẾP A-Z
   const [sortByName, setSortByName] = useState(false)
 
   // Modal Create/Upload
@@ -36,6 +36,9 @@ export default function LibraryPage() {
   const [docTitle, setDocTitle] = useState('')
   const [docFiles, setDocFiles] = useState<File[]>([])
   const [uploadStatus, setUploadStatus] = useState<{type: 'idle' | 'uploading' | 'success' | 'error', message: string}>({ type: 'idle', message: '' })
+
+  // 🌟 STATE MỚI: QUẢN LÝ XEM TRƯỚC TÀI LIỆU TRỰC TIẾP TRÊN WEB ĐỒNG BỘ
+  const [previewDoc, setPreviewDoc] = useState<any | null>(null)
 
   // Drag & Drop
   const [draggedItem, setDraggedItem] = useState<{id: string, type: 'folder' | 'document'} | null>(null)
@@ -241,7 +244,7 @@ export default function LibraryPage() {
     if (!error) setDocuments(documents.filter(d => d.id !== id))
   }
 
-  // 🌟 ÁP DỤNG THUẬT TOÁN TÌM KIẾM & SẮP XẾP TỰ NHIÊN (NATURAL SORT)
+  // ÁP DỤNG THUẬT TOÁN TÌM KIẾM & SẮP XẾP TỰ NHIÊN (NATURAL SORT)
   let displayFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
   let displayDocuments = documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
@@ -250,15 +253,83 @@ export default function LibraryPage() {
     displayDocuments.sort((a, b) => a.title.localeCompare(b.title, 'vi', { numeric: true, sensitivity: 'base' }));
   }
 
+  // TỐI ƯU URL PHỤC VỤ PREVIEW VÀ DIRECT DOWNLOAD TRÊN IPHONE
+  const proctorUrls = useMemo(() => {
+    if (!previewDoc) return { preview: '', download: '', driveOpen: '' };
+    return {
+      preview: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/preview`,
+      download: `https://drive.google.com/uc?export=download&id=${previewDoc.drive_file_id}`,
+      driveOpen: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/view`
+    };
+  }, [previewDoc])
+
   if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50 dark:bg-slate-950">Đang khởi tạo thư viện số...</div>
 
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32">
       <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-bl from-blue-400/40 to-cyan-400/30 dark:from-blue-800/40 dark:to-cyan-900/30 rounded-full blur-[120px] pointer-events-none"></div>
 
+      {/* 🌟 WINDOW LIVE PREVIEW (XEM FILE & TẢI TRỰC TIẾP KHÔNG BỊ VĂNG KHỎI WEB) */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-[999] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[90vh] rounded-[2rem] shadow-2xl border border-white/20 dark:border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            
+            {/* Header toolbar */}
+            <div className="h-16 px-6 bg-slate-50 dark:bg-slate-950/60 border-b dark:border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <FileText className="w-5 h-5 text-red-500 shrink-0 shadow-sm" />
+                <div className="truncate">
+                  <h3 className="font-extrabold text-sm md:text-base truncate">{previewDoc.title}</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tài liệu số hệ thống</p>
+                </div>
+              </div>
+              
+              {/* Toolbar điều hướng tệp đính kèm */}
+              <div className="flex items-center gap-2">
+                {/* 1. Nút tải trực tiếp */}
+                <a 
+                  href={proctorUrls.download} 
+                  className="p-2 md:px-4 py-2.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 transition-colors flex items-center gap-1.5 text-xs font-bold border border-blue-200/30"
+                  title="Tải tệp trực tiếp"
+                >
+                  <Download className="w-4 h-4" /> <span className="hidden sm:inline">Tải trực tiếp</span>
+                </a>
+                
+                {/* 2. Nút chuyển sang Drive ở góc trên bên phải */}
+                <a 
+                  href={proctorUrls.driveOpen} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="p-2 md:px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5 text-xs font-bold"
+                  title="Mở rộng bằng tab Google Drive"
+                >
+                  <ExternalLink className="w-4 h-4" /> <span className="hidden sm:inline">Mở rộng Drive</span>
+                </a>
+
+                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1"></div>
+
+                {/* 3. Nút đóng cửa sổ */}
+                <button onClick={() => setPreviewDoc(null)} className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-red-500/10 hover:text-red-500 rounded-xl transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Khung nhúng Iframe tài liệu mượt mà */}
+            <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative">
+              <iframe 
+                src={proctorUrls.preview} 
+                className="absolute inset-0 w-full h-full border-none bg-transparent"
+                allow="autoplay"
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- FLOATING ACTION BARS --- */}
       {isSelectMode && selectedItems.length > 0 && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10">
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 apps-shadow px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10">
            <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
            
            {selectedItems.length === 1 && (userRole === 'admin' || userRole === 'collab') && (
@@ -289,7 +360,7 @@ export default function LibraryPage() {
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-blue-400/50 px-6 py-4 rounded-3xl shadow-[0_10px_40px_rgba(59,130,246,0.3)] flex items-center gap-4 z-[90] animate-bounce">
            <div className="flex flex-col">
              <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400">Đang lưu {clipboard.items.length} mục</span>
-             <span className="text-[10px] font-bold text-slate-500 uppercase">Lệnh: {clipboard.action === 'cut' ? 'Cắt (Di chuyển)' : 'Sao chép'}</span>
+             <span className="text-[10px] font-bold text-slate-500 uppercase">Lệnh: {clipboard.action === 'cut' ? 'Cắt' : 'Sao chép'}</span>
            </div>
            <button onClick={handlePaste} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:scale-105 transition-transform font-bold text-sm shadow-md">
              <ClipboardPaste className="w-4 h-4"/> Dán vào đây
@@ -320,7 +391,7 @@ export default function LibraryPage() {
             <button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
             <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center mb-4"><Folder className="w-6 h-6 text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400"/></div>
             <h3 className="text-xl font-black mb-2">Tạo thư mục mới</h3>
-            <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Tên thư mục (VD: Đề thi thử)" className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500 mb-6 shadow-inner" />
+            <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Tên thư mục..." className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500 mb-6 shadow-inner" />
             <button onClick={handleCreateFolder} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 shadow-md transition-all active:scale-95">Tạo Thư Mục</button>
           </div>
         </div>
@@ -341,7 +412,7 @@ export default function LibraryPage() {
               )}
               
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">File tài liệu (Có thể quét chọn nhiều file)</label>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">File tài liệu PDF</label>
                 <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <input type="file" accept=".pdf" multiple onChange={(e) => setDocFiles(Array.from(e.target.files || []))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   <FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
@@ -377,8 +448,8 @@ export default function LibraryPage() {
               Thư Viện Số <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </h1>
             
-            {/* Breadcrumb */}
-            <div className="flex items-center flex-wrap gap-2 text-sm font-bold bg-white/40 dark:bg-slate-800/40 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/60 dark:border-slate-700/50 w-fit">
+            {/* Breadcrumb đường dẫn */}
+            <div className="flex items-center flex-wrap gap-2 text-sm font-bold bg-white/40 dark:bg-slate-800/40 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/60 dark:border-slate-700/50 w-fit shadow-sm">
               {folderPath.map((step, index) => (
                 <div key={index} className="flex items-center gap-2"
                      onDragOver={(e) => { e.preventDefault(); setDragOverId(step.id || 'root') }}
@@ -396,7 +467,7 @@ export default function LibraryPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 items-center">
-            {/* THANH TÌM KIẾM */}
+            {/* Thanh Tìm kiếm */}
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
               <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm kiếm tài liệu..." className="w-full pl-9 pr-4 py-3 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
@@ -404,17 +475,17 @@ export default function LibraryPage() {
 
             {(userRole === 'admin' || userRole === 'collab') && (
               <>
-                {/* 🌟 NÚT GỌN GÀNG (SẮP XẾP A-Z) */}
+                {/* Sắp xếp A-Z */}
                 <button onClick={() => setSortByName(!sortByName)} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${sortByName ? 'bg-indigo-100 text-indigo-700 border-indigo-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
                   <ArrowUpDown className="w-5 h-5" /> {sortByName ? 'Xếp theo Ngày' : 'Gọn gàng (A-Z)'}
                 </button>
 
-                {/* NÚT CHỌN NHIỀU */}
+                {/* Sắp xếp (Chọn nhiều) */}
                 <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isSelectMode ? 'bg-amber-100 text-amber-700 border-amber-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
                   <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp (Chọn)'}
                 </button>
 
-                <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-white/60 transition-colors">
+                <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center center gap-2 shadow-sm hover:bg-white/60 transition-colors">
                   <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
                 </button>
                 <button onClick={() => setShowDocModal(true)} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(37,99,235,0.3)] transition-colors">
@@ -456,7 +527,7 @@ export default function LibraryPage() {
                             className={`group cursor-pointer flex flex-col items-center gap-3 relative p-4 rounded-3xl transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40'}`}>
                           
                           {isSelectMode && (
-                            <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600'}`}>
+                            <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
                               {isSelected && <CheckCircle2 className="w-3 h-3" />}
                             </div>
                           )}
@@ -484,8 +555,13 @@ export default function LibraryPage() {
                             draggable={!isSelectMode && (userRole === 'admin' || userRole === 'collab')}
                             onDragStart={(e) => handleDragStart(e, doc.id, 'document')}
                             onClick={(e) => {
-                              if (isSelectMode) { e.preventDefault(); toggleSelection(doc.id, 'document', doc); }
-                              else { window.open(`https://drive.google.com/file/d/${doc.drive_file_id}/view`, '_blank'); }
+                              if (isSelectMode) { 
+                                e.preventDefault(); 
+                                toggleSelection(doc.id, 'document', doc); 
+                              } else { 
+                                // 🌟 TỐI ƯU MỚI: Gọi Live Preview ngay trên ứng dụng thay vì văng tab Drive ngoài
+                                setPreviewDoc(doc); 
+                              }
                             }} 
                             className={`backdrop-blur-md rounded-2xl p-4 transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-1 hover:shadow-lg'}`}>
                           
@@ -499,9 +575,15 @@ export default function LibraryPage() {
                             <FileText className="w-6 h-6" />
                           </div>
                           <div className={`flex-1 overflow-hidden transition-all ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
-                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm">{doc.title}</h3>
+                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{doc.title}</h3>
                             <span className="text-[10px] font-bold text-slate-400 mt-1 block">{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
                           </div>
+                          
+                          {!isSelectMode && (
+                            <span className="absolute right-4 text-blue-500 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-xs transition-all font-bold">
+                              Đọc <Maximize2 className="w-3 h-3 ml-0.5" />
+                            </span>
+                          )}
                         </div>
                       )
                     })}
