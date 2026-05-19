@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Clock, ArrowLeft, Send, FileQuestion, LayoutList, 
-  UploadCloud, Bookmark, AlertTriangle, ShieldAlert, PlayCircle, Maximize2, Loader2, Award
+  UploadCloud, Bookmark, AlertTriangle, ShieldAlert, PlayCircle, Maximize2, Loader2, Move
 } from 'lucide-react'
 
 // IMPORT LINH KIỆN GIÁM THỊ AI
@@ -29,10 +29,10 @@ export default function ExamRoomPage() {
   const [isFullscreen, setIsFullscreen] = useState(false) 
   const violationsRef = useRef(0)
 
-  // CHỐNG RE-RENDER TRÊN IPHONE: Lưu trữ URL PDF tránh reload liên tục
+  // TÓI ƯU HÓA CHO IPHONE: Lưu trữ URL PDF tránh reload liên tục
   const [cachedPdfUrl, setCachedPdfUrl] = useState<string>('')
 
-  // KIỂM SOÁT LƯỢT THI CHÍNH XÁC
+  // KIỂM SOÁT LƯỢT THI
   const [attemptCount, setAttemptCount] = useState(0)
   const [isAttemptExceeded, setIsAttemptExceeded] = useState(false)
 
@@ -53,14 +53,17 @@ export default function ExamRoomPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      // 1. Lấy thông tin đề thi
+      // 1. Lấy dữ liệu cấu trúc đề
       const { data: examData, error } = await supabase.from('exams').select('*').eq('id', examId).single()
+      
+      // 🌟 ĐÃ SỬA LỖI: Thay thế !data bằng !examData chuẩn xác theo khai báo cấu trúc
       if (error || !examData) { alert('Đề thi không tồn tại!'); router.push('/exams'); return }
       
-      // Tối ưu hóa bộ nhớ đệm cho iPhone: Chỉ gán URL PDF một lần duy nhất
-      setCachedPdfUrl(`https://drive.google.com/file/d/${examData.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`)
+      if (examData.drive_file_id) {
+        setCachedPdfUrl(`https://drive.google.com/file/d/${examData.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`)
+      }
 
-      // 2. 🌟 FIX LỖI GIAN LẬN LƯỢT THI: Đếm chính xác số bài đã nộp của học sinh đối với đề này
+      // 2. Đo đo lường lượt làm bài chống lỗi lặp vô hạn ở đề thi ẩn
       const { count, error: countError } = await supabase
         .from('submissions')
         .select('*', { count: 'exact', head: true })
@@ -102,7 +105,7 @@ export default function ExamRoomPage() {
         width: 100% !important;
         height: 100% !important;
         inset: 0 !important;
-        -webkit-overflow-scrolling: touch; /* Tối ưu hóa cuộn mượt trên iPhone */
+        -webkit-overflow-scrolling: touch;
       }
     `
     document.head.appendChild(style)
@@ -238,7 +241,7 @@ export default function ExamRoomPage() {
   }
 
   const handleStartExam = async () => {
-    if (isAttemptExceeded) return; // Khóa tuyệt đối nếu vượt lượt thi
+    if (isAttemptExceeded) return;
 
     if (exam?.require_proctoring) {
       setIsRequestingCam(true);
@@ -350,7 +353,6 @@ export default function ExamRoomPage() {
     finally { setSubmitting(false) }
   }
 
-  // Khấu trừ index nhảy câu hỏi được ghi nhớ bằng useMemo tăng tốc độ cho iPhone
   const computedOffsets = useMemo(() => {
     const offsets: Record<string, number> = {}
     if (!exam || !exam.exam_structure) return offsets
@@ -364,7 +366,6 @@ export default function ExamRoomPage() {
 
   if (loading) return <div className="min-h-screen flex bg-slate-950 text-white items-center justify-center font-bold">Đang cấu trúc phòng thi ảo...</div>
 
-  // SCREEN 1: PHÒNG CHỜ THI (ĐÃ ĐƯỢC TỐI ƯU UI SANG TRỌNG)
   if (!hasStarted) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
@@ -379,22 +380,19 @@ export default function ExamRoomPage() {
           <div className="bg-slate-950/80 p-5 rounded-2xl text-left border border-white/5 shadow-inner mb-6 space-y-4">
             <h3 className="text-red-400 font-extrabold text-sm flex items-center gap-2 border-b border-white/5 pb-2"><AlertTriangle className="w-4 h-4"/> QUY CHẾ BẢO MẬT PHÒNG THI:</h3>
             <ul className="text-slate-300 text-xs space-y-3 font-medium list-none pl-1">
-              <li className="flex items-start gap-2"><span>-</span> <span>Hệ thống ép chế độ <b className="text-white">Toàn màn hình</b>. Mọi hành vi vuốt mép điều hướng trên điện thoại sẽ bị ngăn chặn.</span></li>
+              <li className="flex items-start gap-2"><span>-</span> <span>Hệ thống ép chế độ <b className="text-white">Toàn màn hình</b>. Mọi hành vi vuốt mép điều hướng sẽ bị phong tỏa.</span></li>
               <li className="flex items-start gap-2"><span>-</span> <span>Nghiêm cấm thoát màn hình, chuyển Tab. Vi phạm quá <b>3 lần</b> hệ thống tự động thu bài.</span></li>
-              <li className="flex items-start gap-2"><span>-</span> <span>Được cấp <b className="text-emerald-400">3 giây ân hạn</b> nếu lỡ tay thoát khỏi Fullscreen để nhấn khôi phục.</span></li>
               {exam?.require_proctoring && (
                 <li className="flex items-start gap-2 text-purple-300 bg-purple-950/30 p-2 rounded-lg border border-purple-800/30">
-                  <span>-</span> <span><b>Giám thị AI (Camera) đang bật:</b> Chặn đứng hành vi lôi điện thoại lên để chụp ảnh đề gửi AI giải hộ. (Hệ thống không phạt khi cúi đầu làm nháp).</span>
+                  <span>-</span> <span><b>Giám thị AI (Camera) đang bật:</b> Chặn đứng hành vi lôi điện thoại lên để chụp ảnh đề.</span>
                 </li>
               )}
             </ul>
           </div>
 
-          {/* 🌟 THÔNG BÁO CHẶN CHÍNH XÁC NẾU HẾT LƯỢT LÀM BÀI */}
           {isAttemptExceeded ? (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-center text-red-400 text-sm font-bold flex flex-col gap-2">
               <p>⛔ Bạn đã đạt giới hạn làm bài cho phép ({attemptCount}/{exam?.max_attempts} lượt).</p>
-              <p className="text-xs text-slate-500 font-medium">Vui lòng liên hệ giáo viên phụ trách để được cấp thêm lượt thi.</p>
             </div>
           ) : (
             <button onClick={handleStartExam} disabled={isRequestingCam} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-lg shadow-blue-600/20">
@@ -407,17 +405,16 @@ export default function ExamRoomPage() {
     )
   }
 
-  // SCREEN 2: SÂN THI CHÍNH THỨC
   return (
     <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none" style={{ overscrollBehaviorY: 'contain' }}>
       
-      {/* OVERLAY XÁC NHẬN NỘP BÀI (MODAL ẢO CHỐNG VĂNG FULLSCREEN) */}
+      {/* MODAL XÁC NHẬN NỘP BÀIẢO */}
       {showSubmitConfirm && (
         <div className="fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-800 text-center">
             <Send className="w-10 h-10 text-blue-500 mx-auto mb-3" />
             <h2 className="text-xl font-black text-slate-900 dark:text-white">Nộp bài thi?</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-xs font-bold mb-6">Bạn có chắc chắn muốn kết thúc bài thi? Sau khi nộp kết quả sẽ được ghi nhận ngay.</p>
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-bold mb-6">Bạn có chắc chắn muốn kết thúc bài thi ngay bây giờ?</p>
             <div className="flex gap-2">
               <button onClick={() => setShowSubmitConfirm(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl font-bold text-xs">Quay lại</button>
               <button onClick={() => { setShowSubmitConfirm(false); processSubmit(false); }} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-xs shadow-md">Xác nhận nộp</button>
@@ -426,14 +423,13 @@ export default function ExamRoomPage() {
         </div>
       )}
 
-      {/* OVERLAY CẢNH BÁO VI PHẠM (MODAL ẢO CHỐNG KHÓA CAM IPAD) */}
+      {/* OVERLAY CẢNH BÁO VI PHẠM ẢO */}
       {violationAlert && (
         <div className="fixed inset-0 z-[9999] bg-red-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
           <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] border border-red-500/30 max-w-md w-full shadow-2xl space-y-4">
             <ShieldAlert className="w-14 h-14 text-red-500 mx-auto animate-bounce" />
             <h2 className="text-xl font-black text-white">{violationAlert.title}</h2>
             <p className="text-xs font-bold text-slate-300 leading-relaxed whitespace-pre-wrap">{violationAlert.desc}</p>
-            
             {!violationAlert.isFatal ? (
               <button onClick={() => setViolationAlert(null)} className="w-full bg-red-600 text-white font-black py-3 rounded-xl shadow-md text-xs">Tôi đã hiểu & Tiếp tục làm bài</button>
             ) : (
@@ -449,98 +445,95 @@ export default function ExamRoomPage() {
           <div className="bg-slate-900 p-6 rounded-2xl border border-red-500/40 max-w-sm shadow-2xl space-y-4">
             <AlertTriangle className="w-12 h-12 text-red-500 mx-auto animate-pulse" />
             <h2 className="text-lg font-black text-white">MẤT KẾT NỐI AN TOÀN!</h2>
-            <p className="text-xs font-medium text-slate-300">Hệ thống phát hiện cử chỉ thoát màn hình bảo mật. Vui lòng bấm khôi phục ngay lập tức.</p>
+            <p className="text-xs font-medium text-slate-300">Hệ thống phát hiện cử chỉ thoát màn hình bảo mật.</p>
             <div className="text-3xl font-black text-red-500 animate-pulse">Còn lại: {graceCountdown} giây</div>
             <button onClick={requestFullscreenMode} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black py-3 rounded-xl text-xs">Khôi phục Toàn màn hình</button>
           </div>
         </div>
       )}
 
-      {/* GIÁM THỊ AI LINH HOẠT CHẠY ẨN ĐÈ TRÊN GIAO DIỆN */}
+      {/* GIÁM THỊ AI */}
       {hasStarted && exam?.require_proctoring && (
-        <div className="fixed bottom-4 left-4 z-[100] shadow-2xl border border-white/10 rounded-2xl overflow-hidden opacity-90 hover:opacity-100 transition-opacity">
+        <div className="fixed bottom-4 left-4 z-[100] shadow-2xl border border-white/10 rounded-2xl overflow-hidden opacity-90">
           <ProctorCamera onViolation={handleProctorViolation} />
         </div>
       )}
 
       <header className="h-16 bg-white dark:bg-slate-900 border-b flex items-center justify-between px-4 md:px-6 shrink-0 z-10 shadow-sm">
         <div className="flex items-center gap-4">
-          <button onClick={() => { if(confirm("Rời phòng thi lúc này bài thi sẽ bị hủy và không lưu kết quả?")) { const doc = document as any; if(doc.fullscreenElement || doc.webkitFullscreenElement) { if(doc.exitFullscreen) doc.exitFullscreen().catch(()=>{}); else if(doc.webkitExitFullscreen) doc.webkitExitFullscreen().catch(()=>{}); } router.push('/exams') } }} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><ArrowLeft className="w-4 h-4" /></button>
+          <button onClick={() => { if(confirm("Hủy bài thi hiện tại?")) { const doc = document as any; if(doc.fullscreenElement || doc.webkitFullscreenElement) { if(doc.exitFullscreen) doc.exitFullscreen().catch(()=>{}); } router.push('/exams') } }} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><ArrowLeft className="w-4 h-4" /></button>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 border rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0"><img src="/logo.png" alt="Logo" className="w-full h-full object-contain" /></div>
             <div>
               <h1 className="font-extrabold text-xs md:text-sm max-w-[180px] md:max-w-xs truncate">{exam?.title}</h1>
               <div className="flex gap-2 mt-0.5 text-[9px] md:text-[10px] font-bold">
-                <span className={`px-1.5 py-0.5 rounded ${violations > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40'}`}>Vi phạm: {violations}/3</span>
-                {!isFullscreen && <button onClick={requestFullscreenMode} className="text-blue-600 dark:text-blue-400 underline">Bật Fullscreen</button>}
+                <span className={`px-1.5 py-0.5 rounded ${violations > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-emerald-100 text-emerald-700'}`}>Vi phạm: {violations}/3</span>
               </div>
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-4 md:gap-6">
-          <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-black text-sm md:text-lg border-2 ${timeLeft < 300 ? 'text-red-600 border-red-200 bg-red-50 animate-pulse' : 'text-blue-600 border-blue-100 bg-blue-50/50 dark:bg-blue-950/30 dark:border-blue-900/40'}`}><Clock className="w-4 h-4 md:w-5 md:h-5"/>{formatTime(timeLeft)}</div>
-          <button onClick={handleManualSubmit} disabled={submitting} className="flex gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold text-xs md:text-sm shadow-md shadow-blue-600/10"><Send className="w-3.5 h-3.5"/>Nộp bài</button>
+          <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-black text-sm md:text-lg border-2 ${timeLeft < 300 ? 'text-red-600 border-red-200 bg-red-50 animate-pulse' : 'text-blue-600 border-blue-100 bg-blue-50/50 dark:bg-blue-950/30'}`}><Clock className="w-4 h-4 md:w-5 md:h-5"/>{formatTime(timeLeft)}</div>
+          <button onClick={handleManualSubmit} disabled={submitting} className="flex gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold text-xs md:text-sm shadow-md"><Send className="w-3.5 h-3.5"/>Nộp bài</button>
         </div>
       </header>
 
-      {/* KHÔNG GIAN LÀM BÀI SÂN THI */}
+      {/* GIAO DIỆN PHÂN CHIA PHÒNG THI THÍ THÍCH ỨNG ĐA PHƯƠNG THỨC */}
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
         
-        {/* KHUNG TRÁI: KHUNG ĐỀ GỐC CỐ ĐỊNH URL CHO IPHONE MƯỢT MÀ */}
-        <div className="flex-1 h-[40vh] md:h-full relative bg-slate-900/5">
-          <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
-        </div>
+        {/* KHUNG TRÁI: CHỈ HIỂN THỊ NẾU ĐỀ LÀ CHẾ ĐỘ PDF_MODE */}
+        {exam?.creation_mode !== 'interactive_mode' && (
+          <div className="flex-1 h-[40vh] md:h-full relative bg-slate-900/5">
+            <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
+          </div>
+        )}
         
-        {/* KHUNG PHẢI: PHIẾU ĐÁP ÁN (TỐI ƯU GIAO DIỆN) */}
-        <div className="w-full md:w-[420px] lg:w-[460px] h-[60vh] md:h-full bg-white dark:bg-slate-900 flex flex-col border-l dark:border-slate-800 overflow-hidden shrink-0">
+        {/* KHUNG PHẢI: HOẶC TOÀN MÀN HÌNH NẾU LÀ INTERACTIVE_MODE */}
+        <div className={`h-full bg-white dark:bg-slate-900 flex flex-col overflow-hidden ${exam?.creation_mode === 'interactive_mode' ? 'w-full' : 'w-full md:w-[420px] lg:w-[460px] border-l dark:border-slate-800'}`}>
           
           {/* Bảng điều hướng nhanh */}
-          <div className="shrink-0 bg-slate-50/50 dark:bg-slate-900/60 border-b p-4 max-h-[35vh] overflow-y-auto custom-scrollbar">
+          <div className="shrink-0 bg-slate-50/50 dark:bg-slate-900/60 border-b p-4 max-h-[30vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
-              <LayoutList className="w-3.5 h-3.5 text-blue-500" /> Bản đồ câu hỏi
+              <LayoutList className="w-3.5 h-3.5 text-blue-500" /> Sơ đồ câu hỏi phòng thi
             </div>
-            <div className="space-y-3">
-              {exam?.exam_structure?.map((section: any) => (
-                <div key={section.id} className="bg-white dark:bg-slate-950/40 p-2.5 rounded-xl border dark:border-slate-800">
-                  <p className="text-[10px] font-extrabold text-slate-400 truncate mb-2 uppercase">▪ {section.name}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.from({ length: section.questionCount }).map((_, qIdx) => {
-                      const key = `${section.id}-${qIdx}`; 
-                      const isAnswered = answers[key] !== undefined && (typeof answers[key] === 'object' ? Object.keys(answers[key]).length > 0 : String(answers[key]).trim() !== '')
-                      const globalNum = qIdx + (computedOffsets[section.id] || 0) + 1;
-                      
-                      return (
-                        <button 
-                          key={qIdx} 
-                          onClick={() => {
-                            const targetEl = document.getElementById(`q-${key}`);
-                            if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }} 
-                          className={`w-8 h-8 text-[11px] font-black rounded-lg border transition-all flex items-center justify-center shrink-0 ${
-                            savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 
-                            isAnswered ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 
-                            'bg-slate-100/80 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                          }`}
-                        >
-                          {globalNum}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div className="flex flex-wrap gap-2">
+              {exam?.exam_structure?.map((section: any) => 
+                Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                  const key = `${section.id}-${qIdx}`; 
+                  const isAnswered = answers[key] !== undefined && (typeof answers[key] === 'object' ? Object.keys(answers[key]).length > 0 : String(answers[key]).trim() !== '')
+                  const globalNum = qIdx + (computedOffsets[section.id] || 0) + 1;
+                  
+                  return (
+                    <button 
+                      key={key} 
+                      onClick={() => {
+                        const targetEl = document.getElementById(`q-${key}`);
+                        if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }} 
+                      className={`w-8 h-8 text-[11px] font-black rounded-lg border transition-all flex items-center justify-center ${
+                        savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 
+                        isAnswered ? 'bg-blue-600 text-white border-blue-600' : 
+                        'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                      }`}
+                    >
+                      {globalNum}
+                    </button>
+                  )
+                })
+              )}
             </div>
           </div>
 
-          {/* Phiếu tô chi tiết */}
-          <div className="flex-1 p-4 space-y-6 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900/20">
+          {/* Nội dung câu hỏi chi tiết chi tiết */}
+          <div className={`flex-1 p-4 overflow-y-auto custom-scrollbar bg-slate-50/30 dark:bg-slate-900/10 ${exam?.creation_mode === 'interactive_mode' ? 'max-w-4xl mx-auto w-full space-y-8 py-8' : 'space-y-6'}`}>
             {exam?.exam_structure?.map((section: any) => (
-              <div key={section.id} className="bg-slate-50/50 dark:bg-slate-900/40 p-4 rounded-2xl border dark:border-slate-800">
-                <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-4 border-b dark:border-slate-800 pb-2">
+              <div key={section.id} className="bg-white dark:bg-slate-950 p-5 rounded-2xl border dark:border-slate-800 shadow-sm space-y-6">
+                <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5 border-b dark:border-slate-800 pb-2">
                   <FileQuestion className="w-4 h-4 text-blue-500"/> {section.name}
                 </h3>
-                <div className="space-y-4">
+                
+                <div className="space-y-6">
                   {Array.from({ length: section.questionCount }).map((_, qIdx) => {
                     const key = `${section.id}-${qIdx}`; 
                     const currentAns = answers[key];
@@ -560,17 +553,24 @@ export default function ExamRoomPage() {
                     }
 
                     return (
-                      <div key={qIdx} id={`q-${key}`} className={`p-3.5 bg-white dark:bg-slate-950 border dark:border-slate-800/80 rounded-xl shadow-sm space-y-3 transition-all ${savedQuestions[key] ? 'border-amber-400 dark:border-amber-500 bg-amber-500/5' : ''}`}>
-                        <div className="flex justify-between items-center border-b dark:border-slate-900 pb-1.5">
-                          <span className="font-extrabold text-xs text-slate-500">Câu hỏi {globalQNumber}:</span>
-                          <button onClick={() => toggleSaveQuestion(section.id, qIdx)} className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 'text-slate-400 border-slate-200 dark:border-slate-700'}`}>
-                            <Bookmark className="w-3 h-3"/> {savedQuestions[key] ? 'Đã lưu' : 'Ghim câu'}
+                      <div key={qIdx} id={`q-${key}`} className={`p-4 bg-slate-50/50 dark:bg-slate-900/40 border dark:border-slate-800 rounded-xl space-y-3 transition-all ${savedQuestions[key] ? 'border-amber-400 bg-amber-500/5' : ''}`}>
+                        <div className="flex justify-between items-center border-b dark:border-slate-800 pb-2">
+                          <span className="font-black text-xs text-blue-600 dark:text-blue-400">Câu hỏi {globalQNumber}:</span>
+                          <button onClick={() => toggleSaveQuestion(section.id, qIdx)} className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 'text-slate-400'}`}>
+                            <Bookmark className="w-3 h-3"/> {savedQuestions[key] ? 'Đã ghim' : 'Ghim câu'}
                           </button>
                         </div>
+
+                        {exam?.creation_mode === 'interactive_mode' && section.questionTexts?.[qIdx] && (
+                          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-relaxed mb-4 bg-white dark:bg-slate-950 p-3 rounded-xl border dark:border-slate-800 whitespace-pre-wrap">
+                            {section.questionTexts[qIdx]}
+                          </div>
+                        )}
+
                         <div className="pt-1">
+                          {currentType === 'single_choice' && <div className="flex gap-2.5 flex-wrap">{Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className={`w-9 h-9 rounded-full border text-xs font-black transition-all ${currentAns === l ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-700'}`}>{l}</button> })}</div>}
                           
-                          {currentType === 'single_choice' && <div className="flex gap-2.5 flex-wrap">{Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className={`w-9 h-9 rounded-full border text-xs font-black transition-all ${currentAns === l ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>{l}</button> })}</div>}
-                          {currentType === 'multiple_choice' && <div className="flex gap-2.5 flex-wrap">{Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-9 h-9 rounded-lg border text-xs font-black transition-all ${isSel ? 'bg-purple-600 border-purple-600 text-white shadow-md' : 'bg-slate-50 dark:bg-slate-800 text-slate-700 border-slate-200 dark:border-slate-700'}`}>{l}</button> })}</div>}
+                          {currentType === 'multiple_choice' && <div className="flex gap-2.5 flex-wrap">{Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-9 h-9 rounded-lg border text-xs font-black transition-all ${isSel ? 'bg-purple-600 text-white' : 'bg-white dark:bg-slate-800'}`}>{l}</button> })}</div>}
                           
                           {currentType === 'true_false' && (
                             <div className="space-y-2 text-xs font-bold">
@@ -579,17 +579,41 @@ export default function ExamRoomPage() {
                                 return (
                                   <div key={subLabel} className="flex items-center gap-3">
                                     <span className="text-slate-400 w-5 font-black">Ý {subLabel}:</span>
-                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'Đ')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black transition-all ${subVal === 'Đ' ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-800 text-slate-700 border-slate-200 dark:border-slate-700'}`}>Đúng</button>
-                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'S')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black transition-all ${subVal === 'S' ? 'bg-red-500 border-red-500 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-800 text-slate-700 border-slate-200 dark:border-slate-700'}`}>Sai</button>
+                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'Đ')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black ${subVal === 'Đ' ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white dark:bg-slate-800'}`}>Đúng</button>
+                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'S')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black ${subVal === 'S' ? 'bg-red-500 border-red-500 text-white' : 'bg-white dark:bg-slate-800'}`}>Sai</button>
                                   </div>
                                 )
                               })}
                             </div>
                           )}
 
-                          {currentType === 'short_answer' && <input type="text" value={currentAns || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, e.target.value)} placeholder="Nhập câu trả lời ngắn..." className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-blue-500 shadow-inner" />}
-                          {currentType === 'essay' && <div className="space-y-2"><textarea value={currentAns?.text || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, text: e.target.value })} placeholder="Gõ lời giải tự luận..." className="w-full min-h-[100px] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500" /><div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900 rounded-xl border dark:border-slate-800 shadow-inner"><UploadCloud className="text-blue-500 w-4 h-4 shrink-0"/><input type="file" onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, file: e.target.files?.[0] })} className="text-[10px] text-slate-500 w-full"/></div></div>}
-                        
+                          {currentType === 'short_answer' && <input type="text" value={currentAns || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, e.target.value)} placeholder="Nhập kết quả số hoặc biểu thức..." className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-blue-500 shadow-inner" />}
+                          
+                          {currentType === 'drag_drop' && (
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap gap-2 bg-white dark:bg-slate-950 p-2.5 rounded-xl border dark:border-slate-800 min-h-12 items-center">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Lựa chọn:</span>
+                                {section.dragDropOptions?.[qIdx]?.map((opt: string) => (
+                                  <button 
+                                    type="button"
+                                    key={opt}
+                                    onClick={() => handleAnswerSelect(section.id, qIdx, opt)}
+                                    className={`px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border rounded-lg text-xs font-bold hover:bg-blue-50 transition-colors flex items-center gap-1 ${currentAns === opt ? 'ring-2 ring-blue-500 text-blue-600 bg-blue-50/50' : ''}`}
+                                  >
+                                    <Move className="w-3 h-3 text-slate-400" /> {opt}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="text-xs font-bold flex items-center gap-2">
+                                <span className="text-slate-400">Kết quả thả vào ô trống:</span>
+                                <span className={`px-4 py-2 rounded-lg border-2 border-dashed ${currentAns ? 'bg-blue-600/10 text-blue-600 border-blue-500 font-extrabold' : 'border-slate-300 text-slate-400 italic'}`}>
+                                  {currentAns || 'Chưa thả từ khóa'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {currentType === 'essay' && <div className="space-y-2"><textarea value={currentAns?.text || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, text: e.target.value })} placeholder="Gõ lời giải tự luận..." className="w-full min-h-[100px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500" /><div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900 rounded-xl border dark:border-slate-800 shadow-inner"><UploadCloud className="text-blue-500 w-4 h-4 shrink-0"/><input type="file" onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, file: e.target.files?.[0] })} className="text-[10px] text-slate-500 w-full"/></div></div>}
                         </div>
                       </div>
                     )
