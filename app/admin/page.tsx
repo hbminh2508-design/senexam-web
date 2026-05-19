@@ -7,7 +7,7 @@ import {
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
   CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
-  Wand2, Sparkles, Crown, Camera, Sparkle
+  Wand2, Sparkles, Crown, Camera, Sparkle, Move
 } from 'lucide-react'
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
@@ -57,8 +57,6 @@ export default function AdminDashboard() {
   const [isHiddenExam, setIsHiddenExam] = useState(false)
   
   const [requireProctoring, setRequireProctoring] = useState(false)
-  
-  // Phương thức soạn đề (pdf_mode / interactive_mode)
   const [creationMode, setCreationMode] = useState<'pdf_mode' | 'interactive_mode'>('pdf_mode')
 
   const [autoFillModalId, setAutoFillModalId] = useState<string | null>(null)
@@ -240,19 +238,28 @@ export default function AdminDashboard() {
     }))
   }
 
+  // 🌟 THUẬT TOÁN ĐỘC QUYỀN MỚI: BÓC TÁCH TOÀN DIỆN MÃ NGUỒN LATEX ĐỂ PHÂN LOẠI TỰ ĐỘNG KHÔNG NHIỄU DẤU CHẤM/DẤU PHẨY 🌟
   const handleProcessAutoFill = () => {
     if (!autoFillModalId) return
     const section = examStructure.find(s => s.id === autoFillModalId)
     if (!section) return
 
-    const rawText = autoFillText.trim()
+    let rawText = autoFillText.trim()
 
     try {
+      // BƯỚC 1: Nếu phát hiện tài liệu có bọc \begin{document} ... \end{document}, tự động cắt lấy phần lõi
+      if (rawText.includes('\\begin{document}')) {
+        const startDoc = rawText.indexOf('\\begin{document}') + '\\begin{document}'.length
+        const endDoc = rawText.includes('\\end{document}') ? rawText.indexOf('\\end{document}') : rawText.length
+        rawText = rawText.substring(startDoc, endDoc).trim()
+      }
+
+      // BƯỚC 2: Cắt nhỏ tệp tin dựa vào mốc phân tách câu hỏi, bỏ qua dấu chấm, dấu phẩy, dấu hai chấm lỗi
       const regexPattern = /(?:^|\s)(?:câu|bài|question|q)?\s*([1-9]\d*)[\.\:\-\)\,\s]\s*([\s\S]*?)(?=(?:\s*(?:câu|bài|question|q)?\s*[1-9]\d*[\.\:\-\)\,\s])|$)/gi
       const matches = [...rawText.matchAll(regexPattern)]
       
       if (matches.length === 0) {
-        alert("Hệ thống chưa nhận diện được cấu trúc văn bản. Đảm bảo cấu trúc thô có định dạng sạch như 'Câu 1. A' hoặc '1: B'")
+        alert("Cú pháp phân tách thất bại. Vui lòng đảm bảo văn bản hoặc mã lệnh chứa cấu trúc dạng 'Câu 1.' hoặc '1.'")
         return
       }
 
@@ -268,8 +275,11 @@ export default function AdminDashboard() {
           
           let lines = content.split('\n').map(l => l.trim()).filter(Boolean)
           let lastLine = lines[lines.length - 1] || ''
-          let upperLastLine = lastLine.toUpperCase().replace(/Đ/g, 'D').replace(/[\.\,\:\s]/g, '')
+          
+          // Bộ lọc chống nhiễu: Loại bỏ các ký tự dấu câu thừa ở dòng chứa đáp án cuối cùng
+          let cleanLastLine = lastLine.toUpperCase().replace(/Đ/g, 'D').replace(/[\.\,\:\s\-]/g, '')
 
+          // DẠNG 1: Kéo thả (Drag & Drop) chứa biểu mẫu [___]
           if (content.includes('[___]') || content.includes('___')) {
             detectedTypes[qNum] = 'drag_drop'
             newQuestionTexts[qNum] = content
@@ -279,19 +289,21 @@ export default function AdminDashboard() {
               newDragDropOptions[qNum] = optionsPart.split(/[\,\|]/).map(o => o.trim())
               newAnswers[qNum] = optionsPart.split(/[\,\|]/).map(o => o.trim())[0] || ''
             } else {
-              newAnswers[qNum] = lastLine
+              newAnswers[qNum] = lastLine.replace(/[\.\,\:]/g, '').trim()
             }
           }
-          else if (/^[A-D]$/.test(upperLastLine)) {
+          // DẠNG 2: Trắc nghiệm cơ bản 1 lựa chọn (A/B/C/D)
+          else if (/^[A-D]$/.test(cleanLastLine)) {
             detectedTypes[qNum] = 'single_choice'
-            newAnswers[qNum] = upperLastLine
+            newAnswers[qNum] = cleanLastLine
             newQuestionTexts[qNum] = lines.slice(0, -1).join('\n')
           } 
-          else if (/^([DS])([DS])([DS])([DS])$/.test(upperLastLine) || lines.filter(l => l.startsWith('a)') || l.startsWith('b)')).length > 0) {
+          // DẠNG 3: Đúng / Sai 4 ý
+          else if (/^([DS])([DS])([DS])([DS])$/.test(cleanLastLine) || lines.filter(l => l.startsWith('a)') || l.startsWith('b)')).length > 0) {
             detectedTypes[qNum] = 'true_false'
             
-            if (/^([DS])([DS])([DS])([DS])$/.test(upperLastLine)) {
-              const parts = upperLastLine.match(/([DS])/g)
+            if (/^([DS])([DS])([DS])([DS])$/.test(cleanLastLine)) {
+              const parts = cleanLastLine.match(/([DS])/g)
               newAnswers[qNum] = {
                 a: parts![0] === 'D' ? 'Đ' : 'S',
                 b: parts![1] === 'D' ? 'Đ' : 'S',
@@ -304,16 +316,18 @@ export default function AdminDashboard() {
               newQuestionTexts[qNum] = content
             }
           } 
+          // DẠNG 4: Điền số hoặc công thức toán học tự luận ngắn chứa mã lệnh LaTeX
           else {
             detectedTypes[qNum] = 'short_answer'
-            newAnswers[qNum] = lastLine
+            // Chống nhiễu dấu phẩy, dấu chấm nhưng giữ lại ký tự nếu là công thức số thập phân
+            newAnswers[qNum] = lastLine.replace(/[\:\-]/g, '').trim()
             newQuestionTexts[qNum] = lines.slice(0, -1).join('\n') || content
           }
         }
       })
 
       const uniqueTypes = new Set(Object.values(detectedTypes))
-      if (uniqueTypes.size === 0) throw new Error("Không giải mã được cấu trúc tệp dữ liệu đáp án.")
+      if (uniqueTypes.size === 0) throw new Error("Không giải mã được cấu trúc.")
 
       setExamStructure(prev => prev.map(s => {
         if (s.id === section.id) {
@@ -360,9 +374,9 @@ export default function AdminDashboard() {
 
       setAutoFillModalId(null)
       setAutoFillText('')
-      alert('🌟 Sen Magic Paste đã phân tách thực thể câu hỏi, giữ cấu trúc công thức LaTeX và chia loại bài thi thành công!')
+      alert('🌟 Sen Magic Paste Ultra đã tự động loại bỏ các khối gói lệnh dư thừa, bóc tách chính xác phần ruột câu hỏi chứa công thức LaTeX và đồng bộ cấu trúc bài thi thành công!')
     } catch (err: any) {
-      alert(err.message || 'Lỗi bóc tách định dạng!')
+      alert(err.message || 'Lỗi xử lý hệ thống!')
     }
   }
 
@@ -651,7 +665,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen flex bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 relative font-sans overflow-x-hidden">
       
-      {/* 🌟 MODAL SEN MAGIC PASTE: THUẬT TOÁN NHẬN DIỆN VÀ ĐIỀN ĐÁP ÁN TỰ ĐỘNG */}
+      {/* MODAL SEN MAGIC PASTE: THUẬT TOÁN NHẬN DIỆN VÀ ĐIỀN ĐÁP ÁN TỰ ĐỘNG */}
       {autoFillModalId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 max-w-2xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 relative">
@@ -662,37 +676,36 @@ export default function AdminDashboard() {
                 <Sparkles className="w-6 h-6 text-amber-500 drop-shadow-sm"/>
               </div>
               <div>
-                <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-orange-500">Sen Magic Paste Ultra</h2>
-                <p className="text-sm font-medium text-slate-500">Tách thực thể $\LaTeX$, hỗ trợ bóc câu hỏi kéo thả, lọc nhiễu định dạng.</p>
+                <h2 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-orange-500">Sen Magic Paste Ultra 2026</h2>
+                <p className="text-sm font-medium text-slate-500">Hỗ trợ import mã nguồn $\LaTeX$ nguyên khối độc quyền, tự lọc bỏ gói lệnh khai báo thừa.</p>
               </div>
             </div>
 
             <div className="space-y-4 mb-6">
               <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl text-xs font-medium text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30">
-                <span className="font-bold">Gợi ý định dạng bóc tách:</span><br/>
-                {/* 🌟 ĐÃ SỬA LỖI: Bọc chuỗi ký tự chứa dấu mũi tên lớn hơn vào cặp ngoặc chuỗi của JSX để tránh lỗi Unexpected Token */}
-                - Kéo thả: <code>{"Câu 1. Điền vào vùng trống [___] -> Đáp án đúng"}</code><br/>
-                - Trắc nghiệm / Điền số chứa $\LaTeX$: <code>{"Câu 2. Tính tích phân $\\int_0^1 x dx$ . Cú pháp: 0.5"}</code><br/>
+                <span className="font-bold">Đặc quyền Import $\LaTeX$ nguyên khối:</span><br/>
+                - Giáo viên có thể dán toàn bộ file chứa từ <code>{"\\documentclass"}</code>, <code>{"\\begin{document}"}</code> đến hết. Hệ thống tự động lọc bỏ phần rác lệnh khai báo và bóc tách dữ liệu.<br/>
+                - Kéo thả: <code>{"Câu 1. Vùng trống [___] -> Từ khóa"}</code><br/>
               </div>
               
               <textarea 
                 value={autoFillText} 
                 onChange={(e) => setAutoFillText(e.target.value)} 
-                placeholder="Dán nội dung đáp án của giáo viên vào đây..." 
+                placeholder="Dán toàn bộ mã nguồn LaTeX hoặc văn bản chứa danh sách câu hỏi vào đây..." 
                 className="w-full h-48 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500 custom-scrollbar shadow-inner"
               />
               
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-500 flex items-center gap-2 cursor-pointer hover:text-amber-600 transition-colors">
-                  <UploadCloud className="w-4 h-4"/> Tải file Text (.txt) lên
-                  <input type="file" accept=".txt,.csv" onChange={handleAnswerFileRead} className="hidden" />
+                  <UploadCloud className="w-4 h-4"/> Tải file mã nguồn (.txt, .tex) lên
+                  <input type="file" accept=".txt,.csv,.tex" onChange={handleAnswerFileRead} className="hidden" />
                 </label>
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Hệ thống chống lỗi dấu phẩy đang bật</span>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded">Hệ thống bóc tách thực thể chống nhiễu đang bật</span>
               </div>
             </div>
 
             <button onClick={handleProcessAutoFill} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold py-3.5 rounded-xl shadow-[0_4px_15px_rgba(245,158,11,0.3)] transition-transform active:scale-95 flex items-center justify-center gap-2">
-              <Wand2 className="w-5 h-5"/> Xử lý & Phân tích cấu trúc tương tác
+              <Wand2 className="w-5 h-5"/> Xử lý & Đồng bộ cấu trúc tương tác
             </button>
           </div>
         </div>
@@ -943,7 +956,7 @@ export default function AdminDashboard() {
                                 <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-xs font-bold bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"><KeyRound className="w-4 h-4"/> {editingKeysSectionId === section.id ? 'Thu gọn nội dung và đáp án câu hỏi' : 'Cấu hình đáp án & Văn bản câu hỏi'}</button>
                                 
                                 <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-xs font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-xl flex items-center gap-1.5 hover:bg-amber-200 transition-colors shadow-sm border border-amber-200 dark:border-amber-800">
-                                  <Sparkles className="w-4 h-4"/> Bóc tách văn bản hệ thống tương tác
+                                  <Sparkles className="w-4 h-4"/> Bóc tách mã nguồn LaTeX nguyên khối
                                 </button>
                               </div>
 
