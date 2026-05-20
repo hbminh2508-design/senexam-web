@@ -15,6 +15,7 @@ const glassCardStyles = "liquid-panel"
 type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
 
 export default function LibraryPage() {
+  // build-fix: ensure all hooks are defined in component scope (moved search useEffect outside JSX)
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string>('student')
