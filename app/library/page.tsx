@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
   UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
-  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink
+  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink,
+  Image, Video, Music, Palette
 } from 'lucide-react'
 
 const glassCardStyles = "liquid-panel"
@@ -25,6 +26,14 @@ export default function LibraryPage() {
   const currentFolderId = folderPath[folderPath.length - 1].id
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [isCompact, setIsCompact] = useState(false)
+
+  // Folder customizations (color, icon) stored in localStorage to avoid DB migration
+  const [folderCustomizations, setFolderCustomizations] = useState<Record<string, { color?: string, icon?: string }>>({})
+  const [showFolderSettingsModal, setShowFolderSettingsModal] = useState(false)
+  const [folderSettingsTarget, setFolderSettingsTarget] = useState<any | null>(null)
+  const [folderSettingsColor, setFolderSettingsColor] = useState<string | undefined>(undefined)
+  const [folderSettingsIcon, setFolderSettingsIcon] = useState<string | undefined>(undefined)
   
   // STATE: SẮP XẾP A-Z
   const [sortByName, setSortByName] = useState(false)
@@ -54,6 +63,10 @@ export default function LibraryPage() {
   const [renameTarget, setRenameTarget] = useState<SelectedItem | null>(null)
   const [renameInput, setRenameInput] = useState('')
 
+  // Global search results (search across whole library regardless of current folder)
+  const [searchFoldersResults, setSearchFoldersResults] = useState<any[] | null>(null)
+  const [searchDocsResults, setSearchDocsResults] = useState<any[] | null>(null)
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -72,6 +85,13 @@ export default function LibraryPage() {
     init()
   }, [router])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('library_folder_customizations')
+      if (raw) setFolderCustomizations(JSON.parse(raw))
+    } catch (e) { /* ignore */ }
+  }, [])
+
   const fetchContents = async (folderId: string | null) => {
     const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
     if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null);
@@ -80,7 +100,19 @@ export default function LibraryPage() {
     if (folderId) docQuery.eq('folder_id', folderId); else docQuery.is('folder_id', null);
 
     const [folderRes, docRes] = await Promise.all([folderQuery, docQuery])
-    setFolders(folderRes.data || [])
+    const fdata = folderRes.data || []
+    setFolders(fdata)
+    // Đồng bộ màu/icon từ DB vào trạng thái client và localStorage
+    try {
+      const map: Record<string, { color?: string, icon?: string }> = {}
+      for (const f of fdata) {
+        if (f.id && (f.color || f.icon)) map[f.id] = { color: f.color, icon: f.icon }
+      }
+      if (Object.keys(map).length > 0) {
+        setFolderCustomizations(map)
+        try { localStorage.setItem('library_folder_customizations', JSON.stringify(map)) } catch (e) {}
+      }
+    } catch (e) { /* ignore */ }
     setDocuments(docRes.data || [])
   }
 
@@ -137,6 +169,7 @@ export default function LibraryPage() {
         const fileId = (await uploadRes.json()).id;
 
         setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
+        // Lưu trữ thông tin tệp cơ bản (không giả định schema mới trên DB)
         const { error: dbError } = await supabase.from('library_documents').insert({
           folder_id: currentFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
         })
@@ -244,9 +277,44 @@ export default function LibraryPage() {
     if (!error) setDocuments(documents.filter(d => d.id !== id))
   }
 
+  const openFolderSettings = (folder: any) => {
+    setFolderSettingsTarget(folder)
+    const meta = folderCustomizations[folder.id] || {}
+    setFolderSettingsColor(meta.color)
+    setFolderSettingsIcon(meta.icon)
+    setShowFolderSettingsModal(true)
+  }
+
+  const saveFolderSettings = () => {
+    if (!folderSettingsTarget) return
+    const id = folderSettingsTarget.id
+    const next = { ...folderCustomizations, [id]: { color: folderSettingsColor, icon: folderSettingsIcon } }
+    setFolderCustomizations(next)
+    try { localStorage.setItem('library_folder_customizations', JSON.stringify(next)) } catch (e) {}
+    // Cập nhật vào Supabase để đồng bộ giữa thiết bị
+    (async () => {
+      try {
+        await supabase.from('library_folders').update({ color: folderSettingsColor || null, icon: folderSettingsIcon || null }).eq('id', id)
+        // Cập nhật nhanh state folders
+        setFolders(prev => prev.map(f => f.id === id ? { ...f, color: folderSettingsColor, icon: folderSettingsIcon } : f))
+      } catch (e) { console.warn('Không thể lưu cấu hình thư mục lên DB', e) }
+    })()
+    setShowFolderSettingsModal(false)
+  }
+
   // ÁP DỤNG THUẬT TOÁN TÌM KIẾM & SẮP XẾP TỰ NHIÊN (NATURAL SORT)
-  let displayFolders = folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  let displayDocuments = documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
+  // Helper to detect file kind from title extension
+  const getFileKind = (title: string) => {
+    const t = title.toLowerCase()
+    if (t.match(/\.(mp4|mov|webm|mkv)$/)) return 'video'
+    if (t.match(/\.(mp3|wav|ogg|m4a)$/)) return 'audio'
+    if (t.match(/\.(jpe?g|png|gif|bmp|webp|heic)$/)) return 'image'
+    if (t.match(/\.pdf$/)) return 'pdf'
+    return 'other'
+  }
+
+  let displayFolders = searchFoldersResults !== null ? (searchFoldersResults) : folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  let displayDocuments = searchDocsResults !== null ? (searchDocsResults) : documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
   if (sortByName) {
     displayFolders.sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' }));
@@ -315,13 +383,24 @@ export default function LibraryPage() {
               </div>
             </div>
 
-            {/* Khung nhúng Iframe tài liệu mượt mà */}
-            <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative">
-              <iframe 
-                src={proctorUrls.preview} 
-                className="absolute inset-0 w-full h-full border-none bg-transparent"
-                allow="autoplay"
-              ></iframe>
+            {/* Khung nhúng/preview cho nhiều loại tệp (pdf, ảnh, video, audio) */}
+            <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative flex items-center justify-center">
+              {(() => {
+                const kind = getFileKind(previewDoc.title || '')
+                if (kind === 'pdf') {
+                  return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
+                }
+                if (kind === 'image') {
+                  return <img src={proctorUrls.download} alt={previewDoc.title} className="max-h-[86vh] max-w-full object-contain" />
+                }
+                if (kind === 'video') {
+                  return <video controls src={proctorUrls.download} className="max-h-[86vh] max-w-full bg-black" />
+                }
+                if (kind === 'audio') {
+                  return <audio controls src={proctorUrls.download} className="w-full" />
+                }
+                return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
+              })()}
             </div>
           </div>
         </div>
@@ -397,6 +476,39 @@ export default function LibraryPage() {
         </div>
       )}
 
+      {showFolderSettingsModal && folderSettingsTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-6 shadow-2xl relative`}>
+            <button onClick={() => setShowFolderSettingsModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/60 dark:bg-slate-800/40">
+                <Folder className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-black text-lg">Cấu hình thư mục</h3>
+                <p className="text-xs text-slate-500">Thư mục: {folderSettingsTarget.name}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Màu nổi bật</label>
+                <input type="color" value={folderSettingsColor || '#3b82f6'} onChange={(e) => setFolderSettingsColor(e.target.value)} className="w-20 h-10 p-0 border-none bg-transparent" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Biểu tượng (emoji hoặc text)</label>
+                <input type="text" value={folderSettingsIcon || ''} onChange={(e) => setFolderSettingsIcon(e.target.value)} placeholder="Ví dụ: 📁, 📚, 🧪" className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold outline-none" />
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center gap-3">
+              <button onClick={saveFolderSettings} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Lưu</button>
+              <button onClick={() => setShowFolderSettingsModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 py-3 rounded-xl font-bold">Hủy</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDocModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`${glassCardStyles} rounded-3xl w-full max-w-md p-8 shadow-2xl relative`}>
@@ -412,9 +524,9 @@ export default function LibraryPage() {
               )}
               
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">File tài liệu PDF</label>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Chọn file (PDF, ảnh, video, audio)</label>
                 <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <input type="file" accept=".pdf" multiple onChange={(e) => setDocFiles(Array.from(e.target.files || []))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <input type="file" accept=".pdf,image/*,video/*,audio/*" multiple onChange={(e) => setDocFiles(Array.from(e.target.files || []))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   <FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
                   <p className="font-bold text-sm text-slate-700 dark:text-slate-300">
                     {docFiles.length > 0 ? `Đã chọn ${docFiles.length} file tài liệu` : 'Nhấn vào đây để chọn file'}
@@ -435,6 +547,27 @@ export default function LibraryPage() {
           </div>
         </div>
       )}
+
+  // Debounced global search: when searchQuery is non-empty, query across all folders/documents
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim() === '') {
+      setSearchFoldersResults(null)
+      setSearchDocsResults(null)
+      return
+    }
+    const id = setTimeout(async () => {
+      try {
+        const fq = `%${searchQuery.trim()}%`
+        const [fRes, dRes] = await Promise.all([
+          supabase.from('library_folders').select('*').ilike('name', fq).order('created_at', { ascending: false }),
+          supabase.from('library_documents').select('*').ilike('title', fq).order('created_at', { ascending: false })
+        ])
+        setSearchFoldersResults(fRes.data || [])
+        setSearchDocsResults(dRes.data || [])
+      } catch (e) { setSearchFoldersResults([]); setSearchDocsResults([]) }
+    }, 380)
+    return () => clearTimeout(id)
+  }, [searchQuery])
 
       <div className="relative z-10 max-w-[1400px] mx-auto">
         
@@ -470,8 +603,12 @@ export default function LibraryPage() {
             {/* Thanh Tìm kiếm */}
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm kiếm tài liệu..." className="w-full pl-9 pr-4 py-3 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm kiếm (toàn bộ thư viện)..." className="w-full pl-9 pr-4 py-3 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
             </div>
+
+            <button onClick={() => setIsCompact(!isCompact)} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isCompact ? 'bg-slate-100 dark:bg-slate-800 text-slate-900' : 'bg-white/40 dark:bg-slate-800/50'}`}>
+              {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
+            </button>
 
             {(userRole === 'admin' || userRole === 'collab') && (
               <>
@@ -524,7 +661,7 @@ export default function LibraryPage() {
                               if (isSelectMode) { e.preventDefault(); toggleSelection(folder.id, 'folder', folder); } 
                               else { handleOpenFolder(folder.id, folder.name); }
                             }} 
-                            className={`group cursor-pointer flex flex-col items-center gap-3 relative p-4 rounded-3xl transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40'}`}>
+                            className={`group cursor-pointer flex flex-col items-center gap-3 relative ${isCompact ? 'p-2 rounded-2xl' : 'p-4 rounded-3xl'} transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40'}`}>
                           
                           {isSelectMode && (
                             <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
@@ -532,10 +669,17 @@ export default function LibraryPage() {
                             </div>
                           )}
 
-                          <div className="relative w-24 h-20 flex items-center justify-center">
-                            <Folder className={`w-full h-full drop-shadow-[0_10px_15px_rgba(59,130,246,0.3)] transition-transform group-hover:scale-110 ${isSelected ? 'text-blue-500 fill-blue-500' : 'text-blue-400/80 fill-blue-500/90'}`} strokeWidth={1} />
+                          {/* Settings quick action (admin/collab) */}
+                          {(userRole === 'admin' || userRole === 'collab') && (
+                            <button onClick={(e) => { e.stopPropagation(); openFolderSettings(folder) }} className="absolute top-2 left-2 p-1 rounded-lg bg-white/60 dark:bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Palette className="w-4 h-4 text-slate-600 dark:text-slate-200" />
+                            </button>
+                          )}
+
+                          <div className="relative w-20 h-16 flex items-center justify-center">
+                            <Folder className={`w-full h-full drop-shadow-[0_10px_15px_rgba(59,130,246,0.18)] transition-transform group-hover:scale-110`} strokeWidth={1} style={{ color: folderCustomizations[folder.id]?.color || undefined }} />
                           </div>
-                          <p className="font-black text-sm text-center text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1">{folder.name}</p>
+                          <p className={`font-black text-sm text-center ${isCompact ? 'text-[12px]' : ''} text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1`}>{folderCustomizations[folder.id]?.icon ? `${folderCustomizations[folder.id].icon} ${folder.name}` : folder.name}</p>
                         </div>
                       )
                     })}
@@ -550,6 +694,7 @@ export default function LibraryPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {displayDocuments.map(doc => {
                       const isSelected = selectedItems.some(i => i.id === doc.id);
+                      const kind = getFileKind(doc.title || '')
                       return (
                         <div key={doc.id} 
                             draggable={!isSelectMode && (userRole === 'admin' || userRole === 'collab')}
@@ -559,11 +704,10 @@ export default function LibraryPage() {
                                 e.preventDefault(); 
                                 toggleSelection(doc.id, 'document', doc); 
                               } else { 
-                                // 🌟 TỐI ƯU MỚI: Gọi Live Preview ngay trên ứng dụng thay vì văng tab Drive ngoài
                                 setPreviewDoc(doc); 
                               }
                             }} 
-                            className={`backdrop-blur-md rounded-2xl p-4 transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-1 hover:shadow-lg'}`}>
+                            className={`backdrop-blur-md ${isCompact ? 'rounded-xl p-3' : 'rounded-2xl p-4'} transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-1 hover:shadow-lg'}`}>
                           
                           {isSelectMode && (
                             <div className={`absolute top-1/2 -translate-y-1/2 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
@@ -572,7 +716,11 @@ export default function LibraryPage() {
                           )}
 
                           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-blue-100 text-blue-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
-                            <FileText className="w-6 h-6" />
+                            {kind === 'image' && <Image className="w-6 h-6" />}
+                            {kind === 'video' && <Video className="w-6 h-6" />}
+                            {kind === 'audio' && <Music className="w-6 h-6" />}
+                            {kind === 'pdf' && <FileText className="w-6 h-6" />}
+                            {kind === 'other' && <FileText className="w-6 h-6" />}
                           </div>
                           <div className={`flex-1 overflow-hidden transition-all ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
                             <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{doc.title}</h3>
