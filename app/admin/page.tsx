@@ -1092,10 +1092,10 @@ export default function AdminDashboard() {
                         <input type="text" value={section.name} onChange={(e) => updateSection(section.id, 'name', e.target.value)} className="font-black bg-transparent border-b border-white/10 text-base outline-none w-full md:w-1/2 pb-1 focus:border-blue-500" placeholder="Tên phần thi..." />
                         
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Bộ môn</label><select value={section.subject} onChange={(e) => updateSection(section.id, 'subject', e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold outline-none">{selectedSubjects.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                          <div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Bộ môn</label><select value={section.subject} onChange={(e) => updateSection(section.id, 'subject', e.target.value)} className="w-full liquid-input rounded-lg p-2 text-xs font-bold outline-none">{selectedSubjects.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                           <div>
                             <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Dạng bài chủ đạo</label>
-                            <select value={section.type} onChange={(e) => updateSection(section.id, 'type', e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold outline-none">
+                            <select value={section.type} onChange={(e) => updateSection(section.id, 'type', e.target.value)} className="w-full liquid-input rounded-lg p-2 text-xs font-bold outline-none">
                               <option value="mixed">Mô hình hỗn hợp số (Tự động chia vùng)</option>
                               <option value="single_choice">Trắc nghiệm đơn</option>
                               <option value="true_false">Đúng / Sai 4 ý</option>
@@ -1103,7 +1103,7 @@ export default function AdminDashboard() {
                               <option value="drag_drop">Kéo thả từ khóa [___]</option>
                             </select>
                           </div>
-                          <div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Số lượng câu</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold outline-none" /></div>
+                          <div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Số lượng câu</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full liquid-input rounded-lg p-2 text-xs font-bold outline-none" /></div>
                         </div>
 
                         {section.type === 'mixed' && (
@@ -1202,7 +1202,7 @@ export default function AdminDashboard() {
             <div className="space-y-5 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <h3 className="text-xl font-black">Kho Lưu Trữ Đề Kiểm Tra</h3>
-                <div className="bg-slate-900 border border-white/10 px-3 py-1.5 rounded-xl flex items-center gap-2"><Filter className="w-3.5 h-3.5 text-slate-400" /><select value={manageFilter} onChange={(e) => setManageFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none cursor-pointer">{EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}<option value="Tất cả">Tất cả đề</option></select></div>
+                <div className="liquid-input px-3 py-1.5 rounded-xl flex items-center gap-2"><Filter className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" /><select value={manageFilter} onChange={(e) => setManageFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none cursor-pointer text-slate-700 dark:text-slate-200">{EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}<option value="Tất cả">Tất cả đề</option></select></div>
               </div>
               <div className="liquid-panel-strong rounded-2xl border border-white/10 overflow-hidden overflow-x-auto shadow-xl">
                 <table className="w-full text-left border-collapse min-w-max text-xs">
