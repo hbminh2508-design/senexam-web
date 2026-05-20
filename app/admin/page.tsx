@@ -942,7 +942,7 @@ export default function AdminDashboard() {
       )}
 
       {/* --- SIDEBAR ĐẠI TU: CHẠY TRÊN DESKTOP --- */}
-      <div className="w-64 bg-slate-900/60 backdrop-blur-2xl border-r border-white/10 p-6 flex flex-col hidden md:flex shrink-0 z-30">
+      <div className="w-64 liquid-panel-strong border-r border-white/10 p-6 flex flex-col hidden md:flex shrink-0 z-30">
         <div className="flex items-center gap-2.5 mb-8 border-b border-white/5 pb-4">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-black text-white shadow-md shadow-blue-600/20">S</div>
           <span className="font-black text-base tracking-tight">Trạm Quản Trị</span>
@@ -959,19 +959,19 @@ export default function AdminDashboard() {
       </div>
 
       {/* --- TOP BAR MOBILE (KIỂU DÁNG KÍNH MỜ APPS) --- */}
-      <header className="h-16 bg-slate-900/80 backdrop-blur-xl border-b border-white/10 px-4 flex items-center justify-between sticky top-0 z-40 md:hidden shrink-0">
+      <header className="h-16 liquid-panel-strong border-b border-white/10 px-4 flex items-center justify-between sticky top-0 z-40 md:hidden shrink-0">
         <div className="flex items-center gap-2">
           <span className="font-black text-sm tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">SenExam Hub</span>
         </div>
         
         <div className="flex items-center gap-2">
           <div className="relative">
-            <button onClick={() => { setShowNotificationBox(!showNotificationBox); setNotifications(prev => prev.map(n => ({...n, read: true}))) }} className="p-2.5 bg-slate-900 border border-white/10 rounded-xl shadow-inner relative">
+            <button onClick={() => { setShowNotificationBox(!showNotificationBox); setNotifications(prev => prev.map(n => ({...n, read: true}))) }} className="p-2.5 liquid-panel rounded-xl shadow-inner relative">
               <Bell className="w-4 h-4 text-slate-300" />
               {unreadCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white font-black text-[9px] rounded-full flex items-center justify-center animate-pulse">{unreadCount}</span>}
             </button>
             {showNotificationBox && (
-              <div className="absolute right-0 mt-3 w-72 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-3 space-y-2 z-50 animate-in slide-in-from-top-2 max-h-80 overflow-y-auto custom-scrollbar">
+              <div className="absolute right-0 mt-3 w-72 liquid-panel-strong rounded-2xl shadow-2xl p-3 space-y-2 z-50 animate-in slide-in-from-top-2 max-h-80 overflow-y-auto custom-scrollbar">
                 <div className="flex justify-between items-center border-b border-white/5 pb-1.5 text-[10px] font-black text-slate-400 uppercase"><span>Nhật ký hoạt động</span><button onClick={() => setNotifications([])} className="text-red-400">Xóa</button></div>
                 {notifications.length === 0 ? <p className="text-[10px] text-center text-slate-500 py-4 font-bold">Không có tác vụ mới.</p> : notifications.map(n => (
                   <div key={n.id} className="p-2 rounded-lg bg-slate-955/60 border border-white/5 text-[11px] flex items-start gap-2">
@@ -988,15 +988,15 @@ export default function AdminDashboard() {
       {/* --- KHÔNG GIAN NỘI DUNG CHÍNH --- */}
       <div className="flex-1 p-4 md:p-10 overflow-y-auto relative">
         <div className="absolute top-8 right-10 z-40 hidden md:block">
-          <button onClick={() => { setShowNotificationBox(!showNotificationBox); setNotifications(prev => prev.map(n => ({...n, read: true}))) }} className="p-2.5 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-xl relative shadow-md">
+          <button onClick={() => { setShowNotificationBox(!showNotificationBox); setNotifications(prev => prev.map(n => ({...n, read: true}))) }} className="p-2.5 liquid-panel rounded-xl relative shadow-md">
             <Bell className="w-4 h-4 text-slate-300" />
             {unreadCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white font-black text-[9px] rounded-full flex items-center justify-center">{unreadCount}</span>}
           </button>
           {showNotificationBox && (
-            <div className="absolute right-0 mt-3 w-80 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-4 space-y-2.5 z-50 animate-in slide-in-from-top-2 max-h-96 overflow-y-auto custom-scrollbar">
+            <div className="absolute right-0 mt-3 w-80 liquid-panel-strong rounded-2xl shadow-2xl p-4 space-y-2.5 z-50 animate-in slide-in-from-top-2 max-h-96 overflow-y-auto custom-scrollbar">
               <div className="flex justify-between items-center border-b border-white/5 pb-2 text-[10px] font-black text-slate-400 uppercase"><span>Nhật ký hoạt động</span><button onClick={() => setNotifications([])} className="text-red-400">Xóa sạch</button></div>
               {notifications.length === 0 ? <p className="text-[10px] text-center text-slate-500 py-4 font-bold">Không có tác vụ mới.</p> : notifications.map(n => (
-                <div key={n.id} className="p-2.5 rounded-xl bg-slate-950/80 border border-white/5 text-xs flex items-start gap-2.5 shadow-inner">
+                <div key={n.id} className="p-2.5 rounded-xl bg-white/55 dark:bg-slate-950/55 border border-white/10 text-xs flex items-start gap-2.5 shadow-inner">
                   <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${n.type === 'success' ? 'text-emerald-400' : n.type === 'error' ? 'text-red-400' : 'text-blue-400'}`}/>
                   <div><p className="font-black text-slate-200">{n.title}</p><p className="text-slate-400 mt-0.5 font-bold leading-normal">{n.message}</p></div>
                 </div>
@@ -1015,44 +1015,44 @@ export default function AdminDashboard() {
                 <p className="text-slate-400 font-bold text-xs mt-1">Hỗ trợ nhận diện và cắt đề bài thành ảnh, tối ưu hiển thị đa thiết bị.</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-900 border border-white/10 rounded-2xl mb-6">
+              <div className="grid grid-cols-2 gap-2 p-1.5 liquid-panel rounded-2xl mb-6">
                 <button type="button" onClick={() => setCreationMode('pdf_mode')} className={`py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 ${creationMode === 'pdf_mode' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}><FileText className="w-3.5 h-3.5"/> PDF Truyền thống</button>
                 <button type="button" onClick={() => setCreationMode('interactive_mode')} className={`py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5 ${creationMode === 'interactive_mode' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}><Sparkle className="w-3.5 h-3.5"/> Cắt ghép tương tác số</button>
               </div>
 
               <form onSubmit={handleUploadExam} className="space-y-6">
-                <div className="bg-slate-900/60 backdrop-blur-xl p-5 md:p-8 rounded-[2rem] border border-white/10 shadow-xl space-y-5">
+                <div className="liquid-panel-strong p-5 md:p-8 rounded-[2rem] border border-white/10 shadow-xl space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-black text-slate-400 mb-1.5 uppercase">Tiêu đề bài kiểm tra (*)</label>
-                      <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="VD: Khảo sát chất lượng Toán 12..." className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none focus:border-blue-500" />
+                      <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="VD: Khảo sát chất lượng Toán 12..." className="w-full liquid-input rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none focus:border-blue-500" />
                     </div>
                     <div>
                       <label className="block text-xs font-black text-slate-400 mb-1.5 uppercase">Loại hình kỳ thi</label>
-                      <select value={examType} onChange={(e) => { setExamType(e.target.value); setSelectedSubjects([]) }} className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none cursor-pointer">{EXAM_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
+                      <select value={examType} onChange={(e) => { setExamType(e.target.value); setSelectedSubjects([]) }} className="w-full liquid-input rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none cursor-pointer">{EXAM_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
                     </div>
                     <div>
                       <label className="block text-xs font-black text-slate-400 mb-1.5 uppercase">Thời gian thi (Phút)</label>
-                      <input type="number" min="1" value={duration} onChange={(e) => setDuration(parseInt(e.target.value) || 50)} className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none" />
+                      <input type="number" min="1" value={duration} onChange={(e) => setDuration(parseInt(e.target.value) || 50)} className="w-full liquid-input rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none" />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-950/40 rounded-xl border border-white/5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 liquid-panel rounded-xl border border-white/5">
                     <div>
                       <label className="block text-[11px] font-black text-slate-400 mb-1 uppercase">Giới hạn lượt làm bài</label>
-                      <input type="number" min="0" value={maxAttempts} onChange={(e) => setMaxAttempts(parseInt(e.target.value) || 0)} className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-blue-500" />
+                      <input type="number" min="0" value={maxAttempts} onChange={(e) => setMaxAttempts(parseInt(e.target.value) || 0)} className="w-full liquid-input rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-blue-500" />
                     </div>
                     <div>
                       <label className="block text-[11px] font-black text-slate-400 mb-1 uppercase">Phương thức xếp hạng điểm</label>
-                      <select value={gradingMethod} onChange={(e) => setGradingMethod(e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-xs font-bold outline-none cursor-pointer"><option value="highest">Lấy điểm số cao nhất</option><option value="last">Lấy điểm lượt làm cuối</option></select>
+                      <select value={gradingMethod} onChange={(e) => setGradingMethod(e.target.value)} className="w-full liquid-input rounded-lg px-3 py-2 text-xs font-bold outline-none cursor-pointer"><option value="highest">Lấy điểm số cao nhất</option><option value="last">Lấy điểm lượt làm cuối</option></select>
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-3">
                     <label className="text-xs font-black text-slate-400 uppercase">Cài đặt nâng cấp bảo mật</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <label className="p-3 bg-slate-950/40 border border-white/5 rounded-xl flex items-center justify-between cursor-pointer"><span className="text-xs font-bold">Xem lại bài sau nộp</span><input type="checkbox" checked={allowReview} onChange={(e) => setAllowReview(e.target.checked)} className="w-4 h-4 accent-blue-600" /></label>
-                      <label className="p-3 bg-slate-950/40 border border-white/5 rounded-xl flex items-center justify-between cursor-pointer"><span className="text-xs font-bold text-red-400">Ẩn đề thi (Private)</span><input type="checkbox" checked={isHiddenExam} onChange={(e) => setIsHiddenExam(e.target.checked)} className="w-4 h-4 accent-red-600" /></label>
+                      <label className="p-3 liquid-panel border border-white/5 rounded-xl flex items-center justify-between cursor-pointer"><span className="text-xs font-bold">Xem lại bài sau nộp</span><input type="checkbox" checked={allowReview} onChange={(e) => setAllowReview(e.target.checked)} className="w-4 h-4 accent-blue-600" /></label>
+                      <label className="p-3 liquid-panel border border-white/5 rounded-xl flex items-center justify-between cursor-pointer"><span className="text-xs font-bold text-red-500">Ẩn đề thi (Private)</span><input type="checkbox" checked={isHiddenExam} onChange={(e) => setIsHiddenExam(e.target.checked)} className="w-4 h-4 accent-red-600" /></label>
                       <label className="p-3 bg-purple-950/20 border border-purple-900/20 rounded-xl flex items-center justify-between cursor-pointer"><span className="text-xs font-bold text-purple-400">Camera AI Giám sát</span><input type="checkbox" checked={requireProctoring} onChange={(e) => setRequireProctoring(e.target.checked)} className="w-4 h-4 accent-purple-600" /></label>
                     </div>
                   </div>
@@ -1061,7 +1061,7 @@ export default function AdminDashboard() {
                     <label className="block text-xs font-black text-slate-400 mb-2 uppercase">Chọn cấu phần bộ môn thi (*)</label>
                     <div className="flex flex-wrap gap-1.5">
                       {currentAvailableSubjects.map(sub => (
-                        <button type="button" key={sub} onClick={() => toggleSubject(sub)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${selectedSubjects.includes(sub) ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-950/60 border-white/10 text-slate-400'}`}>{sub}</button>
+                        <button type="button" key={sub} onClick={() => toggleSubject(sub)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${selectedSubjects.includes(sub) ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'liquid-input text-slate-600 dark:text-slate-300'}`}>{sub}</button>
                       ))}
                     </div>
                   </div>
@@ -1078,7 +1078,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                <div className="bg-slate-900/60 backdrop-blur-xl p-5 md:p-8 rounded-[2rem] border border-white/10 shadow-xl space-y-5">
+                <div className="liquid-panel-strong p-5 md:p-8 rounded-[2rem] border border-white/10 shadow-xl space-y-5">
                   <div className="flex justify-between items-center border-b border-white/5 pb-3">
                     <span className="text-sm font-black text-orange-400 flex items-center gap-1.5"><Layers className="w-5 h-5"/>Phân mảnh cấu trúc hòm bài làm</span>
                     <button type="button" onClick={addSection} className="text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20 px-3.5 py-1.5 rounded-xl font-bold hover:bg-orange-500/20 transition-colors">+ Thêm khối đề hỗn hợp</button>
@@ -1086,7 +1086,7 @@ export default function AdminDashboard() {
 
                   <div className="space-y-4">
                     {examStructure.map((section) => (
-                      <div key={section.id} className="bg-slate-950/60 p-4 md:p-5 rounded-2xl border border-white/5 relative space-y-4">
+                      <div key={section.id} className="liquid-panel p-4 md:p-5 rounded-2xl border border-white/5 relative space-y-4">
                         <button type="button" onClick={() => removeSection(section.id)} className="absolute top-4 right-4 text-slate-500 hover:text-red-400 transition-colors"><X className="w-4 h-4"/></button>
                         
                         <input type="text" value={section.name} onChange={(e) => updateSection(section.id, 'name', e.target.value)} className="font-black bg-transparent border-b border-white/10 text-base outline-none w-full md:w-1/2 pb-1 focus:border-blue-500" placeholder="Tên phần thi..." />
@@ -1107,15 +1107,15 @@ export default function AdminDashboard() {
                         </div>
 
                         {section.type === 'mixed' && (
-                          <div className="p-3 bg-slate-900/80 border border-white/5 rounded-xl space-y-2.5">
+                          <div className="p-3 liquid-panel rounded-xl space-y-2.5">
                             <div className="flex justify-between items-center border-b border-white/5 pb-1.5"><span className="text-[10px] font-black text-slate-400 uppercase">Cấu hình phân vùng câu hỏi thủ công</span><button type="button" onClick={() => handleAddMixedRange(section.id)} className="text-[9px] font-black bg-blue-600/10 text-blue-400 px-2.5 py-1 rounded-md border border-blue-500/20">+ Thêm vùng</button></div>
                             {section.mixedRanges?.map((range, rIdx) => (
                               <div key={rIdx} className="flex flex-wrap items-center gap-2 text-xs font-bold">
                                 <span className="text-slate-500">Từ</span>
-                                <input type="number" value={range.start} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'start', parseInt(e.target.value)||1)} className="w-12 p-1 bg-slate-950 border border-white/10 rounded-md text-center outline-none"/>
+                                <input type="number" value={range.start} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'start', parseInt(e.target.value)||1)} className="w-12 p-1 liquid-input border border-white/10 rounded-md text-center outline-none"/>
                                 <span className="text-slate-500">đến</span>
-                                <input type="number" value={range.end} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'end', parseInt(e.target.value)||1)} className="w-12 p-1 bg-slate-950 border border-white/10 rounded-md text-center outline-none"/>
-                                <select value={range.type} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'type', e.target.value)} className="flex-1 p-1 bg-slate-950 border border-white/10 rounded-md outline-none text-[11px]">
+                                <input type="number" value={range.end} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'end', parseInt(e.target.value)||1)} className="w-12 p-1 liquid-input border border-white/10 rounded-md text-center outline-none"/>
+                                <select value={range.type} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'type', e.target.value)} className="flex-1 p-1 liquid-input border border-white/10 rounded-md outline-none text-[11px]">
                                   <option value="single_choice">Trắc nghiệm</option>
                                   <option value="true_false">Đúng / Sai 4 ý</option>
                                   <option value="short_answer">Trả lời ngắn</option>
@@ -1134,7 +1134,7 @@ export default function AdminDashboard() {
                         </div>
 
                         {editingKeysSectionId === section.id && (
-                          <div className="space-y-3.5 bg-slate-950 p-3 rounded-xl border border-white/5 max-h-96 overflow-y-auto custom-scrollbar">
+                          <div className="space-y-3.5 liquid-panel p-3 rounded-xl border border-white/5 max-h-96 overflow-y-auto custom-scrollbar">
                             {Array.from({ length: section.questionCount }).map((_, qIdx) => {
                               let currentType = section.type;
                               if (section.type === 'mixed' && section.mixedRanges) {
@@ -1143,7 +1143,7 @@ export default function AdminDashboard() {
                               }
 
                               return (
-                                <div key={qIdx} className="p-3 bg-slate-900 border border-white/5 rounded-xl grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                <div key={qIdx} className="p-3 liquid-panel rounded-xl grid grid-cols-1 lg:grid-cols-2 gap-3">
                                   <div className="space-y-2 border-b lg:border-b-0 lg:border-r pb-2 lg:pb-0 lg:pr-3">
                                     <span className="text-[10px] font-black px-2 py-0.5 bg-slate-800 rounded text-slate-400">Câu {qIdx + 1}</span>
                                     {section.questionEntries?.[qIdx]?.imageCrop ? (
@@ -1163,7 +1163,7 @@ export default function AdminDashboard() {
                                     <span className="text-[10px] font-black text-slate-500 uppercase">Đáp án điền:</span>
                                     {currentType === 'single_choice' && (
                                       <div className="flex gap-1.5">
-                                        {['A','B','C','D'].map(l => <button type="button" key={l} onClick={() => handleSetCorrectAnswer(section.id, qIdx, l)} className={`w-7 h-7 rounded-full border text-[10px] font-black ${section.correctAnswers[qIdx] === l ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-950 text-slate-400 border-white/10'}`}>{l}</button>)}
+                                        {['A','B','C','D'].map(l => <button type="button" key={l} onClick={() => handleSetCorrectAnswer(section.id, qIdx, l)} className={`w-7 h-7 rounded-full border text-[10px] font-black ${section.correctAnswers[qIdx] === l ? 'bg-blue-600 border-blue-600 text-white' : 'liquid-input text-slate-500 dark:text-slate-300 border-white/10'}`}>{l}</button>)}
                                       </div>
                                     )}
                                     {currentType === 'true_false' && (
@@ -1173,14 +1173,14 @@ export default function AdminDashboard() {
                                           return (
                                             <div key={sub} className="flex items-center gap-2">
                                               <span className="text-slate-500 uppercase w-4">{sub}:</span>
-                                              <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'Đ')} className={`px-2 py-0.5 rounded text-[9px] font-black ${v === 'Đ' ? 'bg-emerald-600 text-white' : 'bg-slate-950 text-slate-400'}`}>Đúng</button>
-                                              <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'S')} className={`px-2 py-0.5 rounded text-[9px] font-black ${v === 'S' ? 'bg-red-600 text-white' : 'bg-slate-950 text-slate-400'}`}>Sai</button>
+                                              <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'Đ')} className={`px-2 py-0.5 rounded text-[9px] font-black ${v === 'Đ' ? 'bg-emerald-600 text-white' : 'liquid-input text-slate-500 dark:text-slate-300'}`}>Đúng</button>
+                                              <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'S')} className={`px-2 py-0.5 rounded text-[9px] font-black ${v === 'S' ? 'bg-red-600 text-white' : 'liquid-input text-slate-500 dark:text-slate-300'}`}>Sai</button>
                                             </div>
                                           )
                                         })}
                                       </div>
                                     )}
-                                    {(currentType === 'short_answer' || currentType === 'drag_drop') && <input type="text" value={section.correctAnswers[qIdx] || ''} onChange={(e) => handleSetCorrectAnswer(section.id, qIdx, e.target.value)} className="w-full bg-slate-950 border border-white/10 p-1.5 rounded-lg text-xs font-bold outline-none" placeholder="Giá trị..." />}
+                                    {(currentType === 'short_answer' || currentType === 'drag_drop') && <input type="text" value={section.correctAnswers[qIdx] || ''} onChange={(e) => handleSetCorrectAnswer(section.id, qIdx, e.target.value)} className="w-full liquid-input border border-white/10 p-1.5 rounded-lg text-xs font-bold outline-none" placeholder="Giá trị..." />}
                                   </div>
                                 </div>
                               )
@@ -1204,14 +1204,14 @@ export default function AdminDashboard() {
                 <h3 className="text-xl font-black">Kho Lưu Trữ Đề Kiểm Tra</h3>
                 <div className="bg-slate-900 border border-white/10 px-3 py-1.5 rounded-xl flex items-center gap-2"><Filter className="w-3.5 h-3.5 text-slate-400" /><select value={manageFilter} onChange={(e) => setManageFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none cursor-pointer">{EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}<option value="Tất cả">Tất cả đề</option></select></div>
               </div>
-              <div className="bg-slate-900/40 rounded-2xl border border-white/10 overflow-hidden overflow-x-auto shadow-xl">
+              <div className="liquid-panel-strong rounded-2xl border border-white/10 overflow-hidden overflow-x-auto shadow-xl">
                 <table className="w-full text-left border-collapse min-w-max text-xs">
-                  <thead><tr className="bg-slate-900 border-b border-white/10"><th className="p-4 text-slate-400 font-bold">MÃ / TIÊU ĐỀ</th><th className="p-4 text-slate-400 font-bold">MÔN HỌC</th><th className="p-4 text-slate-400 font-bold">HỆ ĐỀ</th><th className="p-4 text-slate-400 font-bold text-right">THAO TÁC</th></tr></thead>
+                  <thead><tr className="bg-white/55 dark:bg-slate-900/70 border-b border-white/10"><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">MÃ / TIÊU ĐỀ</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">MÔN HỌC</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">HỆ ĐỀ</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold text-right">THAO TÁC</th></tr></thead>
                   <tbody>
                     {filteredExams.map(exam => (
                       <tr key={exam.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="p-4 font-bold max-w-xs truncate">{exam.title} {exam.is_hidden && <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded ml-1.5 font-black uppercase">Mã: {exam.access_code}</span>}</td>
-                        <td className="p-4"><div className="flex gap-1">{exam.subjects?.map((s:string) => <span key={s} className="px-2 py-0.5 bg-slate-950 border border-white/5 text-slate-300 rounded font-bold text-[10px]">{s}</span>)}</div></td>
+                        <td className="p-4"><div className="flex gap-1">{exam.subjects?.map((s:string) => <span key={s} className="px-2 py-0.5 liquid-input rounded font-bold text-[10px]">{s}</span>)}</div></td>
                         <td className="p-4"><span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 font-black rounded-lg">{exam.exam_type}</span></td>
                         <td className="p-4 text-right"><button onClick={() => handleDeleteExam(exam.id)} className="p-2 text-red-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button></td>
                       </tr>
@@ -1226,9 +1226,9 @@ export default function AdminDashboard() {
           {activeTab === 'submissions' && (
             <div className="space-y-5 animate-in fade-in duration-200">
               <h3 className="text-xl font-black">Hồ Sơ Kết Quả Thí Sinh</h3>
-              <div className="bg-white/5 rounded-2xl border overflow-hidden overflow-x-auto">
+              <div className="liquid-panel-strong rounded-2xl border overflow-hidden overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-max text-xs">
-                  <thead><tr className="bg-slate-900 border-b"><th className="p-4 text-slate-400 font-bold">THÍ SINH</th><th className="p-4 text-slate-400 font-bold">ĐỀ THI</th><th className="p-4 text-slate-400 font-bold">ĐIỂM SỐ</th><th className="p-4 text-slate-400 font-bold text-right">HÀNH ĐỘNG</th></tr></thead>
+                  <thead><tr className="bg-white/55 dark:bg-slate-900/70 border-b"><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">THÍ SINH</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">ĐỀ THI</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">ĐIỂM SỐ</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold text-right">HÀNH ĐỘNG</th></tr></thead>
                   <tbody>
                     {filteredSubmissions.map(sub => (
                       <tr key={sub.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
@@ -1248,17 +1248,17 @@ export default function AdminDashboard() {
           {activeTab === 'collab' && (
             <div className="space-y-5 animate-in fade-in duration-200">
               <h3 className="text-xl font-black">Ủy Quyền Phân Cấp Hồ Sơ</h3>
-              <div className="bg-white/5 rounded-2xl border overflow-hidden overflow-x-auto">
+              <div className="liquid-panel-strong rounded-2xl border overflow-hidden overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-max text-xs">
-                  <thead><tr className="bg-slate-900 border-b"><th className="p-4 text-slate-400 font-bold">HỌ VÀ TÊN</th><th className="p-4 text-slate-400 font-bold">CẤP QUYỀN TRUY CẬP</th><th className="p-4 text-slate-400 font-bold text-right">THAY ĐỔI</th></tr></thead>
+                  <thead><tr className="bg-white/55 dark:bg-slate-900/70 border-b"><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">HỌ VÀ TÊN</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold">CẤP QUYỀN TRUY CẬP</th><th className="p-4 text-slate-600 dark:text-slate-400 font-bold text-right">THAY ĐỔI</th></tr></thead>
                   <tbody>
                     {usersList.map(u => (
                       <tr key={u.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td className="p-4 font-black flex items-center gap-1.5">{u.full_name || 'Tài khoản chưa định danh'} {u.role === 'premium_student' && <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400"/>}</td>
-                        <td className="p-4"><span className={`px-2.5 py-0.5 rounded font-black uppercase text-[10px] border ${u.role === 'admin' ? 'bg-red-500/10 border-red-500/20 text-red-400' : u.role === 'collab' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' : 'bg-slate-950 border-white/10 text-slate-400'}`}>{u.role || 'Học sinh'}</span></td>
+                        <td className="p-4"><span className={`px-2.5 py-0.5 rounded font-black uppercase text-[10px] border ${u.role === 'admin' ? 'bg-red-500/10 border-red-500/20 text-red-400' : u.role === 'collab' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' : 'liquid-input text-slate-500 dark:text-slate-300'}`}>{u.role || 'Học sinh'}</span></td>
                         <td className="p-4 text-right">
                           {currentUserRole === 'admin' && u.role !== 'admin' && (
-                            <select value={u.role || 'student'} onChange={(e) => handleUpdateRole(u.id, e.target.value)} className="bg-slate-950 border border-white/10 p-1.5 rounded-lg font-bold outline-none text-xs cursor-pointer focus:border-blue-500"><option value="student">Học sinh thường</option><option value="premium_student">Thành viên Premium</option><option value="collab">Cộng tác viên (Collab)</option></select>
+                            <select value={u.role || 'student'} onChange={(e) => handleUpdateRole(u.id, e.target.value)} className="liquid-input border border-white/10 p-1.5 rounded-lg font-bold outline-none text-xs cursor-pointer focus:border-blue-500"><option value="student">Học sinh thường</option><option value="premium_student">Thành viên Premium</option><option value="collab">Cộng tác viên (Collab)</option></select>
                           )}
                         </td>
                       </tr>
@@ -1273,7 +1273,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* BOTTOM NAVIGATION: CHỈ HIỂN THỊ TRÊN THIẾT BỊ DI ĐỘNG (MOBILE ONLY) */}
-      <div className="fixed bottom-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl border-t border-white/10 grid grid-cols-4 z-40 md:hidden animate-in slide-in-from-bottom-5">
+      <div className="fixed bottom-0 left-0 right-0 h-16 liquid-panel-strong border-t border-white/10 grid grid-cols-4 z-40 md:hidden animate-in slide-in-from-bottom-5">
         <button onClick={() => setActiveTab('upload')} className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'upload' ? 'text-blue-400 font-black' : 'text-slate-500'}`}><PlusCircle className="w-4 h-4"/><span className="text-[9px] font-bold">Đăng đề</span></button>
         <button onClick={() => setActiveTab('manage')} className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'manage' ? 'text-blue-400 font-black' : 'text-slate-500'}`}><FileText className="w-4 h-4"/><span className="text-[9px] font-bold">Kho đề</span></button>
         <button onClick={() => setActiveTab('submissions')} className={`flex flex-col items-center justify-center gap-1 ${activeTab === 'submissions' ? 'text-blue-400 font-black' : 'text-slate-500'}`}><ClipboardList className="w-4 h-4"/><span className="text-[9px] font-bold">Bài làm</span></button>
