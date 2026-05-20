@@ -658,7 +658,13 @@ export default function LibraryPage() {
                           )}
 
                           <div className="relative w-20 h-16 flex items-center justify-center">
-                            <Folder className={`w-full h-full drop-shadow-[0_10px_15px_rgba(59,130,246,0.18)] transition-transform group-hover:scale-110`} strokeWidth={1} style={{ color: folderCustomizations[folder.id]?.color || undefined }} />
+                            <Folder
+                              className="w-full h-full drop-shadow-[0_10px_15px_rgba(59,130,246,0.18)] transition-transform group-hover:scale-110"
+                              strokeWidth={1.4}
+                              fill="currentColor"
+                              stroke="currentColor"
+                              style={{ color: folderCustomizations[folder.id]?.color || '#3b82f6' }}
+                            />
                           </div>
                           <p className={`font-black text-sm text-center ${isCompact ? 'text-[12px]' : ''} text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1`}>{folderCustomizations[folder.id]?.icon ? `${folderCustomizations[folder.id].icon} ${folder.name}` : folder.name}</p>
                         </div>
