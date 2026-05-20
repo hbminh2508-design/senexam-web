@@ -332,7 +332,17 @@ export default function LibraryPage() {
     };
   }, [previewDoc])
 
-  if (loading) return <div className="app-shell min-h-screen flex items-center justify-center font-bold text-blue-600 bg-transparent">Đang khởi tạo thư viện số...</div>
+  if (loading) return (
+    <div className="app-shell min-h-screen flex items-center justify-center font-bold text-blue-600 bg-transparent animate-in fade-in duration-500">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative">
+          <div className="absolute inset-0 bg-blue-400 rounded-full blur-lg opacity-20 animate-pulse"></div>
+          <Loader2 className="w-12 h-12 animate-spin relative" />
+        </div>
+        <p className="text-lg font-bold">Đang khởi tạo thư viện số...</p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="app-shell min-h-screen bg-transparent p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32">
@@ -340,11 +350,11 @@ export default function LibraryPage() {
 
       {/* 🌟 WINDOW LIVE PREVIEW (XEM FILE & TẢI TRỰC TIẾP KHÔNG BỊ VĂNG KHỎI WEB) */}
       {previewDoc && (
-        <div className="fixed inset-0 z-[999] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[90vh] rounded-[2rem] shadow-2xl border border-white/20 dark:border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[999] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[90vh] rounded-[3rem] shadow-2xl border border-white/20 dark:border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
             
             {/* Header toolbar */}
-            <div className="h-16 px-4 sm:px-6 liquid-panel-strong border-b dark:border-slate-800 flex items-center justify-between shrink-0">
+            <div className="h-16 px-4 sm:px-6 liquid-panel-strong rounded-t-[3rem] border-b dark:border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3 overflow-hidden">
                 <FileText className="w-5 h-5 text-red-500 shrink-0 shadow-sm" />
                 <div className="truncate">
@@ -409,7 +419,7 @@ export default function LibraryPage() {
 
       {/* --- FLOATING ACTION BARS --- */}
       {isSelectMode && selectedItems.length > 0 && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 apps-shadow px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10">
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 apps-shadow px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10 duration-300">
            <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
            
            {selectedItems.length === 1 && (userRole === 'admin' || userRole === 'collab') && (
@@ -437,7 +447,7 @@ export default function LibraryPage() {
       )}
 
       {clipboard && !isSelectMode && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-blue-400/50 px-6 py-4 rounded-3xl shadow-[0_10px_40px_rgba(59,130,246,0.3)] flex items-center gap-4 z-[90] animate-bounce">
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-blue-400/50 px-6 py-4 rounded-full shadow-[0_10px_40px_rgba(59,130,246,0.3)] flex items-center gap-4 z-[90] animate-bounce duration-700">
            <div className="flex flex-col">
              <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400">Đang lưu {clipboard.items.length} mục</span>
              <span className="text-[10px] font-bold text-slate-500 uppercase">Lệnh: {clipboard.action === 'cut' ? 'Cắt' : 'Sao chép'}</span>
@@ -453,8 +463,8 @@ export default function LibraryPage() {
 
       {/* --- MODAL ĐỔI TÊN --- */}
       {showRenameModal && renameTarget && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 shadow-2xl relative`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
             <button onClick={() => setShowRenameModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
             <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center mb-4"><Edit className="w-6 h-6 text-amber-600 dark:text-amber-400"/></div>
             <h3 className="text-xl font-black mb-2">Đổi tên {renameTarget.type === 'folder' ? 'thư mục' : 'tài liệu'}</h3>
@@ -466,8 +476,8 @@ export default function LibraryPage() {
 
       {/* --- MODALS CREATE/UPLOAD --- */}
       {showFolderModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 shadow-2xl relative`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
             <button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
             <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center mb-4"><Folder className="w-6 h-6 text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400"/></div>
             <h3 className="text-xl font-black mb-2">Tạo thư mục mới</h3>
@@ -478,8 +488,8 @@ export default function LibraryPage() {
       )}
 
       {showFolderSettingsModal && folderSettingsTarget && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-6 shadow-2xl relative`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-sm p-6 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
             <button onClick={() => setShowFolderSettingsModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
             <div className="mb-4 flex items-center gap-3">
               <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/60 dark:bg-slate-800/40">
@@ -511,8 +521,8 @@ export default function LibraryPage() {
       )}
 
       {showDocModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`${glassCardStyles} rounded-3xl w-full max-w-md p-8 shadow-2xl relative`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
             <button onClick={() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}); setDocFiles([]) }} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
             <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center mb-4"><UploadCloud className="w-6 h-6 text-emerald-600 dark:text-emerald-400"/></div>
             <h3 className="text-xl font-black mb-4">Tải tài liệu lên</h3>
@@ -615,7 +625,7 @@ export default function LibraryPage() {
         </div>
 
         {/* --- MAIN CONTENT AREA --- */}
-        <div className={`${glassCardStyles} rounded-[2.5rem] p-6 md:p-10 min-h-[60vh] border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
+        <div className={`${glassCardStyles} rounded-[3rem] p-6 md:p-10 min-h-[60vh] border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 animate-in fade-in duration-500`}>
           
           {displayFolders.length === 0 && displayDocuments.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-20">
@@ -642,7 +652,7 @@ export default function LibraryPage() {
                               if (isSelectMode) { e.preventDefault(); toggleSelection(folder.id, 'folder', folder); } 
                               else { handleOpenFolder(folder.id, folder.name); }
                             }} 
-                            className={`group cursor-pointer flex flex-col items-center gap-3 relative ${isCompact ? 'p-2 rounded-2xl' : 'p-4 rounded-3xl'} transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40'}`}>
+                            className={`group cursor-pointer flex flex-col items-center gap-3 relative ${isCompact ? 'p-2 rounded-2xl' : 'p-4 rounded-[2rem]'} transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40 hover:scale-105 hover:shadow-lg'} animate-in fade-in duration-500`}>
                           
                           {isSelectMode && (
                             <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
@@ -694,7 +704,7 @@ export default function LibraryPage() {
                                 setPreviewDoc(doc); 
                               }
                             }} 
-                            className={`backdrop-blur-md ${isCompact ? 'rounded-xl p-3' : 'rounded-2xl p-4'} transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-1 hover:shadow-lg'}`}>
+                            className={`backdrop-blur-md ${isCompact ? 'rounded-xl p-3' : 'rounded-[1.75rem] p-4'} transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-2 hover:shadow-xl hover:scale-105'} animate-in fade-in duration-500`}>
                           
                           {isSelectMode && (
                             <div className={`absolute top-1/2 -translate-y-1/2 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
