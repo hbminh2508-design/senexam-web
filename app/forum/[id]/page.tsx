@@ -8,7 +8,7 @@ import {
   Send, Loader2, Download, FileText, Pin, PinOff, Trash2
 } from 'lucide-react'
 
-const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
+const glassCardStyles = "liquid-panel"
 
 export default function PostDetailPage() {
   const params = useParams()
@@ -103,16 +103,16 @@ export default function PostDetailPage() {
     return past.toLocaleDateString('vi-VN')
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
+  if (loading) return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
 
   const canManage = currentUserRole === 'admin' || currentUserRole === 'collab'
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 relative font-sans overflow-x-hidden pb-20">
+    <div className="app-shell min-h-screen bg-transparent text-slate-900 dark:text-slate-100 relative font-sans overflow-x-hidden pb-20">
       
       {/* BACKGROUND ORBS */}
-      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/40 to-indigo-400/30 dark:from-blue-800/40 dark:to-indigo-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
-      <div className="fixed bottom-[-15%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-t from-purple-300/30 to-pink-400/20 dark:from-purple-900/30 dark:to-pink-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '3s' }}></div>
+      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/25 to-indigo-400/20 dark:from-blue-800/35 dark:to-indigo-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 bounce-float pointer-events-none"></div>
+      <div className="fixed bottom-[-15%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-t from-purple-300/25 to-pink-400/18 dark:from-purple-900/25 dark:to-pink-900/18 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 bounce-float-delayed pointer-events-none" style={{ animationDelay: '3s' }}></div>
 
       <div className="relative z-10 p-4 md:p-8 max-w-4xl mx-auto">
         

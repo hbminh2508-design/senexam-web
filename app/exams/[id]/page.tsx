@@ -405,7 +405,7 @@ export default function ExamRoomPage() {
   }
 
   return (
-    <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none" style={{ overscrollBehaviorY: 'contain' }}>
+    <div className="app-shell h-screen w-full flex flex-col bg-transparent text-slate-900 dark:text-slate-100 overflow-hidden select-none" style={{ overscrollBehaviorY: 'contain' }}>
       
       {/* OVERLAY XÁC NHẬN NỘP BÀI ẢO */}
       {showSubmitConfirm && (
@@ -458,7 +458,7 @@ export default function ExamRoomPage() {
         </div>
       )}
 
-      <header className="h-16 bg-white dark:bg-slate-900 border-b flex items-center justify-between px-4 md:px-6 shrink-0 z-10 shadow-sm">
+      <header className="h-16 liquid-panel-strong flex items-center justify-between px-4 md:px-6 shrink-0 z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <button onClick={() => { if(confirm("Hủy bài thi hiện tại?")) { const doc = document as any; if(doc.fullscreenElement || doc.webkitFullscreenElement) { if(doc.exitFullscreen) doc.exitFullscreen().catch(()=>{}); } router.push('/exams') } }} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><ArrowLeft className="w-4 h-4" /></button>
           <div className="flex items-center gap-3">
@@ -492,7 +492,7 @@ export default function ExamRoomPage() {
         <div className={`h-full bg-white dark:bg-slate-900 flex flex-col overflow-hidden ${exam?.creation_mode === 'interactive_mode' ? 'w-full' : 'w-full md:w-[420px] lg:w-[460px] border-l dark:border-slate-800'}`}>
           
           {/* Bảng điều hướng nhanh câu hỏi */}
-          <div className="shrink-0 bg-slate-50/50 dark:bg-slate-900/60 border-b p-4 max-h-[30vh] overflow-y-auto custom-scrollbar">
+          <div className="shrink-0 liquid-panel border-b p-4 max-h-[30vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
               <LayoutList className="w-3.5 h-3.5 text-blue-500" /> Sơ đồ câu hỏi phòng thi
             </div>
@@ -525,9 +525,9 @@ export default function ExamRoomPage() {
           </div>
 
           {/* Ô hiển thị nội dung câu hỏi chi tiết số hóa tương tác */}
-          <div className={`flex-1 p-4 overflow-y-auto custom-scrollbar bg-slate-50/30 dark:bg-slate-900/10 ${exam?.creation_mode === 'interactive_mode' ? 'max-w-4xl mx-auto w-full space-y-8 py-8' : 'space-y-6'}`}>
+          <div className={`flex-1 p-4 overflow-y-auto custom-scrollbar bg-transparent ${exam?.creation_mode === 'interactive_mode' ? 'max-w-4xl mx-auto w-full space-y-8 py-8' : 'space-y-6'}`}>
             {exam?.exam_structure?.map((section: any) => (
-              <div key={section.id} className="bg-white dark:bg-slate-950 p-5 rounded-2xl border dark:border-slate-800 shadow-sm space-y-6">
+              <div key={section.id} className="liquid-panel-strong p-5 rounded-2xl border dark:border-slate-800 shadow-sm space-y-6">
                 <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5 border-b dark:border-slate-800 pb-2">
                   <FileQuestion className="w-4 h-4 text-blue-500"/> {section.name}
                 </h3>
@@ -552,7 +552,7 @@ export default function ExamRoomPage() {
                     }
 
                     return (
-                      <div key={qIdx} id={`q-${key}`} className={`p-4 bg-slate-50/50 dark:bg-slate-900/40 border dark:border-slate-800 rounded-xl space-y-3 transition-all ${savedQuestions[key] ? 'border-amber-400 bg-amber-500/5' : ''}`}>
+                      <div key={qIdx} id={`q-${key}`} className={`p-4 liquid-panel rounded-xl space-y-3 transition-all ${savedQuestions[key] ? 'border-amber-400 bg-amber-500/5' : ''}`}>
                         <div className="flex justify-between items-center border-b dark:border-slate-800 pb-2">
                           <span className="font-black text-xs text-blue-600 dark:text-blue-400">Câu hỏi {globalQNumber}:</span>
                           <button onClick={() => toggleSaveQuestion(section.id, qIdx)} className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 'text-slate-400'}`}>

@@ -257,7 +257,7 @@ export default function ChatOffline({ userName }: { userName: string }) {
           </div>
 
           {/* Chat Body */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-slate-950/50" ref={chatScrollRef}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-transparent" ref={chatScrollRef}>
             {chatMessages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[88%] px-4 py-3 rounded-2xl text-[14px] font-medium leading-relaxed shadow-sm 

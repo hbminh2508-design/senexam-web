@@ -26,8 +26,8 @@ const EXAMS = ['THPTQG', 'HSA', 'TSA', 'SPT']
 const THPTQG_SUBJECTS = ['Toán', 'Ngữ Văn', 'Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí', 'Tiếng Anh', 'GDKT&PL', 'Tin Học', 'Công Nghệ']
 const HSA_SCIENCE_SUBJECTS = ['Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí']
 
-const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
-const glassButtonStyles = "bg-white/40 dark:bg-slate-800/50 backdrop-blur-xl backdrop-saturate-[1.2] border border-white/60 dark:border-white/10 shadow-sm hover:bg-white/60 dark:hover:bg-slate-700/50 transition-all duration-300"
+const glassCardStyles = "liquid-panel"
+const glassButtonStyles = "liquid-badge transition-all duration-300 hover:scale-[1.01] hover:bg-white/70 dark:hover:bg-slate-700/60"
 
 export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   const [now, setNow] = useState(Date.now())
@@ -232,7 +232,7 @@ export default function DashboardPage() {
 
   if (isDataLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="app-shell min-h-screen flex items-center justify-center bg-transparent">
         <div className="flex flex-col items-center gap-4 text-blue-600 dark:text-blue-500">
           <Loader2 className="w-10 h-10 animate-spin" />
           <p className="font-bold">Bạn chờ chút nhé, Sen đang dẫn bạn tới ngay đây …</p>
@@ -242,11 +242,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 p-4 md:p-8 relative text-slate-900 dark:text-slate-100 transition-colors duration-500 overflow-x-hidden font-sans">
+    <div className="app-shell min-h-screen bg-transparent p-4 md:p-8 relative text-slate-900 dark:text-slate-100 transition-colors duration-500 overflow-x-hidden font-sans">
       
-      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/40 to-indigo-400/30 dark:from-blue-800/40 dark:to-indigo-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
-      <div className="fixed top-[25%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-purple-400/40 to-pink-400/30 dark:from-purple-800/40 dark:to-pink-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
-      <div className="fixed bottom-[-15%] left-[20%] w-[700px] h-[700px] bg-gradient-to-t from-emerald-300/30 to-teal-400/20 dark:from-emerald-900/30 dark:to-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '4s' }}></div>
+      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/25 to-indigo-400/20 dark:from-blue-800/35 dark:to-indigo-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 bounce-float pointer-events-none"></div>
+      <div className="fixed top-[25%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-purple-400/24 to-pink-400/20 dark:from-purple-800/28 dark:to-pink-900/18 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-70 bounce-float-delayed pointer-events-none"></div>
+      <div className="fixed bottom-[-15%] left-[20%] w-[700px] h-[700px] bg-gradient-to-t from-emerald-300/20 to-teal-400/14 dark:from-emerald-900/25 dark:to-teal-900/18 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 bounce-float pointer-events-none" style={{ animationDelay: '4s' }}></div>
 
       {showCodeModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">

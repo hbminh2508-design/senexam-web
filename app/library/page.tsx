@@ -9,7 +9,7 @@ import {
   ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink
 } from 'lucide-react'
 
-const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
+const glassCardStyles = "liquid-panel"
 
 type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
 
@@ -263,10 +263,10 @@ export default function LibraryPage() {
     };
   }, [previewDoc])
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50 dark:bg-slate-950">Đang khởi tạo thư viện số...</div>
+  if (loading) return <div className="app-shell min-h-screen flex items-center justify-center font-bold text-blue-600 bg-transparent">Đang khởi tạo thư viện số...</div>
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32">
+    <div className="app-shell min-h-screen bg-transparent p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32">
       <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-bl from-blue-400/40 to-cyan-400/30 dark:from-blue-800/40 dark:to-cyan-900/30 rounded-full blur-[120px] pointer-events-none"></div>
 
       {/* 🌟 WINDOW LIVE PREVIEW (XEM FILE & TẢI TRỰC TIẾP KHÔNG BỊ VĂNG KHỎI WEB) */}
@@ -275,7 +275,7 @@ export default function LibraryPage() {
           <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[90vh] rounded-[2rem] shadow-2xl border border-white/20 dark:border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             
             {/* Header toolbar */}
-            <div className="h-16 px-6 bg-slate-50 dark:bg-slate-950/60 border-b dark:border-slate-800 flex items-center justify-between shrink-0">
+            <div className="h-16 px-4 sm:px-6 liquid-panel-strong border-b dark:border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3 overflow-hidden">
                 <FileText className="w-5 h-5 text-red-500 shrink-0 shadow-sm" />
                 <div className="truncate">

@@ -164,10 +164,10 @@ export default function ExamRoomPage() {
   const pdfUrl = `https://drive.google.com/file/d/${exam?.drive_file_id}/preview`
 
   return (
-    <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100">
+    <div className="app-shell h-screen w-full flex flex-col bg-transparent overflow-hidden text-slate-900 dark:text-slate-100">
       
       {/* HEADER PHÒNG THI */}
-      <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-6 shrink-0 z-10 shadow-sm">
+      <header className="h-16 liquid-panel-strong border-b border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between px-4 md:px-6 shrink-0 z-10 shadow-sm">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push('/exams')} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -196,15 +196,15 @@ export default function ExamRoomPage() {
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
         
         {/* BÊN TRÁI: ĐỀ PDF */}
-        <div className="flex-1 h-[35vh] md:h-full border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-slate-200 dark:bg-slate-800/50 relative">
+        <div className="flex-1 h-[35vh] md:h-full border-b md:border-b-0 md:border-r border-slate-200/60 dark:border-slate-800 bg-slate-200/60 dark:bg-slate-800/50 relative">
           <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay"></iframe>
         </div>
 
         {/* BÊN PHẢI: PHIẾU TÔ + STICKY BOARD TRẠNG THÁI CÂU HỎI */}
-        <div className="w-full md:w-[450px] lg:w-[500px] xl:w-[580px] h-[65vh] md:h-full bg-white dark:bg-slate-900 overflow-y-auto shrink-0 flex flex-col">
+        <div className="w-full md:w-[450px] lg:w-[500px] xl:w-[580px] h-[65vh] md:h-full liquid-panel-strong overflow-y-auto shrink-0 flex flex-col">
           
           {/* 🌟 BẢNG THEO DÕI TRẠNG THÁI CÂU HỎI - ĐÍNH TRÊN CAO MỌI LÚC (STICKY TOP BOARD) */}
-          <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 border-b border-slate-200 dark:border-slate-800 z-20 shadow-sm shrink-0 max-h-[220px] overflow-y-auto custom-scrollbar">
+          <div className="sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-4 border-b border-slate-200/60 dark:border-slate-800/60 z-20 shadow-sm shrink-0 max-h-[220px] overflow-y-auto custom-scrollbar">
             <div className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase tracking-wider mb-2.5">
               <LayoutList className="w-4 h-4 text-blue-500" /> Bản đồ tiến độ câu hỏi (Click để di chuyển nhanh)
             </div>

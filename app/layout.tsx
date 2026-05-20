@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sen Exam",
-  description: "Thi cử & Học tập trực tuyến",
+  title: "SenExam",
+  description: "Thi cử và học tập trực tuyến",
 };
 
 export default function RootLayout({
@@ -24,10 +24,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="vi"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="app-shell min-h-screen flex flex-col bg-background text-foreground">{children}</body>
     </html>
   );
 }

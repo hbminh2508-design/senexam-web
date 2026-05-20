@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { Megaphone, Save, ArrowLeft, Loader2, Calendar, Trash2 } from 'lucide-react'
 
-const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
+const glassCardStyles = "liquid-panel"
 
 // 🌟 COMPONENT ĐẾM NGƯỢC THỜI GIAN THỰC
 export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
@@ -147,11 +147,11 @@ export default function AnnouncementsAdminPage() {
     setAnnouncements(announcements.filter(a => a.id !== id))
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-bold">Xác thực quyền quản trị...</div>
+  if (loading) return <div className="app-shell min-h-screen flex items-center justify-center font-bold bg-transparent">Xác thực quyền quản trị...</div>
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-6 md:p-10 relative overflow-x-hidden font-sans">
-      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-red-400/30 to-orange-400/20 rounded-full blur-[120px] pointer-events-none"></div>
+    <div className="app-shell min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-6 md:p-10 relative overflow-x-hidden font-sans">
+      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-red-400/20 to-orange-400/12 rounded-full blur-[120px] pointer-events-none bounce-float"></div>
 
       <div className="max-w-6xl mx-auto relative z-10">
         <div className="flex items-center justify-between mb-8 border-b dark:border-slate-800 pb-4">

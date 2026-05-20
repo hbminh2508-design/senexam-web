@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 
 // Apple Liquid Glass CSS Constants
-const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.25)]"
+const glassCardStyles = "liquid-panel"
 const EXAM_TYPES = ['Tất cả', 'THPTQG', 'HSA', 'TSA', 'SPT']
 
 export default function ExamsLibraryPage() {
@@ -69,7 +69,7 @@ export default function ExamsLibraryPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="app-shell min-h-screen flex items-center justify-center bg-transparent">
         <div className="flex flex-col items-center gap-4 text-blue-600 dark:text-blue-500">
           <Loader2 className="w-10 h-10 animate-spin" />
           <p className="font-bold">Đang tải kho tài liệu SenExam...</p>
@@ -79,11 +79,11 @@ export default function ExamsLibraryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 relative font-sans overflow-x-hidden">
+    <div className="app-shell min-h-screen bg-transparent text-slate-900 dark:text-slate-100 relative font-sans overflow-x-hidden">
       
       {/* 🌟 LIQUID BACKGROUND ORBS 🌟 */}
-      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/40 to-indigo-400/30 dark:from-blue-800/40 dark:to-indigo-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
-      <div className="fixed bottom-[-15%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-t from-emerald-300/30 to-teal-400/20 dark:from-emerald-900/30 dark:to-teal-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '3s' }}></div>
+      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/25 to-indigo-400/20 dark:from-blue-800/35 dark:to-indigo-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 bounce-float pointer-events-none"></div>
+      <div className="fixed bottom-[-15%] right-[-10%] w-[600px] h-[600px] bg-gradient-to-t from-emerald-300/20 to-teal-400/14 dark:from-emerald-900/25 dark:to-teal-900/18 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 bounce-float-delayed pointer-events-none"></div>
 
       <div className="relative z-10 p-4 md:p-8 max-w-7xl mx-auto">
         

@@ -48,8 +48,8 @@ export default function StudentReviewPage() {
   const pdfUrl = `https://drive.google.com/file/d/${submission.exams?.drive_file_id}/preview`
 
   return (
-    <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
-      <header className="h-16 bg-white dark:bg-slate-900 border-b flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
+    <div className="app-shell h-screen w-full flex flex-col bg-transparent text-slate-900 dark:text-slate-100 overflow-hidden">
+      <header className="h-16 liquid-panel-strong flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/dashboard')} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
           <div>
@@ -60,11 +60,11 @@ export default function StudentReviewPage() {
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
-        <div className="flex-1 h-[45vh] md:h-full border-b md:border-b-0 md:border-r bg-slate-200 relative">
+        <div className="flex-1 h-[45vh] md:h-full border-b md:border-b-0 md:border-r border-white/10 bg-slate-200/60 dark:bg-slate-900/30 relative">
           <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay"></iframe>
         </div>
 
-        <div className="w-full md:w-[480px] lg:w-[580px] h-[55vh] md:h-full bg-white dark:bg-slate-900 overflow-y-auto p-6 space-y-6 custom-scrollbar shrink-0">
+        <div className="w-full md:w-[480px] lg:w-[580px] h-[55vh] md:h-full liquid-panel-strong overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar shrink-0">
           <div className="text-base font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-2 border-b pb-3"><BookOpen className="w-5 h-5"/> Đánh giá chi tiết từng câu</div>
           
           {submission.feedback && (

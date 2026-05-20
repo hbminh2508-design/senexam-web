@@ -98,7 +98,7 @@ export default function AdminDashboard() {
     sectionTotalPoints: number,            
     customPoints: Record<number, number>,
     mixedRanges?: MixedRange[],
-    questionEntries?: Record<number, { text: string; imageCrop?: string; options?: string[] }>, 
+    questionEntries?: Record<number, { text: string; imageCrop?: string; imageUrl?: string; options?: string[] }>,
     dragDropOptions?: Record<number, string[]> 
   }[]>([])
 
@@ -367,12 +367,13 @@ export default function AdminDashboard() {
     setUploadStatus({ type: 'uploading', message: 'Hệ thống đang nạp lõi AI OCR ngầm trên trình duyệt...' })
 
     try {
-      // Dynamic import: Nạp thư viện pdfjs-dist chỉ ở Client-side
+      // Dynamic import: Nạp thư viện pdfjs-dist chỉ ở Client-side, Vercel Build sẽ không báo lỗi
       const pdfjsLib = await import('pdfjs-dist')
       
-      // 🔧 FIX: Setup worker từ built-in package thay vì CDN
-      const workerUrl = `/pdf.worker.min.js`
-      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
+      // 🔧 FIX: Setup worker - dùng CDN với fallback
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+      }
 
       const fileToArrayBuffer = await uploadedFile.arrayBuffer()
       const pdf = await pdfjsLib.getDocument({ data: fileToArrayBuffer }).promise
@@ -380,7 +381,7 @@ export default function AdminDashboard() {
       const newQuestionEntries: Record<number, { text: string; imageCrop?: string; imageUrl?: string; options?: string[] }> = { ...section.questionEntries }
       const detectedTypes: Record<number, string> = {}
       let totalQuestionsFound = 0
-      let savedCount = 0
+  let savedCount = 0
 
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum)
@@ -591,7 +592,20 @@ export default function AdminDashboard() {
       if (authError || !user) throw new Error("Phiên đăng nhập hết hạn.")
 
       const generatedAccessCode = isHiddenExam ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
-      const cleanExamStructure = examStructure.map(s => ({...s}))
+      
+      // 🔧 FIX: Xóa imageCrop (base64 dài) trước khi lưu, chỉ giữ imageUrl
+      const cleanExamStructure = examStructure.map(s => ({
+        ...s,
+        questionEntries: s.questionEntries ? Object.keys(s.questionEntries).reduce((acc: Record<number, any>, key) => {
+          const qEntry = s.questionEntries![parseInt(key)]
+          acc[parseInt(key)] = {
+            text: qEntry.text,
+            imageUrl: qEntry.imageUrl, // Chỉ lưu URL, không lưu base64
+            options: qEntry.options
+          }
+          return acc
+        }, {}) : undefined
+      }))
 
       const { error: dbError } = await supabase.from('exams').insert({
         title, exam_type: examType, duration, allow_review: allowReview, max_attempts: maxAttempts, grading_method: gradingMethod, subjects: selectedSubjects, exam_structure: cleanExamStructure, drive_file_id: driveFileId, created_by: user.id, is_hidden: isHiddenExam, access_code: generatedAccessCode, require_proctoring: requireProctoring, creation_mode: creationMode
@@ -702,7 +716,7 @@ export default function AdminDashboard() {
   const filteredExams = examsList.filter(e => manageFilter === 'Tất cả' || e.exam_type === manageFilter)
   const filteredSubmissions = submissionsList.filter(s => submissionFilter === 'Tất cả' || s.exams?.exam_type === submissionFilter)
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 font-bold font-sans">Xác thực quyền quản trị...</div>
+  if (loading) return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent font-bold font-sans">Xác thực quyền quản trị...</div>
 
   // MÀN HÌNH CHẤM BÀI TỰ LUẬN / PHÊ DUYỆT ĐIỂM SỐ
   if (selectedSubForGrading) {
@@ -808,11 +822,11 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 font-sans overflow-x-hidden pb-20 md:pb-0">
+    <div className="app-shell min-h-screen flex flex-col md:flex-row bg-transparent text-slate-100 font-sans overflow-x-hidden pb-20 md:pb-0">
       
       {/* BACKGROUND ĐỒ HỌA MỜ KÍNH CHỐNG LAG */}
-      <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full filter blur-[130px] pointer-events-none"></div>
-      <div className="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full filter blur-[130px] pointer-events-none"></div>
+      <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full filter blur-[130px] pointer-events-none bounce-float"></div>
+      <div className="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full filter blur-[130px] pointer-events-none bounce-float-delayed"></div>
 
       {/* MODAL 1: CHỤP VÀ CẮT ẢNH CÂU HỎI TỪ PDF */}
       {autoFillModalId && (

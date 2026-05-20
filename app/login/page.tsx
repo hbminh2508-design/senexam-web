@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { Mail, Lock, ArrowRight, Loader2, Zap, GraduationCap, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 // 🌟 APPLE'S LIQUID GLASS CSS CONSTANTS
-const glassCardStyles = "bg-white/30 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border border-white/50 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.1)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]"
-const inputStyles = "w-full bg-white/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 rounded-2xl pl-12 pr-12 py-4 outline-none focus:ring-2 focus:ring-blue-500 backdrop-blur-md shadow-inner transition-all text-sm font-bold text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400"
+const glassCardStyles = "liquid-panel-strong"
+const inputStyles = "liquid-input w-full rounded-2xl pl-12 pr-12 py-4 outline-none focus:ring-2 focus:ring-blue-500 shadow-inner transition-all text-sm font-bold text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -58,12 +58,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/80 flex items-center justify-center p-4 relative text-slate-900 dark:text-slate-100 font-sans overflow-hidden">
+    <div className="app-shell min-h-screen bg-transparent flex items-center justify-center p-4 relative text-slate-900 dark:text-slate-100 font-sans overflow-hidden">
       
       {/* 🌟 LIQUID BACKGROUND ORBS 🌟 */}
-      <div className="fixed top-[-15%] left-[-10%] w-[500px] h-[500px] bg-gradient-to-br from-blue-400/50 to-indigo-400/40 dark:from-blue-800/50 dark:to-indigo-900/40 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 animate-pulse pointer-events-none"></div>
-      <div className="fixed bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-tl from-purple-400/40 to-pink-400/30 dark:from-purple-800/40 dark:to-pink-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[130px] opacity-70 animate-pulse pointer-events-none" style={{ animationDelay: '2s' }}></div>
-      <div className="fixed top-[20%] right-[20%] w-[300px] h-[300px] bg-emerald-300/30 dark:bg-emerald-900/30 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-60 animate-pulse pointer-events-none" style={{ animationDelay: '4s' }}></div>
+      <div className="fixed top-[-15%] left-[-10%] w-[500px] h-[500px] bg-gradient-to-br from-blue-400/25 to-indigo-400/20 dark:from-blue-800/35 dark:to-indigo-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 bounce-float pointer-events-none"></div>
+      <div className="fixed bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-tl from-purple-400/24 to-pink-400/18 dark:from-purple-800/28 dark:to-pink-900/18 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[130px] opacity-70 bounce-float-delayed pointer-events-none" style={{ animationDelay: '2s' }}></div>
+      <div className="fixed top-[20%] right-[20%] w-[300px] h-[300px] bg-emerald-300/18 dark:bg-emerald-900/24 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-60 bounce-float pointer-events-none" style={{ animationDelay: '4s' }}></div>
 
       <div className="relative z-10 w-full max-w-[1000px] flex flex-col md:flex-row items-center gap-10 md:gap-20">
         
