@@ -444,10 +444,10 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-5">
             
             {/* Hero Card - Main Feature */}
-            <div className="md:col-span-3 lg:col-span-4 bg-gradient-to-br from-blue-500/60 via-indigo-500/50 to-indigo-600/60 dark:from-blue-700/50 dark:via-blue-800/40 dark:to-indigo-900/50 backdrop-blur-3xl backdrop-saturate-150 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all group border border-white/40 dark:border-white/10">
+            <div className="md:col-span-3 lg:col-span-4 bg-gradient-to-br from-blue-500/65 via-indigo-500/55 to-cyan-500/45 dark:from-blue-700/55 dark:via-indigo-800/45 dark:to-cyan-900/30 backdrop-blur-3xl backdrop-saturate-150 rounded-2xl p-7 md:p-8 text-white relative overflow-hidden shadow-[0_12px_36px_rgba(37,99,235,0.24)] hover:shadow-[0_16px_42px_rgba(37,99,235,0.3)] transition-all group border border-white/45 dark:border-white/10">
               <div className="absolute inset-0 bg-gradient-to-tr from-white/10 via-transparent to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
               <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl group-hover:blur-2xl transition-all"></div>
               
@@ -456,10 +456,10 @@ export default function DashboardPage() {
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-lg rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-white/30 shadow-sm">
                     <Zap className="w-3 h-3 text-yellow-300 fill-yellow-300" /> Sẵn sàng
                   </div>
-                  <h2 className="text-3xl md:text-4xl font-extrabold mb-3 leading-tight drop-shadow-md">
+                  <h2 className="text-3xl md:text-4xl font-extrabold mb-3 leading-tight drop-shadow-md tracking-tight">
                     Chinh phục <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-blue-100">{formData.targetExams.length > 0 ? formData.targetExams.join(' & ') : 'Kỳ thi'}</span>
                   </h2>
-                  <p className="text-blue-50/85 text-sm font-medium leading-relaxed drop-shadow-sm max-w-xs">
+                  <p className="text-blue-50/90 text-sm font-medium leading-relaxed drop-shadow-sm max-w-sm">
                     Cá nhân hóa đề thi phù hợp năng lực. Đo lường tiến bộ từng ngày.
                   </p>
                 </div>
@@ -477,7 +477,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className={`${glassCardStyles} rounded-2xl p-6 flex flex-col justify-between border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md transition-all group`}>
+            <div className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-between border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md transition-all group`}>
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-gradient-to-br from-orange-400/30 to-red-500/30 text-orange-600 dark:text-orange-400 rounded-lg backdrop-blur-md border border-orange-200/50 dark:border-orange-500/20 shadow-inner group-hover:scale-105 transition-transform">
                   <Trophy className="w-6 h-6 drop-shadow-md" />
@@ -485,14 +485,14 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-600 dark:text-slate-400 font-bold mb-1 uppercase tracking-widest drop-shadow-sm">Điểm cao nhất</p>
-                <p className="text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm">
+                <p className="text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm tracking-tight">
                   {studentHistoryList.length > 0 ? `${Math.max(...studentHistoryList.map(s => s.score || 0))}` : '--'}
                 </p>
               </div>
             </div>
 
             {/* Quick Stats */}
-            <div className={`${glassCardStyles} rounded-2xl p-6 flex flex-col justify-between border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md transition-all group`}>
+            <div className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-between border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md transition-all group`}>
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-gradient-to-br from-emerald-400/30 to-green-500/30 text-emerald-600 dark:text-emerald-400 rounded-lg backdrop-blur-md border border-emerald-200/50 dark:border-emerald-500/20 shadow-inner group-hover:scale-105 transition-transform">
                   <BookOpen className="w-6 h-6 drop-shadow-md" />
@@ -500,16 +500,16 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-600 dark:text-slate-400 font-bold mb-1 uppercase tracking-widest drop-shadow-sm">Bài làm</p>
-                <p className="text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm">
+                <p className="text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm tracking-tight">
                   {studentHistoryList.length}
                 </p>
               </div>
             </div>
 
-            {/* Community Card */}
+            {/* Community + Library Cards */}
             <div 
               onClick={() => router.push('/forum')}
-              className={`${glassCardStyles} rounded-2xl p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md group cursor-pointer relative overflow-hidden transition-all lg:col-span-2`}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 group cursor-pointer relative overflow-hidden transition-all lg:col-span-3`}
             >
               <div className="absolute -right-8 -top-8 w-32 h-32 bg-blue-500/15 dark:bg-blue-600/10 rounded-full blur-2xl group-hover:bg-blue-500/25 transition-colors"></div>
               <div className="relative z-10">
@@ -525,8 +525,28 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <div 
+              onClick={() => router.push('/library')}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-3`}
+            >
+              <div className="absolute -right-10 -top-10 w-36 h-36 bg-cyan-400/14 dark:bg-cyan-600/14 rounded-full blur-3xl group-hover:bg-cyan-400/22 transition-colors"></div>
+              <div className="relative z-10 flex items-center gap-4">
+                <div className="p-3.5 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 text-cyan-600 dark:text-cyan-400 rounded-xl border border-cyan-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+                  <FolderOpen className="w-6 h-6 drop-shadow-md" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                    Thư Viện Số <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
+                    Tài liệu, chuyên đề và bài tập luyện tập đầy đủ
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* History Section - Full Width */}
-            <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-6 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
+            <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
               <h3 className="text-base font-extrabold flex items-center gap-2 mb-4 text-slate-900 dark:text-white drop-shadow-sm">
                 <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Lịch sử bài làm
               </h3>
@@ -561,29 +581,6 @@ export default function DashboardPage() {
                     )
                   })
                 )}
-              </div>
-            </div>
-            
-            {/* Library Section - Compact */}
-            <div 
-              onClick={() => router.push('/library')}
-              className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-6 flex items-center justify-between hover:shadow-lg transition-all border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 group cursor-pointer overflow-hidden relative`}
-            >
-              <div className="absolute -right-12 -top-12 w-56 h-56 bg-cyan-400/12 dark:bg-cyan-600/12 rounded-full blur-3xl group-hover:bg-cyan-400/18 transition-colors"></div>
-              
-              <div className="flex items-center gap-5 relative z-10 w-full">
-                <div className="p-4 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 text-cyan-600 dark:text-cyan-400 rounded-xl border border-cyan-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
-                  <FolderOpen className="w-7 h-7 drop-shadow-md" />
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                    Thư Viện Số <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                  </h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
-                    Tài liệu, chuyên đề và bài tập luyện tập đầy đủ
-                  </p>
-                </div>
               </div>
             </div>
 
