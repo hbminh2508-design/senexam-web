@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 
 // Apple Liquid Glass CSS Constants
-const glassCardStyles = "liquid-panel"
+const glassCardStyles = "liquid-panel relative"
 const EXAM_TYPES = ['Tất cả', 'THPTQG', 'HSA', 'TSA', 'SPT']
 
 export default function ExamsLibraryPage() {
@@ -88,12 +88,12 @@ export default function ExamsLibraryPage() {
       <div className="relative z-10 p-4 md:p-8 max-w-7xl mx-auto">
         
         {/* HEADER & THANH TÌM KIẾM */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5 mb-8">
           <div>
             <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors mb-3">
               <ChevronLeft className="w-4 h-4" /> Về trang chủ
             </button>
-            <h1 className="text-4xl font-extrabold tracking-tight drop-shadow-sm flex items-center gap-3">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-sm flex items-center gap-3">
               Kho Đề Thi <span className="text-blue-600 dark:text-blue-400">SenExam</span>
             </h1>
             <p className="text-slate-600 dark:text-slate-300 font-medium mt-2">Tổng hợp {exams.length} đề thi bám sát cấu trúc mới nhất.</p>
@@ -109,11 +109,11 @@ export default function ExamsLibraryPage() {
                 placeholder="Tìm kiếm tên đề thi..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-2xl pl-11 pr-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/50 shadow-sm transition-all"
+                className="w-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-white/60 dark:border-white/10 rounded-2xl pl-11 pr-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/40 shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all"
               />
             </div>
 
-            <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-white/50 dark:border-white/10 p-1.5 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-white/60 dark:border-white/10 p-1.5 rounded-2xl shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
               <Filter className="w-4 h-4 text-slate-500 ml-2 shrink-0" />
               <select 
                 value={filterType} 
@@ -128,20 +128,20 @@ export default function ExamsLibraryPage() {
 
         {/* LƯỚI DANH SÁCH ĐỀ THI */}
         {filteredExams.length === 0 ? (
-          <div className={`${glassCardStyles} rounded-[2rem] p-16 text-center flex flex-col items-center justify-center border-t-white/60 border-l-white/60`}>
+          <div className={`${glassCardStyles} rounded-[2rem] p-16 text-center flex flex-col items-center justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
             <BookOpen className="w-16 h-16 text-slate-400 mb-4 opacity-50" />
             <h3 className="text-xl font-bold text-slate-700 dark:text-slate-300">Không tìm thấy đề thi phù hợp</h3>
             <p className="text-slate-500 mt-2 font-medium">Hãy thử thay đổi từ khóa hoặc bộ lọc kỳ thi.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredExams.map((exam) => {
               const attempts = getAttemptsCount(exam.id)
               // Logic khóa: Nếu max_attempts lớn hơn 0 VÀ số lần làm đã chạm ngưỡng
               const isLocked = exam.max_attempts > 0 && attempts >= exam.max_attempts
 
               return (
-                <div key={exam.id} className={`${glassCardStyles} rounded-[2rem] p-6 flex flex-col justify-between hover:-translate-y-1 transition-transform duration-300 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 group`}>
+                <div key={exam.id} className={`${glassCardStyles} rounded-[2rem] p-6 flex flex-col justify-between hover:-translate-y-1 hover:shadow-[0_14px_40px_rgba(37,99,235,0.15)] transition-all duration-300 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 group`}>
                   
                   <div>
                     <div className="flex justify-between items-start mb-4">
@@ -156,7 +156,7 @@ export default function ExamsLibraryPage() {
                       )}
                     </div>
 
-                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white leading-snug mb-3 drop-shadow-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2">
+                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white leading-snug mb-3 drop-shadow-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 tracking-tight">
                       {exam.title}
                     </h3>
 
@@ -180,7 +180,7 @@ export default function ExamsLibraryPage() {
                       className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm backdrop-blur-md border ${
                         isLocked 
                           ? 'bg-slate-200/50 dark:bg-slate-800/50 text-slate-400 border-slate-300/50 dark:border-slate-700/50 cursor-not-allowed' 
-                          : 'bg-gradient-to-r from-blue-600/90 to-indigo-600/90 text-white border-white/20 hover:scale-105 hover:shadow-[0_4px_15px_rgba(59,130,246,0.4)]'
+                          : 'bg-gradient-to-r from-blue-600/90 via-indigo-600/90 to-cyan-600/90 text-white border-white/20 hover:scale-105 hover:shadow-[0_6px_18px_rgba(59,130,246,0.38)]'
                       }`}
                     >
                       {isLocked ? (

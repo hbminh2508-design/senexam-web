@@ -362,23 +362,32 @@ export default function ExamRoomPage() {
     return offsets
   }, [exam])
 
-  if (loading) return <div className="min-h-screen flex bg-slate-950 text-white items-center justify-center font-bold">Đang cấu trúc phòng thi ảo...</div>
+  if (loading) {
+    return (
+      <div className="app-shell min-h-screen bg-transparent flex items-center justify-center">
+        <div className="liquid-panel-strong rounded-3xl px-8 py-6 border border-white/20 text-slate-800 dark:text-slate-100 font-bold shadow-lg flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-blue-600 dark:text-blue-400" />
+          Đang cấu trúc phòng thi ảo...
+        </div>
+      </div>
+    )
+  }
 
   // PHÒNG CHỜ VÀO THI
   if (!hasStarted) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
-        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full filter blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full filter blur-[120px]"></div>
+      <div className="app-shell min-h-screen bg-transparent flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-600/15 rounded-full filter blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-500/12 rounded-full filter blur-[120px]"></div>
 
-        <div className="bg-slate-900/60 backdrop-blur-xl p-6 md:p-10 rounded-[2.5rem] max-w-2xl border border-white/10 shadow-2xl relative z-10 w-full animate-in fade-in zoom-in-95 duration-300">
+        <div className="liquid-panel-strong p-6 md:p-10 rounded-[2.5rem] max-w-2xl border border-white/20 dark:border-white/10 shadow-2xl relative z-10 w-full animate-in fade-in zoom-in-95 duration-300">
           <ShieldAlert className="w-14 h-14 text-blue-500 mx-auto mb-4 drop-shadow-[0_4px_12px_rgba(59,130,246,0.4)]" />
-          <h1 className="text-2xl md:text-3xl font-black text-white text-center tracking-tight mb-2">{exam?.title}</h1>
-          <p className="text-slate-400 text-center mb-6 font-bold text-xs uppercase tracking-widest">Thời gian: {exam?.duration} phút • Hệ: {exam?.exam_type}</p>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white text-center tracking-tight mb-2">{exam?.title}</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-center mb-6 font-bold text-xs uppercase tracking-widest">Thời gian: {exam?.duration} phút • Hệ: {exam?.exam_type}</p>
           
-          <div className="bg-slate-950/80 p-5 rounded-2xl text-left border border-white/5 shadow-inner mb-6 space-y-4">
-            <h3 className="text-red-400 font-extrabold text-sm flex items-center gap-2 border-b border-white/5 pb-2"><AlertTriangle className="w-4 h-4"/> QUY CHẾ BẢO MẬT PHÒNG THI:</h3>
-            <ul className="text-slate-300 text-xs space-y-3 font-medium list-none pl-1">
+          <div className="bg-white/45 dark:bg-slate-950/50 p-5 rounded-2xl text-left border border-white/60 dark:border-white/10 shadow-inner mb-6 space-y-4 backdrop-blur-xl">
+            <h3 className="text-red-500 dark:text-red-400 font-extrabold text-sm flex items-center gap-2 border-b border-white/30 dark:border-white/10 pb-2"><AlertTriangle className="w-4 h-4"/> QUY CHẾ BẢO MẬT PHÒNG THI:</h3>
+            <ul className="text-slate-700 dark:text-slate-300 text-xs space-y-3 font-medium list-none pl-1">
               <li className="flex items-start gap-2"><span>-</span> <span>Hệ thống ép chế độ <b className="text-white">Toàn màn hình</b> bảo mật tối đa.</span></li>
               <li className="flex items-start gap-2"><span>-</span> <span>Nghiêm cấm thoát màn hình, chuyển Tab. Vi phạm quá <b>3 lần</b> hệ thống tự động thu bài.</span></li>
               {exam?.require_proctoring && (
@@ -394,7 +403,7 @@ export default function ExamRoomPage() {
               <p>⛔ Bạn đã đạt giới hạn làm bài cho phép ({attemptCount}/{exam?.max_attempts} lượt).</p>
             </div>
           ) : (
-            <button onClick={handleStartExam} disabled={isRequestingCam} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-lg shadow-blue-600/20">
+            <button onClick={handleStartExam} disabled={isRequestingCam} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-lg shadow-blue-600/20">
               {isRequestingCam ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />} 
               {isRequestingCam ? 'Đang kích hoạt hệ thống kiểm duyệt...' : 'Xác nhận vào phòng thi'}
             </button>
@@ -458,23 +467,23 @@ export default function ExamRoomPage() {
         </div>
       )}
 
-      <header className="h-16 liquid-panel-strong flex items-center justify-between px-4 md:px-6 shrink-0 z-10 shadow-sm">
+      <header className="h-16 liquid-panel-strong flex items-center justify-between px-4 md:px-6 shrink-0 z-10 shadow-sm border-b border-white/40 dark:border-white/10">
         <div className="flex items-center gap-4">
-          <button onClick={() => { if(confirm("Hủy bài thi hiện tại?")) { const doc = document as any; if(doc.fullscreenElement || doc.webkitFullscreenElement) { if(doc.exitFullscreen) doc.exitFullscreen().catch(()=>{}); } router.push('/exams') } }} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"><ArrowLeft className="w-4 h-4" /></button>
+          <button onClick={() => { if(confirm("Hủy bài thi hiện tại?")) { const doc = document as any; if(doc.fullscreenElement || doc.webkitFullscreenElement) { if(doc.exitFullscreen) doc.exitFullscreen().catch(()=>{}); } router.push('/exams') } }} className="p-1.5 bg-white/70 dark:bg-slate-800/80 rounded-full text-slate-500 border border-white/60 dark:border-white/10"><ArrowLeft className="w-4 h-4" /></button>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 border rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0"><img src="/logo.png" alt="Logo" className="w-full h-full object-contain" /></div>
             <div>
-              <h1 className="font-extrabold text-xs md:text-sm max-w-[180px] md:max-w-xs truncate">{exam?.title}</h1>
+              <h1 className="font-extrabold text-xs md:text-sm max-w-[180px] md:max-w-xs truncate tracking-tight">{exam?.title}</h1>
               <div className="flex gap-2 mt-0.5 text-[9px] md:text-[10px] font-bold">
-                <span className={`px-1.5 py-0.5 rounded ${violations > 0 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-emerald-100 text-emerald-700'}`}>Vi phạm: {violations}/3</span>
+                <span className={`px-1.5 py-0.5 rounded border ${violations > 0 ? 'bg-red-100 text-red-600 border-red-200 animate-pulse' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>Vi phạm: {violations}/3</span>
               </div>
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-4 md:gap-6">
-          <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-black text-sm md:text-lg border-2 ${timeLeft < 300 ? 'text-red-600 border-red-200 bg-red-50 animate-pulse' : 'text-blue-600 border-blue-100 bg-blue-50/50 dark:bg-blue-950/30'}`}><Clock className="w-4 h-4 md:w-5 md:h-5"/>{formatTime(timeLeft)}</div>
-          <button onClick={handleManualSubmit} disabled={submitting} className="flex gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold text-xs md:text-sm shadow-md"><Send className="w-3.5 h-3.5"/>Nộp bài</button>
+          <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-black text-sm md:text-lg border-2 backdrop-blur-sm ${timeLeft < 300 ? 'text-red-600 border-red-200 bg-red-50 animate-pulse' : 'text-blue-600 border-blue-100 bg-blue-50/60 dark:bg-blue-950/30'}`}><Clock className="w-4 h-4 md:w-5 md:h-5"/>{formatTime(timeLeft)}</div>
+          <button onClick={handleManualSubmit} disabled={submitting} className="flex gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold text-xs md:text-sm shadow-md"><Send className="w-3.5 h-3.5"/>Nộp bài</button>
         </div>
       </header>
 
@@ -483,16 +492,16 @@ export default function ExamRoomPage() {
         
         {/* KHUNG ĐỀ GỐC PDF: CHỈ HIỂN THỊ NẾU SOẠN ĐỀ THEO CHẾ ĐỘ FILE PDF TRUYỀN THỐNG */}
         {exam?.creation_mode !== 'interactive_mode' && (
-          <div className="flex-1 h-[40vh] md:h-full relative bg-slate-900/5">
+          <div className="flex-1 h-[40vh] md:h-full relative bg-white/30 dark:bg-slate-900/20 backdrop-blur-sm">
             <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
           </div>
         )}
         
         {/* PHIẾU ĐÁP ÁN: SẼ CHIẾM TRỌN 100% DIỆN TÍCH MÀN HÌNH NẾU ĐỀ Ở CHẾ ĐỘ INTERACTIVE SỐ HÓA */}
-        <div className={`h-full bg-white dark:bg-slate-900 flex flex-col overflow-hidden ${exam?.creation_mode === 'interactive_mode' ? 'w-full' : 'w-full md:w-[420px] lg:w-[460px] border-l dark:border-slate-800'}`}>
+        <div className={`h-full liquid-panel-strong flex flex-col overflow-hidden ${exam?.creation_mode === 'interactive_mode' ? 'w-full' : 'w-full md:w-[430px] lg:w-[470px] border-l border-white/40 dark:border-white/10'} ${exam?.creation_mode === 'interactive_mode' ? '' : ''}`}>
           
           {/* Bảng điều hướng nhanh câu hỏi */}
-          <div className="shrink-0 liquid-panel border-b p-4 max-h-[30vh] overflow-y-auto custom-scrollbar">
+          <div className="shrink-0 liquid-panel border-b border-white/40 dark:border-white/10 p-4 max-h-[30vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
               <LayoutList className="w-3.5 h-3.5 text-blue-500" /> Sơ đồ câu hỏi phòng thi
             </div>
@@ -510,10 +519,10 @@ export default function ExamRoomPage() {
                         const targetEl = document.getElementById(`q-${key}`);
                         if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                       }} 
-                      className={`w-8 h-8 text-[11px] font-black rounded-lg border transition-all flex items-center justify-center ${
+                      className={`w-8 h-8 text-[11px] font-black rounded-lg border transition-all flex items-center justify-center shadow-sm ${
                         savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 
                         isAnswered ? 'bg-blue-600 text-white border-blue-600' : 
-                        'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        'bg-white/80 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300 border-white/70 dark:border-white/10'
                       }`}
                     >
                       {globalNum}
@@ -527,7 +536,7 @@ export default function ExamRoomPage() {
           {/* Ô hiển thị nội dung câu hỏi chi tiết số hóa tương tác */}
           <div className={`flex-1 p-4 overflow-y-auto custom-scrollbar bg-transparent ${exam?.creation_mode === 'interactive_mode' ? 'max-w-4xl mx-auto w-full space-y-8 py-8' : 'space-y-6'}`}>
             {exam?.exam_structure?.map((section: any) => (
-              <div key={section.id} className="liquid-panel-strong p-5 rounded-2xl border dark:border-slate-800 shadow-sm space-y-6">
+              <div key={section.id} className="liquid-panel-strong p-5 rounded-3xl border border-white/50 dark:border-white/10 shadow-sm space-y-6">
                 <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5 border-b dark:border-slate-800 pb-2">
                   <FileQuestion className="w-4 h-4 text-blue-500"/> {section.name}
                 </h3>
@@ -552,17 +561,17 @@ export default function ExamRoomPage() {
                     }
 
                     return (
-                      <div key={qIdx} id={`q-${key}`} className={`p-4 liquid-panel rounded-xl space-y-3 transition-all ${savedQuestions[key] ? 'border-amber-400 bg-amber-500/5' : ''}`}>
+                      <div key={qIdx} id={`q-${key}`} className={`p-4 liquid-panel rounded-2xl space-y-3 transition-all border border-white/50 dark:border-white/10 ${savedQuestions[key] ? 'border-amber-400 bg-amber-500/10' : ''}`}>
                         <div className="flex justify-between items-center border-b dark:border-slate-800 pb-2">
                           <span className="font-black text-xs text-blue-600 dark:text-blue-400">Câu hỏi {globalQNumber}:</span>
-                          <button onClick={() => toggleSaveQuestion(section.id, qIdx)} className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 'text-slate-400'}`}>
+                          <button onClick={() => toggleSaveQuestion(section.id, qIdx)} className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${savedQuestions[key] ? 'bg-amber-500 text-white border-amber-500' : 'text-slate-400 border-slate-300 dark:border-slate-700'}`}>
                             <Bookmark className="w-3 h-3"/> {savedQuestions[key] ? 'Đã ghim' : 'Ghim câu'}
                           </button>
                         </div>
 
                         {/* 🌟 HẠ TẦNG HIỂN THỊ ĐỀ BÀI SỐ HÓA: Hiện text cắt lát trực diện từ database, chứa trọn vẹn LaTeX */}
                         {exam?.creation_mode === 'interactive_mode' && section.questionEntries?.[qIdx]?.text && (
-                          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-relaxed mb-4 bg-white dark:bg-slate-950 p-3 rounded-xl border dark:border-slate-800 whitespace-pre-wrap">
+                          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-relaxed mb-4 bg-white/90 dark:bg-slate-950/80 p-3 rounded-xl border border-white/60 dark:border-slate-800 whitespace-pre-wrap">
                             {section.questionEntries[qIdx].text}
                           </div>
                         )}
@@ -580,7 +589,7 @@ export default function ExamRoomPage() {
                                         type="button"
                                         key={charLabel}
                                         onClick={() => handleAnswerSelect(section.id, qIdx, charLabel)}
-                                        className={`w-full p-3 text-left border rounded-xl font-bold text-xs flex items-center gap-3 transition-all ${currentAns === charLabel ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700 hover:bg-slate-100'}`}
+                                        className={`w-full p-3 text-left border rounded-xl font-bold text-xs flex items-center gap-3 transition-all ${currentAns === charLabel ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white/90 dark:bg-slate-800 text-slate-700 hover:bg-slate-100 border-white/70 dark:border-slate-700'}`}
                                       >
                                         <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center font-black ${currentAns === charLabel ? 'bg-white text-blue-600 border-white' : 'bg-slate-100 text-slate-500'}`}>{charLabel}</span>
                                         <span>{optText}</span>
@@ -592,14 +601,14 @@ export default function ExamRoomPage() {
                                 <div className="flex gap-2.5 flex-wrap">
                                   {Array.from({ length: currentOptionsCount }).map((_, oIdx) => { 
                                     const l = String.fromCharCode(65 + oIdx); 
-                                    return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className={`w-9 h-9 rounded-full border text-xs font-black transition-all ${currentAns === l ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white dark:bg-slate-800 text-slate-700'}`}>{l}</button> 
+                                    return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className={`w-9 h-9 rounded-full border text-xs font-black transition-all ${currentAns === l ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white/90 dark:bg-slate-800 text-slate-700 border-white/70 dark:border-slate-700'}`}>{l}</button> 
                                   })}
                                 </div>
                               )}
                             </div>
                           )}
                           
-                          {currentType === 'multiple_choice' && <div className="flex gap-2.5 flex-wrap">{Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-9 h-9 rounded-lg border text-xs font-black transition-all ${isSel ? 'bg-purple-600 text-white' : 'bg-white dark:bg-slate-800'}`}>{l}</button> })}</div>}
+                          {currentType === 'multiple_choice' && <div className="flex gap-2.5 flex-wrap">{Array.from({ length: currentOptionsCount }).map((_, oIdx) => { const l = String.fromCharCode(65 + oIdx); const ansArr = currentAns || []; const isSel = ansArr.includes(l); return <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a:any) => a !== l) : [...ansArr, l])} className={`w-9 h-9 rounded-lg border text-xs font-black transition-all ${isSel ? 'bg-purple-600 text-white border-purple-600' : 'bg-white/90 dark:bg-slate-800 border-white/70 dark:border-slate-700'}`}>{l}</button> })}</div>}
                           
                           {currentType === 'true_false' && (
                             <div className="space-y-2 text-xs font-bold">
@@ -608,20 +617,20 @@ export default function ExamRoomPage() {
                                 return (
                                   <div key={subLabel} className="flex items-center gap-3">
                                     <span className="text-slate-400 w-5 font-black">Ý {subLabel}:</span>
-                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'Đ')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black ${subVal === 'Đ' ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white dark:bg-slate-800'}`}>Đúng</button>
-                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'S')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black ${subVal === 'S' ? 'bg-red-500 border-red-500 text-white' : 'bg-white dark:bg-slate-800'}`}>Sai</button>
+                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'Đ')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black ${subVal === 'Đ' ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white/90 dark:bg-slate-800 border-white/70 dark:border-slate-700'}`}>Đúng</button>
+                                    <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'S')} className={`px-4 py-1.5 rounded-lg border text-[10px] font-black ${subVal === 'S' ? 'bg-red-500 border-red-500 text-white' : 'bg-white/90 dark:bg-slate-800 border-white/70 dark:border-slate-700'}`}>Sai</button>
                                   </div>
                                 )
                               })}
                             </div>
                           )}
 
-                          {currentType === 'short_answer' && <input type="text" value={currentAns || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, e.target.value)} placeholder="Nhập kết quả điền số hoặc biểu thức..." className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-blue-500 shadow-inner" />}
+                          {currentType === 'short_answer' && <input type="text" value={currentAns || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, e.target.value)} placeholder="Nhập kết quả điền số hoặc biểu thức..." className="w-full bg-white/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-blue-500 shadow-inner" />}
                           
                           {/* 🌟 HẠ TẦNG KÉO THẢ (DRAG & DROP) CHẠM CHUẨN XỊN TRỰC TIẾP */}
                           {currentType === 'drag_drop' && (
                             <div className="space-y-3">
-                              <div className="flex flex-wrap gap-2 bg-white dark:bg-slate-950 p-2.5 rounded-xl border dark:border-slate-800 min-h-12 items-center">
+                              <div className="flex flex-wrap gap-2 bg-white/90 dark:bg-slate-950 p-2.5 rounded-xl border border-white/70 dark:border-slate-800 min-h-12 items-center">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Lựa chọn:</span>
                                 {section.dragDropOptions?.[qIdx]?.map((opt: string) => (
                                   <button 
@@ -643,7 +652,7 @@ export default function ExamRoomPage() {
                             </div>
                           )}
 
-                          {currentType === 'essay' && <div className="space-y-2"><textarea value={currentAns?.text || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, text: e.target.value })} placeholder="Gõ lời giải tự luận..." className="w-full min-h-[100px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500" /><div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900 rounded-xl border dark:border-slate-800 shadow-inner"><UploadCloud className="text-blue-500 w-4 h-4 shrink-0"/><input type="file" onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, file: e.target.files?.[0] })} className="text-[10px] text-slate-500 w-full"/></div></div>}
+                          {currentType === 'essay' && <div className="space-y-2"><textarea value={currentAns?.text || ''} onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, text: e.target.value })} placeholder="Gõ lời giải tự luận..." className="w-full min-h-[100px] bg-white/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-xs font-medium outline-none focus:border-blue-500" /><div className="flex items-center gap-2 p-2 bg-slate-50/80 dark:bg-slate-900 rounded-xl border border-white/70 dark:border-slate-800 shadow-inner"><UploadCloud className="text-blue-500 w-4 h-4 shrink-0"/><input type="file" onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, file: e.target.files?.[0] })} className="text-[10px] text-slate-500 w-full"/></div></div>}
                         </div>
                       </div>
                     )
