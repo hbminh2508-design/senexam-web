@@ -367,18 +367,20 @@ export default function AdminDashboard() {
     setUploadStatus({ type: 'uploading', message: 'Hệ thống đang nạp lõi AI OCR ngầm trên trình duyệt...' })
 
     try {
-      // Dynamic import: Nạp thư viện pdfjs-dist chỉ ở Client-side, Vercel Build sẽ không báo lỗi
+      // Dynamic import: Nạp thư viện pdfjs-dist chỉ ở Client-side
       const pdfjsLib = await import('pdfjs-dist')
-      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-      }
+      
+      // 🔧 FIX: Setup worker từ built-in package thay vì CDN
+      const workerUrl = `/pdf.worker.min.js`
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
       const fileToArrayBuffer = await uploadedFile.arrayBuffer()
       const pdf = await pdfjsLib.getDocument({ data: fileToArrayBuffer }).promise
       
-      const newQuestionEntries: Record<number, { text: string; imageCrop?: string; options?: string[] }> = { ...section.questionEntries }
+      const newQuestionEntries: Record<number, { text: string; imageCrop?: string; imageUrl?: string; options?: string[] }> = { ...section.questionEntries }
       const detectedTypes: Record<number, string> = {}
       let totalQuestionsFound = 0
+      let savedCount = 0
 
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum)
@@ -428,10 +430,43 @@ export default function AdminDashboard() {
           const base64Image = cropCanvas.toDataURL('image/jpeg', 0.9)
           
           detectedTypes[currentQ.qIndex] = 'single_choice'
-          newQuestionEntries[currentQ.qIndex] = {
-            text: `Câu hỏi phân mảnh dạng ảnh số ${currentQ.qIndex + 1}`,
-            imageCrop: base64Image
+          
+          // 🔧 LƯU ẢNH VÀO SUPABASE STORAGE
+          try {
+            const saveResponse = await fetch('/api/save-question-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                image: base64Image,
+                fileName: `q${currentQ.qIndex + 1}`,
+                sectionId: autoFillModalId,
+                questionIndex: currentQ.qIndex
+              })
+            })
+            
+            if (saveResponse.ok) {
+              const saveData = await saveResponse.json()
+              newQuestionEntries[currentQ.qIndex] = {
+                text: `Câu hỏi phân mảnh dạng ảnh số ${currentQ.qIndex + 1}`,
+                imageCrop: base64Image,
+                imageUrl: saveData.url
+              }
+              savedCount++
+            } else {
+              // Fallback: lưu base64 nếu upload thất bại
+              newQuestionEntries[currentQ.qIndex] = {
+                text: `Câu hỏi phân mảnh dạng ảnh số ${currentQ.qIndex + 1}`,
+                imageCrop: base64Image
+              }
+            }
+          } catch (err) {
+            // Fallback: lưu base64 nếu có lỗi network
+            newQuestionEntries[currentQ.qIndex] = {
+              text: `Câu hỏi phân mảnh dạng ảnh số ${currentQ.qIndex + 1}`,
+              imageCrop: base64Image
+            }
           }
+          
           totalQuestionsFound++
         }
       }
@@ -469,7 +504,7 @@ export default function AdminDashboard() {
 
       setAutoFillModalId(null)
       setUploadStatus({ type: 'idle', message: '' })
-      addNotification('Trích xuất hoàn tất', `Đã tự động bóc nhỏ và tạo lập ${totalQuestionsFound} câu hỏi dạng ảnh sắc nét từ PDF.`, 'success')
+      addNotification('Trích xuất hoàn tất', `Đã tự động bóc nhỏ và tạo lập ${totalQuestionsFound} câu hỏi dạng ảnh sắc nét từ PDF. ${savedCount} ảnh đã lưu vào cloud.`, 'success')
 
     } catch (err: any) {
       setUploadStatus({ type: 'error', message: err.message || 'Lỗi bóc tách tệp PDF.' })
