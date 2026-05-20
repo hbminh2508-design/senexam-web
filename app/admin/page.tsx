@@ -72,6 +72,10 @@ export default function AdminDashboard() {
   const [autoFillModalId, setAutoFillModalId] = useState<string | null>(null)
   const [autoFillText, setAutoFillText] = useState('')
   
+  // 🌟 STATE CHO OCR BẢNG ĐÁP ÁN
+  const [ocrAnswerSheetModalId, setOcrAnswerSheetModalId] = useState<string | null>(null)
+  const [ocrAnswerSheetFile, setOcrAnswerSheetFile] = useState<File | null>(null)
+  
   // HỆ THỐNG THÔNG BÁO LIỀN MẠCH
   const [notifications, setNotifications] = useState<SysNotification[]>([
     { id: '1', title: 'Hệ thống sẵn sàng', message: 'Hạ tầng AI OCR cắt ảnh PDF phối hợp bảng đáp án tự động đã kích hoạt.', type: 'success', time: 'Vừa xong', read: false }
@@ -266,6 +270,89 @@ export default function AdminDashboard() {
       }
       return s
     }))
+  }
+
+  // 🌟 HÀM OCR CÂUHỎI TỪ ẢNH BẰNG GEMINI VISION
+  const handleOCRQuestion = async (imageCropBase64: string, qIdx: number, sectionId: string) => {
+    try {
+      const base64Data = imageCropBase64.split(',')[1] || imageCropBase64
+      
+      const formData = new FormData()
+      const blobData = await (await fetch(`data:image/jpeg;base64,${base64Data}`)).blob()
+      formData.append('image', blobData, 'question.jpg')
+      formData.append('mode', 'question')
+
+      const response = await fetch('/api/ocr-exam', { method: 'POST', body: formData })
+      const result = await response.json()
+
+      if (!response.ok) throw new Error(result.error)
+
+      const { question_type, question_text, options } = result.data
+
+      // Cập nhật text của câu hỏi
+      setExamStructure(prev => prev.map(s => {
+        if (s.id === sectionId) {
+          const updatedEntries = { ...s.questionEntries }
+          updatedEntries[qIdx] = {
+            ...(updatedEntries[qIdx] || {}),
+            text: question_text,
+            options: options || undefined
+          }
+          return { ...s, questionEntries: updatedEntries }
+        }
+        return s
+      }))
+
+      addNotification('OCR câu hỏi', `Câu ${qIdx + 1}: Nhận diện dạng "${question_type}" thành công`, 'success')
+    } catch (error: any) {
+      addNotification('OCR thất bại', error.message, 'error')
+    }
+  }
+
+  // 🌟 HÀM OCR BẢNG ĐÁP ÁN TỪ ẢNH
+  const handleOCRAnswerSheet = async (imageFile: File) => {
+    try {
+      if (!autoFillModalId) return
+
+      addNotification('OCR bảng đáp án', 'Hệ thống đang quét trang trả lời...', 'info')
+      setUploadStatus({ type: 'uploading', message: 'Gemini Vision đang nhận diện bảng đáp án...' })
+
+      const formData = new FormData()
+      formData.append('image', imageFile)
+      formData.append('mode', 'answer')
+
+      const response = await fetch('/api/ocr-exam', { method: 'POST', body: formData })
+      const result = await response.json()
+
+      if (!response.ok) throw new Error(result.error)
+
+      const { answers, total_questions } = result.data
+      const section = examStructure.find(s => s.id === autoFillModalId)
+      if (!section) return
+
+      const updatedAnswers = { ...section.correctAnswers }
+      Object.entries(answers).forEach(([qNum, ans]) => {
+        const qIdx = parseInt(qNum) - 1
+        if (qIdx >= 0 && qIdx < section.questionCount) {
+          updatedAnswers[qIdx] = String(ans).toUpperCase()
+        }
+      })
+
+      setExamStructure(prev => prev.map(s => {
+        if (s.id === autoFillModalId) {
+          return { ...s, correctAnswers: updatedAnswers }
+        }
+        return s
+      }))
+
+      setUploadStatus({ type: 'success', message: 'Hoàn thành!' })
+      addNotification('OCR đáp án', `Đã nhận diện ${total_questions} câu trả lời thành công`, 'success')
+      
+      setTimeout(() => setUploadStatus({ type: 'idle', message: '' }), 2000)
+    } catch (error: any) {
+      setUploadStatus({ type: 'error', message: error.message })
+      addNotification('OCR thất bại', error.message, 'error')
+    }
   }
 
   // 🌟 FIX LỖI DOMMatrix VÀ CẢNH BÁO KIỂU DỮ LIỆU CANVAS CỦA TYPESCRIPT 🌟
@@ -716,6 +803,70 @@ export default function AdminDashboard() {
                   <Loader2 className="w-3.5 h-3.5 animate-spin"/> {uploadStatus.message}
                 </div>
               )}
+              <div className="border-t border-white/5 pt-4 mt-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Hoặc OCR bảng đáp án</p>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setOcrAnswerSheetModalId(autoFillModalId)
+                    setAutoFillModalId(null)
+                  }}
+                  className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-3.5 h-3.5"/> OCR Trang Trả Lời (Ảnh/Scan)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1B: OCR BẢNG ĐÁP ÁN TỪ ẢNH */}
+      {ocrAnswerSheetModalId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-white/10 rounded-[2rem] p-6 max-w-lg w-full shadow-2xl relative">
+            <button onClick={() => setOcrAnswerSheetModalId(null)} className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full hover:text-red-400 transition-colors"><X className="w-4 h-4"/></button>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center border border-amber-500/30"><Sparkles className="w-5 h-5"/></div>
+              <div>
+                <h3 className="font-black text-base">OCR Bảng Đáp Án</h3>
+                <p className="text-xs text-slate-400 font-medium">Gemini Vision sẽ nhận diện toàn bộ bảng đáp án từ ảnh hoặc file scan.</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-amber-700 rounded-xl p-8 text-center relative hover:bg-amber-950/20 transition-colors">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={(e) => setOcrAnswerSheetFile(e.target.files?.[0] || null)} 
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                />
+                <UploadCloud className="w-10 h-10 text-amber-500 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-300">{ocrAnswerSheetFile ? ocrAnswerSheetFile.name : 'Chọn ảnh bảng đáp án hoặc scan trang trả lời'}</p>
+                <p className="text-xs text-slate-500 mt-1">Hỗ trợ: JPG, PNG, PDF scan</p>
+              </div>
+              {uploadStatus.type === 'uploading' && (
+                <div className="p-3 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin"/> {uploadStatus.message}
+                </div>
+              )}
+              {uploadStatus.type === 'error' && (
+                <div className="p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold">
+                  {uploadStatus.message}
+                </div>
+              )}
+              <button 
+                type="button"
+                disabled={!ocrAnswerSheetFile || uploadStatus.type === 'uploading'}
+                onClick={() => {
+                  if (ocrAnswerSheetFile) {
+                    handleOCRAnswerSheet(ocrAnswerSheetFile)
+                  }
+                }}
+                className="w-full bg-amber-500 hover:bg-amber-600 disabled:bg-slate-600 text-slate-950 font-black py-3 rounded-xl text-xs transition-colors disabled:cursor-not-allowed"
+              >
+                {uploadStatus.type === 'uploading' ? 'Đang xử lý...' : 'Quét Bảng Đáp Án'}
+              </button>
             </div>
           </div>
         </div>
@@ -947,7 +1098,16 @@ export default function AdminDashboard() {
                                   <div className="space-y-2 border-b lg:border-b-0 lg:border-r pb-2 lg:pb-0 lg:pr-3">
                                     <span className="text-[10px] font-black px-2 py-0.5 bg-slate-800 rounded text-slate-400">Câu {qIdx + 1}</span>
                                     {section.questionEntries?.[qIdx]?.imageCrop ? (
-                                      <div className="bg-white p-1.5 rounded-lg border shadow-inner mt-1.5"><img src={section.questionEntries[qIdx].imageCrop} alt="" className="w-full h-auto object-contain max-h-36" /></div>
+                                      <div className="space-y-1.5">
+                                        <div className="bg-white p-1.5 rounded-lg border shadow-inner mt-1.5"><img src={section.questionEntries[qIdx].imageCrop} alt="" className="w-full h-auto object-contain max-h-36" /></div>
+                                        <button 
+                                          type="button"
+                                          onClick={() => section.questionEntries?.[qIdx]?.imageCrop && handleOCRQuestion(section.questionEntries[qIdx].imageCrop, qIdx, section.id)}
+                                          className="w-full text-[10px] font-black bg-purple-600/20 text-purple-400 border border-purple-500/30 px-2 py-1.5 rounded-lg hover:bg-purple-600/30 transition-colors flex items-center justify-center gap-1"
+                                        >
+                                          <Sparkles className="w-3 h-3"/> Quét câu
+                                        </button>
+                                      </div>
                                     ) : <p className="text-[10px] italic text-slate-500 mt-1">Chưa nạp ảnh đề từ PDF.</p>}
                                   </div>
                                   <div className="flex flex-col justify-center gap-1.5">
