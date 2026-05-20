@@ -1,18 +1,14 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo, ChangeEvent } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   UploadCloud, FileText, Users, LogOut, PlusCircle, 
   Trash2, ShieldAlert, BookOpen, Layers, X, ClipboardList, 
   CheckCircle2, Hourglass, ExternalLink, KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard, Maximize2,
-  Wand2, Sparkles, Crown, Camera, Sparkle, Shuffle, Check, FileInput, Bell, AlertCircle, Menu
+  Wand2, Sparkles, Crown, Camera, Sparkle, Shuffle, Check, FileInput, Bell, AlertCircle, Menu, Loader2
 } from 'lucide-react'
-
-// Cấu hình worker cho thư viện PDF.js xử lý cắt ảnh ngầm trên trình duyệt
-import * as pdfjsLib from 'pdfjs-dist'
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
 const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT']
 const SUBJECT_GROUPS: Record<string, string[]> = {
@@ -40,6 +36,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   
   const [activeTab, setActiveTab] = useState<'upload' | 'manage' | 'submissions' | 'collab'>('upload')
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const [selectedSubForGrading, setSelectedSubForGrading] = useState<any | null>(null)
   const [gradingScores, setGradingScores] = useState<Record<string, string>>({})
@@ -72,15 +69,16 @@ export default function AdminDashboard() {
   const [requireProctoring, setRequireProctoring] = useState(false)
   const [creationMode, setCreationMode] = useState<'pdf_mode' | 'interactive_mode'>('pdf_mode')
 
+  const [autoFillModalId, setAutoFillModalId] = useState<string | null>(null)
+  const [autoFillText, setAutoFillText] = useState('')
+  
   // HỆ THỐNG THÔNG BÁO LIỀN MẠCH
   const [notifications, setNotifications] = useState<SysNotification[]>([
     { id: '1', title: 'Hệ thống sẵn sàng', message: 'Hạ tầng AI OCR cắt ảnh PDF phối hợp bảng đáp án tự động đã kích hoạt.', type: 'success', time: 'Vừa xong', read: false }
   ])
   const [showNotificationBox, setShowNotificationBox] = useState(false)
 
-  // Modals bóc tách đáp án thần tốc
-  const [autoFillModalId, setAutoFillModalId] = useState<string | null>(null)
-  const [autoFillText, setAutoFillText] = useState('')
+  // Modals khớp hòm đáp án
   const [quickAnswersModalId, setQuickAnswersModalId] = useState<string | null>(null)
   const [quickAnswersText, setQuickAnswersText] = useState('')
 
@@ -270,7 +268,7 @@ export default function AdminDashboard() {
     }))
   }
 
-  // 🌟 BỘ LÕI OCR NHẬN DIỆN VÀ TỰ ĐỘNG CẮT ĐỀ THI THÀNH ẢNH TỪ FILE PDF GỐC 🌟
+  // 🌟 FIX LỖI DOMMatrix VÀ CẢNH BÁO KIỂU DỮ LIỆU CANVAS CỦA TYPESCRIPT 🌟
   const handleProcessPdfCropping = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0]
     if (!uploadedFile || !autoFillModalId) return
@@ -278,10 +276,16 @@ export default function AdminDashboard() {
     const section = examStructure.find(s => s.id === autoFillModalId)
     if (!section) return
 
-    addNotification('Bóc tách PDF', 'Hệ thống đang quét tọa độ câu hỏi và băm ảnh ngầm...', 'info')
-    setUploadStatus({ type: 'uploading', message: 'Hệ thống đang quét tọa độ câu hỏi ngầm trên Canvas...' })
+    addNotification('Bóc tách PDF', 'Hệ thống đang nạp thư viện lõi và quét tọa độ câu hỏi ngầm...', 'info')
+    setUploadStatus({ type: 'uploading', message: 'Hệ thống đang nạp lõi AI OCR ngầm trên trình duyệt...' })
 
     try {
+      // Dynamic import: Nạp thư viện pdfjs-dist chỉ ở Client-side, Vercel Build sẽ không báo lỗi
+      const pdfjsLib = await import('pdfjs-dist')
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+      }
+
       const fileToArrayBuffer = await uploadedFile.arrayBuffer()
       const pdf = await pdfjsLib.getDocument({ data: fileToArrayBuffer }).promise
       
@@ -299,7 +303,8 @@ export default function AdminDashboard() {
         canvas.width = viewport.width
         canvas.height = viewport.height
 
-        await page.render({ canvas: canvas, canvasContext: ctx!, viewport }).promise
+        // Sửa lỗi cảnh báo TypeScript ở hàm page.render() bằng cách cast (ép kiểu) an toàn
+        await page.render({ canvasContext: ctx, viewport } as any).promise
 
         const items: any[] = textContent.items
         const questionLines: { qIndex: number; yTop: number }[] = []
@@ -344,7 +349,7 @@ export default function AdminDashboard() {
         }
       }
 
-      if (totalQuestionsFound === 0) throw new Error("Không quét được mốc từ khóa câu hỏi.")
+      if (totalQuestionsFound === 0) throw new Error("Không quét được mốc từ khóa câu hỏi. Xin hãy kiểm tra lại định dạng file PDF.")
 
       setExamStructure(prev => prev.map(s => {
         if (s.id === autoFillModalId) {
@@ -377,7 +382,7 @@ export default function AdminDashboard() {
 
       setAutoFillModalId(null)
       setUploadStatus({ type: 'idle', message: '' })
-      addNotification('Trích xuất hoàn tất', `Đã tự động bóc nhỏ và tạo lập ${totalQuestionsFound} ô câu hỏi dạng ảnh thành công.`, 'success')
+      addNotification('Trích xuất hoàn tất', `Đã tự động bóc nhỏ và tạo lập ${totalQuestionsFound} câu hỏi dạng ảnh sắc nét từ PDF.`, 'success')
 
     } catch (err: any) {
       setUploadStatus({ type: 'error', message: err.message || 'Lỗi bóc tách tệp PDF.' })
@@ -385,7 +390,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // KHỚP CHUỖI ĐÁP ÁN THẦN TỐC THEO CHUỖI TEXT
   const handleProcessQuickAnswers = () => {
     if (!quickAnswersModalId) return
     const section = examStructure.find(s => s.id === quickAnswersModalId)
@@ -426,14 +430,13 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleAnswerFileRead = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (evt) => {
-      if (evt.target?.result) setAutoFillText(evt.target.result as string)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selectedFile = e.target.files[0]
+      setFile(selectedFile)
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl)
+      setPdfPreviewUrl(URL.createObjectURL(selectedFile))
     }
-    reader.readAsText(file)
   }
 
   const handleUploadExam = async (e: React.FormEvent) => {
@@ -682,14 +685,63 @@ export default function AdminDashboard() {
     )
   }
 
-  function handleFileChange(event: ChangeEvent<HTMLInputElement, HTMLInputElement>): void {
-    throw new Error('Function not implemented.')
-  }
-
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 font-sans overflow-x-hidden pb-20 md:pb-0">
       
-      {/* SIDEBAR ĐẠI TU: CHẠY TRÊN DESKTOP */}
+      {/* BACKGROUND ĐỒ HỌA MỜ KÍNH CHỐNG LAG */}
+      <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full filter blur-[130px] pointer-events-none"></div>
+      <div className="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full filter blur-[130px] pointer-events-none"></div>
+
+      {/* MODAL 1: CHỤP VÀ CẮT ẢNH CÂU HỎI TỪ PDF */}
+      {autoFillModalId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-white/10 rounded-[2rem] p-6 max-w-lg w-full shadow-2xl relative">
+            <button onClick={() => setAutoFillModalId(null)} className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full hover:text-red-400 transition-colors"><X className="w-4 h-4"/></button>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-blue-500/20 text-blue-400 rounded-xl flex items-center justify-center border border-blue-500/30"><Wand2 className="w-5 h-5"/></div>
+              <div>
+                <h3 className="font-black text-base">Trích Xuất Ảnh PDF Tự Động</h3>
+                <p className="text-xs text-slate-400 font-medium">Hệ thống quét tọa độ dòng và cắt đề bài thành ảnh riêng biệt.</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center relative hover:bg-slate-800/40 transition-colors">
+                <input type="file" accept=".pdf" onChange={handleProcessPdfCropping} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                <UploadCloud className="w-10 h-10 text-blue-500 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-300">Nhấp chọn hoặc kéo thả tệp PDF đề vào đây</p>
+                <p className="text-xs text-slate-500 mt-1">Ghi chú: File PDF cần có từ khóa "Câu 1.", "Câu 2." để nhận diện phân vùng.</p>
+              </div>
+              {uploadStatus.type === 'uploading' && (
+                <div className="p-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin"/> {uploadStatus.message}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: KHỚP ĐÁP ÁN THẦN TỐC */}
+      {quickAnswersModalId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-white/10 rounded-[2rem] p-6 max-w-md w-full shadow-2xl relative">
+            <button onClick={() => setQuickAnswersModalId(null)} className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full hover:text-red-400 transition-colors"><X className="w-4 h-4"/></button>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center border border-amber-500/30"><Check className="w-5 h-5"/></div>
+              <div>
+                <h3 className="font-black text-base">Hộp Đáp Án Thần Tốc</h3>
+                <p className="text-xs text-slate-400 font-medium">Tự động khớp chuỗi ký tự đáp án thô vào hệ thống.</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <textarea value={quickAnswersText} onChange={(e) => setQuickAnswersText(e.target.value)} placeholder="Mẫu: 1.A, 2.B, 3.ĐSĐS, 4.12,5" className="w-full h-28 p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs font-bold outline-none focus:border-amber-500 shadow-inner" />
+              <button onClick={handleProcessQuickAnswers} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl text-xs transition-transform active:scale-95 shadow-md">Đồng bộ dữ liệu đáp án</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- SIDEBAR ĐẠI TU: CHẠY TRÊN DESKTOP --- */}
       <div className="w-64 bg-slate-900/60 backdrop-blur-2xl border-r border-white/10 p-6 flex flex-col hidden md:flex shrink-0 z-30">
         <div className="flex items-center gap-2.5 mb-8 border-b border-white/5 pb-4">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-black text-white shadow-md shadow-blue-600/20">S</div>
@@ -706,21 +758,24 @@ export default function AdminDashboard() {
         <button onClick={async () => { await supabase.auth.signOut(); router.push('/login') }} className="flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl font-bold text-xs transition-colors mt-auto"><LogOut className="w-4 h-4"/> Đăng xuất tài khoản</button>
       </div>
 
-      {/* TOP BAR MOBILE (KIỂU DÁNG KÍNH MỜ APPS) */}
+      {/* --- TOP BAR MOBILE (KIỂU DÁNG KÍNH MỜ APPS) --- */}
       <header className="h-16 bg-slate-900/80 backdrop-blur-xl border-b border-white/10 px-4 flex items-center justify-between sticky top-0 z-40 md:hidden shrink-0">
-        <div><span className="font-black text-sm tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">SenExam Hub</span></div>
+        <div className="flex items-center gap-2">
+          <span className="font-black text-sm tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">SenExam Hub</span>
+        </div>
+        
         <div className="flex items-center gap-2">
           <div className="relative">
             <button onClick={() => { setShowNotificationBox(!showNotificationBox); setNotifications(prev => prev.map(n => ({...n, read: true}))) }} className="p-2.5 bg-slate-900 border border-white/10 rounded-xl shadow-inner relative">
               <Bell className="w-4 h-4 text-slate-300" />
-              {unreadCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white font-black text-[9px] rounded-full flex items-center justify-center">{unreadCount}</span>}
+              {unreadCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white font-black text-[9px] rounded-full flex items-center justify-center animate-pulse">{unreadCount}</span>}
             </button>
             {showNotificationBox && (
-              <div className="absolute right-0 mt-3 w-72 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-3 space-y-2 z-50 animate-in slide-in-from-top-2 max-h-80 overflow-y-auto custom-scrollbar">
-                <div className="flex justify-between items-center border-b border-white/5 pb-1.5 text-[10px] font-black text-slate-400 uppercase"><span>Nhật ký tác vụ</span><button onClick={() => setNotifications([])} className="text-red-400">Xóa</button></div>
+              <div className="absolute right-0 mt-3 w-72 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-3 space-y-2 z-50 animate-in slide-in-from-top-2 max-h-80 overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-center border-b border-white/5 pb-1.5 text-[10px] font-black text-slate-400 uppercase"><span>Nhật ký hoạt động</span><button onClick={() => setNotifications([])} className="text-red-400">Xóa</button></div>
                 {notifications.length === 0 ? <p className="text-[10px] text-center text-slate-500 py-4 font-bold">Không có tác vụ mới.</p> : notifications.map(n => (
-                  <div key={n.id} className="p-2 rounded-lg bg-slate-950 border border-white/5 text-[11px] flex items-start gap-2">
-                    <AlertCircle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${n.type === 'success' ? 'text-emerald-400' : 'text-blue-400'}`}/>
+                  <div key={n.id} className="p-2 rounded-lg bg-slate-955/60 border border-white/5 text-[11px] flex items-start gap-2">
+                    <AlertCircle className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${n.type === 'success' ? 'text-emerald-400' : n.type === 'error' ? 'text-red-400' : 'text-blue-400'}`}/>
                     <div><p className="font-extrabold text-slate-200">{n.title}</p><p className="text-slate-400 mt-0.5 font-medium leading-tight">{n.message}</p></div>
                   </div>
                 ))}
@@ -730,20 +785,19 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {/* KHÔNG GIAN NỘI DUNG CHÍNH */}
+      {/* --- KHÔNG GIAN NỘI DUNG CHÍNH --- */}
       <div className="flex-1 p-4 md:p-10 overflow-y-auto relative">
-        {/* CHUÔNG THÔNG BÁO CHO BẢN DESKTOP */}
         <div className="absolute top-8 right-10 z-40 hidden md:block">
           <button onClick={() => { setShowNotificationBox(!showNotificationBox); setNotifications(prev => prev.map(n => ({...n, read: true}))) }} className="p-2.5 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-xl relative shadow-md">
             <Bell className="w-4 h-4 text-slate-300" />
             {unreadCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white font-black text-[9px] rounded-full flex items-center justify-center">{unreadCount}</span>}
           </button>
           {showNotificationBox && (
-            <div className="absolute right-0 mt-3 w-80 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-4 space-y-2.5 z-50 animate-in slide-in-from-top-2 max-h-96 overflow-y-auto custom-scrollbar">
+            <div className="absolute right-0 mt-3 w-80 bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-4 space-y-2.5 z-50 animate-in slide-in-from-top-2 max-h-96 overflow-y-auto custom-scrollbar">
               <div className="flex justify-between items-center border-b border-white/5 pb-2 text-[10px] font-black text-slate-400 uppercase"><span>Nhật ký hoạt động</span><button onClick={() => setNotifications([])} className="text-red-400">Xóa sạch</button></div>
-              {notifications.map(n => (
-                <div key={n.id} className="p-2.5 rounded-xl bg-slate-950 border border-white/5 text-xs flex items-start gap-2.5 shadow-inner">
-                  <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${n.type === 'success' ? 'text-emerald-400' : 'text-blue-400'}`}/>
+              {notifications.length === 0 ? <p className="text-[10px] text-center text-slate-500 py-4 font-bold">Không có tác vụ mới.</p> : notifications.map(n => (
+                <div key={n.id} className="p-2.5 rounded-xl bg-slate-950/80 border border-white/5 text-xs flex items-start gap-2.5 shadow-inner">
+                  <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${n.type === 'success' ? 'text-emerald-400' : n.type === 'error' ? 'text-red-400' : 'text-blue-400'}`}/>
                   <div><p className="font-black text-slate-200">{n.title}</p><p className="text-slate-400 mt-0.5 font-bold leading-normal">{n.message}</p></div>
                 </div>
               ))}
@@ -833,7 +887,7 @@ export default function AdminDashboard() {
                   <div className="space-y-4">
                     {examStructure.map((section) => (
                       <div key={section.id} className="bg-slate-950/60 p-4 md:p-5 rounded-2xl border border-white/5 relative space-y-4">
-                        <button type="button" onClick={() => removeSection(section.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-400 transition-colors"><X className="w-4 h-4"/></button>
+                        <button type="button" onClick={() => removeSection(section.id)} className="absolute top-4 right-4 text-slate-500 hover:text-red-400 transition-colors"><X className="w-4 h-4"/></button>
                         
                         <input type="text" value={section.name} onChange={(e) => updateSection(section.id, 'name', e.target.value)} className="font-black bg-transparent border-b border-white/10 text-base outline-none w-full md:w-1/2 pb-1 focus:border-blue-500" placeholder="Tên phần thi..." />
                         
@@ -841,32 +895,26 @@ export default function AdminDashboard() {
                           <div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Bộ môn</label><select value={section.subject} onChange={(e) => updateSection(section.id, 'subject', e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold outline-none">{selectedSubjects.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                           <div>
                             <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Dạng bài chủ đạo</label>
-                            <select value={section.type} onChange={(e) => updateSection(section.id, 'type', e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold">
-                              <option value="mixed">Câu hỗn hợp số hóa đa năng (Kiểu Azota)</option>
-                              <option value="single_choice">Trắc nghiệm (1 đáp án)</option>
-                              <option value="multiple_choice">Trắc nghiệm (Nhiều đáp án)</option>
-                              <option value="true_false">Đúng / Sai (4 Ý bộ GD)</option>
+                            <select value={section.type} onChange={(e) => updateSection(section.id, 'type', e.target.value)} className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold outline-none">
+                              <option value="mixed">Mô hình hỗn hợp số (Tự động chia vùng)</option>
+                              <option value="single_choice">Trắc nghiệm đơn</option>
+                              <option value="true_false">Đúng / Sai 4 ý</option>
                               <option value="short_answer">Trả lời ngắn / Điền số</option>
-                              <option value="drag_drop">Kéo thả vào vùng trống [___]</option>
+                              <option value="drag_drop">Kéo thả từ khóa [___]</option>
                             </select>
                           </div>
                           <div><label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Số lượng câu</label><input type="number" min="1" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 1)} className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs font-bold outline-none" /></div>
                         </div>
 
                         {section.type === 'mixed' && (
-                          <div className="mt-4 p-4 bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl space-y-3 mb-4">
-                            <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                              <p className="text-xs font-bold text-indigo-400">Phân vùng cấu trúc câu hỏi hỗn hợp tự động</p>
-                              <button type="button" onClick={() => handleAddMixedRange(section.id)} className="text-[10px] font-bold bg-indigo-100/10 text-indigo-400 px-3 py-1 rounded-lg hover:bg-indigo-200 transition-colors">
-                                + Thêm vùng thủ công
-                              </button>
-                            </div>
+                          <div className="p-3 bg-slate-900/80 border border-white/5 rounded-xl space-y-2.5">
+                            <div className="flex justify-between items-center border-b border-white/5 pb-1.5"><span className="text-[10px] font-black text-slate-400 uppercase">Cấu hình phân vùng câu hỏi thủ công</span><button type="button" onClick={() => handleAddMixedRange(section.id)} className="text-[9px] font-black bg-blue-600/10 text-blue-400 px-2.5 py-1 rounded-md border border-blue-500/20">+ Thêm vùng</button></div>
                             {section.mixedRanges?.map((range, rIdx) => (
-                              <div key={rIdx} className="flex flex-wrap items-center gap-3 text-xs font-bold">
-                                <span className="text-slate-500">Từ câu</span>
-                                <input type="number" min="1" value={range.start} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'start', parseInt(e.target.value)||1)} className="w-14 p-1 bg-slate-950 border border-white/10 rounded-md text-center outline-none"/>
+                              <div key={rIdx} className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                                <span className="text-slate-500">Từ</span>
+                                <input type="number" value={range.start} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'start', parseInt(e.target.value)||1)} className="w-12 p-1 bg-slate-950 border border-white/10 rounded-md text-center outline-none"/>
                                 <span className="text-slate-500">đến</span>
-                                <input type="number" min="1" value={range.end} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'end', parseInt(e.target.value)||1)} className="w-14 p-1 bg-slate-950 border border-white/10 rounded-md text-center outline-none"/>
+                                <input type="number" value={range.end} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'end', parseInt(e.target.value)||1)} className="w-12 p-1 bg-slate-950 border border-white/10 rounded-md text-center outline-none"/>
                                 <select value={range.type} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'type', e.target.value)} className="flex-1 p-1 bg-slate-950 border border-white/10 rounded-md outline-none text-[11px]">
                                   <option value="single_choice">Trắc nghiệm</option>
                                   <option value="true_false">Đúng / Sai 4 ý</option>
@@ -880,7 +928,7 @@ export default function AdminDashboard() {
                         )}
 
                         <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
-                          <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-[11px] font-black bg-white/5 text-slate-300 px-3.5 py-2 rounded-xl flex items-center gap-1"><KeyRound className="w-3.5 h-3.5"/> {editingKeysSectionId === section.id ? 'Thu gọn các câu hỏi' : 'Xem và cấu hình đáp án chi tiết'}</button>
+                          <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-[11px] font-black bg-white/5 text-slate-300 px-3.5 py-2 rounded-xl flex items-center gap-1"><KeyRound className="w-3.5 h-3.5"/> {editingKeysSectionId === section.id ? 'Thu gọn hòm kiểm tra' : 'Mở bảng điều phối chi tiết'}</button>
                           <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-[11px] font-black bg-blue-600 text-white px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md shadow-blue-600/10"><Wand2 className="w-3.5 h-3.5"/> 1. Quét & Tự động cắt đề từ PDF</button>
                           {section.questionCount > 0 && <button type="button" onClick={() => setQuickAnswersModalId(section.id)} className="text-[11px] font-black bg-amber-500 text-slate-950 px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md shadow-amber-500/10"><Sparkles className="w-3.5 h-3.5"/> 2. Khớp chuỗi đáp án nhanh</button>}
                         </div>
@@ -892,10 +940,6 @@ export default function AdminDashboard() {
                               if (section.type === 'mixed' && section.mixedRanges) {
                                 const range = section.mixedRanges.find(r => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
                                 currentType = range ? range.type : 'short_answer'
-                              }
-
-                              function handleAnswerSelect(id: string, qIdx: number, l: string): void {
-                                throw new Error('Function not implemented.')
                               }
 
                               return (
@@ -910,7 +954,7 @@ export default function AdminDashboard() {
                                     <span className="text-[10px] font-black text-slate-500 uppercase">Đáp án điền:</span>
                                     {currentType === 'single_choice' && (
                                       <div className="flex gap-1.5">
-                                        {['A','B','C','D'].map(l => <button type="button" key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className={`w-7 h-7 rounded-full border text-[10px] font-black ${section.correctAnswers[qIdx] === l ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-950 text-slate-400 border-white/10'}`}>{l}</button>)}
+                                        {['A','B','C','D'].map(l => <button type="button" key={l} onClick={() => handleSetCorrectAnswer(section.id, qIdx, l)} className={`w-7 h-7 rounded-full border text-[10px] font-black ${section.correctAnswers[qIdx] === l ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-950 text-slate-400 border-white/10'}`}>{l}</button>)}
                                       </div>
                                     )}
                                     {currentType === 'true_false' && (
@@ -953,11 +997,11 @@ export default function AdminDashboard() {
               </div>
               <div className="bg-slate-900/40 rounded-2xl border border-white/10 overflow-hidden overflow-x-auto shadow-xl">
                 <table className="w-full text-left border-collapse min-w-max text-xs">
-                  <thead><tr className="bg-slate-900 border-b border-white/10"><th className="p-4 text-slate-400 font-bold">TIÊU ĐỀ</th><th className="p-4 text-slate-400 font-bold">MÔN HỌC</th><th className="p-4 text-slate-400 font-bold">HỆ ĐỀ</th><th className="p-4 text-slate-400 font-bold text-right">THAO TÁC</th></tr></thead>
+                  <thead><tr className="bg-slate-900 border-b border-white/10"><th className="p-4 text-slate-400 font-bold">MÃ / TIÊU ĐỀ</th><th className="p-4 text-slate-400 font-bold">MÔN HỌC</th><th className="p-4 text-slate-400 font-bold">HỆ ĐỀ</th><th className="p-4 text-slate-400 font-bold text-right">THAO TÁC</th></tr></thead>
                   <tbody>
                     {filteredExams.map(exam => (
                       <tr key={exam.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="p-4 font-bold max-w-xs truncate">{exam.title} {exam.is_hidden && <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded ml-1.5 font-black">Mã: {exam.access_code}</span>}</td>
+                        <td className="p-4 font-bold max-w-xs truncate">{exam.title} {exam.is_hidden && <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded ml-1.5 font-black uppercase">Mã: {exam.access_code}</span>}</td>
                         <td className="p-4"><div className="flex gap-1">{exam.subjects?.map((s:string) => <span key={s} className="px-2 py-0.5 bg-slate-950 border border-white/5 text-slate-300 rounded font-bold text-[10px]">{s}</span>)}</div></td>
                         <td className="p-4"><span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 font-black rounded-lg">{exam.exam_type}</span></td>
                         <td className="p-4 text-right"><button onClick={() => handleDeleteExam(exam.id)} className="p-2 text-red-400 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button></td>
