@@ -549,27 +549,7 @@ export default function LibraryPage() {
         </div>
       )}
 
-  // Debounced global search: when searchQuery is non-empty, query across all folders/documents
-  useEffect(() => {
-    if (!searchQuery || searchQuery.trim() === '') {
-      setSearchFoldersResults(null)
-      setSearchDocsResults(null)
-      return
-    }
-    const id = setTimeout(async () => {
-      try {
-        const fq = `%${searchQuery.trim()}%`
-        const [fRes, dRes] = await Promise.all([
-          supabase.from('library_folders').select('*').ilike('name', fq).order('created_at', { ascending: false }),
-          supabase.from('library_documents').select('*').ilike('title', fq).order('created_at', { ascending: false })
-        ])
-        setSearchFoldersResults(fRes.data || [])
-        setSearchDocsResults(dRes.data || [])
-      } catch (e) { setSearchFoldersResults([]); setSearchDocsResults([]) }
-    }, 380)
-    return () => clearTimeout(id)
-  }, [searchQuery])
-
+  
       <div className="relative z-10 max-w-[1400px] mx-auto">
         
         {/* HEADER & THANH TÌM KIẾM */}
