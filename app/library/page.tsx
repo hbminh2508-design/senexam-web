@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
@@ -67,6 +67,9 @@ export default function LibraryPage() {
   // Global search results (search across whole library regardless of current folder)
   const [searchFoldersResults, setSearchFoldersResults] = useState<any[] | null>(null)
   const [searchDocsResults, setSearchDocsResults] = useState<any[] | null>(null)
+  const [searchExamsResults, setSearchExamsResults] = useState<any[] | null>(null)
+  const previewRef = useRef<HTMLDivElement | null>(null)
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -85,6 +88,42 @@ export default function LibraryPage() {
     }
     init()
   }, [router])
+
+  // Fullscreenchange listener to update state when user exits fullscreen
+  useEffect(() => {
+    const onFull = () => {
+      const fs = document.fullscreenElement || (document as any).webkitFullscreenElement
+      setIsPreviewFullscreen(!!fs)
+      if (!fs) {
+        // when exiting fullscreen, if preview was open we keep it
+      }
+    }
+    document.addEventListener('fullscreenchange', onFull)
+    document.addEventListener('webkitfullscreenchange', onFull)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFull)
+      document.removeEventListener('webkitfullscreenchange', onFull)
+    }
+  }, [])
+
+  const globalSearch = async (q: string) => {
+    const qtrim = q.trim()
+    if (!qtrim) {
+      setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); return
+    }
+    try {
+      setLoading(true)
+      const [fRes, dRes, eRes] = await Promise.all([
+        supabase.from('library_folders').select('*').ilike('name', `%${qtrim}%`).limit(50),
+        supabase.from('library_documents').select('*').ilike('title', `%${qtrim}%`).limit(200),
+        supabase.from('exams').select('id,title,exam_type').ilike('title', `%${qtrim}%`).limit(100)
+      ])
+      setSearchFoldersResults(fRes.data || [])
+      setSearchDocsResults(dRes.data || [])
+      setSearchExamsResults(eRes.data || [])
+    } catch (e) { console.warn('Search failed', e) }
+    setLoading(false)
+  }
 
   useEffect(() => {
     try {
@@ -385,6 +424,18 @@ export default function LibraryPage() {
                   <ExternalLink className="w-4 h-4" /> <span className="hidden sm:inline">Mở rộng Drive</span>
                 </a>
 
+                {/* 2.5 Nút fullscreen */}
+                <button onClick={async () => {
+                  try {
+                    const el = previewRef.current || document.documentElement
+                    if (el.requestFullscreen) await el.requestFullscreen()
+                    else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen()
+                    setIsPreviewFullscreen(true)
+                  } catch (e) { console.warn('Fullscreen failed', e) }
+                }} className="p-2 md:px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-xs font-bold" title="Xem toàn màn hình">
+                  <Maximize2 className="w-4 h-4" /> <span className="hidden sm:inline">Toàn màn hình</span>
+                </button>
+
                 <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1"></div>
 
                 {/* 3. Nút đóng cửa sổ */}
@@ -395,7 +446,7 @@ export default function LibraryPage() {
             </div>
 
             {/* Khung nhúng/preview cho nhiều loại tệp (pdf, ảnh, video, audio) */}
-            <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative flex items-center justify-center">
+            <div ref={previewRef} className="flex-1 bg-slate-100 dark:bg-slate-950 relative flex items-center justify-center">
               {(() => {
                 const kind = getFileKind(previewDoc.title || '')
                 if (kind === 'pdf') {
@@ -594,7 +645,8 @@ export default function LibraryPage() {
             {/* Thanh Tìm kiếm */}
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm kiếm (toàn bộ thư viện)..." className="w-full pl-9 pr-4 py-3 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); globalSearch(searchQuery) } }} placeholder="Tìm kiếm (toàn bộ thư viện)..." className="w-full pl-9 pr-10 py-3 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
+              <button onClick={() => globalSearch(searchQuery)} title="Tìm kiếm toàn cục" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200"><Search className="w-4 h-4" /></button>
             </div>
 
             <button onClick={() => setIsCompact(!isCompact)} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isCompact ? 'bg-slate-100 dark:bg-slate-800 text-slate-900' : 'bg-white/40 dark:bg-slate-800/50'}`}>
@@ -732,6 +784,21 @@ export default function LibraryPage() {
                         </div>
                       )
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* Kết quả Đề thi khi tìm kiếm toàn cục */}
+              {searchExamsResults && searchExamsResults.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Đề thi liên quan</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {searchExamsResults.map((exam: any) => (
+                      <div key={exam.id} onClick={() => router.push(`/exams/${exam.id}`)} className="cursor-pointer p-4 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:shadow-lg hover:-translate-y-1 transition-all">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{exam.title}</h4>
+                        <p className="text-[11px] text-slate-500 mt-1">Loại: {exam.exam_type || 'Không rõ'}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
