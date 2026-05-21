@@ -108,6 +108,37 @@ export default function LibraryPage() {
     } catch (e) { /* ignore */ }
   }, [])
 
+  // If URL contains ?folder=<id>, navigate directly into that folder chain
+  useEffect(() => {
+    const openFolderFromQuery = async () => {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const folderId = params.get('folder')
+        if (!folderId) return
+
+        const chain: { id: string | null, name: string }[] = []
+        let currentId: string | null = folderId
+        let guard = 0
+
+        while (currentId && guard < 20) {
+          const { data: folderData, error }: { data: { id: string, name: string, parent_id: string | null } | null, error: any } = await supabase.from('library_folders').select('id,name,parent_id').eq('id', currentId).single()
+          if (error || !folderData) break
+          chain.unshift({ id: folderData.id, name: folderData.name })
+          currentId = folderData.parent_id || null
+          guard += 1
+        }
+
+        if (chain.length > 0) {
+          const rootPath = [{ id: null, name: 'Trang chủ Thư viện' }, ...chain]
+          setFolderPath(rootPath)
+          await fetchContents(chain[chain.length - 1].id)
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    openFolderFromQuery()
+  }, [])
+
   // Debounce searchQuery -> globalSearch
   useEffect(() => {
     if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current)
