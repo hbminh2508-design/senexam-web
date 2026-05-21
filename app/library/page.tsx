@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
@@ -17,6 +17,7 @@ type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
 export default function LibraryPage() {
   // build-fix: ensure all hooks are defined in component scope (moved search useEffect outside JSX)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string>('student')
   
@@ -93,51 +94,56 @@ export default function LibraryPage() {
     init()
   }, [router])
 
-  // If URL contains ?preview=<id>, open preview for that document
+  const routeQueryRef = useRef<string | null>(null)
+
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      setIsEmbedPreview(params.get('embed') === '1')
-      const previewId = params.get('preview')
-      if (previewId) {
-        ;(async () => {
+    const currentQuery = searchParams.toString()
+    if (routeQueryRef.current === currentQuery) return
+    routeQueryRef.current = currentQuery
+
+    const applyRouteState = async () => {
+      try {
+        const previewId = searchParams.get('preview')
+        const folderId = searchParams.get('folder')
+        setIsEmbedPreview(searchParams.get('embed') === '1')
+
+        if (previewId) {
           const { data, error } = await supabase.from('library_documents').select('*').eq('id', previewId).single()
           if (!error && data) setPreviewDoc(data)
-        })()
-      }
-    } catch (e) { /* ignore */ }
-  }, [])
-
-  // If URL contains ?folder=<id>, navigate directly into that folder chain
-  useEffect(() => {
-    const openFolderFromQuery = async () => {
-      try {
-        const params = new URLSearchParams(window.location.search)
-        const folderId = params.get('folder')
-        if (!folderId) return
-
-        const chain: { id: string | null, name: string }[] = []
-        let currentId: string | null = folderId
-        let guard = 0
-
-        while (currentId && guard < 20) {
-          const { data: folderData, error }: { data: { id: string, name: string, parent_id: string | null } | null, error: any } = await supabase.from('library_folders').select('id,name,parent_id').eq('id', currentId).single()
-          if (error || !folderData) break
-          chain.unshift({ id: folderData.id, name: folderData.name })
-          currentId = folderData.parent_id || null
-          guard += 1
+        } else {
+          setPreviewDoc(null)
         }
 
-        if (chain.length > 0) {
-          const rootPath = [{ id: null, name: 'Trang chủ Thư viện' }, ...chain]
-          setFolderPath(rootPath)
-          await fetchContents(chain[chain.length - 1].id)
+        if (folderId) {
+          const chain: { id: string | null, name: string }[] = []
+          let currentId: string | null = folderId
+          let guard = 0
+
+          while (currentId && guard < 20) {
+            const { data: folderData, error }: { data: { id: string, name: string, parent_id: string | null } | null, error: any } = await supabase.from('library_folders').select('id,name,parent_id').eq('id', currentId).single()
+            if (error || !folderData) break
+            chain.unshift({ id: folderData.id, name: folderData.name })
+            currentId = folderData.parent_id || null
+            guard += 1
+          }
+
+          if (chain.length > 0) {
+            const rootPath = [{ id: null, name: 'Trang chủ Thư viện' }, ...chain]
+            setFolderPath(rootPath)
+            await fetchContents(chain[chain.length - 1].id)
+          } else if (!previewId) {
+            setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+            await fetchContents(null)
+          }
+        } else if (!previewId) {
+          setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+          await fetchContents(null)
         }
       } catch (e) { /* ignore */ }
     }
 
-    openFolderFromQuery()
-  }, [])
+    applyRouteState()
+  }, [searchParams])
 
   // Debounce searchQuery -> globalSearch
   useEffect(() => {
