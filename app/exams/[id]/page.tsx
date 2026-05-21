@@ -493,25 +493,15 @@ export default function ExamRoomPage() {
       {/* GIAO DIỆN PHÂN CHIA PHÒNG THI INTERACTIVE SIÊU KHỦNG (TỐI ƯU CHO CẢ IPHONE) */}
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
         
-        {/* KHUNG ĐỀ GỐC PDF: CHỈ HIỂN THỊ KHI THỰC SỰ KHÔNG CÓ CẤU TRÚC ĐỀ SỐ HÓA */}
-        {(() => {
-          const hasDigitalStructure = Array.isArray(exam?.exam_structure) && exam.exam_structure.length > 0
-          const shouldShowPdf = exam?.creation_mode !== 'interactive_mode' && !hasDigitalStructure && cachedPdfUrl
-          if (!shouldShowPdf) return null
-          return (
-            <div className="flex-1 h-[40vh] md:h-full relative bg-white/30 dark:bg-slate-900/20 backdrop-blur-sm">
-              <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
-            </div>
-          )
-        })()}
+        {/* KHUNG ĐỀ GỐC PDF: HIỂN THỊ SONG SONG NẾU CÓ DRIVE FILE (PDF) VÀ KHÔNG PHẢI CHẾ ĐỘ TƯƠNG TÁC */}
+        {(exam?.creation_mode !== 'interactive_mode' && cachedPdfUrl) && (
+          <div className="flex-1 h-[40vh] md:h-full relative bg-white/30 dark:bg-slate-900/20 backdrop-blur-sm">
+            <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
+          </div>
+        )}
         
         {/* PHIẾU ĐÁP ÁN: SẼ CHIẾM TRỌN 100% DIỆN TÍCH MÀN HÌNH NẾU ĐỀ Ở CHẾ ĐỘ INTERACTIVE SỐ HÓA */}
-        <div className={`h-full liquid-panel-strong flex flex-col overflow-hidden ${(() => {
-          const hasDigitalStructure = Array.isArray(exam?.exam_structure) && exam.exam_structure.length > 0
-          const showPdf = exam?.creation_mode !== 'interactive_mode' && !hasDigitalStructure && cachedPdfUrl
-          // nếu không hiển thị PDF thì chiếm hết chiều ngang
-          return showPdf ? 'w-full md:w-[430px] lg:w-[470px] border-l border-white/40 dark:border-white/10' : 'w-full'
-        })()}`}> 
+        <div className={`h-full liquid-panel-strong flex flex-col overflow-hidden ${exam?.creation_mode !== 'interactive_mode' && cachedPdfUrl ? 'w-full md:w-[430px] lg:w-[470px] border-l border-white/40 dark:border-white/10' : 'w-full'}`}> 
           
           {/* Bảng điều hướng nhanh câu hỏi */}
           <div className="shrink-0 liquid-panel border-b border-white/40 dark:border-white/10 p-4 max-h-[30vh] overflow-y-auto custom-scrollbar">
