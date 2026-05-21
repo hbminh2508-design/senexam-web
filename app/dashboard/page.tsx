@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { 
   BookOpen, Clock, Trophy, Target, LogOut, User, 
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
@@ -146,6 +147,8 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setUserEmail(user.email ?? null)
+
+      await ensureStudentProfile(user.id)
 
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { Mail, Lock, ArrowRight, Loader2, Zap, GraduationCap, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 // 🌟 APPLE'S LIQUID GLASS CSS CONSTANTS
 const glassCardStyles = "liquid-panel-strong"
@@ -35,6 +36,8 @@ export default function LoginPage() {
         // Xử lý đăng nhập
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) await ensureStudentProfile(user.id)
         router.push('/dashboard')
       } else {
         // Xử lý đăng ký
@@ -43,10 +46,7 @@ export default function LoginPage() {
         
         // Sau khi đăng ký thành công, tự động tạo một profile rỗng để kích hoạt Onboarding
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { error: profileError } = await supabase.from('profiles').insert({ id: user.id, role: 'student' })
-          if (profileError && profileError.code !== '23505') throw profileError // Bỏ qua lỗi duplicate nếu đã có
-        }
+        if (user) await ensureStudentProfile(user.id)
         
         router.push('/dashboard')
       }

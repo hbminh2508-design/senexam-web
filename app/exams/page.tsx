@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { 
   Search, BookOpen, Clock, Target, ChevronLeft, 
   Filter, Lock, PlayCircle, Loader2, CheckCircle2
@@ -31,6 +32,8 @@ export default function ExamsLibraryPage() {
         router.push('/login')
         return
       }
+
+      await ensureStudentProfile(user.id)
 
       // 1. Lấy toàn bộ danh sách đề thi (ĐÃ TÍCH HỢP BỘ LỌC ẨN ĐỀ PRIVATE)
       const { data: examsData } = await supabase
