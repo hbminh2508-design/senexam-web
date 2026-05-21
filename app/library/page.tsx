@@ -1,9 +1,7 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useDeferredValue, useEffect, useState, useMemo, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
@@ -17,11 +15,11 @@ import { glassSearchInputClass, highlightSearchText } from '@/app/components/sea
 const glassCardStyles = "liquid-panel"
 
 type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
+type LibrarySearchParams = Record<string, string | string[] | undefined>
 
-export default function LibraryPage() {
+export default function LibraryPage({ searchParams = {} }: { searchParams?: LibrarySearchParams }) {
   // build-fix: ensure all hooks are defined in component scope (moved search useEffect outside JSX)
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string>('student')
   
@@ -81,6 +79,11 @@ export default function LibraryPage() {
   const searchRequestRef = useRef(0)
   const [isEmbedPreview, setIsEmbedPreview] = useState(false)
 
+  const readSearchParam = (key: string) => {
+    const value = searchParams[key]
+    return Array.isArray(value) ? value[0] ?? null : value ?? null
+  }
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -100,17 +103,17 @@ export default function LibraryPage() {
   }, [router])
 
   const routeQueryRef = useRef<string | null>(null)
+  const routeQueryKey = useMemo(() => JSON.stringify(searchParams), [searchParams])
 
   useEffect(() => {
-    const currentQuery = searchParams.toString()
-    if (routeQueryRef.current === currentQuery) return
-    routeQueryRef.current = currentQuery
+    if (routeQueryRef.current === routeQueryKey) return
+    routeQueryRef.current = routeQueryKey
 
     const applyRouteState = async () => {
       try {
-        const previewId = searchParams.get('preview')
-        const folderId = searchParams.get('folder')
-        setIsEmbedPreview(searchParams.get('embed') === '1')
+        const previewId = readSearchParam('preview')
+        const folderId = readSearchParam('folder')
+        setIsEmbedPreview(readSearchParam('embed') === '1')
 
         if (previewId) {
           const { data, error } = await supabase.from('library_documents').select('*').eq('id', previewId).single()
@@ -148,7 +151,7 @@ export default function LibraryPage() {
     }
 
     applyRouteState()
-  }, [searchParams])
+  }, [routeQueryKey, searchParams])
 
   // Debounce searchQuery -> globalSearch
   useEffect(() => {
