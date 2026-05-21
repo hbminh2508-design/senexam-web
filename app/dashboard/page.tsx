@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
@@ -257,21 +257,58 @@ export default function DashboardPage() {
   const [globalExamsResults, setGlobalExamsResults] = useState<any[] | null>(null)
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
   const [showGlobalResults, setShowGlobalResults] = useState(false)
+  const [hoverPreviewDoc, setHoverPreviewDoc] = useState<any | null>(null)
+  const globalSearchDebounce = useRef<number | null>(null)
+  const globalSearchRequestRef = useRef(0)
+
+  const scoreSearchText = (value: string, query: string) => {
+    const source = value.toLowerCase()
+    const needle = query.toLowerCase().trim()
+    if (!needle) return 0
+    if (source === needle) return 100
+    if (source.startsWith(needle)) return 85
+    if (source.includes(needle)) return 60
+    return needle.split(/\s+/).filter(Boolean).reduce((score, word) => score + (source.includes(word) ? 10 : 0), 0)
+  }
+
+  const rankResults = <T extends Record<string, any>>(items: T[], query: string, textSelector: (item: T) => string) => {
+    return [...items].sort((left, right) => scoreSearchText(textSelector(right), query) - scoreSearchText(textSelector(left), query))
+  }
 
   const handleGlobalSearch = async (q?: string) => {
     const qtrim = (q ?? globalQuery).trim()
     if (!qtrim) { setGlobalDocsResults(null); setGlobalExamsResults(null); setShowGlobalResults(false); return }
+    const requestId = ++globalSearchRequestRef.current
     setGlobalSearchLoading(true); setShowGlobalResults(true)
     try {
       const [dRes, eRes] = await Promise.all([
         supabase.from('library_documents').select('*').ilike('title', `%${qtrim}%`).limit(50),
         supabase.from('exams').select('id,title,exam_type').ilike('title', `%${qtrim}%`).limit(50)
       ])
-      setGlobalDocsResults(dRes.data || [])
-      setGlobalExamsResults(eRes.data || [])
+      if (requestId !== globalSearchRequestRef.current) return
+      const docs = rankResults(dRes.data || [], qtrim, item => `${item.title || ''} ${item.drive_file_id || ''}`)
+      const exams = rankResults(eRes.data || [], qtrim, item => `${item.title || ''} ${item.exam_type || ''}`)
+      setGlobalDocsResults(docs)
+      setGlobalExamsResults(exams)
     } catch (e) { console.warn('Global search failed', e) }
-    setGlobalSearchLoading(false)
+    if (requestId === globalSearchRequestRef.current) setGlobalSearchLoading(false)
   }
+
+  // Debounce auto-search when typing
+  useEffect(() => {
+    if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current)
+    if (!globalQuery || globalQuery.trim().length < 2) {
+      globalSearchRequestRef.current += 1
+      setShowGlobalResults(false)
+      setGlobalDocsResults(null)
+      setGlobalExamsResults(null)
+      setHoverPreviewDoc(null)
+      return
+    }
+    // @ts-ignore
+    globalSearchDebounce.current = window.setTimeout(() => handleGlobalSearch(globalQuery), 500)
+    return () => { if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current) }
+  }, [globalQuery])
 
   const handleSaveProfile = async () => {
     if (formData.targetExams.includes('HSA') && formData.hsaOption === 'Khoa học' && formData.hsaScienceSubjects.length !== 3) { alert("Vui lòng chọn đủ 3 môn trong phần thi Khoa học của HSA!"); return }
@@ -516,24 +553,56 @@ export default function DashboardPage() {
               <div className="relative w-full sm:w-72">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                 <input value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGlobalSearch() } }} placeholder="Tìm nhanh tài liệu hoặc đề..." className="w-full pl-9 pr-10 py-2 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
-                <button onClick={() => handleGlobalSearch()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200"><Search className="w-4 h-4" /></button>
+                <button onClick={() => handleGlobalSearch()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">
+                  {globalSearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                </button>
 
-                {showGlobalResults && ((globalDocsResults && globalDocsResults.length > 0) || (globalExamsResults && globalExamsResults.length > 0)) && (
+                {showGlobalResults && ((globalDocsResults && globalDocsResults.length > 0) || (globalExamsResults && globalExamsResults.length > 0) || globalSearchLoading) && (
                   <div className="absolute left-0 mt-2 w-full bg-white dark:bg-slate-900 border border-white/60 dark:border-slate-700 rounded-xl shadow-lg z-50 max-h-80 overflow-y-auto custom-scrollbar">
                     <div className="p-3">
-                      {globalDocsResults && globalDocsResults.map(d => (
-                        <div key={d.id} onClick={() => window.open(`https://drive.google.com/file/d/${d.drive_file_id}/view`, '_blank')} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2">
-                          <div className="font-bold text-sm">{d.title}</div>
-                          <div className="text-[11px] text-slate-500">Tài liệu</div>
+                      {globalSearchLoading && (
+                        <div className="py-2 px-2 text-sm text-slate-500 flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Đang tìm kiếm...
                         </div>
-                      ))}
-                      {globalExamsResults && globalExamsResults.map(e => (
-                        <div key={e.id} onClick={() => { router.push(`/exams/${e.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2">
-                          <div className="font-bold text-sm">{e.title}</div>
-                          <div className="text-[11px] text-slate-500">Đề thi • {e.exam_type}</div>
+                      )}
+                      {!!globalDocsResults?.length && (
+                        <div className="mb-2">
+                          <div className="px-2 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Tài liệu</div>
+                          {globalDocsResults.map(d => (
+                            <div key={d.id} onClick={() => { router.push(`/library?preview=${d.id}`); setShowGlobalResults(false) }} onMouseEnter={() => setHoverPreviewDoc(d)} onMouseLeave={() => setHoverPreviewDoc(null)} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between">
+                              <div className="min-w-0">
+                                <div className="font-bold text-sm truncate">{d.title}</div>
+                                <div className="text-[11px] text-slate-500 truncate">Nội bộ • mở trong thư viện</div>
+                              </div>
+                              <div className="text-[11px] text-slate-400 shrink-0">Xem</div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      {!!globalExamsResults?.length && (
+                        <div>
+                          <div className="px-2 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Đề thi</div>
+                          {globalExamsResults.map(e => (
+                            <div key={e.id} onClick={() => { router.push(`/exams/${e.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2">
+                              <div className="font-bold text-sm">{e.title}</div>
+                              <div className="text-[11px] text-slate-500">Đề thi • {e.exam_type}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!globalSearchLoading && !globalDocsResults?.length && !globalExamsResults?.length && globalQuery.trim().length >= 2 && (
+                        <div className="py-2 px-2 text-sm text-slate-500">Không tìm thấy tài liệu hoặc đề thi phù hợp.</div>
+                      )}
                     </div>
+                  </div>
+                )}
+                {hoverPreviewDoc && (
+                  <div className="absolute right-0 top-full mt-2 w-[360px] bg-white dark:bg-slate-900 border border-white/60 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden">
+                    <div className="p-2 text-xs font-bold text-slate-500">Xem nhanh: {hoverPreviewDoc.title}</div>
+                    <div className="w-full h-44">
+                      <iframe src={`/library?preview=${hoverPreviewDoc.id}&embed=1`} className="w-full h-full border-none" />
+                    </div>
+                    <div className="p-2 text-right"><button onClick={() => { router.push(`/library?preview=${hoverPreviewDoc.id}`); setShowGlobalResults(false) }} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm">Mở chi tiết</button></div>
                   </div>
                 )}
               </div>

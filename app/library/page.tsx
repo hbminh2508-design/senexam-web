@@ -68,8 +68,12 @@ export default function LibraryPage() {
   const [searchFoldersResults, setSearchFoldersResults] = useState<any[] | null>(null)
   const [searchDocsResults, setSearchDocsResults] = useState<any[] | null>(null)
   const [searchExamsResults, setSearchExamsResults] = useState<any[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
   const previewRef = useRef<HTMLDivElement | null>(null)
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
+  const searchDebounceRef = useRef<number | null>(null)
+  const searchRequestRef = useRef(0)
+  const [isEmbedPreview, setIsEmbedPreview] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -89,6 +93,33 @@ export default function LibraryPage() {
     init()
   }, [router])
 
+  // If URL contains ?preview=<id>, open preview for that document
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      setIsEmbedPreview(params.get('embed') === '1')
+      const previewId = params.get('preview')
+      if (previewId) {
+        ;(async () => {
+          const { data, error } = await supabase.from('library_documents').select('*').eq('id', previewId).single()
+          if (!error && data) setPreviewDoc(data)
+        })()
+      }
+    } catch (e) { /* ignore */ }
+  }, [])
+
+  // Debounce searchQuery -> globalSearch
+  useEffect(() => {
+    if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current)
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      searchRequestRef.current += 1
+      setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); setSearchLoading(false); return
+    }
+    // @ts-ignore
+    searchDebounceRef.current = window.setTimeout(() => { globalSearch(searchQuery) }, 500)
+    return () => { if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current) }
+  }, [searchQuery])
+
   // Fullscreenchange listener to update state when user exits fullscreen
   useEffect(() => {
     const onFull = () => {
@@ -106,23 +137,42 @@ export default function LibraryPage() {
     }
   }, [])
 
+  const scoreResult = (text: string, query: string) => {
+    const source = text.toLowerCase()
+    const needle = query.toLowerCase().trim()
+    if (!needle) return 0
+    if (source === needle) return 100
+    if (source.startsWith(needle)) return 80
+    if (source.includes(needle)) return 60
+    const words = needle.split(/\s+/).filter(Boolean)
+    const matchedWords = words.filter(word => source.includes(word)).length
+    return matchedWords * 10
+  }
+
+  const rankByQuery = (items: any[], query: string, labelGetter: (item: any) => string) => {
+    return [...items].sort((a, b) => scoreResult(labelGetter(b), query) - scoreResult(labelGetter(a), query))
+  }
+
   const globalSearch = async (q: string) => {
     const qtrim = q.trim()
     if (!qtrim) {
-      setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); return
+      searchRequestRef.current += 1
+      setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); setSearchLoading(false); return
     }
+    const requestId = ++searchRequestRef.current
+    setSearchLoading(true)
     try {
-      setLoading(true)
       const [fRes, dRes, eRes] = await Promise.all([
         supabase.from('library_folders').select('*').ilike('name', `%${qtrim}%`).limit(50),
         supabase.from('library_documents').select('*').ilike('title', `%${qtrim}%`).limit(200),
         supabase.from('exams').select('id,title,exam_type').ilike('title', `%${qtrim}%`).limit(100)
       ])
-      setSearchFoldersResults(fRes.data || [])
-      setSearchDocsResults(dRes.data || [])
-      setSearchExamsResults(eRes.data || [])
+      if (requestId !== searchRequestRef.current) return
+      setSearchFoldersResults(rankByQuery(fRes.data || [], qtrim, item => item.name || ''))
+      setSearchDocsResults(rankByQuery(dRes.data || [], qtrim, item => item.title || ''))
+      setSearchExamsResults(rankByQuery(eRes.data || [], qtrim, item => item.title || ''))
     } catch (e) { console.warn('Search failed', e) }
-    setLoading(false)
+    if (requestId === searchRequestRef.current) setSearchLoading(false)
   }
 
   useEffect(() => {
@@ -382,6 +432,42 @@ export default function LibraryPage() {
       </div>
     </div>
   )
+
+  if (isEmbedPreview && previewDoc) {
+    return (
+      <div className="w-full h-full min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">Xem nhanh nội bộ</p>
+            <h3 className="font-black truncate">{previewDoc.title}</h3>
+          </div>
+          <button onClick={() => router.push(`/library?preview=${previewDoc.id}`)} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shrink-0">
+            Mở chi tiết
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 relative bg-slate-100 dark:bg-slate-950">
+          <div ref={previewRef} className="absolute inset-0 flex items-center justify-center">
+            {(() => {
+              const kind = getFileKind(previewDoc.title || '')
+              if (kind === 'pdf') {
+                return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
+              }
+              if (kind === 'image') {
+                return <img src={proctorUrls.download} alt={previewDoc.title} className="max-h-full max-w-full object-contain" />
+              }
+              if (kind === 'video') {
+                return <video controls src={proctorUrls.download} className="max-h-full max-w-full bg-black" />
+              }
+              if (kind === 'audio') {
+                return <audio controls src={proctorUrls.download} className="w-full px-4" />
+              }
+              return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
+            })()}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell min-h-screen bg-transparent p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32">
@@ -646,7 +732,7 @@ export default function LibraryPage() {
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
               <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); globalSearch(searchQuery) } }} placeholder="Tìm kiếm (toàn bộ thư viện)..." className="w-full pl-9 pr-10 py-3 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
-              <button onClick={() => globalSearch(searchQuery)} title="Tìm kiếm toàn cục" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200"><Search className="w-4 h-4" /></button>
+              <button onClick={() => globalSearch(searchQuery)} title="Tìm kiếm toàn cục" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">{searchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}</button>
             </div>
 
             <button onClick={() => setIsCompact(!isCompact)} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isCompact ? 'bg-slate-100 dark:bg-slate-800 text-slate-900' : 'bg-white/40 dark:bg-slate-800/50'}`}>
