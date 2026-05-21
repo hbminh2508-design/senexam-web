@@ -153,6 +153,28 @@ export default function LibraryPage() {
     return [...items].sort((a, b) => scoreResult(labelGetter(b), query) - scoreResult(labelGetter(a), query))
   }
 
+  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  const highlightText = (text: string, query: string) => {
+    const needle = query.trim()
+    if (!needle) return text
+    const regex = new RegExp(`(${escapeRegex(needle)})`, 'ig')
+    return text.split(regex).map((part, index) => (
+      index % 2 === 1
+        ? <mark key={index} className="rounded bg-yellow-200/80 dark:bg-yellow-400/30 px-0.5 text-inherit">{part}</mark>
+        : <span key={index}>{part}</span>
+    ))
+  }
+
+  const buildSearchBlob = (item: any, folderName?: string) => {
+    return Object.values(item)
+      .filter(value => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+      .map(value => String(value))
+      .concat(folderName ? [folderName] : [])
+      .join(' ')
+      .toLowerCase()
+  }
+
   const globalSearch = async (q: string) => {
     const qtrim = q.trim()
     if (!qtrim) {
@@ -163,14 +185,29 @@ export default function LibraryPage() {
     setSearchLoading(true)
     try {
       const [fRes, dRes, eRes] = await Promise.all([
-        supabase.from('library_folders').select('*').ilike('name', `%${qtrim}%`).limit(50),
-        supabase.from('library_documents').select('*').ilike('title', `%${qtrim}%`).limit(200),
-        supabase.from('exams').select('id,title,exam_type').ilike('title', `%${qtrim}%`).limit(100)
+        supabase.from('library_folders').select('*').limit(1000),
+        supabase.from('library_documents').select('*').limit(1000),
+        supabase.from('exams').select('*').limit(1000)
       ])
       if (requestId !== searchRequestRef.current) return
-      setSearchFoldersResults(rankByQuery(fRes.data || [], qtrim, item => item.name || ''))
-      setSearchDocsResults(rankByQuery(dRes.data || [], qtrim, item => item.title || ''))
-      setSearchExamsResults(rankByQuery(eRes.data || [], qtrim, item => item.title || ''))
+
+      const folders = fRes.data || []
+      const folderMap = new Map<string, any>(folders.map((folder: any) => [folder.id, folder]))
+      const folderBlobQuery = qtrim.toLowerCase()
+
+      const searchFolders = folders.filter((folder: any) => buildSearchBlob(folder).includes(folderBlobQuery))
+
+      const searchDocs = (dRes.data || [])
+        .map((doc: any) => ({ ...doc, folder_name: doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : '' }))
+        .filter((doc: any) => buildSearchBlob(doc, doc.folder_name).includes(folderBlobQuery) || (doc.folder_name && scoreResult(doc.folder_name, qtrim) > 0))
+
+      const searchExams = (eRes.data || [])
+        .map((exam: any) => ({ ...exam, folder_name: exam.folder_id ? folderMap.get(exam.folder_id)?.name || exam.folder_name || '' : exam.folder_name || '' }))
+        .filter((exam: any) => buildSearchBlob(exam, exam.folder_name).includes(folderBlobQuery) || (exam.folder_name && scoreResult(exam.folder_name, qtrim) > 0))
+
+      setSearchFoldersResults(rankByQuery(searchFolders, qtrim, item => buildSearchBlob(item)))
+      setSearchDocsResults(rankByQuery(searchDocs, qtrim, item => buildSearchBlob(item, item.folder_name)))
+      setSearchExamsResults(rankByQuery(searchExams, qtrim, item => buildSearchBlob(item, item.folder_name)))
     } catch (e) { console.warn('Search failed', e) }
     if (requestId === searchRequestRef.current) setSearchLoading(false)
   }
@@ -814,7 +851,7 @@ export default function LibraryPage() {
                               style={{ color: folderCustomizations[folder.id]?.color || '#3b82f6' }}
                             />
                           </div>
-                          <p className={`font-black text-sm text-center ${isCompact ? 'text-[12px]' : ''} text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1`}>{folderCustomizations[folder.id]?.icon ? `${folderCustomizations[folder.id].icon} ${folder.name}` : folder.name}</p>
+                          <p className={`font-black text-sm text-center ${isCompact ? 'text-[12px]' : ''} text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1`}>{folderCustomizations[folder.id]?.icon ? <>{folderCustomizations[folder.id].icon} {highlightText(folder.name, searchQuery)}</> : highlightText(folder.name, searchQuery)}</p>
                         </div>
                       )
                     })}
@@ -858,8 +895,8 @@ export default function LibraryPage() {
                             {kind === 'other' && <FileText className="w-6 h-6" />}
                           </div>
                           <div className={`flex-1 overflow-hidden transition-all ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
-                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{doc.title}</h3>
-                            <span className="text-[10px] font-bold text-slate-400 mt-1 block">{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
+                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{highlightText(doc.title, searchQuery)}</h3>
+                            <span className="text-[10px] font-bold text-slate-400 mt-1 block">{doc.folder_name ? `${doc.folder_name} • ` : ''}{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
                           </div>
                           
                           {!isSelectMode && (

@@ -275,21 +275,72 @@ export default function DashboardPage() {
     return [...items].sort((left, right) => scoreSearchText(textSelector(right), query) - scoreSearchText(textSelector(left), query))
   }
 
+  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  const highlightText = (text: string, query: string) => {
+    const needle = query.trim()
+    if (!needle) return text
+    const regex = new RegExp(`(${escapeRegex(needle)})`, 'ig')
+    return text.split(regex).map((part, index) => (
+      index % 2 === 1
+        ? <mark key={index} className="rounded bg-yellow-200/80 dark:bg-yellow-400/30 px-0.5 text-inherit">{part}</mark>
+        : <span key={index}>{part}</span>
+    ))
+  }
+
+  const getDocSearchText = (doc: any, folderName?: string) => [
+    doc.title,
+    doc.description,
+    doc.author,
+    doc.exam_type,
+    doc.subject,
+    doc.tag,
+    folderName,
+    doc.drive_file_id
+  ].filter(Boolean).join(' ')
+
+  const getExamSearchText = (exam: any, folderName?: string) => [
+    exam.title,
+    exam.description,
+    exam.exam_type,
+    exam.subject,
+    exam.level,
+    exam.folder_name,
+    folderName
+  ].filter(Boolean).join(' ')
+
   const handleGlobalSearch = async (q?: string) => {
     const qtrim = (q ?? globalQuery).trim()
     if (!qtrim) { setGlobalDocsResults(null); setGlobalExamsResults(null); setShowGlobalResults(false); return }
     const requestId = ++globalSearchRequestRef.current
     setGlobalSearchLoading(true); setShowGlobalResults(true)
     try {
-      const [dRes, eRes] = await Promise.all([
-        supabase.from('library_documents').select('*').ilike('title', `%${qtrim}%`).limit(50),
-        supabase.from('exams').select('id,title,exam_type').ilike('title', `%${qtrim}%`).limit(50)
+      const [docsRes, examsRes, foldersRes] = await Promise.all([
+        supabase.from('library_documents').select('*').limit(1000),
+        supabase.from('exams').select('*').limit(1000),
+        supabase.from('library_folders').select('*').limit(1000)
       ])
       if (requestId !== globalSearchRequestRef.current) return
-      const docs = rankResults(dRes.data || [], qtrim, item => `${item.title || ''} ${item.drive_file_id || ''}`)
-      const exams = rankResults(eRes.data || [], qtrim, item => `${item.title || ''} ${item.exam_type || ''}`)
-      setGlobalDocsResults(docs)
-      setGlobalExamsResults(exams)
+      const folderMap = new Map<string, any>((foldersRes.data || []).map((folder: any) => [folder.id, folder]))
+      const folderMatches = (foldersRes.data || []).filter((folder: any) => getDocSearchText(folder, '').toLowerCase().includes(qtrim.toLowerCase()) || getExamSearchText(folder, '').toLowerCase().includes(qtrim.toLowerCase()))
+      const folderMatchIds = new Set(folderMatches.map((folder: any) => folder.id))
+
+      const docs = (docsRes.data || [])
+        .filter((doc: any) => {
+          const folderName = doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : ''
+          return getDocSearchText(doc, folderName).toLowerCase().includes(qtrim.toLowerCase()) || (doc.folder_id && folderMatchIds.has(doc.folder_id))
+        })
+        .map((doc: any) => ({ ...doc, folder_name: doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : '' }))
+
+      const exams = (examsRes.data || [])
+        .filter((exam: any) => {
+          const folderName = exam.folder_id ? folderMap.get(exam.folder_id)?.name || exam.folder_name || '' : exam.folder_name || ''
+          return getExamSearchText(exam, folderName).toLowerCase().includes(qtrim.toLowerCase()) || (exam.folder_id && folderMatchIds.has(exam.folder_id))
+        })
+        .map((exam: any) => ({ ...exam, folder_name: exam.folder_id ? folderMap.get(exam.folder_id)?.name || '' : exam.folder_name || '' }))
+
+      setGlobalDocsResults(rankResults(docs, qtrim, item => getDocSearchText(item, item.folder_name || '')))
+      setGlobalExamsResults(rankResults(exams, qtrim, item => getExamSearchText(item, item.folder_name || '')))
     } catch (e) { console.warn('Global search failed', e) }
     if (requestId === globalSearchRequestRef.current) setGlobalSearchLoading(false)
   }
@@ -571,8 +622,8 @@ export default function DashboardPage() {
                           {globalDocsResults.map(d => (
                             <div key={d.id} onClick={() => { router.push(`/library?preview=${d.id}`); setShowGlobalResults(false) }} onMouseEnter={() => setHoverPreviewDoc(d)} onMouseLeave={() => setHoverPreviewDoc(null)} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between">
                               <div className="min-w-0">
-                                <div className="font-bold text-sm truncate">{d.title}</div>
-                                <div className="text-[11px] text-slate-500 truncate">Nội bộ • mở trong thư viện</div>
+                                <div className="font-bold text-sm truncate">{highlightText(d.title || 'Không tên', globalQuery)}</div>
+                                <div className="text-[11px] text-slate-500 truncate">Nội bộ{d.folder_name ? ` • ${d.folder_name}` : ' • mở trong thư viện'}</div>
                               </div>
                               <div className="text-[11px] text-slate-400 shrink-0">Xem</div>
                             </div>
@@ -584,8 +635,8 @@ export default function DashboardPage() {
                           <div className="px-2 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Đề thi</div>
                           {globalExamsResults.map(e => (
                             <div key={e.id} onClick={() => { router.push(`/exams/${e.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2">
-                              <div className="font-bold text-sm">{e.title}</div>
-                              <div className="text-[11px] text-slate-500">Đề thi • {e.exam_type}</div>
+                              <div className="font-bold text-sm">{highlightText(e.title || 'Không tên', globalQuery)}</div>
+                              <div className="text-[11px] text-slate-500">Đề thi • {highlightText(e.exam_type || 'Không rõ', globalQuery)}{e.folder_name ? ` • ${e.folder_name}` : ''}</div>
                             </div>
                           ))}
                         </div>
