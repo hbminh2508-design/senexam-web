@@ -258,10 +258,8 @@ export default function DashboardPage() {
   const [globalExamsResults, setGlobalExamsResults] = useState<any[] | null>(null)
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
   const [showGlobalResults, setShowGlobalResults] = useState(false)
-  const [hoverPreviewDoc, setHoverPreviewDoc] = useState<any | null>(null)
   const globalSearchDebounce = useRef<number | null>(null)
   const globalSearchRequestRef = useRef(0)
-  const hoverPreviewDebounce = useRef<number | null>(null)
 
   const scoreSearchText = (value: string, query: string) => {
     const source = value.toLowerCase()
@@ -360,38 +358,18 @@ export default function DashboardPage() {
   // Debounce auto-search when typing
   useEffect(() => {
     if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current)
-    if (hoverPreviewDebounce.current) window.clearTimeout(hoverPreviewDebounce.current)
     if (!globalQuery || globalQuery.trim().length < 2) {
       globalSearchRequestRef.current += 1
       setShowGlobalResults(false)
       setGlobalFoldersResults(null)
       setGlobalDocsResults(null)
       setGlobalExamsResults(null)
-      setHoverPreviewDoc(null)
       return
     }
     // @ts-ignore
     globalSearchDebounce.current = window.setTimeout(() => handleGlobalSearch(globalQuery), 500)
     return () => { if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current) }
   }, [globalQuery])
-
-  useEffect(() => {
-    return () => {
-      if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current)
-      if (hoverPreviewDebounce.current) window.clearTimeout(hoverPreviewDebounce.current)
-    }
-  }, [])
-
-  const scheduleHoverPreview = (doc: any) => {
-    if (hoverPreviewDebounce.current) window.clearTimeout(hoverPreviewDebounce.current)
-    hoverPreviewDebounce.current = window.setTimeout(() => setHoverPreviewDoc(doc), 120)
-  }
-
-  const clearHoverPreview = () => {
-    if (hoverPreviewDebounce.current) window.clearTimeout(hoverPreviewDebounce.current)
-    hoverPreviewDebounce.current = null
-    setHoverPreviewDoc(null)
-  }
 
   const handleSaveProfile = async () => {
     if (formData.targetExams.includes('HSA') && formData.hsaOption === 'Khoa học' && formData.hsaScienceSubjects.length !== 3) { alert("Vui lòng chọn đủ 3 môn trong phần thi Khoa học của HSA!"); return }
@@ -633,7 +611,7 @@ export default function DashboardPage() {
             </div>
             
             <div className="flex gap-2 items-center flex-wrap">
-              <div className="relative w-full sm:w-72">
+              <div className="relative w-full sm:w-80 shrink-0 z-50">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                 <input value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGlobalSearch() } }} placeholder="Tìm nhanh tài liệu hoặc đề..." className="w-full pl-9 pr-10 py-2 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
                 <button onClick={() => handleGlobalSearch()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">
@@ -641,9 +619,8 @@ export default function DashboardPage() {
                 </button>
 
                 {showGlobalResults && ((globalFoldersResults && globalFoldersResults.length > 0) || (globalDocsResults && globalDocsResults.length > 0) || (globalExamsResults && globalExamsResults.length > 0) || globalSearchLoading) && (
-                  <div className="absolute right-0 left-auto mt-2 w-[min(980px,calc(100vw-1rem))] bg-white dark:bg-slate-900 border border-white/60 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden max-w-[calc(100vw-1rem)]">
-                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-                      <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
+                  <div className="absolute left-0 top-full mt-2 w-full bg-white dark:bg-slate-900 border border-white/60 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden">
+                    <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
                       {globalSearchLoading && (
                         <div className="py-2 px-2 text-sm text-slate-500 flex items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" /> Đang tìm kiếm...
@@ -670,8 +647,6 @@ export default function DashboardPage() {
                             <div
                               key={d.id}
                               onClick={() => { router.push(`/library?preview=${d.id}`); setShowGlobalResults(false) }}
-                              onMouseEnter={() => scheduleHoverPreview(d)}
-                              onMouseLeave={clearHoverPreview}
                               className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between"
                             >
                               <div className="min-w-0">
@@ -697,28 +672,6 @@ export default function DashboardPage() {
                       {!globalSearchLoading && !globalDocsResults?.length && !globalExamsResults?.length && globalQuery.trim().length >= 2 && (
                         <div className="py-2 px-2 text-sm text-slate-500">Không tìm thấy tài liệu hoặc đề thi phù hợp.</div>
                       )}
-                      </div>
-
-                      <div className="hidden lg:flex border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 min-h-[20rem] max-w-[320px]">
-                        {hoverPreviewDoc ? (
-                          <div className="w-full flex flex-col overflow-hidden">
-                            <div className="p-3 border-b border-slate-200 dark:border-slate-800">
-                              <div className="text-[10px] uppercase tracking-widest text-slate-400 font-black">Xem nhanh</div>
-                              <div className="font-bold text-sm truncate">{hoverPreviewDoc.title}</div>
-                            </div>
-                            <div className="flex-1 min-h-0">
-                              <iframe key={hoverPreviewDoc.id} src={`/library?preview=${hoverPreviewDoc.id}&embed=1`} className="w-full h-full border-none" loading="lazy" />
-                            </div>
-                            <div className="p-3 border-t border-slate-200 dark:border-slate-800">
-                              <button onClick={() => { router.push(`/library?preview=${hoverPreviewDoc.id}`); setShowGlobalResults(false) }} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Mở chi tiết</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="w-full flex items-center justify-center p-4 text-center text-slate-500 text-sm">
-                            Rê chuột vào một tài liệu để xem nhanh ở đây.
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </div>
                 )}
