@@ -474,8 +474,8 @@ export default function ExamRoomPage() {
             <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 border rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0"><img src="/logo.png" alt="Logo" className="w-full h-full object-contain" /></div>
             <div>
               <h1 className="font-extrabold text-xs md:text-sm max-w-[180px] md:max-w-xs truncate tracking-tight">{exam?.title}</h1>
-              <div className="flex gap-2 mt-0.5 text-[9px] md:text-[10px] font-bold">
-                <span className={`px-1.5 py-0.5 rounded border ${violations > 0 ? 'bg-red-100 text-red-600 border-red-200 animate-pulse' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>Vi phạm: {violations}/3</span>
+                <div className="flex gap-2 mt-0.5 text-[9px] md:text-[10px] font-bold">
+                <span className={`px-1.5 py-0.5 rounded border ${violations > 0 ? 'bg-red-100 text-red-600 border-red-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}`}>Vi phạm: {violations}/3</span>
               </div>
             </div>
           </div>
@@ -483,6 +483,9 @@ export default function ExamRoomPage() {
         
         <div className="flex items-center gap-4 md:gap-6">
           <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-black text-sm md:text-lg border-2 backdrop-blur-sm ${timeLeft < 300 ? 'text-red-600 border-red-200 bg-red-50 animate-pulse' : 'text-blue-600 border-blue-100 bg-blue-50/60 dark:bg-blue-950/30'}`}><Clock className="w-4 h-4 md:w-5 md:h-5"/>{formatTime(timeLeft)}</div>
+          <button onClick={requestFullscreenMode} title="Toàn màn hình" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-slate-100 px-3 py-1.5 rounded-xl font-bold text-xs md:text-sm border border-white/10 shadow-sm">
+            <Maximize2 className="w-4 h-4" />
+          </button>
           <button onClick={handleManualSubmit} disabled={submitting} className="flex gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold text-xs md:text-sm shadow-md"><Send className="w-3.5 h-3.5"/>Nộp bài</button>
         </div>
       </header>
@@ -490,15 +493,25 @@ export default function ExamRoomPage() {
       {/* GIAO DIỆN PHÂN CHIA PHÒNG THI INTERACTIVE SIÊU KHỦNG (TỐI ƯU CHO CẢ IPHONE) */}
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
         
-        {/* KHUNG ĐỀ GỐC PDF: CHỈ HIỂN THỊ NẾU SOẠN ĐỀ THEO CHẾ ĐỘ FILE PDF TRUYỀN THỐNG */}
-        {exam?.creation_mode !== 'interactive_mode' && (
-          <div className="flex-1 h-[40vh] md:h-full relative bg-white/30 dark:bg-slate-900/20 backdrop-blur-sm">
-            <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
-          </div>
-        )}
+        {/* KHUNG ĐỀ GỐC PDF: CHỈ HIỂN THỊ KHI THỰC SỰ KHÔNG CÓ CẤU TRÚC ĐỀ SỐ HÓA */}
+        {(() => {
+          const hasDigitalStructure = Array.isArray(exam?.exam_structure) && exam.exam_structure.length > 0
+          const shouldShowPdf = exam?.creation_mode !== 'interactive_mode' && !hasDigitalStructure && cachedPdfUrl
+          if (!shouldShowPdf) return null
+          return (
+            <div className="flex-1 h-[40vh] md:h-full relative bg-white/30 dark:bg-slate-900/20 backdrop-blur-sm">
+              <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
+            </div>
+          )
+        })()}
         
         {/* PHIẾU ĐÁP ÁN: SẼ CHIẾM TRỌN 100% DIỆN TÍCH MÀN HÌNH NẾU ĐỀ Ở CHẾ ĐỘ INTERACTIVE SỐ HÓA */}
-        <div className={`h-full liquid-panel-strong flex flex-col overflow-hidden ${exam?.creation_mode === 'interactive_mode' ? 'w-full' : 'w-full md:w-[430px] lg:w-[470px] border-l border-white/40 dark:border-white/10'} ${exam?.creation_mode === 'interactive_mode' ? '' : ''}`}>
+        <div className={`h-full liquid-panel-strong flex flex-col overflow-hidden ${(() => {
+          const hasDigitalStructure = Array.isArray(exam?.exam_structure) && exam.exam_structure.length > 0
+          const showPdf = exam?.creation_mode !== 'interactive_mode' && !hasDigitalStructure && cachedPdfUrl
+          // nếu không hiển thị PDF thì chiếm hết chiều ngang
+          return showPdf ? 'w-full md:w-[430px] lg:w-[470px] border-l border-white/40 dark:border-white/10' : 'w-full'
+        })()}`}> 
           
           {/* Bảng điều hướng nhanh câu hỏi */}
           <div className="shrink-0 liquid-panel border-b border-white/40 dark:border-white/10 p-4 max-h-[30vh] overflow-y-auto custom-scrollbar">

@@ -722,7 +722,7 @@ export default function AdminDashboard() {
   if (selectedSubForGrading) {
     const pdfUrl = `https://drive.google.com/file/d/${selectedSubForGrading.exams?.drive_file_id}/preview`
     return (
-      <div className="h-screen w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+      <div className="h-screen w-full flex flex-col bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
         <header className="h-16 bg-slate-900 border-b border-white/10 flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
           <div className="flex items-center gap-3">
             <button onClick={() => setSelectedSubForGrading(null)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
@@ -822,7 +822,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="app-shell min-h-screen flex flex-col md:flex-row bg-transparent text-slate-100 font-sans overflow-x-hidden pb-20 md:pb-0">
+    <div className="app-shell min-h-screen flex flex-col md:flex-row bg-transparent text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-20 md:pb-0">
       
       {/* BACKGROUND ĐỒ HỌA MỜ KÍNH CHỐNG LAG */}
       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full filter blur-[130px] pointer-events-none bounce-float"></div>
@@ -1012,7 +1012,9 @@ export default function AdminDashboard() {
             <div className="animate-in fade-in zoom-in-95 duration-200">
               <div className="mb-6 md:mb-8">
                 <h2 className="text-2xl md:text-3xl font-black tracking-tight">Trình Tạo Đề Thi Số Hóa</h2>
-                <p className="text-slate-400 font-bold text-xs mt-1">Hỗ trợ nhận diện và cắt đề bài thành ảnh, tối ưu hiển thị đa thiết bị.</p>
+                {creationMode !== 'pdf_mode' && (
+                  <p className="text-slate-400 font-bold text-xs mt-1">Hỗ trợ nhận diện và cắt đề bài thành ảnh, tối ưu hiển thị đa thiết bị.</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2 p-1.5 liquid-panel rounded-2xl mb-6">
@@ -1129,7 +1131,9 @@ export default function AdminDashboard() {
 
                         <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
                           <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-[11px] font-black bg-white/5 text-slate-300 px-3.5 py-2 rounded-xl flex items-center gap-1"><KeyRound className="w-3.5 h-3.5"/> {editingKeysSectionId === section.id ? 'Thu gọn hòm kiểm tra' : 'Mở bảng điều phối chi tiết'}</button>
-                          <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-[11px] font-black bg-blue-600 text-white px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md shadow-blue-600/10"><Wand2 className="w-3.5 h-3.5"/> 1. Quét & Tự động cắt đề từ PDF</button>
+                          {creationMode !== 'pdf_mode' && (
+                            <button type="button" onClick={() => setAutoFillModalId(section.id)} className="text-[11px] font-black bg-blue-600 text-white px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md shadow-blue-600/10"><Wand2 className="w-3.5 h-3.5"/> 1. Quét & Tự động cắt đề từ PDF</button>
+                          )}
                           {section.questionCount > 0 && <button type="button" onClick={() => setQuickAnswersModalId(section.id)} className="text-[11px] font-black bg-amber-500 text-slate-950 px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md shadow-amber-500/10"><Sparkles className="w-3.5 h-3.5"/> 2. Khớp chuỗi đáp án nhanh</button>}
                         </div>
 
