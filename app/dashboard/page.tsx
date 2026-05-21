@@ -608,7 +608,7 @@ export default function DashboardPage() {
                   {globalSearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 </button>
 
-                {showGlobalResults && ((globalFoldersResults && globalFoldersResults.length > 0) || (globalDocsResults && globalDocsResults.length > 0) || (globalExamsResults && globalExamsResults.length > 0) || globalSearchLoading) && (
+                {showGlobalResults && globalQuery.trim().length >= 2 && (
                   <div className={`${glassSearchPanelClass} z-50`}>
                     <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
                       {globalSearchLoading && (
@@ -659,7 +659,7 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       )}
-                      {!globalSearchLoading && !globalDocsResults?.length && !globalExamsResults?.length && globalQuery.trim().length >= 2 && (
+                      {!globalSearchLoading && !globalFoldersResults?.length && !globalDocsResults?.length && !globalExamsResults?.length && globalQuery.trim().length >= 2 && (
                         <div className="py-2 px-2 text-sm text-slate-500">Không tìm thấy tài liệu hoặc đề thi phù hợp.</div>
                       )}
                     </div>
