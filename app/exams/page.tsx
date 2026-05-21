@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useDeferredValue, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   Search, BookOpen, Clock, Target, ChevronLeft, 
   Filter, Lock, PlayCircle, Loader2, CheckCircle2
 } from 'lucide-react'
+
+import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 
 // Apple Liquid Glass CSS Constants
 const glassCardStyles = "liquid-panel relative"
@@ -19,6 +21,7 @@ export default function ExamsLibraryPage() {
   const [userSubmissions, setUserSubmissions] = useState<any[]>([])
   
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [filterType, setFilterType] = useState('Tất cả')
 
   useEffect(() => {
@@ -63,7 +66,7 @@ export default function ExamsLibraryPage() {
   // Bộ lọc tìm kiếm và phân loại
   const filteredExams = exams.filter(exam => {
     const matchType = filterType === 'Tất cả' || exam.exam_type === filterType
-    const matchSearch = exam.title.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchSearch = exam.title.toLowerCase().includes(deferredSearchQuery.toLowerCase())
     return matchType && matchSearch
   })
 
@@ -109,7 +112,7 @@ export default function ExamsLibraryPage() {
                 placeholder="Tìm kiếm tên đề thi..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl border border-white/60 dark:border-white/10 rounded-2xl pl-11 pr-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/40 shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all"
+                className={`${glassSearchInputClass} pl-11 pr-4 py-3`}
               />
             </div>
 
@@ -146,7 +149,7 @@ export default function ExamsLibraryPage() {
                   <div>
                     <div className="flex justify-between items-start mb-4">
                       <span className="px-3 py-1.5 bg-blue-100/80 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-black uppercase tracking-wider backdrop-blur-sm border border-blue-200 dark:border-blue-800/50 shadow-sm">
-                        {exam.exam_type}
+                        {highlightSearchText(exam.exam_type, deferredSearchQuery)}
                       </span>
                       {exam.max_attempts > 0 && (
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border backdrop-blur-sm shadow-sm flex items-center gap-1 ${isLocked ? 'bg-red-100/80 text-red-600 border-red-200' : 'bg-emerald-100/80 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800/50'}`}>
@@ -157,7 +160,7 @@ export default function ExamsLibraryPage() {
                     </div>
 
                     <h3 className="text-xl font-extrabold text-slate-900 dark:text-white leading-snug mb-3 drop-shadow-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 tracking-tight">
-                      {exam.title}
+                      {highlightSearchText(exam.title, deferredSearchQuery)}
                     </h3>
 
                     <div className="flex flex-wrap gap-1.5 mb-5">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useDeferredValue, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
@@ -8,6 +8,8 @@ import {
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
   Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen, Sparkles, Lock
 } from 'lucide-react'
+
+import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
 
 // 🌟 GỌI BỘ NÃO AI OFFLINE VÀO TRANG MỘT CÁCH GỌN GÀNG
 import ChatOffline from '@/app/components/ChatOffline'
@@ -258,6 +260,7 @@ export default function DashboardPage() {
   const [globalExamsResults, setGlobalExamsResults] = useState<any[] | null>(null)
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
   const [showGlobalResults, setShowGlobalResults] = useState(false)
+  const deferredGlobalQuery = useDeferredValue(globalQuery)
   const globalSearchDebounce = useRef<number | null>(null)
   const globalSearchRequestRef = useRef(0)
 
@@ -273,19 +276,6 @@ export default function DashboardPage() {
 
   const rankResults = <T extends Record<string, any>>(items: T[], query: string, textSelector: (item: T) => string) => {
     return [...items].sort((left, right) => scoreSearchText(textSelector(right), query) - scoreSearchText(textSelector(left), query))
-  }
-
-  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-  const highlightText = (text: string, query: string) => {
-    const needle = query.trim()
-    if (!needle) return text
-    const regex = new RegExp(`(${escapeRegex(needle)})`, 'ig')
-    return text.split(regex).map((part, index) => (
-      index % 2 === 1
-        ? <mark key={index} className="rounded bg-yellow-200/80 dark:bg-yellow-400/30 px-0.5 text-inherit">{part}</mark>
-        : <span key={index}>{part}</span>
-    ))
   }
 
   const getDocSearchText = (doc: any, folderName?: string) => [
@@ -613,13 +603,13 @@ export default function DashboardPage() {
             <div className="flex gap-2 items-center flex-wrap">
               <div className="relative w-full sm:w-80 shrink-0 z-50">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                <input value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGlobalSearch() } }} placeholder="Tìm nhanh tài liệu hoặc đề..." className="w-full pl-9 pr-10 py-2 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
+                <input value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGlobalSearch() } }} placeholder="Tìm nhanh tài liệu hoặc đề..." className={`${glassSearchInputClass} pl-9 pr-10 py-2`} />
                 <button onClick={() => handleGlobalSearch()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">
                   {globalSearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 </button>
 
                 {showGlobalResults && ((globalFoldersResults && globalFoldersResults.length > 0) || (globalDocsResults && globalDocsResults.length > 0) || (globalExamsResults && globalExamsResults.length > 0) || globalSearchLoading) && (
-                  <div className="absolute left-0 top-full mt-2 w-full bg-white dark:bg-slate-900 border border-white/60 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className={`${glassSearchPanelClass} z-50`}>
                     <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
                       {globalSearchLoading && (
                         <div className="py-2 px-2 text-sm text-slate-500 flex items-center gap-2">
@@ -632,7 +622,7 @@ export default function DashboardPage() {
                           {globalFoldersResults.map(folder => (
                             <div key={folder.id} onClick={() => { router.push(`/library?folder=${folder.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between">
                               <div className="min-w-0">
-                                <div className="font-bold text-sm truncate">{highlightText(folder.name || 'Không tên', globalQuery)}</div>
+                                <div className="font-bold text-sm truncate">{highlightSearchText(folder.name || 'Không tên', deferredGlobalQuery)}</div>
                                 <div className="text-[11px] text-slate-500 truncate">Thư mục nội bộ</div>
                               </div>
                               <div className="text-[11px] text-slate-400 shrink-0">Mở</div>
@@ -650,7 +640,7 @@ export default function DashboardPage() {
                               className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between"
                             >
                               <div className="min-w-0">
-                                <div className="font-bold text-sm truncate">{highlightText(d.title || 'Không tên', globalQuery)}</div>
+                                <div className="font-bold text-sm truncate">{highlightSearchText(d.title || 'Không tên', deferredGlobalQuery)}</div>
                                 <div className="text-[11px] text-slate-500 truncate">Nội bộ{d.folder_name ? ` • ${d.folder_name}` : ' • mở trong thư viện'}</div>
                               </div>
                               <div className="text-[11px] text-slate-400 shrink-0">Xem</div>
@@ -663,8 +653,8 @@ export default function DashboardPage() {
                           <div className="px-2 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Đề thi</div>
                           {globalExamsResults.map(e => (
                             <div key={e.id} onClick={() => { router.push(`/exams/${e.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2">
-                              <div className="font-bold text-sm">{highlightText(e.title || 'Không tên', globalQuery)}</div>
-                              <div className="text-[11px] text-slate-500">Đề thi • {highlightText(e.exam_type || 'Không rõ', globalQuery)}{e.folder_name ? ` • ${e.folder_name}` : ''}</div>
+                              <div className="font-bold text-sm">{highlightSearchText(e.title || 'Không tên', deferredGlobalQuery)}</div>
+                              <div className="text-[11px] text-slate-500">Đề thi • {highlightSearchText(e.exam_type || 'Không rõ', deferredGlobalQuery)}{e.folder_name ? ` • ${e.folder_name}` : ''}</div>
                             </div>
                           ))}
                         </div>

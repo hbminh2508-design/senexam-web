@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useDeferredValue, useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
@@ -9,6 +9,8 @@ import {
   ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink,
   Image, Video, Music, Palette
 } from 'lucide-react'
+
+import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 
 const glassCardStyles = "liquid-panel"
 
@@ -28,6 +30,7 @@ export default function LibraryPage() {
   const currentFolderId = folderPath[folderPath.length - 1].id
 
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [isCompact, setIsCompact] = useState(false)
 
   // Folder customizations (color, icon) stored in localStorage to avoid DB migration
@@ -188,19 +191,6 @@ export default function LibraryPage() {
 
   const rankByQuery = (items: any[], query: string, labelGetter: (item: any) => string) => {
     return [...items].sort((a, b) => scoreResult(labelGetter(b), query) - scoreResult(labelGetter(a), query))
-  }
-
-  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-  const highlightText = (text: string, query: string) => {
-    const needle = query.trim()
-    if (!needle) return text
-    const regex = new RegExp(`(${escapeRegex(needle)})`, 'ig')
-    return text.split(regex).map((part, index) => (
-      index % 2 === 1
-        ? <mark key={index} className="rounded bg-yellow-200/80 dark:bg-yellow-400/30 px-0.5 text-inherit">{part}</mark>
-        : <span key={index}>{part}</span>
-    ))
   }
 
   const buildSearchBlob = (item: any, folderName?: string) => {
@@ -477,8 +467,8 @@ export default function LibraryPage() {
     return 'other'
   }
 
-  let displayFolders = searchFoldersResults !== null ? (searchFoldersResults) : folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  let displayDocuments = searchDocsResults !== null ? (searchDocsResults) : documents.filter(d => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
+  let displayFolders = searchFoldersResults !== null ? (searchFoldersResults) : folders.filter(f => f.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
+  let displayDocuments = searchDocsResults !== null ? (searchDocsResults) : documents.filter(d => d.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
 
   if (sortByName) {
     displayFolders.sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' }));
@@ -805,7 +795,7 @@ export default function LibraryPage() {
             {/* Thanh Tìm kiếm */}
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); globalSearch(searchQuery) } }} placeholder="Tìm kiếm (toàn bộ thư viện)..." className="w-full pl-9 pr-10 py-3 rounded-2xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm" />
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); globalSearch(searchQuery) } }} placeholder="Tìm kiếm (toàn bộ thư viện)..." className={`${glassSearchInputClass} pl-9 pr-10 py-3`} />
               <button onClick={() => globalSearch(searchQuery)} title="Tìm kiếm toàn cục" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">{searchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}</button>
             </div>
 
@@ -888,7 +878,7 @@ export default function LibraryPage() {
                               style={{ color: folderCustomizations[folder.id]?.color || '#3b82f6' }}
                             />
                           </div>
-                          <p className={`font-black text-sm text-center ${isCompact ? 'text-[12px]' : ''} text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1`}>{folderCustomizations[folder.id]?.icon ? <>{folderCustomizations[folder.id].icon} {highlightText(folder.name, searchQuery)}</> : highlightText(folder.name, searchQuery)}</p>
+                          <p className={`font-black text-sm text-center ${isCompact ? 'text-[12px]' : ''} text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1`}>{folderCustomizations[folder.id]?.icon ? <>{folderCustomizations[folder.id].icon} {highlightSearchText(folder.name, deferredSearchQuery)}</> : highlightSearchText(folder.name, deferredSearchQuery)}</p>
                         </div>
                       )
                     })}
@@ -932,7 +922,7 @@ export default function LibraryPage() {
                             {kind === 'other' && <FileText className="w-6 h-6" />}
                           </div>
                           <div className={`flex-1 overflow-hidden transition-all ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
-                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{highlightText(doc.title, searchQuery)}</h3>
+                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{highlightSearchText(doc.title, deferredSearchQuery)}</h3>
                             <span className="text-[10px] font-bold text-slate-400 mt-1 block">{doc.folder_name ? `${doc.folder_name} • ` : ''}{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
                           </div>
                           

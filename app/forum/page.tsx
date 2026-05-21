@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useDeferredValue, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
@@ -8,6 +8,8 @@ import {
   MessageCircle, Clock, User, Filter, X, Loader2, Send, Paperclip, FileIcon, Download,
   Pin, PinOff, Trash2
 } from 'lucide-react'
+
+import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 
 const glassCardStyles = "liquid-panel"
 const CATEGORIES = ['Tất cả', 'Hỏi đáp bài tập', 'Chia sẻ tài liệu', 'Thảo luận chung', 'Góc tâm sự']
@@ -19,6 +21,7 @@ export default function ForumPage() {
   
   const [currentUserRole, setCurrentUserRole] = useState('student')
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [activeCategory, setActiveCategory] = useState('Tất cả')
 
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -138,7 +141,8 @@ export default function ForumPage() {
 
   const filteredPosts = posts.filter(post => {
     const matchCat = activeCategory === 'Tất cả' || post.category === activeCategory
-    const matchSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) || post.content.toLowerCase().includes(searchQuery.toLowerCase())
+    const searchTerm = deferredSearchQuery.toLowerCase()
+    const matchSearch = post.title.toLowerCase().includes(searchTerm) || post.content.toLowerCase().includes(searchTerm)
     return matchCat && matchSearch
   })
 
@@ -217,7 +221,7 @@ export default function ForumPage() {
         <div className={`${glassCardStyles} rounded-2xl p-4 flex flex-col sm:flex-row gap-4 mb-8 border-t-white/60 border-l-white/60`}>
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 dark:text-slate-400" />
-            <input type="text" placeholder="Tìm kiếm câu hỏi, môn học, tài liệu..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white/50 dark:bg-slate-900/50 border border-white/50 dark:border-slate-700/50 rounded-xl pl-10 pr-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/50 text-sm font-bold transition-all shadow-inner placeholder-slate-400" />
+            <input type="text" placeholder="Tìm kiếm câu hỏi, môn học, tài liệu..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={`${glassSearchInputClass} pl-10 pr-4 py-3 shadow-inner`} />
           </div>
           <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
             {CATEGORIES.map(cat => (
@@ -243,7 +247,7 @@ export default function ForumPage() {
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <h3 className="text-xl font-extrabold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 drop-shadow-sm flex items-center gap-2">
                     {post.is_pinned && <Pin className="w-4 h-4 text-orange-500 fill-orange-500 rotate-45 shrink-0" />}
-                    {post.title}
+                    {highlightSearchText(post.title, deferredSearchQuery)}
                   </h3>
                   
                   <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
@@ -274,7 +278,7 @@ export default function ForumPage() {
                 </div>
                 
                 <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2 mb-4 font-medium leading-relaxed">
-                  {post.content}
+                  {highlightSearchText(post.content, deferredSearchQuery)}
                 </p>
 
                 {post.drive_file_id && (
