@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   BookOpen, Clock, Trophy, Target, LogOut, User, 
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle,
-  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen
+  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen, Sparkles, Lock
 } from 'lucide-react'
 
 // 🌟 GỌI BỘ NÃO AI OFFLINE VÀO TRANG MỘT CÁCH GỌN GÀNG
@@ -210,6 +210,47 @@ export default function DashboardPage() {
     })
   }
 
+  const [isAiEnabled, setIsAiEnabled] = useState(true)
+  const [language, setLanguage] = useState('vi')
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+
+  useEffect(() => {
+    const ai = localStorage.getItem('senai_enabled')
+    setIsAiEnabled(ai === null ? true : ai === '1')
+    const lang = localStorage.getItem('senexam_lang') || 'vi'
+    setLanguage(lang)
+    const notif = localStorage.getItem('senexam_notifications')
+    setNotificationsEnabled(notif === null ? true : notif === '1')
+  }, [])
+
+  const toggleAiEnabled = (val?: boolean) => {
+    const next = typeof val === 'boolean' ? val : !isAiEnabled
+    setIsAiEnabled(next)
+    localStorage.setItem('senai_enabled', next ? '1' : '0')
+  }
+
+  const handleLanguageChange = (lang: string) => {
+    setLanguage(lang)
+    localStorage.setItem('senexam_lang', lang)
+  }
+
+  const toggleNotifications = () => {
+    const next = !notificationsEnabled
+    setNotificationsEnabled(next)
+    localStorage.setItem('senexam_notifications', next ? '1' : '0')
+  }
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) { alert('Mật khẩu phải có ít nhất 6 ký tự'); return }
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (!user) { alert('Bạn cần đăng nhập lại để đổi mật khẩu'); return }
+    const { error: upErr } = await supabase.auth.updateUser({ password: newPassword })
+    if (upErr) alert('Lỗi khi đổi mật khẩu: ' + upErr.message)
+    else { alert('Đổi mật khẩu thành công'); setShowChangePassword(false); setNewPassword('') }
+  }
+
   const handleSaveProfile = async () => {
     if (formData.targetExams.includes('HSA') && formData.hsaOption === 'Khoa học' && formData.hsaScienceSubjects.length !== 3) { alert("Vui lòng chọn đủ 3 môn trong phần thi Khoa học của HSA!"); return }
     const { data: { user } } = await supabase.auth.getUser()
@@ -352,6 +393,42 @@ export default function DashboardPage() {
                     <button onClick={toggleDarkMode} className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors border border-white/30 shadow-inner ${isDarkMode ? 'bg-blue-600' : 'bg-slate-300/80'}`}><span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`} /></button>
                   </div>
                 </div>
+
+                <div className="bg-white/40 dark:bg-slate-800/40 backdrop-blur-md p-5 rounded-2xl border border-white/60 dark:border-slate-700/50 shadow-sm">
+                  <h3 className="text-sm font-bold mb-3">Tùy chọn hệ thống</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3"><Sparkles className="w-5 h-5 text-yellow-400" /><div><p className="text-xs text-slate-500">Trợ lý Sen AI</p><p className="text-[11px] text-slate-500">Bật/Tắt trợ lý AI trên giao diện</p></div></div>
+                      <button onClick={() => toggleAiEnabled()} className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors border border-white/30 shadow-inner ${isAiEnabled ? 'bg-blue-600' : 'bg-slate-300/80'}`}><span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isAiEnabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3"><Bell className="w-5 h-5 text-red-400" /><div><p className="text-xs text-slate-500">Thông báo</p><p className="text-[11px] text-slate-500">Nhận thông báo mới từ hệ thống</p></div></div>
+                      <button onClick={toggleNotifications} className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors border border-white/30 shadow-inner ${notificationsEnabled ? 'bg-emerald-600' : 'bg-slate-300/80'}`}><span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} /></button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3"><KeyRound className="w-5 h-5 text-indigo-500" /><div><p className="text-xs text-slate-500">Ngôn ngữ</p><p className="text-[11px] text-slate-500">Chọn ngôn ngữ hiển thị</p></div></div>
+                      <select value={language} onChange={(e) => handleLanguageChange(e.target.value)} className="bg-white/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 rounded-xl px-3 py-2 font-bold outline-none">
+                        <option value="vi">Tiếng Việt</option>
+                        <option value="en">English</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3"><Lock className="w-5 h-5 text-slate-700" /><div><p className="text-xs text-slate-500">Đổi mật khẩu</p><p className="text-[11px] text-slate-500">Thay đổi mật khẩu đăng nhập</p></div></div>
+                      <button onClick={() => setShowChangePassword(true)} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold">Đổi mật khẩu</button>
+                    </div>
+                  </div>
+                </div>
+
+                {showChangePassword && (
+                  <div className="bg-white/30 dark:bg-slate-900/30 p-4 rounded-xl border border-white/40 dark:border-slate-700/50 shadow-sm">
+                    <label className="block text-xs font-bold mb-2">Mật khẩu mới</label>
+                    <div className="flex gap-2"><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="flex-1 bg-white/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-700/50 rounded-xl px-3 py-2 outline-none" placeholder="Mật khẩu tối thiểu 6 ký tự" /><button onClick={handleChangePassword} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold">Lưu</button></div>
+                    <div className="mt-2"><button onClick={() => { setShowChangePassword(false); setNewPassword('') }} className="text-sm text-slate-500">Hủy</button></div>
+                  </div>
+                )}
 
                 <div>
                   <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 drop-shadow-sm">Hồ sơ thí sinh</h3>
@@ -588,7 +665,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <ChatOffline userName={formData.fullName ? formData.fullName.split(' ').pop() || '' : ''} />
+      <ChatOffline userName={formData.fullName ? formData.fullName.split(' ').pop() || '' : ''} avoid={showProfile} hidden={!isAiEnabled} />
 
     </div>
   )

@@ -202,7 +202,7 @@ const formatMessage = (text: string, role: 'user' | 'model') => {
   });
 };
 
-export default function ChatOffline({ userName }: { userName: string }) {
+export default function ChatOffline({ userName, avoid, hidden }: { userName: string, avoid?: boolean, hidden?: boolean }) {
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [chatMessages, setChatMessages] = useState<{role: 'user' | 'model', text: string}[]>([
@@ -236,8 +236,10 @@ export default function ChatOffline({ userName }: { userName: string }) {
     }, 700 + Math.random() * 500); 
   }
 
+  if (hidden) return null;
+
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end">
+    <div className={`fixed bottom-6 z-[100] flex flex-col items-end ${avoid ? 'right-6 lg:right-[28rem]' : 'right-6'}`}>
       {isChatOpen && (
         <div className="mb-4 w-[350px] sm:w-[400px] h-[550px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl border border-white/60 dark:border-slate-700/50 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
           {/* Header */}
