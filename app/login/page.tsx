@@ -73,7 +73,7 @@ export default function LoginPage() {
             <Zap className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> Hệ thống thi cử thông minh
           </div>
           <h1 className="text-5xl md:text-7xl font-black tracking-tight drop-shadow-md leading-tight">
-            SenExam<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">.COM</span>
+            SenExam<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">.ME</span>
           </h1>
           <p className="text-slate-600 dark:text-slate-300 text-lg md:text-xl font-medium max-w-md mx-auto md:mx-0 leading-relaxed drop-shadow-sm">
             Nền tảng đánh giá năng lực cá nhân hóa. Chinh phục kỳ thi THPTQG, HSA và TSA ngay hôm nay.

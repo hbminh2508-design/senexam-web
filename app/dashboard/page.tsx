@@ -405,10 +405,10 @@ export default function DashboardPage() {
               </div>
               <div className="flex flex-col justify-center">
                 <h1 className="text-xl md:text-2xl font-black tracking-tight drop-shadow-sm leading-none text-slate-900 dark:text-white">
-                  SenExam<span className="text-blue-600 dark:text-blue-400 drop-shadow-md">.COM</span>
+                  SenExam<span className="text-blue-600 dark:text-blue-400 drop-shadow-md">.ME</span>
                 </h1>
                 <span className="text-[8px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
-                  Trực tuyến học & thi
+                  Nền tảng Học và Thi trực tuyến miễn phí
                 </span>
               </div>
             </div>
