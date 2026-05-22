@@ -802,10 +802,10 @@ export default function DashboardPage() {
 
             <div 
               onClick={() => router.push('/focus')}
-              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-3`}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex items-center justify-between gap-4 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-6`}
             >
               <div className="absolute -right-10 -top-10 w-36 h-36 bg-violet-400/14 dark:bg-violet-600/14 rounded-full blur-3xl group-hover:bg-violet-400/22 transition-colors"></div>
-              <div className="relative z-10 flex items-center gap-4">
+              <div className="relative z-10 flex items-center gap-4 min-w-0">
                 <div className="p-3.5 bg-gradient-to-br from-violet-400/30 to-fuchsia-500/30 text-violet-600 dark:text-violet-400 rounded-xl border border-violet-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
                   <Music2 className="w-6 h-6 drop-shadow-md" />
                 </div>
@@ -817,6 +817,9 @@ export default function DashboardPage() {
                     Phòng tập trung với thư viện, timer và lo-fi chill
                   </p>
                 </div>
+              </div>
+              <div className="relative z-10 hidden sm:flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">
+                Mở ngay
               </div>
             </div>
 

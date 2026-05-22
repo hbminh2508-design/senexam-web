@@ -52,16 +52,16 @@ const YOUTUBE_SUGGESTIONS = [
 ]
 
 const LOFI_PLAYLIST = [
-  { title: 'Chill beats to study to', artist: 'lofi girl', url: 'https://www.youtube.com/watch?v=5qap5aO4i9A' },
-  { title: 'Study and relax', artist: 'chillhop music', url: 'https://www.youtube.com/watch?v=7NOSDKb0HlU' },
-  { title: 'Late night coding', artist: 'lofi hip hop radio', url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk' },
-  { title: 'Soft piano focus', artist: 'relaxing ambient', url: 'https://www.youtube.com/watch?v=2OEL4P1Rz04' },
+  { title: 'Chill beats to study to', artist: 'lofi girl', videoId: '5qap5aO4i9A' },
+  { title: 'Study and relax', artist: 'chillhop music', videoId: '7NOSDKb0HlU' },
+  { title: 'Late night coding', artist: 'lofi hip hop radio', videoId: 'jfKfPfyJRdk' },
+  { title: 'Soft piano focus', artist: 'relaxing ambient', videoId: '2OEL4P1Rz04' },
 ]
 
 type TimerMode = 'countdown' | 'stopwatch'
 
-function getEmbedUrl(videoId: string) {
-  return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`
+function getEmbedUrl(videoId: string, autoplay = false) {
+  return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1${autoplay ? '&autoplay=1' : ''}`
 }
 
 export default function FocusRoomPage() {
@@ -74,8 +74,16 @@ export default function FocusRoomPage() {
   const [isRunning, setIsRunning] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedVideoId, setSelectedVideoId] = useState(YOUTUBE_SUGGESTIONS[0].videoId)
+  const [selectedLofiVideoId, setSelectedLofiVideoId] = useState(LOFI_PLAYLIST[0].videoId)
 
   const activeBackground = useMemo(() => STUDY_BACKGROUNDS.find(item => item.id === backgroundId) ?? STUDY_BACKGROUNDS[0], [backgroundId])
+  const isLightBackground = backgroundId === 'paper' || backgroundId === 'sunrise'
+  const shellTextClass = isLightBackground ? 'text-slate-950' : 'text-slate-100'
+  const cardClass = isLightBackground
+    ? 'border border-slate-300/70 bg-white/82 shadow-[0_20px_60px_rgba(15,23,42,0.10)] backdrop-blur-xl'
+    : 'border border-white/15 bg-slate-950/35 shadow-[0_20px_60px_rgba(15,23,42,0.25)] backdrop-blur-xl'
+  const softTextClass = isLightBackground ? 'text-slate-700' : 'text-white/75'
+  const mutedTextClass = isLightBackground ? 'text-slate-600' : 'text-white/60'
   const parseCountdownValue = (value: string) => {
     const normalized = value.trim()
     const parts = normalized.split(':').map(part => Number(part))
@@ -149,19 +157,19 @@ export default function FocusRoomPage() {
   }
 
   return (
-    <main className={`min-h-screen text-slate-100 ${activeBackground.className}`}>
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <section className="rounded-[2rem] border border-white/15 bg-white/10 p-5 shadow-[0_20px_80px_rgba(15,23,42,0.28)] backdrop-blur-xl">
+    <main className={`min-h-screen ${shellTextClass} ${activeBackground.className}`}>
+      <div className="mx-auto flex min-h-screen w-full max-w-[1800px] flex-col gap-5 px-3 py-4 sm:px-5 lg:px-6">
+        <section className={`rounded-[2rem] p-5 shadow-[0_20px_80px_rgba(15,23,42,0.28)] ${cardClass}`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-white/80">
+              <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${isLightBackground ? 'border border-slate-300 bg-white/75 text-slate-700' : 'border border-white/15 bg-white/10 text-white/80'}`}>
                 <MoonStar className="h-4 w-4" />
                 Focus Room
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+              <h1 className={`text-3xl font-black tracking-tight sm:text-4xl ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>
                 Phòng tập trung học bài
               </h1>
-              <p className="max-w-3xl text-sm leading-6 text-white/75 sm:text-base">
+              <p className={`max-w-3xl text-sm leading-6 sm:text-base ${softTextClass}`}>
                 Chọn nền phù hợp, mở tài liệu, nghe lo-fi và giữ nhịp học theo cách của bạn.
               </p>
             </div>
@@ -172,38 +180,38 @@ export default function FocusRoomPage() {
                   key={background.id}
                   type="button"
                   onClick={() => setBackgroundId(background.id)}
-                  className={`group rounded-2xl border px-4 py-3 text-left transition ${background.id === backgroundId ? 'border-white/60 bg-white/20 shadow-lg' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                  className={`group rounded-2xl px-4 py-3 text-left transition ${background.id === backgroundId ? (isLightBackground ? 'border border-slate-400 bg-white/90 shadow-lg' : 'border border-white/60 bg-white/20 shadow-lg') : (isLightBackground ? 'border border-slate-300 bg-white/65 hover:bg-white/80' : 'border border-white/10 bg-white/5 hover:bg-white/10')}`}
                 >
-                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-white">
+                  <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl ${isLightBackground ? 'bg-slate-900/10 text-slate-900' : 'bg-white/15 text-white'}`}>
                     <Palette className="h-5 w-5" />
                   </div>
-                  <div className="text-sm font-bold text-white">{background.name}</div>
-                  <div className="text-xs text-white/65">Nền tùy chọn</div>
+                  <div className={`text-sm font-bold ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>{background.name}</div>
+                  <div className={`text-xs ${mutedTextClass}`}>Nền tùy chọn</div>
                 </button>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="grid flex-1 gap-5 xl:grid-cols-3">
-          <article className="rounded-[2rem] border border-white/15 bg-slate-950/35 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)] backdrop-blur-xl">
+        <section className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.94fr)_minmax(0,1.18fr)] items-stretch">
+          <article className={`h-full min-h-[720px] rounded-[2rem] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)] ${cardClass}`}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/80">Tab 1</p>
-                <h2 className="text-xl font-black text-white">Tài liệu & YouTube</h2>
+                <p className={`text-xs font-semibold uppercase tracking-[0.28em] ${isLightBackground ? 'text-cyan-700/80' : 'text-cyan-200/80'}`}>Tab 1</p>
+                <h2 className={`text-xl font-black ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>Tài liệu & YouTube</h2>
               </div>
-              <div className="inline-flex rounded-full border border-white/10 bg-white/10 p-1">
+              <div className={`inline-flex rounded-full p-1 ${isLightBackground ? 'border border-slate-300 bg-white/70' : 'border border-white/10 bg-white/10'}`}>
                 <button
                   type="button"
                   onClick={() => setTab('library')}
-                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${tab === 'library' ? 'bg-white text-slate-900' : 'text-white/75 hover:text-white'}`}
+                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${tab === 'library' ? (isLightBackground ? 'bg-slate-900 text-white' : 'bg-white text-slate-900') : (isLightBackground ? 'text-slate-700 hover:text-slate-950' : 'text-white/75 hover:text-white')}`}
                 >
                   Thư viện
                 </button>
                 <button
                   type="button"
                   onClick={() => setTab('youtube')}
-                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${tab === 'youtube' ? 'bg-white text-slate-900' : 'text-white/75 hover:text-white'}`}
+                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${tab === 'youtube' ? (isLightBackground ? 'bg-slate-900 text-white' : 'bg-white text-slate-900') : (isLightBackground ? 'text-slate-700 hover:text-slate-950' : 'text-white/75 hover:text-white')}`}
                 >
                   YouTube
                 </button>
@@ -212,12 +220,12 @@ export default function FocusRoomPage() {
 
             {tab === 'library' ? (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="mb-3 flex items-center gap-2 text-white/90">
+                <div className={`rounded-2xl p-4 ${isLightBackground ? 'border border-slate-300 bg-white/80' : 'border border-white/10 bg-white/5'}`}>
+                  <div className={`mb-3 flex items-center gap-2 ${isLightBackground ? 'text-slate-950' : 'text-white/90'}`}>
                     <LibraryBig className="h-5 w-5" />
                     <span className="text-sm font-semibold">Truy cập thư viện</span>
                   </div>
-                  <p className="text-sm leading-6 text-white/70">
+                  <p className={`text-sm leading-6 ${softTextClass}`}>
                     Mở nhanh thư viện để tìm file, đề thi, ghi chú hoặc tài liệu ôn tập.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-3">
@@ -230,7 +238,7 @@ export default function FocusRoomPage() {
                     </Link>
                     <Link
                       href="/library"
-                      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${isLightBackground ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50' : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'}`}
                     >
                       Xem toàn bộ file
                     </Link>
@@ -242,34 +250,34 @@ export default function FocusRoomPage() {
                     <Link
                       key={item.title}
                       href={item.href}
-                      className="group flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-cyan-300/40 hover:bg-white/10"
+                      className={`group flex items-start justify-between gap-4 rounded-2xl p-4 transition ${isLightBackground ? 'border border-slate-300 bg-white/75 hover:border-cyan-400/40 hover:bg-white' : 'border border-white/10 bg-white/5 hover:border-cyan-300/40 hover:bg-white/10'}`}
                     >
                       <div>
-                        <div className="text-sm font-bold text-white">{item.title}</div>
-                        <div className="mt-1 text-sm leading-6 text-white/65">{item.description}</div>
+                        <div className={`text-sm font-bold ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>{item.title}</div>
+                        <div className={`mt-1 text-sm leading-6 ${mutedTextClass}`}>{item.description}</div>
                       </div>
-                      <ArrowRight className="mt-1 h-4 w-4 text-white/50 transition group-hover:translate-x-0.5 group-hover:text-cyan-200" />
+                      <ArrowRight className={`mt-1 h-4 w-4 transition group-hover:translate-x-0.5 ${isLightBackground ? 'text-slate-500 group-hover:text-cyan-700' : 'text-white/50 group-hover:text-cyan-200'}`} />
                     </Link>
                   ))}
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                  <Search className="h-5 w-5 text-white/60" />
+                <label className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${isLightBackground ? 'border border-slate-300 bg-white/85' : 'border border-white/10 bg-white/5'}`}>
+                  <Search className={`h-5 w-5 ${isLightBackground ? 'text-slate-500' : 'text-white/60'}`} />
                   <input
                     value={searchTerm}
                     onChange={event => setSearchTerm(event.target.value)}
                     placeholder="Tìm video lo-fi, piano, ambient..."
-                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/40"
+                    className={`w-full bg-transparent text-sm outline-none ${isLightBackground ? 'text-slate-950 placeholder:text-slate-400' : 'text-white placeholder:text-white/40'}`}
                   />
                 </label>
 
                 <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/35">
                   <iframe
                     title="YouTube focus player"
-                    className="aspect-video w-full"
-                    src={getEmbedUrl(selectedVideoId)}
+                    className="aspect-video w-full min-h-[320px]"
+                    src={getEmbedUrl(selectedVideoId, true)}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     referrerPolicy="strict-origin-when-cross-origin"
                     allowFullScreen
@@ -282,60 +290,50 @@ export default function FocusRoomPage() {
                       key={video.videoId}
                       type="button"
                       onClick={() => setSelectedVideoId(video.videoId)}
-                      className={`rounded-2xl border p-3 text-left transition ${selectedVideoId === video.videoId ? 'border-cyan-300/70 bg-cyan-300/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                      className={`rounded-2xl border p-3 text-left transition ${selectedVideoId === video.videoId ? (isLightBackground ? 'border-cyan-500/60 bg-cyan-50' : 'border-cyan-300/70 bg-cyan-300/10') : (isLightBackground ? 'border-slate-300 bg-white/75 hover:bg-white' : 'border-white/10 bg-white/5 hover:bg-white/10')}`}
                     >
-                      <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white">
+                      <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl ${isLightBackground ? 'bg-slate-900/10 text-slate-900' : 'bg-white/10 text-white'}`}>
                         <Video className="h-5 w-5" />
                       </div>
-                      <div className="text-sm font-bold text-white">{video.title}</div>
-                      <div className="mt-1 text-xs leading-5 text-white/65">{video.description}</div>
+                      <div className={`text-sm font-bold ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>{video.title}</div>
+                      <div className={`mt-1 text-xs leading-5 ${mutedTextClass}`}>{video.description}</div>
                     </button>
                   ))}
                 </div>
-
-                <a
-                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(searchTerm || 'lofi study music')}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                >
-                  Tìm trên YouTube
-                  <ArrowRight className="h-4 w-4" />
-                </a>
               </div>
             )}
           </article>
 
-          <article className="rounded-[2rem] border border-white/15 bg-slate-950/35 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)] backdrop-blur-xl">
+          <article className={`h-full min-h-[720px] rounded-[2rem] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)] ${cardClass}`}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/80">Tab 2</p>
-                <h2 className="text-xl font-black text-white">Đồng hồ tập trung</h2>
+                <p className={`text-xs font-semibold uppercase tracking-[0.28em] ${isLightBackground ? 'text-amber-700/80' : 'text-amber-200/80'}`}>Tab 2</p>
+                <h2 className={`text-xl font-black ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>Đồng hồ tập trung</h2>
               </div>
-              <div className="inline-flex rounded-full border border-white/10 bg-white/10 p-1">
+              <div className={`inline-flex rounded-full p-1 ${isLightBackground ? 'border border-slate-300 bg-white/70' : 'border border-white/10 bg-white/10'}`}>
                 <button
                   type="button"
                   onClick={() => setTimerMode('countdown')}
-                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${timerMode === 'countdown' ? 'bg-white text-slate-900' : 'text-white/75 hover:text-white'}`}
+                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${timerMode === 'countdown' ? (isLightBackground ? 'bg-slate-900 text-white' : 'bg-white text-slate-900') : (isLightBackground ? 'text-slate-700 hover:text-slate-950' : 'text-white/75 hover:text-white')}`}
                 >
                   Đếm ngược
                 </button>
                 <button
                   type="button"
                   onClick={() => setTimerMode('stopwatch')}
-                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${timerMode === 'stopwatch' ? 'bg-white text-slate-900' : 'text-white/75 hover:text-white'}`}
+                  className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${timerMode === 'stopwatch' ? (isLightBackground ? 'bg-slate-900 text-white' : 'bg-white text-slate-900') : (isLightBackground ? 'text-slate-700 hover:text-slate-950' : 'text-white/75 hover:text-white')}`}
                 >
                   Đếm thời gian
                 </button>
               </div>
             </div>
 
-            <div className="rounded-[1.75rem] border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-5 text-center shadow-inner">
-              <div className="mb-2 flex items-center justify-center gap-2 text-white/70">
+            <div className={`rounded-[1.75rem] p-5 text-center shadow-inner ${isLightBackground ? 'border border-slate-300 bg-gradient-to-b from-white/90 to-white/70' : 'border border-white/10 bg-gradient-to-b from-white/10 to-white/5'}`}>
+              <div className={`mb-2 flex items-center justify-center gap-2 ${softTextClass}`}>
                 <Timer className="h-5 w-5" />
                 <span className="text-sm font-medium">{timerMode === 'countdown' ? 'Pomodoro / nghỉ giữa giờ' : 'Session đang chạy'}</span>
               </div>
-              <div className="text-5xl font-black tracking-[0.08em] text-white sm:text-6xl">
+              <div className={`text-5xl font-black tracking-[0.08em] sm:text-6xl ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>
                 {currentTimerDisplay}
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
@@ -350,7 +348,7 @@ export default function FocusRoomPage() {
                 <button
                   type="button"
                   onClick={handleResetTimer}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                  className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition ${isLightBackground ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50' : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'}`}
                 >
                   <TimerReset className="h-5 w-5" />
                   Reset
@@ -358,65 +356,75 @@ export default function FocusRoomPage() {
               </div>
             </div>
 
-            <div className="mt-5 space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className={`mt-5 space-y-4 rounded-2xl p-4 ${isLightBackground ? 'border border-slate-300 bg-white/75' : 'border border-white/10 bg-white/5'}`}>
               {timerMode === 'countdown' ? (
                 <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-white/80">Đặt thời gian bắt đầu</span>
+                  <span className={`mb-2 block text-sm font-semibold ${softTextClass}`}>Đặt thời gian bắt đầu</span>
                   <input
                     value={countdownInput}
                     onChange={event => handleCountdownInputChange(event.target.value)}
                     placeholder="45:00"
-                    className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-white/40"
+                    className={`w-full rounded-2xl px-4 py-3 text-sm outline-none ${isLightBackground ? 'border border-slate-300 bg-white text-slate-950 placeholder:text-slate-400' : 'border border-white/10 bg-black/20 text-white placeholder:text-white/40'}`}
                   />
                 </label>
               ) : (
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
+                <div className={`rounded-2xl px-4 py-3 text-sm ${isLightBackground ? 'border border-slate-300 bg-white text-slate-700' : 'border border-white/10 bg-black/20 text-white/70'}`}>
                   Đồng hồ sẽ chạy từ 00:00 cho đến khi bạn dừng lại.
                 </div>
               )}
 
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
+              <div className={`rounded-2xl px-4 py-3 text-sm ${isLightBackground ? 'border border-slate-300 bg-white text-slate-700' : 'border border-white/10 bg-black/20 text-white/70'}`}>
                 Gợi ý: chia phiên học thành 25 phút tập trung và 5 phút nghỉ để giữ nhịp lâu hơn.
               </div>
             </div>
           </article>
 
-          <article className="rounded-[2rem] border border-white/15 bg-slate-950/35 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)] backdrop-blur-xl">
+          <article className={`h-full min-h-[720px] rounded-[2rem] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)] ${cardClass}`}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-fuchsia-200/80">Tab 3</p>
-                <h2 className="text-xl font-black text-white">Lofi chill cho học bài</h2>
+                <p className={`text-xs font-semibold uppercase tracking-[0.28em] ${isLightBackground ? 'text-fuchsia-700/80' : 'text-fuchsia-200/80'}`}>Tab 3</p>
+                <h2 className={`text-xl font-black ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>Lofi chill cho học bài</h2>
               </div>
-              <Music2 className="h-5 w-5 text-white/70" />
+              <Music2 className={`h-5 w-5 ${isLightBackground ? 'text-slate-600' : 'text-white/70'}`} />
             </div>
 
             <div className="space-y-3">
+              <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/35">
+                <iframe
+                  title="Lofi focus player"
+                  className="aspect-video w-full min-h-[320px]"
+                  src={getEmbedUrl(selectedLofiVideoId, true)}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              </div>
+
               {LOFI_PLAYLIST.map(track => (
-                <a
-                  key={track.url}
-                  href={track.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-fuchsia-300/40 hover:bg-white/10"
+                <button
+                  key={track.videoId}
+                  type="button"
+                  onClick={() => setSelectedLofiVideoId(track.videoId)}
+                  className={`group flex w-full items-center gap-4 rounded-2xl p-4 text-left transition ${selectedLofiVideoId === track.videoId ? (isLightBackground ? 'border border-fuchsia-400/50 bg-fuchsia-50' : 'border border-fuchsia-300/40 bg-fuchsia-300/10') : (isLightBackground ? 'border border-slate-300 bg-white/75 hover:bg-white' : 'border border-white/10 bg-white/5 hover:bg-white/10')}`}
                 >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${isLightBackground ? 'bg-slate-900/10 text-slate-900' : 'bg-white/10 text-white'}`}>
                     <SquarePlay className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-bold text-white">{track.title}</div>
-                    <div className="text-xs text-white/60">{track.artist}</div>
+                    <div className={`truncate text-sm font-bold ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>{track.title}</div>
+                    <div className={`text-xs ${mutedTextClass}`}>{track.artist}</div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-white/45 transition group-hover:translate-x-0.5 group-hover:text-fuchsia-200" />
-                </a>
+                  <ArrowRight className={`h-4 w-4 transition group-hover:translate-x-0.5 ${isLightBackground ? 'text-slate-500 group-hover:text-fuchsia-700' : 'text-white/45 group-hover:text-fuchsia-200'}`} />
+                </button>
               ))}
             </div>
 
-            <div className="mt-5 rounded-2xl border border-white/10 bg-gradient-to-br from-fuchsia-500/15 to-cyan-500/10 p-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white/90">
+            <div className={`mt-5 rounded-2xl p-4 ${isLightBackground ? 'border border-slate-300 bg-gradient-to-br from-fuchsia-100 to-cyan-50' : 'border border-white/10 bg-gradient-to-br from-fuchsia-500/15 to-cyan-500/10'}`}>
+              <div className={`mb-2 flex items-center gap-2 text-sm font-semibold ${isLightBackground ? 'text-slate-950' : 'text-white/90'}`}>
                 <SunMedium className="h-4 w-4" />
                 Cài đặt nhẹ
               </div>
-              <p className="text-sm leading-6 text-white/70">
+              <p className={`text-sm leading-6 ${softTextClass}`}>
                 Mở một bản lo-fi, hạ ánh sáng màn hình và để nền bạn chọn hỗ trợ nhịp tập trung.
               </p>
             </div>
