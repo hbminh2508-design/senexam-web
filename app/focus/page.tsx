@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
 import { Search, TimerReset, Timer, PlayCircle, PauseCircle, LibraryBig, Video, Music2, Palette, ArrowRight, MoonStar, SunMedium, SquarePlay, PlusCircle, Volume2, Gauge, SkipBack, SkipForward } from 'lucide-react'
 
 const STUDY_BACKGROUNDS = [
@@ -25,12 +26,6 @@ const STUDY_BACKGROUNDS = [
     name: 'Sunrise',
     className: 'bg-[linear-gradient(135deg,_#fff4db_0%,_#ffd7c2_46%,_#ffe9f3_100%)]',
   },
-]
-
-const LIBRARY_SHORTCUTS = [
-  { title: 'Toàn bộ thư viện', description: 'Mở không gian lưu trữ tài liệu và đề thi', href: '/library' },
-  { title: 'Đề thi gần đây', description: 'Nhanh chóng vào khu vực đề và bài làm', href: '/library?folder=recent' },
-  { title: 'Tài liệu ôn tập', description: 'Các file PDF, slide và ghi chú học tập', href: '/library?folder=study' },
 ]
 
 const YOUTUBE_SUGGESTIONS = [
@@ -65,6 +60,13 @@ type VideoTrack = {
   description?: string
   artist?: string
   videoId: string
+}
+
+type LibraryDoc = {
+  id: string
+  title: string
+  drive_file_id: string | null
+  created_at?: string | null
 }
 
 type YouTubePlayer = {
@@ -124,6 +126,7 @@ function extractYoutubeId(input: string) {
 }
 
 export default function FocusRoomPage() {
+  const router = useRouter()
   const [backgroundId, setBackgroundId] = useState(STUDY_BACKGROUNDS[0].id)
   const [tab, setTab] = useState<'library' | 'youtube'>('library')
   const [timerMode, setTimerMode] = useState<TimerMode>('countdown')
@@ -154,6 +157,11 @@ export default function FocusRoomPage() {
   const [videoDuration, setVideoDuration] = useState(0)
   const [currentSeconds, setCurrentSeconds] = useState(0)
   const [isPlayerReady, setIsPlayerReady] = useState(false)
+  const [libraryDocs, setLibraryDocs] = useState<LibraryDoc[]>([])
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const [libraryQuery, setLibraryQuery] = useState('')
+  const [activeLibraryDoc, setActiveLibraryDoc] = useState<LibraryDoc | null>(null)
+  const [libraryError, setLibraryError] = useState('')
   const playerRef = useRef<YouTubePlayer | null>(null)
 
   const activeBackground = useMemo(() => STUDY_BACKGROUNDS.find(item => item.id === backgroundId) ?? STUDY_BACKGROUNDS[0], [backgroundId])
@@ -189,6 +197,33 @@ export default function FocusRoomPage() {
     localStorage.setItem('focus_custom_videos', JSON.stringify(customVideos))
   }, [customVideos])
 
+  useEffect(() => {
+    if (tab !== 'library' || libraryDocs.length > 0) return
+
+    const fetchLibraryDocs = async () => {
+      setLibraryError('')
+      setLibraryLoading(true)
+
+      const { data, error } = await supabase
+        .from('library_documents')
+        .select('id,title,drive_file_id,created_at')
+        .order('created_at', { ascending: false })
+        .limit(250)
+
+      if (error) {
+        setLibraryError('Không thể tải thư viện ngay lúc này.')
+        setLibraryLoading(false)
+        return
+      }
+
+      const docs = (data || []).filter(item => !!item.drive_file_id)
+      setLibraryDocs(docs)
+      setLibraryLoading(false)
+    }
+
+    fetchLibraryDocs()
+  }, [tab, libraryDocs.length])
+
   const formattedCountdown = useMemo(() => {
     const total = Math.max(countdownSeconds, 0)
     const minutes = Math.floor(total / 60)
@@ -207,6 +242,17 @@ export default function FocusRoomPage() {
   const streamVideos = useMemo<VideoTrack[]>(() => {
     return [...YOUTUBE_SUGGESTIONS, ...customVideos]
   }, [customVideos])
+
+  const filteredLibraryDocs = useMemo(() => {
+    const keyword = libraryQuery.trim().toLowerCase()
+    if (!keyword) return libraryDocs
+    return libraryDocs.filter(doc => doc.title.toLowerCase().includes(keyword))
+  }, [libraryDocs, libraryQuery])
+
+  const activeLibraryPreviewUrl = useMemo(() => {
+    if (!activeLibraryDoc?.drive_file_id) return ''
+    return `https://drive.google.com/file/d/${activeLibraryDoc.drive_file_id}/preview`
+  }, [activeLibraryDoc])
 
   const filteredSuggestions = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase()
@@ -367,6 +413,14 @@ export default function FocusRoomPage() {
         <section className={`rounded-[2rem] p-5 shadow-[0_20px_80px_rgba(15,23,42,0.28)] ${cardClass}`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] transition ${isLightBackground ? 'border border-slate-300 bg-white/80 text-slate-700 hover:bg-white' : 'border border-white/20 bg-white/10 text-white/85 hover:bg-white/20'}`}
+              >
+                <SkipBack className="h-4 w-4" />
+                Dashboard
+              </button>
               <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${isLightBackground ? 'border border-slate-300 bg-white/75 text-slate-700' : 'border border-white/15 bg-white/10 text-white/80'}`}>
                 <MoonStar className="h-4 w-4" />
                 Focus Room
@@ -428,42 +482,79 @@ export default function FocusRoomPage() {
                 <div className={`rounded-2xl p-4 ${isLightBackground ? 'border border-slate-300 bg-white/80' : 'border border-white/10 bg-white/5'}`}>
                   <div className={`mb-3 flex items-center gap-2 ${isLightBackground ? 'text-slate-950' : 'text-white/90'}`}>
                     <LibraryBig className="h-5 w-5" />
-                    <span className="text-sm font-semibold">Truy cập thư viện</span>
+                    <span className="text-sm font-semibold">Thư viện trong Focus</span>
                   </div>
                   <p className={`text-sm leading-6 ${softTextClass}`}>
-                    Mở nhanh thư viện để tìm file, đề thi, ghi chú hoặc tài liệu ôn tập.
+                    Tìm file và xem trước ngay trong Focus. Đóng file hiện tại để chọn tài liệu khác mà không cần rời trang.
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Link
-                      href="/library"
-                      className="inline-flex items-center gap-2 rounded-full bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-300"
-                    >
-                      Vào thư viện
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                    <Link
-                      href="/library"
-                      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${isLightBackground ? 'border border-slate-300 bg-white text-slate-900 hover:bg-slate-50' : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'}`}
-                    >
-                      Xem toàn bộ file
-                    </Link>
-                  </div>
                 </div>
 
-                <div className="space-y-3">
-                  {LIBRARY_SHORTCUTS.map(item => (
-                    <Link
-                      key={item.title}
-                      href={item.href}
-                      className={`group flex items-start justify-between gap-4 rounded-2xl p-4 transition ${isLightBackground ? 'border border-slate-300 bg-white/75 hover:border-cyan-400/40 hover:bg-white' : 'border border-white/10 bg-white/5 hover:border-cyan-300/40 hover:bg-white/10'}`}
-                    >
-                      <div>
-                        <div className={`text-sm font-bold ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>{item.title}</div>
-                        <div className={`mt-1 text-sm leading-6 ${mutedTextClass}`}>{item.description}</div>
+                <label className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${isLightBackground ? 'border border-slate-300 bg-white/85' : 'border border-white/10 bg-white/5'}`}>
+                  <Search className={`h-5 w-5 ${isLightBackground ? 'text-slate-500' : 'text-white/60'}`} />
+                  <input
+                    value={libraryQuery}
+                    onChange={(event) => setLibraryQuery(event.target.value)}
+                    placeholder="Tìm tài liệu theo tên..."
+                    className={`w-full bg-transparent text-sm outline-none ${isLightBackground ? 'text-slate-950 placeholder:text-slate-400' : 'text-white placeholder:text-white/40'}`}
+                  />
+                </label>
+
+                {activeLibraryDoc && activeLibraryPreviewUrl ? (
+                  <div className={`rounded-2xl p-3 ${isLightBackground ? 'border border-slate-300 bg-white/85' : 'border border-white/10 bg-black/25'}`}>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className={`truncate text-sm font-black ${isLightBackground ? 'text-slate-950' : 'text-white'}`}>{activeLibraryDoc.title}</p>
+                        <p className={`text-xs ${mutedTextClass}`}>Đang xem trước trong Focus Room</p>
                       </div>
-                      <ArrowRight className={`mt-1 h-4 w-4 transition group-hover:translate-x-0.5 ${isLightBackground ? 'text-slate-500 group-hover:text-cyan-700' : 'text-white/50 group-hover:text-cyan-200'}`} />
-                    </Link>
-                  ))}
+                      <button
+                        type="button"
+                        onClick={() => setActiveLibraryDoc(null)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-bold ${isLightBackground ? 'border border-slate-300 bg-white text-slate-900' : 'border border-white/20 bg-white/10 text-white'}`}
+                      >
+                        Đóng file
+                      </button>
+                    </div>
+                    <iframe
+                      title={activeLibraryDoc.title}
+                      src={activeLibraryPreviewUrl}
+                      className="h-[340px] w-full rounded-xl border border-white/10 bg-black/40"
+                      allow="autoplay"
+                    />
+                  </div>
+                ) : (
+                  <div className={`rounded-2xl p-4 text-sm ${isLightBackground ? 'border border-dashed border-slate-300 bg-white/60 text-slate-600' : 'border border-dashed border-white/20 bg-white/5 text-white/65'}`}>
+                    Chọn một tài liệu bên dưới để xem trước ngay trong Focus.
+                  </div>
+                )}
+
+                <div className={`rounded-2xl p-3 ${isLightBackground ? 'border border-slate-300 bg-white/80' : 'border border-white/10 bg-white/5'}`}>
+                  <div className="max-h-[220px] space-y-2 overflow-y-auto pr-1">
+                    {libraryLoading ? (
+                      <p className={`px-2 py-3 text-sm ${mutedTextClass}`}>Đang tải tài liệu...</p>
+                    ) : libraryError ? (
+                      <p className="px-2 py-3 text-sm text-red-500">{libraryError}</p>
+                    ) : filteredLibraryDocs.length === 0 ? (
+                      <p className={`px-2 py-3 text-sm ${mutedTextClass}`}>Không tìm thấy tài liệu phù hợp.</p>
+                    ) : (
+                      filteredLibraryDocs.map(doc => (
+                        <button
+                          key={doc.id}
+                          type="button"
+                          onClick={() => setActiveLibraryDoc(doc)}
+                          className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${activeLibraryDoc?.id === doc.id ? (isLightBackground ? 'border border-cyan-500/50 bg-cyan-50' : 'border border-cyan-300/40 bg-cyan-300/10') : (isLightBackground ? 'border border-slate-300 bg-white hover:bg-slate-50' : 'border border-white/10 bg-white/5 hover:bg-white/10')}`}
+                        >
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isLightBackground ? 'bg-slate-900/10 text-slate-900' : 'bg-white/10 text-white'}`}>
+                            <LibraryBig className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={`truncate text-sm font-semibold ${isLightBackground ? 'text-slate-900' : 'text-white'}`}>{doc.title}</p>
+                            <p className={`text-[11px] ${mutedTextClass}`}>Nhấn để preview</p>
+                          </div>
+                          <ArrowRight className={`h-4 w-4 ${isLightBackground ? 'text-slate-500 group-hover:text-cyan-700' : 'text-white/45 group-hover:text-cyan-200'}`} />
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
