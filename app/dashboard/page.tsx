@@ -7,7 +7,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { 
   BookOpen, Clock, Trophy, Target, LogOut, User, 
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
-  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen, Sparkles, Lock
+  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen, Sparkles, Lock, Music2
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -761,45 +761,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Community + Library Cards */}
-            <div 
-              onClick={() => router.push('/forum')}
-              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 group cursor-pointer relative overflow-hidden transition-all lg:col-span-3`}
-            >
-              <div className="absolute -right-8 -top-8 w-32 h-32 bg-blue-500/15 dark:bg-blue-600/10 rounded-full blur-2xl group-hover:bg-blue-500/25 transition-colors"></div>
-              <div className="relative z-10">
-                <div className="p-3 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200/30 shadow-inner w-fit mb-3 group-hover:scale-105 transition-transform">
-                  <MessageSquare className="w-5 h-5 drop-shadow-md" />
-                </div>
-                <h3 className="text-lg font-bold mb-1 text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  Cộng Đồng <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
-                  Nơi giao lưu học tập
-                </p>
-              </div>
-            </div>
-
-            <div 
-              onClick={() => router.push('/library')}
-              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-3`}
-            >
-              <div className="absolute -right-10 -top-10 w-36 h-36 bg-cyan-400/14 dark:bg-cyan-600/14 rounded-full blur-3xl group-hover:bg-cyan-400/22 transition-colors"></div>
-              <div className="relative z-10 flex items-center gap-4">
-                <div className="p-3.5 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 text-cyan-600 dark:text-cyan-400 rounded-xl border border-cyan-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
-                  <FolderOpen className="w-6 h-6 drop-shadow-md" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                    Thư Viện Số <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                  </h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
-                    Tài liệu, chuyên đề và bài tập luyện tập đầy đủ
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* History Section - Full Width */}
             <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
               <h3 className="text-base font-extrabold flex items-center gap-2 mb-4 text-slate-900 dark:text-white drop-shadow-sm">
@@ -836,6 +797,65 @@ export default function DashboardPage() {
                     )
                   })
                 )}
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push('/focus')}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-3`}
+            >
+              <div className="absolute -right-10 -top-10 w-36 h-36 bg-violet-400/14 dark:bg-violet-600/14 rounded-full blur-3xl group-hover:bg-violet-400/22 transition-colors"></div>
+              <div className="relative z-10 flex items-center gap-4">
+                <div className="p-3.5 bg-gradient-to-br from-violet-400/30 to-fuchsia-500/30 text-violet-600 dark:text-violet-400 rounded-xl border border-violet-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+                  <Music2 className="w-6 h-6 drop-shadow-md" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                    Focus Room <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
+                    Phòng tập trung với thư viện, timer và lo-fi chill
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Community + Library Cards */}
+            <div 
+              onClick={() => router.push('/forum')}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 group cursor-pointer relative overflow-hidden transition-all lg:col-span-3`}
+            >
+              <div className="absolute -right-8 -top-8 w-32 h-32 bg-blue-500/15 dark:bg-blue-600/10 rounded-full blur-2xl group-hover:bg-blue-500/25 transition-colors"></div>
+              <div className="relative z-10">
+                <div className="p-3 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200/30 shadow-inner w-fit mb-3 group-hover:scale-105 transition-transform">
+                  <MessageSquare className="w-5 h-5 drop-shadow-md" />
+                </div>
+                <h3 className="text-lg font-bold mb-1 text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  Cộng Đồng <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
+                  Nơi giao lưu học tập
+                </p>
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push('/library')}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-3`}
+            >
+              <div className="absolute -right-10 -top-10 w-36 h-36 bg-cyan-400/14 dark:bg-cyan-600/14 rounded-full blur-3xl group-hover:bg-cyan-400/22 transition-colors"></div>
+              <div className="relative z-10 flex items-center gap-4">
+                <div className="p-3.5 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 text-cyan-600 dark:text-cyan-400 rounded-xl border border-cyan-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+                  <FolderOpen className="w-6 h-6 drop-shadow-md" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                    Thư Viện Số <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
+                    Tài liệu, chuyên đề và bài tập luyện tập đầy đủ
+                  </p>
+                </div>
               </div>
             </div>
 
