@@ -761,45 +761,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* History Section - Full Width */}
-            <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
-              <h3 className="text-base font-extrabold flex items-center gap-2 mb-4 text-slate-900 dark:text-white drop-shadow-sm">
-                <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Lịch sử bài làm
-              </h3>
-              <div className="flex-grow overflow-y-auto max-h-[250px] pr-2 space-y-2 custom-scrollbar">
-                {studentHistoryList.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 bg-white/30 dark:bg-slate-800/30 rounded-lg border-2 border-dashed border-slate-300/50 dark:border-slate-700/50 py-8 backdrop-blur-sm">
-                    <BookOpen className="w-6 h-6 mb-2 opacity-50" />
-                    <p className="text-xs font-bold">Chưa có dữ liệu</p>
-                  </div>
-                ) : (
-                  studentHistoryList.map((sub) => {
-                    const canReview = sub.exams?.allow_review;
-                    return (
-                      <div key={sub.id} className="p-3 bg-white/50 dark:bg-slate-800/50 backdrop-blur-lg rounded-lg border border-white/60 dark:border-slate-700/50 flex justify-between items-center gap-3 hover:bg-white/70 dark:hover:bg-slate-700/70 transition-all shadow-sm group">
-                        <div className="overflow-hidden flex-1 min-w-0">
-                          <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate drop-shadow-sm">{sub.exams?.title}</p>
-                          <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 font-medium">{new Date(sub.created_at).toLocaleString('vi-VN', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} • {sub.exams?.exam_type}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm border backdrop-blur-md whitespace-nowrap ${sub.is_graded ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30' : 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'}`}>
-                            {sub.is_graded ? `${sub.score} đ` : 'Chờ'}
-                          </span>
-                          {canReview && sub.is_graded ? (
-                            <button onClick={() => router.push(`/submissions/${sub.id}/review`)} className="p-2 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 border border-blue-500/20 transition-all shadow-sm group-hover:scale-105" title="Xem chi tiết">
-                              <Eye className="w-3.5 h-3.5"/>
-                            </button>
-                          ) : (
-                            <span className="text-[9px] text-slate-500 italic font-bold px-1.5 py-1 bg-slate-400/10 rounded border border-slate-300/30 dark:border-slate-600/30">🔒</span>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-
             <div 
               onClick={() => router.push('/focus')}
               className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex items-center justify-between gap-4 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-6`}
@@ -859,6 +820,45 @@ export default function DashboardPage() {
                     Tài liệu, chuyên đề và bài tập luyện tập đầy đủ
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* History Section - Full Width */}
+            <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
+              <h3 className="text-base font-extrabold flex items-center gap-2 mb-4 text-slate-900 dark:text-white drop-shadow-sm">
+                <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Lịch sử bài làm
+              </h3>
+              <div className="flex-grow overflow-y-auto max-h-[250px] pr-2 space-y-2 custom-scrollbar">
+                {studentHistoryList.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 bg-white/30 dark:bg-slate-800/30 rounded-lg border-2 border-dashed border-slate-300/50 dark:border-slate-700/50 py-8 backdrop-blur-sm">
+                    <BookOpen className="w-6 h-6 mb-2 opacity-50" />
+                    <p className="text-xs font-bold">Chưa có dữ liệu</p>
+                  </div>
+                ) : (
+                  studentHistoryList.map((sub) => {
+                    const canReview = sub.exams?.allow_review;
+                    return (
+                      <div key={sub.id} className="p-3 bg-white/50 dark:bg-slate-800/50 backdrop-blur-lg rounded-lg border border-white/60 dark:border-slate-700/50 flex justify-between items-center gap-3 hover:bg-white/70 dark:hover:bg-slate-700/70 transition-all shadow-sm group">
+                        <div className="overflow-hidden flex-1 min-w-0">
+                          <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate drop-shadow-sm">{sub.exams?.title}</p>
+                          <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 font-medium">{new Date(sub.created_at).toLocaleString('vi-VN', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} • {sub.exams?.exam_type}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm border backdrop-blur-md whitespace-nowrap ${sub.is_graded ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30' : 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'}`}>
+                            {sub.is_graded ? `${sub.score} đ` : 'Chờ'}
+                          </span>
+                          {canReview && sub.is_graded ? (
+                            <button onClick={() => router.push(`/submissions/${sub.id}/review`)} className="p-2 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 border border-blue-500/20 transition-all shadow-sm group-hover:scale-105" title="Xem chi tiết">
+                              <Eye className="w-3.5 h-3.5"/>
+                            </button>
+                          ) : (
+                            <span className="text-[9px] text-slate-500 italic font-bold px-1.5 py-1 bg-slate-400/10 rounded border border-slate-300/30 dark:border-slate-600/30">🔒</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
 

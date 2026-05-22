@@ -37,31 +37,31 @@ const YOUTUBE_SUGGESTIONS = [
   {
     title: 'Lo-fi hip hop radio',
     description: 'Kênh nhạc nền kinh điển để tập trung',
-    videoId: 'jfKfPfyJRdk',
+    videoId: 'DWcJFNfaw9c',
   },
   {
     title: 'Relaxing study beats',
     description: 'Nhịp nhẹ, ít lời, hợp với đọc và làm bài',
-    videoId: '5qap5aO4i9A',
+    videoId: '2OEL4P1Rz04',
   },
   {
     title: 'Ambient focus session',
     description: 'Âm nền êm, phù hợp cho khung học dài',
-    videoId: 'DWcJFNfaw9c',
+    videoId: 'HkZ8BitJhvc',
   },
 ]
 
 const LOFI_PLAYLIST = [
-  { title: 'Chill beats to study to', artist: 'lofi girl', videoId: '5qap5aO4i9A' },
-  { title: 'Study and relax', artist: 'chillhop music', videoId: '7NOSDKb0HlU' },
-  { title: 'Late night coding', artist: 'lofi hip hop radio', videoId: 'jfKfPfyJRdk' },
-  { title: 'Soft piano focus', artist: 'relaxing ambient', videoId: '2OEL4P1Rz04' },
+  { title: 'Chill beats to study to', artist: 'lofi girl', videoId: 'DWcJFNfaw9c' },
+  { title: 'Study and relax', artist: 'chillhop music', videoId: '2OEL4P1Rz04' },
+  { title: 'Late night coding', artist: 'focus mix', videoId: 'HkZ8BitJhvc' },
+  { title: 'Soft piano focus', artist: 'relaxing ambient', videoId: 'DWcJFNfaw9c' },
 ]
 
 type TimerMode = 'countdown' | 'stopwatch'
 
 function getEmbedUrl(videoId: string, autoplay = false) {
-  return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1${autoplay ? '&autoplay=1' : ''}`
+  return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1&fs=1${autoplay ? '&autoplay=1&mute=1' : ''}`
 }
 
 export default function FocusRoomPage() {
@@ -136,6 +136,12 @@ export default function FocusRoomPage() {
     if (parsedSeconds !== null) {
       setCountdownSeconds(parsedSeconds)
     }
+  }
+
+  const handlePlayLofiTrack = (videoId: string) => {
+    setSelectedLofiVideoId(videoId)
+    setSelectedVideoId(videoId)
+    setTab('youtube')
   }
 
   const handleResetTimer = () => {
@@ -276,6 +282,7 @@ export default function FocusRoomPage() {
                 <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/35">
                   <iframe
                     title="YouTube focus player"
+                    key={selectedVideoId}
                     className="aspect-video w-full min-h-[320px]"
                     src={getEmbedUrl(selectedVideoId, true)}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -388,23 +395,18 @@ export default function FocusRoomPage() {
               <Music2 className={`h-5 w-5 ${isLightBackground ? 'text-slate-600' : 'text-white/70'}`} />
             </div>
 
-            <div className="space-y-3">
-              <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/35">
-                <iframe
-                  title="Lofi focus player"
-                  className="aspect-video w-full min-h-[320px]"
-                  src={getEmbedUrl(selectedLofiVideoId, true)}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  referrerPolicy="strict-origin-when-cross-origin"
-                  allowFullScreen
-                />
-              </div>
+            <div className={`rounded-[1.5rem] p-4 ${isLightBackground ? 'border border-slate-300 bg-white/75' : 'border border-white/10 bg-white/5'}`}>
+              <p className={`text-sm leading-6 ${softTextClass}`}>
+                Chọn một bài để phát ngay ở khung bên trái. Cột này chỉ hiển thị danh sách để tránh chiếm thêm không gian video.
+              </p>
+            </div>
 
+            <div className="mt-4 space-y-3">
               {LOFI_PLAYLIST.map(track => (
                 <button
                   key={track.videoId}
                   type="button"
-                  onClick={() => setSelectedLofiVideoId(track.videoId)}
+                  onClick={() => handlePlayLofiTrack(track.videoId)}
                   className={`group flex w-full items-center gap-4 rounded-2xl p-4 text-left transition ${selectedLofiVideoId === track.videoId ? (isLightBackground ? 'border border-fuchsia-400/50 bg-fuchsia-50' : 'border border-fuchsia-300/40 bg-fuchsia-300/10') : (isLightBackground ? 'border border-slate-300 bg-white/75 hover:bg-white' : 'border border-white/10 bg-white/5 hover:bg-white/10')}`}
                 >
                   <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${isLightBackground ? 'bg-slate-900/10 text-slate-900' : 'bg-white/10 text-white'}`}>
