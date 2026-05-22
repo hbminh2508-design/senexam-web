@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Search, TimerReset, Timer, PlayCircle, PauseCircle, LibraryBig, Youtube, Music2, Palette, ArrowRight, MoonStar, SunMedium, SquarePlay } from 'lucide-react'
+import { Search, TimerReset, Timer, PlayCircle, PauseCircle, LibraryBig, Video, Music2, Palette, ArrowRight, MoonStar, SunMedium, SquarePlay } from 'lucide-react'
 
 const STUDY_BACKGROUNDS = [
   {
@@ -285,7 +285,7 @@ export default function FocusRoomPage() {
                       className={`rounded-2xl border p-3 text-left transition ${selectedVideoId === video.videoId ? 'border-cyan-300/70 bg-cyan-300/10' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                     >
                       <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white">
-                        <Youtube className="h-5 w-5" />
+                        <Video className="h-5 w-5" />
                       </div>
                       <div className="text-sm font-bold text-white">{video.title}</div>
                       <div className="mt-1 text-xs leading-5 text-white/65">{video.description}</div>
