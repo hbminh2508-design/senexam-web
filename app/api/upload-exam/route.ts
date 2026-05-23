@@ -77,6 +77,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thiếu file hoặc tên đề thi' }, { status: 400 })
     }
 
+    const hasFileExtension = /\.[a-z0-9]{1,8}$/i.test(title)
+
     // Chuyển dữ liệu file thành luồng (Stream)
     const buffer = Buffer.from(await file.arrayBuffer())
     const stream = new Readable()
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
     // Tiến hành tải file lên thư mục
     const driveResponse = await drive.files.create({
       requestBody: {
-        name: `${title}.pdf`,
+        name: hasFileExtension ? title : `${title}.pdf`,
         parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
       },
       media: {

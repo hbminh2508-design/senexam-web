@@ -7,15 +7,20 @@ import {
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
   UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
   ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink,
-  Image, Video, Music, Palette
+  Image, Video, Music, Palette, Lock, Unlock, Eye, EyeOff
 } from 'lucide-react'
 
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 
 const glassCardStyles = "liquid-panel"
+const STUDENT_UPLOAD_FOLDER_NAME = 'Dành cho học sinh/Sinh viên chia sẻ'
+const DOCUMENT_UNLOCK_STORAGE_KEY = 'library_document_unlocks_v1'
+const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
 
 type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
 type LibrarySearchParams = Record<string, string | string[] | undefined>
+type DocumentSecurity = { hidden?: boolean, passwordHash?: string, passwordSalt?: string }
+type DocumentSecurityMap = Record<string, DocumentSecurity>
 
 export default function LibraryPage({ searchParams = {} }: { searchParams?: LibrarySearchParams }) {
   // build-fix: ensure all hooks are defined in component scope (moved search useEffect outside JSX)
@@ -35,6 +40,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
   // Folder customizations (color, icon) stored in localStorage to avoid DB migration
   const [folderCustomizations, setFolderCustomizations] = useState<Record<string, { color?: string, icon?: string }>>({})
+  const [documentSecurity, setDocumentSecurity] = useState<DocumentSecurityMap>({})
+  const [unlockedDocumentIds, setUnlockedDocumentIds] = useState<Record<string, true>>({})
+  const [studentUploadFolderId, setStudentUploadFolderId] = useState<string | null>(null)
   const [showFolderSettingsModal, setShowFolderSettingsModal] = useState(false)
   const [folderSettingsTarget, setFolderSettingsTarget] = useState<any | null>(null)
   const [folderSettingsColor, setFolderSettingsColor] = useState<string | undefined>(undefined)
@@ -78,10 +86,164 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const searchDebounceRef = useRef<number | null>(null)
   const searchRequestRef = useRef(0)
   const [isEmbedPreview, setIsEmbedPreview] = useState(false)
+  const studentFolderEnsureRef = useRef(false)
 
   const readSearchParam = (key: string) => {
     const value = searchParams[key]
     return Array.isArray(value) ? value[0] ?? null : value ?? null
+  }
+
+  const isAdmin = userRole === 'admin'
+  const canManageLibrary = userRole === 'admin' || userRole === 'collab'
+
+  const encodeDocumentSecurity = (security: DocumentSecurity) => {
+    if (!security.hidden && !security.passwordHash) return null
+    return `${DOCUMENT_SECURITY_PREFIX}${JSON.stringify(security)}`
+  }
+
+  const decodeDocumentSecurity = (description?: string | null) => {
+    if (!description || !description.startsWith(DOCUMENT_SECURITY_PREFIX)) return null
+    try {
+      return JSON.parse(description.slice(DOCUMENT_SECURITY_PREFIX.length)) as DocumentSecurity
+    } catch (error) {
+      return null
+    }
+  }
+
+  const getDocumentSecurity = (doc: any) => documentSecurity[doc.id] || decodeDocumentSecurity(doc.description) || {}
+
+  const saveDocumentSecurity = (next: DocumentSecurityMap) => {
+    setDocumentSecurity(next)
+  }
+
+  const saveUnlockedDocumentIds = (next: Record<string, true>) => {
+    setUnlockedDocumentIds(next)
+    try { sessionStorage.setItem(DOCUMENT_UNLOCK_STORAGE_KEY, JSON.stringify(next)) } catch (error) { /* ignore */ }
+  }
+
+  const generateSalt = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(16))
+    return Array.from(bytes).map(byte => byte.toString(16).padStart(2, '0')).join('')
+  }
+
+  const hashPassword = async (password: string, salt: string) => {
+    const encoded = new TextEncoder().encode(`${salt}:${password}`)
+    const digest = await crypto.subtle.digest('SHA-256', encoded)
+    return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('')
+  }
+
+  const isDocumentHidden = (doc: any) => !!getDocumentSecurity(doc)?.hidden
+  const isDocumentLocked = (doc: any) => !!getDocumentSecurity(doc)?.passwordHash
+  const isDocumentUnlocked = (doc: any) => isAdmin || !!unlockedDocumentIds[doc.id]
+
+  const persistDocumentState = async (docId: string, updater: (current: DocumentSecurity) => DocumentSecurity) => {
+    const next = { ...documentSecurity }
+    next[docId] = updater(next[docId] || {})
+    if (!next[docId].hidden && !next[docId].passwordHash) delete next[docId]
+    const { error } = await supabase.from('library_documents').update({ description: encodeDocumentSecurity(next[docId] || {}) }).eq('id', docId)
+    if (error) {
+      throw error
+    }
+    saveDocumentSecurity(next)
+  }
+
+  const requestDocumentAccess = async (doc: any) => {
+    if (isDocumentHidden(doc) && !isAdmin) {
+      alert('Tài liệu này đang ẩn.')
+      return false
+    }
+
+    if (isDocumentLocked(doc) && !isDocumentUnlocked(doc)) {
+      const password = window.prompt('Nhập mật khẩu để mở tài liệu')
+      if (!password) return false
+
+      const security = getDocumentSecurity(doc)
+      if (!security?.passwordHash || !security.passwordSalt) return false
+
+      const enteredHash = await hashPassword(password, security.passwordSalt)
+      if (enteredHash !== security.passwordHash) {
+        alert('Mật khẩu không đúng.')
+        return false
+      }
+
+      saveUnlockedDocumentIds({ ...unlockedDocumentIds, [doc.id]: true })
+    }
+
+    return true
+  }
+
+  const toggleDocumentHidden = async (doc: any) => {
+    if (!isAdmin) return
+    try {
+      await persistDocumentState(doc.id, current => ({ ...current, hidden: !current.hidden }))
+    } catch (error) {
+      alert('Không thể cập nhật trạng thái ẩn của tài liệu.')
+    }
+  }
+
+  const toggleDocumentLock = async (doc: any) => {
+    if (!isAdmin) return
+
+    const current = getDocumentSecurity(doc)
+    if (current?.passwordHash) {
+      if (!confirm('Mở khóa tài liệu này?')) return
+      try {
+        await persistDocumentState(doc.id, security => {
+          const next = { ...security }
+          delete next.passwordHash
+          delete next.passwordSalt
+          return next
+        })
+        const nextUnlocked = { ...unlockedDocumentIds }
+        delete nextUnlocked[doc.id]
+        saveUnlockedDocumentIds(nextUnlocked)
+      } catch (error) {
+        alert('Không thể mở khóa tài liệu này.')
+      }
+      return
+    }
+
+    const password = window.prompt('Đặt mật khẩu cho tài liệu')
+    if (!password || password.trim().length < 4) {
+      alert('Mật khẩu phải có ít nhất 4 ký tự.')
+      return
+    }
+
+    const salt = generateSalt()
+    const passwordHash = await hashPassword(password.trim(), salt)
+    try {
+      await persistDocumentState(doc.id, security => ({ ...security, passwordHash, passwordSalt: salt }))
+    } catch (error) {
+      alert('Không thể đặt mật khẩu cho tài liệu này.')
+    }
+  }
+
+  const ensureStudentUploadFolder = async (rootFolders: any[]) => {
+    if (studentFolderEnsureRef.current) return studentUploadFolderId
+    studentFolderEnsureRef.current = true
+
+    const existing = rootFolders.find(folder => folder.name === STUDENT_UPLOAD_FOLDER_NAME)
+    if (existing?.id) {
+      setStudentUploadFolderId(existing.id)
+      return existing.id as string
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('library_folders')
+        .insert({ name: STUDENT_UPLOAD_FOLDER_NAME, created_by: null, parent_id: null })
+        .select('id,name')
+        .single()
+
+      if (!error && data?.id) {
+        setStudentUploadFolderId(data.id)
+        return data.id as string
+      }
+    } catch (error) {
+      console.warn('Không thể tạo folder dành cho student', error)
+    }
+
+    return null
   }
 
   useEffect(() => {
@@ -92,7 +254,22 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       setUserRole(profile?.role || 'student')
       
-      await fetchContents(null)
+      const rootData = await fetchContents(null)
+
+      try {
+        const rawUnlocked = sessionStorage.getItem(DOCUMENT_UNLOCK_STORAGE_KEY)
+        if (rawUnlocked) setUnlockedDocumentIds(JSON.parse(rawUnlocked))
+      } catch (error) { /* ignore */ }
+
+      if ((profile?.role || 'student') === 'student' && !readSearchParam('folder') && !readSearchParam('preview')) {
+        const targetFolderId = await ensureStudentUploadFolder(rootData?.folders || [])
+        if (targetFolderId) {
+          const specialFolder = rootData?.folders?.find((folder: any) => folder.id === targetFolderId)
+          setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }, { id: targetFolderId, name: specialFolder?.name || STUDENT_UPLOAD_FOLDER_NAME }])
+          await fetchContents(targetFolderId)
+        }
+      }
+
       setLoading(false)
     }
 
@@ -117,7 +294,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
         if (previewId) {
           const { data, error } = await supabase.from('library_documents').select('*').eq('id', previewId).single()
-          if (!error && data) setPreviewDoc(data)
+          if (!error && data) {
+            const allowed = await requestDocumentAccess(data)
+            if (allowed) setPreviewDoc(data)
+          }
         } else {
           setPreviewDoc(null)
         }
@@ -199,9 +379,13 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const buildSearchBlob = (item: any, folderName?: string) => {
-    return Object.values(item)
-      .filter(value => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
-      .map(value => String(value))
+    return Object.entries(item)
+      .filter(([key, value]) => {
+        if (key === '_security') return false
+        if (key === 'description' && typeof value === 'string' && value.startsWith(DOCUMENT_SECURITY_PREFIX)) return false
+        return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      })
+      .map(([, value]) => String(value))
       .concat(folderName ? [folderName] : [])
       .join(' ')
       .toLowerCase()
@@ -231,7 +415,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
       const searchDocs = (dRes.data || [])
         .map((doc: any) => ({ ...doc, folder_name: doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : '' }))
-        .filter((doc: any) => buildSearchBlob(doc, doc.folder_name).includes(folderBlobQuery) || (doc.folder_name && scoreResult(doc.folder_name, qtrim) > 0))
+        .filter((doc: any) => (isAdmin || !getDocumentSecurity(doc)?.hidden) && (buildSearchBlob(doc, doc.folder_name).includes(folderBlobQuery) || (doc.folder_name && scoreResult(doc.folder_name, qtrim) > 0)))
 
       const searchExams = (eRes.data || [])
         .map((exam: any) => ({ ...exam, folder_name: exam.folder_id ? folderMap.get(exam.folder_id)?.name || exam.folder_name || '' : exam.folder_name || '' }))
@@ -260,7 +444,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
     const [folderRes, docRes] = await Promise.all([folderQuery, docQuery])
     const fdata = folderRes.data || []
-    setFolders(fdata)
+    const visibleFolders = userRole === 'student' && folderId === null && studentUploadFolderId
+      ? fdata.filter(folder => folder.id === studentUploadFolderId)
+      : fdata
+
+    setFolders(visibleFolders)
     // Đồng bộ màu/icon từ DB vào trạng thái client và localStorage
     try {
       const map: Record<string, { color?: string, icon?: string }> = {}
@@ -272,10 +460,33 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         try { localStorage.setItem('library_folder_customizations', JSON.stringify(map)) } catch (e) {}
       }
     } catch (e) { /* ignore */ }
-    setDocuments(docRes.data || [])
+    const docsWithSecurity = (docRes.data || []).map((doc: any) => ({
+      ...doc,
+      _security: getDocumentSecurity(doc)
+    }))
+    const visibleDocs = docsWithSecurity.filter((doc: any) => isAdmin || !doc._security?.hidden)
+    setDocuments(visibleDocs)
+
+    const nextSecurity: DocumentSecurityMap = {}
+    for (const doc of docsWithSecurity) {
+      if (doc._security && (doc._security.hidden || doc._security.passwordHash)) {
+        nextSecurity[doc.id] = doc._security
+      }
+    }
+    setDocumentSecurity(prev => {
+      const merged = { ...prev }
+      for (const doc of docsWithSecurity) {
+        if (nextSecurity[doc.id]) merged[doc.id] = nextSecurity[doc.id]
+        else delete merged[doc.id]
+      }
+      return merged
+    })
+
+    return { folders: fdata, documents: docRes.data || [] }
   }
 
   const handleOpenFolder = async (folderId: string, folderName: string) => {
+    if (userRole === 'student' && folderId !== studentUploadFolderId) return
     setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
     setFolderPath([...folderPath, { id: folderId, name: folderName }])
     await fetchContents(folderId)
@@ -306,31 +517,31 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     try {
       setUploadStatus({ type: 'uploading', message: `Bắt đầu xử lý ${docFiles.length} tài liệu...` })
       const { data: { user } } = await supabase.auth.getUser()
+      const uploadFolderId = userRole === 'student' ? studentUploadFolderId : currentFolderId
+
+      if (userRole === 'student' && !uploadFolderId) {
+        throw new Error('Chưa tạo được thư mục dành cho student.')
+      }
 
       for (let i = 0; i < docFiles.length; i++) {
         const file = docFiles[i];
         const finalTitle = (docFiles.length === 1 && docTitle.trim()) ? docTitle.trim() : file.name;
 
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang cấp phép tải file: ${file.name}...` })
-        const initRes = await fetch('/api/upload-exam', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: finalTitle, mimeType: file.type })
-        });
-        
-        if (!initRes.ok) throw new Error("Không thể khởi tạo kết nối Google Drive.");
-        const { uploadUrl } = await initRes.json();
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang tải file lên Google Drive: ${file.name}...` })
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('title', finalTitle)
 
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file lên Đám mây...` })
-        const uploadRes = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-        if (!uploadRes.ok) throw new Error("Lỗi đứt đoạn đường truyền.");
-        
-        const fileId = (await uploadRes.json()).id;
+        const uploadRes = await fetch('/api/upload-exam', { method: 'POST', body: formData })
+        const result = await uploadRes.json()
+        if (!uploadRes.ok) throw new Error(result.error || 'Không thể kết nối Google Drive.')
+
+        const fileId = result.driveFileId
 
         setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
         // Lưu trữ thông tin tệp cơ bản (không giả định schema mới trên DB)
         const { error: dbError } = await supabase.from('library_documents').insert({
-          folder_id: currentFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
+          folder_id: uploadFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
         })
         if (dbError) throw new Error(dbError.message)
       }
@@ -461,6 +672,12 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     setShowFolderSettingsModal(false)
   }
 
+  const handleOpenDocument = async (doc: any) => {
+    const allowed = await requestDocumentAccess(doc)
+    if (!allowed) return
+    setPreviewDoc(doc)
+  }
+
   // ÁP DỤNG THUẬT TOÁN TÌM KIẾM & SẮP XẾP TỰ NHIÊN (NATURAL SORT)
   // Helper to detect file kind from title extension
   const getFileKind = (title: string) => {
@@ -473,7 +690,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   let displayFolders = searchFoldersResults !== null ? (searchFoldersResults) : folders.filter(f => f.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
-  let displayDocuments = searchDocsResults !== null ? (searchDocsResults) : documents.filter(d => d.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
+  let displayDocuments = searchDocsResults !== null
+    ? (searchDocsResults)
+    : documents.filter(d => d.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()) && (isAdmin || !getDocumentSecurity(d)?.hidden))
 
   if (sortByName) {
     displayFolders.sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' }));
@@ -628,7 +847,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 apps-shadow px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10 duration-300">
            <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
            
-           {selectedItems.length === 1 && (userRole === 'admin' || userRole === 'collab') && (
+           {selectedItems.length === 1 && canManageLibrary && (
              <button onClick={() => {
                setRenameTarget(selectedItems[0]);
                setRenameInput(selectedItems[0].type === 'folder' ? selectedItems[0].data.name : selectedItems[0].data.title);
@@ -808,7 +1027,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
               {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
             </button>
 
-            {(userRole === 'admin' || userRole === 'collab') && (
+            {canManageLibrary && (
               <>
                 {/* Sắp xếp A-Z */}
                 <button onClick={() => setSortByName(!sortByName)} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${sortByName ? 'bg-indigo-100 text-indigo-700 border-indigo-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
@@ -850,7 +1069,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                       const isSelected = selectedItems.some(i => i.id === folder.id);
                       return (
                         <div key={folder.id} 
-                            draggable={!isSelectMode && (userRole === 'admin' || userRole === 'collab')}
+                            draggable={!isSelectMode && canManageLibrary}
                             onDragStart={(e) => handleDragStart(e, folder.id, 'folder')}
                             onDragOver={(e) => { if (!isSelectMode) { e.preventDefault(); setDragOverId(folder.id); } }}
                             onDragLeave={() => setDragOverId(null)}
@@ -868,7 +1087,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                           )}
 
                           {/* Settings quick action (admin/collab) */}
-                          {(userRole === 'admin' || userRole === 'collab') && (
+                          {canManageLibrary && (
                             <button onClick={(e) => { e.stopPropagation(); openFolderSettings(folder) }} className="absolute top-2 left-2 p-1 rounded-lg bg-white/60 dark:bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Palette className="w-4 h-4 text-slate-600 dark:text-slate-200" />
                             </button>
@@ -899,16 +1118,18 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                     {displayDocuments.map(doc => {
                       const isSelected = selectedItems.some(i => i.id === doc.id);
                       const kind = getFileKind(doc.title || '')
+                      const hidden = isDocumentHidden(doc)
+                      const locked = isDocumentLocked(doc)
                       return (
                         <div key={doc.id} 
-                            draggable={!isSelectMode && (userRole === 'admin' || userRole === 'collab')}
+                            draggable={!isSelectMode && canManageLibrary}
                             onDragStart={(e) => handleDragStart(e, doc.id, 'document')}
                             onClick={(e) => {
                               if (isSelectMode) { 
                                 e.preventDefault(); 
                                 toggleSelection(doc.id, 'document', doc); 
                               } else { 
-                                setPreviewDoc(doc); 
+                                handleOpenDocument(doc); 
                               }
                             }} 
                             className={`backdrop-blur-md ${isCompact ? 'rounded-xl p-3' : 'rounded-[1.75rem] p-4'} transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-2 hover:shadow-xl hover:scale-105'} animate-in fade-in duration-500`}>
@@ -919,7 +1140,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                             </div>
                           )}
 
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-blue-100 text-blue-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-blue-100 text-blue-600' : locked ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
                             {kind === 'image' && <Image className="w-6 h-6" />}
                             {kind === 'video' && <Video className="w-6 h-6" />}
                             {kind === 'audio' && <Music className="w-6 h-6" />}
@@ -929,7 +1150,22 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                           <div className={`flex-1 overflow-hidden transition-all ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
                             <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{highlightSearchText(doc.title, deferredSearchQuery)}</h3>
                             <span className="text-[10px] font-bold text-slate-400 mt-1 block">{doc.folder_name ? `${doc.folder_name} • ` : ''}{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {locked && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black bg-amber-100/90 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"><Lock className="w-3 h-3" /> Khóa</span>}
+                              {hidden && isAdmin && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black bg-slate-200/90 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200"><EyeOff className="w-3 h-3" /> Ẩn</span>}
+                            </div>
                           </div>
+
+                          {isAdmin && (
+                            <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocumentHidden(doc) }} className="p-2 rounded-lg bg-white/80 dark:bg-slate-900/80 shadow-sm" title={hidden ? 'Hiện tài liệu' : 'Ẩn tài liệu'}>
+                                {hidden ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-600" />}
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); toggleDocumentLock(doc) }} className="p-2 rounded-lg bg-white/80 dark:bg-slate-900/80 shadow-sm" title={locked ? 'Mở khóa' : 'Khóa bằng mật khẩu'}>
+                                {locked ? <Unlock className="w-4 h-4 text-amber-600" /> : <Lock className="w-4 h-4 text-amber-600" />}
+                              </button>
+                            </div>
+                          )}
                           
                           {!isSelectMode && (
                             <span className="absolute right-4 text-blue-500 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-xs transition-all font-bold">

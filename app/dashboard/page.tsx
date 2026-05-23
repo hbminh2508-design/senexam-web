@@ -31,6 +31,7 @@ const HSA_SCIENCE_SUBJECTS = ['Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch S
 
 const glassCardStyles = "liquid-panel relative"
 const glassButtonStyles = "liquid-button liquid-badge transition-all duration-300 hover:scale-[1.02] hover:bg-white/80 dark:hover:bg-slate-700/70 active:scale-95"
+const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
 
 export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   const [now, setNow] = useState(Date.now())
@@ -283,7 +284,7 @@ export default function DashboardPage() {
 
   const getDocSearchText = (doc: any, folderName?: string) => [
     doc.title,
-    doc.description,
+    typeof doc.description === 'string' && doc.description.startsWith(DOCUMENT_SECURITY_PREFIX) ? '' : doc.description,
     doc.author,
     doc.exam_type,
     doc.subject,
