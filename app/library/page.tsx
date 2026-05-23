@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
+import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 
 const glassCardStyles = "liquid-panel"
 const STUDENT_UPLOAD_FOLDER_NAME = 'Dành cho học sinh/Sinh viên chia sẻ'
@@ -544,47 +545,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
         setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang khởi tạo kết nối Google Drive: ${file.name}...` })
 
-        const initRes = await fetch('/api/upload-exam', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: finalTitle, mimeType: file.type })
-        })
+        const uploadUrl = await initGoogleDriveUpload(finalTitle, file.type)
 
-        const initPayload = await readResponsePayload(initRes)
-        if (!initPayload.ok || !initRes.ok) {
-          const errorMessage = (initPayload as any).error || 'Không thể kết nối Google Drive.'
-          if (initRes.status === 413) {
-            throw new Error('Tệp PDF quá nặng (Giới hạn Serverless là 4.5MB). Vui lòng nén file hoặc dùng tính năng cắt đề từng phần.')
-          }
-          if (initRes.status === 504) {
-            throw new Error('Cổng kết nối quá tải (Timeout 10s). Vui lòng kiểm tra lại đường truyền hoặc giảm dung lượng PDF.')
-          }
-          throw new Error(errorMessage)
-        }
-
-        const initData = (initPayload as any).data || {}
-        const uploadUrl = initData.uploadUrl
-        const driveFileIdFromServer = initData.driveFileId
-
-        let fileId = driveFileIdFromServer
-
-        if (!fileId) {
-          if (!uploadUrl) throw new Error('Google không trả về URL tải lên hoặc mã file.')
-
-          setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file trực tiếp lên Google Drive...` })
-          const uploadRes = await fetch(uploadUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': file.type },
-            body: file
-          })
-
-          const uploadPayload = await readResponsePayload(uploadRes)
-          if (!uploadRes.ok || !uploadPayload.ok) {
-            throw new Error((uploadPayload as any).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
-          }
-
-          fileId = (uploadPayload as any).data?.id
-        }
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file trực tiếp lên Google Drive...` })
+        const uploadedData = await uploadFileToGoogleDrive(uploadUrl, file)
+        const fileId = uploadedData?.id
 
         if (!fileId) throw new Error('Không nhận được mã file từ Google Drive.')
 
