@@ -578,13 +578,24 @@ export default function AdminDashboard() {
         formData.append('title', title)
 
         const response = await fetch('/api/upload-exam', { method: 'POST', body: formData })
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-           const result = await response.json();
-           if (!response.ok) throw new Error(result.error || 'Lỗi lưu kho');
-           driveFileId = result.driveFileId;
+        const contentType = response.headers.get('content-type')
+
+        if (contentType && contentType.includes('application/json')) {
+          const result = await response.json()
+          if (!response.ok) throw new Error(result.error || 'Lỗi lưu kho đám mây')
+          driveFileId = result.driveFileId
         } else {
-           throw new Error(`Lỗi kết nối Server (${response.status})`);
+          // Nếu không phải JSON, đọc dữ liệu dạng văn bản thuần để bắt lỗi Vercel
+          const textError = await response.text()
+          console.error('Phản hồi lỗi thô từ Server:', textError)
+
+          if (response.status === 413) {
+            throw new Error('Tệp PDF quá nặng (Giới hạn Serverless là 4.5MB). Vui lòng nén file hoặc dùng tính năng cắt đề từng phần.')
+          }
+          if (response.status === 504) {
+            throw new Error('Cổng kết nối quá tải (Timeout 10s). Vui lòng kiểm tra lại đường truyền hoặc giảm dung lượng PDF.')
+          }
+          throw new Error(`Lỗi hệ thống nội bộ (${response.status}): Server từ chối trả về dữ liệu cấu trúc.`)
         }
       }
 
