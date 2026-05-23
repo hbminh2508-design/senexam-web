@@ -562,22 +562,30 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
           throw new Error(errorMessage)
         }
 
-        const uploadUrl = (initPayload as any).data?.uploadUrl
-        if (!uploadUrl) throw new Error('Google không trả về URL tải lên.')
+        const initData = (initPayload as any).data || {}
+        const uploadUrl = initData.uploadUrl
+        const driveFileIdFromServer = initData.driveFileId
 
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file trực tiếp lên Google Drive...` })
-        const uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type },
-          body: file
-        })
+        let fileId = driveFileIdFromServer
 
-        const uploadPayload = await readResponsePayload(uploadRes)
-        if (!uploadRes.ok || !uploadPayload.ok) {
-          throw new Error((uploadPayload as any).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
+        if (!fileId) {
+          if (!uploadUrl) throw new Error('Google không trả về URL tải lên hoặc mã file.')
+
+          setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file trực tiếp lên Google Drive...` })
+          const uploadRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type },
+            body: file
+          })
+
+          const uploadPayload = await readResponsePayload(uploadRes)
+          if (!uploadRes.ok || !uploadPayload.ok) {
+            throw new Error((uploadPayload as any).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
+          }
+
+          fileId = (uploadPayload as any).data?.id
         }
 
-        const fileId = (uploadPayload as any).data?.id
         if (!fileId) throw new Error('Không nhận được mã file từ Google Drive.')
 
         setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
