@@ -1,12 +1,17 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { google } from 'googleapis'
 
-// Sử dụng Service Role Key nếu có, ngược lại dùng Anon Key
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  serviceRoleKey!
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  'https://developers.google.com/oauthplayground'
 )
+
+oauth2Client.setCredentials({
+  refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+})
+
+const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
 export async function POST(request: Request) {
   try {
@@ -16,47 +21,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thiếu dữ liệu' }, { status: 400 })
     }
 
-    // Chuyển base64 thành Buffer
     const base64Data = image.split(',')[1] || image
     const buffer = Buffer.from(base64Data, 'base64')
-
-    // Tạo tên file unique
     const timestamp = Date.now()
-    const filePath = `exam-questions/${sectionId}/${questionIndex}-${timestamp}.jpg`
+    const fileTitle = `exam-questions/${sectionId}/${questionIndex}-${timestamp}.jpg`
 
-    // 🔧 Kiểm tra xem bucket tồn tại không, nếu không thì tạo nó
-    try {
-      await supabase.storage.getBucket('exam-media')
-    } catch (err) {
-      // Tạo bucket nếu chưa tồn tại
-      await supabase.storage.createBucket('exam-media', {
-        public: true,
-        fileSizeLimit: 10485760, // 10MB
-      })
+    const uploadRes = await drive.files.create({
+      requestBody: {
+        name: fileTitle,
+        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
+      },
+      media: {
+        mimeType: 'image/jpeg',
+        body: buffer,
+      },
+      fields: 'id',
+    })
+
+    const fileId = uploadRes.data.id
+    if (!fileId) {
+      throw new Error('Google không trả về mã file ảnh.')
     }
 
-    // Upload lên Supabase Storage
-    const { data, error } = await supabase.storage
-      .from('exam-media')
-      .upload(filePath, buffer, {
-        contentType: 'image/jpeg',
-        upsert: false,
-      })
-
-    if (error) {
-      console.error('Storage error:', error)
-      throw new Error(`Lỗi lưu ảnh: ${error.message}`)
-    }
-
-    // Lấy public URL
-    const { data: urlData } = supabase.storage
-      .from('exam-media')
-      .getPublicUrl(filePath)
+    await drive.permissions.create({
+      fileId,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone',
+      },
+    })
 
     return NextResponse.json({
       success: true,
-      url: urlData.publicUrl,
-      path: filePath,
+      fileId,
+      url: `https://drive.google.com/uc?export=view&id=${fileId}`,
     })
   } catch (error: any) {
     console.error('Save question image error:', error)
