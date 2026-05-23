@@ -121,6 +121,21 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     try { sessionStorage.setItem(DOCUMENT_UNLOCK_STORAGE_KEY, JSON.stringify(next)) } catch (error) { /* ignore */ }
   }
 
+  const readResponsePayload = async (response: Response) => {
+    const contentType = response.headers.get('content-type') || ''
+    const rawText = await response.text()
+
+    if (contentType.includes('application/json')) {
+      try {
+        return { ok: true, data: JSON.parse(rawText) }
+      } catch (error) {
+        return { ok: false, error: rawText || 'Phản hồi JSON không hợp lệ.' }
+      }
+    }
+
+    return { ok: false, error: rawText || `Lỗi kết nối server (${response.status})` }
+  }
+
   const generateSalt = () => {
     const bytes = crypto.getRandomValues(new Uint8Array(16))
     return Array.from(bytes).map(byte => byte.toString(16).padStart(2, '0')).join('')
@@ -527,38 +542,49 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         const file = docFiles[i];
         const finalTitle = (docFiles.length === 1 && docTitle.trim()) ? docTitle.trim() : file.name;
 
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang tải file lên Google Drive: ${file.name}...` })
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('title', finalTitle)
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang khởi tạo kết nối Google Drive: ${file.name}...` })
 
-        const uploadRes = await fetch('/api/upload-exam', { method: 'POST', body: formData })
-        const contentType = uploadRes.headers.get('content-type')
+        const initRes = await fetch('/api/upload-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: finalTitle, mimeType: file.type })
+        })
 
-        if (contentType && contentType.includes('application/json')) {
-          const result = await uploadRes.json()
-          if (!uploadRes.ok) throw new Error(result.error || 'Không thể kết nối Google Drive.')
-          const fileId = result.driveFileId
-
-          setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
-          // Lưu trữ thông tin tệp cơ bản (không giả định schema mới trên DB)
-          const { error: dbError } = await supabase.from('library_documents').insert({
-            folder_id: uploadFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
-          })
-          if (dbError) throw new Error(dbError.message)
-          continue
+        const initPayload = await readResponsePayload(initRes)
+        if (!initPayload.ok || !initRes.ok) {
+          const errorMessage = (initPayload as any).error || 'Không thể kết nối Google Drive.'
+          if (initRes.status === 413) {
+            throw new Error('Tệp PDF quá nặng (Giới hạn Serverless là 4.5MB). Vui lòng nén file hoặc dùng tính năng cắt đề từng phần.')
+          }
+          if (initRes.status === 504) {
+            throw new Error('Cổng kết nối quá tải (Timeout 10s). Vui lòng kiểm tra lại đường truyền hoặc giảm dung lượng PDF.')
+          }
+          throw new Error(errorMessage)
         }
 
-        const textError = await uploadRes.text()
-        console.error('Phản hồi lỗi thô từ Server:', textError)
+        const uploadUrl = (initPayload as any).data?.uploadUrl
+        if (!uploadUrl) throw new Error('Google không trả về URL tải lên.')
 
-        if (uploadRes.status === 413) {
-          throw new Error('Tệp PDF quá nặng (Giới hạn Serverless là 4.5MB). Vui lòng nén file hoặc dùng tính năng cắt đề từng phần.')
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file trực tiếp lên Google Drive...` })
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file
+        })
+
+        const uploadPayload = await readResponsePayload(uploadRes)
+        if (!uploadRes.ok || !uploadPayload.ok) {
+          throw new Error((uploadPayload as any).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
         }
-        if (uploadRes.status === 504) {
-          throw new Error('Cổng kết nối quá tải (Timeout 10s). Vui lòng kiểm tra lại đường truyền hoặc giảm dung lượng PDF.')
-        }
-        throw new Error(`Lỗi hệ thống nội bộ (${uploadRes.status}): Server từ chối trả về dữ liệu cấu trúc.`)
+
+        const fileId = (uploadPayload as any).data?.id
+        if (!fileId) throw new Error('Không nhận được mã file từ Google Drive.')
+
+        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
+        const { error: dbError } = await supabase.from('library_documents').insert({
+          folder_id: uploadFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
+        })
+        if (dbError) throw new Error(dbError.message)
       }
       
       setUploadStatus({ type: 'success', message: `Tuyệt vời! Đã tải thành công ${docFiles.length} tài liệu!` })
