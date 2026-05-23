@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import { 
   MessageSquare, Edit3, Search, ChevronLeft, 
   MessageCircle, Clock, User, Filter, X, Loader2, Send, Paperclip, FileIcon, Download,
@@ -97,16 +98,12 @@ export default function ForumPage() {
       let driveFileId = null; let fileName = null; let fileSize = null
 
       if (attachedFile) {
-        setUploadStatus('Đang tải tài liệu lên Google Drive...')
-        const formData = new FormData()
-        formData.append('file', attachedFile)
-        formData.append('title', attachedFile.name) 
+        setUploadStatus('Đang khởi tạo kết nối Google Drive...')
+        const uploadUrl = await initGoogleDriveUpload(attachedFile.name, attachedFile.type || 'application/octet-stream')
 
-        const response = await fetch('/api/upload-exam', { method: 'POST', body: formData })
-        const result = await response.json()
-
-        if (!response.ok) throw new Error(result.error || 'Lỗi upload Drive')
-        driveFileId = result.driveFileId; fileName = attachedFile.name; fileSize = formatBytes(attachedFile.size)
+        setUploadStatus('Đang đẩy tài liệu trực tiếp lên Google Drive...')
+        const uploadData = await uploadFileToGoogleDrive(uploadUrl, attachedFile)
+        driveFileId = uploadData.id; fileName = attachedFile.name; fileSize = formatBytes(attachedFile.size)
       }
 
       setUploadStatus('Đang lưu bài viết...')
