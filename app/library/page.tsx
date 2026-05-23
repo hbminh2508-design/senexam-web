@@ -533,17 +533,32 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         formData.append('title', finalTitle)
 
         const uploadRes = await fetch('/api/upload-exam', { method: 'POST', body: formData })
-        const result = await uploadRes.json()
-        if (!uploadRes.ok) throw new Error(result.error || 'Không thể kết nối Google Drive.')
+        const contentType = uploadRes.headers.get('content-type')
 
-        const fileId = result.driveFileId
+        if (contentType && contentType.includes('application/json')) {
+          const result = await uploadRes.json()
+          if (!uploadRes.ok) throw new Error(result.error || 'Không thể kết nối Google Drive.')
+          const fileId = result.driveFileId
 
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
-        // Lưu trữ thông tin tệp cơ bản (không giả định schema mới trên DB)
-        const { error: dbError } = await supabase.from('library_documents').insert({
-          folder_id: uploadFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
-        })
-        if (dbError) throw new Error(dbError.message)
+          setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
+          // Lưu trữ thông tin tệp cơ bản (không giả định schema mới trên DB)
+          const { error: dbError } = await supabase.from('library_documents').insert({
+            folder_id: uploadFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
+          })
+          if (dbError) throw new Error(dbError.message)
+          continue
+        }
+
+        const textError = await uploadRes.text()
+        console.error('Phản hồi lỗi thô từ Server:', textError)
+
+        if (uploadRes.status === 413) {
+          throw new Error('Tệp PDF quá nặng (Giới hạn Serverless là 4.5MB). Vui lòng nén file hoặc dùng tính năng cắt đề từng phần.')
+        }
+        if (uploadRes.status === 504) {
+          throw new Error('Cổng kết nối quá tải (Timeout 10s). Vui lòng kiểm tra lại đường truyền hoặc giảm dung lượng PDF.')
+        }
+        throw new Error(`Lỗi hệ thống nội bộ (${uploadRes.status}): Server từ chối trả về dữ liệu cấu trúc.`)
       }
       
       setUploadStatus({ type: 'success', message: `Tuyệt vời! Đã tải thành công ${docFiles.length} tài liệu!` })
