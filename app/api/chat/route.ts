@@ -96,11 +96,19 @@ export async function POST(req: Request) {
     const status = Number(errorObject?.status ?? errorObject?.code ?? errorObject?.response?.status ?? 0)
     const message = error instanceof Error ? error.message : 'Unknown error'
     const isQuotaError = status === 429 || /429|resource exhausted|too many requests/i.test(message)
+    const isPermissionError = status === 401 || status === 403 || /permission denied|access denied|denied access/i.test(message)
 
     if (isQuotaError) {
       return NextResponse.json(
         { error: 'Gemini đang quá lượt sử dụng. Sen X Gemini ngoại tuyến sẽ tạm thời thay bạn trả lời.' },
         { status: 429 }
+      )
+    }
+
+    if (isPermissionError) {
+      return NextResponse.json(
+        { error: 'Gemini chưa được cấp quyền cho project này. Sen X Gemini ngoại tuyến sẽ tạm thời thay bạn trả lời.' },
+        { status: 403 }
       )
     }
 

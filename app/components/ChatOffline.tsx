@@ -142,13 +142,20 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
         return
       }
 
-      if (response.status === 429) {
+      const errorText = typeof data?.error === 'string' ? data.error : ''
+      const shouldUseOfflineFallback =
+        response.status === 429 ||
+        response.status === 403 ||
+        response.status === 401 ||
+        /permission denied|access denied|denied access|resource exhausted|too many requests/i.test(errorText)
+
+      if (shouldUseOfflineFallback) {
         const fallback = generateOfflineAIResponse(userMessage, userName)
         setChatMessages([...nextHistory, { role: 'model', text: fallback }])
         return
       }
 
-      const message = typeof data?.error === 'string' ? data.error : 'Không thể gọi Gemini ngay lúc này.'
+      const message = errorText || 'Không thể gọi Gemini ngay lúc này.'
       setChatMessages([...nextHistory, { role: 'model', text: `Mình chưa lấy được phản hồi từ Gemini: ${message}` }])
     } catch {
       setChatMessages([...nextHistory, { role: 'model', text: 'Mình chưa kết nối được tới Gemini lúc này. Bạn thử lại sau nhé.' }])
