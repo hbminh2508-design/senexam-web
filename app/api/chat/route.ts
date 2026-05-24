@@ -19,7 +19,7 @@ type IncomingChatMessage = {
   text?: unknown
 }
 
-const systemPrompt = `Bạn là Sen X Gemini, trợ lý AI chính thức của SenExam.ME.
+const systemPrompt = `Bạn là SenAI, trợ lý AI chính thức của SenExam.ME.
 
 Mục tiêu:
 - Hướng dẫn người dùng sử dụng website SenExam nhanh, đúng và thân thiện.
@@ -41,7 +41,7 @@ Quy tắc trả lời:
 - Nếu người dùng cần trợ giúp bài kiểm tra, hãy ưu tiên chỉ họ sang /exams; nếu cần tài liệu, ưu tiên /library; nếu cần trao đổi, ưu tiên /forum.
 
 Phong cách:
-- Xưng là “mình” hoặc “Sen X Gemini”.
+- Xưng là “mình” hoặc “SenAI”.
 - Gọi người dùng là “bạn”, riêng giáo viên thì có thể xưng “thầy/cô”.
 - Có thể dùng 1-2 emoji phù hợp, nhưng không lạm dụng.
 - Nếu câu trả lời dài, hãy rút gọn thành gạch đầu dòng.
@@ -100,14 +100,14 @@ export async function POST(req: Request) {
 
     if (isQuotaError) {
       return NextResponse.json(
-        { error: 'Gemini đang quá lượt sử dụng. Sen X Gemini ngoại tuyến sẽ tạm thời thay bạn trả lời.' },
+        { error: 'Gemini đang quá lượt sử dụng. SenAI ngoại tuyến sẽ tạm thời thay bạn trả lời.' },
         { status: 429 }
       )
     }
 
     if (isPermissionError) {
       return NextResponse.json(
-        { error: 'Gemini chưa được cấp quyền cho project này. Sen X Gemini ngoại tuyến sẽ tạm thời thay bạn trả lời.' },
+        { error: 'Gemini chưa được cấp quyền cho project này. SenAI ngoại tuyến sẽ tạm thời thay bạn trả lời.' },
         { status: 403 }
       )
     }

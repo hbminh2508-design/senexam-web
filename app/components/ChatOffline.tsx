@@ -39,7 +39,7 @@ const generateOfflineAIResponse = (input: string, userName: string) => {
   }
 
   if (/\b(chao|hello|hi|alo|hey)\b/.test(normalizedInput)) {
-    return `Chào ${userName || 'bạn'}! 🌸 Mình là Sen X Gemini. Bạn muốn tìm tài liệu, đề thi hay đường dẫn tới tính năng nào của web?`
+    return `Chào ${userName || 'bạn'}! 🌸 Mình là SenAI. Bạn muốn tìm tài liệu, đề thi hay đường dẫn tới tính năng nào của web?`
   }
 
   return 'Mình chưa hiểu rõ ý bạn lắm. Bạn có thể hỏi về tài liệu, đề thi, /library, /exams hoặc /forum để mình chỉ đúng đường dẫn nhé.'
@@ -103,7 +103,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'model', text: 'Chào bạn! 🌸 Mình là Sen X Gemini - trợ lý học tập của SenExam. Bạn muốn tìm tài liệu, đề thi hay đường dẫn tới tính năng nào của web?' }
+    { role: 'model', text: 'Chào bạn! 🌸 Mình là SenAI - trợ lý học tập của SenExam. Bạn muốn tìm tài liệu, đề thi hay đường dẫn tới tính năng nào của web?' }
   ])
   const [isChatLoading, setIsChatLoading] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement>(null)
@@ -176,7 +176,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-sm leading-tight">Sen X Gemini ✨</h3>
+                <h3 className="font-bold text-sm leading-tight">SenAI ✨</h3>
                 <p className="text-[11px] text-blue-100 font-medium">Gemini ưu tiên, offline dự phòng khi quá lượt</p>
               </div>
             </div>
@@ -198,7 +198,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
               <div className="flex justify-start">
                 <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
                   <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                  <span className="text-xs text-slate-500 font-bold">Sen X Gemini đang suy nghĩ...</span>
+                  <span className="text-xs text-slate-500 font-bold">SenAI đang suy nghĩ...</span>
                 </div>
               </div>
             )}
@@ -210,7 +210,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Hỏi Sen X Gemini (tài liệu, đề thi, đường dẫn web)..."
+                placeholder="Hỏi SenAI (tài liệu, đề thi, đường dẫn web)..."
                 className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full pl-4 pr-12 py-3 text-[14px] font-medium outline-none focus:border-blue-500 dark:focus:border-blue-400 focus:bg-white dark:focus:bg-slate-900 transition-all shadow-inner placeholder:text-slate-400"
               />
               <button
@@ -232,7 +232,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
         {isChatOpen ? <X className="w-6 h-6" /> : (
           <>
             <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse" />
-            Sen X Gemini
+            SenAI
           </>
         )}
       </button>
