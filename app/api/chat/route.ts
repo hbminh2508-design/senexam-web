@@ -4,14 +4,19 @@ import { NextResponse } from 'next/server'
 const apiKey = process.env.GEMINI_API_KEY || ''
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null
 
+type ChatRequestBody = {
+  message?: unknown
+  history?: unknown
+}
+
 type ChatMessage = {
   role: 'user' | 'model'
   text: string
 }
 
-type ChatRequestBody = {
-  message?: unknown
-  history?: unknown
+type IncomingChatMessage = {
+  role?: unknown
+  text?: unknown
 }
 
 const systemPrompt = `Bạn là Sen X Gemini, trợ lý AI chính thức của SenExam.ME.
@@ -27,7 +32,6 @@ Ngữ cảnh sản phẩm SenExam:
 - Kho đề thi: /exams
 - Cộng đồng hỏi đáp: /forum
 - Phòng tập trung: /focus
-- Khu quản trị: /admin
 
 Quy tắc trả lời:
 - Nếu người dùng hỏi “có tài liệu này không”, “có đề này không”, “môn này ở đâu”, hãy hướng dẫn họ tìm ở /library hoặc /exams trước, và nhắc ô tìm kiếm trên dashboard.
@@ -46,15 +50,20 @@ Ví dụ:
 - “Bạn vào /library để tìm tài liệu, hoặc dùng ô tìm kiếm trên /dashboard nếu muốn tra nhanh theo tên.”
 - “Nếu bạn đang tìm đề thi, hãy vào /exams. Còn muốn hỏi đáp thêm thì /forum là đúng chỗ nhất.”`
 
-const buildMessages = (history: ChatMessage[], message: string) => {
-  const formattedHistory = history
+const buildMessages = (history: IncomingChatMessage[], message: string) => {
+  const formattedHistory: { role: 'user' | 'model'; parts: [{ text: string }] }[] = history
     .map((msg) => {
-      const text = msg.text.trim()
-      return text ? { role: msg.role, parts: [{ text }] } : null
+      const role = msg.role === 'user' ? 'user' : 'model'
+      const text = typeof msg.text === 'string' ? msg.text.trim() : ''
+      return text ? { role, parts: [{ text }] } : null
     })
     .filter((item): item is { role: 'user' | 'model'; parts: [{ text: string }] } => item !== null)
 
   return [...formattedHistory, { role: 'user', parts: [{ text: message }] }]
+}
+
+const isIncomingChatMessage = (value: unknown): value is IncomingChatMessage => {
+  return Boolean(value) && typeof value === 'object'
 }
 
 export async function POST(req: Request) {
@@ -65,14 +74,7 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => null)) as ChatRequestBody | null
     const message = typeof body?.message === 'string' ? body.message.trim() : ''
-    const history = Array.isArray(body?.history)
-      ? body.history.filter((item): item is ChatMessage => {
-          return Boolean(item) && typeof item === 'object' && 'role' in item && 'text' in item && (item as ChatMessage).role !== undefined && (item as ChatMessage).text !== undefined
-        }).map((item) => ({
-          role: item.role === 'user' ? 'user' : 'model',
-          text: typeof item.text === 'string' ? item.text : '',
-        }))
-      : []
+    const history = Array.isArray(body?.history) ? body.history.filter(isIncomingChatMessage) : []
 
     if (!message) {
       return NextResponse.json({ error: 'Nội dung tin nhắn không được để trống.' }, { status: 400 })
