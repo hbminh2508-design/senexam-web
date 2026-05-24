@@ -1,0 +1,50 @@
+[33m20881a3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mc9c770c[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m3231253[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mda82585[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m0a9b86c[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m8b2f159[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m6cd9be5[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mab35caf[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m069e78b[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mad0f03f[m Rename assistant to SenAI
+[33mc520536[m Handle Gemini permission denied in chat
+[33md71dbd6[m Fix Gemini chat route typing
+[33m0fff1a4[m Make Sen X Gemini the primary assistant
+[33me0ffa32[m[33m ([m[1;31morigin/gemini-dashboard[m[33m, [m[1;32mgemini-dashboard[m[33m)[m Add Gemini route handler and dashboard chat
+[33m598f05d[m chore: disable library hide/lock UI and make toggle functions no-op
+[33mdc5f4c7[m Harden Google Drive upload fallback
+[33md417117[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mf8b6991[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mf0345e1[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mb067c6d[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m76638fa[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m03efd4e[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m95a3674[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m8bfc5e4[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m5053162[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m5b31c3b[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m1113c79[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m267308e[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m6eb4442[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mb6fb563[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mbcb7510[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33ma2bfed8[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m112c9b6[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mff7dabd[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m8729970[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m84db725[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mbf65689[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m7ff7636[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m637db54[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m7b09d53[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m0f258a8[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33me31adb1[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m6078129[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33md7ab55a[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m30cbe15[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33m4545e7a[m Cập nhật tính năng và sửa các lỗi còn tồn đọng
+[33mff29661[m feat(library): optimize UI with smoother rounded corners and lightweight animations
+[33m7951f4e[m Nhâm nhi tách cà phê và tận hưởng trải nghiệm mới nhất!
+[33m2943ec3[m fix(library): remove stray useEffect from JSX causing build error
+[33m595eca4[m fix(library): move search effect out of JSX (build fix)
