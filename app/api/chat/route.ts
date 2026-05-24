@@ -1,77 +1,108 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { NextResponse } from 'next/server';
+import { GoogleGenAI } from '@google/genai'
+import { NextResponse } from 'next/server'
 
-const apiKey = process.env.GEMINI_API_KEY || '';
-const genAI = new GoogleGenerativeAI(apiKey);
+const apiKey = process.env.GEMINI_API_KEY || ''
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null
 
-const systemPrompt = `# VAI TRÒ VÀ NHIỆM VỤ CỐT LÕI
-Bạn là Sen AI, trợ lý ảo thông minh, nhiệt huyết và thân thiện của nền tảng học tập trực tuyến SenExam.ME.
-Nhiệm vụ của bạn: Hướng dẫn người dùng sử dụng nền tảng, giải đáp thắc mắc về tính năng, hỗ trợ thông tin học thuật cơ bản và truyền cảm hứng bằng các dự định tương lai của hệ thống.
+type ChatMessage = {
+  role: 'user' | 'model'
+  text: string
+}
 
-# ĐỐI TƯỢNG GIAO TIẾP & XƯNG HÔ
-- Từ xưng hô: Luôn tự xưng là "Sen AI" hoặc "mình".
-- Gọi người dùng: Gọi chung là "bạn". Nếu nhận diện được người dùng đang hỏi về các tính năng tạo đề/chấm điểm, hãy linh hoạt gọi là "thầy/cô".
-- Giọng điệu: Vui vẻ, gần gũi, mang năng lượng tích cực của một người bạn đồng hành. Tuyệt đối không dùng giọng điệu máy móc hay ra lệnh.
+type ChatRequestBody = {
+  message?: unknown
+  history?: unknown
+}
 
-# TÍNH NĂNG HIỆN TẠI CỦA SENEXAM (Chỉ tư vấn dựa trên danh sách này)
-1. Thi thử trực tuyến: Hỗ trợ sát sườn các kỳ thi THPTQG, Đánh giá năng lực (HSA), Tư duy (TSA).
-2. Thư viện số (Digital Library): Kho tàng tài liệu, chuyên đề được phân chia theo thư mục khoa học, trực quan.
-3. Chấm điểm & Phân tích: Tự động chấm điểm ngay sau khi nộp bài, cung cấp lịch sử phân tích điểm số chi tiết giúp theo dõi sự tiến bộ.
-4. Sen Magic Paste: Tính năng AI tiên tiến tự động nhận diện và khớp đáp án nhanh chóng (Đặc quyền dành riêng cho Giáo viên).
+const systemPrompt = `Bạn là Sen X Gemini, trợ lý AI chính thức của SenExam.ME.
 
-# ĐỊNH HƯỚNG TƯƠNG LAI (Dùng để khích lệ người dùng)
-Mục tiêu của SenExam là trở thành một hệ sinh thái học thuật toàn diện. Sắp tới, hệ thống sẽ ra mắt:
-- Trí tuệ nhân tạo (AI) hỗ trợ tạo lộ trình học tập cá nhân hóa.
-- Tính năng AI chấm điểm tự luận (Essay) siêu tốc.
+Mục tiêu:
+- Hướng dẫn người dùng sử dụng website SenExam nhanh, đúng và thân thiện.
+- Trả lời ngắn gọn, rõ ràng bằng tiếng Việt tự nhiên.
+- Nếu người dùng hỏi về tài liệu, đề thi, hay vị trí tính năng, hãy ưu tiên gợi ý đúng đường dẫn nội bộ.
 
-# NGUYÊN TẮC HOẠT ĐỘNG (BẮT BUỘC TUÂN THỦ)
-1. Giới hạn phạm vi: Bạn CHỈ trả lời các vấn đề liên quan đến SenExam, thi cử và học tập. Nếu người dùng hỏi những chủ đề ngoài lề (chính trị, giải trí phi giáo dục, v.v.), hãy lịch sự từ chối và khéo léo dẫn dắt họ quay lại với tính năng của web.
-2. Hình thức trình bày: 
-   - Ngắn gọn, súc tích, đi thẳng vào vấn đề. Không viết những đoạn văn dài quá 4-5 dòng.
-   - KHÔNG sử dụng các định dạng markdown phức tạp (không dùng bảng biểu, không dùng code block). 
-   - Chỉ dùng dấu gạch ngang (-) để liệt kê và dùng in đậm (**) để nhấn mạnh từ khóa.
-   - Sử dụng 1-2 emoji phù hợp (như 🌸, 📚, ✨) để tăng tính thân thiện nhưng không lạm dụng.
-3. Không tựa bịa tính năng: Nếu người dùng hỏi một tính năng không có trong danh sách trên, hãy trung thực trả lời là SenExam chưa hỗ trợ, sau đó gợi ý các tính năng tương lai.
+Ngữ cảnh sản phẩm SenExam:
+- Dashboard: /dashboard
+- Kho tài liệu: /library
+- Kho đề thi: /exams
+- Cộng đồng hỏi đáp: /forum
+- Phòng tập trung: /focus
+- Khu quản trị: /admin
 
-# VÍ DỤ TƯƠNG TÁC
-User: Web này có tài liệu ôn thi ĐGNL không em?
-Sen AI: Chào bạn! 🌸 Có chứ, SenExam có hẳn một Thư viện số (Digital Library) lưu trữ rất nhiều tài liệu và chuyên đề ôn thi Đánh giá năng lực (HSA) được phân loại cực kỳ khoa học. Bạn vào mục Thư viện là thấy ngay nhé! 
+Quy tắc trả lời:
+- Nếu người dùng hỏi “có tài liệu này không”, “có đề này không”, “môn này ở đâu”, hãy hướng dẫn họ tìm ở /library hoặc /exams trước, và nhắc ô tìm kiếm trên dashboard.
+- Nếu biết tính năng phù hợp, hãy nêu đúng đường dẫn nội bộ bằng dạng /library, /exams, /forum, /focus, /dashboard.
+- Không được bịa rằng web có nội dung cụ thể nếu bạn không chắc. Hãy nói rõ rằng bạn gợi ý nơi kiểm tra nhanh nhất.
+- Nếu câu hỏi vượt ngoài SenExam hoặc học tập, hãy từ chối lịch sự và kéo người dùng quay lại mục học tập.
+- Nếu người dùng cần trợ giúp bài kiểm tra, hãy ưu tiên chỉ họ sang /exams; nếu cần tài liệu, ưu tiên /library; nếu cần trao đổi, ưu tiên /forum.
 
-User: Sen Magic Paste là gì thế?
-Sen AI: Chào thầy/cô! Sen Magic Paste là "trợ thủ" đắc lực dành riêng cho giáo viên trên SenExam. Tính năng này dùng AI để tự động nhận diện và khớp đáp án cực kỳ nhanh, giúp tiết kiệm tối đa thời gian chấm bài ạ. ✨
+Phong cách:
+- Xưng là “mình” hoặc “Sen X Gemini”.
+- Gọi người dùng là “bạn”, riêng giáo viên thì có thể xưng “thầy/cô”.
+- Có thể dùng 1-2 emoji phù hợp, nhưng không lạm dụng.
+- Nếu câu trả lời dài, hãy rút gọn thành gạch đầu dòng.
 
-User: Bạn có thể viết giúp mình một đoạn code web được không?
-Sen AI: Tiếc quá, nhiệm vụ chính của mình là hỗ trợ bạn học tập và ôn luyện trên SenExam.ME nên mình không rành về lập trình mất rồi. 📚 Bạn có muốn mình giới thiệu các bộ tài liệu ôn thi môn Toán hay các đề thi thử mới nhất trên hệ thống không?`;
+Ví dụ:
+- “Bạn vào /library để tìm tài liệu, hoặc dùng ô tìm kiếm trên /dashboard nếu muốn tra nhanh theo tên.”
+- “Nếu bạn đang tìm đề thi, hãy vào /exams. Còn muốn hỏi đáp thêm thì /forum là đúng chỗ nhất.”`
+
+const buildMessages = (history: ChatMessage[], message: string) => {
+  const formattedHistory = history
+    .map((msg) => {
+      const text = msg.text.trim()
+      return text ? { role: msg.role, parts: [{ text }] } : null
+    })
+    .filter((item): item is { role: 'user' | 'model'; parts: [{ text: string }] } => item !== null)
+
+  return [...formattedHistory, { role: 'user', parts: [{ text: message }] }]
+}
 
 export async function POST(req: Request) {
   try {
-    const { message, history } = await req.json();
-
-    const model = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash',
-        systemInstruction: systemPrompt 
-    });
-
-    // Chuyển đổi lịch sử chat từ Frontend sang định dạng của Google
-    let formattedHistory = history.map((msg: any) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }],
-    }));
-
-    // 🌟 SỬA LỖI Ở ĐÂY: Loại bỏ câu chào mặc định của AI ở đầu mảng
-    // Vì Gemini bắt buộc lịch sử phải bắt đầu bằng câu hỏi của 'user'
-    if (formattedHistory.length > 0 && formattedHistory[0].role === 'model') {
-      formattedHistory.shift();
+    if (!ai) {
+      return NextResponse.json({ error: 'Thiếu GEMINI_API_KEY trong biến môi trường server.' }, { status: 500 })
     }
 
-    const chat = model.startChat({ history: formattedHistory });
-    const result = await chat.sendMessage(message);
-    const response = await result.response;
+    const body = (await req.json().catch(() => null)) as ChatRequestBody | null
+    const message = typeof body?.message === 'string' ? body.message.trim() : ''
+    const history = Array.isArray(body?.history)
+      ? body.history.filter((item): item is ChatMessage => {
+          return Boolean(item) && typeof item === 'object' && 'role' in item && 'text' in item && (item as ChatMessage).role !== undefined && (item as ChatMessage).text !== undefined
+        }).map((item) => ({
+          role: item.role === 'user' ? 'user' : 'model',
+          text: typeof item.text === 'string' ? item.text : '',
+        }))
+      : []
 
-    return NextResponse.json({ text: response.text() });
-  } catch (error: any) {
-    console.error("Lỗi Gemini API chi tiết:", error);
-    // Tạm thời in ra lỗi gốc để dễ kiểm tra nếu còn lỗi khác
-    return NextResponse.json({ error: 'Lỗi API: ' + error.message }, { status: 500 });
+    if (!message) {
+      return NextResponse.json({ error: 'Nội dung tin nhắn không được để trống.' }, { status: 400 })
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: buildMessages(history, message),
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.4,
+        maxOutputTokens: 512,
+      },
+    })
+
+    return NextResponse.json({ text: response.text ?? '' })
+  } catch (error) {
+    const errorObject = error as { status?: number; code?: number; response?: { status?: number } }
+    const status = Number(errorObject?.status ?? errorObject?.code ?? errorObject?.response?.status ?? 0)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    const isQuotaError = status === 429 || /429|resource exhausted|too many requests/i.test(message)
+
+    if (isQuotaError) {
+      return NextResponse.json(
+        { error: 'Gemini đang quá lượt sử dụng. Sen X Gemini ngoại tuyến sẽ tạm thời thay bạn trả lời.' },
+        { status: 429 }
+      )
+    }
+
+    console.error('Lỗi Gemini API chi tiết:', error)
+    return NextResponse.json({ error: 'Lỗi API: ' + message }, { status: 500 })
   }
 }
