@@ -4,29 +4,6 @@ type ResponsePayload = {
   error?: string
 }
 
-const uploadFileViaApi = async (file: File, title: string) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('title', title)
-
-  const response = await fetch('/api/upload-exam', {
-    method: 'POST',
-    body: formData,
-  })
-
-  const payload = await readResponsePayload(response)
-  if (!payload.ok || !response.ok) {
-    throw new Error((payload as ResponsePayload).error || 'Không thể tải file qua API nội bộ.')
-  }
-
-  const driveFileId = payload.data?.driveFileId
-  if (!driveFileId) {
-    throw new Error('API nội bộ không trả về mã file.')
-  }
-
-  return { id: driveFileId }
-}
-
 const readResponsePayload = async (response: Response): Promise<ResponsePayload> => {
   const contentType = response.headers.get('content-type') || ''
   const rawText = await response.text()
@@ -67,28 +44,40 @@ export const initGoogleDriveUpload = async (fileName: string, mimeType: string) 
 }
 
 export const uploadFileToGoogleDrive = async (uploadUrl: string, file: File, fallbackTitle = file.name) => {
-  try {
-    const response = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': file.type || 'application/octet-stream',
-        'Content-Range': `bytes 0-${Math.max(file.size - 1, 0)}/${file.size}`,
-      },
-      body: file,
-    })
+  return await new Promise<any>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', uploadUrl, true)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.setRequestHeader('Content-Range', `bytes 0-${Math.max(file.size - 1, 0)}/${file.size}`)
+    xhr.timeout = 30 * 60 * 1000
 
-    const payload = await readResponsePayload(response)
-    if (!payload.ok || !response.ok) {
-      throw new Error((payload as ResponsePayload).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
+    xhr.onload = () => {
+      const responseText = xhr.responseText || ''
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(responseText || `Lỗi khi tải file trực tiếp lên Google Drive (${xhr.status}).`))
+        return
+      }
+
+      try {
+        const payload = responseText ? JSON.parse(responseText) : {}
+        if (!payload?.id) {
+          reject(new Error(`Không nhận được mã file từ Google Drive cho ${fallbackTitle}.`))
+          return
+        }
+        resolve(payload)
+      } catch (error) {
+        reject(new Error(responseText || `Phản hồi Google Drive không hợp lệ cho ${fallbackTitle}.`))
+      }
     }
 
-    const fileId = payload.data?.id
-    if (!fileId) {
-      throw new Error('Không nhận được mã file từ Google Drive.')
+    xhr.onerror = () => {
+      reject(new Error(`Load failed khi tải ${fallbackTitle} lên Google Drive.`))
     }
 
-    return payload.data
-  } catch (error) {
-    return uploadFileViaApi(file, fallbackTitle)
-  }
+    xhr.ontimeout = () => {
+      reject(new Error(`Hết thời gian khi tải ${fallbackTitle} lên Google Drive.`))
+    }
+
+    xhr.send(file)
+  })
 }
