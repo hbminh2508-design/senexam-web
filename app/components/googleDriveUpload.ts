@@ -44,24 +44,41 @@ export const initGoogleDriveUpload = async (fileName: string, mimeType: string) 
 }
 
 export const uploadFileToGoogleDrive = async (uploadUrl: string, file: File, fallbackTitle = file.name) => {
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type || 'application/octet-stream',
-      'Content-Range': `bytes 0-${Math.max(file.size - 1, 0)}/${file.size}`,
-    },
-    body: file,
+  return await new Promise<any>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', uploadUrl, true)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.setRequestHeader('Content-Range', `bytes 0-${Math.max(file.size - 1, 0)}/${file.size}`)
+    xhr.timeout = 30 * 60 * 1000
+
+    xhr.onload = () => {
+      const responseText = xhr.responseText || ''
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(responseText || `Lỗi khi tải file trực tiếp lên Google Drive (${xhr.status}).`))
+        return
+      }
+
+      try {
+        const payload = responseText ? JSON.parse(responseText) : {}
+        const fileId = payload?.id
+        if (!fileId) {
+          reject(new Error(`Không nhận được mã file từ Google Drive cho ${fallbackTitle}.`))
+          return
+        }
+        resolve(payload)
+      } catch (error) {
+        reject(new Error(responseText || `Phản hồi Google Drive không hợp lệ cho ${fallbackTitle}.`))
+      }
+    }
+
+    xhr.onerror = () => {
+      reject(new Error(`Load failed khi tải ${fallbackTitle} lên Google Drive.`))
+    }
+
+    xhr.ontimeout = () => {
+      reject(new Error(`Hết thời gian khi tải ${fallbackTitle} lên Google Drive.`))
+    }
+
+    xhr.send(file)
   })
-
-  const payload = await readResponsePayload(response)
-  if (!payload.ok || !response.ok) {
-    throw new Error((payload as ResponsePayload).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
-  }
-
-  const fileId = payload.data?.id
-  if (!fileId) {
-    throw new Error(`Không nhận được mã file từ Google Drive cho ${fallbackTitle}.`)
-  }
-
-  return payload.data
 }
