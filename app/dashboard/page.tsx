@@ -7,7 +7,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { 
   BookOpen, Clock, Trophy, Target, LogOut, User, 
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
-  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen, Sparkles, Lock, Music2
+  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, Bell, FolderOpen, Sparkles, Lock, Music2, Brain, Cloud
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -782,6 +782,64 @@ export default function DashboardPage() {
               </div>
               <div className="relative z-10 hidden sm:flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">
                 Mở ngay
+              </div>
+            </div>
+
+            <div className={`${glassCardStyles} lg:col-span-6 rounded-3xl p-6 md:p-7 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-xl transition-all overflow-hidden relative`}>
+              <div className="absolute inset-0 bg-gradient-to-br from-sky-400/10 via-transparent to-indigo-500/10"></div>
+              <div className="absolute -left-12 -bottom-12 w-48 h-48 bg-sky-400/15 rounded-full blur-3xl"></div>
+              <div className="relative z-10 flex flex-col gap-5">
+                <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                  <div className="max-w-2xl">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/40 dark:bg-slate-900/40 border border-white/50 dark:border-white/10 text-[11px] font-black uppercase tracking-[0.22em] text-sky-700 dark:text-sky-300 mb-2">
+                      Sen Cloud AI
+                    </div>
+                    <h3 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">
+                      Quiz và Cloud chia đôi, gọn một chạm.
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium leading-relaxed mt-2">
+                      Một nửa để ôn luyện quiz, một nửa để lưu trữ dữ liệu cá nhân. Tài khoản miễn phí được cấp 30GB dùng riêng.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-white/50 dark:bg-slate-900/40 border border-white/60 dark:border-white/10 px-4 py-3 shadow-sm shrink-0">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400 font-black">Dung lượng miễn phí</p>
+                    <p className="text-2xl font-black text-sky-600 dark:text-sky-300">30GB</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:items-stretch">
+                  <div onClick={() => router.push('/quizzle')} className="group cursor-pointer rounded-2xl p-5 bg-white/50 dark:bg-slate-900/35 border border-white/60 dark:border-white/10 hover:bg-white/70 dark:hover:bg-slate-900/55 transition-all shadow-sm hover:shadow-md h-full flex flex-col justify-between min-h-[180px]">
+                    <div>
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="p-3 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-400/20">
+                        <Brain className="w-6 h-6" />
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                      <h4 className="text-lg font-black text-slate-900 dark:text-white mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-300 transition-colors">Quiz</h4>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">Tạo nhanh bộ câu hỏi riêng, lưu tiến độ và theo dõi nhịp học mỗi ngày.</p>
+                    </div>
+                    <div className="mt-4 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">
+                      Mở Quiz <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  <div onClick={() => router.push('/cloud')} className="group cursor-pointer rounded-2xl p-5 bg-white/50 dark:bg-slate-900/35 border border-white/60 dark:border-white/10 hover:bg-white/70 dark:hover:bg-slate-900/55 transition-all shadow-sm hover:shadow-md h-full flex flex-col justify-between min-h-[180px]">
+                    <div>
+                      <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="p-3 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-300 border border-sky-400/20">
+                        <Cloud className="w-6 h-6" />
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-sky-500 group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                      <h4 className="text-lg font-black text-slate-900 dark:text-white mb-1 group-hover:text-sky-600 dark:group-hover:text-sky-300 transition-colors">Cloud</h4>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">Lưu dữ liệu riêng tư, tài liệu và ghi chú học tập trong một không gian cá nhân an toàn.</p>
+                    </div>
+                    <div className="mt-4 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-sky-700 dark:text-sky-300">
+                      Mở Cloud <ChevronRight className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
