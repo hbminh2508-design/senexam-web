@@ -14,6 +14,7 @@ import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } fro
 
 // 🌟 GỌI BỘ NÃO AI OFFLINE VÀO TRANG MỘT CÁCH GỌN GÀNG
 import ChatOffline from '@/app/components/ChatOffline'
+import GeminiChatBox from '@/app/components/GeminiChatBox'
 
 const PROVINCES = [
   'An Giang', 'Bắc Ninh', 'Cà Mau', 'Cao Bằng', 'Điện Biên', 'Đắk Lắk', 
@@ -823,6 +824,8 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            <GeminiChatBox />
 
             {/* History Section - Full Width */}
             <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
