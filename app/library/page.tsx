@@ -189,49 +189,17 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const toggleDocumentHidden = async (doc: any) => {
-    if (!isAdmin) return
-    try {
-      await persistDocumentState(doc.id, current => ({ ...current, hidden: !current.hidden }))
-    } catch (error) {
-      alert('Không thể cập nhật trạng thái ẩn của tài liệu.')
-    }
+    // Disabled: UI for hiding documents is intentionally removed.
+    // Keeping function as no-op to avoid accidental usage.
+    console.warn('toggleDocumentHidden is disabled in this deployment.')
+    return
   }
 
   const toggleDocumentLock = async (doc: any) => {
-    if (!isAdmin) return
-
-    const current = getDocumentSecurity(doc)
-    if (current?.passwordHash) {
-      if (!confirm('Mở khóa tài liệu này?')) return
-      try {
-        await persistDocumentState(doc.id, security => {
-          const next = { ...security }
-          delete next.passwordHash
-          delete next.passwordSalt
-          return next
-        })
-        const nextUnlocked = { ...unlockedDocumentIds }
-        delete nextUnlocked[doc.id]
-        saveUnlockedDocumentIds(nextUnlocked)
-      } catch (error) {
-        alert('Không thể mở khóa tài liệu này.')
-      }
-      return
-    }
-
-    const password = window.prompt('Đặt mật khẩu cho tài liệu')
-    if (!password || password.trim().length < 4) {
-      alert('Mật khẩu phải có ít nhất 4 ký tự.')
-      return
-    }
-
-    const salt = generateSalt()
-    const passwordHash = await hashPassword(password.trim(), salt)
-    try {
-      await persistDocumentState(doc.id, security => ({ ...security, passwordHash, passwordSalt: salt }))
-    } catch (error) {
-      alert('Không thể đặt mật khẩu cho tài liệu này.')
-    }
+    // Disabled: UI for locking documents is intentionally removed.
+    // Keeping function as no-op to avoid accidental usage.
+    console.warn('toggleDocumentLock is disabled in this deployment.')
+    return
   }
 
   const ensureStudentUploadFolder = async (rootFolders: any[]) => {
@@ -1170,16 +1138,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                             </div>
                           </div>
 
-                          {isAdmin && (
-                            <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={(e) => { e.stopPropagation(); toggleDocumentHidden(doc) }} className="p-2 rounded-lg bg-white/80 dark:bg-slate-900/80 shadow-sm" title={hidden ? 'Hiện tài liệu' : 'Ẩn tài liệu'}>
-                                {hidden ? <Eye className="w-4 h-4 text-emerald-600" /> : <EyeOff className="w-4 h-4 text-slate-600" />}
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDocumentLock(doc) }} className="p-2 rounded-lg bg-white/80 dark:bg-slate-900/80 shadow-sm" title={locked ? 'Mở khóa' : 'Khóa bằng mật khẩu'}>
-                                {locked ? <Unlock className="w-4 h-4 text-amber-600" /> : <Lock className="w-4 h-4 text-amber-600" />}
-                              </button>
-                            </div>
-                          )}
+                          {/* Admin controls for hide/lock removed per request */}
                           
                           {!isSelectMode && (
                             <span className="absolute right-4 text-blue-500 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-xs transition-all font-bold">
