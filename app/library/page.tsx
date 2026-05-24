@@ -548,7 +548,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         const uploadUrl = await initGoogleDriveUpload(finalTitle, file.type)
 
         setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file trực tiếp lên Google Drive...` })
-        const uploadedData = await uploadFileToGoogleDrive(uploadUrl, file)
+        const uploadedData = await uploadFileToGoogleDrive(uploadUrl, file, finalTitle)
         const fileId = uploadedData?.id
 
         if (!fileId) throw new Error('Không nhận được mã file từ Google Drive.')

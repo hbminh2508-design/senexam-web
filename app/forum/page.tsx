@@ -102,7 +102,7 @@ export default function ForumPage() {
         const uploadUrl = await initGoogleDriveUpload(attachedFile.name, attachedFile.type || 'application/octet-stream')
 
         setUploadStatus('Đang đẩy tài liệu trực tiếp lên Google Drive...')
-        const uploadData = await uploadFileToGoogleDrive(uploadUrl, attachedFile)
+        const uploadData = await uploadFileToGoogleDrive(uploadUrl, attachedFile, attachedFile.name)
         driveFileId = uploadData.id; fileName = attachedFile.name; fileSize = formatBytes(attachedFile.size)
       }
 

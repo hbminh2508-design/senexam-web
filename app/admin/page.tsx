@@ -577,7 +577,7 @@ export default function AdminDashboard() {
         const uploadUrl = await initGoogleDriveUpload(file.name || title, file.type || 'application/pdf')
 
         setUploadStatus({ type: 'uploading', message: 'Đang đẩy tệp trực tiếp lên Google Drive...' })
-        const uploadData = await uploadFileToGoogleDrive(uploadUrl, file)
+        const uploadData = await uploadFileToGoogleDrive(uploadUrl, file, file.name || title)
         driveFileId = uploadData.id
       }
 
