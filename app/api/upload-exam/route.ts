@@ -33,8 +33,12 @@ export async function POST(request: Request) {
       }
 
       // Lấy Access Token tươi từ OAuth2
-      const { token: accessToken } = await oauth2Client.getAccessToken()
-      if (!accessToken) throw new Error("Không thể lấy Access Token từ OAuth2")
+      const accessTokenResult = await oauth2Client.getAccessToken()
+      const accessToken = typeof accessTokenResult === 'string' ? accessTokenResult : accessTokenResult?.token
+      if (!accessToken) {
+        console.error('upload-exam: Không thể lấy Access Token từ OAuth2', { accessTokenResult })
+        return NextResponse.json({ error: 'Không thể lấy Access Token từ OAuth2' }, { status: 500 })
+      }
 
       const metadata = {
         name: fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`,
@@ -49,15 +53,22 @@ export async function POST(request: Request) {
           'X-Upload-Content-Type': mimeType,
         },
         body: JSON.stringify(metadata)
+      }).catch(async (err) => {
+        console.error('upload-exam: fetch init resumable failed', err)
+        return new Response(JSON.stringify({ error: 'Không thể kết nối tới Google API' }), { status: 502 })
       })
 
       if (!res.ok) {
-        const errText = await res.text()
-        throw new Error(`Lỗi khởi tạo Google Drive: ${errText}`)
+        const errText = await res.text().catch(() => '')
+        console.error('upload-exam: Google init returned non-ok', { status: res.status, body: errText })
+        return NextResponse.json({ error: `Lỗi khởi tạo Google Drive: ${errText}` }, { status: res.status || 500 })
       }
 
       const uploadUrl = res.headers.get('Location')
-      if (!uploadUrl) throw new Error("Google không trả về URL tải lên")
+      if (!uploadUrl) {
+        console.error('upload-exam: missing Location header on resumable init', { headers: Object.fromEntries(res.headers) })
+        return NextResponse.json({ error: 'Google không trả về URL tải lên' }, { status: 502 })
+      }
 
       return NextResponse.json({ uploadUrl })
     }

@@ -53,37 +53,40 @@ export const uploadFileToGoogleDrive = async (uploadUrl: string, file: File, fal
     const start = offset
     const end = Math.min(offset + CHUNK_SIZE, file.size) - 1
 
-    const response = await new Promise<XMLHttpRequest>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('PUT', uploadUrl, true)
-      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
-      xhr.setRequestHeader('Content-Range', `bytes ${start}-${end}/${file.size}`)
-      xhr.timeout = 30 * 60 * 1000
+    let res: Response
+    try {
+      res = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'Content-Range': `bytes ${start}-${end}/${file.size}`,
+        },
+        body: chunk,
+      })
+    } catch (err: any) {
+      throw new Error(`Load failed khi tải ${fallbackTitle} lên Google Drive. (${err?.message || 'network error'})`)
+    }
 
-      xhr.onload = () => resolve(xhr)
-      xhr.onerror = () => reject(new Error(`Load failed khi tải ${fallbackTitle} lên Google Drive.`))
-      xhr.ontimeout = () => reject(new Error(`Hết thời gian khi tải ${fallbackTitle} lên Google Drive.`))
-      xhr.send(chunk)
-    })
-
-    if (response.status === 308) {
+    if (res.status === 308) {
       offset = end + 1
       continue
     }
 
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(response.responseText || `Lỗi khi tải file trực tiếp lên Google Drive (${response.status}).`)
+    if (res.status < 200 || res.status >= 300) {
+      const text = await res.text().catch(() => '')
+      throw new Error(text || `Lỗi khi tải file trực tiếp lên Google Drive (${res.status}).`)
     }
 
+    const text = await res.text().catch(() => '')
     try {
-      const payload = response.responseText ? JSON.parse(response.responseText) : {}
+      const payload = text ? JSON.parse(text) : {}
       if (!payload?.id) {
         throw new Error(`Không nhận được mã file từ Google Drive cho ${fallbackTitle}.`)
       }
       lastPayload = payload
       return lastPayload
-    } catch (error) {
-      throw new Error(response.responseText || `Phản hồi Google Drive không hợp lệ cho ${fallbackTitle}.`)
+    } catch (error: any) {
+      throw new Error(text || `Phản hồi Google Drive không hợp lệ cho ${fallbackTitle}.`)
     }
   }
 
