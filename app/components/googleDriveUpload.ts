@@ -4,7 +4,28 @@ type ResponsePayload = {
   error?: string
 }
 
-const CHUNK_SIZE = 5 * 1024 * 1024
+const uploadFileViaApi = async (file: File, title: string) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('title', title)
+
+  const response = await fetch('/api/upload-exam', {
+    method: 'POST',
+    body: formData,
+  })
+
+  const payload = await readResponsePayload(response)
+  if (!payload.ok || !response.ok) {
+    throw new Error((payload as ResponsePayload).error || 'Không thể tải file qua API nội bộ.')
+  }
+
+  const driveFileId = payload.data?.driveFileId
+  if (!driveFileId) {
+    throw new Error('API nội bộ không trả về mã file.')
+  }
+
+  return { id: driveFileId }
+}
 
 const readResponsePayload = async (response: Response): Promise<ResponsePayload> => {
   const contentType = response.headers.get('content-type') || ''
@@ -46,40 +67,28 @@ export const initGoogleDriveUpload = async (fileName: string, mimeType: string) 
 }
 
 export const uploadFileToGoogleDrive = async (uploadUrl: string, file: File, fallbackTitle = file.name) => {
-  let offset = 0
-  let lastPayload: any = null
-
-  while (offset < file.size) {
-    const chunk = file.slice(offset, Math.min(offset + CHUNK_SIZE, file.size))
-    const start = offset
-    const end = Math.min(offset + CHUNK_SIZE, file.size) - 1
-
+  try {
     const response = await fetch(uploadUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': file.type || 'application/octet-stream',
-        'Content-Range': `bytes ${start}-${end}/${file.size}`,
+        'Content-Range': `bytes 0-${Math.max(file.size - 1, 0)}/${file.size}`,
       },
-      body: chunk,
+      body: file,
     })
-
-    if (response.status === 308) {
-      offset = end + 1
-      continue
-    }
 
     const payload = await readResponsePayload(response)
     if (!payload.ok || !response.ok) {
-      throw new Error((payload as ResponsePayload).error || `Lỗi khi tải file trực tiếp lên Google Drive (${response.status}).`)
+      throw new Error((payload as ResponsePayload).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
     }
 
-    lastPayload = payload.data
-    const fileId = lastPayload?.id
+    const fileId = payload.data?.id
     if (!fileId) {
-      throw new Error(`Không nhận được mã file từ Google Drive cho ${fallbackTitle}.`)
+      throw new Error('Không nhận được mã file từ Google Drive.')
     }
-    return lastPayload
-  }
 
-  throw new Error(`Không thể hoàn tất tải ${fallbackTitle} lên Google Drive.`)
+    return payload.data
+  } catch (error) {
+    return uploadFileViaApi(file, fallbackTitle)
+  }
 }
