@@ -4,6 +4,8 @@ type ResponsePayload = {
   error?: string
 }
 
+const CHUNK_SIZE = 5 * 1024 * 1024
+
 const readResponsePayload = async (response: Response): Promise<ResponsePayload> => {
   const contentType = response.headers.get('content-type') || ''
   const rawText = await response.text()
@@ -44,41 +46,40 @@ export const initGoogleDriveUpload = async (fileName: string, mimeType: string) 
 }
 
 export const uploadFileToGoogleDrive = async (uploadUrl: string, file: File, fallbackTitle = file.name) => {
-  return await new Promise<any>((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', uploadUrl, true)
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
-    xhr.setRequestHeader('Content-Range', `bytes 0-${Math.max(file.size - 1, 0)}/${file.size}`)
-    xhr.timeout = 30 * 60 * 1000
+  let offset = 0
+  let lastPayload: any = null
 
-    xhr.onload = () => {
-      const responseText = xhr.responseText || ''
-      if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(responseText || `Lỗi khi tải file trực tiếp lên Google Drive (${xhr.status}).`))
-        return
-      }
+  while (offset < file.size) {
+    const chunk = file.slice(offset, Math.min(offset + CHUNK_SIZE, file.size))
+    const start = offset
+    const end = Math.min(offset + CHUNK_SIZE, file.size) - 1
 
-      try {
-        const payload = responseText ? JSON.parse(responseText) : {}
-        const fileId = payload?.id
-        if (!fileId) {
-          reject(new Error(`Không nhận được mã file từ Google Drive cho ${fallbackTitle}.`))
-          return
-        }
-        resolve(payload)
-      } catch (error) {
-        reject(new Error(responseText || `Phản hồi Google Drive không hợp lệ cho ${fallbackTitle}.`))
-      }
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'Content-Range': `bytes ${start}-${end}/${file.size}`,
+      },
+      body: chunk,
+    })
+
+    if (response.status === 308) {
+      offset = end + 1
+      continue
     }
 
-    xhr.onerror = () => {
-      reject(new Error(`Load failed khi tải ${fallbackTitle} lên Google Drive.`))
+    const payload = await readResponsePayload(response)
+    if (!payload.ok || !response.ok) {
+      throw new Error((payload as ResponsePayload).error || `Lỗi khi tải file trực tiếp lên Google Drive (${response.status}).`)
     }
 
-    xhr.ontimeout = () => {
-      reject(new Error(`Hết thời gian khi tải ${fallbackTitle} lên Google Drive.`))
+    lastPayload = payload.data
+    const fileId = lastPayload?.id
+    if (!fileId) {
+      throw new Error(`Không nhận được mã file từ Google Drive cho ${fallbackTitle}.`)
     }
+    return lastPayload
+  }
 
-    xhr.send(file)
-  })
+  throw new Error(`Không thể hoàn tất tải ${fallbackTitle} lên Google Drive.`)
 }
