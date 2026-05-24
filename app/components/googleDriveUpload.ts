@@ -47,21 +47,37 @@ const readResponsePayload = async (response: Response): Promise<ResponsePayload>
 }
 
 export const initGoogleDriveUpload = async (fileName: string, mimeType: string) => {
-  const response = await fetch('/api/upload-exam', {
+  // Lấy Access Token từ server (server chỉ trả token, không truyền file)
+  const tokenResp = await fetch('/api/get-drive-token')
+  const tokenPayload = await readResponsePayload(tokenResp)
+  if (!tokenPayload.ok || !tokenPayload.data?.accessToken) {
+    throw new Error(tokenPayload.error || 'Không thể lấy access token từ server')
+  }
+  const accessToken = tokenPayload.data.accessToken
+
+  const folderId = tokenPayload.data.folderId || process.env.NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_ID || ''
+  const metadata = {
+    name: fileName,
+    parents: folderId ? [folderId] : []
+  }
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileName, mimeType }),
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+      'X-Upload-Content-Type': mimeType,
+    },
+    body: JSON.stringify(metadata)
   })
 
-  const payload = await readResponsePayload(response)
-  if (!payload.ok || !response.ok) {
-    throw new Error((payload as ResponsePayload).error || 'Không thể kết nối Google Drive.')
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`Lỗi khởi tạo Google Drive: ${txt}`)
   }
 
-  const uploadUrl = payload.data?.uploadUrl
-  if (!uploadUrl) {
-    throw new Error('Google không trả về URL tải lên.')
-  }
+  const uploadUrl = res.headers.get('Location')
+  if (!uploadUrl) throw new Error('Google không trả về URL tải lên.')
 
   return uploadUrl as string
 }
