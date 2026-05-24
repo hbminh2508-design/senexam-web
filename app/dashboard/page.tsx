@@ -794,12 +794,6 @@ export default function DashboardPage() {
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/40 dark:bg-slate-900/40 border border-white/50 dark:border-white/10 text-[11px] font-black uppercase tracking-[0.22em] text-sky-700 dark:text-sky-300 mb-2">
                       Sen Cloud AI
                     </div>
-                    <h3 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">
-                      Quiz và Cloud chia đôi, gọn một chạm.
-                    </h3>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm font-medium leading-relaxed mt-2">
-                      Một nửa để ôn luyện quiz, một nửa để lưu trữ dữ liệu cá nhân. Tài khoản miễn phí được cấp 30GB dùng riêng.
-                    </p>
                   </div>
                   <div className="rounded-2xl bg-white/50 dark:bg-slate-900/40 border border-white/60 dark:border-white/10 px-4 py-3 shadow-sm shrink-0">
                     <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400 font-black">Dung lượng miễn phí</p>

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { BookOpen, CheckCircle2, ChevronRight, Clock, PlusCircle, Sparkles, Trash2, Brain } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, BookOpen, CheckCircle2, ChevronRight, Clock, PlusCircle, Sparkles, Trash2, Brain } from 'lucide-react'
 
 type QuizQuestion = {
   id: string
@@ -59,6 +60,7 @@ const createQuestion = (): QuizQuestion => ({
 })
 
 export default function QuizzlePage() {
+  const router = useRouter()
   const [title, setTitle] = useState('')
   const [subject, setSubject] = useState('')
   const [description, setDescription] = useState('')
@@ -148,6 +150,9 @@ export default function QuizzlePage() {
   return (
     <div className="app-shell min-h-screen bg-transparent text-slate-900 dark:text-slate-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto relative">
+        <button onClick={() => router.push('/dashboard')} className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 transition-colors mb-4">
+          <ArrowLeft className="w-4 h-4" /> Về trang chủ
+        </button>
         <div className="absolute -top-20 left-0 w-72 h-72 bg-emerald-400/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-24 right-0 w-80 h-80 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none" />
 
