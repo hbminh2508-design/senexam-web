@@ -15,8 +15,10 @@ import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components
 
 const glassCardStyles = "liquid-panel"
 const STUDENT_UPLOAD_FOLDER_NAME = 'Dành cho học sinh/Sinh viên chia sẻ'
+const LIBRARY_SCOPE_STORAGE_KEY = 'library_scope_v1'
 const DOCUMENT_UNLOCK_STORAGE_KEY = 'library_document_unlocks_v1'
 const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
+type LibraryScope = 'private' | 'shared'
 
 type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
 type LibrarySearchParams = Record<string, string | string[] | undefined>
@@ -28,6 +30,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string>('student')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [libraryScope, setLibraryScope] = useState<LibraryScope>('private')
   
   const [folders, setFolders] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
@@ -96,6 +100,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
   const isAdmin = userRole === 'admin'
   const canManageLibrary = userRole === 'admin' || userRole === 'collab'
+  const isStudentLibrary = userRole === 'student'
 
   const encodeDocumentSecurity = (security: DocumentSecurity) => {
     if (!security.hidden && !security.passwordHash) return null
@@ -230,28 +235,77 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     return null
   }
 
+  const isItemVisibleInScope = (item: any, itemKind: 'folder' | 'document', scope: LibraryScope, rootFolderId: string | null, userIdOverride?: string | null) => {
+    if (!isStudentLibrary) return true
+
+    const effectiveUserId = userIdOverride ?? currentUserId
+    const ownedByCurrentUser = !!effectiveUserId && item?.created_by === effectiveUserId
+    const isStudentRootContainer = itemKind === 'folder' && item?.id === studentUploadFolderId
+
+    if (scope === 'private') {
+      if (rootFolderId === null) return isStudentRootContainer || ownedByCurrentUser
+      return ownedByCurrentUser || isStudentRootContainer
+    }
+
+    if (rootFolderId === null) return !isStudentRootContainer && !ownedByCurrentUser
+    return !ownedByCurrentUser && !isStudentRootContainer
+  }
+
+  const syncLibraryScope = async (nextScope: LibraryScope, nextUserId = currentUserId) => {
+    setLibraryScope(nextScope)
+    try { localStorage.setItem(LIBRARY_SCOPE_STORAGE_KEY, nextScope) } catch (error) { /* ignore */ }
+    setSearchQuery('')
+    setSearchFoldersResults(null)
+    setSearchDocsResults(null)
+    setSearchExamsResults(null)
+    setSearchLoading(false)
+    setPreviewDoc(null)
+    setSelectedItems([])
+    setIsSelectMode(false)
+    setClipboard(null)
+    setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+    await fetchContents(null, nextScope, nextUserId)
+  }
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      setCurrentUserId(user.id)
       setUserRole(profile?.role || 'student')
+
+      let initialScope: LibraryScope = 'private'
+      try {
+        const savedScope = localStorage.getItem(LIBRARY_SCOPE_STORAGE_KEY)
+        if (savedScope === 'private' || savedScope === 'shared') initialScope = savedScope
+      } catch (error) { /* ignore */ }
+
+      if ((profile?.role || 'student') !== 'student') {
+        initialScope = 'shared'
+      }
+
+      setLibraryScope(initialScope)
       
-      const rootData = await fetchContents(null)
+      const rootData = await fetchContents(null, initialScope, user.id)
 
       try {
         const rawUnlocked = sessionStorage.getItem(DOCUMENT_UNLOCK_STORAGE_KEY)
         if (rawUnlocked) setUnlockedDocumentIds(JSON.parse(rawUnlocked))
       } catch (error) { /* ignore */ }
 
-      if ((profile?.role || 'student') === 'student' && !readSearchParam('folder') && !readSearchParam('preview')) {
+      if ((profile?.role || 'student') === 'student' && initialScope === 'private' && !readSearchParam('folder') && !readSearchParam('preview')) {
         const targetFolderId = await ensureStudentUploadFolder(rootData?.folders || [])
         if (targetFolderId) {
           const specialFolder = rootData?.folders?.find((folder: any) => folder.id === targetFolderId)
           setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }, { id: targetFolderId, name: specialFolder?.name || STUDENT_UPLOAD_FOLDER_NAME }])
-          await fetchContents(targetFolderId)
+          await fetchContents(targetFolderId, initialScope, user.id)
+        } else {
+          setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
         }
+      } else {
+        setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
       }
 
       setLoading(false)
@@ -299,7 +353,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
             guard += 1
           }
 
-          if (chain.length > 0) {
+          const allowsFolder = !isStudentLibrary || libraryScope === 'shared' || chain.some(step => step.id === studentUploadFolderId)
+
+          if (chain.length > 0 && allowsFolder) {
             const rootPath = [{ id: null, name: 'Trang chủ Thư viện' }, ...chain]
             setFolderPath(rootPath)
             await fetchContents(chain[chain.length - 1].id)
@@ -315,7 +371,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     }
 
     applyRouteState()
-  }, [routeQueryKey, searchParams])
+  }, [routeQueryKey, searchParams, libraryScope, studentUploadFolderId, isStudentLibrary])
 
   // Debounce searchQuery -> globalSearch
   useEffect(() => {
@@ -327,7 +383,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     // @ts-ignore
     searchDebounceRef.current = window.setTimeout(() => { globalSearch(searchQuery) }, 500)
     return () => { if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current) }
-  }, [searchQuery])
+  }, [searchQuery, libraryScope])
 
   // Fullscreenchange listener to update state when user exits fullscreen
   useEffect(() => {
@@ -395,11 +451,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
       const folderMap = new Map<string, any>(folders.map((folder: any) => [folder.id, folder]))
       const folderBlobQuery = qtrim.toLowerCase()
 
-      const searchFolders = folders.filter((folder: any) => buildSearchBlob(folder).includes(folderBlobQuery))
+      const searchFolders = folders.filter((folder: any) => isItemVisibleInScope(folder, 'folder', libraryScope, null, currentUserId) && buildSearchBlob(folder).includes(folderBlobQuery))
 
       const searchDocs = (dRes.data || [])
         .map((doc: any) => ({ ...doc, folder_name: doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : '' }))
-        .filter((doc: any) => (isAdmin || !getDocumentSecurity(doc)?.hidden) && (buildSearchBlob(doc, doc.folder_name).includes(folderBlobQuery) || (doc.folder_name && scoreResult(doc.folder_name, qtrim) > 0)))
+        .filter((doc: any) => (isAdmin || !getDocumentSecurity(doc)?.hidden) && isItemVisibleInScope(doc, 'document', libraryScope, null, currentUserId) && (buildSearchBlob(doc, doc.folder_name).includes(folderBlobQuery) || (doc.folder_name && scoreResult(doc.folder_name, qtrim) > 0)))
 
       const searchExams = (eRes.data || [])
         .map((exam: any) => ({ ...exam, folder_name: exam.folder_id ? folderMap.get(exam.folder_id)?.name || exam.folder_name || '' : exam.folder_name || '' }))
@@ -419,7 +475,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     } catch (e) { /* ignore */ }
   }, [])
 
-  const fetchContents = async (folderId: string | null) => {
+  const fetchContents = async (folderId: string | null, scopeOverride?: LibraryScope, userIdOverride?: string | null) => {
+    const effectiveScope = scopeOverride || libraryScope
+    const effectiveUserId = userIdOverride || currentUserId
+
     const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
     if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null);
     
@@ -428,9 +487,18 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
     const [folderRes, docRes] = await Promise.all([folderQuery, docQuery])
     const fdata = folderRes.data || []
-    const visibleFolders = userRole === 'student' && folderId === null && studentUploadFolderId
-      ? fdata.filter(folder => folder.id === studentUploadFolderId)
-      : fdata
+    const visibleFolders = fdata.filter(folder => {
+      if (effectiveScope === 'private' && isStudentLibrary) {
+        if (folderId === null) return folder.id === studentUploadFolderId || (effectiveUserId && folder.created_by === effectiveUserId)
+        return (effectiveUserId && folder.created_by === effectiveUserId) || folder.id === studentUploadFolderId
+      }
+
+      if (isStudentLibrary) {
+        return folder.id !== studentUploadFolderId && (!effectiveUserId || folder.created_by !== effectiveUserId)
+      }
+
+      return true
+    })
 
     setFolders(visibleFolders)
     // Đồng bộ màu/icon từ DB vào trạng thái client và localStorage
@@ -448,7 +516,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
       ...doc,
       _security: getDocumentSecurity(doc)
     }))
-    const visibleDocs = docsWithSecurity.filter((doc: any) => isAdmin || !doc._security?.hidden)
+    const visibleDocs = docsWithSecurity.filter((doc: any) => (isAdmin || !doc._security?.hidden) && isItemVisibleInScope(doc, 'document', effectiveScope, folderId, effectiveUserId))
     setDocuments(visibleDocs)
 
     const nextSecurity: DocumentSecurityMap = {}
@@ -466,11 +534,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
       return merged
     })
 
-    return { folders: fdata, documents: docRes.data || [] }
+    return { folders: visibleFolders, documents: visibleDocs }
   }
 
   const handleOpenFolder = async (folderId: string, folderName: string) => {
-    if (userRole === 'student' && folderId !== studentUploadFolderId) return
+    if (isStudentLibrary && libraryScope === 'private' && folderId !== studentUploadFolderId && !folderPath.some(step => step.id === studentUploadFolderId)) return
     setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
     setFolderPath([...folderPath, { id: folderId, name: folderName }])
     await fetchContents(folderId)
@@ -1008,6 +1076,12 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
             <button onClick={() => setIsCompact(!isCompact)} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isCompact ? 'bg-slate-100 dark:bg-slate-800 text-slate-900' : 'bg-white/40 dark:bg-slate-800/50'}`}>
               {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
             </button>
+
+            {isStudentLibrary && (
+              <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                {libraryScope === 'private' ? <><Unlock className="w-5 h-5" /> Cloud riêng</> : <><Lock className="w-5 h-5" /> Cloud chung</>}
+              </button>
+            )}
 
             {canManageLibrary && (
               <>
