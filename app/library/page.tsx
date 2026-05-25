@@ -236,6 +236,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const isItemVisibleInScope = (item: any, itemKind: 'folder' | 'document', scope: LibraryScope, rootFolderId: string | null, userIdOverride?: string | null) => {
+    if (!isStudentLibrary) return true
+
     const effectiveUserId = userIdOverride ?? currentUserId
     const ownedByCurrentUser = !!effectiveUserId && item?.created_by === effectiveUserId
     const isStudentRootContainer = itemKind === 'folder' && item?.id === studentUploadFolderId
@@ -538,7 +540,6 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const handleOpenFolder = async (folderId: string, folderName: string) => {
-    if (libraryScope === 'private' && folderId !== studentUploadFolderId && !folderPath.some(step => step.id === studentUploadFolderId) && currentUserId && folderId && !folderPath.some(step => step.id === folderId)) return
     setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
     setFolderPath([...folderPath, { id: folderId, name: folderName }])
     await fetchContents(folderId)
@@ -1077,9 +1078,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
               {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
             </button>
 
-            <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
-              {libraryScope === 'private' ? <><Unlock className="w-5 h-5" /> Cloud riêng</> : <><Lock className="w-5 h-5" /> Cloud chung</>}
-            </button>
+            {isStudentLibrary && (
+              <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`} title={libraryScope === 'private' ? 'Chuyển sang cloud chung' : 'Chuyển sang cloud riêng'}>
+                {libraryScope === 'private' ? <><Unlock className="w-4 h-4" /> Riêng</> : <><Lock className="w-4 h-4" /> Chung</>}
+              </button>
+            )}
 
             {canManageLibrary && (
               <>
