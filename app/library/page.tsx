@@ -32,6 +32,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const [userRole, setUserRole] = useState<string>('student')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [libraryScope, setLibraryScope] = useState<LibraryScope>('private')
+  const [adminUploaderIds, setAdminUploaderIds] = useState<string[]>([])
   
   const [folders, setFolders] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
@@ -102,6 +103,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const isAdmin = userRole === 'admin'
   const canManageLibrary = userRole === 'admin' || userRole === 'collab'
   const isStudentLibrary = userRole === 'student'
+  const canManageItem = (item: any) => canManageLibrary || (!!currentUserId && item?.created_by === currentUserId)
 
   const encodeDocumentSecurity = (security: DocumentSecurity) => {
     if (!security.hidden && !security.passwordHash) return null
@@ -290,6 +292,12 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
       if ((profile?.role || 'student') !== 'student') {
         initialScope = 'shared'
       }
+
+      // fetch admin/collab ids to treat their uploads as "shared"
+      try {
+        const { data: admins } = await supabase.from('profiles').select('id,role').in('role', ['admin','collab'])
+        if (admins && Array.isArray(admins)) setAdminUploaderIds(admins.map((a: any) => a.id))
+      } catch (e) { /* ignore */ }
 
       setLibraryScope(initialScope)
       
@@ -499,19 +507,27 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     }))
 
     const visibleFolders = fdata.filter(folder => {
-      if (effectiveScope === 'private' && isStudentLibrary) {
-        if (folderId === null) return folder.id === studentUploadFolderId || (effectiveUserId && folder.created_by === effectiveUserId)
-        return (effectiveUserId && folder.created_by === effectiveUserId) || folder.id === studentUploadFolderId
-      }
-
       if (isStudentLibrary) {
-        return folder.id !== studentUploadFolderId && (!effectiveUserId || folder.created_by !== effectiveUserId)
+        if (effectiveScope === 'private') {
+          if (folderId === null) return folder.id === studentUploadFolderId || (effectiveUserId && folder.created_by === effectiveUserId)
+          return (effectiveUserId && folder.created_by === effectiveUserId) || folder.id === studentUploadFolderId
+        }
+        // shared mode for students: only show folders uploaded by admins/collab or public (created_by null)
+        return (folder.created_by == null) || adminUploaderIds.includes(folder.created_by)
       }
 
+      // admin/collab: see everything
       return true
     })
 
-    const visibleDocs = docsWithSecurity.filter((doc: any) => (isAdmin || !doc._security?.hidden) && isItemVisibleInScope(doc, 'document', effectiveScope, folderId, effectiveUserId))
+    const visibleDocs = docsWithSecurity.filter((doc: any) => {
+      if (!(isAdmin || !doc._security?.hidden)) return false
+      if (isStudentLibrary) {
+        if (effectiveScope === 'private') return (doc.created_by === effectiveUserId) || (doc.folder_id === studentUploadFolderId)
+        return (doc.created_by == null) || adminUploaderIds.includes(doc.created_by)
+      }
+      return true
+    })
 
     if (requestId === fetchContentsRequestRef.current) {
       setFolders(visibleFolders)
@@ -681,7 +697,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const handleBulkDelete = async () => {
-    if (userRole !== 'admin') return alert("Chỉ Admin mới có quyền xóa tài liệu!");
+    // allow if admin, or if current user owns all selected items
+    const allOwnedByUser = selectedItems.every(i => i.data?.created_by === currentUserId)
+    if (!isAdmin && !allOwnedByUser) return alert("Chỉ Admin hoặc chủ sở hữu mới có quyền xóa các mục này!");
     if (!confirm(`Xóa vĩnh viễn ${selectedItems.length} mục đã chọn khỏi hệ thống?`)) return;
     
     setLoading(true);
@@ -696,11 +714,17 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const handleDeleteFolder = async (id: string) => {
+    const folder = folders.find(f => f.id === id)
+    if (!folder) return alert('Thư mục không tồn tại')
+    if (!isAdmin && folder.created_by !== currentUserId) return alert('Bạn không có quyền xoá thư mục này')
     if (!confirm('Bạn có chắc chắn muốn xoá Thư mục này cùng toàn bộ tài liệu bên trong?')) return
     const { error } = await supabase.from('library_folders').delete().eq('id', id)
     if (!error) setFolders(folders.filter(f => f.id !== id))
   }
   const handleDeleteDocument = async (id: string) => {
+    const doc = documents.find(d => d.id === id)
+    if (!doc) return alert('Tài liệu không tồn tại')
+    if (!isAdmin && doc.created_by !== currentUserId) return alert('Bạn không có quyền xoá tài liệu này')
     if (!confirm('Xoá vĩnh viễn tài liệu này khỏi hệ thống?')) return
     const { error } = await supabase.from('library_documents').delete().eq('id', id)
     if (!error) setDocuments(documents.filter(d => d.id !== id))
@@ -906,7 +930,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 apps-shadow px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10 duration-300">
            <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
            
-           {selectedItems.length === 1 && canManageLibrary && (
+           {selectedItems.length === 1 && (canManageLibrary || (selectedItems[0].data?.created_by === currentUserId)) && (
              <button onClick={() => {
                setRenameTarget(selectedItems[0]);
                setRenameInput(selectedItems[0].type === 'folder' ? selectedItems[0].data.name : selectedItems[0].data.title);
@@ -916,7 +940,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
              </button>
            )}
 
-           {userRole === 'admin' && (
+           {(selectedItems.length > 0 && selectedItems.every(i => canManageItem(i.data))) && (
              <button onClick={handleBulkDelete} className="flex items-center gap-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-bold text-sm">
                <Trash2 className="w-4 h-4"/> Xóa
              </button>
@@ -1092,6 +1116,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
               </button>
             )}
 
+            {
+              /* Admin/collab-only controls */
+            }
             {canManageLibrary && (
               <>
                 {/* Sắp xếp A-Z */}
@@ -1104,6 +1131,19 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                   <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp (Chọn)'}
                 </button>
 
+                <>
+                  <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center center gap-2 shadow-sm hover:bg-white/60 transition-colors">
+                    <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
+                  </button>
+                  <button onClick={() => setShowDocModal(true)} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(37,99,235,0.3)] transition-colors">
+                    <UploadCloud className="w-5 h-5" /> Tải Lên
+                  </button>
+                </>
+              </>
+            )}
+            {/* Allow regular users to create/upload in their private space */}
+            {!canManageLibrary && currentUserId && (
+              <>
                 <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center center gap-2 shadow-sm hover:bg-white/60 transition-colors">
                   <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
                 </button>
