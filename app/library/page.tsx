@@ -103,8 +103,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const isAdmin = userRole === 'admin'
   const canManageLibrary = userRole === 'admin' || userRole === 'collab'
   const isStudentLibrary = userRole === 'student'
-  const canManageItem = (item: any) => canManageLibrary || (!!currentUserId && item?.created_by === currentUserId)
-  const showAdminControls = canManageLibrary || (isStudentLibrary && libraryScope === 'private')
+  const canManageItem = (item: any) => canManageLibrary || (!!currentUserId && (item?.created_by === currentUserId || (libraryScope === 'shared' && item?.created_by == null)))
+  const showAdminControls = canManageLibrary || isStudentLibrary
   const getLibraryRootLabel = (scope: LibraryScope = libraryScope) => scope === 'private' ? 'SenCloud' : 'SenLib'
   const getHomeLabel = () => 'Sen Home'
   const headerButtonBase = 'w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all backdrop-blur-md border border-white/60 dark:border-slate-700 bg-white/35 dark:bg-slate-800/55 text-slate-900 dark:text-white hover:bg-white/55 dark:hover:bg-slate-800/70'
@@ -598,13 +598,13 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     try {
       setUploadStatus({ type: 'uploading', message: `Bắt đầu xử lý ${docFiles.length} tài liệu...` })
       const { data: { user } } = await supabase.auth.getUser()
-      let uploadFolderId = currentFolderId
+      let uploadFolderId: string | null = currentFolderId
 
-      if (userRole === 'student' && !uploadFolderId) {
+      if (libraryScope === 'private' && userRole === 'student' && !uploadFolderId) {
         uploadFolderId = studentUploadFolderId || await ensureStudentUploadFolder(folders)
       }
 
-      if (!uploadFolderId) {
+      if (libraryScope === 'private' && !uploadFolderId) {
         throw new Error('Chưa xác định được thư mục đích để tải lên.')
       }
 
@@ -624,7 +624,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
         setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
         const { error: dbError } = await supabase.from('library_documents').insert({
-          folder_id: uploadFolderId, title: finalTitle, drive_file_id: fileId, created_by: user?.id
+          folder_id: uploadFolderId,
+          title: finalTitle,
+          drive_file_id: fileId,
+          created_by: libraryScope === 'shared' ? null : user?.id
         })
         if (dbError) throw new Error(dbError.message)
       }
@@ -706,8 +709,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
 
   const handleBulkDelete = async () => {
     // allow if admin, or if current user owns all selected items
-    const allOwnedByUser = selectedItems.every(i => i.data?.created_by === currentUserId)
-    if (!isAdmin && !allOwnedByUser) return alert("Chỉ Admin hoặc chủ sở hữu mới có quyền xóa các mục này!");
+    const allOwnedByUserOrShared = selectedItems.every(i => i.data?.created_by === currentUserId || (libraryScope === 'shared' && i.data?.created_by == null))
+    if (!isAdmin && !allOwnedByUserOrShared) return alert("Chỉ Admin hoặc chủ sở hữu mới có quyền xóa các mục này!");
     if (!confirm(`Xóa vĩnh viễn ${selectedItems.length} mục đã chọn khỏi hệ thống?`)) return;
     
     setLoading(true);
@@ -724,7 +727,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const handleDeleteFolder = async (id: string) => {
     const folder = folders.find(f => f.id === id)
     if (!folder) return alert('Thư mục không tồn tại')
-    if (!isAdmin && folder.created_by !== currentUserId) return alert('Bạn không có quyền xoá thư mục này')
+    if (!isAdmin && !(folder.created_by === currentUserId || (libraryScope === 'shared' && folder.created_by == null))) return alert('Bạn không có quyền xoá thư mục này')
     if (!confirm('Bạn có chắc chắn muốn xoá Thư mục này cùng toàn bộ tài liệu bên trong?')) return
     const { error } = await supabase.from('library_folders').delete().eq('id', id)
     if (!error) setFolders(folders.filter(f => f.id !== id))
@@ -732,7 +735,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const handleDeleteDocument = async (id: string) => {
     const doc = documents.find(d => d.id === id)
     if (!doc) return alert('Tài liệu không tồn tại')
-    if (!isAdmin && doc.created_by !== currentUserId) return alert('Bạn không có quyền xoá tài liệu này')
+    if (!isAdmin && !(doc.created_by === currentUserId || (libraryScope === 'shared' && doc.created_by == null))) return alert('Bạn không có quyền xoá tài liệu này')
     if (!confirm('Xoá vĩnh viễn tài liệu này khỏi hệ thống?')) return
     const { error } = await supabase.from('library_documents').delete().eq('id', id)
     if (!error) setDocuments(documents.filter(d => d.id !== id))
@@ -938,7 +941,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 apps-shadow px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10 duration-300">
            <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
            
-           {selectedItems.length === 1 && (canManageLibrary || (selectedItems[0].data?.created_by === currentUserId)) && (
+           {selectedItems.length === 1 && (canManageLibrary || (selectedItems[0].data?.created_by === currentUserId) || (libraryScope === 'shared' && selectedItems[0].data?.created_by == null)) && (
              <button onClick={() => {
                setRenameTarget(selectedItems[0]);
                setRenameInput(selectedItems[0].type === 'folder' ? selectedItems[0].data.name : selectedItems[0].data.title);
@@ -1147,7 +1150,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                   <button onClick={() => setShowFolderModal(true)} className={headerButtonBase}>
                     <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
                   </button>
-                  <button onClick={() => setShowDocModal(true)} className={`${headerButtonBase} bg-blue-600 hover:bg-blue-700 text-white border-blue-500/40 dark:border-blue-400/30`}>
+                  <button onClick={() => setShowDocModal(true)} className={`${headerButtonBase} border-sky-200/80 dark:border-sky-900/60 bg-sky-50/80 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:bg-sky-100/85 dark:hover:bg-sky-900/55`}>
                     <UploadCloud className="w-5 h-5" /> Tải Lên
                   </button>
                 </>
