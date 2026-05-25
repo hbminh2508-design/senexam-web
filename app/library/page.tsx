@@ -14,7 +14,8 @@ import { glassSearchInputClass, highlightSearchText } from '@/app/components/sea
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 
 const glassCardStyles = "liquid-panel"
-const STUDENT_UPLOAD_FOLDER_NAME = 'Dành cho học sinh/Sinh viên chia sẻ'
+const STUDENT_UPLOAD_FOLDER_NAME = 'Student'
+const LEGACY_STUDENT_UPLOAD_FOLDER_NAME = 'Dành cho học sinh/Sinh viên chia sẻ'
 const LIBRARY_SCOPE_STORAGE_KEY = 'library_scope_v1'
 const DOCUMENT_UNLOCK_STORAGE_KEY = 'library_document_unlocks_v1'
 const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
@@ -218,7 +219,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     if (studentFolderEnsureRef.current) return studentUploadFolderId
     studentFolderEnsureRef.current = true
 
-    const existing = rootFolders.find(folder => folder.name === STUDENT_UPLOAD_FOLDER_NAME)
+    const existing = rootFolders.find(folder => (
+      (folder.name === STUDENT_UPLOAD_FOLDER_NAME || folder.name === LEGACY_STUDENT_UPLOAD_FOLDER_NAME)
+      && folder.created_by === currentUserId
+    ))
     if (existing?.id) {
       setStudentUploadFolderId(existing.id)
       return existing.id as string
@@ -227,7 +231,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     try {
       const { data, error } = await supabase
         .from('library_folders')
-        .insert({ name: STUDENT_UPLOAD_FOLDER_NAME, created_by: null, parent_id: null })
+        .insert({ name: STUDENT_UPLOAD_FOLDER_NAME, created_by: currentUserId, parent_id: null })
         .select('id,name')
         .single()
 
@@ -275,7 +279,16 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     setFolders([])
     setDocuments([])
     setFolderPath([{ id: null, name: getHomeLabel() }])
-    await fetchContents(null, nextScope, nextUserId)
+    const rootData = await fetchContents(null, nextScope, nextUserId)
+
+    if (nextScope === 'private') {
+      const targetFolderId = await ensureStudentUploadFolder(rootData?.folders || [])
+      if (targetFolderId) {
+        const specialFolder = rootData?.folders?.find((folder: any) => folder.id === targetFolderId)
+        setFolderPath([{ id: null, name: getHomeLabel() }, { id: targetFolderId, name: specialFolder?.name || STUDENT_UPLOAD_FOLDER_NAME }])
+        await fetchContents(targetFolderId, nextScope, nextUserId)
+      }
+    }
   }
 
   useEffect(() => {
@@ -312,7 +325,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         if (rawUnlocked) setUnlockedDocumentIds(JSON.parse(rawUnlocked))
       } catch (error) { /* ignore */ }
 
-      if ((profile?.role || 'student') === 'student' && initialScope === 'private' && !readSearchParam('folder') && !readSearchParam('preview')) {
+      if (initialScope === 'private' && !readSearchParam('folder') && !readSearchParam('preview')) {
         const targetFolderId = await ensureStudentUploadFolder(rootData?.folders || [])
         if (targetFolderId) {
           const specialFolder = rootData?.folders?.find((folder: any) => folder.id === targetFolderId)
