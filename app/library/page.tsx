@@ -685,8 +685,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const proctorUrls = useMemo(() => {
     if (!previewDoc) return { preview: '', download: '', driveOpen: '' };
     return {
-      preview: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/preview`,
-      download: `https://drive.google.com/uc?export=download&id=${previewDoc.drive_file_id}`,
+      preview: `/api/drive/stream?fileId=${previewDoc.drive_file_id}`,
+      download: `/api/drive/stream?fileId=${previewDoc.drive_file_id}&download=1`,
       driveOpen: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/view`
     };
   }, [previewDoc])
