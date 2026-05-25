@@ -236,11 +236,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const isItemVisibleInScope = (item: any, itemKind: 'folder' | 'document', scope: LibraryScope, rootFolderId: string | null, userIdOverride?: string | null) => {
-    if (!isStudentLibrary) return true
-
     const effectiveUserId = userIdOverride ?? currentUserId
     const ownedByCurrentUser = !!effectiveUserId && item?.created_by === effectiveUserId
     const isStudentRootContainer = itemKind === 'folder' && item?.id === studentUploadFolderId
+
+    if (!effectiveUserId) return true
 
     if (scope === 'private') {
       if (rootFolderId === null) return isStudentRootContainer || ownedByCurrentUser
@@ -538,7 +538,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   }
 
   const handleOpenFolder = async (folderId: string, folderName: string) => {
-    if (isStudentLibrary && libraryScope === 'private' && folderId !== studentUploadFolderId && !folderPath.some(step => step.id === studentUploadFolderId)) return
+    if (libraryScope === 'private' && folderId !== studentUploadFolderId && !folderPath.some(step => step.id === studentUploadFolderId) && currentUserId && folderId && !folderPath.some(step => step.id === folderId)) return
     setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
     setFolderPath([...folderPath, { id: folderId, name: folderName }])
     await fetchContents(folderId)
@@ -1077,11 +1077,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
               {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
             </button>
 
-            {isStudentLibrary && (
-              <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                {libraryScope === 'private' ? <><Unlock className="w-5 h-5" /> Cloud riêng</> : <><Lock className="w-5 h-5" /> Cloud chung</>}
-              </button>
-            )}
+            <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`}>
+              {libraryScope === 'private' ? <><Unlock className="w-5 h-5" /> Cloud riêng</> : <><Lock className="w-5 h-5" /> Cloud chung</>}
+            </button>
 
             {canManageLibrary && (
               <>
