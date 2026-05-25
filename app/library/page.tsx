@@ -90,6 +90,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
   const searchDebounceRef = useRef<number | null>(null)
   const searchRequestRef = useRef(0)
+  const fetchContentsRequestRef = useRef(0)
   const [isEmbedPreview, setIsEmbedPreview] = useState(false)
   const studentFolderEnsureRef = useRef(false)
 
@@ -265,6 +266,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     setSelectedItems([])
     setIsSelectMode(false)
     setClipboard(null)
+    setFolders([])
+    setDocuments([])
     setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
     await fetchContents(null, nextScope, nextUserId)
   }
@@ -480,15 +483,21 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const fetchContents = async (folderId: string | null, scopeOverride?: LibraryScope, userIdOverride?: string | null) => {
     const effectiveScope = scopeOverride || libraryScope
     const effectiveUserId = userIdOverride || currentUserId
+    const requestId = ++fetchContentsRequestRef.current
 
     const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
-    if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null);
-    
+    if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null)
+
     const docQuery = supabase.from('library_documents').select('*').order('created_at', { ascending: false })
-    if (folderId) docQuery.eq('folder_id', folderId); else docQuery.is('folder_id', null);
+    if (folderId) docQuery.eq('folder_id', folderId); else docQuery.is('folder_id', null)
 
     const [folderRes, docRes] = await Promise.all([folderQuery, docQuery])
     const fdata = folderRes.data || []
+    const docsWithSecurity = (docRes.data || []).map((doc: any) => ({
+      ...doc,
+      _security: getDocumentSecurity(doc)
+    }))
+
     const visibleFolders = fdata.filter(folder => {
       if (effectiveScope === 'private' && isStudentLibrary) {
         if (folderId === null) return folder.id === studentUploadFolderId || (effectiveUserId && folder.created_by === effectiveUserId)
@@ -502,39 +511,38 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
       return true
     })
 
-    setFolders(visibleFolders)
-    // Đồng bộ màu/icon từ DB vào trạng thái client và localStorage
-    try {
-      const map: Record<string, { color?: string, icon?: string }> = {}
-      for (const f of fdata) {
-        if (f.id && (f.color || f.icon)) map[f.id] = { color: f.color, icon: f.icon }
-      }
-      if (Object.keys(map).length > 0) {
-        setFolderCustomizations(map)
-        try { localStorage.setItem('library_folder_customizations', JSON.stringify(map)) } catch (e) {}
-      }
-    } catch (e) { /* ignore */ }
-    const docsWithSecurity = (docRes.data || []).map((doc: any) => ({
-      ...doc,
-      _security: getDocumentSecurity(doc)
-    }))
     const visibleDocs = docsWithSecurity.filter((doc: any) => (isAdmin || !doc._security?.hidden) && isItemVisibleInScope(doc, 'document', effectiveScope, folderId, effectiveUserId))
-    setDocuments(visibleDocs)
 
-    const nextSecurity: DocumentSecurityMap = {}
-    for (const doc of docsWithSecurity) {
-      if (doc._security && (doc._security.hidden || doc._security.passwordHash)) {
-        nextSecurity[doc.id] = doc._security
-      }
-    }
-    setDocumentSecurity(prev => {
-      const merged = { ...prev }
+    if (requestId === fetchContentsRequestRef.current) {
+      setFolders(visibleFolders)
+      // Đồng bộ màu/icon từ DB vào trạng thái client và localStorage
+      try {
+        const map: Record<string, { color?: string, icon?: string }> = {}
+        for (const f of fdata) {
+          if (f.id && (f.color || f.icon)) map[f.id] = { color: f.color, icon: f.icon }
+        }
+        if (Object.keys(map).length > 0) {
+          setFolderCustomizations(map)
+          try { localStorage.setItem('library_folder_customizations', JSON.stringify(map)) } catch (e) {}
+        }
+      } catch (e) { /* ignore */ }
+      setDocuments(visibleDocs)
+
+      const nextSecurity: DocumentSecurityMap = {}
       for (const doc of docsWithSecurity) {
-        if (nextSecurity[doc.id]) merged[doc.id] = nextSecurity[doc.id]
-        else delete merged[doc.id]
+        if (doc._security && (doc._security.hidden || doc._security.passwordHash)) {
+          nextSecurity[doc.id] = doc._security
+        }
       }
-      return merged
-    })
+      setDocumentSecurity(prev => {
+        const merged = { ...prev }
+        for (const doc of docsWithSecurity) {
+          if (nextSecurity[doc.id]) merged[doc.id] = nextSecurity[doc.id]
+          else delete merged[doc.id]
+        }
+        return merged
+      })
+    }
 
     return { folders: visibleFolders, documents: visibleDocs }
   }
