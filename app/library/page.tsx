@@ -104,6 +104,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const canManageLibrary = userRole === 'admin' || userRole === 'collab'
   const isStudentLibrary = userRole === 'student'
   const canManageItem = (item: any) => canManageLibrary || (!!currentUserId && item?.created_by === currentUserId)
+  const showAdminControls = canManageLibrary || (isStudentLibrary && libraryScope === 'private')
 
   const encodeDocumentSecurity = (security: DocumentSecurity) => {
     if (!security.hidden && !security.passwordHash) return null
@@ -1110,7 +1111,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
               {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
             </button>
 
-            {(isStudentLibrary || canManageLibrary) && (
+            {isStudentLibrary && (
               <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`} title={libraryScope === 'private' ? 'Chuyển sang cloud chung' : 'Chuyển sang cloud riêng'}>
                 {libraryScope === 'private' ? <><Unlock className="w-4 h-4" /> Riêng</> : <><Lock className="w-4 h-4" /> Chung</>}
               </button>
@@ -1119,7 +1120,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
             {
               /* Admin/collab-only controls */
             }
-            {canManageLibrary && (
+            {showAdminControls && (
               <>
                 {/* Sắp xếp A-Z */}
                 <button onClick={() => setSortByName(!sortByName)} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${sortByName ? 'bg-indigo-100 text-indigo-700 border-indigo-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
@@ -1141,17 +1142,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                 </>
               </>
             )}
-            {/* Allow regular users to create/upload in their private space */}
-            {!canManageLibrary && currentUserId && (
-              <>
-                <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center center gap-2 shadow-sm hover:bg-white/60 transition-colors">
-                  <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
-                </button>
-                <button onClick={() => setShowDocModal(true)} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(37,99,235,0.3)] transition-colors">
-                  <UploadCloud className="w-5 h-5" /> Tải Lên
-                </button>
-              </>
-            )}
+            {/* Create/upload buttons are shown via `showAdminControls` (admin or student-private) */}
           </div>
         </div>
 
@@ -1174,7 +1165,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                       const isSelected = selectedItems.some(i => i.id === folder.id);
                       return (
                         <div key={folder.id} 
-                            draggable={!isSelectMode && canManageLibrary}
+                          draggable={!isSelectMode && showAdminControls}
                             onDragStart={(e) => handleDragStart(e, folder.id, 'folder')}
                             onDragOver={(e) => { if (!isSelectMode) { e.preventDefault(); setDragOverId(folder.id); } }}
                             onDragLeave={() => setDragOverId(null)}
@@ -1192,7 +1183,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                           )}
 
                           {/* Settings quick action (admin/collab) */}
-                          {canManageLibrary && (
+                          {showAdminControls && (
                             <button onClick={(e) => { e.stopPropagation(); openFolderSettings(folder) }} className="absolute top-2 left-2 p-1 rounded-lg bg-white/60 dark:bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Palette className="w-4 h-4 text-slate-600 dark:text-slate-200" />
                             </button>
@@ -1227,7 +1218,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                       const locked = isDocumentLocked(doc)
                       return (
                         <div key={doc.id} 
-                            draggable={!isSelectMode && canManageLibrary}
+                          draggable={!isSelectMode && showAdminControls}
                             onDragStart={(e) => handleDragStart(e, doc.id, 'document')}
                             onClick={(e) => {
                               if (isSelectMode) { 
