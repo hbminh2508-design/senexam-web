@@ -1110,7 +1110,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
               {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
             </button>
 
-            {isStudentLibrary && (
+            {(isStudentLibrary || canManageLibrary) && (
               <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`} title={libraryScope === 'private' ? 'Chuyển sang cloud chung' : 'Chuyển sang cloud riêng'}>
                 {libraryScope === 'private' ? <><Unlock className="w-4 h-4" /> Riêng</> : <><Lock className="w-4 h-4" /> Chung</>}
               </button>
