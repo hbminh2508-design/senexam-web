@@ -7,7 +7,7 @@ import {
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
   UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
   ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink,
-  Image, Video, Music, Palette, Lock, Unlock, Eye, EyeOff
+  Image, Video, Music, Palette, Lock, Unlock, Eye, EyeOff, Cloud, Library, Home
 } from 'lucide-react'
 
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -105,6 +105,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const isStudentLibrary = userRole === 'student'
   const canManageItem = (item: any) => canManageLibrary || (!!currentUserId && item?.created_by === currentUserId)
   const showAdminControls = canManageLibrary || (isStudentLibrary && libraryScope === 'private')
+  const getLibraryRootLabel = (scope: LibraryScope = libraryScope) => scope === 'private' ? 'SenCloud' : 'SenLib'
+  const getHomeLabel = () => 'Sen Home'
 
   const encodeDocumentSecurity = (security: DocumentSecurity) => {
     if (!security.hidden && !security.passwordHash) return null
@@ -271,7 +273,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     setClipboard(null)
     setFolders([])
     setDocuments([])
-    setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+    setFolderPath([{ id: null, name: getHomeLabel() }])
     await fetchContents(null, nextScope, nextUserId)
   }
 
@@ -313,13 +315,13 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         const targetFolderId = await ensureStudentUploadFolder(rootData?.folders || [])
         if (targetFolderId) {
           const specialFolder = rootData?.folders?.find((folder: any) => folder.id === targetFolderId)
-          setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }, { id: targetFolderId, name: specialFolder?.name || STUDENT_UPLOAD_FOLDER_NAME }])
+          setFolderPath([{ id: null, name: getHomeLabel() }, { id: targetFolderId, name: specialFolder?.name || STUDENT_UPLOAD_FOLDER_NAME }])
           await fetchContents(targetFolderId, initialScope, user.id)
         } else {
-          setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+          setFolderPath([{ id: null, name: getHomeLabel() }])
         }
       } else {
-        setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+        setFolderPath([{ id: null, name: getHomeLabel() }])
       }
 
       setLoading(false)
@@ -370,15 +372,15 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
           const allowsFolder = !isStudentLibrary || libraryScope === 'shared' || chain.some(step => step.id === studentUploadFolderId)
 
           if (chain.length > 0 && allowsFolder) {
-            const rootPath = [{ id: null, name: 'Trang chủ Thư viện' }, ...chain]
+            const rootPath = [{ id: null, name: getHomeLabel() }, ...chain]
             setFolderPath(rootPath)
             await fetchContents(chain[chain.length - 1].id)
           } else if (!previewId) {
-            setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+            setFolderPath([{ id: null, name: getHomeLabel() }])
             await fetchContents(null)
           }
         } else if (!previewId) {
-          setFolderPath([{ id: null, name: 'Trang chủ Thư viện' }])
+          setFolderPath([{ id: null, name: getHomeLabel() }])
           await fetchContents(null)
         }
       } catch (e) { /* ignore */ }
@@ -1075,10 +1077,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex-1">
             <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors mb-3">
-              <ArrowLeft className="w-4 h-4" /> Về trang chủ
+              <Home className="w-4 h-4" /> Sen Home
             </button>
             <h1 className="text-4xl font-black tracking-tight drop-shadow-sm flex items-center gap-3 mb-4">
-              Thư Viện Số <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              {getLibraryRootLabel()} {libraryScope === 'private' ? <Cloud className="w-8 h-8 text-cyan-500 dark:text-cyan-400" /> : <Library className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />}
             </h1>
             
             {/* Breadcrumb đường dẫn */}
@@ -1112,8 +1114,12 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
             </button>
 
             {isStudentLibrary && (
-              <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${libraryScope === 'private' ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white'}`} title={libraryScope === 'private' ? 'Chuyển sang cloud chung' : 'Chuyển sang cloud riêng'}>
-                {libraryScope === 'private' ? <><Unlock className="w-4 h-4" /> Riêng</> : <><Lock className="w-4 h-4" /> Chung</>}
+              <button
+                onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')}
+                className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all backdrop-blur-md border ${libraryScope === 'private' ? 'border-cyan-200/80 dark:border-cyan-900/60 bg-cyan-50/65 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100/75 dark:hover:bg-cyan-900/50' : 'border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/65 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/75 dark:hover:bg-emerald-900/50'}`}
+                title={libraryScope === 'private' ? 'Chuyển sang SenLib' : 'Chuyển sang SenCloud'}
+              >
+                {libraryScope === 'private' ? <><Unlock className="w-4 h-4" /> SenCloud</> : <><Lock className="w-4 h-4" /> SenLib</>}
               </button>
             )}
 
