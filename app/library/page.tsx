@@ -107,6 +107,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
   const showAdminControls = canManageLibrary || (isStudentLibrary && libraryScope === 'private')
   const getLibraryRootLabel = (scope: LibraryScope = libraryScope) => scope === 'private' ? 'SenCloud' : 'SenLib'
   const getHomeLabel = () => 'Sen Home'
+  const headerButtonBase = 'w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all backdrop-blur-md border border-white/60 dark:border-slate-700 bg-white/35 dark:bg-slate-800/55 text-slate-900 dark:text-white hover:bg-white/55 dark:hover:bg-slate-800/70'
 
   const encodeDocumentSecurity = (security: DocumentSecurity) => {
     if (!security.hidden && !security.passwordHash) return null
@@ -597,10 +598,14 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
     try {
       setUploadStatus({ type: 'uploading', message: `Bắt đầu xử lý ${docFiles.length} tài liệu...` })
       const { data: { user } } = await supabase.auth.getUser()
-      const uploadFolderId = userRole === 'student' ? studentUploadFolderId : currentFolderId
+      let uploadFolderId = currentFolderId
 
       if (userRole === 'student' && !uploadFolderId) {
-        throw new Error('Chưa tạo được thư mục dành cho student.')
+        uploadFolderId = studentUploadFolderId || await ensureStudentUploadFolder(folders)
+      }
+
+      if (!uploadFolderId) {
+        throw new Error('Chưa xác định được thư mục đích để tải lên.')
       }
 
       for (let i = 0; i < docFiles.length; i++) {
@@ -1109,14 +1114,14 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
               <button onClick={() => globalSearch(searchQuery)} title="Tìm kiếm toàn cục" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">{searchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}</button>
             </div>
 
-            <button onClick={() => setIsCompact(!isCompact)} className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isCompact ? 'bg-slate-100 dark:bg-slate-800 text-slate-900' : 'bg-white/40 dark:bg-slate-800/50'}`}>
+            <button onClick={() => setIsCompact(!isCompact)} className={`${headerButtonBase} ${isCompact ? 'ring-1 ring-slate-300/70 dark:ring-slate-600/70' : ''}`}>
               {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
             </button>
 
             {isStudentLibrary && (
               <button
                 onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')}
-                className={`w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all backdrop-blur-md border ${libraryScope === 'private' ? 'border-cyan-200/80 dark:border-cyan-900/60 bg-cyan-50/65 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100/75 dark:hover:bg-cyan-900/50' : 'border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/65 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/75 dark:hover:bg-emerald-900/50'}`}
+                className={`${headerButtonBase} ${libraryScope === 'private' ? 'border-cyan-200/80 dark:border-cyan-900/60 bg-cyan-50/65 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100/75 dark:hover:bg-cyan-900/50' : 'border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/65 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/75 dark:hover:bg-emerald-900/50'}`}
                 title={libraryScope === 'private' ? 'Chuyển sang SenLib' : 'Chuyển sang SenCloud'}
               >
                 {libraryScope === 'private' ? <><Unlock className="w-4 h-4" /> SenCloud</> : <><Lock className="w-4 h-4" /> SenLib</>}
@@ -1129,20 +1134,20 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
             {showAdminControls && (
               <>
                 {/* Sắp xếp A-Z */}
-                <button onClick={() => setSortByName(!sortByName)} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${sortByName ? 'bg-indigo-100 text-indigo-700 border-indigo-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
+                <button onClick={() => setSortByName(!sortByName)} className={`${headerButtonBase} ${sortByName ? 'border-indigo-300 bg-indigo-100/80 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/60' : ''}`}>
                   <ArrowUpDown className="w-5 h-5" /> {sortByName ? 'Xếp theo Ngày' : 'Gọn gàng (A-Z)'}
                 </button>
 
                 {/* Sắp xếp (Chọn nhiều) */}
-                <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`w-full sm:w-auto px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${isSelectMode ? 'bg-amber-100 text-amber-700 border-amber-300 border' : 'bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white hover:bg-white/60'}`}>
+                <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`${headerButtonBase} ${isSelectMode ? 'border-amber-300 bg-amber-100/80 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60' : ''}`}>
                   <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp (Chọn)'}
                 </button>
 
                 <>
-                  <button onClick={() => setShowFolderModal(true)} className="w-full sm:w-auto bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/60 dark:border-slate-700 text-slate-900 dark:text-white px-5 py-3 rounded-2xl font-bold flex items-center center gap-2 shadow-sm hover:bg-white/60 transition-colors">
+                  <button onClick={() => setShowFolderModal(true)} className={headerButtonBase}>
                     <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
                   </button>
-                  <button onClick={() => setShowDocModal(true)} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(37,99,235,0.3)] transition-colors">
+                  <button onClick={() => setShowDocModal(true)} className={`${headerButtonBase} bg-blue-600 hover:bg-blue-700 text-white border-blue-500/40 dark:border-blue-400/30`}>
                     <UploadCloud className="w-5 h-5" /> Tải Lên
                   </button>
                 </>
