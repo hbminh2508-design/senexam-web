@@ -11,8 +11,6 @@ import {
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
-
-// 🌟 GỌI BỘ NÃO AI OFFLINE VÀO TRANG MỘT CÁCH GỌN GÀNG
 import ChatOffline from '@/app/components/ChatOffline'
 
 const PROVINCES = [
@@ -29,8 +27,8 @@ const EXAMS = ['THPTQG', 'HSA', 'TSA', 'SPT']
 const THPTQG_SUBJECTS = ['Toán', 'Ngữ Văn', 'Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí', 'Tiếng Anh', 'GDKT&PL', 'Tin Học', 'Công Nghệ']
 const HSA_SCIENCE_SUBJECTS = ['Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí']
 
-const glassCardStyles = "liquid-panel relative"
-const glassButtonStyles = "liquid-button liquid-badge transition-all duration-300 hover:scale-[1.02] hover:bg-white/80 dark:hover:bg-slate-700/70 active:scale-95"
+const glassCardStyles = "liquid-panel relative bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl backdrop-saturate-[1.5] border-white/60 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)]"
+const glassButtonStyles = "liquid-button liquid-badge transition-all duration-300 hover:scale-[1.02] hover:bg-white/80 dark:hover:bg-slate-700/70 active:scale-95 shadow-sm"
 const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
 
 export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
@@ -399,13 +397,14 @@ export default function DashboardPage() {
   return (
     <div className="app-shell min-h-screen bg-transparent p-4 md:p-8 relative text-slate-900 dark:text-slate-100 transition-colors duration-500 overflow-x-hidden font-sans">
       
+      {/* Nền đồ họa Background Ambient */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-blue-400/25 to-indigo-400/20 dark:from-blue-800/35 dark:to-indigo-900/20 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[120px] opacity-80 bounce-float pointer-events-none"></div>
       <div className="fixed top-[25%] right-[-10%] w-[500px] h-[500px] bg-gradient-to-tr from-purple-400/24 to-pink-400/20 dark:from-purple-800/28 dark:to-pink-900/18 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-70 bounce-float-delayed pointer-events-none"></div>
       <div className="fixed bottom-[-15%] left-[20%] w-[700px] h-[700px] bg-gradient-to-t from-emerald-300/20 to-teal-400/14 dark:from-emerald-900/25 dark:to-teal-900/18 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[150px] opacity-70 bounce-float pointer-events-none" style={{ animationDelay: '4s' }}></div>
 
       {showCodeModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-           <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 relative shadow-2xl`}>
+           <div className={`${glassCardStyles} rounded-3xl w-full max-w-sm p-8 relative shadow-2xl`}>
               <button onClick={() => setShowCodeModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
               <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center mb-4"><KeyRound className="w-6 h-6 text-blue-600 dark:text-blue-400"/></div>
               <h3 className="text-2xl font-black mb-2">Đề thi nội bộ</h3>
@@ -426,11 +425,11 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="relative z-10 p-4 md:p-6 max-w-[1400px] mx-auto">
+      <div className="relative z-10 max-w-[1400px] mx-auto">
         
         {showOnboarding && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md transition-all">
-             <div className={`${glassCardStyles} rounded-[2rem] w-full max-w-5xl max-h-[95vh] overflow-y-auto custom-scrollbar border-t-white/70 border-l-white/70 dark:border-t-white/20 dark:border-l-white/20`}>
+             <div className={`${glassCardStyles} rounded-[2rem] w-full max-w-5xl max-h-[95vh] overflow-y-auto custom-scrollbar`}>
               <div className="p-8 md:p-10">
                 <div className="mb-8 flex justify-between items-start">
                   <div>
@@ -587,8 +586,10 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* MÀN HÌNH DASHBOARD ĐIỀU KHIỂN CHÍNH */}
         <div className={`transition-all duration-500 ${(showOnboarding || showProfile || showCodeModal || showNotifications) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}`}>
           
+          {/* HEADER NAV QUẢN TRỊ NGƯỜI DÙNG */}
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-3 md:gap-4">
             <div className="flex items-center gap-2.5 cursor-pointer select-none group shrink-0" onClick={() => router.push('/dashboard')}>
               <div className="w-10 h-10 bg-gradient-to-br from-white/60 to-white/40 dark:from-slate-800/80 dark:to-slate-900/60 border border-white/60 dark:border-white/10 rounded-xl flex items-center justify-center p-1 backdrop-blur-lg shadow-sm group-hover:scale-105 group-hover:shadow-md transition-all duration-300">
@@ -599,21 +600,22 @@ export default function DashboardPage() {
                   SenExam<span className="text-blue-600 dark:text-blue-400 drop-shadow-md">.ME</span>
                 </h1>
                 <span className="text-[8px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
-                  Nền tảng Học và Thi trực tuyến miễn phí
+                  Nền tảng Học và Thi trực tuyến
                 </span>
               </div>
             </div>
             
             <div className="flex gap-2 items-center flex-wrap">
               <div className="relative w-full sm:w-80 shrink-0 z-50">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                <input value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGlobalSearch() } }} placeholder="Tìm nhanh tài liệu hoặc đề..." className={`${glassSearchInputClass} pl-9 pr-10 py-2`} />
-                <button onClick={() => handleGlobalSearch()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                <input value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleGlobalSearch() } }} placeholder="Tìm nhanh tài liệu hoặc đề..." className={`${glassSearchInputClass} pl-9 pr-10 py-2 border-white/60 dark:border-white/10 text-slate-900 dark:text-white`} />
+                <button onClick={() => handleGlobalSearch()} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 dark:bg-slate-700/50 hover:bg-white/40 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors">
                   {globalSearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 </button>
 
+                {/* SEARCH RESULTS DROPDOWN */}
                 {showGlobalResults && globalQuery.trim().length >= 2 && (
-                  <div className={`${glassSearchPanelClass} z-50`}>
+                  <div className={`${glassSearchPanelClass} z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-3xl border border-white/60 dark:border-white/10 shadow-2xl`}>
                     <div className="p-3 max-h-80 overflow-y-auto custom-scrollbar">
                       {globalSearchLoading && (
                         <div className="py-2 px-2 text-sm text-slate-500 flex items-center gap-2">
@@ -624,7 +626,7 @@ export default function DashboardPage() {
                         <div className="mb-2">
                           <div className="px-2 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Thư mục</div>
                           {globalFoldersResults.map(folder => (
-                            <div key={folder.id} onClick={() => { router.push(`/library?folder=${folder.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between">
+                            <div key={folder.id} onClick={() => { router.push(`/library?folder=${folder.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between text-slate-900 dark:text-slate-100">
                               <div className="min-w-0">
                                 <div className="font-bold text-sm truncate">{highlightSearchText(folder.name || 'Không tên', deferredGlobalQuery)}</div>
                                 <div className="text-[11px] text-slate-500 truncate">Thư mục nội bộ</div>
@@ -641,7 +643,7 @@ export default function DashboardPage() {
                             <div
                               key={d.id}
                               onClick={() => { router.push(`/library?preview=${d.id}`); setShowGlobalResults(false) }}
-                              className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between"
+                              className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 flex items-center justify-between text-slate-900 dark:text-slate-100"
                             >
                               <div className="min-w-0">
                                 <div className="font-bold text-sm truncate">{highlightSearchText(d.title || 'Không tên', deferredGlobalQuery)}</div>
@@ -656,7 +658,7 @@ export default function DashboardPage() {
                         <div>
                           <div className="px-2 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Đề thi</div>
                           {globalExamsResults.map(e => (
-                            <div key={e.id} onClick={() => { router.push(`/exams/${e.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2">
+                            <div key={e.id} onClick={() => { router.push(`/exams/${e.id}`); setShowGlobalResults(false) }} className="py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md px-2 text-slate-900 dark:text-slate-100">
                               <div className="font-bold text-sm">{highlightSearchText(e.title || 'Không tên', deferredGlobalQuery)}</div>
                               <div className="text-[11px] text-slate-500">Đề thi • {highlightSearchText(e.exam_type || 'Không rõ', deferredGlobalQuery)}{e.folder_name ? ` • ${e.folder_name}` : ''}</div>
                             </div>
@@ -670,29 +672,26 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-              <button onClick={() => router.push('/forum')} className={`${glassButtonStyles} flex items-center justify-center gap-1.5 px-4 py-2 text-blue-600 dark:text-blue-400 rounded-xl font-bold text-xs md:text-sm`}>
-                <MessageSquare className="w-4 h-4" /> <span className="hidden sm:inline">Forum</span>
+
+              {/* ACTION BUTTONS */}
+              <button onClick={() => router.push('/announcements')} className={`${glassButtonStyles} flex items-center justify-center p-2 text-red-500 dark:text-red-400 rounded-xl transition-all border border-white/60 dark:border-white/10`} title="Thông báo">
+                <Bell className="w-4 h-4" />
               </button>
-              
+
               {(userRole === 'admin' || userRole === 'collab') && (
-                <>
-                  <button onClick={() => router.push('/announcements')} className={`${glassButtonStyles} flex items-center justify-center p-2 text-red-500 dark:text-red-400 rounded-xl transition-all`} title="Thông báo">
-                    <Bell className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => router.push('/admin')} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-500/80 to-orange-500/80 hover:from-red-600 hover:to-orange-600 backdrop-blur-lg border border-red-400/30 text-white rounded-xl shadow-md font-bold text-xs md:text-sm transition-all hover:shadow-lg active:scale-95">
-                    <ShieldCheck className="w-4 h-4" /> <span className="hidden sm:inline">Admin</span>
-                  </button>
-                </>
+                <button onClick={() => router.push('/admin')} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-500/90 to-orange-500/90 hover:from-red-600 hover:to-orange-600 backdrop-blur-lg border border-red-400/30 dark:border-red-900/30 text-white rounded-xl shadow-md font-bold text-xs md:text-sm transition-all hover:shadow-lg active:scale-95">
+                  <ShieldCheck className="w-4 h-4" /> <span className="hidden sm:inline">Admin</span>
+                </button>
               )}
 
-              <button onClick={() => setShowProfile(true)} className={`${glassButtonStyles} flex items-center justify-center gap-1.5 px-4 py-2 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs md:text-sm`}><Settings className="w-4 h-4" /></button>
-              <button onClick={handleLogout} className={`${glassButtonStyles} flex items-center justify-center p-2 text-red-600 dark:text-red-400 rounded-xl font-bold`}><LogOut className="w-4 h-4" /></button>
+              <button onClick={() => setShowProfile(true)} className={`${glassButtonStyles} flex items-center justify-center gap-1.5 px-4 py-2 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs md:text-sm border border-white/60 dark:border-white/10`}><Settings className="w-4 h-4" /></button>
+              <button onClick={handleLogout} className={`${glassButtonStyles} flex items-center justify-center p-2 text-rose-600 dark:text-rose-400 rounded-xl font-bold border border-white/60 dark:border-white/10`}><LogOut className="w-4 h-4" /></button>
             </div>
           </div>
 
           {activeAnnouncement && (
             <div className="mb-6 w-full animate-in fade-in slide-in-from-top-2 duration-500 relative z-20">
-              <div className="bg-gradient-to-br from-white/50 to-white/30 dark:from-slate-800/60 dark:to-slate-900/40 backdrop-blur-2xl backdrop-saturate-150 border border-white/60 dark:border-white/10 rounded-2xl p-6 md:p-8 shadow-lg relative overflow-hidden group hover:shadow-xl transition-all">
+              <div className="bg-gradient-to-br from-white/60 to-white/40 dark:from-slate-800/80 dark:to-slate-900/60 backdrop-blur-2xl backdrop-saturate-150 border border-white/60 dark:border-white/10 rounded-2xl p-6 md:p-8 shadow-lg relative overflow-hidden group hover:shadow-xl transition-all">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500"></div>
                 <div className="absolute -right-32 -top-32 w-64 h-64 bg-red-500/10 rounded-full blur-3xl group-hover:bg-red-500/15 transition-colors"></div>
                 <div className="relative z-10"><AnnouncementRenderer text={activeAnnouncement} /></div>
@@ -700,16 +699,17 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-5">
+          {/* 🌟 CẤU TRÚC GRID BENTO CHÍNH GIỮA */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 md:gap-5">
             
-            {/* Hero Card - Main Feature */}
-            <div className="md:col-span-3 lg:col-span-4 bg-gradient-to-br from-blue-500/65 via-indigo-500/55 to-cyan-500/45 dark:from-blue-700/55 dark:via-indigo-800/45 dark:to-cyan-900/30 backdrop-blur-3xl backdrop-saturate-150 rounded-2xl p-7 md:p-8 text-white relative overflow-hidden shadow-[0_12px_36px_rgba(37,99,235,0.24)] hover:shadow-[0_16px_42px_rgba(37,99,235,0.3)] transition-all group border border-white/45 dark:border-white/10">
+            {/* 🎯 HERO BANNER CARD (Chinh phục kỳ thi) - CHIẾM 4 CỘT TRÊN DESKTOP */}
+            <div className="md:col-span-2 lg:col-span-4 bg-gradient-to-br from-blue-500/80 via-indigo-500/70 to-cyan-500/60 dark:from-blue-700/60 dark:via-indigo-800/50 dark:to-cyan-900/40 backdrop-blur-3xl backdrop-saturate-150 rounded-2xl p-7 md:p-8 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all group border border-white/45 dark:border-white/10">
               <div className="absolute inset-0 bg-gradient-to-tr from-white/10 via-transparent to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
               <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl group-hover:blur-2xl transition-all"></div>
               
               <div className="relative z-10 h-full flex flex-col justify-between">
                 <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-lg rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-white/30 shadow-sm">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 dark:bg-slate-900/30 backdrop-blur-lg rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-white/30 dark:border-white/10 shadow-sm text-white">
                     <Zap className="w-3 h-3 text-yellow-300 fill-yellow-300" /> Sẵn sàng
                   </div>
                   <h2 className="text-3xl md:text-4xl font-extrabold mb-3 leading-tight drop-shadow-md tracking-tight">
@@ -720,140 +720,144 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 
-                <div className="flex flex-wrap items-center gap-2 pt-2">
-                  <button onClick={() => router.push('/exams')} className="bg-white/25 hover:bg-white/35 backdrop-blur-xl border border-white/40 text-white px-5 py-2.5 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 group/btn text-sm transition-all active:scale-95">
+                <div className="flex flex-wrap items-center gap-2 pt-4">
+                  <button onClick={() => router.push('/exams')} className="bg-white/25 hover:bg-white/35 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-xl border border-white/40 dark:border-white/20 text-white px-5 py-2.5 rounded-xl font-bold shadow-md flex items-center justify-center gap-2 group/btn text-sm transition-all active:scale-95">
                     <Target className="w-4 h-4 group-hover/btn:scale-110 transition-transform" /> Kho đề <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
                   </button>
-                  <button onClick={() => setShowCodeModal(true)} className="bg-white/15 hover:bg-white/25 backdrop-blur-xl border border-white/30 text-white px-4 py-2.5 rounded-xl font-bold shadow-sm flex items-center justify-center gap-1.5 text-sm transition-all">
-                    <KeyRound className="w-4 h-4" /> Code
+                  <button onClick={() => setShowCodeModal(true)} className="bg-white/15 hover:bg-white/25 dark:bg-slate-900/20 dark:hover:bg-slate-900/40 backdrop-blur-xl border border-white/30 dark:border-white/10 text-white px-4 py-2.5 rounded-xl font-bold shadow-sm flex items-center justify-center gap-1.5 text-sm transition-all hover:scale-105 active:scale-95">
+                    <KeyRound className="w-4 h-4" /> Nhập Code
                   </button>
                 </div>
               </div>
-              <BookOpen className="absolute -right-10 -bottom-10 w-48 h-48 text-white/8 blur-sm" />
+              <BookOpen className="absolute -right-10 -bottom-10 w-48 h-48 text-white/10 blur-sm" />
             </div>
 
-            {/* Stats Cards */}
-            <div className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-between border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md transition-all group`}>
+            {/* 🏆 STATS CARD 1: ĐIỂM CAO NHẤT */}
+            <div className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-between hover:-translate-y-1 transition-all group lg:col-span-1`}>
               <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-gradient-to-br from-orange-400/30 to-red-500/30 text-orange-600 dark:text-orange-400 rounded-lg backdrop-blur-md border border-orange-200/50 dark:border-orange-500/20 shadow-inner group-hover:scale-105 transition-transform">
+                <div className="p-3 bg-gradient-to-br from-orange-400/30 to-red-500/30 text-orange-600 dark:text-orange-400 rounded-lg backdrop-blur-md border border-orange-200/50 dark:border-orange-500/20 shadow-inner group-hover:scale-110 transition-transform duration-300">
                   <Trophy className="w-6 h-6 drop-shadow-md" />
                 </div>
               </div>
               <div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 font-bold mb-1 uppercase tracking-widest drop-shadow-sm">Điểm cao nhất</p>
-                <p className="text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm tracking-tight">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-1 uppercase tracking-widest drop-shadow-sm">Điểm cao nhất</p>
+                <p className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm tracking-tight">
                   {studentHistoryList.length > 0 ? `${Math.max(...studentHistoryList.map(s => s.score || 0))}` : '--'}
                 </p>
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-between border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md transition-all group`}>
+            {/* 📚 STATS CARD 2: SỐ BÀI ĐÃ LÀM */}
+            <div className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-between hover:-translate-y-1 transition-all group lg:col-span-1`}>
               <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-gradient-to-br from-emerald-400/30 to-green-500/30 text-emerald-600 dark:text-emerald-400 rounded-lg backdrop-blur-md border border-emerald-200/50 dark:border-emerald-500/20 shadow-inner group-hover:scale-105 transition-transform">
+                <div className="p-3 bg-gradient-to-br from-emerald-400/30 to-teal-500/30 text-emerald-600 dark:text-emerald-400 rounded-lg backdrop-blur-md border border-emerald-200/50 dark:border-emerald-500/20 shadow-inner group-hover:scale-110 transition-transform duration-300">
                   <BookOpen className="w-6 h-6 drop-shadow-md" />
                 </div>
               </div>
               <div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 font-bold mb-1 uppercase tracking-widest drop-shadow-sm">Bài làm</p>
-                <p className="text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm tracking-tight">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-1 uppercase tracking-widest drop-shadow-sm">Bài đã làm</p>
+                <p className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white drop-shadow-sm tracking-tight">
                   {studentHistoryList.length}
                 </p>
               </div>
             </div>
 
+            {/* 🎧 FOCUS ROOM CARD - FULL WIDTH NẰM DƯỚI BENTO CẤP 1 */}
             <div 
               onClick={() => router.push('/focus')}
-              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex items-center justify-between gap-4 border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-6`}
+              className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex items-center justify-between gap-4 hover:shadow-lg hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative`}
             >
-              <div className="absolute -right-10 -top-10 w-36 h-36 bg-violet-400/14 dark:bg-violet-600/14 rounded-full blur-3xl group-hover:bg-violet-400/22 transition-colors"></div>
+              <div className="absolute -right-10 -top-10 w-36 h-36 bg-violet-400/15 dark:bg-violet-600/10 rounded-full blur-3xl group-hover:bg-violet-400/25 transition-colors"></div>
               <div className="relative z-10 flex items-center gap-4 min-w-0">
-                <div className="p-3.5 bg-gradient-to-br from-violet-400/30 to-fuchsia-500/30 text-violet-600 dark:text-violet-400 rounded-xl border border-violet-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+                <div className="p-3.5 bg-gradient-to-br from-violet-400/30 to-fuchsia-500/30 text-violet-600 dark:text-violet-400 rounded-xl border border-violet-200/30 dark:border-violet-500/20 shadow-inner group-hover:scale-110 transition-transform shrink-0">
                   <Music2 className="w-6 h-6 drop-shadow-md" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
-                    Focus Room <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                    Phòng Tập Trung <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                   </h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
-                    Phòng tập trung với thư viện, timer và lo-fi chill
+                  <p className="text-slate-500 dark:text-slate-400 text-xs font-medium leading-relaxed truncate">
+                    Đồng hồ Pomodoro, Thư viện & Lo-Fi Chill
                   </p>
                 </div>
               </div>
-              <div className="relative z-10 hidden sm:flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">
-                Mở ngay
+              <div className="relative z-10 hidden sm:flex items-center gap-2 rounded-full border border-violet-200/50 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-900/20 px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] text-violet-700 dark:text-violet-300 shadow-sm group-hover:bg-violet-100 dark:group-hover:bg-violet-900/40 transition-colors">
+                Tham gia
               </div>
             </div>
 
-            {/* Community + Library Cards */}
+            {/* 💬 DIỄN ĐÀN VÀ CỘNG ĐỒNG - NỮA CỘT DƯỚI TRÁI */}
             <div 
               onClick={() => router.push('/forum')}
-              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 group cursor-pointer relative overflow-hidden transition-all lg:col-span-3`}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center hover:shadow-lg hover:-translate-y-1 transition-all group cursor-pointer relative overflow-hidden lg:col-span-3`}
             >
               <div className="absolute -right-8 -top-8 w-32 h-32 bg-blue-500/15 dark:bg-blue-600/10 rounded-full blur-2xl group-hover:bg-blue-500/25 transition-colors"></div>
               <div className="relative z-10">
-                <div className="p-3 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200/30 shadow-inner w-fit mb-3 group-hover:scale-105 transition-transform">
-                  <MessageSquare className="w-5 h-5 drop-shadow-md" />
+                <div className="p-3 bg-gradient-to-br from-blue-400/30 to-indigo-500/30 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200/30 dark:border-blue-500/20 shadow-inner w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <MessageSquare className="w-6 h-6 drop-shadow-md" />
                 </div>
-                <h3 className="text-lg font-bold mb-1 text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  Cộng Đồng <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                <h3 className="text-lg font-black mb-1 text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  Diễn Đàn Cộng Đồng <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                 </h3>
-                <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
-                  Nơi giao lưu học tập
+                <p className="text-slate-500 dark:text-slate-400 text-xs font-medium leading-relaxed">
+                  Thảo luận đề thi, chia sẻ phương pháp học tập
                 </p>
               </div>
             </div>
 
+            {/* 📂 THƯ VIỆN SỐ - NỮA CỘT DƯỚI PHẢI */}
             <div 
               onClick={() => router.push('/library')}
-              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-pointer overflow-hidden relative lg:col-span-3`}
+              className={`${glassCardStyles} rounded-2xl p-5 md:p-6 flex flex-col justify-center hover:shadow-lg hover:-translate-y-1 transition-all group cursor-pointer relative overflow-hidden lg:col-span-3`}
             >
-              <div className="absolute -right-10 -top-10 w-36 h-36 bg-cyan-400/14 dark:bg-cyan-600/14 rounded-full blur-3xl group-hover:bg-cyan-400/22 transition-colors"></div>
-              <div className="relative z-10 flex items-center gap-4">
-                <div className="p-3.5 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 text-cyan-600 dark:text-cyan-400 rounded-xl border border-cyan-200/30 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+              <div className="absolute -right-10 -top-10 w-36 h-36 bg-cyan-400/15 dark:bg-cyan-600/10 rounded-full blur-3xl group-hover:bg-cyan-400/25 transition-colors"></div>
+              <div className="relative z-10">
+                <div className="p-3 bg-gradient-to-br from-cyan-400/30 to-blue-500/30 text-cyan-600 dark:text-cyan-400 rounded-lg border border-cyan-200/30 dark:border-cyan-500/20 shadow-inner w-fit mb-4 group-hover:scale-110 transition-transform duration-300">
                   <FolderOpen className="w-6 h-6 drop-shadow-md" />
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-                    Thư Viện Số <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-                  </h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-xs font-medium leading-relaxed">
-                    Tài liệu, chuyên đề và bài tập luyện tập đầy đủ
-                  </p>
-                </div>
+                <h3 className="text-lg font-black mb-1 text-slate-900 dark:text-white flex items-center gap-1.5 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                  Kho Thư Viện Số <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                </h3>
+                <p className="text-slate-500 dark:text-slate-400 text-xs font-medium leading-relaxed">
+                  Tra cứu chuyên đề, sách giáo khoa & đáp án mẫu
+                </p>
               </div>
             </div>
 
-            {/* History Section - Full Width */}
-            <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex flex-col overflow-hidden border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20`}>
-              <h3 className="text-base font-extrabold flex items-center gap-2 mb-4 text-slate-900 dark:text-white drop-shadow-sm">
-                <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Lịch sử bài làm
+            {/* 🕒 LỊCH SỬ BÀI LÀM - KHỐI TRẢI DÀI CUỐI CÙNG */}
+            <div className={`${glassCardStyles} lg:col-span-6 rounded-2xl p-5 md:p-6 flex flex-col overflow-hidden`}>
+              <h3 className="text-sm uppercase tracking-widest font-black flex items-center gap-2 mb-4 text-slate-500 dark:text-slate-400 drop-shadow-sm">
+                <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Báo cáo Lịch sử thi
               </h3>
-              <div className="flex-grow overflow-y-auto max-h-[250px] pr-2 space-y-2 custom-scrollbar">
+              <div className="flex-grow overflow-y-auto max-h-[280px] pr-2 space-y-2 custom-scrollbar">
                 {studentHistoryList.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 bg-white/30 dark:bg-slate-800/30 rounded-lg border-2 border-dashed border-slate-300/50 dark:border-slate-700/50 py-8 backdrop-blur-sm">
-                    <BookOpen className="w-6 h-6 mb-2 opacity-50" />
-                    <p className="text-xs font-bold">Chưa có dữ liệu</p>
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-white/30 dark:bg-slate-800/30 rounded-xl border-2 border-dashed border-slate-300/50 dark:border-slate-700/50 py-10 backdrop-blur-sm transition-colors">
+                    <BookOpen className="w-8 h-8 mb-3 opacity-40" />
+                    <p className="text-xs font-bold">Chưa ghi nhận dữ liệu bài làm nào.</p>
                   </div>
                 ) : (
                   studentHistoryList.map((sub) => {
                     const canReview = sub.exams?.allow_review;
                     return (
-                      <div key={sub.id} className="p-3 bg-white/50 dark:bg-slate-800/50 backdrop-blur-lg rounded-lg border border-white/60 dark:border-slate-700/50 flex justify-between items-center gap-3 hover:bg-white/70 dark:hover:bg-slate-700/70 transition-all shadow-sm group">
+                      <div key={sub.id} className="p-4 bg-white/60 dark:bg-slate-800/60 backdrop-blur-lg rounded-xl border border-white/60 dark:border-slate-700/50 flex flex-col sm:flex-row justify-between sm:items-center gap-3 hover:bg-white/90 dark:hover:bg-slate-700/80 hover:shadow-md transition-all group cursor-default">
                         <div className="overflow-hidden flex-1 min-w-0">
-                          <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate drop-shadow-sm">{sub.exams?.title}</p>
-                          <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 font-medium">{new Date(sub.created_at).toLocaleString('vi-VN', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} • {sub.exams?.exam_type}</p>
+                          <p className="font-bold text-sm text-slate-900 dark:text-white truncate drop-shadow-sm transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-400">{sub.exams?.title}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium tracking-wide">
+                            {new Date(sub.created_at).toLocaleString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} <span className="mx-1">•</span> <span className="font-bold text-indigo-500 dark:text-indigo-400">{sub.exams?.exam_type}</span>
+                          </p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm border backdrop-blur-md whitespace-nowrap ${sub.is_graded ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30' : 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/30'}`}>
-                            {sub.is_graded ? `${sub.score} đ` : 'Chờ'}
+                        <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
+                          <span className={`px-3 py-1.5 rounded-lg text-xs font-black shadow-sm border backdrop-blur-md whitespace-nowrap ${sub.is_graded ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50' : 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800/50'}`}>
+                            {sub.is_graded ? `${String(sub.score).replace('.', ',')} Điểm` : 'Chờ duyệt'}
                           </span>
                           {canReview && sub.is_graded ? (
-                            <button onClick={() => router.push(`/submissions/${sub.id}/review`)} className="p-2 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-500/20 border border-blue-500/20 transition-all shadow-sm group-hover:scale-105" title="Xem chi tiết">
-                              <Eye className="w-3.5 h-3.5"/>
+                            <button onClick={() => router.push(`/submissions/${sub.id}/review`)} className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-800/50 border border-blue-200 dark:border-blue-800/50 transition-all shadow-sm hover:scale-105 active:scale-95" title="Xem chi tiết">
+                              <Eye className="w-4 h-4"/>
                             </button>
                           ) : (
-                            <span className="text-[9px] text-slate-500 italic font-bold px-1.5 py-1 bg-slate-400/10 rounded border border-slate-300/30 dark:border-slate-600/30">🔒</span>
+                            <div className="p-2 bg-slate-100 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 rounded-lg border border-slate-200 dark:border-slate-700/50 flex items-center justify-center cursor-not-allowed" title="Bài thi khóa xem lại">
+                              <Lock className="w-4 h-4"/>
+                            </div>
                           )}
                         </div>
                       </div>
