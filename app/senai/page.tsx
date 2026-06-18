@@ -9,6 +9,12 @@ import {
   MessageSquare, Loader2, FileText, Settings2
 } from 'lucide-react'
 
+// 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC (LATEX)
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css' // File CSS bắt buộc để hiển thị chuẩn định dạng Toán học
+
 // ============================================================================
 // TYPES & CONSTANTS
 // ============================================================================
@@ -134,7 +140,7 @@ export default function SenAIFullScreenPage() {
   }
 
   const deleteSession = async (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation() // Ngăn không click nhầm vào session
+    e.stopPropagation() 
     const isConfirmed = window.confirm("Bạn có chắc chắn muốn xóa phiên chat này không?")
     if (!isConfirmed) return
 
@@ -215,7 +221,6 @@ export default function SenAIFullScreenPage() {
     try {
       let sessionId = currentSessionId
 
-      // 1. NẾU CHƯA CÓ SESSION, TẠO MỚI TRÊN SUPABASE
       if (!sessionId) {
         const title = userText.length > 30 ? userText.substring(0, 30) + '...' : userText || 'Phân tích hình ảnh'
         const { data: newSession, error: sessionErr } = await supabase
@@ -231,24 +236,22 @@ export default function SenAIFullScreenPage() {
         }
       }
 
-      // 2. LƯU TIN NHẮN CỦA USER VÀO SUPABASE
       if (sessionId) {
         await supabase.from('senai_messages').insert({
           session_id: sessionId,
           role: 'user',
           content: userText,
-          images: userImages.map(img => ({ base64: img.base64, mimeType: img.mimeType })) // Lưu cả ảnh
+          images: userImages.map(img => ({ base64: img.base64, mimeType: img.mimeType })) 
         })
       }
 
-      // 3. GỌI GEMINI API
       const systemContext = `THÔNG TIN CỐT LÕI VỀ HỆ THỐNG:
       - Tên hệ thống: SenExam V2.0 - Trợ lý AI Mở rộng.
-      - Tác giả & Nhà phát triển (Boss): Hoàng Bình Minh (25/08/2000, UET). Đam mê AI, Web, Embedded Systems, thích F1, Matcha Latte.
+      - Tác giả & Nhà phát triển (Boss): Hoàng Bình Minh (25/08/2000, UET). Đam mê AI, Web, Embedded Systems.
       - Tên người dùng đang trò chuyện: ${userName || 'Học sinh'}.
-      - Ký hiệu: Sử dụng dấu chấm "." cho phép nhân, dấu phẩy "," cho số thập phân.
+      - Ký hiệu Toán học: Sử dụng dấu chấm "." cho phép nhân, dấu phẩy "," cho số thập phân.
       - Nếu người dùng có tên là "Minh" hoặc "Hoàng Bình Minh", hãy nhận diện đây là Boss/Sếp.
-      - NẾU CÓ ẢNH KÈM THEO: Hãy phân tích kỹ nội dung trong ảnh để giải đáp chi tiết nhất.`
+      - LUÔN SỬ DỤNG DẤU $ HOẶC $$ ĐỂ BỌC CÁC CÔNG THỨC TOÁN HỌC. NẾU CÓ ẢNH KÈM THEO: Phân tích kỹ nội dung trong ảnh để giải đáp chi tiết nhất.`
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -265,10 +268,8 @@ export default function SenAIFullScreenPage() {
 
       if (response.ok && data.text) {
         const aiText = data.text
-        // Cập nhật UI
         setMessages([...nextHistory, { role: 'model', text: aiText }])
         
-        // 4. LƯU TIN NHẮN CỦA AI VÀO SUPABASE
         if (sessionId) {
           await supabase.from('senai_messages').insert({
             session_id: sessionId,
@@ -292,21 +293,6 @@ export default function SenAIFullScreenPage() {
       e.preventDefault()
       handleSendMessage()
     }
-  }
-
-  // Format Markdown Text
-  const formatMessageText = (text: string) => {
-    const parts = text.split('**')
-    return parts.map((part, index) => {
-      if (index % 2 === 1) return <strong key={index} className="font-extrabold text-indigo-600 dark:text-indigo-400">{part}</strong>
-      
-      return part.split(/(\s+)/).map((word, wIndex) => {
-        if (/^https?:\/\/[^\s]+/.test(word)) {
-          return <a key={wIndex} href={word} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 font-bold text-indigo-500 hover:text-indigo-700">{word}</a>
-        }
-        return <span key={wIndex}>{word}</span>
-      })
-    })
   }
 
   // ============================================================================
@@ -420,7 +406,7 @@ export default function SenAIFullScreenPage() {
                     </div>
                   )}
 
-                  <div className={`max-w-[85%] lg:max-w-[75%] flex flex-col gap-3 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`max-w-[90%] lg:max-w-[85%] flex flex-col gap-3 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     
                     {/* Hiển thị ảnh nếu User có đính kèm */}
                     {msg.images && msg.images.length > 0 && (
@@ -434,14 +420,35 @@ export default function SenAIFullScreenPage() {
                     )}
 
                     {msg.text && (
-                      <div className={`px-6 py-4 rounded-[1.5rem] text-[15px] font-medium leading-relaxed shadow-sm ${
+                      <div className={`px-6 py-4 rounded-[1.5rem] text-[15px] font-medium leading-relaxed shadow-sm overflow-x-auto ${
                         msg.role === 'user' 
                           ? 'bg-gradient-to-br from-indigo-600 to-blue-600 text-white rounded-br-sm' 
                           : 'bg-white dark:bg-[#1E1E1E] border border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm'
                       }`}>
-                        {msg.text.split('\n').map((line, i) => (
-                          <p key={i} className={i > 0 ? "mt-2.5" : ""}>{formatMessageText(line)}</p>
-                        ))}
+                        
+                        {/* 🌟 SỬ DỤNG BỘ RENDER MARKDOWN SIÊU CẤP TẠI ĐÂY */}
+                        <ReactMarkdown
+                          remarkPlugins={[remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={{
+                            p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
+                            strong: ({node, ...props}) => <strong className={`font-extrabold ${msg.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...props} />,
+                            a: ({node, ...props}) => <a className={`underline underline-offset-4 font-bold ${msg.role === 'user' ? 'text-white hover:text-blue-200' : 'text-indigo-500 hover:text-indigo-700'}`} target="_blank" rel="noopener noreferrer" {...props} />,
+                            ul: ({node, ...props}) => <ul className="list-disc ml-5 mb-3 space-y-1" {...props} />,
+                            ol: ({node, ...props}) => <ol className="list-decimal ml-5 mb-3 space-y-1" {...props} />,
+                            li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                            h1: ({node, ...props}) => <h1 className="text-2xl font-black mb-3 mt-5" {...props} />,
+                            h2: ({node, ...props}) => <h2 className="text-xl font-black mb-3 mt-4" {...props} />,
+                            h3: ({node, ...props}) => <h3 className="text-lg font-bold mb-2 mt-3" {...props} />,
+                            code: ({node, inline, ...props}: any) => 
+                              inline 
+                                ? <code className={`px-1.5 py-0.5 rounded-md text-[13px] font-mono ${msg.role === 'user' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-pink-600 dark:text-pink-400'}`} {...props} />
+                                : <div className="bg-slate-800 text-slate-100 p-4 rounded-xl my-3 overflow-x-auto"><code className="font-mono text-[13px]" {...props} /></div>
+                          }}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
+
                       </div>
                     )}
                   </div>
