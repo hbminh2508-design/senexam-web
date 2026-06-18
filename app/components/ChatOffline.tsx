@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Loader2, Send, Sparkles, X, Maximize2, Minimize2, Zap, Settings2 } from 'lucide-react'
 
+// 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC (LATEX)
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
+
 type ChatMessage = {
   role: 'user' | 'model'
   text: string
@@ -21,7 +27,7 @@ const normalizeText = (value: string) => {
 }
 
 // ============================================================================
-// LÕI XỬ LÝ OFFLINE TỐI ƯU HÓA (SMART FALLBACK)
+// LÕI XỬ LÝ OFFLINE TỐI ƯU HÓA (SMART FALLBACK ĐÃ CHUẨN HÓA MARKDOWN)
 // ============================================================================
 const generateOfflineAIResponse = (input: string, userName: string) => {
   const normalizedInput = normalizeText(input)
@@ -39,28 +45,28 @@ const generateOfflineAIResponse = (input: string, userName: string) => {
   const searchMatch = normalizedInput.match(/tim (sach|tai lieu|de thi|chuyen de|bai tap) (.*)/)
   if (searchMatch && searchMatch[2]) {
     const query = encodeURIComponent(searchMatch[2].trim())
-    return `Mình đã tìm thấy một số kết quả trong kho lưu trữ cho từ khóa "${searchMatch[2].trim()}". Bạn nhấn vào đây để mở Thư viện số nhé: /library?search=${query} 📚`
+    return `Mình đã tìm thấy một số kết quả trong kho lưu trữ cho từ khóa "${searchMatch[2].trim()}". Bạn nhấn vào đây để mở Thư viện số nhé: **[Mở Thư Viện](/library?search=${query})** 📚`
   }
 
-  // 3. Logic điều hướng chức năng cốt lõi
+  // 3. Logic điều hướng chức năng cốt lõi (Sử dụng chuẩn Markdown Link)
   if (/\b(tai lieu|thu vien|pdf|chuyen de|on tap|sach|giao trinh)\b/.test(normalizedInput)) {
-    return `Bạn có thể vào /library để khám phá toàn bộ tài liệu nhé, hoặc gõ "tìm sách [tên sách]" để mình dẫn link trực tiếp cho. 📚`
+    return `Bạn có thể vào **[Thư viện số](/library)** để khám phá toàn bộ tài liệu nhé, hoặc gõ "tìm sách [tên sách]" để mình dẫn link trực tiếp cho. 📚`
   }
 
   if (/\b(de thi|thi thu|lam de|kiem tra|hsa|tsa|thptqg|vao thi)\b/.test(normalizedInput)) {
-    return `Bạn hãy vào /exams để xem kho đề thi chuyên sâu và đánh giá năng lực bản thân nhé. ✨`
+    return `Bạn hãy vào **[Kho đề thi](/exams)** để xem đề thi chuyên sâu và đánh giá năng lực bản thân nhé. ✨`
   }
 
   if (/\b(forum|cong dong|hoi bai|thao luan|giai dap)\b/.test(normalizedInput)) {
-    return `Khu vực trao đổi học thuật nằm ở /forum. Bạn có thể đăng câu hỏi để mọi người cùng giải đáp nha. 🌸`
+    return `Khu vực trao đổi học thuật nằm ở **[Cộng đồng](/forum)**. Bạn có thể đăng câu hỏi để mọi người cùng giải đáp nha. 🌸`
   }
 
   if (/\b(focus|tap trung|lofi|nhac|hoc tap|pomodoro)\b/.test(normalizedInput)) {
-    return `Mở /focus để vào không gian Pomodoro tĩnh tâm học tập cùng nhạc Lo-fi nhé. 🚀`
+    return `Mở **[Phòng Tập Trung](/focus)** để vào không gian Pomodoro tĩnh tâm học tập cùng nhạc Lo-fi nhé. 🚀`
   }
   
   if (/\b(tinh diem|diem thi|xet tuyen|dai hoc|diem uu tien|bach khoa)\b/.test(normalizedInput)) {
-    return `Bạn cần quy đổi điểm thi THPTQG hay Bách Khoa? Truy cập ngay công cụ /tinhdiem để hệ thống tính toán chuẩn xác nhất! 🎓`
+    return `Bạn cần quy đổi điểm thi THPTQG hay Bách Khoa? Truy cập ngay công cụ **[Tính điểm Đại học](/tinhdiem)** để hệ thống tính toán chuẩn xác nhất! 🎓`
   }
 
   // 4. Lời chào cá nhân hóa
@@ -70,52 +76,6 @@ const generateOfflineAIResponse = (input: string, userName: string) => {
   }
 
   return 'Ở chế độ Cơ bản, mình được tối ưu để tra cứu hệ thống nội bộ. Bạn có thể gõ "tìm sách [tên]" hoặc bật **Chế độ Nâng cao (Gemini)** trên góc phải để nhờ mình giải bài tập phức tạp nhé!'
-}
-
-// ============================================================================
-// RENDERER MARKDOWN & AUTO-LINK GENERATOR
-// ============================================================================
-const formatMessage = (text: string, role: 'user' | 'model') => {
-  const parts = text.split('**')
-
-  return parts.map((part, partIndex) => {
-    if (partIndex % 2 === 1) {
-      return <strong key={`strong-${partIndex}`} className="font-extrabold">{part}</strong>
-    }
-
-    return part.split(/(\s+)/).map((word, wordIndex) => {
-      // Bắt các Route nội bộ (bao gồm cả Query parameters)
-      const routeMatch = word.match(/^((?:\/dashboard|\/library|\/exams|\/forum|\/focus|\/admin|\/tinhdiem))(.*)$/)
-      
-      if (routeMatch) {
-        return (
-          <a
-            key={`route-${partIndex}-${wordIndex}`}
-            href={routeMatch[0]} // Lấy nguyên cụm bao gồm query
-            className={`font-black underline decoration-2 underline-offset-4 transition-colors ${role === 'user' ? 'text-white hover:text-blue-200 decoration-white/50' : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 decoration-indigo-300 dark:decoration-indigo-600/50'}`}
-          >
-            {routeMatch[1] === '/library' && routeMatch[2].includes('?search=') ? 'Mở Thư Viện' : routeMatch[0]}
-          </a>
-        )
-      }
-
-      if (/^https?:\/\/[^\s]+/.test(word)) {
-        return (
-          <a
-            key={`url-${partIndex}-${wordIndex}`}
-            href={word}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`font-bold underline underline-offset-4 transition-colors ${role === 'user' ? 'text-white hover:text-blue-200' : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300'}`}
-          >
-            {word}
-          </a>
-        )
-      }
-
-      return <span key={`text-${partIndex}-${wordIndex}`}>{word}</span>
-    })
-  })
 }
 
 // ============================================================================
@@ -179,7 +139,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       
       QUY TẮC GIAO TIẾP VÀ HÀNH VI:
       1. Kính trọng Tác giả: Nếu người dùng có tên là "Minh" hoặc "Hoàng Bình Minh" (hoặc tự nhận là tác giả), HÃY NHẬN DIỆN ĐÂY LÀ BOSS/SẾP CỦA BẠN. Thể hiện sự tôn trọng, trung thành và vui vẻ.
-      2. Ký hiệu Toán học / Vật Lí: Tuyệt đối tuân thủ tiêu chuẩn Việt Nam: Phải sử dụng dấu chấm "." cho phép nhân và dấu phẩy "," cho dấu thập phân (Ví dụ: 9,8 . 10).
+      2. Ký hiệu Toán học / Vật Lí: Tuyệt đối tuân thủ tiêu chuẩn Việt Nam: Phải sử dụng dấu chấm "." cho phép nhân và dấu phẩy "," cho dấu thập phân (Ví dụ: 9,8 . 10). LUÔN BỌC CÔNG THỨC TOÁN HỌC TRONG DẤU $ HOẶC $$.
       3. Liên kết Thư viện: Nếu người dùng nhờ tìm kiếm sách/đề thi, hãy trả lời bằng đường dẫn định dạng: /library?search=<từ_khóa> (Ví dụ: /library?search=toán+12).
       4. Điều hướng: Các module hiện có: Thi thử (/exams), Tính điểm Đại học (/tinhdiem), Phòng học tập trung (/focus), Diễn đàn (/forum).`
 
@@ -287,8 +247,36 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                   </div>
                 )}
                 
-                <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14.5px] font-medium leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
-                  {formatMessage(msg.text, msg.role)}
+                <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14.5px] font-medium leading-relaxed shadow-sm overflow-x-auto ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
+                  {/* 🌟 SỬ DỤNG BỘ RENDER MARKDOWN TẠI ĐÂY */}
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={{
+                      p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                      strong: ({node, ...props}) => <strong className={`font-extrabold ${msg.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...props} />,
+                      a: ({node, ...props}) => (
+                        <a 
+                          className={`underline underline-offset-4 font-bold ${msg.role === 'user' ? 'text-white hover:text-blue-200' : 'text-indigo-500 hover:text-indigo-700'}`} 
+                          target={props.href?.startsWith('http') ? '_blank' : '_self'} 
+                          rel={props.href?.startsWith('http') ? 'noopener noreferrer' : ''} 
+                          {...props} 
+                        />
+                      ),
+                      ul: ({node, ...props}) => <ul className="list-disc ml-5 mb-2 space-y-1" {...props} />,
+                      ol: ({node, ...props}) => <ol className="list-decimal ml-5 mb-2 space-y-1" {...props} />,
+                      li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                      h1: ({node, ...props}) => <h1 className="text-xl font-black mb-2 mt-4" {...props} />,
+                      h2: ({node, ...props}) => <h2 className="text-lg font-black mb-2 mt-3" {...props} />,
+                      h3: ({node, ...props}) => <h3 className="text-base font-bold mb-2 mt-2" {...props} />,
+                      code: ({node, inline, ...props}: any) => 
+                        inline 
+                          ? <code className={`px-1.5 py-0.5 rounded-md text-[13px] font-mono ${msg.role === 'user' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-pink-600 dark:text-pink-400'}`} {...props} />
+                          : <div className="bg-slate-800 text-slate-100 p-3 rounded-xl my-2 overflow-x-auto"><code className="font-mono text-[13px]" {...props} /></div>
+                    }}
+                  >
+                    {msg.text}
+                  </ReactMarkdown>
                 </div>
               </div>
             ))}
@@ -304,7 +292,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                     <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
                     <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
                   </span>
-                  <span className="text-[13px] text-slate-500 font-bold italic block ml-1">Sen đang gõ...</span>
+                  <span className="text-[13px] text-slate-500 font-bold italic block ml-1">Sen đang suy nghĩ...</span>
                 </div>
               </div>
             )}
