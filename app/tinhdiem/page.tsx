@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, Calculator, GraduationCap, Target, AlertCircle, 
   Info, Sparkles, BookOpen, BarChart3, CheckCircle2,
-  Percent, Hash, MapPin
+  Percent, Hash, MapPin, Bot, Loader2, Send, ChevronRight
 } from 'lucide-react'
 
-// Các hằng số giao diện đồng bộ với Dashboard v2.0
-const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
+// Các hằng số giao diện chuẩn Material Design 3 + Liquid Glass
+const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm transition-all duration-300"
 const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-[#252525] rounded-2xl px-5 py-4 outline-none transition-all font-black text-slate-900 dark:text-white text-base shadow-inner"
 
 export default function ScoreCalculatorPage() {
@@ -34,6 +34,12 @@ export default function ScoreCalculatorPage() {
     totalScore: number;
   } | null>(null)
 
+  // 🌟 State cho SenAI Tư vấn
+  const [aiResponse, setAiResponse] = useState('')
+  const [isAiLoading, setIsAiLoading] = useState(false)
+  const [showAiBox, setShowAiBox] = useState(false)
+  const rightPanelRef = useRef<HTMLDivElement>(null)
+
   // Khởi tạo Theme
   useEffect(() => {
     const theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -43,6 +49,12 @@ export default function ScoreCalculatorPage() {
 
   // Thuật toán Tính toán điểm số realtime
   useEffect(() => {
+    // Tự động clear AI response khi điểm bị thay đổi để tránh lệch dữ liệu
+    if (showAiBox) {
+      setShowAiBox(false)
+      setAiResponse('')
+    }
+
     const s1 = parseFloat(scores.sub1.replace(',', '.'))
     const s2 = parseFloat(scores.sub2.replace(',', '.'))
     const s3 = parseFloat(scores.sub3.replace(',', '.'))
@@ -83,6 +95,81 @@ export default function ScoreCalculatorPage() {
     if (value === '' || /^[0-9.,]*$/.test(value)) {
       setScores(prev => ({ ...prev, [field]: value }))
     }
+  }
+
+  // 🌟 HÀM KÍCH HOẠT SEN AI TƯ VẤN TRƯỜNG/NGÀNH
+  const handleAskSenAI = async () => {
+    if (!result) return
+    setIsAiLoading(true)
+    setShowAiBox(true)
+    setAiResponse('')
+
+    // Auto scroll xuống box AI
+    setTimeout(() => {
+      if (rightPanelRef.current) {
+        rightPanelRef.current.scrollTop = rightPanelRef.current.scrollHeight
+      }
+    }, 100)
+
+    const modeText = calcMode === 'standard' 
+      ? 'Đại học chung (Tổng 3 môn + Điểm ưu tiên)' 
+      : 'Đại học Bách Khoa Hà Nội (Môn chính nhân hệ số 2, quy đổi về thang 30)'
+
+    const prompt = `Học sinh vừa sử dụng công cụ tính điểm xét tuyển trên hệ thống SenExam.
+- Tổng điểm đạt được: ${result.totalScore} (Thang điểm 30)
+- Phương thức xét tuyển: ${modeText}
+
+Nhiệm vụ của bạn (Gia sư tư vấn tuyển sinh SenAI):
+Dựa vào phổ điểm và điểm chuẩn năm 2025 (sử dụng làm mốc dự đoán cho năm 2026), hãy phân tích cơ hội đỗ và đề xuất:
+${calcMode === 'standard' 
+  ? '1. Gợi ý 3 đến 5 trường Đại học xịn nhất, top đầu và ngành học tương ứng mà học sinh có khả năng trúng tuyển với số điểm này.\n2. Lời khuyên phân bổ nguyện vọng an toàn.' 
+  : '1. Gợi ý 3 đến 5 ngành học HOT và xịn nhất tại Đại học Bách Khoa Hà Nội (HUST) mà học sinh có khả năng trúng tuyển với số điểm này.\n2. Đánh giá mức độ cạnh tranh của các ngành đó.'}
+
+Yêu cầu định dạng:
+- Xưng "Mình" gọi "Bạn".
+- Đưa ra điểm chuẩn 2025 của các ngành đó để đối chiếu.
+- Sử dụng gạch đầu dòng gọn gàng, có icon minh họa. Không in đậm toàn bộ văn bản. Ngắn gọn nhưng súc tích.`
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt, history: [] }),
+      })
+      const data = await res.json()
+      
+      if (res.ok && data.text) {
+        setAiResponse(data.text)
+      } else {
+        throw new Error('Lỗi API')
+      }
+    } catch (error) {
+      setAiResponse('Xin lỗi bạn, kết nối đến máy chủ SenAI đang bị gián đoạn. Bạn thử bấm tư vấn lại nhé! 😥')
+    } finally {
+      setIsAiLoading(false)
+      setTimeout(() => {
+        if (rightPanelRef.current) {
+          rightPanelRef.current.scrollTop = rightPanelRef.current.scrollHeight
+        }
+      }, 200)
+    }
+  }
+
+  // Hàm render Markdown cơ bản
+  const formatAIResponse = (text: string) => {
+    return text.split('\n').map((line, i) => {
+      if (!line.trim()) return <div key={i} className="h-1.5"></div>
+      const parts = line.split('**')
+      return (
+        <p key={i} className="mb-2 text-[14px]">
+          {parts.map((part, j) => 
+            j % 2 === 1 
+            ? <strong key={j} className="text-indigo-600 dark:text-indigo-400 font-extrabold">{part}</strong> 
+            : part
+          )}
+        </p>
+      )
+    })
   }
 
   return (
@@ -191,7 +278,7 @@ export default function ScoreCalculatorPage() {
                           <label className="block text-xs font-bold mb-2 text-slate-600 dark:text-slate-400">Điểm Môn {num}</label>
                           <input 
                             type="text" 
-                            placeholder="VD: 8.5"
+                            placeholder="VD: 8,5"
                             value={scores[key]}
                             onChange={(e) => handleScoreChange(key, e.target.value)}
                             className={mdInput}
@@ -222,7 +309,7 @@ export default function ScoreCalculatorPage() {
                 <div className="mb-6">
                   <input 
                     type="text" 
-                    placeholder="Tổng điểm ưu tiên của bạn (VD: 0.75)"
+                    placeholder="Tổng điểm ưu tiên của bạn (VD: 0,75)"
                     value={priorityScore}
                     onChange={(e) => {
                       if (e.target.value === '' || /^[0-9.,]*$/.test(e.target.value)) setPriorityScore(e.target.value)
@@ -244,7 +331,7 @@ export default function ScoreCalculatorPage() {
                   </div>
                   
                   <p className="pt-3 mt-3 border-t border-amber-200/50 dark:border-amber-900/50 text-[11px] font-bold italic opacity-80">
-                    * Lưu ý: AI hệ thống sẽ tự động áp dụng công thức giảm trừ điểm ưu tiên của Bộ GD&ĐT nếu tổng điểm 3 môn của bạn ≥ 22.5.
+                    * Lưu ý: Hệ thống sẽ tự động áp dụng công thức giảm trừ điểm ưu tiên của Bộ GD&ĐT nếu tổng điểm 3 môn của bạn ≥ 22.5.
                   </p>
                 </div>
               </div>
@@ -252,17 +339,19 @@ export default function ScoreCalculatorPage() {
             </div>
 
             {/* ============================================================== */}
-            {/* PANEL PHẢI: KẾT QUẢ ĐẦU RA (Chiếm 5 cột) */}
+            {/* PANEL PHẢI: KẾT QUẢ ĐẦU RA & TƯ VẤN AI (Chiếm 5 cột) */}
             {/* ============================================================== */}
             <div className="lg:col-span-5 relative">
-              <div className="sticky top-[100px] space-y-6">
+              <div 
+                ref={rightPanelRef}
+                className="sticky top-[100px] space-y-6 max-h-[calc(100vh-120px)] overflow-y-auto custom-scrollbar pb-10"
+              >
                 
                 {/* THẺ HIỂN THỊ KẾT QUẢ CỐT LÕI */}
-                <div className={`${mdCard} p-0 overflow-hidden shadow-xl`}>
+                <div className={`${mdCard} p-0 overflow-hidden shadow-xl shrink-0`}>
                   
                   {/* Nửa trên: Banner Kết quả (Đổi màu theo Mode) */}
                   <div className={`p-8 md:p-10 text-white transition-colors duration-500 relative flex flex-col items-center justify-center min-h-[260px] ${calcMode === 'hust' ? 'bg-gradient-to-br from-red-600 via-rose-600 to-orange-600 dark:from-red-800 dark:to-orange-900' : 'bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-600 dark:from-indigo-800 dark:to-cyan-900'}`}>
-                    {/* Họa tiết trang trí */}
                     <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl mix-blend-overlay"></div>
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-black/10 rounded-full blur-2xl mix-blend-overlay"></div>
                     
@@ -271,7 +360,7 @@ export default function ScoreCalculatorPage() {
                       <h3 className="text-xs font-black text-white/80 uppercase tracking-widest mb-2">Điểm Xét Tuyển Cuối Cùng</h3>
                       
                       <div className="text-[5rem] md:text-[6rem] font-black drop-shadow-lg tracking-tighter leading-none mb-4">
-                        {result ? result.totalScore.toFixed(2) : '--'}
+                        {result ? String(result.totalScore.toFixed(2)).replace('.', ',') : '--'}
                       </div>
                       
                       <p className="text-[11px] font-black uppercase text-white/90 bg-black/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 shadow-inner">
@@ -286,7 +375,7 @@ export default function ScoreCalculatorPage() {
                     <div className="flex justify-between items-center p-4.5 rounded-[1.5rem] bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 transition-colors">
                       <span className="text-sm font-bold text-slate-500 dark:text-slate-400">Điểm khối gốc (Chưa cộng):</span>
                       <span className="text-xl font-black text-slate-900 dark:text-white">
-                        {result ? result.rawScore.toFixed(2) : '0.00'}
+                        {result ? String(result.rawScore.toFixed(2)).replace('.', ',') : '0,00'}
                       </span>
                     </div>
 
@@ -298,13 +387,11 @@ export default function ScoreCalculatorPage() {
                         )}
                       </div>
                       <span className="relative z-10 text-xl font-black text-emerald-600 dark:text-emerald-400">
-                        +{result ? result.finalPriority.toFixed(2) : '0.00'}
+                        +{result ? String(result.finalPriority.toFixed(2)).replace('.', ',') : '0,00'}
                       </span>
-                      {/* Vệt sáng cảnh báo giảm trừ */}
                       {result && result.rawScore >= 22.5 && parseFloat(priorityScore) > 0 && <div className="absolute right-0 top-0 w-24 h-full bg-amber-100/50 dark:bg-amber-900/10 blur-xl"></div>}
                     </div>
 
-                    {/* Lời nhắc điền điểm */}
                     {!result && (
                       <div className="text-center pt-4 pb-2 animate-pulse">
                         <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Vui lòng điền đủ điểm 3 môn để xem kết quả</p>
@@ -313,10 +400,51 @@ export default function ScoreCalculatorPage() {
                   </div>
                 </div>
 
+                {/* 🌟 WIDGET SENAI TƯ VẤN (Chỉ hiện khi đã có điểm) */}
+                {result && (
+                  <div className="animate-in slide-in-from-top-4 fade-in duration-500">
+                    {!showAiBox ? (
+                      <button 
+                        onClick={handleAskSenAI}
+                        className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-[1.5rem] p-5 font-black shadow-[0_8px_20px_rgba(79,70,229,0.3)] transition-all active:scale-95 group"
+                      >
+                        <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse"/> 
+                        Tư vấn Trường/Ngành cùng SenAI
+                        <ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/>
+                      </button>
+                    ) : (
+                      <div className="bg-white dark:bg-[#1A1A1A] border border-indigo-200 dark:border-indigo-500/30 rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500"></div>
+                        
+                        <div className="flex items-center gap-3 mb-5 border-b border-slate-100 dark:border-white/5 pb-4">
+                          <div className="w-10 h-10 bg-indigo-50 dark:bg-[#202020] rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-inner">
+                            <Bot className="w-5 h-5"/>
+                          </div>
+                          <div>
+                            <h4 className="font-black text-slate-900 dark:text-white">Gia sư Tuyển sinh SenAI</h4>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Tham chiếu điểm chuẩn 2025</p>
+                          </div>
+                        </div>
+
+                        {isAiLoading ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3"/>
+                            <p className="text-sm font-bold text-slate-500 animate-pulse">Đang rà soát ma trận điểm chuẩn 2025...</p>
+                          </div>
+                        ) : (
+                          <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed space-y-2">
+                            {formatAIResponse(aiResponse)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Nút tác vụ phụ */}
-                <div className="flex justify-center">
+                <div className="flex justify-center pt-2">
                    <button 
-                    onClick={() => { setScores({sub1:'', sub2:'', sub3:''}); setPriorityScore(''); setResult(null) }} 
+                    onClick={() => { setScores({sub1:'', sub2:'', sub3:''}); setPriorityScore(''); setResult(null); setShowAiBox(false); setAiResponse('') }} 
                     className="text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/5 shadow-sm px-6 py-2.5 rounded-full active:scale-95"
                   >
                      Làm mới bộ tính
