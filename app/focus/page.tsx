@@ -7,7 +7,7 @@ import {
   Search, TimerReset, Timer, PlayCircle, PauseCircle, LibraryBig, 
   Video, Music2, Palette, ArrowRight, MoonStar, SunMedium, SquarePlay, 
   PlusCircle, Volume2, Gauge, SkipBack, SkipForward, ArrowLeft, 
-  Maximize2, Minimize2, Bot, Sparkles, Send, Image as ImageIcon, FileText, Trash2, Loader2, GripVertical
+  Maximize2, Minimize2, Bot, Sparkles, Send, Image as ImageIcon, FileText, Trash2, Loader2, GripVertical, Link as LinkIcon
 } from 'lucide-react'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC
@@ -16,7 +16,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 
-// Khai báo global cho YouTube Iframe API để fix lỗi TypeScript (ts 2339)
+// Khai báo global cho YouTube Iframe API để fix lỗi TypeScript
 declare global {
   interface Window {
     YT: any;
@@ -93,7 +93,7 @@ const mdCard = "bg-white/5 dark:bg-[#1A1A1A]/60 backdrop-blur-2xl backdrop-satur
 export default function FocusRoomPage() {
   const router = useRouter()
   
-  // -- Cấu trúc Layout (Split Pane) --
+  // -- Cấu trúc Layout (Split Pane Responsive) --
   const [leftWidth, setLeftWidth] = useState(55) // Theo phần trăm (%)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -108,17 +108,36 @@ export default function FocusRoomPage() {
   const [stopwatchSeconds, setStopwatchSeconds] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
 
-  // -- States: Video Player --
+  // -- States: Video Player & Nhạc Tùy Chỉnh --
   const [selectedVideoId, setSelectedVideoId] = useState(LOFI_PLAYLIST[0].videoId)
   const [isVideoMaximized, setIsVideoMaximized] = useState(false)
   const [volumeLevel, setVolumeLevel] = useState(50)
   const [isPlayerReady, setIsPlayerReady] = useState(false)
   const playerRef = useRef<YouTubePlayer | null>(null)
+  
+  const [customVideoUrl, setCustomVideoUrl] = useState('')
+  const [customVideoTitle, setCustomVideoTitle] = useState('')
+  const [videoFormError, setVideoFormError] = useState('')
+  const [customVideos, setCustomVideos] = useState<VideoTrack[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const raw = localStorage.getItem('focus_custom_videos')
+      if (!raw) return []
+      return JSON.parse(raw) as VideoTrack[]
+    } catch { return [] }
+  })
 
-  // -- States: Thư viện --
+  // -- States: Thư viện & Tìm kiếm --
   const [libraryDocs, setLibraryDocs] = useState<LibraryDoc[]>([])
   const [activeLibraryDoc, setActiveLibraryDoc] = useState<LibraryDoc | null>(null)
+  const [libraryQuery, setLibraryQuery] = useState('') // State tìm kiếm file
   
+  // Lọc thư viện theo từ khóa
+  const filteredDocs = useMemo(() => {
+    if (!libraryQuery.trim()) return libraryDocs
+    return libraryDocs.filter(d => d.title.toLowerCase().includes(libraryQuery.toLowerCase()))
+  }, [libraryDocs, libraryQuery])
+
   // -- States: SenAI Chat --
   const [messages, setMessages] = useState<ChatMessage[]>([{ 
     role: 'model', 
@@ -139,8 +158,11 @@ export default function FocusRoomPage() {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return
+      // Vô hiệu hóa kéo thả trên màn hình di động
+      if (window.innerWidth < 1024) return 
+      
       const newWidth = (e.clientX / window.innerWidth) * 100
-      setLeftWidth(Math.max(30, Math.min(newWidth, 70))) // Giới hạn từ 30% đến 70%
+      setLeftWidth(Math.max(30, Math.min(newWidth, 70))) 
     }
     const handleMouseUp = () => setIsDragging(false)
 
@@ -158,9 +180,8 @@ export default function FocusRoomPage() {
   // EFFECTS: INITIALIZATION
   // ============================================================================
   useEffect(() => {
-    document.documentElement.classList.add('dark') // Ép Darkmode cho không gian học tập Focus
+    document.documentElement.classList.add('dark') 
     
-    // Lấy tên người dùng và Thư viện
     const fetchUserAndLibrary = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -168,11 +189,16 @@ export default function FocusRoomPage() {
         if (data?.full_name) setUserName(data.full_name)
       }
       
-      const { data: docs } = await supabase.from('library_documents').select('id,title,drive_file_id').not('drive_file_id', 'is', null).limit(30)
+      const { data: docs } = await supabase.from('library_documents').select('id,title,drive_file_id').not('drive_file_id', 'is', null).limit(50)
       if (docs) setLibraryDocs(docs)
     }
     fetchUserAndLibrary()
   }, [])
+
+  // Lưu Custom Videos vào Local Storage
+  useEffect(() => {
+    localStorage.setItem('focus_custom_videos', JSON.stringify(customVideos))
+  }, [customVideos])
 
   // ============================================================================
   // EFFECTS: TIMER TICK
@@ -209,7 +235,7 @@ export default function FocusRoomPage() {
       if (!window.YT?.Player || playerRef.current) return
       playerRef.current = new window.YT.Player('focus-yt-player', {
         videoId: selectedVideoId,
-        playerVars: { autoplay: 1, controls: 1, rel: 0, playsinline: 1 },
+        playerVars: { autoplay: 1, controls: 1, rel: 0, playsinline: 1, fs: 1 }, // fs:1 cho phép Fullscreen native an toàn
         events: {
           onReady: (e: any) => {
             e.target.setVolume(volumeLevel)
@@ -227,7 +253,7 @@ export default function FocusRoomPage() {
       document.body.appendChild(script)
     }
     window.onYouTubeIframeAPIReady = initPlayer
-  }, [selectedVideoId]) // Phụ thuộc vào VideoID để load lại khi đổi bài
+  }, [selectedVideoId])
 
   useEffect(() => {
     if (isPlayerReady && playerRef.current) {
@@ -238,6 +264,35 @@ export default function FocusRoomPage() {
   useEffect(() => {
     if (isPlayerReady && playerRef.current) playerRef.current.setVolume(volumeLevel)
   }, [volumeLevel, isPlayerReady])
+
+  // ============================================================================
+  // HANDLERS: ADD CUSTOM VIDEO
+  // ============================================================================
+  const handleAddVideoToStream = () => {
+    setVideoFormError('')
+    const videoId = extractYoutubeId(customVideoUrl)
+    if (!videoId) {
+      setVideoFormError('Link YouTube chưa hợp lệ.')
+      return
+    }
+
+    const exists = customVideos.some(item => item.videoId === videoId) || LOFI_PLAYLIST.some(item => item.videoId === videoId)
+    if (exists) {
+      setVideoFormError('Video này đã có trong luồng phát.')
+      return
+    }
+
+    const nextTrack: VideoTrack = {
+      title: customVideoTitle.trim() || `Bài nhạc tùy chỉnh ${customVideos.length + 1}`,
+      videoId,
+      artist: 'Tùy chỉnh',
+    }
+
+    setCustomVideos(prev => [nextTrack, ...prev])
+    setCustomVideoUrl('')
+    setCustomVideoTitle('')
+    setSelectedVideoId(videoId)
+  }
 
   // ============================================================================
   // HANDLERS: SEN AI CHAT (MULTIMODAL + COMMAND EXECUTION)
@@ -303,7 +358,7 @@ export default function FocusRoomPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userText,
-          history: messages.map(m => ({ role: m.role, text: m.text })), // Tránh gửi base64 nặng lên history
+          history: messages.map(m => ({ role: m.role, text: m.text })), 
           images: userFiles.map(f => ({ mimeType: f.mimeType, base64: f.base64 })),
           context: systemContext
         }),
@@ -314,7 +369,6 @@ export default function FocusRoomPage() {
         let aiRawText = data.text
 
         // 🌟 XỬ LÝ LỆNH NGẦM (ACTION PARSER)
-        // 1. Lệnh Đặt thời gian
         const timerMatch = aiRawText.match(/\[TIMER:(\d+)\]/i)
         if (timerMatch) {
           const minutes = parseInt(timerMatch[1])
@@ -322,15 +376,14 @@ export default function FocusRoomPage() {
           setCountdownInput(String(minutes))
           setTimerMode('countdown')
           setIsRunning(true)
-          aiRawText = aiRawText.replace(/\[TIMER:\d+\]/gi, '') // Ẩn mã lệnh
+          aiRawText = aiRawText.replace(/\[TIMER:\d+\]/gi, '') 
         }
 
-        // 2. Lệnh Mở nhạc
         const playMatch = aiRawText.match(/\[PLAY:([a-zA-Z0-9_-]{11})\]/i)
         if (playMatch) {
           setSelectedVideoId(playMatch[1])
           if (!isRunning) setIsRunning(true)
-          aiRawText = aiRawText.replace(/\[PLAY:[a-zA-Z0-9_-]{11}\]/gi, '') // Ẩn mã lệnh
+          aiRawText = aiRawText.replace(/\[PLAY:[a-zA-Z0-9_-]{11}\]/gi, '') 
         }
 
         setMessages([...nextHistory, { role: 'model', text: aiRawText.trim() }])
@@ -381,14 +434,16 @@ export default function FocusRoomPage() {
         </div>
       </header>
 
-      {/* 🌟 MAIN SPLIT LAYOUT */}
-      <div className="flex-1 flex overflow-hidden relative">
+      {/* 🌟 MAIN SPLIT LAYOUT (RESPONSIVE) */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative custom-scrollbar">
         
         {/* ========================================================= */}
         {/* PANEL TRÁI: ĐIỀU KHIỂN FOCUS (LƯỚI BENTO) */}
         {/* ========================================================= */}
-        <div style={{ width: `${leftWidth}%` }} className="h-full p-4 lg:p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar">
-          
+        <div 
+          className="w-full lg:w-[var(--left-width)] h-auto lg:h-full p-4 lg:p-6 flex flex-col gap-4 lg:overflow-y-auto custom-scrollbar shrink-0"
+          style={{ '--left-width': `${leftWidth}%` } as React.CSSProperties}
+        >
           {/* HÀNG 1: ĐỒNG HỒ & TRÌNH PHÁT NHẠC */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             
@@ -427,7 +482,7 @@ export default function FocusRoomPage() {
               )}
             </div>
 
-            {/* THẺ TRÌNH PHÁT VIDEO LOFI */}
+            {/* THẺ TRÌNH PHÁT VIDEO LOFI & CUSTOM LINK */}
             <div className={`${mdCard} flex flex-col p-4`}>
               <div className="flex items-center justify-between mb-4 px-2">
                 <h3 className="font-black text-sm uppercase tracking-widest text-cyan-400 flex items-center gap-2">
@@ -438,8 +493,9 @@ export default function FocusRoomPage() {
                 </button>
               </div>
 
-              {/* 🌟 CONTAINER VIDEO CÓ THỂ BẬT FULLSCREEN */}
-              <div className={`transition-all duration-500 bg-black overflow-hidden ${isVideoMaximized ? 'fixed inset-4 z-[200] rounded-[2rem] shadow-2xl' : 'relative w-full aspect-video rounded-2xl mb-4 border border-white/10'}`}>
+              {/* 🌟 CONTAINER VIDEO CÓ THỂ BẬT FULLSCREEN 
+                  Bỏ transition nặng để tránh WebKit Safari bị crash */}
+              <div className={`bg-black overflow-hidden z-[200] ${isVideoMaximized ? 'fixed inset-0 sm:inset-4 sm:rounded-[2rem] shadow-2xl' : 'relative w-full aspect-video rounded-2xl mb-4 border border-white/10'}`}>
                 {isVideoMaximized && (
                   <button onClick={() => setIsVideoMaximized(false)} className="absolute top-4 right-4 z-50 p-3 bg-black/50 hover:bg-black/80 text-white rounded-full backdrop-blur-md transition-colors">
                     <Minimize2 className="w-6 h-6"/>
@@ -458,7 +514,7 @@ export default function FocusRoomPage() {
                 />
               </div>
 
-              {/* Quick Playlist */}
+              {/* Quick Playlist Core */}
               <div className="mt-3 flex overflow-x-auto gap-2 custom-scrollbar pb-2">
                 {LOFI_PLAYLIST.map(track => (
                   <button 
@@ -469,12 +525,64 @@ export default function FocusRoomPage() {
                   </button>
                 ))}
               </div>
+
+              {/* 🌟 KHU VỰC THÊM NHẠC YOUTUBE TÙY CHỈNH */}
+              <div className="mt-3 pt-3 border-t border-white/10">
+                <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-2 flex items-center gap-1"><LinkIcon className="w-3 h-3"/> Thêm video tùy chỉnh</h4>
+                <div className="flex flex-col gap-2">
+                  <input 
+                    value={customVideoUrl}
+                    onChange={(e) => setCustomVideoUrl(e.target.value)}
+                    placeholder="Dán link YouTube (VD: https://youtu.be/...)"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-cyan-400 transition-colors"
+                  />
+                  <div className="flex gap-2">
+                    <input 
+                      value={customVideoTitle}
+                      onChange={(e) => setCustomVideoTitle(e.target.value)}
+                      placeholder="Tiêu đề (Không bắt buộc)"
+                      className="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-cyan-400 transition-colors"
+                    />
+                    <button 
+                      onClick={handleAddVideoToStream}
+                      className="shrink-0 bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 rounded-xl text-xs font-black transition-colors flex items-center gap-1 shadow-md"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5"/> Thêm
+                    </button>
+                  </div>
+                  {videoFormError && <p className="text-[10px] text-rose-400 font-bold mt-0.5">{videoFormError}</p>}
+                </div>
+
+                {/* Danh sách nhạc đã thêm (Custom Videos List) */}
+                {customVideos.length > 0 && (
+                  <div className="mt-3 flex overflow-x-auto gap-2 custom-scrollbar pb-2">
+                    {customVideos.map((track, idx) => (
+                      <div key={track.videoId} className="shrink-0 flex items-center group/track shadow-sm">
+                        <button 
+                          onClick={() => setSelectedVideoId(track.videoId)}
+                          className={`px-3 py-2 rounded-l-xl text-xs font-bold border-y border-l transition-colors whitespace-nowrap ${selectedVideoId === track.videoId ? 'bg-cyan-500/20 border-cyan-400 text-cyan-100' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white/70'}`}
+                        >
+                          {track.title}
+                        </button>
+                        <button 
+                          onClick={() => setCustomVideos(prev => prev.filter((_, i) => i !== idx))}
+                          className={`px-2 py-2 rounded-r-xl border-y border-r border-l border-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-white/40 transition-colors bg-white/5 ${selectedVideoId === track.videoId ? 'border-r-cyan-400 border-y-cyan-400 border-l-cyan-400' : ''}`}
+                          title="Xóa khỏi luồng phát"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
             </div>
 
           </div>
 
           {/* HÀNG 2: THƯ VIỆN & TÀI LIỆU */}
-          <div className={`${mdCard} p-6 flex-1 flex flex-col min-h-[300px]`}>
+          <div className={`${mdCard} p-6 flex-1 flex flex-col min-h-[350px]`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-black text-sm uppercase tracking-widest text-emerald-400 flex items-center gap-2">
                 <LibraryBig className="w-4 h-4"/> Thư viện Tài liệu
@@ -486,24 +594,43 @@ export default function FocusRoomPage() {
               )}
             </div>
 
+            {/* THANH TÌM KIẾM TÀI LIỆU */}
+            {!activeLibraryDoc && (
+              <div className="flex items-center gap-3 bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 mb-4">
+                <Search className="w-4 h-4 text-white/50 shrink-0" />
+                <input 
+                  value={libraryQuery}
+                  onChange={e => setLibraryQuery(e.target.value)}
+                  placeholder="Tìm tài liệu theo tên..." 
+                  className="bg-transparent border-none outline-none text-sm text-white placeholder:text-white/30 w-full"
+                />
+              </div>
+            )}
+
             {activeLibraryDoc && activeLibraryDoc.drive_file_id ? (
               <div className="flex-1 bg-white rounded-2xl overflow-hidden relative border border-white/20 shadow-inner">
                 <iframe src={`https://drive.google.com/file/d/${activeLibraryDoc.drive_file_id}/preview`} className="absolute inset-0 w-full h-full border-none"></iframe>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto custom-scrollbar bg-black/20 rounded-2xl border border-white/5 p-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {libraryDocs.map(doc => (
+                {filteredDocs.map(doc => (
                   <div key={doc.id} onClick={() => setActiveLibraryDoc(doc)} className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl cursor-pointer transition-colors flex items-start gap-3 group">
                     <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                       <FileText className="w-4 h-4"/>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold truncate text-white/90 group-hover:text-white">{doc.title}</p>
+                    {/* TRUNCATE ĐỂ FIX LỖI TÊN FILE DÀI */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate text-white/90 group-hover:text-white" title={doc.title}>{doc.title}</p>
                       <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">Click để mở PDF</p>
                     </div>
                   </div>
                 ))}
-                {libraryDocs.length === 0 && <p className="text-center text-white/40 col-span-full py-10 text-sm font-bold">Đang tải tài liệu...</p>}
+                {libraryDocs.length > 0 && filteredDocs.length === 0 && (
+                  <p className="text-center text-white/40 col-span-full py-10 text-sm font-bold">Không tìm thấy tài liệu phù hợp.</p>
+                )}
+                {libraryDocs.length === 0 && (
+                  <p className="text-center text-white/40 col-span-full py-10 text-sm font-bold">Đang tải tài liệu...</p>
+                )}
               </div>
             )}
           </div>
@@ -511,11 +638,11 @@ export default function FocusRoomPage() {
         </div>
 
         {/* ========================================================= */}
-        {/* DRAGGABLE DIVIDER (RESIZER) */}
+        {/* DRAGGABLE DIVIDER (RESIZER) CHỈ HIỆN TRÊN DESKTOP */}
         {/* ========================================================= */}
         <div 
           onMouseDown={() => setIsDragging(true)}
-          className="w-1.5 hover:w-2 bg-white/5 hover:bg-cyan-400/50 cursor-col-resize z-30 transition-all flex items-center justify-center relative group"
+          className="hidden lg:flex w-1.5 hover:w-2 bg-white/5 hover:bg-cyan-400/50 cursor-col-resize z-30 transition-all items-center justify-center relative group"
         >
           <div className="h-8 w-1 bg-white/30 rounded-full group-hover:bg-cyan-400"></div>
         </div>
@@ -523,10 +650,13 @@ export default function FocusRoomPage() {
         {/* ========================================================= */}
         {/* PANEL PHẢI: SEN AI WORKSPACE (CHAT & MULTIMODAL) */}
         {/* ========================================================= */}
-        <div style={{ width: `${100 - leftWidth}%` }} className="h-full bg-black/40 backdrop-blur-3xl border-l border-white/10 flex flex-col relative">
+        <div 
+          className="w-full lg:w-[var(--right-width)] h-[600px] lg:h-full bg-black/40 backdrop-blur-3xl lg:border-l border-t lg:border-t-0 border-white/10 flex flex-col relative shrink-0"
+          style={{ '--right-width': `${100 - leftWidth}%` } as React.CSSProperties}
+        >
           
           {/* AI Header */}
-          <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-gradient-to-r from-indigo-500/10 to-transparent">
+          <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-gradient-to-r from-indigo-500/10 to-transparent shrink-0">
             <div className="w-10 h-10 rounded-[12px] bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
               <Bot className="w-6 h-6 text-indigo-400"/>
             </div>
