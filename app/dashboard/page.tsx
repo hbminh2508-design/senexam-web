@@ -9,7 +9,7 @@ import {
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
   Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, 
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash, 
-  CheckCircle2, Info, BarChart3, FileText
+  CheckCircle2, Info, BarChart3, FileText, Bot
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -51,6 +51,8 @@ interface SysNotification {
   time: string
   read: boolean
 }
+
+type MixedRange = { start: number; end: number; type: string; optionsCount: number }
 
 // ============================================================================
 // 2. CÁC COMPONENT TIỆN ÍCH (COUNTDOWN, ANNOUNCEMENT)
@@ -235,6 +237,20 @@ export default function DashboardPage() {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
 
+  // ----------------------------------------------------------------------------
+  // 🌟 CALCULATOR MODAL STATES (TÍNH ĐIỂM ĐẠI HỌC)
+  // ----------------------------------------------------------------------------
+  const [showCalculatorModal, setShowCalculatorModal] = useState(false)
+  const [calcMode, setCalcMode] = useState<'standard' | 'hust'>('standard')
+  const [calcScores, setCalcScores] = useState({ sub1: '', sub2: '', sub3: '' })
+  const [calcMainSubject, setCalcMainSubject] = useState<'sub1' | 'sub2' | 'sub3'>('sub1')
+  const [calcPriorityScore, setCalcPriorityScore] = useState('')
+  const [calcResult, setCalcResult] = useState<{
+    rawScore: number;
+    finalPriority: number;
+    totalScore: number;
+  } | null>(null)
+
   // -- Global Search States --
   const [globalQuery, setGlobalQuery] = useState('')
   const [globalFoldersResults, setGlobalFoldersResults] = useState<any[] | null>(null)
@@ -332,6 +348,49 @@ export default function DashboardPage() {
     setLanguage(localStorage.getItem('senexam_lang') || 'vi')
     setNotificationsEnabled(localStorage.getItem('senexam_notifications') !== '0')
   }, [router])
+
+  // Lắng nghe sự kiện để tính điểm tự động trong Modal Calculator
+  useEffect(() => {
+    if (!showCalculatorModal) return;
+
+    // Dấu phẩy sẽ là dấu phẩy ở các bài toán
+    const s1 = parseFloat(calcScores.sub1.replace(',', '.'))
+    const s2 = parseFloat(calcScores.sub2.replace(',', '.'))
+    const s3 = parseFloat(calcScores.sub3.replace(',', '.'))
+    const baseP = parseFloat(calcPriorityScore.replace(',', '.')) || 0
+
+    // Validate
+    if (isNaN(s1) || isNaN(s2) || isNaN(s3) || s1 > 10 || s2 > 10 || s3 > 10 || s1 < 0 || s2 < 0 || s3 < 0) {
+      setCalcResult(null)
+      return
+    }
+
+    let rawScore = 0
+
+    if (calcMode === 'standard') {
+      rawScore = s1 + s2 + s3
+    } else if (calcMode === 'hust') {
+      const mainS = calcMainSubject === 'sub1' ? s1 : calcMainSubject === 'sub2' ? s2 : s3
+      const otherSum = (s1 + s2 + s3) - mainS
+      rawScore = ((mainS * 2 + otherSum) * 3) / 4
+    }
+
+    // Công thức tính điểm ưu tiên chuẩn Bộ GD&ĐT (Giảm trừ khi điểm >= 22.5)
+    let actualPriority = baseP
+    if (rawScore >= 22.5) {
+      actualPriority = ((30 - rawScore) / 7.5) * baseP
+    }
+
+    rawScore = Math.round(rawScore * 100) / 100
+    actualPriority = Math.round(actualPriority * 100) / 100
+    const totalScore = Math.round((rawScore + actualPriority) * 100) / 100
+
+    setCalcResult({ 
+      rawScore, 
+      finalPriority: Math.max(0, actualPriority), 
+      totalScore 
+    })
+  }, [calcScores, calcMode, calcMainSubject, calcPriorityScore, showCalculatorModal])
 
   // ============================================================================
   // XỬ LÝ SỰ KIỆN (HANDLERS)
@@ -460,6 +519,14 @@ export default function DashboardPage() {
       setCodeLoading(false) 
     } else { 
       router.push(`/exams/${data.id}`) 
+    }
+  }
+
+  // Calculator Score Input Handler
+  const handleScoreCalcChange = (field: string, value: string) => {
+    // Cho phép nhập số và dấu phẩy
+    if (value === '' || /^[0-9.,]*$/.test(value)) {
+      setCalcScores(prev => ({ ...prev, [field]: value }))
     }
   }
 
@@ -734,7 +801,7 @@ export default function DashboardPage() {
       {/* ============================================================================ */}
       <main 
         className={`max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8 relative z-10 transition-all duration-300 
-          ${(showOnboarding || showProfile || showCodeModal || showNotifications) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}
+          ${(showOnboarding || showProfile || showCodeModal || showNotifications || showCalculatorModal) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}
         `}
       >
         
@@ -883,6 +950,35 @@ export default function DashboardPage() {
             </p>
           </div>
 
+        </div>
+
+        {/* 🌟 NÚT MỞ RỘNG SENAI WORKSPACE (FULL WIDTH BENTO GRID) */}
+        <div 
+          onClick={() => router.push('/senai')} 
+          className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 dark:from-indigo-900/50 dark:via-purple-900/50 dark:to-blue-900/50 backdrop-blur-2xl rounded-[2.5rem] p-8 sm:p-10 border border-indigo-300/50 dark:border-white/10 shadow-lg hover:shadow-xl hover:-translate-y-1 flex flex-col sm:flex-row items-start sm:items-center justify-between cursor-pointer group transition-all duration-500 relative overflow-hidden mt-5 lg:mt-6"
+        >
+          {/* Decorative elements */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl mix-blend-overlay group-hover:scale-110 transition-transform duration-700"></div>
+          
+          <div className="flex items-center gap-5 relative z-10">
+            <div className="w-16 h-16 rounded-[1.2rem] bg-white/20 dark:bg-black/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner border border-white/30 shrink-0">
+              <Bot className="w-8 h-8 drop-shadow-sm" />
+            </div>
+            <div>
+              <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2 mb-1.5 drop-shadow-md">
+                SenAI Workspace Mở Rộng <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse"/>
+              </h3>
+              <p className="text-sm font-medium text-white/90 max-w-xl leading-relaxed drop-shadow-sm">
+                Trợ lý ảo toàn năng với không gian làm việc chuyên biệt. Hỗ trợ tải lên hình ảnh, giải toán chi tiết và lưu trữ toàn bộ lịch sử trò chuyện của bạn.
+              </p>
+            </div>
+          </div>
+          
+          <div className="mt-6 sm:mt-0 relative z-10 shrink-0 self-end sm:self-auto">
+            <div className="bg-white text-indigo-600 font-black px-6 py-3.5 rounded-full flex items-center gap-2 shadow-md group-hover:bg-indigo-50 transition-colors active:scale-95">
+              Mở Workspace <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
         </div>
 
         {/* 🌟 LỊCH SỬ BÀI LÀM KIỂU BẢNG (LIST VIEW V2.0) */}
@@ -1085,14 +1181,23 @@ export default function DashboardPage() {
 
             </div>
 
-            <div className="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-[#121212]">
+            {/* 🌟 THÊM NÚT ĐĂNG XUẤT VÀ CẬP NHẬT HỒ SƠ TẠI ĐÂY */}
+            <div className="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-[#121212] flex flex-col gap-3">
               <button 
                 onClick={() => { setShowOnboarding(true); setShowProfile(false); }} 
                 className="w-full bg-slate-900 hover:bg-black dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 text-white rounded-2xl py-4 font-black transition-all shadow-md active:scale-95 text-sm uppercase tracking-wider"
               >
                 Cập nhật Hồ sơ Năng lực
               </button>
+
+              <button 
+                onClick={handleLogout} 
+                className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/10 dark:hover:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/30 rounded-2xl py-4 font-black transition-all shadow-sm active:scale-95 text-sm uppercase tracking-wider flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-5 h-5" /> Đăng xuất tài khoản
+              </button>
             </div>
+            
           </div>
         </div>
       )}
@@ -1266,7 +1371,7 @@ export default function DashboardPage() {
       {/* BOT CHAT MẶC ĐỊNH */}
       <ChatOffline 
         userName={formData.fullName ? formData.fullName.split(' ').pop() || '' : ''} 
-        avoid={showProfile || showOnboarding} 
+        avoid={showProfile || showOnboarding || showCalculatorModal} 
         hidden={!isAiEnabled} 
       />
 
