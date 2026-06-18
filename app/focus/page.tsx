@@ -16,6 +16,14 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 
+// Khai báo global cho YouTube Iframe API để fix lỗi TypeScript (ts 2339)
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
+
 // ============================================================================
 // CONSTANTS & DATA
 // ============================================================================
@@ -55,7 +63,7 @@ type VideoTrack = { title: string; description?: string; artist?: string; videoI
 type LibraryDoc = { id: string; title: string; drive_file_id: string | null }
 type ChatFile = { url: string; base64: string; mimeType: string; isPdf: boolean; name: string }
 type ChatMessage = { role: 'user' | 'model'; text: string; files?: ChatFile[] }
-type YouTubePlayer = any // Bypassing strict YT types for simplicity in React
+type YouTubePlayer = any 
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -90,7 +98,6 @@ export default function FocusRoomPage() {
   const [isDragging, setIsDragging] = useState(false)
 
   // -- States: Giao diện & Chủ đề --
-  const [isDark, setIsDark] = useState(true) // Focus room ưu tiên nền tối
   const [backgroundId, setBackgroundId] = useState(STUDY_BACKGROUNDS[0].id)
   const activeBackground = useMemo(() => STUDY_BACKGROUNDS.find(item => item.id === backgroundId) ?? STUDY_BACKGROUNDS[0], [backgroundId])
 
@@ -151,21 +158,20 @@ export default function FocusRoomPage() {
   // EFFECTS: INITIALIZATION
   // ============================================================================
   useEffect(() => {
-    document.documentElement.classList.add('dark') // Ép Darkmode cho đẹp
+    document.documentElement.classList.add('dark') // Ép Darkmode cho không gian học tập Focus
     
-    // Lấy tên người dùng
-    const fetchUser = async () => {
+    // Lấy tên người dùng và Thư viện
+    const fetchUserAndLibrary = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
         if (data?.full_name) setUserName(data.full_name)
       }
       
-      // Load Library
-      const { data: docs } = await supabase.from('library_documents').select('id,title,drive_file_id').not('drive_file_id', 'is', null).limit(20)
+      const { data: docs } = await supabase.from('library_documents').select('id,title,drive_file_id').not('drive_file_id', 'is', null).limit(30)
       if (docs) setLibraryDocs(docs)
     }
-    fetchUser()
+    fetchUserAndLibrary()
   }, [])
 
   // ============================================================================
@@ -213,7 +219,7 @@ export default function FocusRoomPage() {
       })
     }
 
-    if (window.YT?.Player) { initPlayer(); return }
+    if (window.YT && window.YT.Player) { initPlayer(); return }
     const scriptId = 'youtube-iframe-api'
     if (!document.getElementById(scriptId)) {
       const script = document.createElement('script')
@@ -221,7 +227,7 @@ export default function FocusRoomPage() {
       document.body.appendChild(script)
     }
     window.onYouTubeIframeAPIReady = initPlayer
-  }, [selectedVideoId]) // Phụ thuộc vào VideoID để load lại
+  }, [selectedVideoId]) // Phụ thuộc vào VideoID để load lại khi đổi bài
 
   useEffect(() => {
     if (isPlayerReady && playerRef.current) {
@@ -276,7 +282,6 @@ export default function FocusRoomPage() {
     setMessages(nextHistory)
     setIsChatLoading(true)
 
-    // Scroll bottom
     setTimeout(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight }, 50)
 
     try {
@@ -284,7 +289,7 @@ export default function FocusRoomPage() {
       Tên người dùng: ${userName}. (Nếu tên chứa chữ "Minh", đây là Boss/Người sáng lập hệ thống).
       
       NHIỆM VỤ ĐẶC BIỆT (SMART ACTIONS):
-      Bạn có quyền ĐIỀU KHIỂN phòng học của học sinh bằng cách chèn các [MÃ LỆNH] vào câu trả lời của mình. Hãy tự động chèn mã nếu người dùng yêu cầu:
+      Bạn có quyền ĐIỀU KHIỂN phòng học của học sinh bằng cách chèn các [MÃ LỆNH] vào câu trả lời của mình. Hãy tự động chèn mã nếu người dùng yêu cầu đặt giờ học hoặc chuyển nhạc:
       1. Để đặt đồng hồ đếm ngược: Chèn [TIMER:số_phút]. Ví dụ: [TIMER:25] (để đặt 25 phút).
       2. Để chuyển nhạc/video: Chèn [PLAY:YoutubeID]. Ví dụ nhạc Lofi: [PLAY:DWcJFNfaw9c], Piano: [PLAY:2OEL4P1Rz04], Mưa: [PLAY:7NOSDKb0HlU].
       
@@ -298,7 +303,7 @@ export default function FocusRoomPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userText,
-          history: messages.map(m => ({ role: m.role, text: m.text })), // Chỉ gửi text history
+          history: messages.map(m => ({ role: m.role, text: m.text })), // Tránh gửi base64 nặng lên history
           images: userFiles.map(f => ({ mimeType: f.mimeType, base64: f.base64 })),
           context: systemContext
         }),
@@ -317,7 +322,7 @@ export default function FocusRoomPage() {
           setCountdownInput(String(minutes))
           setTimerMode('countdown')
           setIsRunning(true)
-          aiRawText = aiRawText.replace(/\[TIMER:\d+\]/gi, '') // Xóa tag
+          aiRawText = aiRawText.replace(/\[TIMER:\d+\]/gi, '') // Ẩn mã lệnh
         }
 
         // 2. Lệnh Mở nhạc
@@ -325,7 +330,7 @@ export default function FocusRoomPage() {
         if (playMatch) {
           setSelectedVideoId(playMatch[1])
           if (!isRunning) setIsRunning(true)
-          aiRawText = aiRawText.replace(/\[PLAY:[a-zA-Z0-9_-]{11}\]/gi, '')
+          aiRawText = aiRawText.replace(/\[PLAY:[a-zA-Z0-9_-]{11}\]/gi, '') // Ẩn mã lệnh
         }
 
         setMessages([...nextHistory, { role: 'model', text: aiRawText.trim() }])
@@ -341,7 +346,7 @@ export default function FocusRoomPage() {
   }
 
   // ============================================================================
-  // RENDER UI
+  // RENDER UI CHÍNH
   // ============================================================================
   return (
     <div className={`h-screen w-full flex flex-col text-white font-sans overflow-hidden transition-colors duration-1000 ${activeBackground.className}`}>
@@ -388,7 +393,7 @@ export default function FocusRoomPage() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             
             {/* THẺ ĐỒNG HỒ */}
-            <div className={`${mdCard} p-6 flex flex-col items-center justify-center relative overflow-hidden group`}>
+            <div className={`${mdCard} p-6 flex flex-col items-center justify-center relative overflow-hidden group min-h-[280px]`}>
               <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-50"></div>
               
               <div className="flex items-center gap-2 bg-white/10 rounded-full p-1 mb-6 border border-white/10">
@@ -506,7 +511,7 @@ export default function FocusRoomPage() {
         </div>
 
         {/* ========================================================= */}
-        {/* DRAGGABLE DIVIDER */}
+        {/* DRAGGABLE DIVIDER (RESIZER) */}
         {/* ========================================================= */}
         <div 
           onMouseDown={() => setIsDragging(true)}
@@ -516,10 +521,11 @@ export default function FocusRoomPage() {
         </div>
 
         {/* ========================================================= */}
-        {/* PANEL PHẢI: SEN AI WORKSPACE (CHAT) */}
+        {/* PANEL PHẢI: SEN AI WORKSPACE (CHAT & MULTIMODAL) */}
         {/* ========================================================= */}
         <div style={{ width: `${100 - leftWidth}%` }} className="h-full bg-black/40 backdrop-blur-3xl border-l border-white/10 flex flex-col relative">
           
+          {/* AI Header */}
           <div className="p-4 border-b border-white/10 flex items-center gap-3 bg-gradient-to-r from-indigo-500/10 to-transparent">
             <div className="w-10 h-10 rounded-[12px] bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
               <Bot className="w-6 h-6 text-indigo-400"/>
@@ -530,6 +536,7 @@ export default function FocusRoomPage() {
             </div>
           </div>
 
+          {/* AI Chat History */}
           <div ref={chatScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -540,6 +547,8 @@ export default function FocusRoomPage() {
                 )}
 
                 <div className={`max-w-[90%] flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  
+                  {/* Hiển thị Ảnh/PDF User gửi */}
                   {msg.files && msg.files.length > 0 && (
                     <div className="flex flex-wrap gap-2 justify-end mb-1">
                       {msg.files.map((file, i) => (
@@ -557,6 +566,7 @@ export default function FocusRoomPage() {
                     </div>
                   )}
 
+                  {/* Tin nhắn Markdown (Hỗ trợ Toán học KaTeX) */}
                   {msg.text && (
                     <div className={`px-5 py-3.5 rounded-[1.2rem] text-[14px] font-medium leading-relaxed shadow-sm overflow-x-auto ${
                       msg.role === 'user' 
@@ -597,7 +607,10 @@ export default function FocusRoomPage() {
             )}
           </div>
 
+          {/* AI Input Area */}
           <div className="p-4 bg-black/20 border-t border-white/10 shrink-0">
+            
+            {/* Dock hiển thị Ảnh/PDF trước khi gửi */}
             {selectedFiles.length > 0 && (
               <div className="flex items-center gap-2 mb-3 bg-black/40 p-2 rounded-xl border border-white/10 overflow-x-auto">
                 {selectedFiles.map((file, index) => (
@@ -619,7 +632,7 @@ export default function FocusRoomPage() {
               <textarea
                 ref={textareaRef} value={chatInput} onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); handleSendMessage() } }}
-                placeholder="Gửi PDF/Ảnh để giải toán, hoặc nhờ đặt giờ học..."
+                placeholder="Gửi PDF/Ảnh để giải bài, hoặc nhờ cài giờ học..."
                 className="flex-1 bg-transparent border-none outline-none resize-none py-3 px-1 max-h-[120px] custom-scrollbar text-sm font-medium text-white placeholder:text-white/30"
                 rows={1}
               />
@@ -630,6 +643,7 @@ export default function FocusRoomPage() {
             </form>
           </div>
         </div>
+
       </div>
     </div>
   )
