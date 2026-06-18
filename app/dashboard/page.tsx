@@ -52,8 +52,6 @@ interface SysNotification {
   read: boolean
 }
 
-type MixedRange = { start: number; end: number; type: string; optionsCount: number }
-
 // ============================================================================
 // 2. CÁC COMPONENT TIỆN ÍCH (COUNTDOWN, ANNOUNCEMENT)
 // ============================================================================
@@ -201,7 +199,7 @@ export default function DashboardPage() {
   const [showProfile, setShowProfile] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   
-  // ĐỒNG BỘ: Sử dụng isDark thay vì isDarkMode
+  // ĐỒNG BỘ: Sử dụng isDark
   const [isDark, setIsDark] = useState(false)
   
   // -- Data States --
@@ -236,20 +234,6 @@ export default function DashboardPage() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
-
-  // ----------------------------------------------------------------------------
-  // 🌟 CALCULATOR MODAL STATES (TÍNH ĐIỂM ĐẠI HỌC)
-  // ----------------------------------------------------------------------------
-  const [showCalculatorModal, setShowCalculatorModal] = useState(false)
-  const [calcMode, setCalcMode] = useState<'standard' | 'hust'>('standard')
-  const [calcScores, setCalcScores] = useState({ sub1: '', sub2: '', sub3: '' })
-  const [calcMainSubject, setCalcMainSubject] = useState<'sub1' | 'sub2' | 'sub3'>('sub1')
-  const [calcPriorityScore, setCalcPriorityScore] = useState('')
-  const [calcResult, setCalcResult] = useState<{
-    rawScore: number;
-    finalPriority: number;
-    totalScore: number;
-  } | null>(null)
 
   // -- Global Search States --
   const [globalQuery, setGlobalQuery] = useState('')
@@ -348,49 +332,6 @@ export default function DashboardPage() {
     setLanguage(localStorage.getItem('senexam_lang') || 'vi')
     setNotificationsEnabled(localStorage.getItem('senexam_notifications') !== '0')
   }, [router])
-
-  // Lắng nghe sự kiện để tính điểm tự động trong Modal Calculator
-  useEffect(() => {
-    if (!showCalculatorModal) return;
-
-    // Dấu phẩy sẽ là dấu phẩy ở các bài toán
-    const s1 = parseFloat(calcScores.sub1.replace(',', '.'))
-    const s2 = parseFloat(calcScores.sub2.replace(',', '.'))
-    const s3 = parseFloat(calcScores.sub3.replace(',', '.'))
-    const baseP = parseFloat(calcPriorityScore.replace(',', '.')) || 0
-
-    // Validate
-    if (isNaN(s1) || isNaN(s2) || isNaN(s3) || s1 > 10 || s2 > 10 || s3 > 10 || s1 < 0 || s2 < 0 || s3 < 0) {
-      setCalcResult(null)
-      return
-    }
-
-    let rawScore = 0
-
-    if (calcMode === 'standard') {
-      rawScore = s1 + s2 + s3
-    } else if (calcMode === 'hust') {
-      const mainS = calcMainSubject === 'sub1' ? s1 : calcMainSubject === 'sub2' ? s2 : s3
-      const otherSum = (s1 + s2 + s3) - mainS
-      rawScore = ((mainS * 2 + otherSum) * 3) / 4
-    }
-
-    // Công thức tính điểm ưu tiên chuẩn Bộ GD&ĐT (Giảm trừ khi điểm >= 22.5)
-    let actualPriority = baseP
-    if (rawScore >= 22.5) {
-      actualPriority = ((30 - rawScore) / 7.5) * baseP
-    }
-
-    rawScore = Math.round(rawScore * 100) / 100
-    actualPriority = Math.round(actualPriority * 100) / 100
-    const totalScore = Math.round((rawScore + actualPriority) * 100) / 100
-
-    setCalcResult({ 
-      rawScore, 
-      finalPriority: Math.max(0, actualPriority), 
-      totalScore 
-    })
-  }, [calcScores, calcMode, calcMainSubject, calcPriorityScore, showCalculatorModal])
 
   // ============================================================================
   // XỬ LÝ SỰ KIỆN (HANDLERS)
@@ -519,14 +460,6 @@ export default function DashboardPage() {
       setCodeLoading(false) 
     } else { 
       router.push(`/exams/${data.id}`) 
-    }
-  }
-
-  // Calculator Score Input Handler
-  const handleScoreCalcChange = (field: string, value: string) => {
-    // Cho phép nhập số và dấu phẩy
-    if (value === '' || /^[0-9.,]*$/.test(value)) {
-      setCalcScores(prev => ({ ...prev, [field]: value }))
     }
   }
 
@@ -801,7 +734,7 @@ export default function DashboardPage() {
       {/* ============================================================================ */}
       <main 
         className={`max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8 relative z-10 transition-all duration-300 
-          ${(showOnboarding || showProfile || showCodeModal || showNotifications || showCalculatorModal) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}
+          ${(showOnboarding || showProfile || showCodeModal || showNotifications) ? 'opacity-30 pointer-events-none select-none blur-md scale-[0.98]' : ''}
         `}
       >
         
@@ -885,7 +818,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 LƯỚI BENTO CẤP 2: BỘ 4 CÔNG CỤ CỐT LÕI (CÓ TÍNH ĐIỂM) */}
+        {/* 🌟 LƯỚI BENTO CẤP 2: BỘ 4 CÔNG CỤ CỐT LÕI */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
           
           <div 
@@ -933,9 +866,9 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          {/* 🌟 NÚT MỞ WIDGET TÍNH ĐIỂM (CALCULATOR MODAL) */}
+          {/* NÚT MỞ TRANG TÍNH ĐIỂM */}
           <div 
-            onClick={() => setShowCalculatorModal(true)} 
+            onClick={() => router.push('/tinhdiem')} 
             className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-7 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500 relative overflow-hidden"
           >
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl group-hover:bg-rose-500/20 transition-colors"></div>
@@ -1330,146 +1263,10 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 🌟 5. SCORE CALCULATOR MODAL (TÍNH ĐIỂM ĐẠI HỌC TRỰC TIẾP) */}
-      {showCalculatorModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-[#1A1A1A] rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl relative border border-slate-200 dark:border-white/5 flex flex-col md:flex-row">
-            
-            <button 
-              onClick={() => {setShowCalculatorModal(false); setCalcResult(null)}} 
-              className="absolute top-4 right-4 z-20 p-2.5 rounded-full bg-white/50 dark:bg-black/50 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors backdrop-blur-md"
-            >
-              <X className="w-5 h-5 text-slate-600 dark:text-slate-300"/>
-            </button>
-
-            {/* PANEL TRÁI: NHẬP LIỆU */}
-            <div className="flex-1 p-8 md:p-10 border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/5">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shadow-inner border border-rose-100 dark:border-rose-500/20">
-                  <Calculator className="w-6 h-6"/>
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black text-slate-900 dark:text-white">Công cụ tính điểm</h3>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-0.5">Quy chuẩn xét tuyển Đại học</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider mb-3 text-slate-500 dark:text-slate-400">Phương thức xét tuyển</label>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => setCalcMode('standard')}
-                      className={`flex-1 py-3 rounded-2xl text-sm font-bold transition-all border-2 ${calcMode === 'standard' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-indigo-500 shadow-sm' : 'bg-slate-50 dark:bg-[#202020] text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-100 dark:hover:bg-[#2A2A2A]'}`}
-                    >
-                      Đại học chung
-                    </button>
-                    <button 
-                      onClick={() => setCalcMode('hust')}
-                      className={`flex-1 py-3 rounded-2xl text-sm font-bold transition-all border-2 ${calcMode === 'hust' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-500 shadow-sm' : 'bg-slate-50 dark:bg-[#202020] text-slate-600 dark:text-slate-300 border-transparent hover:bg-slate-100 dark:hover:bg-[#2A2A2A]'}`}
-                    >
-                      ĐH Bách Khoa
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Điểm thi thành phần</label>
-                    {calcMode === 'hust' && <span className="text-[9px] font-black uppercase bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-2 py-0.5 rounded-md">Chọn môn x2</span>}
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {[1, 2, 3].map((num) => {
-                      const key = `sub${num}` as keyof typeof calcScores
-                      const isMain = calcMode === 'hust' && calcMainSubject === key
-                      
-                      return (
-                        <div key={key} className={`flex items-center gap-3 p-1 rounded-2xl transition-colors ${isMain ? 'bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 pl-3' : ''}`}>
-                          <input 
-                            type="text" 
-                            placeholder={`Điểm thi môn ${num}`}
-                            value={calcScores[key]}
-                            onChange={(e) => handleScoreCalcChange(key, e.target.value)}
-                            className="w-full bg-slate-100 dark:bg-[#202020] border-transparent focus:bg-white dark:focus:bg-[#2A2A2A] border-2 focus:border-indigo-500 rounded-xl px-4 py-3 outline-none transition-all font-black text-slate-900 dark:text-white text-sm"
-                          />
-                          {calcMode === 'hust' && (
-                            <button 
-                              onClick={() => setCalcMainSubject(key)}
-                              className={`shrink-0 w-12 h-[48px] rounded-xl flex items-center justify-center transition-all border-2 ${isMain ? 'bg-red-500 text-white border-red-500 shadow-md' : 'bg-slate-100 dark:bg-[#202020] text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-[#2A2A2A]'}`}
-                              title="Chọn làm môn chính (Nhân đôi)"
-                            >
-                              {isMain ? '★' : ''}
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider mb-3 text-slate-500 dark:text-slate-400">Điểm Ưu Tiên</label>
-                  <input 
-                    type="text" 
-                    placeholder="Tổng điểm cộng (VD: 0.75)"
-                    value={calcPriorityScore}
-                    onChange={(e) => {
-                      if (e.target.value === '' || /^[0-9.,]*$/.test(e.target.value)) setCalcPriorityScore(e.target.value)
-                    }}
-                    className="w-full bg-slate-100 dark:bg-[#202020] border-transparent focus:bg-white dark:focus:bg-[#2A2A2A] border-2 focus:border-amber-500 rounded-xl px-4 py-3 outline-none transition-all font-black text-slate-900 dark:text-white text-sm"
-                  />
-                  <p className="text-[10px] font-bold text-amber-600 dark:text-amber-500 mt-2 flex items-center gap-1"><Info className="w-3 h-3"/> Tự động giảm trừ ưu tiên nếu tổng 3 môn ≥ 22.5</p>
-                </div>
-              </div>
-            </div>
-
-            {/* PANEL PHẢI: KẾT QUẢ ĐẦU RA */}
-            <div className="w-full md:w-[350px] lg:w-[400px] shrink-0 bg-slate-50 dark:bg-[#121212] flex flex-col justify-center p-8 md:p-10 relative overflow-hidden">
-              <div className={`absolute top-0 left-0 w-full h-1.5 ${calcMode === 'hust' ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gradient-to-r from-indigo-500 to-blue-500'}`}></div>
-              <div className={`absolute -right-20 -bottom-20 w-64 h-64 rounded-full blur-3xl opacity-20 ${calcMode === 'hust' ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
-
-              <div className="relative z-10 flex flex-col items-center text-center mb-8">
-                <BarChart3 className={`w-12 h-12 mb-4 drop-shadow-md ${calcMode === 'hust' ? 'text-red-500' : 'text-indigo-500'}`}/>
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Điểm xét tuyển cuối cùng</h3>
-                <div className={`text-6xl font-black drop-shadow-lg tracking-tighter ${calcMode === 'hust' ? 'text-red-600 dark:text-red-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
-                  {calcResult ? calcResult.totalScore.toFixed(2).replace('.', ',') : '--'}
-                </div>
-                <div className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full mt-3 ${calcMode === 'hust' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'}`}>
-                  {calcMode === 'standard' ? 'Hệ cơ bản (Thang 30)' : 'Hệ Bách Khoa (Thang 30)'}
-                </div>
-              </div>
-
-              <div className="relative z-10 space-y-3 w-full">
-                <div className="flex justify-between items-center p-4 bg-white dark:bg-[#1A1A1A] rounded-2xl border border-slate-100 dark:border-white/5 shadow-sm">
-                  <span className="text-xs font-bold text-slate-500">Điểm gốc:</span>
-                  <span className="text-base font-black text-slate-900 dark:text-white">
-                    {calcResult ? calcResult.rawScore.toFixed(2).replace('.', ',') : '0,00'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm relative overflow-hidden">
-                  <div className="relative z-10 flex flex-col items-start">
-                    <span className="text-xs font-bold text-slate-500">Ưu tiên (Đã chuẩn hóa):</span>
-                    {calcResult && calcResult.rawScore >= 22.5 && parseFloat(calcPriorityScore) > 0 && (
-                      <span className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 font-bold italic flex items-center gap-1">Đã áp dụng giảm trừ</span>
-                    )}
-                  </div>
-                  <span className="relative z-10 text-base font-black text-emerald-600 dark:text-emerald-400">
-                    +{calcResult ? calcResult.finalPriority.toFixed(2).replace('.', ',') : '0,00'}
-                  </span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* BOT CHAT MẶC ĐỊNH */}
       <ChatOffline 
         userName={formData.fullName ? formData.fullName.split(' ').pop() || '' : ''} 
-        avoid={showProfile || showOnboarding || showCalculatorModal} 
+        avoid={showProfile || showOnboarding} 
         hidden={!isAiEnabled} 
       />
 
