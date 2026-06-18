@@ -3,54 +3,37 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    // 1. Kiểm tra API Key
+    // 1. Kiểm tra API Key (Lỗi 403 thường xuất phát từ việc biến này bị undefined trên Vercel)
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.error("Lỗi Server: Không tìm thấy biến môi trường GEMINI_API_KEY");
-      return NextResponse.json({ error: 'Chưa cấu hình API Key trên hệ thống' }, { status: 500 });
+      return NextResponse.json({ error: 'Chưa cấu hình API Key trên hệ thống Vercel' }, { status: 500 });
     }
 
-    // 2. Khởi tạo SDK kết nối
+    // 2. Khởi tạo SDK
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 3. Lấy dữ liệu gửi lên từ Frontend
+    // 3. Sử dụng mô hình Flash Lite siêu tốc (8B)
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' });
+
+    // 4. Phân tích dữ liệu từ Client gửi lên
     const { message, history } = await req.json();
 
-    // Định hình Persona của SenAI
-    const systemInstruction = "Bạn là SenAI, một trợ lý học tập thân thiện, thông minh của nền tảng SenExam. Bạn hãy giải đáp các câu hỏi học thuật của học sinh một cách ngắn gọn, dễ hiểu và truyền cảm hứng. Lưu ý: Không lạm dụng Markdown in đậm quá mức.";
+    // 5. Định hình tính cách của SenAI
+    const systemInstruction = "Bạn là SenAI, một trợ lý học tập thân thiện, thông minh của nền tảng SenExam. Bạn hãy giải đáp các câu hỏi học thuật của học sinh một cách ngắn gọn, dễ hiểu và truyền cảm hứng. Lưu ý: Không sử dụng Markdown in đậm quá nhiều.";
     
-    const finalPrompt = `${systemInstruction}\n\nLịch sử trò chuyện:\n${JSON.stringify(history || [])}\n\nCâu hỏi: ${message}`;
+    // Ghép lịch sử để AI hiểu ngữ cảnh cuộc trò chuyện
+    const finalPrompt = `${systemInstruction}\n\nLịch sử trò chuyện trước đó:\n${JSON.stringify(history || [])}\n\nCâu hỏi mới: ${message}`;
 
-    let responseText = '';
+    // 6. Gọi AI sinh phản hồi
+    const result = await model.generateContent(finalPrompt);
+    const responseText = result.response.text();
 
-    try {
-      // THỬ NGHIỆM 1: Dùng Model chính (Mạnh & Nhanh nhất)
-      const primaryModel = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
-      const result = await primaryModel.generateContent(finalPrompt);
-      responseText = result.response.text();
-      
-    } catch (primaryError: any) {
-      // NẾU GẶP LỖI 503 (QUÁ TẢI) -> TỰ ĐỘNG KÍCH HOẠT FALLBACK
-      if (primaryError.status === 503) {
-        console.warn('Model chính đang quá tải (503), tự động chuyển sang luồng AI dự phòng...');
-        
-        // THỬ NGHIỆM 2: Dùng Model dự phòng có độ ổn định cực cao
-        const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
-        const fallbackResult = await fallbackModel.generateContent(finalPrompt);
-        responseText = fallbackResult.response.text();
-      } else {
-        // Ném lỗi ra ngoài nếu không phải là lỗi quá tải mạng
-        throw primaryError;
-      }
-    }
-
-    // Trả về trường text theo đúng chuẩn frontend
     return NextResponse.json({ text: responseText });
 
   } catch (error: any) {
-    console.error('Chi tiết lỗi hệ thống Gemini API:', error);
+    console.error('Gemini API Error Detail:', error);
     
-    // Trả mã lỗi cụ thể về Frontend để kích hoạt cơ chế Offline Mode
     return NextResponse.json(
       { error: error.message || 'Đã có lỗi xảy ra khi xử lý AI' }, 
       { status: error.status || 500 }
