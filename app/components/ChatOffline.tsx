@@ -8,6 +8,7 @@ type ChatMessage = {
   text: string
 }
 
+// Hàm chuẩn hóa tiếng Việt không dấu để AI Offline dễ bắt từ khóa
 const normalizeText = (value: string) => {
   return value
     .normalize('NFD')
@@ -20,43 +21,61 @@ const normalizeText = (value: string) => {
 }
 
 // ============================================================================
-// LÕI XỬ LÝ OFFLINE (CƠ BẢN) - KHÔNG CẦN INTERNET
+// LÕI XỬ LÝ OFFLINE TỐI ƯU HÓA (SMART FALLBACK)
 // ============================================================================
 const generateOfflineAIResponse = (input: string, userName: string) => {
   const normalizedInput = normalizeText(input)
+  const isBoss = userName && normalizeText(userName).includes('minh')
 
+  // 1. Logic nhận diện tác giả & hệ thống
+  if (/\b(tac gia|ai tao ra|nguoi tao|phat trien|dev|founder|cha de|hoang binh minh|boss)\b/.test(normalizedInput)) {
+    if (isBoss) {
+      return `Haha, sếp đang test em đấy à? 😆 Hệ thống SenExam V2.0 này do chính sếp (**Hoàng Bình Minh** - UET) tạo ra chứ ai vào đây nữa! Đam mê từ code web đến robot AuraServe, sếp đỉnh quá rồi. Cần em hỗ trợ điều hướng đi đâu không ạ? 🚀`
+    }
+    return `Nền tảng SenExam V2.0 này được thiết kế và phát triển độc lập bởi **Hoàng Bình Minh**. Anh ấy là một sinh viên tài năng xuất thân từ Đại học Công nghệ - ĐHQGHN (UET) với đam mê mãnh liệt về AI, Web và cả hệ thống nhúng (Embedded Systems). Minh tạo ra mình (SenAI) để giúp các bạn học tập tốt hơn đó! 🚀`
+  }
+
+  // 2. Logic Smart Search - Tự động tạo link tìm kiếm thư viện
+  const searchMatch = normalizedInput.match(/tim (sach|tai lieu|de thi|chuyen de|bai tap) (.*)/)
+  if (searchMatch && searchMatch[2]) {
+    const query = encodeURIComponent(searchMatch[2].trim())
+    return `Mình đã tìm thấy một số kết quả trong kho lưu trữ cho từ khóa "${searchMatch[2].trim()}". Bạn nhấn vào đây để mở Thư viện số nhé: /library?search=${query} 📚`
+  }
+
+  // 3. Logic điều hướng chức năng cốt lõi
   if (/\b(tai lieu|thu vien|pdf|chuyen de|on tap|sach|giao trinh)\b/.test(normalizedInput)) {
-    return `Bạn có thể vào /library để tìm tài liệu nhé, hoặc dùng ô tìm kiếm trên /dashboard nếu muốn tra nhanh theo tên. 📚`
+    return `Bạn có thể vào /library để khám phá toàn bộ tài liệu nhé, hoặc gõ "tìm sách [tên sách]" để mình dẫn link trực tiếp cho. 📚`
   }
 
   if (/\b(de thi|thi thu|lam de|kiem tra|hsa|tsa|thptqg|vao thi)\b/.test(normalizedInput)) {
-    return `Bạn hãy vào /exams để xem kho đề thi và chọn bài phù hợp. Nếu muốn hỏi thêm, /forum cũng rất hữu ích. ✨`
+    return `Bạn hãy vào /exams để xem kho đề thi chuyên sâu và đánh giá năng lực bản thân nhé. ✨`
   }
 
   if (/\b(forum|cong dong|hoi bai|thao luan|giai dap)\b/.test(normalizedInput)) {
-    return `Bạn có thể trao đổi tại /forum. Nếu cần tài liệu kèm theo, mình gợi ý thêm /library nhé. 🌸`
+    return `Khu vực trao đổi học thuật nằm ở /forum. Bạn có thể đăng câu hỏi để mọi người cùng giải đáp nha. 🌸`
   }
 
-  if (/\b(focus|tap trung|lofi|nhac|hoc tap)\b/.test(normalizedInput)) {
-    return `Nếu muốn học tập trung hơn, bạn mở /focus để vào phòng tập trung nhé. 🚀`
+  if (/\b(focus|tap trung|lofi|nhac|hoc tap|pomodoro)\b/.test(normalizedInput)) {
+    return `Mở /focus để vào không gian Pomodoro tĩnh tâm học tập cùng nhạc Lo-fi nhé. 🚀`
   }
   
-  if (/\b(tinh diem|diem thi|xet tuyen|dai hoc|diem uu tien)\b/.test(normalizedInput)) {
-    return `Bạn có thể quy đổi và xem tính điểm xét tuyển Đại Học/Bách Khoa tại /tinhdiem nhé! 🎓`
+  if (/\b(tinh diem|diem thi|xet tuyen|dai hoc|diem uu tien|bach khoa)\b/.test(normalizedInput)) {
+    return `Bạn cần quy đổi điểm thi THPTQG hay Bách Khoa? Truy cập ngay công cụ /tinhdiem để hệ thống tính toán chuẩn xác nhất! 🎓`
   }
 
+  // 4. Lời chào cá nhân hóa
   if (/\b(chao|hello|hi|alo|hey)\b/.test(normalizedInput)) {
-    return `Chào ${userName || 'bạn'}! 🌸 Mình là SenAI (Chế độ Cơ bản). Mình được thiết kế để điều hướng nhanh các link trên hệ thống. Nếu muốn giải bài tập, bạn hãy chuyển sang chế độ Nâng cao nhé!`
+    if (isBoss) return `Dạ em chào sếp Minh! 👋 Hôm nay sếp muốn vừa uống Matcha Latte vừa nâng cấp tính năng gì cho hệ thống ạ?`
+    return `Chào ${userName || 'bạn'}! 🌸 Mình là SenAI (Chế độ Cơ bản). Mình biết rất rõ về thư viện và hệ thống của SenExam do anh Hoàng Bình Minh phát triển. Gõ "tìm sách [tên sách]" để thử tính năng nhé!`
   }
 
-  return 'Ở chế độ Cơ bản, mình chỉ được trang bị kiến thức điều hướng web. Bạn có thể hỏi về tài liệu, đề thi, /library, /exams hoặc /forum. Bật chế độ Nâng cao (Gemini) để hỏi bài tập nhé!'
+  return 'Ở chế độ Cơ bản, mình được tối ưu để tra cứu hệ thống nội bộ. Bạn có thể gõ "tìm sách [tên]" hoặc bật **Chế độ Nâng cao (Gemini)** trên góc phải để nhờ mình giải bài tập phức tạp nhé!'
 }
 
 // ============================================================================
-// RENDERER MARKDOWN & ROUTE LINK
+// RENDERER MARKDOWN & AUTO-LINK GENERATOR
 // ============================================================================
 const formatMessage = (text: string, role: 'user' | 'model') => {
-  // Tách text theo markdown in đậm (**)
   const parts = text.split('**')
 
   return parts.map((part, partIndex) => {
@@ -64,19 +83,18 @@ const formatMessage = (text: string, role: 'user' | 'model') => {
       return <strong key={`strong-${partIndex}`} className="font-extrabold">{part}</strong>
     }
 
-    // Tách theo khoảng trắng để tìm route hoặc URL
     return part.split(/(\s+)/).map((word, wordIndex) => {
+      // Bắt các Route nội bộ (bao gồm cả Query parameters)
       const routeMatch = word.match(/^((?:\/dashboard|\/library|\/exams|\/forum|\/focus|\/admin|\/tinhdiem))(.*)$/)
       
       if (routeMatch) {
         return (
           <a
             key={`route-${partIndex}-${wordIndex}`}
-            href={routeMatch[1]}
+            href={routeMatch[0]} // Lấy nguyên cụm bao gồm query
             className={`font-black underline decoration-2 underline-offset-4 transition-colors ${role === 'user' ? 'text-white hover:text-blue-200 decoration-white/50' : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 decoration-indigo-300 dark:decoration-indigo-600/50'}`}
           >
-            {routeMatch[1]}
-            {routeMatch[2]}
+            {routeMatch[1] === '/library' && routeMatch[2].includes('?search=') ? 'Mở Thư Viện' : routeMatch[0]}
           </a>
         )
       }
@@ -107,24 +125,29 @@ const formatMessage = (text: string, role: 'user' | 'model') => {
 export default function ChatOffline({ userName, avoid, hidden }: { userName: string, avoid?: boolean, hidden?: boolean }) {
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [isOnlineMode, setIsOnlineMode] = useState(true) // True = Gemini, False = Offline Logic
+  const [isOnlineMode, setIsOnlineMode] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [isChatLoading, setIsChatLoading] = useState(false)
   
+  const isBoss = userName && normalizeText(userName).includes('minh')
+  
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'model', text: `Chào ${userName || 'bạn'}! 🌸 Mình là SenAI. Mình có thể giải toán, phân tích lý hóa hoặc tìm đường dẫn web cho bạn. Bạn cần hỗ trợ gì nào?` }
+    { 
+      role: 'model', 
+      text: isBoss 
+        ? `Chào Boss Hoàng Bình Minh! 🌸 Trợ lý SenAI đã sẵn sàng. Sếp muốn tra cứu hệ thống hay dùng Gemini để giải quyết vấn đề gì hôm nay ạ?` 
+        : `Chào ${userName || 'bạn'}! 🌸 Mình là SenAI. Bạn muốn giải toán, tìm hiểu hệ thống hay tìm tài liệu nào (VD: "Tìm sách Toán 12")?` 
+    }
   ])
   
   const chatScrollRef = useRef<HTMLDivElement>(null)
 
-  // Cuộn tự động khi có tin nhắn mới
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
     }
   }, [chatMessages, isChatLoading, isChatOpen, isFullscreen])
 
-  // Xử lý gửi tin nhắn
   const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!chatInput.trim() || isChatLoading) return
@@ -136,46 +159,57 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
     setChatMessages(nextHistory)
     setIsChatLoading(true)
 
-    // 1. Nếu đang bật chế độ Cơ bản (Offline)
+    // 1. Chế độ Cơ bản (Offline)
     if (!isOnlineMode) {
       setTimeout(() => {
         const fallbackResponse = generateOfflineAIResponse(userMessage, userName)
         setChatMessages([...nextHistory, { role: 'model', text: fallbackResponse }])
         setIsChatLoading(false)
-      }, 600) // Tạo độ trễ giả lập AI đang gõ
+      }, 500)
       return
     }
 
-    // 2. Nếu đang bật chế độ Nâng cao (Gemini API)
+    // 2. Chế độ Nâng cao (Gemini API)
     try {
+      // 🌟 ĐÓNG GÓI NGỮ CẢNH HỆ THỐNG VÀ TÁC GIẢ ĐỂ AI HIỂU BIẾT HƠN
+      const systemContext = `THÔNG TIN CỐT LÕI VỀ HỆ THỐNG (Tuyệt đối tuân thủ):
+      - Tên hệ thống: SenExam V2.0 - Nền tảng luyện thi thông minh.
+      - Tác giả & Nhà phát triển (Creator/Boss): Hoàng Bình Minh (Sinh ngày 25/08/2000), sinh viên xuất sắc của Đại học Công nghệ - ĐHQGHN (UET). Minh đam mê lập trình (Next.js, Python), phát triển robot (AuraServe), thích giải trí với F1, anime (Jujutsu Kaisen, Zelda) và hay uống Matcha Latte, Hibiscus tea.
+      - Tên người dùng đang trò chuyện: ${userName || 'Học sinh'}.
+      
+      QUY TẮC GIAO TIẾP VÀ HÀNH VI:
+      1. Kính trọng Tác giả: Nếu người dùng có tên là "Minh" hoặc "Hoàng Bình Minh" (hoặc tự nhận là tác giả), HÃY NHẬN DIỆN ĐÂY LÀ BOSS/SẾP CỦA BẠN. Thể hiện sự tôn trọng, trung thành và vui vẻ.
+      2. Ký hiệu Toán học / Vật Lí: Tuyệt đối tuân thủ tiêu chuẩn Việt Nam: Phải sử dụng dấu chấm "." cho phép nhân và dấu phẩy "," cho dấu thập phân (Ví dụ: 9,8 . 10).
+      3. Liên kết Thư viện: Nếu người dùng nhờ tìm kiếm sách/đề thi, hãy trả lời bằng đường dẫn định dạng: /library?search=<từ_khóa> (Ví dụ: /library?search=toán+12).
+      4. Điều hướng: Các module hiện có: Thi thử (/exams), Tính điểm Đại học (/tinhdiem), Phòng học tập trung (/focus), Diễn đàn (/forum).`
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage,
           history: chatMessages,
+          context: systemContext // Truyền Context lên API
         }),
       })
 
       const data = await response.json().catch(() => null)
 
-      // Thành công
       if (response.ok && typeof data?.text === 'string' && data.text.trim()) {
         setChatMessages([...nextHistory, { role: 'model', text: data.text }])
         return
       }
 
-      // Xử lý lỗi API (Quá tải, hết tiền, lỗi server) => Tự động Fallback sang Offline
       const errorText = typeof data?.error === 'string' ? data.error : ''
       const shouldUseOfflineFallback =
         response.status === 429 || response.status === 403 || response.status === 401 || response.status === 500 ||
-        /permission denied|access denied|resource exhausted|too many requests/i.test(errorText)
+        /permission denied|access denied|resource exhausted|too many requests|503/i.test(errorText)
 
       if (shouldUseOfflineFallback) {
         const fallback = generateOfflineAIResponse(userMessage, userName)
         setChatMessages([...nextHistory, { 
           role: 'model', 
-          text: `⚠️ Mình đang mất kết nối tới máy chủ tư duy (Quá tải). Đây là câu trả lời từ hệ thống dự phòng: \n\n${fallback}` 
+          text: `⚠️ Mình đang mất kết nối tới Gemini API. Đây là câu trả lời từ hệ thống dự phòng: \n\n${fallback}` 
         }])
         return
       }
@@ -183,24 +217,21 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       setChatMessages([...nextHistory, { role: 'model', text: `Mình chưa lấy được phản hồi: ${errorText || 'Lỗi không xác định.'}` }])
     
     } catch {
-      setChatMessages([...nextHistory, { role: 'model', text: 'Mạng có vẻ yếu hoặc bị đứt kết nối. Bạn hãy thử chuyển sang chế độ "Cơ bản" trên góc phải xem sao nhé!' }])
+      setChatMessages([...nextHistory, { role: 'model', text: 'Mạng bị đứt kết nối. Hãy thử chuyển sang chế độ "Cơ bản" để mình giúp tra cứu nhé!' }])
     } finally {
       setIsChatLoading(false)
     }
   }
 
-  // Chuyển đổi trạng thái đóng/mở chat
   const handleToggleChat = () => {
     setIsChatOpen(!isChatOpen)
-    if (isFullscreen) setIsFullscreen(false) // Đóng chat thì reset luôn fullscreen
+    if (isFullscreen) setIsFullscreen(false)
   }
 
   if (hidden) return null
 
-  // Render Classes
   const chatContainerBase = "bg-white/95 dark:bg-[#121212]/95 backdrop-blur-3xl border border-slate-200/60 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden animate-in fade-in duration-300"
   
-  // Kích thước linh hoạt theo chế độ Fullscreen
   const chatSizeClasses = isFullscreen 
     ? "fixed inset-4 sm:inset-6 md:inset-10 lg:inset-x-32 lg:inset-y-12 z-[150] rounded-[2rem]" 
     : `mb-4 w-[360px] sm:w-[420px] h-[600px] max-h-[80vh] rounded-3xl z-[100] ${avoid ? 'lg:mr-[28rem]' : ''}`
@@ -211,7 +242,6 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       {isChatOpen && (
         <div className={`${chatContainerBase} ${chatSizeClasses} pointer-events-auto`}>
           
-          {/* HEADER CHAT BOT */}
           <div className={`px-5 py-4 flex items-center justify-between shadow-sm z-10 transition-colors duration-500 ${isOnlineMode ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : 'bg-gradient-to-r from-slate-700 to-slate-600 dark:from-slate-800 dark:to-slate-900'}`}>
             <div className="flex items-center gap-3 text-white">
               <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-inner">
@@ -223,13 +253,12 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                   {isOnlineMode && <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300"/>}
                 </h3>
                 <p className="text-[11px] text-white/80 font-medium truncate max-w-[160px] sm:max-w-[200px]">
-                  {isOnlineMode ? 'Hỗ trợ giải toán, hỏi đáp AI' : 'Điều hướng & tra cứu cục bộ'}
+                  {isOnlineMode ? 'Hỏi đáp AI & Tìm thư viện' : 'Điều hướng & Giới thiệu Tác giả'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5">
-              {/* Nút Toggle Switch Đổi Chế Độ AI / Offline */}
               <div 
                 className="hidden sm:flex items-center gap-1.5 bg-white/10 border border-white/20 p-1 rounded-full mr-2 cursor-pointer"
                 onClick={() => setIsOnlineMode(!isOnlineMode)}
@@ -239,19 +268,16 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${isOnlineMode ? 'bg-white text-indigo-600 shadow-sm' : 'text-white/70'}`}><Sparkles className="w-3.5 h-3.5"/></div>
               </div>
 
-              {/* Nút Fullscreen */}
               <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
               
-              {/* Nút Đóng */}
               <button onClick={handleToggleChat} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
 
-          {/* VÙNG HIỂN THỊ TIN NHẮN */}
           <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-slate-50/50 dark:bg-transparent" ref={chatScrollRef}>
             {chatMessages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -284,14 +310,13 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
             )}
           </div>
 
-          {/* THANH CÔNG CỤ NHẬP LIỆU */}
           <div className="p-4 bg-white dark:bg-[#1A1A1A] border-t border-slate-100 dark:border-white/5">
             <form onSubmit={handleSendChatMessage} className="flex items-center gap-3 relative">
               <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder={isOnlineMode ? "Hỏi bài toán, giải thích kiến thức..." : "Tìm đề thi, tài liệu..."}
+                placeholder={isOnlineMode ? "Hỏi bài toán, tra tài liệu..." : "Tìm đề thi, tài liệu, hỏi tác giả..."}
                 className="flex-1 bg-slate-100 dark:bg-[#252525] border border-transparent focus:border-indigo-500 dark:focus:border-indigo-400 rounded-full pl-5 pr-14 py-3.5 text-sm font-semibold outline-none transition-all shadow-inner placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-white"
               />
               <button
@@ -303,7 +328,6 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
               </button>
             </form>
             
-            {/* Thông báo chế độ Mobile */}
             <div className="sm:hidden mt-3 flex justify-between items-center px-2">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                 <Settings2 className="w-3 h-3"/> Đổi Engine
@@ -320,7 +344,6 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
         </div>
       )}
 
-      {/* FLOATING ACTION BUTTON (FAB) KÍCH HOẠT CHAT */}
       <button
         onClick={handleToggleChat}
         className={`pointer-events-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] text-white font-black transition-all duration-300 hover:scale-105 active:scale-95 z-[100] border border-white/20
