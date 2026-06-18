@@ -5,12 +5,36 @@ import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, Calculator, GraduationCap, Target, AlertCircle, 
   Info, Sparkles, BookOpen, BarChart3, CheckCircle2,
-  Percent, Hash, MapPin, Bot, Loader2, Send, ChevronRight
+  Hash, MapPin, Bot, Loader2, Send, ChevronRight, MessageSquare
 } from 'lucide-react'
 
+// 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC (LATEX)
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
+
 // Các hằng số giao diện chuẩn Material Design 3 + Liquid Glass
-const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm transition-all duration-300"
+const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm transition-all duration-300"
 const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-[#252525] rounded-2xl px-5 py-4 outline-none transition-all font-black text-slate-900 dark:text-white text-base shadow-inner"
+
+// DỮ LIỆU CÁC KHỐI THI TIÊU CHUẨN
+const EXAM_BLOCKS = [
+  { code: 'A00', name: 'Toán, Vật lí, Hóa học', subs: ['Toán', 'Vật lí', 'Hóa học'] },
+  { code: 'A01', name: 'Toán, Vật lí, Tiếng Anh', subs: ['Toán', 'Vật lí', 'Tiếng Anh'] },
+  { code: 'B00', name: 'Toán, Hóa học, Sinh học', subs: ['Toán', 'Hóa học', 'Sinh học'] },
+  { code: 'C00', name: 'Ngữ văn, Lịch sử, Địa lí', subs: ['Ngữ văn', 'Lịch sử', 'Địa lí'] },
+  { code: 'D01', name: 'Ngữ văn, Toán, Tiếng Anh', subs: ['Ngữ văn', 'Toán', 'Tiếng Anh'] },
+  { code: 'D07', name: 'Toán, Hóa học, Tiếng Anh', subs: ['Toán', 'Hóa học', 'Tiếng Anh'] },
+  { code: 'A02', name: 'Toán, Vật lí, Sinh học', subs: ['Toán', 'Vật lí', 'Sinh học'] },
+  { code: 'C01', name: 'Ngữ văn, Toán, Vật lí', subs: ['Ngữ văn', 'Toán', 'Vật lí'] },
+  { code: 'Khác', name: 'Tổ hợp môn tự chọn', subs: ['Môn 1', 'Môn 2', 'Môn 3'] }
+]
+
+type ChatMessage = {
+  role: 'user' | 'model'
+  text: string
+}
 
 export default function ScoreCalculatorPage() {
   const router = useRouter()
@@ -21,6 +45,7 @@ export default function ScoreCalculatorPage() {
   
   // Tính điểm Mode
   const [calcMode, setCalcMode] = useState<'standard' | 'hust'>('standard')
+  const [selectedBlock, setSelectedBlock] = useState(EXAM_BLOCKS[0].code)
 
   // Dữ liệu nhập
   const [scores, setScores] = useState({ sub1: '', sub2: '', sub3: '' })
@@ -34,11 +59,16 @@ export default function ScoreCalculatorPage() {
     totalScore: number;
   } | null>(null)
 
-  // 🌟 State cho SenAI Tư vấn
-  const [aiResponse, setAiResponse] = useState('')
+  // 🌟 State cho SenAI Tư vấn Liên tục
+  const [aiMessages, setAiMessages] = useState<ChatMessage[]>([])
+  const [aiInput, setAiInput] = useState('')
   const [isAiLoading, setIsAiLoading] = useState(false)
   const [showAiBox, setShowAiBox] = useState(false)
+  
+  const aiChatScrollRef = useRef<HTMLDivElement>(null)
   const rightPanelRef = useRef<HTMLDivElement>(null)
+
+  const currentBlockData = EXAM_BLOCKS.find(b => b.code === selectedBlock) || EXAM_BLOCKS[0]
 
   // Khởi tạo Theme
   useEffect(() => {
@@ -47,12 +77,19 @@ export default function ScoreCalculatorPage() {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [])
 
+  // Tự động cuộn chat box AI
+  useEffect(() => {
+    if (aiChatScrollRef.current) {
+      aiChatScrollRef.current.scrollTop = aiChatScrollRef.current.scrollHeight
+    }
+  }, [aiMessages, isAiLoading])
+
   // Thuật toán Tính toán điểm số realtime
   useEffect(() => {
-    // Tự động clear AI response khi điểm bị thay đổi để tránh lệch dữ liệu
-    if (showAiBox) {
+    // Ẩn bảng tư vấn nếu điểm thay đổi để tránh lệch dữ liệu
+    if (showAiBox && !isAiLoading) {
       setShowAiBox(false)
-      setAiResponse('')
+      setAiMessages([])
     }
 
     const s1 = parseFloat(scores.sub1.replace(',', '.'))
@@ -60,7 +97,6 @@ export default function ScoreCalculatorPage() {
     const s3 = parseFloat(scores.sub3.replace(',', '.'))
     const baseP = parseFloat(priorityScore.replace(',', '.')) || 0
 
-    // Validate giới hạn điểm cơ bản
     if (isNaN(s1) || isNaN(s2) || isNaN(s3) || s1 > 10 || s2 > 10 || s3 > 10 || s1 < 0 || s2 < 0 || s3 < 0) {
       setResult(null)
       return
@@ -73,23 +109,20 @@ export default function ScoreCalculatorPage() {
     } else if (calcMode === 'hust') {
       const mainS = mainSubject === 'sub1' ? s1 : mainSubject === 'sub2' ? s2 : s3
       const otherSum = (s1 + s2 + s3) - mainS
-      // Công thức Bách Khoa quy về thang 30: ((Môn Chính x2 + 2 Môn Còn Lại) x 3) / 4
       rawScore = ((mainS * 2 + otherSum) * 3) / 4
     }
 
-    // Công thức tính điểm ưu tiên chuẩn Bộ GD&ĐT (Chỉ giảm dần khi điểm gốc >= 22.5)
     let actualPriority = baseP
     if (rawScore >= 22.5) {
       actualPriority = ((30 - rawScore) / 7.5) * baseP
     }
 
-    // Làm tròn 2 chữ số thập phân
     rawScore = Math.round(rawScore * 100) / 100
     actualPriority = Math.round(actualPriority * 100) / 100
     const totalScore = Math.round((rawScore + actualPriority) * 100) / 100
 
     setResult({ rawScore, finalPriority: Math.max(0, actualPriority), totalScore })
-  }, [scores, calcMode, mainSubject, priorityScore])
+  }, [scores, calcMode, mainSubject, priorityScore, selectedBlock])
 
   const handleScoreChange = (field: string, value: string) => {
     if (value === '' || /^[0-9.,]*$/.test(value)) {
@@ -97,79 +130,87 @@ export default function ScoreCalculatorPage() {
     }
   }
 
-  // 🌟 HÀM KÍCH HOẠT SEN AI TƯ VẤN TRƯỜNG/NGÀNH
+  // 🌟 HÀM KÍCH HOẠT TƯ VẤN ĐẦU TIÊN
   const handleAskSenAI = async () => {
     if (!result) return
     setIsAiLoading(true)
     setShowAiBox(true)
-    setAiResponse('')
 
-    // Auto scroll xuống box AI
     setTimeout(() => {
-      if (rightPanelRef.current) {
-        rightPanelRef.current.scrollTop = rightPanelRef.current.scrollHeight
-      }
+      if (rightPanelRef.current) rightPanelRef.current.scrollTop = rightPanelRef.current.scrollHeight
     }, 100)
 
     const modeText = calcMode === 'standard' 
       ? 'Đại học chung (Tổng 3 môn + Điểm ưu tiên)' 
       : 'Đại học Bách Khoa Hà Nội (Môn chính nhân hệ số 2, quy đổi về thang 30)'
 
-    const prompt = `Học sinh vừa sử dụng công cụ tính điểm xét tuyển trên hệ thống SenExam.
-- Tổng điểm đạt được: ${result.totalScore} (Thang điểm 30)
-- Phương thức xét tuyển: ${modeText}
+    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. Nhiệm vụ của bạn là tư vấn trường, ngành phù hợp dựa trên điểm thi và khối thi của thí sinh. Hãy tham chiếu mức điểm chuẩn năm 2025 để đưa ra dự báo. Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn".`
 
-Nhiệm vụ của bạn (Gia sư tư vấn tuyển sinh SenAI):
-Dựa vào phổ điểm và điểm chuẩn năm 2025 (sử dụng làm mốc dự đoán cho năm 2026), hãy phân tích cơ hội đỗ và đề xuất:
+    const prompt = `Mình vừa tính điểm xét tuyển trên hệ thống:
+- Tổng điểm xét tuyển: ${result.totalScore} (Thang 30)
+- Khối thi: ${selectedBlock} (${currentBlockData.name})
+- Chi tiết: ${currentBlockData.subs[0]}: ${scores.sub1}, ${currentBlockData.subs[1]}: ${scores.sub2}, ${currentBlockData.subs[2]}: ${scores.sub3}
+- Phương thức: ${modeText}
+
+Hãy tư vấn giúp mình:
 ${calcMode === 'standard' 
-  ? '1. Gợi ý 3 đến 5 trường Đại học xịn nhất, top đầu và ngành học tương ứng mà học sinh có khả năng trúng tuyển với số điểm này.\n2. Lời khuyên phân bổ nguyện vọng an toàn.' 
-  : '1. Gợi ý 3 đến 5 ngành học HOT và xịn nhất tại Đại học Bách Khoa Hà Nội (HUST) mà học sinh có khả năng trúng tuyển với số điểm này.\n2. Đánh giá mức độ cạnh tranh của các ngành đó.'}
+  ? '1. Gợi ý 3-5 trường Đại học xịn nhất và ngành học (kèm điểm chuẩn 2025) mà mình có khả năng đỗ với khối thi và số điểm này.\n2. Lời khuyên phân bổ nguyện vọng an toàn.' 
+  : '1. Gợi ý 3-5 ngành HOT tại ĐH Bách Khoa Hà Nội (HUST) (kèm điểm chuẩn 2025) phù hợp với số điểm này.\n2. Đánh giá mức độ cạnh tranh.'}`
 
-Yêu cầu định dạng:
-- Xưng "Mình" gọi "Bạn".
-- Đưa ra điểm chuẩn 2025 của các ngành đó để đối chiếu.
-- Sử dụng gạch đầu dòng gọn gàng, có icon minh họa. Không in đậm toàn bộ văn bản. Ngắn gọn nhưng súc tích.`
+    const initialDisplayMessage: ChatMessage = { role: 'user', text: `Tư vấn giúp mình các trường và ngành phù hợp với số điểm **${result.totalScore}** (Khối **${selectedBlock}**) nhé!` }
+    setAiMessages([initialDisplayMessage])
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt, history: [] }),
+        body: JSON.stringify({ message: prompt, history: [], context: systemContext }),
       })
       const data = await res.json()
       
       if (res.ok && data.text) {
-        setAiResponse(data.text)
+        setAiMessages([initialDisplayMessage, { role: 'model', text: data.text }])
       } else {
         throw new Error('Lỗi API')
       }
     } catch (error) {
-      setAiResponse('Xin lỗi bạn, kết nối đến máy chủ SenAI đang bị gián đoạn. Bạn thử bấm tư vấn lại nhé! 😥')
+      setAiMessages([initialDisplayMessage, { role: 'model', text: 'Xin lỗi bạn, kết nối đến máy chủ đang gián đoạn. Bạn thử gõ tin nhắn lại nhé! 😥' }])
     } finally {
       setIsAiLoading(false)
-      setTimeout(() => {
-        if (rightPanelRef.current) {
-          rightPanelRef.current.scrollTop = rightPanelRef.current.scrollHeight
-        }
-      }, 200)
     }
   }
 
-  // Hàm render Markdown cơ bản
-  const formatAIResponse = (text: string) => {
-    return text.split('\n').map((line, i) => {
-      if (!line.trim()) return <div key={i} className="h-1.5"></div>
-      const parts = line.split('**')
-      return (
-        <p key={i} className="mb-2 text-[14px]">
-          {parts.map((part, j) => 
-            j % 2 === 1 
-            ? <strong key={j} className="text-indigo-600 dark:text-indigo-400 font-extrabold">{part}</strong> 
-            : part
-          )}
-        </p>
-      )
-    })
+  // 🌟 HÀM XỬ LÝ CHAT TIẾP NỐI (FOLLOW-UP)
+  const handleSendFollowUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!aiInput.trim() || isAiLoading) return
+    const userMsg = aiInput.trim()
+    setAiInput('')
+    
+    const newHistory: ChatMessage[] = [...aiMessages, { role: 'user', text: userMsg }]
+    setAiMessages(newHistory)
+    setIsAiLoading(true)
+
+    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. Tham chiếu mức điểm chuẩn năm 2025 để đưa ra dự báo. Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn". Học sinh đang có ${result?.totalScore} điểm, khối ${selectedBlock}.`
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg, history: newHistory, context: systemContext }),
+      })
+      const data = await res.json()
+      
+      if (res.ok && data.text) {
+        setAiMessages([...newHistory, { role: 'model', text: data.text }])
+      } else {
+        throw new Error('Lỗi API')
+      }
+    } catch (error) {
+      setAiMessages([...newHistory, { role: 'model', text: 'Xin lỗi bạn, kết nối đến máy chủ đang gián đoạn. Bạn thử gửi lại nhé! 😥' }])
+    } finally {
+      setIsAiLoading(false)
+    }
   }
 
   return (
@@ -258,7 +299,7 @@ Yêu cầu định dạng:
                 </div>
               </div>
 
-              {/* KHỐI 2: ĐIỂM THI THÀNH PHẦN */}
+              {/* KHỐI 2: CHỌN KHỐI THI VÀ ĐIỂM THÀNH PHẦN */}
               <div className={`${mdCard} p-6 md:p-8`}>
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-sm font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest flex items-center gap-2">
@@ -267,15 +308,33 @@ Yêu cầu định dạng:
                   {calcMode === 'hust' && <span className="text-[10px] font-black uppercase bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 px-3 py-1 rounded-full">Chọn 1 môn nhân đôi</span>}
                 </div>
 
+                {/* Dropdown Khối Thi */}
+                <div className="mb-6">
+                  <label className="block text-xs font-black uppercase tracking-wider mb-2 text-indigo-600 dark:text-indigo-400 ml-1">Chọn Khối Thi Xét Tuyển</label>
+                  <select 
+                    value={selectedBlock} 
+                    onChange={(e) => setSelectedBlock(e.target.value)}
+                    className={`${mdInput} cursor-pointer hover:bg-slate-200/50 dark:hover:bg-[#303030]`}
+                  >
+                    {EXAM_BLOCKS.map(b => (
+                      <option key={b.code} value={b.code} className="font-bold bg-white dark:bg-[#202020]">
+                        Khối {b.code} ({b.name})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="space-y-4">
-                  {[1, 2, 3].map((num) => {
+                  {[0, 1, 2].map((idx) => {
+                    const num = idx + 1
                     const key = `sub${num}` as keyof typeof scores
                     const isMain = calcMode === 'hust' && mainSubject === key
+                    const subjectName = currentBlockData.subs[idx]
                     
                     return (
                       <div key={key} className={`flex items-center gap-3 md:gap-4 p-2 rounded-[1.5rem] transition-colors ${isMain ? 'bg-red-50/50 dark:bg-red-900/5 -mx-2 px-4 border border-red-100 dark:border-red-900/30' : 'border border-transparent'}`}>
                         <div className="flex-1">
-                          <label className="block text-xs font-bold mb-2 text-slate-600 dark:text-slate-400">Điểm Môn {num}</label>
+                          <label className="block text-xs font-bold mb-2 text-slate-600 dark:text-slate-400">Điểm môn {subjectName}</label>
                           <input 
                             type="text" 
                             placeholder="VD: 8,5"
@@ -339,7 +398,7 @@ Yêu cầu định dạng:
             </div>
 
             {/* ============================================================== */}
-            {/* PANEL PHẢI: KẾT QUẢ ĐẦU RA & TƯ VẤN AI (Chiếm 5 cột) */}
+            {/* PANEL PHẢI: KẾT QUẢ ĐẦU RA & TƯ VẤN AI LIÊN TỤC (Chiếm 5 cột) */}
             {/* ============================================================== */}
             <div className="lg:col-span-5 relative">
               <div 
@@ -400,9 +459,9 @@ Yêu cầu định dạng:
                   </div>
                 </div>
 
-                {/* 🌟 WIDGET SENAI TƯ VẤN (Chỉ hiện khi đã có điểm) */}
+                {/* 🌟 WIDGET SENAI TƯ VẤN (CÓ CHAT LIÊN TỤC) */}
                 {result && (
-                  <div className="animate-in slide-in-from-top-4 fade-in duration-500">
+                  <div className="animate-in slide-in-from-top-4 fade-in duration-500 flex flex-col">
                     {!showAiBox ? (
                       <button 
                         onClick={handleAskSenAI}
@@ -413,29 +472,92 @@ Yêu cầu định dạng:
                         <ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/>
                       </button>
                     ) : (
-                      <div className="bg-white dark:bg-[#1A1A1A] border border-indigo-200 dark:border-indigo-500/30 rounded-[2rem] p-6 shadow-xl relative overflow-hidden">
+                      <div className="bg-white dark:bg-[#1A1A1A] border border-indigo-200 dark:border-indigo-500/30 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col h-[550px]">
                         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500"></div>
                         
-                        <div className="flex items-center gap-3 mb-5 border-b border-slate-100 dark:border-white/5 pb-4">
-                          <div className="w-10 h-10 bg-indigo-50 dark:bg-[#202020] rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-inner">
-                            <Bot className="w-5 h-5"/>
-                          </div>
-                          <div>
-                            <h4 className="font-black text-slate-900 dark:text-white">Gia sư Tuyển sinh SenAI</h4>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Tham chiếu điểm chuẩn 2025</p>
+                        {/* Chat Header */}
+                        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/5 shrink-0 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-md z-10">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-50 dark:bg-[#202020] rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-inner">
+                              <Bot className="w-5 h-5"/>
+                            </div>
+                            <div>
+                              <h4 className="font-black text-slate-900 dark:text-white text-sm">Gia sư Tuyển sinh SenAI</h4>
+                              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Tham chiếu điểm chuẩn 2025</p>
+                            </div>
                           </div>
                         </div>
 
-                        {isAiLoading ? (
-                          <div className="flex flex-col items-center justify-center py-8 text-center">
-                            <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3"/>
-                            <p className="text-sm font-bold text-slate-500 animate-pulse">Đang rà soát ma trận điểm chuẩn 2025...</p>
-                          </div>
-                        ) : (
-                          <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed space-y-2">
-                            {formatAIResponse(aiResponse)}
-                          </div>
-                        )}
+                        {/* Chat History Area */}
+                        <div 
+                          ref={aiChatScrollRef}
+                          className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6"
+                        >
+                          {aiMessages.map((msg, idx) => (
+                            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                              {msg.role === 'model' && (
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 mr-3 shadow-sm mt-1">
+                                  <Bot className="w-4 h-4"/>
+                                </div>
+                              )}
+
+                              <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14px] font-medium leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm overflow-x-auto'}`}>
+                                {/* SỬ DỤNG REACT-MARKDOWN ĐỂ RENDER CHUẨN CÔNG THỨC */}
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkMath]}
+                                  rehypePlugins={[rehypeKatex]}
+                                  components={{
+                                    p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                    strong: ({node, ...props}) => <strong className={`font-extrabold ${msg.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...props} />,
+                                    ul: ({node, ...props}) => <ul className="list-disc ml-5 mb-2 space-y-1" {...props} />,
+                                    ol: ({node, ...props}) => <ol className="list-decimal ml-5 mb-2 space-y-1" {...props} />,
+                                    li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                                    h3: ({node, ...props}) => <h3 className="text-base font-bold mb-2 mt-3" {...props} />,
+                                  }}
+                                >
+                                  {msg.text}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
+                          ))}
+
+                          {isAiLoading && (
+                            <div className="flex justify-start items-end">
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 shrink-0 mr-3 shadow-sm">
+                                <Sparkles className="w-4 h-4 animate-pulse text-yellow-500"/>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 px-5 py-3.5 rounded-[1.5rem] rounded-bl-sm shadow-sm flex items-center gap-2">
+                                <span className="flex gap-1">
+                                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
+                                  <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
+                                  <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
+                                </span>
+                                <span className="text-[12px] text-slate-500 font-bold italic ml-1">Đang phân tích dữ liệu...</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Chat Input */}
+                        <div className="p-4 border-t border-slate-100 dark:border-white/5 shrink-0 bg-white dark:bg-[#1A1A1A]">
+                          <form onSubmit={handleSendFollowUp} className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={aiInput}
+                              onChange={(e) => setAiInput(e.target.value)}
+                              placeholder="Hỏi thêm về các trường/ngành khác..."
+                              className="w-full bg-slate-100 dark:bg-[#252525] border-transparent focus:bg-white dark:focus:bg-[#2A2A2A] border-2 focus:border-indigo-500 rounded-full pl-5 pr-14 py-3 outline-none transition-all font-medium text-slate-900 dark:text-white text-sm shadow-inner"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!aiInput.trim() || isAiLoading}
+                              className="absolute right-1.5 p-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full transition-transform active:scale-95 shadow-md flex items-center justify-center disabled:opacity-50"
+                            >
+                              <Send className="w-4 h-4 ml-0.5" />
+                            </button>
+                          </form>
+                        </div>
+
                       </div>
                     )}
                   </div>
@@ -444,7 +566,7 @@ Yêu cầu định dạng:
                 {/* Nút tác vụ phụ */}
                 <div className="flex justify-center pt-2">
                    <button 
-                    onClick={() => { setScores({sub1:'', sub2:'', sub3:''}); setPriorityScore(''); setResult(null); setShowAiBox(false); setAiResponse('') }} 
+                    onClick={() => { setScores({sub1:'', sub2:'', sub3:''}); setPriorityScore(''); setResult(null); setShowAiBox(false); setAiMessages([]); setAiInput('') }} 
                     className="text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/5 shadow-sm px-6 py-2.5 rounded-full active:scale-95"
                   >
                      Làm mới bộ tính
