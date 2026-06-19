@@ -1,6 +1,10 @@
-import fs from 'fs';
-import path from 'path';
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+// Khởi tạo Supabase Client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function POST(req: Request) {
   try {
@@ -10,54 +14,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Dữ liệu gửi lên không đúng định dạng mảng JSON.' }, { status: 400 });
     }
 
-    const filePath = path.join(process.cwd(), 'data', 'diemchuan.json');
-    let existingData: any[] = [];
+    // 1. Đọc dữ liệu cũ từ Supabase
+    const { data: dbRecord, error: fetchErr } = await supabase
+      .from('university_scores')
+      .select('data')
+      .eq('id', 1)
+      .single();
 
-    // Đọc dữ liệu cũ nếu file đã tồn tại
-    if (fs.existsSync(filePath)) {
-      const fileContent = fs.readFileSync(filePath, 'utf8');
-      if (fileContent) {
-        existingData = JSON.parse(fileContent);
-      }
-    }
+    let existingData: any[] = dbRecord?.data || [];
 
-    // Thuật toán Merge (Gộp) dữ liệu thông minh
+    // 2. Thuật toán Merge (Gộp) dữ liệu thông minh
     newData.forEach((newGroup: any) => {
-      // Tìm nhóm ngành (Ví dụ: Công nghệ - Kỹ thuật)
       const existingGroup = existingData.find(g => g.group === newGroup.group);
       
       if (existingGroup) {
-        // Nhóm đã tồn tại -> Kiểm tra từng trường đại học
         newGroup.universities.forEach((newUni: any) => {
           const existingUni = existingGroup.universities.find((u: any) => u.code === newUni.code);
           
           if (existingUni) {
-            // Trường đã tồn tại -> Gộp ngành học (nếu trùng mã ngành thì ghi đè điểm mới, nếu không thì thêm vào)
             newUni.majors.forEach((newMajor: any) => {
               const existingMajorIndex = existingUni.majors.findIndex((m: any) => m.major_code === newMajor.major_code || m.major_name === newMajor.major_name);
               if (existingMajorIndex > -1) {
-                existingUni.majors[existingMajorIndex] = newMajor; // Ghi đè
+                existingUni.majors[existingMajorIndex] = newMajor; // Ghi đè cập nhật điểm mới
               } else {
-                existingUni.majors.push(newMajor); // Thêm mới
+                existingUni.majors.push(newMajor); // Thêm ngành mới
               }
             });
           } else {
-            // Trường chưa tồn tại trong nhóm -> Thêm mới trường
-            existingGroup.universities.push(newUni);
+            existingGroup.universities.push(newUni); // Thêm trường mới
           }
         });
       } else {
-        // Nhóm chưa tồn tại -> Thêm nguyên cả khối nhóm mới
-        existingData.push(newGroup);
+        existingData.push(newGroup); // Thêm nguyên khối nhóm ngành mới
       }
     });
 
-    // Lưu lại vào file hệ thống
-    fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2), 'utf8');
+    // 3. Lưu lại lên Supabase thay vì ghi file local
+    const { error: updateErr } = await supabase
+      .from('university_scores')
+      .update({ data: existingData })
+      .eq('id', 1);
 
-    return NextResponse.json({ success: true, message: 'Cập nhật cơ sở dữ liệu diemchuan.json thành công!' });
+    if (updateErr) {
+        // Fallback nếu bảng chưa có dòng id=1
+        await supabase.from('university_scores').insert([{ id: 1, data: existingData }]);
+    }
+
+    return NextResponse.json({ success: true, message: 'Đồng bộ cơ sở dữ liệu lên Supabase thành công!' });
   } catch (error: any) {
-    console.error('Lỗi khi ghi file diemchuan.json:', error);
+    console.error('Lỗi khi cập nhật DB:', error);
     return NextResponse.json({ error: error.message || 'Lỗi Server khi cập nhật dữ liệu.' }, { status: 500 });
   }
 }
