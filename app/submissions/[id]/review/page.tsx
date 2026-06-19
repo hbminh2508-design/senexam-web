@@ -6,8 +6,17 @@ import { supabase } from '@/lib/supabaseClient'
 import { 
   ArrowLeft, CheckCircle2, XCircle, HelpCircle, BookOpen, PenTool, 
   Sparkles, Send, Bot, Loader2, Award, ChevronRight, AlertCircle, 
-  FileText, Layers, User // 🌟 Đã fix bổ sung import User
+  FileText, Layers, User, ImageIcon, Paperclip, Trash2
 } from 'lucide-react'
+
+// ============================================================================
+// THƯ VIỆN RENDER MARKDOWN & TOÁN HỌC (BẢNG, CÔNG THỨC)
+// ============================================================================
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import remarkGfm from 'remark-gfm'
+import 'katex/dist/katex.min.css'
 
 // ============================================================================
 // MATERIAL DESIGN 3 + LIQUID GLASS CONSTANTS
@@ -16,11 +25,14 @@ const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-satu
 const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-[#2A2A2A] rounded-2xl px-5 py-4 outline-none transition-all font-medium text-slate-900 dark:text-white text-sm shadow-inner placeholder:text-slate-400 dark:placeholder:text-slate-500"
 
 // ============================================================================
-// INTERFACES & TYPES (Định nghĩa chặt chẽ để chống lỗi TypeScript)
+// INTERFACES & TYPES
 // ============================================================================
+type ChatFile = { url: string; base64: string; mimeType: string; isPdf: boolean; name: string }
+
 interface AIQuestionState {
   isOpen: boolean;
   questionText: string;
+  files: ChatFile[]; // 🌟 Thêm mảng chứa file đính kèm
   response: string;
   isLoading: boolean;
 }
@@ -32,11 +44,10 @@ export default function StudentReviewPage() {
   const [submission, setSubmission] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   
-  // State quản lý việc mở SenAI cho từng câu hỏi riêng biệt (Lưu theo ID câu hỏi)
   const [aiStates, setAiStates] = useState<Record<string, AIQuestionState>>({})
 
   // ============================================================================
-  // KHỞI TẠO VÀ NẠP DỮ LIỆU TỪ SUPABASE
+  // KHỞI TẠO VÀ NẠP DỮ LIỆU
   // ============================================================================
   useEffect(() => {
     const fetchSubmissionData = async () => {
@@ -47,7 +58,6 @@ export default function StudentReviewPage() {
         return; 
       }
 
-      // Nạp dữ liệu báo cáo điểm kèm cấu trúc đề từ cơ sở dữ liệu
       const { data, error } = await supabase
         .from('submissions')
         .select(`
@@ -58,7 +68,7 @@ export default function StudentReviewPage() {
           profiles ( full_name )
         `)
         .eq('id', params.id as string)
-        .eq('user_id', user.id) // Bảo mật: Chỉ người làm bài mới được xem
+        .eq('user_id', user.id)
         .single()
 
       if (error || !data) {
@@ -79,57 +89,82 @@ export default function StudentReviewPage() {
 
     fetchSubmissionData()
 
-    // Khởi tạo Theme theo cài đặt của trình duyệt hoặc LocalStorage
     if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
       document.documentElement.classList.add('dark')
     }
   }, [params.id, router])
 
   // ============================================================================
+  // CÁC HÀM XỬ LÝ FILE (UPLOAD & PASTE)
+  // ============================================================================
+  
+  const handleFileUpload = (key: string, fileList: FileList | File[]) => {
+    Array.from(fileList).forEach(file => {
+      const isPdf = file.type === 'application/pdf'
+      if (!isPdf && !file.type.startsWith('image/')) { 
+        alert('Hệ thống chỉ hỗ trợ phân tích file PDF hoặc Hình ảnh.'); 
+        return 
+      }
+
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const base64Data = (event.target?.result as string).split(',')[1]
+        const newFile = { url: URL.createObjectURL(file), base64: base64Data, mimeType: file.type, isPdf, name: file.name }
+        
+        setAiStates(prev => {
+          const curr = prev[key] || { isOpen: true, questionText: '', files: [], response: '', isLoading: false }
+          return { ...prev, [key]: { ...curr, files: [...curr.files, newFile] } }
+        })
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>, key: string) => {
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      e.preventDefault(); // Chặn việc paste text rác nếu có chứa file
+      handleFileUpload(key, e.clipboardData.files)
+    }
+  }
+
+  const removeFile = (key: string, fileIndex: number) => {
+    setAiStates(prev => {
+      const curr = prev[key]
+      if (!curr) return prev
+      const newFiles = [...curr.files]
+      newFiles.splice(fileIndex, 1)
+      return { ...prev, [key]: { ...curr, files: newFiles } }
+    })
+  }
+
+  // ============================================================================
   // CÁC HÀM XỬ LÝ DỮ LIỆU ĐÁP ÁN (PARSERS)
   // ============================================================================
   
   const parseStudentAnswer = (ans: any, type?: string) => {
-    // 1. Xử lý trường hợp học sinh bỏ trống
-    if (ans === undefined || ans === null || ans === '') {
-      return <span className="text-slate-400 dark:text-slate-500 italic font-medium">Bỏ trống</span>
-    }
-    
-    // 2. Xử lý định dạng True/False liên hoàn của Bộ GD&ĐT (a: Đ, b: S, c: Đ, d: S)
+    if (ans === undefined || ans === null || ans === '') return <span className="text-slate-400 dark:text-slate-500 italic font-medium">Bỏ trống</span>
     if (type === 'true_false' && typeof ans === 'object' && !Array.isArray(ans)) {
       return ['a', 'b', 'c', 'd'].map(k => `${k.toUpperCase()}: ${ans[k] || '-'}`).join(' | ')
     }
-
-    // 3. Xử lý các Object phức tạp (Nhiều lựa chọn, Tự luận có file đính kèm...)
     if (typeof ans === 'object') {
-      if (Array.isArray(ans)) return ans.join(', ') // Multiple choices (e.g. [A, C])
-      if (ans.text) return ans.text // Essay text
-      if (ans.file_url) return 'Có tệp đính kèm' // Essay file
-      return JSON.stringify(ans) // Fallback
+      if (Array.isArray(ans)) return ans.join(', ') 
+      if (ans.text) return ans.text 
+      if (ans.file_url) return 'Có tệp đính kèm' 
+      return JSON.stringify(ans)
     }
-
-    // 4. Mặc định là chuỗi String (Trắc nghiệm đơn, Điền số)
     return String(ans)
   }
 
-  // Khớp điểm gốc để xác định câu làm đúng hay sai
   const isQuestionFullyCorrect = (studentAns: any, correctAns: any, type: string, score: number) => {
-    // Tự luận: Cứ có điểm lớn hơn 0 là tính đúng (xanh)
     if (type === 'essay') return score > 0;
-    
-    // Trắc nghiệm nhiều lựa chọn
     if (type === 'multiple_choice') {
       return Array.isArray(studentAns) && Array.isArray(correctAns) && 
              studentAns.length === correctAns.length && studentAns.every(v => correctAns.includes(v));
     }
-    
-    // Đúng/Sai liên hoàn: Phải đúng cả 4 ý mới tính là correct 100% để tắt nút AI
     if (type === 'true_false') {
       return typeof studentAns === 'object' && typeof correctAns === 'object' && 
              ['a','b','c','d'].every(sub => studentAns[sub] === correctAns[sub]);
     }
-
-    // Trắc nghiệm đơn và Điền khuyết: Khớp chuỗi tuyệt đối (không phân biệt hoa/thường)
     return String(studentAns).trim().toLowerCase() === String(correctAns).trim().toLowerCase();
   }
 
@@ -139,49 +174,49 @@ export default function StudentReviewPage() {
   const handleAskSenAI = async (questionKey: string, studentAns: any, correctAns: any, type: string) => {
     const currentState = aiStates[questionKey]
     
-    // Validate trước khi gửi API
-    if (!currentState?.questionText.trim() || currentState.isLoading) return
+    // Yêu cầu phải có Text hoặc File mới gọi AI
+    if ((!currentState?.questionText.trim() && (!currentState?.files || currentState.files.length === 0)) || currentState?.isLoading) return
 
-    // Bật trạng thái Loading UI
     setAiStates(prev => ({ 
       ...prev, 
       [questionKey]: { ...currentState, isLoading: true, response: '' } 
     }))
 
-    // Chuẩn hóa dữ liệu đẩy lên AI để tránh lỗi parse Object
     const parsedStudent = typeof studentAns === 'object' ? JSON.stringify(studentAns) : String(studentAns || 'Bỏ trống')
     const parsedCorrect = typeof correctAns === 'object' ? JSON.stringify(correctAns) : String(correctAns)
     
-    // Hệ thống Prompt thiết kế theo chuẩn Zero-Shot Prompting
     const prompt = `Học sinh đang xem lại bài kiểm tra và làm sai (hoặc chưa hiểu) một câu hỏi.
 Dưới đây là thông tin câu hỏi:
-- Nội dung câu hỏi: "${currentState.questionText}"
+- Nội dung câu hỏi/công thức: "${currentState.questionText || '[Học sinh đã đính kèm trong Hình ảnh/PDF]'}"
 - Đáp án học sinh đã chọn: ${parsedStudent}
 - Đáp án đúng của hệ thống: ${parsedCorrect}
 - Dạng câu hỏi: ${type}
 
 Nhiệm vụ của bạn (SenAI - Gia sư AI chuyên nghiệp):
-1. Giải thích cặn kẽ, từng bước một tại sao đáp án hệ thống lại là đáp án đúng.
-2. Phân tích lỗi sai trong tư duy hoặc lỗi tính toán khiến học sinh chọn đáp án sai kia.
-3. Rút ra bài học, cung cấp công thức, định lý hoặc mẹo ghi nhớ để học sinh khắc phục và áp dụng cho các bài tương tự.
+1. Đọc hình ảnh/PDF đính kèm (nếu có) để nhận diện các công thức Toán, Vật Lí, Hóa Học phức tạp.
+2. Giải thích cặn kẽ, từng bước một tại sao đáp án hệ thống lại là đáp án đúng. Trình bày các công thức Toán học bằng chuẩn LaTeX (dùng $ và $$).
+3. Phân tích lỗi sai trong tư duy hoặc lỗi tính toán khiến học sinh chọn đáp án sai kia.
+4. Rút ra bài học, cung cấp công thức, định lý hoặc mẹo ghi nhớ để học sinh khắc phục.
 
 Yêu cầu định dạng:
 - Trình bày cực kỳ thân thiện, xưng "Mình" gọi "Bạn".
-- Phân đoạn rõ ràng, mạch lạc, không dùng Markdown in đậm quá nhiều để tránh rối mắt.
-- Tập trung vào trọng tâm kiến thức.`
+- Dùng Markdown rõ ràng (Bullet points, Bảng, In đậm chữ quan trọng).`
+
+    const payloadImages = (currentState.files || []).map(f => ({
+      mimeType: f.mimeType,
+      base64: f.base64
+    }))
 
     try {
-      // GỌI VÀO API ROUTE (/api/chat) ĐÃ ĐƯỢC TỐI ƯU TRÊN HỆ THỐNG
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt, history: [] }),
+        body: JSON.stringify({ message: prompt, history: [], images: payloadImages }),
       })
 
       const data = await response.json()
 
       if (response.ok && data.text) {
-        // Cập nhật câu trả lời từ Gemini
         setAiStates(prev => ({ 
           ...prev, 
           [questionKey]: { ...currentState, isLoading: false, response: data.text } 
@@ -190,7 +225,6 @@ Yêu cầu định dạng:
         throw new Error(data.error || 'Lỗi xử lý từ hệ thống AI của Google')
       }
     } catch (error) {
-      // Bắt lỗi Network hoặc Quá tải API
       setAiStates(prev => ({ 
         ...prev, 
         [questionKey]: { 
@@ -202,29 +236,10 @@ Yêu cầu định dạng:
     }
   }
 
-  // Định dạng Text trả về từ AI (Parse Markdown Basic)
-  const formatAIResponse = (text: string) => {
-    return text.split('\n').map((line, i) => {
-      if (!line.trim()) return <div key={i} className="h-2"></div> // Spacer cho dòng trống
-      
-      const parts = line.split('**')
-      return (
-        <p key={i} className="mb-2.5 text-[14px]">
-          {parts.map((part, j) => 
-            j % 2 === 1 
-            ? <strong key={j} className="text-indigo-600 dark:text-indigo-400 font-black tracking-wide">{part}</strong> 
-            : part
-          )}
-        </p>
-      )
-    })
-  }
-
   // ============================================================================
-  // RENDER UI CHÍNH - MATERIAL DESIGN 3 + LIQUID GLASS
+  // RENDER UI CHÍNH
   // ============================================================================
 
-  // 1. Trạng thái Loading ban đầu
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]">
       <Loader2 className="w-14 h-14 animate-spin text-indigo-600 dark:text-indigo-400 mb-6 drop-shadow-lg" />
@@ -233,18 +248,16 @@ Yêu cầu định dạng:
     </div>
   )
 
-  // Link Preview PDF từ Google Drive
   const pdfUrl = `https://drive.google.com/file/d/${submission.exams?.drive_file_id}/preview`
 
   return (
     <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 overflow-hidden font-sans relative transition-colors duration-500">
       
-      {/* 🌟 NỀN AMBIENT TRANG TRÍ V2.0 (LÀM NỔI BẬT HIỆU ỨNG KÍNH MỜ) */}
+      {/* 🌟 NỀN AMBIENT */}
       <div className="absolute top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/5 dark:from-indigo-900/20 dark:to-blue-900/10 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
-      {/* 🌟 HEADER APP BAR: BÁO CÁO KẾT QUẢ */}
+      {/* 🌟 HEADER APP BAR */}
       <header className="h-[80px] md:h-[88px] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl backdrop-saturate-[1.5] border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 sm:px-6 lg:px-8 shrink-0 z-20 shadow-sm transition-all duration-300">
-        
         <div className="flex items-center gap-3 sm:gap-5">
           <button 
             onClick={() => router.push('/dashboard')} 
@@ -280,12 +293,10 @@ Yêu cầu định dạng:
         </div>
       </header>
 
-      {/* 🌟 WORKSPACE CHÍNH: CHIA 2 CỘT (PDF TRÁI & REVIEW PHẢI) */}
+      {/* 🌟 WORKSPACE CHÍNH */}
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden z-10 bg-transparent">
         
-        {/* ============================================================== */}
-        {/* CỘT TRÁI: HIỂN THỊ ĐỀ THI BẢN GỐC (PDF VIEWER) */}
-        {/* ============================================================== */}
+        {/* CỘT TRÁI: PDF VIEWER */}
         <div className="flex-1 h-[40vh] md:h-full relative bg-slate-200/50 dark:bg-[#0A0A0A] border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/5 shadow-inner">
           {submission.exams?.drive_file_id ? (
             <iframe 
@@ -305,16 +316,14 @@ Yêu cầu định dạng:
           )}
         </div>
 
-        {/* ============================================================== */}
-        {/* CỘT PHẢI: BẢNG PHÂN TÍCH ĐÁP ÁN TỪNG CÂU & GIA SƯ AI */}
-        {/* ============================================================== */}
+        {/* CỘT PHẢI: REVIEW & SENAI */}
         <div className="w-full md:w-[480px] lg:w-[580px] xl:w-[650px] h-[60vh] md:h-full bg-slate-50 dark:bg-[#0A0A0A] overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8 custom-scrollbar shrink-0">
           
           <div className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 border-b border-slate-200 dark:border-white/10 pb-5">
             <BookOpen className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/> Phân tích đánh giá chi tiết
           </div>
           
-          {/* Lời phê chung từ Giáo viên / Hệ thống */}
+          {/* Lời phê chung */}
           {submission.feedback && (
             <div className={`${mdCard} p-6 border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/10`}>
               <h3 className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest mb-2 flex items-center gap-2">
@@ -326,12 +335,11 @@ Yêu cầu định dạng:
             </div>
           )}
 
-          {/* Duyệt qua từng cấu trúc Phần thi (Sections Matrix) */}
+          {/* Duyệt qua từng cấu trúc Phần thi */}
           <div className="space-y-8 md:space-y-10">
             {submission.exams?.exam_structure?.map((section: any) => (
               <div key={section.id} className="space-y-5">
                 
-                {/* Section Header */}
                 <div className="flex items-center gap-3 py-3 border-b border-slate-200 dark:border-white/10 sticky top-0 bg-slate-50/90 dark:bg-[#0A0A0A]/90 backdrop-blur-md z-10">
                   <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-[#202020] flex items-center justify-center text-slate-600 dark:text-slate-400 font-black shadow-inner">
                     <Layers className="w-4 h-4"/>
@@ -341,7 +349,6 @@ Yêu cầu định dạng:
                   </h2>
                 </div>
 
-                {/* Danh sách Câu hỏi (Questions Mapping) */}
                 <div className="space-y-5">
                   {Array.from({ length: section.questionCount }).map((_, qIdx) => {
                     const key = `${section.id}-${qIdx}`
@@ -349,23 +356,18 @@ Yêu cầu định dạng:
                     const correctAns = section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)]
                     const questionScore = submission.detailed_scores?.[key] ?? 0
                     
-                    // Logic nội suy nhận diện Dạng Bài
                     let currentType = section.type
                     if (section.type === 'mixed' && section.mixedRanges) {
                       const range = section.mixedRanges.find((r: any) => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
                       currentType = range ? range.type : 'short_answer'
                     }
 
-                    // Đánh giá Trạng thái câu (Đúng / Sai)
                     const isRight = isQuestionFullyCorrect(studentAns, correctAns, currentType, questionScore)
-                    
-                    // State Quản lý Trợ lý AI
-                    const aiState = aiStates[key] || { isOpen: false, questionText: '', response: '', isLoading: false }
+                    const aiState = aiStates[key] || { isOpen: false, questionText: '', files: [], response: '', isLoading: false }
 
                     return (
                       <div key={qIdx} className={`${mdCard} p-5 sm:p-6 ${isRight ? 'border-emerald-200/60 dark:border-emerald-900/40 bg-white/90 dark:bg-[#1A1A1A]/90' : 'border-rose-200/60 dark:border-rose-900/40 bg-white/90 dark:bg-[#1A1A1A]/90'}`}>
                         
-                        {/* Hàng 1: Header Câu Hỏi & Báo Điểm */}
                         <div className="flex justify-between items-center mb-5">
                           <div className="flex items-center gap-3">
                             <span className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${isRight ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400'}`}>
@@ -384,7 +386,6 @@ Yêu cầu định dạng:
                           </div>
                         </div>
 
-                        {/* Hàng 2: Khung Hiển thị Đáp án */}
                         {currentType === 'true_false' ? (
                           <div className="flex flex-col gap-2 mt-2">
                             {['a','b','c','d'].map(subLabel => {
@@ -416,8 +417,7 @@ Yêu cầu định dạng:
                           </div>
                         )}
 
-                        {/* 🌟 HÀNG 3: WIDGET SEN AI GIA SƯ (TÍCH HỢP GEMINI API) */}
-                        {/* Điều kiện bật: Câu làm sai (isRight == false) VÀ không phải câu Tự luận */}
+                        {/* 🌟 HÀNG 3: WIDGET SEN AI GIA SƯ ĐA PHƯƠNG THỨC */}
                         {!isRight && currentType !== 'essay' && (
                           <div className="mt-5 pt-5 border-t border-slate-100 dark:border-white/5">
                             
@@ -430,7 +430,6 @@ Yêu cầu định dạng:
                               </button>
                             ) : (
                               <div className="bg-white dark:bg-[#161616] rounded-[1.5rem] border border-indigo-200 dark:border-indigo-500/30 p-5 shadow-lg relative overflow-hidden animate-in fade-in zoom-in-95 duration-300">
-                                {/* Viền màu trang trí đỉnh */}
                                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500"></div>
                                 
                                 {!aiState.response && !aiState.isLoading ? (
@@ -442,17 +441,44 @@ Yêu cầu định dạng:
                                       <div className="pt-0.5">
                                         <h4 className="font-black text-sm text-slate-900 dark:text-white mb-1">Chào bạn, mình là SenAI! 👋</h4>
                                         <p className="text-[13px] font-medium text-slate-600 dark:text-slate-400 leading-relaxed">
-                                          Vì mình không thể tự "nhìn" thấy chữ trong file PDF, bạn hãy giúp mình <strong className="text-indigo-600 dark:text-indigo-400 font-bold">chép lại nội dung câu hỏi</strong> từ đề bài bên trái và dán vào ô bên dưới nhé. Mình sẽ phân tích ngay!
+                                          Nếu câu hỏi chứa <strong className="text-indigo-600 dark:text-indigo-400 font-bold">công thức phức tạp</strong>, bạn có thể <strong className="text-indigo-600 dark:text-indigo-400 font-bold">Copy và Dán ảnh (Ctrl+V)</strong> trực tiếp vào khung dưới, hoặc đính kèm file nhé!
                                         </p>
                                       </div>
                                     </div>
                                     
-                                    <textarea 
-                                      value={aiState.questionText}
-                                      onChange={(e) => setAiStates(prev => ({ ...prev, [key]: { ...aiState, questionText: e.target.value } }))}
-                                      placeholder="✏️ Dán nội dung câu hỏi bị sai vào đây..."
-                                      className="w-full bg-slate-50 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 rounded-xl p-4 text-sm font-medium outline-none transition-all shadow-inner placeholder:text-slate-400 dark:placeholder:text-slate-600 min-h-[100px] mb-4 text-slate-900 dark:text-white"
-                                    />
+                                    {/* Khung nhập liệu Multimodal */}
+                                    <div className="relative bg-slate-50 dark:bg-[#202020] border-2 border-transparent focus-within:border-indigo-500 rounded-xl transition-all shadow-inner mb-4 overflow-hidden p-2">
+                                      
+                                      {/* Hiển thị tệp đính kèm */}
+                                      {aiState.files && aiState.files.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-2 p-2">
+                                          {aiState.files.map((f, i) => (
+                                            <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-black group shrink-0">
+                                              {f.isPdf ? <div className="w-full h-full flex items-center justify-center"><FileText className="w-6 h-6 text-slate-400"/></div> : <img src={f.url} alt="Uploaded file" className="w-full h-full object-cover"/>}
+                                              <button onClick={() => removeFile(key, i)} className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4 text-rose-400"/></button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      <textarea 
+                                        value={aiState.questionText}
+                                        onChange={(e) => setAiStates(prev => ({ ...prev, [key]: { ...aiState, questionText: e.target.value } }))}
+                                        onPaste={(e) => handlePaste(e, key)}
+                                        placeholder="✏️ Dán nội dung câu hỏi hoặc dán Ảnh trực tiếp vào đây..."
+                                        className="w-full bg-transparent p-2 text-sm font-medium outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 min-h-[80px] resize-none custom-scrollbar text-slate-900 dark:text-white"
+                                      />
+                                      
+                                      <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700/50 mt-1">
+                                        <div className="flex gap-2 pl-1">
+                                          <input type="file" id={`file-upload-${key}`} multiple accept="image/*,application/pdf" className="hidden" onChange={(e) => handleFileUpload(key, e.target.files || [])} />
+                                          <label htmlFor={`file-upload-${key}`} className="p-1.5 text-slate-400 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg cursor-pointer transition-colors" title="Đính kèm Ảnh/PDF">
+                                            <ImageIcon className="w-5 h-5" />
+                                          </label>
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 font-bold hidden sm:block italic pr-2">Hỗ trợ Paste (Ctrl+V) ảnh trực tiếp</div>
+                                      </div>
+                                    </div>
                                     
                                     <div className="flex justify-end gap-3">
                                       <button 
@@ -463,7 +489,7 @@ Yêu cầu định dạng:
                                       </button>
                                       <button 
                                         onClick={() => handleAskSenAI(key, studentAns, correctAns, currentType)}
-                                        disabled={!aiState.questionText.trim()}
+                                        disabled={!aiState.questionText.trim() && (!aiState.files || aiState.files.length === 0)}
                                         className="px-6 py-2.5 rounded-full text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition-all flex items-center gap-2 disabled:opacity-50 disabled:shadow-none shadow-md active:scale-95"
                                       >
                                         Gửi cho AI Phân tích <Send className="w-3.5 h-3.5"/>
@@ -488,14 +514,40 @@ Yêu cầu định dạng:
                                           </div>
                                         </div>
                                       ) : (
-                                        <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-[#1A1A1A] p-5 rounded-2xl border border-slate-100 dark:border-white/5 shadow-inner selection:bg-indigo-200 dark:selection:bg-indigo-900">
+                                        <div className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-relaxed bg-slate-50 dark:bg-[#1A1A1A] p-5 rounded-2xl border border-slate-100 dark:border-white/5 shadow-inner">
                                           
-                                          {/* Render kết quả Markdown Basic */}
-                                          {formatAIResponse(aiState.response)}
+                                          {/* 🌟 RENDER MARKDOWN XỊN (HỖ TRỢ LATEX VÀ BẢNG) */}
+                                          <div className="markdown-content">
+                                            <ReactMarkdown
+                                              remarkPlugins={[remarkMath, remarkGfm]}
+                                              rehypePlugins={[rehypeKatex]}
+                                              components={{
+                                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                                strong: ({node, ...props}) => <strong className="font-black text-indigo-600 dark:text-indigo-400" {...props} />,
+                                                ul: ({node, ...props}) => <ul className="list-disc ml-5 mb-2 space-y-1" {...props} />,
+                                                ol: ({node, ...props}) => <ol className="list-decimal ml-5 mb-2 space-y-1" {...props} />,
+                                                li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                                                h3: ({node, ...props}) => <h3 className="text-base font-bold mb-2 mt-3" {...props} />,
+                                                // Tùy chỉnh Table UI
+                                                table: ({node, ...props}) => (
+                                                  <div className="overflow-x-auto my-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                                                    <table className="w-full text-left border-collapse text-sm min-w-full" {...props} />
+                                                  </div>
+                                                ),
+                                                thead: ({node, ...props}) => <thead className="bg-slate-100 dark:bg-[#2A2A2A] text-slate-700 dark:text-slate-300" {...props} />,
+                                                tbody: ({node, ...props}) => <tbody className="divide-y divide-slate-200 dark:divide-white/10" {...props} />,
+                                                tr: ({node, ...props}) => <tr className="hover:bg-slate-50 dark:hover:bg-[#252525] transition-colors" {...props} />,
+                                                th: ({node, ...props}) => <th className="px-4 py-3 font-bold border-r last:border-r-0 border-slate-200 dark:border-white/10" {...props} />,
+                                                td: ({node, ...props}) => <td className="px-4 py-3 align-top border-r last:border-r-0 border-slate-200 dark:border-white/10" {...props} />,
+                                              }}
+                                            >
+                                              {aiState.response}
+                                            </ReactMarkdown>
+                                          </div>
                                           
                                           <div className="mt-5 pt-4 border-t border-slate-200 dark:border-white/5 flex justify-end">
                                             <button 
-                                              onClick={() => setAiStates(prev => ({ ...prev, [key]: { ...aiState, response: '', questionText: '' } }))}
+                                              onClick={() => setAiStates(prev => ({ ...prev, [key]: { ...aiState, response: '', questionText: '', files: [] } }))}
                                               className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 rounded-full"
                                             >
                                               <ChevronRight className="w-4 h-4"/> Phân tích lại câu này
@@ -519,7 +571,6 @@ Yêu cầu định dạng:
             ))}
           </div>
           
-          {/* Pad bottom for smooth scrolling */}
           <div className="h-16"></div>
         </div>
       </div>
