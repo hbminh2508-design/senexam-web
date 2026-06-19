@@ -1,44 +1,43 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Khởi tạo Supabase Client (Đặt ngoài handler để tối ưu connection pool)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import fs from 'fs';
+import path from 'path';
 
 export async function POST(req: Request) {
   try {
-    // 🌟 HỆ THỐNG ĐẢO KEY (KEY ROTATION) V2 - SIÊU BỀN BỈ
-    const rawKeys = process.env.GEMINI_API_KEY;
-    if (!rawKeys) {
+    // 1. Kiểm tra API Key (Chỉ dùng 1 Key duy nhất, không Key Rotation)
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       console.error("Lỗi Server: Không tìm thấy biến môi trường GEMINI_API_KEY");
       return NextResponse.json({ error: 'Chưa cấu hình API Key trên hệ thống Vercel' }, { status: 500 });
     }
 
-    // Tách các key ra thành mảng (Hỗ trợ vô hạn Key cách nhau bằng dấu phẩy)
-    const apiKeys = rawKeys.split(',').map(k => k.trim()).filter(Boolean);
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // 2. Khởi tạo Model với Google Search Grounding
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-3.1-flash-lite',
+      // @ts-ignore - Bỏ qua kiểm duyệt Type của thư viện cũ trên Vercel
+      tools: [{ googleSearch: {} }] 
+    });
 
-    // Hứng dữ liệu từ giao diện gửi lên
+    // 3. Hứng dữ liệu từ giao diện gửi lên
     const { message, history, context, images } = await req.json();
 
-    // 🌟 LẤY DỮ LIỆU ĐIỂM CHUẨN TỪ SUPABASE
+    // 4. 🌟 ĐỌC DỮ LIỆU ĐIỂM CHUẨN TỪ FILE LOCAL (data/diemchuan.json)
     let universityDataText = "";
     try {
-      const { data: dbData, error } = await supabase
-        .from('university_scores')
-        .select('data')
-        .eq('id', 1)
-        .single();
-        
-      if (!error && dbData && dbData.data && dbData.data.length > 0) {
-        universityDataText = JSON.stringify(dbData.data);
+      const filePath = path.join(process.cwd(), 'data', 'diemchuan.json');
+      if (fs.existsSync(filePath)) {
+        universityDataText = fs.readFileSync(filePath, 'utf8');
+      } else {
+        console.warn(`Cảnh báo: Không tìm thấy file dữ liệu tại đường dẫn: ${filePath}`);
       }
-    } catch (dbErr) {
-      console.error("Lỗi hệ thống khi đọc dữ liệu điểm chuẩn từ DB:", dbErr);
+    } catch (fileError) {
+      console.error("Lỗi hệ thống khi đọc tệp diemchuan.json:", fileError);
     }
 
-    // 🌟 ĐỊNH HÌNH TÍNH CÁCH VÀ NẠP KIẾN THỨC CHO AI
+    // 5. ĐỊNH HÌNH TÍNH CÁCH VÀ NẠP KIẾN THỨC CHO AI
     const baseInstruction = context || "Bạn là SenAI, một trợ lý học thuật thông minh, thân thiện của nền tảng SenExam. Hãy giải đáp các câu hỏi ngắn gọn, dễ hiểu và truyền cảm hứng.";
     
     const systemInstruction = `
@@ -50,7 +49,7 @@ QUY TẮC BẮT BUỘC:
 3. TÁC GIẢ: Khi nhắc đến tác giả Hoàng Bình Minh, tuyệt đối không lặp thừa chữ Minh.
 
 KHO DỮ LIỆU ĐIỂM CHUẨN ĐẠI HỌC VÀ NGÀNH HỌC CỦA HỆ THỐNG:
-${universityDataText ? universityDataText : "Chưa có dữ liệu điểm chuẩn."}
+${universityDataText ? universityDataText : "Chưa có dữ liệu điểm chuẩn cục bộ."}
 
 NHIỆM VỤ TƯ VẤN TRƯỜNG/NGÀNH:
 - BƯỚC 1: Ưu tiên đối chiếu NGHIÊM NGẶT với KHO DỮ LIỆU JSON ở trên.
@@ -62,62 +61,23 @@ NHIỆM VỤ TƯ VẤN TRƯỜNG/NGÀNH:
     // Ghép lịch sử trò chuyện và câu lệnh mới
     const finalPrompt = `${systemInstruction}\n\nLịch sử trò chuyện trước đó:\n${JSON.stringify(history || [])}\n\nCâu hỏi mới: ${message}`;
 
-    // 🌟 THUẬT TOÁN THỬ TỪNG API KEY (FALLBACK CHỐNG LỖI 400, 429)
-    let result = null;
-    let lastError: any = null;
-
-    for (let i = 0; i < apiKeys.length; i++) {
-      try {
-        const genAI = new GoogleGenerativeAI(apiKeys[i]);
-        const model = genAI.getGenerativeModel({ 
-          model: 'gemini-3.1-flash-lite',
-          // @ts-ignore - Bỏ qua kiểm duyệt Type của thư viện cũ trên Vercel
-          tools: [{ googleSearch: {} }] 
+    // 6. Gọi AI (Hỗ trợ Multimodal: Đọc Ảnh, PDF, Text + Trình tìm kiếm Web)
+    let result;
+    if (images && images.length > 0) {
+      const parts: any[] = [{ text: finalPrompt }];
+      
+      images.forEach((img: any) => {
+        parts.push({
+          inlineData: {
+            data: img.base64,
+            mimeType: img.mimeType
+          }
         });
-
-        if (images && images.length > 0) {
-          const parts: any[] = [{ text: finalPrompt }];
-          images.forEach((img: any) => {
-            parts.push({
-              inlineData: {
-                data: img.base64,
-                mimeType: img.mimeType
-              }
-            });
-          });
-          result = await model.generateContent(parts);
-        } else {
-          result = await model.generateContent(finalPrompt);
-        }
-        
-        // Nếu thành công, thoát vòng lặp ngay lập tức
-        break; 
-
-      } catch (e: any) {
-        lastError = e;
-        console.warn(`API Key số ${i + 1} gặp lỗi:`, e.message);
-        
-        // 🌟 Bỏ qua TẤT CẢ các lỗi liên quan đến Auth (400, 401, 403) và Quota (429) để nhảy sang Key tiếp theo
-        const isAuthOrQuotaError = 
-          e.status === 429 || 
-          e.status === 400 || 
-          e.status === 401 || 
-          e.status === 403 || 
-          e.message?.includes('expired') || 
-          e.message?.includes('INVALID');
-
-        if (isAuthOrQuotaError) {
-          continue; // Key hỏng/hết lưu lượng -> Chạy tiếp vòng lặp với Key sau
-        } else {
-          // Nếu là lỗi khác (Lỗi Prompt, Lỗi mạng Vercel...) thì throw luôn
-          throw e; 
-        }
-      }
-    }
-
-    // Nếu đã thử hết sạch danh sách Key mà vẫn không có kết quả
-    if (!result) {
-      throw lastError || new Error("Toàn bộ API Keys trong hệ thống đều đã lỗi hoặc vượt quá hạn mức truy cập.");
+      });
+      
+      result = await model.generateContent(parts);
+    } else {
+      result = await model.generateContent(finalPrompt);
     }
 
     return NextResponse.json({ text: result.response.text() });
