@@ -260,7 +260,7 @@
       { "major_name": "Chỉ huy tham mưu Tăng Thiết giáp (Thí sinh nam miền Bắc)", "blocks": ["A00", "A01", "C01"], "score_2025": 24.05 },
       { "major_name": "Chỉ huy tham mưu Tăng Thiết giáp (Thí sinh nam miền Nam)", "blocks": ["A00", "A01", "C01"], "score_2025": 22.36 }
     ]
-  }
+  },
   {
     "code": "YHB",
     "name": "Đại học Y Hà Nội",
@@ -352,6 +352,139 @@
       { "major_name": "Dược học", "blocks": ["A00", "B00"], "score_2025": 19.00 },
       { "major_name": "Điều dưỡng", "blocks": ["A00", "B00", "D07"], "score_2025": 17.50 },
       { "major_name": "Y học dự phòng", "blocks": ["A00", "B00", "D07"], "score_2025": 17.25 }
+    ]
+  },
+  {
+    "code": "KHA",
+    "name": "Đại học Kinh tế Quốc dân (NEU)",
+    "scale": 30,
+    "method": "Xét điểm thi THPT",
+    "majors": [
+      { "major_name": "Thương mại điện tử", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.83 },
+      { "major_name": "Logistics và Quản lý chuỗi cung ứng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.61 },
+      { "major_name": "Kinh doanh quốc tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.60 },
+      { "major_name": "Kiểm toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.38 },
+      { "major_name": "Quan hệ công chúng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.18 },
+      { "major_name": "Kinh tế quốc tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.13 },
+      { "major_name": "Marketing", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.12 },
+      { "major_name": "Kinh doanh thương mại", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.00 },
+      { "major_name": "Logistics và Quản lý chuỗi cung ứng tích hợp chứng chỉ quốc tế (LSIC)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.69 },
+      { "major_name": "Kinh tế đầu tư", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.50 },
+      { "major_name": "Hệ thống thông tin quản lý", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.50 },
+      { "major_name": "Phân tích kinh doanh (BA)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.50 },
+      { "major_name": "Kiểm toán tích hợp chứng chỉ quốc tế (ICAEW CFAB)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.25 },
+      { "major_name": "Kế toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.10 },
+      { "major_name": "Quản trị kinh doanh", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.10 },
+      { "major_name": "Kinh tế và quản lý nguồn nhân lực", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.79 },
+      { "major_name": "Phân tích dữ liệu kinh tế (EDA)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.78 },
+      { "major_name": "Kinh tế phát triển", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.77 },
+      { "major_name": "Luật kinh tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.75 },
+      { "major_name": "Kinh tế học", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.52 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.51 },
+      { "major_name": "Luật thương mại quốc tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.44 },
+      { "major_name": "Kinh doanh số (E-BDB)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.40 },
+      { "major_name": "Hệ thống thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.38 },
+      { "major_name": "Công nghệ tài chính (BFT)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.29 },
+      { "major_name": "Khoa học máy tính", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.27 },
+      { "major_name": "Khoa học dữ liệu", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.13 },
+      { "major_name": "Quản lý công và chính sách", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.10 },
+      { "major_name": "Khoa học quản lý", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.06 },
+      { "major_name": "Luật", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.96 },
+      { "major_name": "Công nghệ thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.89 },
+      { "major_name": "An toàn thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.59 },
+      { "major_name": "Bất động sản", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.41 }
+    ]
+  },
+  {
+    "code": "TMU",
+    "name": "Đại học Thương mại",
+    "scale": 30,
+    "method": "Xét điểm thi THPT",
+    "majors": [
+      { "major_name": "Marketing (Marketing số)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.50 },
+      { "major_name": "Logistics và Quản lý chuỗi cung ứng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.20 },
+      { "major_name": "Thương mại điện tử", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.00 },
+      { "major_name": "Marketing (Marketing Thương mại)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.00 },
+      { "major_name": "Marketing (Quản trị Thương hiệu)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.80 },
+      { "major_name": "Kinh doanh quốc tế (Thương mại quốc tế)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.60 },
+      { "major_name": "Ngôn ngữ Trung Quốc", "blocks": ["D01", "D04"], "score_2025": 26.50 },
+      { "major_name": "Quản trị kinh doanh", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.20 },
+      { "major_name": "Kiểm toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.10 },
+      { "major_name": "Marketing (Quản trị thương hiệu - IPOP)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.10 },
+      { "major_name": "Quản trị nhân lực", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.00 },
+      { "major_name": "Tài chính - Ngân hàng thương mại", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.90 },
+      { "major_name": "Kế toán (Kế toán doanh nghiệp)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.80 },
+      { "major_name": "Hệ thống thông tin quản lý", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.80 },
+      { "major_name": "Kế toán (Kế toán công)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.60 },
+      { "major_name": "Luật kinh tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.60 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["D01"], "score_2025": 25.50 },
+      { "major_name": "Quản trị khách sạn", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.40 },
+      { "major_name": "Quản trị dịch vụ du lịch và lữ hành", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.20 },
+      { "major_name": "Kinh tế số (Phân tích kinh doanh trong môi trường số)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.80 }
+    ]
+  },
+  {
+    "code": "HTC",
+    "name": "Học viện Tài chính",
+    "scale": 30,
+    "method": "Xét điểm thi THPT",
+    "majors": [
+      { "major_name": "Hải quan và Logistics", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.80 },
+      { "major_name": "Kiểm toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.60 },
+      { "major_name": "Tài chính doanh nghiệp", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.50 },
+      { "major_name": "Phân tích tài chính", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.50 },
+      { "major_name": "Kế toán doanh nghiệp", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.40 },
+      { "major_name": "Marketing", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.23 },
+      { "major_name": "Ngân hàng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.10 },
+      { "major_name": "Hệ thống thông tin quản lý", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.10 },
+      { "major_name": "Thuế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.00 },
+      { "major_name": "Quản trị kinh doanh", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.90 },
+      { "major_name": "Kinh tế học", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.80 },
+      { "major_name": "Tài chính quốc tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.80 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["D01"], "score_2025": 25.50 },
+      { "major_name": "Kế toán công", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.50 },
+      { "major_name": "Tài chính - Ngân hàng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.47 },
+      { "major_name": "Đầu tư tài chính", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.40 },
+      { "major_name": "Quản lý tài chính công", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.30 }
+    ]
+  },
+  {
+    "code": "NHH",
+    "name": "Học viện Ngân hàng",
+    "scale": 30,
+    "method": "Xét điểm thi THPT",
+    "majors": [
+      { "major_name": "Luật kinh tế (C00, C03)", "blocks": ["C00", "C03"], "score_2025": 26.97 },
+      { "major_name": "Kinh doanh quốc tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.50 },
+      { "major_name": "Logistics và Quản lý chuỗi cung ứng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.40 },
+      { "major_name": "Tài chính - Ngân hàng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.80 },
+      { "major_name": "Kinh tế đầu tư", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.70 },
+      { "major_name": "Công nghệ thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.60 },
+      { "major_name": "Kế toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.50 },
+      { "major_name": "Hệ thống thông tin quản lý", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.40 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["D01"], "score_2025": 25.30 },
+      { "major_name": "Ngân hàng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.93 },
+      { "major_name": "Kiểm toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.88 },
+      { "major_name": "Ngân hàng số", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.82 },
+      { "major_name": "Luật kinh tế (D01, D14)", "blocks": ["D01", "D14"], "score_2025": 24.47 },
+      { "major_name": "Ngân hàng (Chất lượng cao)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 21.98 },
+      { "major_name": "Hệ thống thông tin quản lý (Chất lượng cao)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 21.95 },
+      { "major_name": "Tài chính (Chất lượng cao)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 21.60 },
+      { "major_name": "Kinh tế đầu tư (Chất lượng cao)", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 21.50 }
+    ]
+  },
+  {
+    "code": "QHE",
+    "name": "Đại học Kinh tế - ĐHQGHN (UEB)",
+    "scale": 40,
+    "method": "Xét điểm thi THPT (Thang 40 - Tiếng Anh nhân hệ số 2)",
+    "majors": [
+      { "major_name": "Kinh tế quốc tế", "blocks": ["A01", "D01", "D09", "D10"], "score_2025": 35.15 },
+      { "major_name": "Quản trị kinh doanh", "blocks": ["A01", "D01", "D09", "D10"], "score_2025": 34.50 },
+      { "major_name": "Tài chính - Ngân hàng", "blocks": ["A01", "D01", "D09", "D10"], "score_2025": 34.03 },
+      { "major_name": "Kế toán", "blocks": ["A01", "D01", "D09", "D10"], "score_2025": 33.85 },
+      { "major_name": "Kinh tế", "blocks": ["A01", "D01", "D09", "D10"], "score_2025": 33.50 },
+      { "major_name": "Kinh tế phát triển", "blocks": ["A01", "D01", "D09", "D10"], "score_2025": 33.50 }
     ]
   }
 ]
