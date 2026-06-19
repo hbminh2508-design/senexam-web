@@ -890,5 +890,343 @@
       { "major_name": "Quy hoạch vùng và đô thị", "blocks": ["V00", "A00", "D01"], "score_2025": 19.50 },
       { "major_name": "Kỹ thuật cơ khí", "blocks": ["A00", "A01", "C01"], "score_2025": 21.00 }
     ]
+  },
+  {
+    "code": "LPH",
+    "name": "Đại học Luật Hà Nội",
+    "majors": [
+      { "major_name": "Luật", "blocks": ["A00", "A01", "C00", "D01", "D02", "D03", "D04", "D05", "D06"], "score_2025": 27.39 },
+      { "major_name": "Luật Kinh tế", "blocks": ["A00", "A01", "C00", "D01", "D02", "D03", "D04", "D05", "D06"], "score_2025": 28.79 },
+      { "major_name": "Luật Thương mại quốc tế", "blocks": ["A01", "D01", "D02", "D03", "D04", "D05", "D06"], "score_2025": 24.44 },
+      { "major_name": "Ngôn ngữ Anh (Chuyên ngành tiếng Anh pháp lý)", "blocks": ["A01", "D01"], "score_2025": 23.49 },
+      { "major_name": "Luật (Đào tạo tại Phân hiệu Đắk Lắk)", "blocks": ["A00", "A01", "C00", "D01", "D02", "D03", "D04", "D05", "D06"], "score_2025": 22.99 }
+    ]
+  },
+  {
+    "code": "QHL",
+    "name": "Trường Đại học Luật - Đại học Quốc gia Hà Nội",
+    "majors": [
+      { "major_name": "Luật", "blocks": ["A01", "C00", "D01", "D03", "D78", "D82"], "score_2025": 28.36 },
+      { "major_name": "Luật Kinh doanh", "blocks": ["A00", "A01", "D01", "D78", "D82"], "score_2025": 25.80 },
+      { "major_name": "Luật Thương mại Quốc tế", "blocks": ["A00", "A01", "D01", "D78", "D82"], "score_2025": 26.50 },
+      { "major_name": "Luật chất lượng cao", "blocks": ["A01", "D01", "D78"], "score_2025": 26.52 }
+    ]
+  },
+  {
+    "code": "SPH",
+    "name": "Đại học Sư phạm Hà Nội",
+    "majors": [
+      { "major_name": "Sư phạm Lịch sử", "blocks": ["C00", "D01", "D14"], "score_2025": 29.30 },
+      { "major_name": "Sư phạm Địa lý", "blocks": ["C00", "D01", "D15"], "score_2025": 28.79 },
+      { "major_name": "Sư phạm Lịch sử - Địa lý", "blocks": ["C00", "D01", "D14"], "score_2025": 28.60 },
+      { "major_name": "Sư phạm Ngữ văn", "blocks": ["C00", "D01", "D14"], "score_2025": 29.30 },
+      { "major_name": "Sư phạm Hóa học", "blocks": ["A00", "B00"], "score_2025": 28.42 },
+      { "major_name": "Sư phạm Hóa học (Dạy Toán bằng tiếng Anh)", "blocks": ["A00", "B00"], "score_2025": 28.10 },
+      { "major_name": "Sư phạm Toán học", "blocks": ["A00", "A01", "D01"], "score_2025": 28.27 },
+      { "major_name": "Sư phạm Toán học (Dạy Toán bằng tiếng Anh)", "blocks": ["A00", "A01", "D01"], "score_2025": 28.36 },
+      { "major_name": "Sư phạm Vật lí", "blocks": ["A00", "A01"], "score_2025": 28.31 },
+      { "major_name": "Sư phạm Vật lý (Dạy Vật lý bằng tiếng Anh)", "blocks": ["A00", "A01"], "score_2025": 28.00 },
+      { "major_name": "Sư phạm Sinh học", "blocks": ["B00", "B08"], "score_2025": 26.50 },
+      { "major_name": "Sư phạm Sinh học (Dạy Sinh học bằng tiếng Anh)", "blocks": ["B00", "B08"], "score_2025": 25.50 },
+      { "major_name": "Sư phạm Khoa học Tự nhiên", "blocks": ["A00", "A01", "B00"], "score_2025": 24.50 },
+      { "major_name": "Sư phạm Tin học", "blocks": ["A00", "A01", "D01"], "score_2025": 24.83 },
+      { "major_name": "Sư phạm Công nghệ", "blocks": ["A00", "A01", "B00"], "score_2025": 22.00 },
+      { "major_name": "Sư phạm Tiếng Anh", "blocks": ["D01", "A01"], "score_2025": 27.50 },
+      { "major_name": "Sư phạm Tiếng Pháp", "blocks": ["D01", "D03"], "score_2025": 24.50 },
+      { "major_name": "Sư phạm Âm nhạc", "blocks": ["N00"], "score_2025": 23.20 },
+      { "major_name": "Sư phạm Mỹ thuật", "blocks": ["H00"], "score_2025": 22.50 },
+      { "major_name": "Giáo dục Mầm non", "blocks": ["M00", "M01"], "score_2025": 22.25 },
+      { "major_name": "Giáo dục Mầm non – Sư phạm Tiếng Anh", "blocks": ["M00", "M01"], "score_2025": 21.63 },
+      { "major_name": "Giáo dục Tiểu học", "blocks": ["A00", "C00", "D01"], "score_2025": 25.17 },
+      { "major_name": "Giáo dục Tiểu học – Sư phạm Tiếng Anh", "blocks": ["A01", "D01"], "score_2025": 24.99 },
+      { "major_name": "Giáo dục Đặc biệt", "blocks": ["C00", "D01"], "score_2025": 27.55 },
+      { "major_name": "Giáo dục Thể chất", "blocks": ["T00", "T01"], "score_2025": 25.60 },
+      { "major_name": "Giáo dục Chính trị", "blocks": ["C00", "D01", "D14"], "score_2025": 28.22 },
+      { "major_name": "Giáo dục Công dân", "blocks": ["C00", "D01", "D14"], "score_2025": 27.74 },
+      { "major_name": "Giáo dục Quốc phòng và An ninh", "blocks": ["A00", "C00", "D01"], "score_2025": 27.27 },
+      { "major_name": "Quản lý giáo dục", "blocks": ["A00", "C00", "D01"], "score_2025": 24.68 },
+      { "major_name": "Tâm lý học (Tâm lý học trường học)", "blocks": ["C00", "D01", "D14"], "score_2025": 23.25 },
+      { "major_name": "Tâm lý học giáo dục", "blocks": ["C00", "D01", "D14"], "score_2025": 23.96 },
+      { "major_name": "Công tác xã hội", "blocks": ["C00", "D01", "D14"], "score_2025": 25.50 },
+      { "major_name": "Chính trị học", "blocks": ["C00", "D01", "D14"], "score_2025": 25.19 },
+      { "major_name": "Triết học", "blocks": ["A00", "C00", "D01"], "score_2025": 24.87 },
+      { "major_name": "Xã hội học", "blocks": ["C00", "D01", "D14"], "score_2025": 26.00 },
+      { "major_name": "Toán học", "blocks": ["A00", "A01", "D01"], "score_2025": 26.50 },
+      { "major_name": "Hóa học", "blocks": ["A00", "B00"], "score_2025": 23.00 },
+      { "major_name": "Sinh học", "blocks": ["B00", "B08"], "score_2025": 20.50 },
+      { "major_name": "Văn học", "blocks": ["C00", "D01", "D14"], "score_2025": 27.64 },
+      { "major_name": "Lịch sử", "blocks": ["C00", "D01", "D14"], "score_2025": 27.75 },
+      { "major_name": "Tiếng Việt và Văn hóa Việt Nam", "blocks": ["C00", "D01", "D14"], "score_2025": 26.36 },
+      { "major_name": "Việt Nam học", "blocks": ["C00", "D01", "D14"], "score_2025": 20.00 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["A01", "D01"], "score_2025": 24.56 },
+      { "major_name": "Ngôn ngữ Trung Quốc", "blocks": ["D01", "D04"], "score_2025": 26.76 },
+      { "major_name": "Quản trị dịch vụ du lịch và lữ hành", "blocks": ["A01", "C00", "D01"], "score_2025": 20.25 },
+      { "major_name": "Hỗ trợ giáo dục người khuyết tật", "blocks": ["C00", "D01"], "score_2025": 22.00 }
+    ]
+  },
+  {
+    "code": "DTS",
+    "name": "Đại học Sư phạm - Đại học Thái Nguyên",
+    "majors": [
+      { "major_name": "Giáo dục Mầm non", "blocks": ["M00", "M05", "M07", "M10"], "score_2025": 23.95 },
+      { "major_name": "Giáo dục Tiểu học", "blocks": ["D01", "C01", "C03"], "score_2025": 23.98 },
+      { "major_name": "Giáo dục Chính trị", "blocks": ["C00", "C14", "C19", "C20"], "score_2025": 22.00 },
+      { "major_name": "Giáo dục Thể chất", "blocks": ["T00", "T03", "T05", "T06"], "score_2025": 22.86 },
+      { "major_name": "Sư phạm Toán học", "blocks": ["A00", "A01", "D01"], "score_2025": 26.35 },
+      { "major_name": "Sư phạm Tin học", "blocks": ["A00", "A01", "D01"], "score_2025": 22.25 },
+      { "major_name": "Sư phạm Vật lý", "blocks": ["A00", "A01", "D01", "C01"], "score_2025": 26.15 },
+      { "major_name": "Sư phạm Hóa học", "blocks": ["A00", "B00", "D07"], "score_2025": 25.90 },
+      { "major_name": "Sư phạm Sinh học", "blocks": ["A00", "B00", "B02", "B08"], "score_2025": 21.75 },
+      { "major_name": "Sư phạm Ngữ văn", "blocks": ["C00", "D01", "D14", "D15"], "score_2025": 28.56 },
+      { "major_name": "Sư phạm Lịch sử", "blocks": ["C00", "C19", "D14"], "score_2025": 28.60 },
+      { "major_name": "Sư phạm Địa lý", "blocks": ["C00", "C04", "D01", "D10", "D15"], "score_2025": 27.80 },
+      { "major_name": "Sư phạm Tiếng Anh", "blocks": ["D01", "D09", "D15"], "score_2025": 24.06 },
+      { "major_name": "Sư phạm Khoa học tự nhiên", "blocks": ["A00", "A01", "B00", "B08"], "score_2025": 23.43 },
+      { "major_name": "Sư phạm Lịch sử - Địa lý", "blocks": ["C00", "D14", "D15", "A07"], "score_2025": 27.78 },
+      { "major_name": "Sư phạm Âm nhạc", "blocks": ["N00"], "score_2025": 21.75 },
+      { "major_name": "Giáo dục học", "blocks": ["C00", "C14", "C20", "D66"], "score_2025": 25.73 },
+      { "major_name": "Tâm lý học giáo dục", "blocks": ["B00", "C00", "C14", "C20"], "score_2025": 26.11 },
+      { "major_name": "Sinh học ứng dụng", "blocks": ["A02", "B00", "B08"], "score_2025": 24.00 }
+    ]
+  },
+  {
+    "code": "SP2",
+    "name": "Đại học Sư phạm Hà Nội 2",
+    "majors": [
+      { "major_name": "Giáo dục Mầm non", "blocks": ["M00", "M01", "M09", "M11"], "score_2025": 25.73 },
+      { "major_name": "Giáo dục Tiểu học", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 27.39 },
+      { "major_name": "Giáo dục Công dân", "blocks": ["C00", "C19", "C20", "D14"], "score_2025": 27.94 },
+      { "major_name": "Giáo dục Thể chất", "blocks": ["T00", "T01", "T04", "T05"], "score_2025": 20.00 },
+      { "major_name": "Giáo dục Quốc phòng - An ninh", "blocks": ["C00", "C19", "D14"], "score_2025": 27.63 },
+      { "major_name": "Sư phạm Toán học", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 26.83 },
+      { "major_name": "Sư phạm Tin học", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.85 },
+      { "major_name": "Sư phạm Vật lý", "blocks": ["A00", "A01", "A02", "D01"], "score_2025": 26.81 },
+      { "major_name": "Sư phạm Hóa học", "blocks": ["A00", "B00", "D07"], "score_2025": 26.54 },
+      { "major_name": "Sư phạm Sinh học", "blocks": ["B00", "B03", "B08", "D08"], "score_2025": 26.33 },
+      { "major_name": "Sư phạm Ngữ văn", "blocks": ["C00", "C19", "C20", "D14"], "score_2025": 28.83 },
+      { "major_name": "Sư phạm Lịch sử", "blocks": ["C00", "C19", "C20", "D14"], "score_2025": 28.83 },
+      { "major_name": "Sư phạm Tiếng Anh", "blocks": ["D01", "D09", "D14", "D15"], "score_2025": 27.20 },
+      { "major_name": "Sư phạm Khoa học tự nhiên", "blocks": ["A00", "A01", "B00", "D01"], "score_2025": 25.57 },
+      { "major_name": "Sư phạm Lịch sử - Địa lý", "blocks": ["C00", "C19", "C20", "D14"], "score_2025": 28.42 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["D01", "D09", "D14", "D15"], "score_2025": 25.94 },
+      { "major_name": "Ngôn ngữ Trung Quốc", "blocks": ["D01", "D04", "D14"], "score_2025": 26.14 },
+      { "major_name": "Tâm lý học giáo dục", "blocks": ["B00", "C00", "D01"], "score_2025": 26.68 },
+      { "major_name": "Việt Nam học", "blocks": ["C00", "C19", "C20", "D14"], "score_2025": 25.07 },
+      { "major_name": "Công nghệ sinh học", "blocks": ["A00", "B00", "B03", "B08"], "score_2025": 15.35 },
+      { "major_name": "Khoa học vật liệu", "blocks": ["A00", "A01", "A02", "B00"], "score_2025": 18.85 },
+      { "major_name": "Công nghệ thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 21.60 },
+      { "major_name": "Quản lý thể dục thể thao", "blocks": ["T00", "T01", "T04", "T05"], "score_2025": 18.00 }
+    ]
+  },
+  {
+    "code": "QHS",
+    "name": "Trường Đại học Giáo dục - Đại học Quốc gia Hà Nội",
+    "majors": [
+      { "major_name": "Sư phạm Toán học", "blocks": ["A00", "A01"], "score_2025": 26.15 },
+      { "major_name": "Sư phạm Vật lý", "blocks": ["A00", "A01"], "score_2025": 25.50 },
+      { "major_name": "Sư phạm Hóa học", "blocks": ["A00", "B00"], "score_2025": 25.70 },
+      { "major_name": "Sư phạm Sinh học", "blocks": ["B00", "D08"], "score_2025": 24.20 },
+      { "major_name": "Sư phạm Khoa học Tự nhiên", "blocks": ["A00", "A01", "B00"], "score_2025": 24.50 },
+      { "major_name": "Sư phạm Lịch sử", "blocks": ["C00", "D01"], "score_2025": 27.50 },
+      { "major_name": "Sư phạm Địa lý", "blocks": ["C00", "D01"], "score_2025": 26.80 },
+      { "major_name": "Sư phạm Lịch sử và Địa lý", "blocks": ["C00", "D01"], "score_2025": 26.50 },
+      { "major_name": "Sư phạm Ngữ văn", "blocks": ["C00", "D01"], "score_2025": 27.25 },
+      { "major_name": "Giáo dục Tiểu học", "blocks": ["A00", "C00", "D01"], "score_2025": 26.85 },
+      { "major_name": "Giáo dục Mầm non", "blocks": ["M00", "M01"], "score_2025": 24.00 },
+      { "major_name": "Quản trị trường học", "blocks": ["A01", "C00", "D01"], "score_2025": 22.10 },
+      { "major_name": "Quản trị công nghệ giáo dục", "blocks": ["A01", "D01"], "score_2025": 21.50 },
+      { "major_name": "Tham vấn học đường", "blocks": ["C00", "D01"], "score_2025": 22.80 },
+      { "major_name": "Khoa học giáo dục", "blocks": ["A01", "C00", "D01"], "score_2025": 21.00 },
+      { "major_name": "Quản trị chất lượng giáo dục", "blocks": ["A01", "D01"], "score_2025": 21.20 }
+    ]
+  },
+  {
+    "code": "DKH",
+    "name": "Trường Đại học Dược Hà Nội",
+    "majors": [
+      { "major_name": "Dược học", "blocks": ["A00", "A01"], "score_2025": 25.45 },
+      { "major_name": "Hóa dược", "blocks": ["A00", "A01"], "score_2025": 24.10 },
+      { "major_name": "Công nghệ sinh học", "blocks": ["B00"], "score_2025": 23.50 },
+      { "major_name": "Hóa học", "blocks": ["A00"], "score_2025": 22.80 }
+    ]
+  },
+  {
+    "code": "NTH",
+    "name": "Trường Đại học Ngoại thương (Cơ sở phía Bắc)",
+    "majors": [
+      { "major_name": "Kinh tế (Kinh tế đối ngoại, Kinh tế quốc tế)", "blocks": ["A00", "A01", "D01", "D03", "D04", "D06", "D07"], "score_2025": 28.50 },
+      { "major_name": "Kinh tế quốc tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 28.30 },
+      { "major_name": "Kinh doanh quốc tế", "blocks": ["A00", "A01", "D01", "D06", "D07"], "score_2025": 28.20 },
+      { "major_name": "Quản trị kinh doanh", "blocks": ["A00", "A01", "D01", "D06"], "score_2025": 27.90 },
+      { "major_name": "Tài chính - Ngân hàng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.80 },
+      { "major_name": "Kế toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 27.65 },
+      { "major_name": "Luật", "blocks": ["A00", "A01", "D01"], "score_2025": 27.10 },
+      { "major_name": "Kinh tế chính trị", "blocks": ["A00", "A01", "D01"], "score_2025": 27.00 },
+      { "major_name": "Khoa học máy tính", "blocks": ["A00", "A01", "D01"], "score_2025": 26.90 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["D01"], "score_2025": 27.60 },
+      { "major_name": "Ngôn ngữ Pháp", "blocks": ["D01", "D03"], "score_2025": 26.40 },
+      { "major_name": "Ngôn ngữ Trung Quốc", "blocks": ["D01", "D04"], "score_2025": 27.90 },
+      { "major_name": "Ngôn ngữ Nhật", "blocks": ["D01", "D06"], "score_2025": 27.30 }
+    ]
+  },
+  {
+    "code": "HBT",
+    "name": "Học viện Báo chí và Tuyên truyền",
+    "majors": [
+      { "major_name": "Báo in", "blocks": ["C00", "D01", "R11"], "score_2025": 25.40 },
+      { "major_name": "Báo phát thanh", "blocks": ["C00", "D01", "R12"], "score_2025": 25.80 },
+      { "major_name": "Báo truyền hình", "blocks": ["C00", "D01", "R13"], "score_2025": 26.90 },
+      { "major_name": "Báo mạng điện tử", "blocks": ["C00", "D01", "R11"], "score_2025": 26.75 },
+      { "major_name": "Ảnh báo chí", "blocks": ["C00", "R15"], "score_2025": 24.20 },
+      { "major_name": "Quay phim truyền hình", "blocks": ["C00", "R16"], "score_2025": 23.80 },
+      { "major_name": "Truyền thông đại chúng", "blocks": ["A01", "C00", "D01"], "score_2025": 27.10 },
+      { "major_name": "Truyền thông đa phương tiện", "blocks": ["A01", "D01", "D78"], "score_2025": 28.25 },
+      { "major_name": "Quan hệ công chúng (Chuyên nghiệp)", "blocks": ["D01", "D78", "R26"], "score_2025": 28.10 },
+      { "major_name": "Quảng cáo", "blocks": ["D01", "D78", "R26"], "score_2025": 27.50 },
+      { "major_name": "Quan hệ quốc tế (Thông tin đối ngoại)", "blocks": ["D01", "D78"], "score_2025": 26.80 },
+      { "major_name": "Quan hệ quốc tế (Quan hệ chính trị và Ngoại giao)", "blocks": ["D01", "D78"], "score_2025": 27.20 },
+      { "major_name": "Kinh tế chính trị", "blocks": ["C00", "D01"], "score_2025": 24.10 },
+      { "major_name": "Quản lý kinh tế", "blocks": ["A00", "A01", "D01"], "score_2025": 25.90 },
+      { "major_name": "Triết học", "blocks": ["C00", "D01"], "score_2025": 23.00 },
+      { "major_name": "Chủ nghĩa xã hội khoa học", "blocks": ["C00", "D01"], "score_2025": 23.20 },
+      { "major_name": "Tư tưởng Hồ Chí Minh", "blocks": ["C00", "D01"], "score_2025": 23.10 },
+      { "major_name": "Lịch sử Đảng Cộng sản Việt Nam", "blocks": ["C00", "D01"], "score_2025": 23.50 },
+      { "major_name": "Xây dựng Đảng và Chính quyền nhà nước", "blocks": ["C00", "D01"], "score_2025": 24.60 },
+      { "major_name": "Chính trị học (Quản lý hoạt động tư tưởng - văn hóa)", "blocks": ["C00", "D01"], "score_2025": 24.80 },
+      { "major_name": "Chính trị học (Chính trị truyền thông)", "blocks": ["C00", "D01"], "score_2025": 25.30 },
+      { "major_name": "Quản lý công", "blocks": ["A01", "C00", "D01"], "score_2025": 24.90 },
+      { "major_name": "Quản lý nhà nước", "blocks": ["A01", "C00", "D01"], "score_2025": 25.00 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["D01"], "score_2025": 26.40 },
+      { "major_name": "Xã hội học", "blocks": ["C00", "D01"], "score_2025": 24.00 },
+      { "major_name": "Xuất bản", "blocks": ["C00", "D01"], "score_2025": 24.50 },
+      { "major_name": "Công tác xã hội", "blocks": ["C00", "D01"], "score_2025": 24.20 }
+    ]
+  },
+  {
+    "code": "HQT",
+    "name": "Học viện Ngoại giao",
+    "majors": [
+      { "major_name": "Trung Quốc học", "blocks": ["C00", "D01", "D04"], "score_2025": 29.20 },
+      { "major_name": "Truyền thông quốc tế", "blocks": ["A01", "C00", "D01", "D03", "D04", "D06", "D07"], "score_2025": 29.05 },
+      { "major_name": "Quan hệ quốc tế", "blocks": ["A01", "C00", "D01", "D03", "D04", "D06", "D07"], "score_2025": 28.76 },
+      { "major_name": "Hàn Quốc học", "blocks": ["C00", "D01", "D07"], "score_2025": 28.50 },
+      { "major_name": "Hoa Kỳ học", "blocks": ["A01", "C00", "D01"], "score_2025": 28.40 },
+      { "major_name": "Kinh tế quốc tế", "blocks": ["A00", "A01", "D01", "D03", "D04", "D06", "D07"], "score_2025": 27.60 },
+      { "major_name": "Kinh doanh quốc tế", "blocks": ["A00", "A01", "D01", "D03", "D04", "D06", "D07"], "score_2025": 27.50 },
+      { "major_name": "Luật quốc tế", "blocks": ["A01", "C00", "D01", "D03", "D04", "D06", "D07"], "score_2025": 27.20 },
+      { "major_name": "Nhật Bản học", "blocks": ["C00", "D01", "D06"], "score_2025": 26.80 },
+      { "major_name": "Châu Á - Thái Bình Dương học", "blocks": ["A01", "C00", "D01", "D03", "D04", "D06", "D07"], "score_2025": 26.50 },
+      { "major_name": "Luật thương mại quốc tế", "blocks": ["A01", "C00", "D01", "D03", "D04", "D06", "D07"], "score_2025": 25.37 },
+      { "major_name": "Ngôn ngữ Anh (Thang điểm 40)", "blocks": ["A01", "D01", "D07"], "score_2025": 35.38 }
+    ]
+  },
+  {
+    "code": "KMA",
+    "name": "Học viện Kỹ thuật Mật mã",
+    "majors": [
+      { "major_name": "Công nghệ thông tin (Cơ sở Hà Nội)", "blocks": ["A00", "A01", "D90"], "score_2025": 26.10 },
+      { "major_name": "An toàn thông tin (Cơ sở Hà Nội)", "blocks": ["A00", "A01", "D90"], "score_2025": 25.95 },
+      { "major_name": "Kỹ thuật phần mềm (Cơ sở Hà Nội)", "blocks": ["A00", "A01", "D90"], "score_2025": 25.50 },
+      { "major_name": "Kỹ thuật điện tử - viễn thông (Cơ sở Hà Nội)", "blocks": ["A00", "A01", "D90"], "score_2025": 25.35 },
+      { "major_name": "An toàn thông tin (Cơ sở TP.HCM)", "blocks": ["A00", "A01", "D90"], "score_2025": 24.85 }
+    ]
+  },
+  {
+    "code": "HPN",
+    "name": "Học viện Phụ nữ Việt Nam",
+    "majors": [
+      { "major_name": "Truyền thông đa phương tiện", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 26.00 },
+      { "major_name": "Quản trị dịch vụ du lịch và lữ hành", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 25.25 },
+      { "major_name": "Luật kinh tế", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 24.50 },
+      { "major_name": "Tâm lý học", "blocks": ["A00", "B00", "C00", "D01"], "score_2025": 24.50 },
+      { "major_name": "Luật", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 24.25 },
+      { "major_name": "Quản trị kinh doanh", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 24.00 },
+      { "major_name": "Kinh tế", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 23.00 },
+      { "major_name": "Công tác xã hội", "blocks": ["A00", "C00", "D01"], "score_2025": 22.50 },
+      { "major_name": "Công nghệ thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 22.00 },
+      { "major_name": "Giới và phát triển", "blocks": ["C00", "D01", "D14"], "score_2025": 20.00 },
+      { "major_name": "Xã hội học", "blocks": ["C00", "D01", "D14"], "score_2025": 20.00 }
+    ]
+  },
+  {
+    "code": "HTA",
+    "name": "Học viện Tòa án",
+    "majors": [
+      { "major_name": "Luật (Tuyển nữ - Phía Bắc)", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 28.20 },
+      { "major_name": "Luật (Tuyển nam - Phía Bắc)", "blocks": ["A00", "A01", "C00", "D01"], "score_2025": 28.10 },
+      { "major_name": "Luật (Tuyển chung Nam & Nữ khối C00 - Phía Nam)", "blocks": ["C00"], "score_2025": 27.67 },
+      { "major_name": "Luật (Tuyển nữ khối A01 - Phía Nam)", "blocks": ["A01"], "score_2025": 21.70 },
+      { "major_name": "Luật (Tuyển nam khối A00, A01, D01 - Phía Nam)", "blocks": ["A00", "A01", "D01"], "score_2025": 21.05 }
+    ]
+  },
+  {
+    "code": "QHD",
+    "name": "Trường Quản trị và Kinh doanh - Đại học Quốc gia Hà Nội",
+    "majors": [
+      { "major_name": "Kinh doanh (Chuyên ngành kép: Marketing và Phân tích kinh doanh)", "blocks": ["A01", "D01", "D07", "D08"], "score_2025": 24.50 },
+      { "major_name": "Quản trị An ninh phi truyền thống", "blocks": ["A01", "D01", "D07", "D08", "D09", "D10"], "score_2025": 23.85 },
+      { "major_name": "Quản trị dịch vụ khách hàng và Chăm sóc sức khỏe", "blocks": ["A01", "D01", "D07", "D08", "D09", "D10"], "score_2025": 23.50 },
+      { "major_name": "Quản trị nhân lực và nhân tài", "blocks": ["A01", "D01", "D07", "D08", "D09", "D10"], "score_2025": 23.90 },
+      { "major_name": "Marketing và truyền thông", "blocks": ["A01", "D01", "D07", "D08", "D09", "D10"], "score_2025": 24.75 },
+      { "major_name": "Quản trị và An ninh", "blocks": ["A01", "D01", "D07", "D08", "D09", "D10"], "score_2025": 23.60 },
+      { "major_name": "Quản trị doanh nghiệp và công nghệ", "blocks": ["A01", "D01", "D07", "D08", "D09", "D10"], "score_2025": 24.20 }
+    ]
+  },
+  {
+    "code": "DYH",
+    "name": "Học viện Quân y - Hệ dân sự",
+    "majors": [
+      { "major_name": "Y khoa", "blocks": ["A00", "B00", "D07"], "score_2025": 27.33 },
+      { "major_name": "Dược học", "blocks": ["A00", "D07"], "score_2025": 23.93 }
+    ]
+  },
+  {
+    "code": "DQH",
+    "name": "Học Viện Kỹ Thuật Quân Sự - Hệ dân sự",
+    "majors": [
+      { "major_name": "Hệ thống Công nghệ thông tin", "blocks": ["A00", "A01"], "score_2025": 26.50 },
+      { "major_name": "Trí tuệ nhân tạo", "blocks": ["A00", "A01"], "score_2025": 23.96 },
+      { "major_name": "An toàn không gian mạng", "blocks": ["A00", "A01"], "score_2025": 26.00 },
+      { "major_name": "Điện tử - Viễn thông", "blocks": ["A00", "A01"], "score_2025": 25.50 },
+      { "major_name": "Thiết kế vi mạch và hệ thống nhúng", "blocks": ["A00", "A01"], "score_2025": 25.80 },
+      { "major_name": "Công nghệ bán dẫn và Nano", "blocks": ["A00", "A01"], "score_2025": 25.50 },
+      { "major_name": "Tự động hóa", "blocks": ["A00", "A01"], "score_2025": 25.10 },
+      { "major_name": "Kỹ thuật cơ điện tử", "blocks": ["A00", "A01"], "score_2025": 24.80 },
+      { "major_name": "Công nghệ chế tạo máy", "blocks": ["A00", "A01"], "score_2025": 24.20 },
+      { "major_name": "Kỹ thuật xây dựng", "blocks": ["A00", "A01"], "score_2025": 23.50 },
+      { "major_name": "Kỹ thuật ô tô", "blocks": ["A00", "A01"], "score_2025": 24.75 },
+      { "major_name": "Điện tử y sinh", "blocks": ["A00", "A01"], "score_2025": 24.50 }
+    ]
+  },
+  {
+    "code": "TLA",
+    "name": "Đại học Thủy lợi",
+    "majors": [
+      { "major_name": "Công nghệ thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.80 },
+      { "major_name": "Hệ thống thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.25 },
+      { "major_name": "Kỹ thuật phần mềm", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.50 },
+      { "major_name": "Trí tuệ nhân tạo và Khoa học dữ liệu", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.30 },
+      { "major_name": "An toàn thông tin", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.00 },
+      { "major_name": "Logistics và Quản lý chuỗi cung ứng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.90 },
+      { "major_name": "Thương mại điện tử", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.75 },
+      { "major_name": "Kinh tế", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.90 },
+      { "major_name": "Quản trị kinh doanh", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 25.10 },
+      { "major_name": "Kế toán", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.85 },
+      { "major_name": "Tài chính - Ngân hàng", "blocks": ["A00", "A01", "D01", "D07"], "score_2025": 24.80 },
+      { "major_name": "Luật", "blocks": ["A00", "A01", "D01", "C00"], "score_2025": 25.20 },
+      { "major_name": "Luật kinh tế", "blocks": ["A00", "A01", "D01", "C00"], "score_2025": 25.35 },
+      { "major_name": "Kỹ thuật ô tô", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 24.50 },
+      { "major_name": "Kỹ thuật cơ điện tử", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 24.30 },
+      { "major_name": "Kỹ thuật điều khiển và Tự động hóa", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 24.70 },
+      { "major_name": "Kỹ thuật điện", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 23.50 },
+      { "major_name": "Kỹ thuật điện tử - viễn thông", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 23.80 },
+      { "major_name": "Kỹ thuật xây dựng dân dụng và công nghiệp", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 22.50 },
+      { "major_name": "Xây dựng và quản lý công trình thủy", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 20.00 },
+      { "major_name": "Tài nguyên nước và môi trường (Thủy văn học)", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 19.50 },
+      { "major_name": "Kỹ thuật xây dựng công trình giao thông", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 21.50 },
+      { "major_name": "Quản lý xây dựng", "blocks": ["A00", "A01", "D01", "D07", "C01"], "score_2025": 22.00 },
+      { "major_name": "Ngôn ngữ Anh", "blocks": ["D01", "A01", "D07"], "score_2025": 24.80 },
+      { "major_name": "Ngôn ngữ Trung Quốc", "blocks": ["D01", "D04", "A01"], "score_2025": 25.10 }
+    ]
   }
 ]
