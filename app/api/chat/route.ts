@@ -20,7 +20,8 @@ export async function POST(req: Request) {
     // 🌟 KÍCH HOẠT GOOGLE SEARCH GROUNDING CHO MODEL
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-3.1-flash-lite',
-      tools: [{ googleSearch: {} }] // Cấp quyền cho AI tìm kiếm web thời gian thực
+      // @ts-ignore - Bỏ qua kiểm duyệt Type của thư viện cũ trên Vercel
+      tools: [{ googleSearch: {} }] 
     });
 
     // Hứng dữ liệu từ giao diện gửi lên
