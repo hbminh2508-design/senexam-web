@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, Calculator, GraduationCap, Target, AlertCircle, 
   Info, Sparkles, BookOpen, BarChart3, CheckCircle2,
-  Hash, MapPin, Bot, Loader2, Send, ChevronRight, MessageSquare
+  Hash, MapPin, Bot, Loader2, Send, ChevronRight, MessageSquare, Briefcase
 } from 'lucide-react'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC (LATEX)
@@ -30,6 +30,9 @@ const EXAM_BLOCKS = [
   { code: 'C01', name: 'Ngữ văn, Toán, Vật lí', subs: ['Ngữ văn', 'Toán', 'Vật lí'] },
   { code: 'Khác', name: 'Tổ hợp môn tự chọn', subs: ['Môn 1', 'Môn 2', 'Môn 3'] }
 ]
+
+// DỮ LIỆU ĐAM MÊ NGHỀ NGHIỆP CƠ BẢN
+const PRESET_PASSIONS = ['Kỹ sư Công nghệ', 'Nhà Nghiên cứu', 'Giáo viên', 'Bác sĩ / Y tế', 'Dược sĩ', 'Quân đội', 'Công an / An ninh', 'Kinh tế / Quản trị']
 
 type ChatMessage = {
   role: 'user' | 'model'
@@ -58,6 +61,10 @@ export default function ScoreCalculatorPage() {
     finalPriority: number;
     totalScore: number;
   } | null>(null)
+
+  // 🌟 STATES CHO PHẦN TƯ VẤN ĐAM MÊ & NGHỀ NGHIỆP
+  const [selectedPassions, setSelectedPassions] = useState<string[]>([])
+  const [customPassion, setCustomPassion] = useState('')
 
   // 🌟 State cho SenAI Tư vấn Liên tục
   const [aiMessages, setAiMessages] = useState<ChatMessage[]>([])
@@ -109,14 +116,17 @@ export default function ScoreCalculatorPage() {
     } else if (calcMode === 'hust') {
       const mainS = mainSubject === 'sub1' ? s1 : mainSubject === 'sub2' ? s2 : s3
       const otherSum = (s1 + s2 + s3) - mainS
+      // Công thức Bách Khoa quy về thang 30: ((Môn Chính x2 + 2 Môn Còn Lại) x 3) / 4
       rawScore = ((mainS * 2 + otherSum) * 3) / 4
     }
 
+    // Công thức tính điểm ưu tiên chuẩn Bộ GD&ĐT (Chỉ giảm dần khi điểm gốc >= 22.5)
     let actualPriority = baseP
     if (rawScore >= 22.5) {
       actualPriority = ((30 - rawScore) / 7.5) * baseP
     }
 
+    // Làm tròn 2 chữ số thập phân
     rawScore = Math.round(rawScore * 100) / 100
     actualPriority = Math.round(actualPriority * 100) / 100
     const totalScore = Math.round((rawScore + actualPriority) * 100) / 100
@@ -130,7 +140,11 @@ export default function ScoreCalculatorPage() {
     }
   }
 
-  // 🌟 HÀM KÍCH HOẠT TƯ VẤN ĐẦU TIÊN
+  const togglePassion = (passion: string) => {
+    setSelectedPassions(prev => prev.includes(passion) ? prev.filter(p => p !== passion) : [...prev, passion])
+  }
+
+  // 🌟 HÀM KÍCH HOẠT TƯ VẤN ĐẦU TIÊN KẾT HỢP ĐAM MÊ
   const handleAskSenAI = async () => {
     if (!result) return
     setIsAiLoading(true)
@@ -144,20 +158,28 @@ export default function ScoreCalculatorPage() {
       ? 'Đại học chung (Tổng 3 môn + Điểm ưu tiên)' 
       : 'Đại học Bách Khoa Hà Nội (Môn chính nhân hệ số 2, quy đổi về thang 30)'
 
-    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. Nhiệm vụ của bạn là tư vấn trường, ngành phù hợp dựa trên điểm thi và khối thi của thí sinh. Hãy tham chiếu mức điểm chuẩn năm 2025 để đưa ra dự báo. Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn".`
+    const allPassions = [...selectedPassions]
+    if (customPassion.trim()) allPassions.push(customPassion.trim())
+    const passionText = allPassions.length > 0 ? allPassions.join(', ') : 'Chưa định hướng rõ ràng'
+
+    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. 
+    Nhiệm vụ của bạn là tư vấn trường, ngành phù hợp dựa trên ĐIỂM SỐ, KHỐI THI và ĐAM MÊ NGHỀ NGHIỆP của học sinh. 
+    Lưu ý quan trọng: Dữ liệu của 248 trường đại học và hơn 2400 ngành được cập nhật đến năm 2025. Hãy tham chiếu mức điểm chuẩn năm 2025 để dự báo. 
+    Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn".`
 
     const prompt = `Mình vừa tính điểm xét tuyển trên hệ thống:
-- Tổng điểm xét tuyển: ${result.totalScore} (Thang 30)
+- Tổng điểm xét tuyển: **${result.totalScore}** (Thang 30)
 - Khối thi: ${selectedBlock} (${currentBlockData.name})
-- Chi tiết: ${currentBlockData.subs[0]}: ${scores.sub1}, ${currentBlockData.subs[1]}: ${scores.sub2}, ${currentBlockData.subs[2]}: ${scores.sub3}
+- Điểm chi tiết: ${currentBlockData.subs[0]}: ${scores.sub1}, ${currentBlockData.subs[1]}: ${scores.sub2}, ${currentBlockData.subs[2]}: ${scores.sub3}
 - Phương thức: ${modeText}
+- Đam mê / Ngành nghề mong muốn của mình: **${passionText}**
 
 Hãy tư vấn giúp mình:
 ${calcMode === 'standard' 
-  ? '1. Gợi ý 3-5 trường Đại học xịn nhất và ngành học (kèm điểm chuẩn 2025) mà mình có khả năng đỗ với khối thi và số điểm này.\n2. Lời khuyên phân bổ nguyện vọng an toàn.' 
-  : '1. Gợi ý 3-5 ngành HOT tại ĐH Bách Khoa Hà Nội (HUST) (kèm điểm chuẩn 2025) phù hợp với số điểm này.\n2. Đánh giá mức độ cạnh tranh.'}`
+  ? '1. Dựa trên đam mê và số điểm này, gợi ý 3-5 trường Đại học xịn nhất và ngành học (kèm điểm chuẩn 2025) mà mình có khả năng đỗ.\n2. Lời khuyên phân bổ nguyện vọng an toàn.' 
+  : '1. Dựa trên đam mê và số điểm này, gợi ý 3-5 ngành HOT tại ĐH Bách Khoa Hà Nội (HUST) (kèm điểm chuẩn 2025) mà mình có khả năng đỗ.\n2. Đánh giá mức độ cạnh tranh của các ngành đó.'}`
 
-    const initialDisplayMessage: ChatMessage = { role: 'user', text: `Tư vấn giúp mình các trường và ngành phù hợp với số điểm **${result.totalScore}** (Khối **${selectedBlock}**) nhé!` }
+    const initialDisplayMessage: ChatMessage = { role: 'user', text: `Tư vấn giúp mình các trường và ngành phù hợp với số điểm **${result.totalScore}** (Khối **${selectedBlock}**) và định hướng làm **${passionText}** nhé!` }
     setAiMessages([initialDisplayMessage])
 
     try {
@@ -191,7 +213,7 @@ ${calcMode === 'standard'
     setAiMessages(newHistory)
     setIsAiLoading(true)
 
-    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. Tham chiếu mức điểm chuẩn năm 2025 để đưa ra dự báo. Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn". Học sinh đang có ${result?.totalScore} điểm, khối ${selectedBlock}.`
+    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. Tham chiếu mức điểm chuẩn năm 2025 (dữ liệu của 248 trường và hơn 2400 ngành) để đưa ra dự báo. Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn". Học sinh đang có ${result?.totalScore} điểm, khối ${selectedBlock}.`
 
     try {
       const res = await fetch('/api/chat', {
@@ -459,20 +481,52 @@ ${calcMode === 'standard'
                   </div>
                 </div>
 
-                {/* 🌟 WIDGET SENAI TƯ VẤN (CÓ CHAT LIÊN TỤC) */}
+                {/* 🌟 WIDGET ĐAM MÊ VÀ TƯ VẤN SENAI (Chỉ hiện khi đã có điểm) */}
                 {result && (
-                  <div className="animate-in slide-in-from-top-4 fade-in duration-500 flex flex-col">
-                    {!showAiBox ? (
-                      <button 
-                        onClick={handleAskSenAI}
-                        className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-[1.5rem] p-5 font-black shadow-[0_8px_20px_rgba(79,70,229,0.3)] transition-all active:scale-95 group"
-                      >
-                        <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse"/> 
-                        Tư vấn Trường/Ngành cùng SenAI
-                        <ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/>
-                      </button>
-                    ) : (
-                      <div className="bg-white dark:bg-[#1A1A1A] border border-indigo-200 dark:border-indigo-500/30 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col h-[550px]">
+                  <div className="animate-in slide-in-from-top-4 fade-in duration-500 flex flex-col gap-6">
+                    
+                    {/* BẢNG ĐÁNH GIÁ ĐAM MÊ NGAY KHI VỪA CÓ ĐIỂM */}
+                    {!showAiBox && (
+                      <div className={`${mdCard} p-6 shadow-md border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-900/10`}>
+                        <h3 className="text-sm font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest mb-2 flex items-center gap-2"><Briefcase className="w-4 h-4"/> Định hướng đam mê của bạn</h3>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-5">Chọn các lĩnh vực bạn yêu thích để SenAI đưa ra lời khuyên "đo ni đóng giày" nhất với số điểm của bạn nhé.</p>
+                        
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {PRESET_PASSIONS.map(passion => (
+                            <button 
+                              key={passion} 
+                              onClick={() => togglePassion(passion)}
+                              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${selectedPassions.includes(passion) ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-indigo-400'}`}
+                            >
+                              {passion}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mb-5">
+                          <input 
+                            type="text" 
+                            placeholder="Hoặc tự gõ ngành nghề bạn mơ ước vào đây..."
+                            value={customPassion}
+                            onChange={(e) => setCustomPassion(e.target.value)}
+                            className="w-full bg-white dark:bg-[#1E1E1E] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 outline-none text-sm font-medium text-slate-900 dark:text-white focus:border-indigo-500 shadow-inner"
+                          />
+                        </div>
+
+                        <button 
+                          onClick={handleAskSenAI}
+                          className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl p-4 font-black shadow-[0_8px_20px_rgba(79,70,229,0.3)] transition-all active:scale-95 group"
+                        >
+                          <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse"/> 
+                          Tư vấn Ngành học theo Đam mê
+                          <ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* KHUNG CHAT TƯ VẤN SENAI */}
+                    {showAiBox && (
+                      <div className="bg-white dark:bg-[#1A1A1A] border border-indigo-200 dark:border-indigo-500/30 rounded-[2rem] shadow-xl relative overflow-hidden flex flex-col h-[650px] animate-in zoom-in-95 duration-300">
                         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500"></div>
                         
                         {/* Chat Header */}
@@ -483,7 +537,7 @@ ${calcMode === 'standard'
                             </div>
                             <div>
                               <h4 className="font-black text-slate-900 dark:text-white text-sm">Gia sư Tuyển sinh SenAI</h4>
-                              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Tham chiếu điểm chuẩn 2025</p>
+                              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Big Data: 248 Trường & 2400 Ngành</p>
                             </div>
                           </div>
                         </div>
@@ -502,7 +556,7 @@ ${calcMode === 'standard'
                               )}
 
                               <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14px] font-medium leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm overflow-x-auto'}`}>
-                                {/* SỬ DỤNG REACT-MARKDOWN ĐỂ RENDER CHUẨN CÔNG THỨC */}
+                                {/* SỬ DỤNG REACT-MARKDOWN ĐỂ RENDER CHUẨN CÔNG THỨC VÀ MARKDOWN */}
                                 <ReactMarkdown
                                   remarkPlugins={[remarkMath]}
                                   rehypePlugins={[rehypeKatex]}
@@ -532,7 +586,7 @@ ${calcMode === 'standard'
                                   <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
                                   <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
                                 </span>
-                                <span className="text-[12px] text-slate-500 font-bold italic ml-1">Đang phân tích dữ liệu...</span>
+                                <span className="text-[12px] text-slate-500 font-bold italic ml-1">Đang truy xuất phổ điểm 2025...</span>
                               </div>
                             </div>
                           )}
@@ -566,7 +620,16 @@ ${calcMode === 'standard'
                 {/* Nút tác vụ phụ */}
                 <div className="flex justify-center pt-2">
                    <button 
-                    onClick={() => { setScores({sub1:'', sub2:'', sub3:''}); setPriorityScore(''); setResult(null); setShowAiBox(false); setAiMessages([]); setAiInput('') }} 
+                    onClick={() => { 
+                      setScores({sub1:'', sub2:'', sub3:''}); 
+                      setPriorityScore(''); 
+                      setResult(null); 
+                      setShowAiBox(false); 
+                      setAiMessages([]); 
+                      setAiInput('');
+                      setSelectedPassions([]);
+                      setCustomPassion('');
+                    }} 
                     className="text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/5 shadow-sm px-6 py-2.5 rounded-full active:scale-95"
                   >
                      Làm mới bộ tính
