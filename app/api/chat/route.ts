@@ -15,8 +15,12 @@ export async function POST(req: Request) {
     // 2. Khởi tạo Google SDK
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 3. Sử dụng mô hình gemini-3.5-flash theo yêu cầu
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' });
+    // 3. Sử dụng mô hình gemini-3.5-flash và bật công cụ tìm kiếm
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-3.5-flash',
+      // @ts-ignore - Bỏ qua kiểm duyệt Type của thư viện cũ trên Vercel
+      tools: [{ googleSearch: {} }] 
+    });
 
     // 4. Phân tích dữ liệu từ Client gửi lên
     const { message, history, context, images } = await req.json();
@@ -45,13 +49,15 @@ ${baseInstruction}
 QUY TẮC HIỂN THỊ TOÁN HỌC & ĐIỂM SỐ:
 - Phải sử dụng dấu chấm "." cho phép nhân và dấu phẩy "," cho dấu thập phân ở mọi điểm số hoặc bài toán (Ví dụ: 27,85 hoặc 9,8 . 10).
 - Khi trả về công thức Toán học phức tạp, luôn bọc trong ký hiệu $ (inline) hoặc $$ (block) để hệ thống hiển thị TeX/KaTeX mượt mà.
+- TÁC GIẢ: Khi nhắc đến tác giả Hoàng Bình Minh, tuyệt đối không lặp thừa chữ Minh.
 
 KHO DỮ LIỆU ĐIỂM CHUẨN ĐẠI HỌC VÀ NGÀNH HỌC CHÍNH XÁC (Tham chiếu năm 2025):
 ${universityDataText ? universityDataText : "Hiện tại hệ thống dữ liệu đang được bảo trì, hãy dùng kiến thức nền của bạn."}
 
 Nhiệm vụ tư vấn trường/ngành:
-- Khi học sinh hỏi về cơ hội trúng tuyển hoặc xin gợi ý trường/ngành dựa trên điểm số và khối thi, bạn hãy đối chiếu thật nghiêm ngặt với KHO DỮ LIỆU ở trên.
-- Tuyệt đối không tự bịa ra điểm chuẩn hoặc tên ngành không có trong danh sách. 
+- BƯỚC 1: Ưu tiên đối chiếu THẬT NGHIÊM NGẶT với KHO DỮ LIỆU JSON ở trên.
+- BƯỚC 2: Nếu trường học hoặc ngành học mà thí sinh hỏi KHÔNG CÓ TRONG KHO DỮ LIỆU, bạn HÃY TỰ ĐỘNG TÌM KIẾM TRÊN WEB (Google Search). Ưu tiên tìm kiếm tại các nguồn uy tín như tuyensinh247.com để lấy thông tin điểm chuẩn năm gần nhất (2024 hoặc 2025) và cập nhật tư vấn cho thí sinh.
+- BƯỚC 3: Tuyệt đối KHÔNG TỰ BỊA RA (Hallucinate) điểm chuẩn hoặc tên ngành nếu chưa tìm thấy nguồn dữ liệu thực tế. 
 - Nếu học sinh hỏi về các trường tính theo thang điểm 100 (Ví dụ: Đại học Bách Khoa TP,HCM - QSB), bạn hãy tính toán quy đổi điểm của học sinh sang thang điểm 100 tương ứng hoặc quy đổi điểm chuẩn của trường về thang điểm 30 để giải thích một cách dễ hiểu, khoa học.
 `;
 
