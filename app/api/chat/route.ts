@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // 3. Sử dụng mô hình gemini-3.5-flash theo yêu cầu
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' });
 
     // 4. Phân tích dữ liệu từ Client gửi lên
     const { message, history, context, images } = await req.json();

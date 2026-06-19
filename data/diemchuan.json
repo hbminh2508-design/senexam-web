@@ -261,4 +261,97 @@
       { "major_name": "Chỉ huy tham mưu Tăng Thiết giáp (Thí sinh nam miền Nam)", "blocks": ["A00", "A01", "C01"], "score_2025": 22.36 }
     ]
   }
+  {
+    "code": "YHB",
+    "name": "Đại học Y Hà Nội",
+    "scale": 30,
+    "majors": [
+      { "major_name": "Tâm lý học (Khối C00)", "blocks": ["C00"], "score_2025": 28.70 },
+      { "major_name": "Y khoa", "blocks": ["B00"], "score_2025": 28.13 },
+      { "major_name": "Răng - Hàm - Mặt", "blocks": ["B00"], "score_2025": 27.34 },
+      { "major_name": "Tâm lý học (Khối D01)", "blocks": ["D01"], "score_2025": 26.70 },
+      { "major_name": "Y khoa Phân hiệu Thanh Hóa", "blocks": ["B00"], "score_2025": 25.80 },
+      { "major_name": "Kỹ thuật xét nghiệm y học", "blocks": ["A00", "B00"], "score_2025": 23.72 },
+      { "major_name": "Tâm lý học (Khối B00)", "blocks": ["B00"], "score_2025": 23.70 },
+      { "major_name": "Kỹ thuật hình ảnh y học", "blocks": ["A00", "B00"], "score_2025": 23.57 },
+      { "major_name": "Y học cổ truyền", "blocks": ["A00", "B00"], "score_2025": 23.50 },
+      { "major_name": "Khúc xạ nhãn khoa", "blocks": ["A00", "B00"], "score_2025": 23.23 },
+      { "major_name": "Kỹ thuật phục hồi chức năng", "blocks": ["A00", "B00"], "score_2025": 22.50 },
+      { "major_name": "Điều dưỡng", "blocks": ["A00", "B00"], "score_2025": 22.25 },
+      { "major_name": "Kỹ thuật phục hình răng", "blocks": ["A00", "B00"], "score_2025": 21.85 },
+      { "major_name": "Y tế công cộng (Khối D01)", "blocks": ["D01"], "score_2025": 21.20 },
+      { "major_name": "Hộ sinh", "blocks": ["A00", "B00"], "score_2025": 20.35 },
+      { "major_name": "Dinh dưỡng", "blocks": ["A00", "B00"], "score_2025": 18.75 },
+      { "major_name": "Kỹ thuật xét nghiệm y học Phân hiệu Thanh Hóa", "blocks": ["A00", "B00"], "score_2025": 18.35 },
+      { "major_name": "Y tế công cộng (Khối B00, B08)", "blocks": ["B00", "B08"], "score_2025": 18.20 },
+      { "major_name": "Kỹ thuật phục hồi chức năng Phân hiệu Thanh Hóa", "blocks": ["A00", "B00"], "score_2025": 17.30 },
+      { "major_name": "Y học dự phòng", "blocks": ["A00", "B00", "D07"], "score_2025": 17.00 },
+      { "major_name": "Điều dưỡng Phân hiệu Thanh Hóa", "blocks": ["A00", "B00"], "score_2025": 17.00 },
+      { "major_name": "Công tác xã hội", "blocks": ["A00", "B00", "B08"], "score_2025": 17.00 }
+    ]
+  },
+  {
+    "code": "YTB",
+    "name": "Đại học Y Dược Thái Bình",
+    "scale": 30,
+    "majors": [
+      { "major_name": "Y khoa", "blocks": ["B00", "D07", "D08"], "score_2025": 24.60 },
+      { "major_name": "Dược học", "blocks": ["A00", "A01", "D07"], "score_2025": 19.50 },
+      { "major_name": "Kỹ thuật xét nghiệm y học", "blocks": ["A00", "B00"], "score_2025": 19.50 },
+      { "major_name": "Y học cổ truyền", "blocks": ["B00", "D08"], "score_2025": 19.00 },
+      { "major_name": "Y học dự phòng", "blocks": ["B00", "D08"], "score_2025": 17.00 },
+      { "major_name": "Điều dưỡng", "blocks": ["B00", "D08"], "score_2025": 17.00 }
+    ]
+  },
+  {
+    "code": "YPB",
+    "name": "Đại học Y Dược Hải Phòng",
+    "scale": 30,
+    "majors": [
+      { "major_name": "Y khoa", "blocks": ["A00", "B00"], "score_2025": 25.33 },
+      { "major_name": "Răng - Hàm - Mặt", "blocks": ["B00"], "score_2025": 24.63 },
+      { "major_name": "Y học cổ truyền", "blocks": ["B00"], "score_2025": 24.03 },
+      { "major_name": "Kỹ thuật xét nghiệm y học", "blocks": ["B00"], "score_2025": 23.23 },
+      { "major_name": "Điều dưỡng", "blocks": ["B00"], "score_2025": 22.22 },
+      { "major_name": "Dược học", "blocks": ["A00", "B00", "D07"], "score_2025": 20.00 },
+      { "major_name": "Y học dự phòng", "blocks": ["B00"], "score_2025": 19.35 }
+    ]
+  },
+  {
+    "code": "HYD",
+    "name": "Học viện Y Dược học Cổ truyền Việt Nam",
+    "scale": 30,
+    "majors": [
+      { "major_name": "Y khoa", "blocks": ["B00", "B03", "A02", "D08", "X14"], "score_2025": 24.25 },
+      { "major_name": "Dược học", "blocks": ["A00", "B00", "D07", "C02", "X10"], "score_2025": 21.35 },
+      { "major_name": "Y học cổ truyền", "blocks": ["B00", "B03", "A02", "D08", "X14"], "score_2025": 21.00 }
+    ]
+  },
+  {
+    "code": "DTY",
+    "name": "Đại học Y Dược - Đại học Thái Nguyên",
+    "scale": 30,
+    "majors": [
+      { "major_name": "Răng - Hàm - Mặt", "blocks": ["B00", "D07", "D08"], "score_2025": 26.15 },
+      { "major_name": "Y khoa", "blocks": ["B00", "D07", "D08"], "score_2025": 25.85 },
+      { "major_name": "Dược học", "blocks": ["A00", "A01", "A02", "B00", "D07", "D08"], "score_2025": 22.80 },
+      { "major_name": "Kỹ thuật xét nghiệm y học", "blocks": ["A00", "A01", "A02", "B00", "D07", "D08"], "score_2025": 22.50 },
+      { "major_name": "Kỹ thuật hình ảnh y học", "blocks": ["A00", "A01", "A02", "B00", "D07", "D08"], "score_2025": 21.25 },
+      { "major_name": "Kỹ thuật phục hồi chức năng", "blocks": ["A00", "A01", "A02", "B00", "D07", "D08"], "score_2025": 20.50 },
+      { "major_name": "Điều dưỡng", "blocks": ["B00", "D07", "D08"], "score_2025": 20.00 },
+      { "major_name": "Y học dự phòng", "blocks": ["B00", "D07", "D08"], "score_2025": 18.30 }
+    ]
+  },
+  {
+    "code": "YKV",
+    "name": "Đại học Y khoa Vinh",
+    "scale": 30,
+    "majors": [
+      { "major_name": "Y khoa", "blocks": ["B00"], "score_2025": 22.10 },
+      { "major_name": "Kỹ thuật xét nghiệm y học", "blocks": ["A00", "B00", "D07"], "score_2025": 20.00 },
+      { "major_name": "Dược học", "blocks": ["A00", "B00"], "score_2025": 19.00 },
+      { "major_name": "Điều dưỡng", "blocks": ["A00", "B00", "D07"], "score_2025": 17.50 },
+      { "major_name": "Y học dự phòng", "blocks": ["A00", "B00", "D07"], "score_2025": 17.25 }
+    ]
+  }
 ]
