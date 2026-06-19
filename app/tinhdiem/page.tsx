@@ -12,6 +12,7 @@ import {
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import remarkGfm from 'remark-gfm' // Thêm thư viện hỗ trợ render Bảng (Table)
 import 'katex/dist/katex.min.css'
 
 // Các hằng số giao diện chuẩn Material Design 3 + Liquid Glass
@@ -556,9 +557,9 @@ ${calcMode === 'standard'
                               )}
 
                               <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14px] font-medium leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm overflow-x-auto'}`}>
-                                {/* SỬ DỤNG REACT-MARKDOWN ĐỂ RENDER CHUẨN CÔNG THỨC VÀ MARKDOWN */}
+                                {/* SỬ DỤNG REACT-MARKDOWN ĐỂ RENDER CHUẨN CÔNG THỨC VÀ MARKDOWN BẢNG */}
                                 <ReactMarkdown
-                                  remarkPlugins={[remarkMath]}
+                                  remarkPlugins={[remarkMath, remarkGfm]}
                                   rehypePlugins={[rehypeKatex]}
                                   components={{
                                     p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
@@ -567,6 +568,18 @@ ${calcMode === 'standard'
                                     ol: ({node, ...props}) => <ol className="list-decimal ml-5 mb-2 space-y-1" {...props} />,
                                     li: ({node, ...props}) => <li className="pl-1" {...props} />,
                                     h3: ({node, ...props}) => <h3 className="text-base font-bold mb-2 mt-3" {...props} />,
+                                    
+                                    // Bổ sung các cấu hình render Bảng (Table) tương thích giao diện
+                                    table: ({node, ...props}) => (
+                                      <div className="overflow-x-auto my-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                                        <table className="w-full text-left border-collapse text-sm min-w-full" {...props} />
+                                      </div>
+                                    ),
+                                    thead: ({node, ...props}) => <thead className="bg-slate-100 dark:bg-[#2A2A2A] text-slate-700 dark:text-slate-300" {...props} />,
+                                    tbody: ({node, ...props}) => <tbody className="divide-y divide-slate-200 dark:divide-white/10" {...props} />,
+                                    tr: ({node, ...props}) => <tr className="hover:bg-slate-50 dark:hover:bg-[#252525] transition-colors" {...props} />,
+                                    th: ({node, ...props}) => <th className="px-4 py-3 font-bold border-r last:border-r-0 border-slate-200 dark:border-white/10" {...props} />,
+                                    td: ({node, ...props}) => <td className="px-4 py-3 align-top border-r last:border-r-0 border-slate-200 dark:border-white/10" {...props} />,
                                   }}
                                 >
                                   {msg.text}
