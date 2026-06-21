@@ -1,14 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
-  ArrowLeft, FlaskConical, Settings2, Activity, Play, RotateCcw,
-  Cpu, Zap, Waves, Target, CircleDot, Send, Bot, Loader2, Sparkles,
-  Info, ChevronRight
+  ArrowLeft, FlaskConical, Settings2, Play, Square, RotateCcw,
+  Target, CircleDot, Send, Bot, Loader2, Sparkles, Activity, Cpu, Edit3
 } from 'lucide-react'
 
-// Render Markdown và LaTeX
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -16,328 +14,192 @@ import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 
 // ============================================================================
-// CONSTANTS & UI STYLES
+// CONSTANTS, TYPES & PRESETS
 // ============================================================================
-const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm transition-all duration-300"
-const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 rounded-xl px-4 py-3 outline-none transition-all font-medium text-sm shadow-inner text-slate-900 dark:text-white"
-const rangeInput = "w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
+const inputClass = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 rounded-xl px-4 py-3 outline-none font-black text-sm shadow-inner"
+const rangeClass = "w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
 
-type ExperimentType = 'pendulum' | 'horizontal' | 'projectile' | 'kirchhoff' | 'rc_circuit'
-type AiMessage = { role: 'user' | 'model'; text: string; isError?: boolean }
+type ExpType = 'pendulum' | 'horizontal' | 'projectile' | 'kirchhoff' | 'rc_circuit'
+type ComponentType = 'wire' | 'R' | 'E' | 'C' | 'open'
+type Edge = { id: string, x1: number, y1: number, x2: number, y2: number, type: ComponentType, val: number }
 
-const EXPERIMENTS = [
-  { id: 'pendulum', title: 'Con lắc đơn', icon: <CircleDot className="w-5 h-5"/>, category: 'Cơ học' },
-  { id: 'horizontal', title: 'Ném ngang', icon: <ArrowLeft className="w-5 h-5 rotate-180"/>, category: 'Cơ học' },
-  { id: 'projectile', title: 'Ném xiên', icon: <Target className="w-5 h-5"/>, category: 'Cơ học' },
-  { id: 'kirchhoff', title: 'Định luật Kirchhoff', icon: <Activity className="w-5 h-5"/>, category: 'Điện học' },
-  { id: 'rc_circuit', title: 'Mạch R-C', icon: <Cpu className="w-5 h-5"/>, category: 'Điện học' },
+const EXPERIMENTS: {id: ExpType, title: string, icon: any}[] = [
+  { id: 'pendulum', title: 'Con lắc đơn', icon: <CircleDot className="w-4 h-4"/> },
+  { id: 'horizontal', title: 'Ném ngang', icon: <ArrowLeft className="w-4 h-4 rotate-180"/> },
+  { id: 'projectile', title: 'Ném xiên', icon: <Target className="w-4 h-4"/> },
+  { id: 'kirchhoff', title: 'ĐL Kirchhoff (Lưới)', icon: <Activity className="w-4 h-4"/> },
+  { id: 'rc_circuit', title: 'Mạch R-C (Lưới)', icon: <Cpu className="w-4 h-4"/> },
+]
+
+// Mạng lưới mạch điện mặc định (7 cạnh)
+const initEdges = (preset: 'K' | 'RC'): Edge[] => [
+  { id: 'left', x1: 50, y1: 50, x2: 50, y2: 150, type: 'E', val: 12 },
+  { id: 'mid', x1: 150, y1: 50, x2: 150, y2: 150, type: preset === 'K' ? 'R' : 'C', val: preset === 'K' ? 10 : 100 },
+  { id: 'right', x1: 250, y1: 50, x2: 250, y2: 150, type: preset === 'K' ? 'E' : 'open', val: preset === 'K' ? 9 : 0 },
+  { id: 'top1', x1: 50, y1: 50, x2: 150, y2: 50, type: 'R', val: 5 },
+  { id: 'top2', x1: 150, y1: 50, x2: 250, y2: 50, type: preset === 'K' ? 'R' : 'open', val: preset === 'K' ? 5 : 0 },
+  { id: 'bot1', x1: 50, y1: 150, x2: 150, y2: 150, type: 'wire', val: 0 },
+  { id: 'bot2', x1: 150, y1: 150, x2: 250, y2: 150, type: preset === 'K' ? 'wire' : 'open', val: 0 },
 ]
 
 export default function VirtualLabPage() {
   const router = useRouter()
-  const [activeExp, setActiveExp] = useState<ExperimentType>('pendulum')
-
-  // STATES THÔNG SỐ VẬT LÝ
-  // 1. Con lắc đơn
-  const [pendulumLength, setPendulumLength] = useState(1) // mét
-  const [pendulumGravity, setPendulumGravity] = useState(9.8) // m/s2
-  const [pendulumMass, setPendulumMass] = useState(0.5) // kg
+  const [activeExp, setActiveExp] = useState<ExpType>('pendulum')
   
-  // 2. Ném xiên & Ném ngang
-  const [v0, setV0] = useState(15) // m/s
-  const [angle, setAngle] = useState(45) // độ (Ném xiên)
-  const [height, setHeight] = useState(10) // mét (Ném ngang/Ném xiên)
+  // Trạng thái Mô phỏng Thời gian thực
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [time, setTime] = useState(0)
 
-  // 3. Mạch R-C
-  const [resistance, setResistance] = useState(100) // Ohm
-  const [capacitance, setCapacitance] = useState(10) // MicroFarad
-  const [voltage, setVoltage] = useState(12) // V
+  // Tham số Vật lý Cơ học
+  const [params, setParams] = useState({ l: 1, g: 9.8, m: 0.5, v0: 15, angle: 45, h: 10 })
+  
+  // Trạng thái Lưới Mạch điện
+  const [edges, setEdges] = useState<Edge[]>(initEdges('K'))
+  const [selEdgeId, setSelEdgeId] = useState<string | null>(null)
 
-  // STATES AI ASSISTANT
+  // AI States
   const [aiQuery, setAiQuery] = useState('')
-  const [aiMessages, setAiMessages] = useState<AiMessage[]>([{
-    role: 'model',
-    text: 'Chào bạn! Mình là SenAI - Trợ lý Phòng thí nghiệm. Bạn có thể thay đổi thông số ở bảng điều khiển, hoặc **bấm trực tiếp vào các bộ phận trên hình vẽ** để mình giải thích chi tiết nhé! 🚀'
-  }])
-  const [isAiSearching, setIsAiSearching] = useState(false)
-  const aiChatScrollRef = useRef<HTMLDivElement>(null)
+  const [aiMessages, setAiMessages] = useState<{role: 'user'|'model', text: string, err?: boolean}[]>([{ role: 'model', text: 'Chào bạn! Bấm **Bắt đầu** để chạy thí nghiệm. Bấm trực tiếp vào các linh kiện mạch điện để thay đổi tùy ý nhé! 🚀' }])
+  const [isAiLoading, setIsAiLoading] = useState(false)
+  const aiScrollRef = useRef<HTMLDivElement>(null)
 
-  // Khởi tạo Theme
+  // Động cơ Vật lý (Physics Engine Loop)
   useEffect(() => {
-    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
-      document.documentElement.classList.add('dark')
+    let req: number, last = performance.now()
+    const loop = (now: number) => {
+      setTime(t => t + (now - last) / 1000)
+      last = now; req = requestAnimationFrame(loop)
     }
-  }, [])
+    if (isPlaying) req = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(req)
+  }, [isPlaying])
 
-  // Auto-scroll chat
+  // Reset khi đổi Tab
   useEffect(() => {
-    if (aiChatScrollRef.current) aiChatScrollRef.current.scrollTop = aiChatScrollRef.current.scrollHeight
-  }, [aiMessages, isAiSearching])
-
-  // Reset chat when changing experiment
-  useEffect(() => {
-    setAiMessages([{ role: 'model', text: `Đã chuyển sang thí nghiệm **${EXPERIMENTS.find(e => e.id === activeExp)?.title}**. Bạn cần mình hỗ trợ tính toán hay giải thích hiện tượng gì không?` }])
+    setIsPlaying(false); setTime(0); setSelEdgeId(null);
+    if (activeExp === 'kirchhoff') setEdges(initEdges('K'))
+    if (activeExp === 'rc_circuit') setEdges(initEdges('RC'))
+    setAiMessages([{ role: 'model', text: `Chuyển sang cấu hình: **${EXPERIMENTS.find(e=>e.id===activeExp)?.title}**. Bạn cần hỗ trợ tính toán gì không?` }])
   }, [activeExp])
 
+  useEffect(() => { if (aiScrollRef.current) aiScrollRef.current.scrollTop = aiScrollRef.current.scrollHeight }, [aiMessages, isAiLoading])
+
   // ==========================================================================
-  // XỬ LÝ GỌI SENAI
+  // LOGIC SENAI (NHẬN THỨC NGỮ CẢNH)
   // ==========================================================================
-  const handleAskSenAI = async (e?: React.FormEvent, customQuery?: string) => {
-    if (e) e.preventDefault()
-    const q = customQuery || aiQuery.trim()
-    if (!q || isAiSearching) return
+  const handleAskSenAI = async (e?: React.FormEvent, directQ?: string) => {
+    if(e) e.preventDefault()
+    const q = directQ || aiQuery.trim()
+    if (!q || isAiLoading) return
+    if (!directQ) setAiQuery('')
+    setAiMessages(p => [...p, { role: 'user', text: q }]); setIsAiLoading(true)
 
-    if (!customQuery) setAiQuery('')
-    setAiMessages(p => [...p, { role: 'user', text: q }])
-    setIsAiSearching(true)
-
-    // Tạo Context về trạng thái hiện tại của Thí nghiệm để AI hiểu bối cảnh
-    let contextStr = `Học sinh đang thao tác thí nghiệm: ${EXPERIMENTS.find(x => x.id === activeExp)?.title}.\n`
-    if (activeExp === 'pendulum') contextStr += `Thông số hiện tại: Chiều dài dây l = ${pendulumLength} m, Trọng trường g = ${pendulumGravity} m/s2, Khối lượng m = ${pendulumMass} kg.`
-    else if (activeExp === 'projectile') contextStr += `Thông số hiện tại: Vận tốc đầu v0 = ${v0} m/s, Góc ném = ${angle} độ, Độ cao ban đầu h = ${height} m.`
-    else if (activeExp === 'horizontal') contextStr += `Thông số hiện tại: Vận tốc đầu v0 = ${v0} m/s, Độ cao ban đầu h = ${height} m.`
-    else if (activeExp === 'rc_circuit') contextStr += `Thông số: Điện trở R = ${resistance} Ohm, Điện dung C = ${capacitance} uF, Điện áp U = ${voltage} V.`
-
-    const systemPrompt = `Bạn là SenAI, trợ lý Phòng thí nghiệm Vật lý ảo của nền tảng SenExam.
-    QUY TẮC HIỂN THỊ TOÁN HỌC & ĐIỂM SỐ BẮT BUỘC:
-    - Bọc công thức Toán/Vật lý bằng ký hiệu $ (inline) hoặc $$ (block).
-    - Phải sử dụng dấu chấm "." cho phép nhân và dấu phẩy "," cho dấu thập phân (Ví dụ: 9,8 . 10).
-    - Giải thích rõ ràng, thân thiện, xưng "Mình" gọi "Bạn".
-    
-    BỐI CẢNH (CONTEXT):
-    ${contextStr}
-    Dựa vào thông số trên, hãy tính toán hoặc giải thích chính xác theo yêu cầu của học sinh. Tuyệt đối không bịa ra số liệu sai lệch với Bối cảnh.`
+    // Nhúng toàn bộ thông số thí nghiệm hiện tại vào não AI
+    let ctx = `Học sinh đang ở Thí nghiệm: ${EXPERIMENTS.find(x=>x.id===activeExp)?.title}. `
+    if (['pendulum','horizontal','projectile'].includes(activeExp)) {
+      ctx += `Thông số: Chiều dài l=${params.l}m, Gia tốc g=${params.g}m/s2, Khối lượng m=${params.m}kg, Vận tốc v0=${params.v0}m/s, Góc ném=${params.angle}°, Độ cao h=${params.h}m. Mô phỏng đang ở giây thứ t=${time.toFixed(2)}s.`
+    } else {
+      ctx += `Cấu trúc Mạch điện hiện tại: ${edges.map(e => `Cạnh ${e.id}(${e.type}=${e.val})`).join(', ')}.`
+    }
+    const sysPrompt = `Bạn là SenAI, trợ lý Phòng Thí Nghiệm Vật lý. BỐI CẢNH THỰC TẾ: ${ctx}. Bắt buộc bọc công thức bằng $ hoặc $$. Trả lời thân thiện, chính xác, phân tích các hiện tượng dựa đúng trên các thông số này.`
 
     try {
-      const res = await fetch('/api/chat', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ message: q, history: [], context: systemPrompt }) 
-      })
+      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q, history: [], context: sysPrompt }) })
       const data = await res.json()
-      if (data.text) {
-        setAiMessages(p => [...p, { role: 'model', text: data.text }])
-      }
-    } catch (err) {
-      setAiMessages(p => [...p, { role: 'model', text: 'Xin lỗi, máy chủ AI đang bận. Bạn thử lại sau nhé!', isError: true }])
-    }
-    setIsAiSearching(false)
-  }
-
-  // Hàm khi bấm vào các thành phần (Hotspots) trên hình
-  const handleComponentClick = (componentName: string) => {
-    handleAskSenAI(undefined, `Giải thích chi tiết về bộ phận: ${componentName} trong thí nghiệm này và vai trò của nó.`)
+      if (data.text) setAiMessages(p => [...p, { role: 'model', text: data.text }])
+    } catch { setAiMessages(p => [...p, { role: 'model', text: 'Lỗi mạng AI.', err: true }]) }
+    setIsAiLoading(false)
   }
 
   // ==========================================================================
-  // RENDER CÁC THÍ NGHIỆM TRỰC QUAN (SVG ANIMATIONS)
+  // RENDER HÌNH ẢNH TRỰC QUAN (SVG)
   // ==========================================================================
-  const renderExperimentVisual = () => {
+  const renderVisuals = () => {
+    // 1. CON LẮC ĐƠN
     if (activeExp === 'pendulum') {
-      const period = 2 * Math.PI * Math.sqrt(pendulumLength / pendulumGravity)
+      const w = Math.sqrt(params.g / params.l)
+      const theta = (Math.PI / 6) * Math.cos(w * time) // Góc thả ban đầu 30 độ
+      const px = 150 + params.l * 80 * Math.sin(theta)
+      const py = 20 + params.l * 80 * Math.cos(theta)
       return (
-        <div className="w-full h-full flex flex-col items-center justify-center relative bg-indigo-900/5 dark:bg-black/20 rounded-[2rem] overflow-hidden border border-indigo-500/10">
-          <div className="absolute top-4 left-4 text-xs font-black text-indigo-500 opacity-50">T = {period.toFixed(2)}s</div>
-          
-          <svg viewBox="0 0 200 200" className="w-full h-full max-w-[300px]">
-            <line x1="20" y1="20" x2="180" y2="20" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" />
-            <g style={{ transformOrigin: '100px 20px', animation: `swing ${period}s ease-in-out infinite alternate` }}>
-              <style>{`@keyframes swing { 0% { transform: rotate(30deg); } 100% { transform: rotate(-30deg); } }`}</style>
-              <line x1="100" y1="20" x2="100" y2={20 + pendulumLength * 80} stroke="currentColor" strokeWidth="2" className="text-indigo-400" />
-              <circle 
-                cx="100" cy={20 + pendulumLength * 80} r={10 + pendulumMass * 5} 
-                className="fill-indigo-600 cursor-pointer hover:fill-indigo-400 transition-colors drop-shadow-lg"
-                onClick={() => handleComponentClick('Quả nặng (Vật m)')}
-              />
-            </g>
-          </svg>
-          <div className="absolute bottom-4 text-xs font-bold text-slate-500 bg-white/50 dark:bg-black/50 px-3 py-1 rounded-lg">Bấm vào quả nặng để hỏi AI</div>
-        </div>
+        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px]">
+          <line x1="50" y1="20" x2="250" y2="20" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" />
+          <line x1="150" y1="20" x2={px} y2={py} stroke="currentColor" strokeWidth="2" className="text-indigo-400" />
+          <circle cx={px} cy={py} r={10 + params.m * 2} className="fill-indigo-600 cursor-pointer hover:fill-indigo-400 shadow-xl" onClick={() => handleAskSenAI(undefined, 'Phân tích lực tác dụng lên quả nặng tại vị trí hiện tại.')}/>
+          <text x="10" y="190" className="text-xs fill-slate-500 font-bold">t = {time.toFixed(2)}s | T = {(2*Math.PI/w).toFixed(2)}s</text>
+        </svg>
       )
     }
 
+    // 2. NÉM XIÊN / NGANG
     if (activeExp === 'projectile' || activeExp === 'horizontal') {
-      const g = 9.8
-      const rad = activeExp === 'horizontal' ? 0 : (angle * Math.PI) / 180
-      const vx = v0 * Math.cos(rad)
-      const vy = v0 * Math.sin(rad)
-      // Thời gian bay (y = 0)
-      const t_flight = (vy + Math.sqrt(vy * vy + 2 * g * height)) / g
-      const max_x = vx * t_flight
-      const max_y = height + (vy * vy) / (2 * g)
+      const rad = activeExp === 'horizontal' ? 0 : params.angle * Math.PI / 180
+      const t_max = (params.v0 * Math.sin(rad) + Math.sqrt(Math.pow(params.v0 * Math.sin(rad), 2) + 2 * params.g * params.h)) / params.g
+      const curT = Math.min(time, t_max) // Dừng khi chạm đất
+      const x = 20 + params.v0 * Math.cos(rad) * curT * 5
+      const y = 200 - (params.h + params.v0 * Math.sin(rad) * curT - 0.5 * params.g * curT * curT) * 5
 
-      // Vẽ đường cong Parabol
-      let pathD = `M 10 ${200 - height * 5}`
-      for (let t = 0; t <= t_flight; t += t_flight/20) {
-        const x = 10 + (vx * t) * 5 // Scale 5x
-        const y = 200 - (height + vy * t - 0.5 * g * t * t) * 5
-        pathD += ` L ${x} ${y}`
+      // Vẽ nét đứt quỹ đạo
+      let pathD = `M 20 ${200 - params.h * 5}`
+      for (let t = 0; t <= t_max; t += t_max/20) pathD += ` L ${20 + params.v0 * Math.cos(rad) * t * 5} ${200 - (params.h + params.v0 * Math.sin(rad) * t - 0.5 * params.g * t * t) * 5}`
+
+      return (
+        <svg viewBox="0 0 350 220" className="w-full h-full max-w-[450px] overflow-visible">
+          <line x1="10" y1="200" x2="340" y2="200" stroke="currentColor" strokeWidth="2" className="text-slate-300 dark:text-slate-700" />
+          {params.h > 0 && <rect x="10" y={200 - params.h * 5} width="10" height={params.h * 5} className="fill-slate-400" />}
+          <path d={pathD} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="5,5" className="text-blue-500/50" />
+          <circle cx={x} cy={y} r="6" className="fill-rose-500 shadow-xl" />
+          <text x="10" y="215" className="text-xs fill-slate-500 font-bold">t = {curT.toFixed(2)}s / {t_max.toFixed(2)}s</text>
+        </svg>
+      )
+    }
+
+    // 3. MẠCH ĐIỆN TÙY BIẾN (Kirchhoff / RC)
+    if (activeExp === 'kirchhoff' || activeExp === 'rc_circuit') {
+      const renderComp = (type: ComponentType) => {
+        if (type === 'wire') return <line x1="-50" y1="0" x2="50" y2="0" stroke="currentColor" strokeWidth="3" className="text-indigo-400"/>
+        if (type === 'R') return <path d="M-50 0 L-25 0 L-20 -10 L-10 10 L0 -10 L10 10 L20 -10 L25 0 L50 0" fill="none" stroke="currentColor" strokeWidth="3" className="text-rose-500"/>
+        if (type === 'E') return <g><line x1="-50" y1="0" x2="-5" y2="0" stroke="currentColor" strokeWidth="3" className="text-indigo-400"/><line x1="-5" y1="-15" x2="-5" y2="15" stroke="currentColor" strokeWidth="3" className="text-slate-500"/><line x1="5" y1="-10" x2="5" y2="10" stroke="currentColor" strokeWidth="5" className="text-emerald-500"/><line x1="5" y1="0" x2="50" y2="0" stroke="currentColor" strokeWidth="3" className="text-indigo-400"/><text x="8" y="-12" fontSize="10" className="fill-emerald-500 font-bold">+</text></g>
+        if (type === 'C') return <g><line x1="-50" y1="0" x2="-5" y2="0" stroke="currentColor" strokeWidth="3" className="text-indigo-400"/><line x1="-5" y1="-15" x2="-5" y2="15" stroke="currentColor" strokeWidth="4" className="text-amber-500"/><line x1="5" y1="-15" x2="5" y2="15" stroke="currentColor" strokeWidth="4" className="text-amber-500"/><line x1="5" y1="0" x2="50" y2="0" stroke="currentColor" strokeWidth="3" className="text-indigo-400"/></g>
+        return null // 'open'
       }
 
       return (
-        <div className="w-full h-full flex flex-col items-center justify-end relative bg-blue-900/5 dark:bg-black/20 rounded-[2rem] overflow-hidden border border-blue-500/10 p-6">
-          <div className="absolute top-4 left-4 text-xs font-black text-blue-500 opacity-80 bg-white/50 dark:bg-black/50 px-3 py-1 rounded-lg">Lmax = {max_x.toFixed(2)}m | Hmax = {max_y.toFixed(2)}m</div>
-          
-          <svg viewBox="0 0 300 220" className="w-full h-full max-h-[300px] overflow-visible">
-            {/* Trục tọa độ */}
-            <line x1="10" y1="200" x2="290" y2="200" stroke="currentColor" strokeWidth="2" className="text-slate-300 dark:text-slate-700" />
-            <line x1="10" y1="200" x2="10" y2="10" stroke="currentColor" strokeWidth="2" className="text-slate-300 dark:text-slate-700" />
-            
-            {/* Tháp ném */}
-            {height > 0 && <rect x="0" y={200 - height * 5} width="10" height={height * 5} className="fill-slate-400 dark:fill-slate-600" />}
-            
-            {/* Quỹ đạo */}
-            <path d={pathD} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="5,5" className="text-blue-500 animate-[dash_2s_linear_infinite]" />
-            <style>{`@keyframes dash { to { stroke-dashoffset: -20; } }`}</style>
-            
-            {/* Viên đạn (Hotspot) */}
-            <circle cx="10" cy={200 - height * 5} r="6" className="fill-rose-500 cursor-pointer hover:fill-rose-400 shadow-xl" onClick={() => handleComponentClick('Vật ném (Viên đạn)')}/>
-            
-            {/* Vecto vận tốc v0 */}
-            <g transform={`translate(10, ${200 - height * 5}) rotate(${-angle})`}>
-              <line x1="0" y1="0" x2="40" y2="0" stroke="currentColor" strokeWidth="2" className="text-emerald-500" />
-              <polygon points="40,0 35,-3 35,3" className="fill-emerald-500" />
-            </g>
-          </svg>
-        </div>
+        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px]">
+          {edges.map(e => {
+            const mx = (e.x1 + e.x2) / 2; const my = (e.y1 + e.y2) / 2
+            const rot = e.x1 === e.x2 ? 90 : 0
+            const isSel = selEdgeId === e.id
+            return (
+              <g key={e.id} onClick={() => setSelEdgeId(e.id)} className="cursor-pointer group">
+                {/* Vùng bấm rộng (Hitbox) */}
+                <line x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke="transparent" strokeWidth="30" />
+                <g transform={`translate(${mx}, ${my}) rotate(${rot})`} className={`transition-all duration-300 ${isSel ? 'drop-shadow-[0_0_8px_rgba(99,102,241,0.8)] scale-105' : 'group-hover:drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]'}`}>
+                  {renderComp(e.type)}
+                </g>
+                {/* Nhãn giá trị */}
+                {e.type !== 'wire' && e.type !== 'open' && (
+                  <text x={mx + (rot===90?15:0)} y={my + (rot===0?-15:0)} textAnchor="middle" className="text-[10px] font-black fill-slate-500 dark:fill-slate-400">
+                    {e.val} {e.type==='R'?'Ω':e.type==='E'?'V':'μF'}
+                  </text>
+                )}
+                {/* Hiệu ứng dòng điện chảy khi Play */}
+                {isPlaying && e.type !== 'open' && (
+                  <circle r="3" className="fill-yellow-400 drop-shadow-md">
+                    <animateMotion dur="2s" repeatCount="indefinite" path={`M ${e.x1} ${e.y1} L ${e.x2} ${e.y2}`} />
+                  </circle>
+                )}
+              </g>
+            )
+          })}
+          {/* Nút mạng */}
+          {[ [50,50], [150,50], [250,50], [50,150], [150,150], [250,150] ].map((n, i) => (
+            <circle key={i} cx={n[0]} cy={n[1]} r="4" className="fill-slate-400 dark:fill-slate-600" />
+          ))}
+        </svg>
       )
     }
-
-    if (activeExp === 'kirchhoff') {
-      return (
-        <div className="w-full h-full flex flex-col items-center justify-center relative bg-emerald-900/5 dark:bg-black/20 rounded-[2rem] overflow-hidden border border-emerald-500/10">
-          <svg viewBox="0 0 300 200" className="w-full h-full max-w-[350px]">
-            {/* Khung mạch */}
-            <rect x="50" y="50" width="200" height="100" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-400 dark:text-slate-600" />
-            <line x1="150" y1="50" x2="150" y2="150" stroke="currentColor" strokeWidth="3" className="text-slate-400 dark:text-slate-600" />
-            
-            {/* Nguồn E1 */}
-            <g className="cursor-pointer group" onClick={() => handleComponentClick('Nguồn điện E1')}>
-              <rect x="40" y="85" width="20" height="30" className="fill-slate-50 dark:fill-slate-800" />
-              <line x1="40" y1="90" x2="60" y2="90" stroke="currentColor" strokeWidth="4" className="text-emerald-500 group-hover:text-emerald-400" />
-              <line x1="45" y1="110" x2="55" y2="110" stroke="currentColor" strokeWidth="8" className="text-slate-800 dark:text-slate-300" />
-              <text x="20" y="105" className="text-xs font-bold fill-emerald-600 dark:fill-emerald-400">E1</text>
-            </g>
-
-            {/* Trở R1 */}
-            <g className="cursor-pointer group" onClick={() => handleComponentClick('Điện trở R1')}>
-              <rect x="90" y="40" width="40" height="20" className="fill-slate-200 dark:fill-slate-700 stroke-2 stroke-indigo-500 group-hover:fill-indigo-200" />
-              <path d="M 90 50 L 95 40 L 105 60 L 115 40 L 125 60 L 130 50" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-600 dark:text-indigo-400" />
-              <text x="100" y="30" className="text-xs font-bold fill-indigo-600 dark:fill-indigo-400">R1</text>
-            </g>
-
-            {/* Nút mạng (Hotspot) */}
-            <circle cx="150" cy="50" r="6" className="fill-rose-500 cursor-pointer hover:scale-125 transition-transform" onClick={() => handleComponentClick('Nút mạng (Giao điểm Kirchhoff 1)')}/>
-            <circle cx="150" cy="150" r="6" className="fill-rose-500 cursor-pointer hover:scale-125 transition-transform" onClick={() => handleComponentClick('Nút mạng (Giao điểm Kirchhoff 2)')}/>
-          </svg>
-          <div className="absolute bottom-4 text-xs font-bold text-slate-500 bg-white/50 dark:bg-black/50 px-3 py-1 rounded-lg">Bấm vào Ký hiệu (R, E, Nút) để học</div>
-        </div>
-      )
-    }
-
-    if (activeExp === 'rc_circuit') {
-      const tau = resistance * capacitance / 1000 // ms
-      return (
-        <div className="w-full h-full flex flex-col items-center justify-center relative bg-orange-900/5 dark:bg-black/20 rounded-[2rem] overflow-hidden border border-orange-500/10 p-4">
-          <div className="absolute top-4 left-4 text-xs font-black text-orange-500 opacity-80 bg-white/50 dark:bg-black/50 px-3 py-1 rounded-lg">Hằng số tg \tau = {tau.toFixed(2)} ms</div>
-          
-          <svg viewBox="0 0 300 150" className="w-full max-w-[300px] mb-6">
-            <rect x="50" y="40" width="200" height="80" fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-400 dark:text-slate-600" />
-            
-            {/* Tụ điện C */}
-            <g className="cursor-pointer group" onClick={() => handleComponentClick('Tụ điện C')}>
-              <rect x="235" y="60" width="30" height="40" className="fill-slate-50 dark:fill-[#1A1A1A]" />
-              <line x1="245" y1="60" x2="245" y2="100" stroke="currentColor" strokeWidth="4" className="text-orange-500 group-hover:text-orange-400" />
-              <line x1="255" y1="60" x2="255" y2="100" stroke="currentColor" strokeWidth="4" className="text-orange-500 group-hover:text-orange-400" />
-              <text x="270" y="85" className="text-xs font-bold fill-orange-600 dark:fill-orange-400">C</text>
-            </g>
-
-            {/* Trở R */}
-            <g className="cursor-pointer group" onClick={() => handleComponentClick('Điện trở R trong mạch R-C')}>
-              <rect x="130" y="30" width="40" height="20" className="fill-slate-200 dark:fill-slate-700 stroke-2 stroke-indigo-500 group-hover:fill-indigo-200" />
-              <text x="145" y="20" className="text-xs font-bold fill-indigo-600 dark:fill-indigo-400">R</text>
-            </g>
-          </svg>
-
-          {/* Đồ thị sạc tụ giả lập */}
-          <div className="w-full max-w-[300px] h-[80px] border-l-2 border-b-2 border-slate-300 dark:border-slate-700 relative flex items-end">
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-              <path d="M 0 100 Q 20 10, 100 5" fill="none" stroke="currentColor" strokeWidth="3" className="text-orange-500" />
-            </svg>
-            <span className="absolute -left-6 top-0 text-[9px] text-slate-500">Uc</span>
-            <span className="absolute bottom-[-16px] right-0 text-[9px] text-slate-500">t</span>
-          </div>
-        </div>
-      )
-    }
-
-    return null
-  }
-
-  // ==========================================================================
-  // RENDER BẢNG ĐIỀU KHIỂN THÔNG SỐ (CONTROLS)
-  // ==========================================================================
-  const renderExperimentControls = () => {
-    return (
-      <div className="space-y-4">
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 flex items-center gap-2 mb-4"><Settings2 className="w-4 h-4"/> Điều chỉnh thông số</h3>
-        
-        {activeExp === 'pendulum' && (
-          <>
-            <div>
-              <label className="flex justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-2"><span>Chiều dài dây (l)</span> <span>{pendulumLength} m</span></label>
-              <input type="range" min="0.1" max="5" step="0.1" value={pendulumLength} onChange={(e)=>setPendulumLength(Number(e.target.value))} className={rangeInput}/>
-            </div>
-            <div>
-              <label className="flex justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-2"><span>Gia tốc trọng trường (g)</span> <span>{pendulumGravity} m/s²</span></label>
-              <input type="range" min="1" max="20" step="0.1" value={pendulumGravity} onChange={(e)=>setPendulumGravity(Number(e.target.value))} className={rangeInput}/>
-            </div>
-            <div>
-              <label className="flex justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-2"><span>Khối lượng (m)</span> <span>{pendulumMass} kg</span></label>
-              <input type="range" min="0.1" max="10" step="0.1" value={pendulumMass} onChange={(e)=>setPendulumMass(Number(e.target.value))} className={rangeInput}/>
-            </div>
-          </>
-        )}
-
-        {(activeExp === 'projectile' || activeExp === 'horizontal') && (
-          <>
-            <div>
-              <label className="flex justify-between text-xs font-bold text-blue-600 dark:text-blue-400 mb-2"><span>Vận tốc ném (v0)</span> <span>{v0} m/s</span></label>
-              <input type="range" min="1" max="50" step="1" value={v0} onChange={(e)=>setV0(Number(e.target.value))} className={rangeInput}/>
-            </div>
-            {activeExp === 'projectile' && (
-              <div>
-                <label className="flex justify-between text-xs font-bold text-blue-600 dark:text-blue-400 mb-2"><span>Góc ném (α)</span> <span>{angle}°</span></label>
-                <input type="range" min="0" max="90" step="1" value={angle} onChange={(e)=>setAngle(Number(e.target.value))} className={rangeInput}/>
-              </div>
-            )}
-            <div>
-              <label className="flex justify-between text-xs font-bold text-blue-600 dark:text-blue-400 mb-2"><span>Độ cao ban đầu (h)</span> <span>{height} m</span></label>
-              <input type="range" min="0" max="50" step="1" value={height} onChange={(e)=>setHeight(Number(e.target.value))} className={rangeInput}/>
-            </div>
-          </>
-        )}
-
-        {activeExp === 'rc_circuit' && (
-          <>
-            <div>
-              <label className="flex justify-between text-xs font-bold text-orange-600 dark:text-orange-400 mb-2"><span>Điện trở (R)</span> <span>{resistance} Ω</span></label>
-              <input type="range" min="10" max="1000" step="10" value={resistance} onChange={(e)=>setResistance(Number(e.target.value))} className={rangeInput}/>
-            </div>
-            <div>
-              <label className="flex justify-between text-xs font-bold text-orange-600 dark:text-orange-400 mb-2"><span>Điện dung (C)</span> <span>{capacitance} μF</span></label>
-              <input type="range" min="1" max="100" step="1" value={capacitance} onChange={(e)=>setCapacitance(Number(e.target.value))} className={rangeInput}/>
-            </div>
-          </>
-        )}
-
-        {activeExp === 'kirchhoff' && (
-          <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">
-            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 leading-relaxed">Mô hình Định luật Kirchhoff hiện đang khóa chế độ tùy chỉnh tĩnh. Bấm vào các nút mạng và thành phần mạch bên cạnh để SenAI giải thích hệ phương trình tương ứng nhé!</p>
-          </div>
-        )}
-      </div>
-    )
   }
 
   // ==========================================================================
@@ -345,103 +207,128 @@ export default function VirtualLabPage() {
   // ==========================================================================
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-10 transition-colors duration-500">
-      
-      {/* 🌟 Nền Ambient */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
-      {/* 🌟 HEADER APP BAR */}
-      <header className="h-[88px] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl border-b border-slate-200 dark:border-white/5 flex items-center px-4 sm:px-8 sticky top-0 z-40 shadow-sm transition-all duration-300">
+      {/* HEADER */}
+      <header className="h-[80px] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl border-b border-slate-200 dark:border-white/5 flex items-center px-4 sm:px-8 sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/dashboard')} className="p-3 bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 dark:hover:bg-[#2A2A2A] rounded-full transition-transform active:scale-95 group border border-slate-200/50 dark:border-white/5">
-            <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-300 group-hover:-translate-x-0.5 transition-transform"/>
-          </button>
-          <div className="flex flex-col">
-            <h1 className="font-black text-xl flex items-center gap-2 tracking-tight text-slate-900 dark:text-white">
-              <FlaskConical className="w-6 h-6 text-indigo-500" /> Virtual Lab
-            </h1>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Phòng thí nghiệm Vật lý AI</p>
-          </div>
+          <button onClick={() => router.push('/dashboard')} className="p-3 bg-slate-100 dark:bg-[#202020] rounded-full hover:scale-105 transition-transform"><ArrowLeft className="w-5 h-5"/></button>
+          <div><h1 className="font-black text-xl flex items-center gap-2"><FlaskConical className="w-6 h-6 text-indigo-500" /> Smart Virtual Lab</h1><p className="text-[10px] font-bold text-slate-500 uppercase">Phòng Thí Nghiệm AI Tương Tác</p></div>
         </div>
       </header>
 
-      {/* 🌟 MAIN WORKSPACE */}
+      {/* WORKSPACE */}
       <div className="max-w-[1500px] mx-auto pt-6 px-4 md:px-8 relative z-10">
         
-        {/* THANH ĐIỀU HƯỚNG THÍ NGHIỆM */}
-        <div className="flex overflow-x-auto gap-3 pb-4 mb-4 custom-scrollbar hide-scroll">
+        {/* TABS */}
+        <div className="flex overflow-x-auto gap-3 pb-4 mb-2 custom-scrollbar">
           {EXPERIMENTS.map(exp => (
-            <button 
-              key={exp.id} onClick={() => setActiveExp(exp.id as ExperimentType)}
-              className={`px-5 py-3 rounded-xl text-sm font-black flex items-center gap-2 whitespace-nowrap transition-all border ${activeExp === exp.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white dark:bg-[#1A1A1A] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-indigo-400 dark:hover:border-indigo-500/50'}`}
-            >
+            <button key={exp.id} onClick={() => setActiveExp(exp.id as ExpType)} className={`px-5 py-3 rounded-xl text-sm font-black flex items-center gap-2 whitespace-nowrap transition-all shadow-sm ${activeExp === exp.id ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-[#1A1A1A] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10'}`}>
               {exp.icon} {exp.title}
             </button>
           ))}
         </div>
 
-        {/* LƯỚI BỐ CỤC */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-[70vh]">
           
-          {/* CỘT TRÁI: HIỂN THỊ THÍ NGHIỆM VÀ ĐIỀU KHIỂN (7 COLUMNS) */}
+          {/* TRÁI: KHUNG NHÌN VÀ ĐIỀU KHIỂN */}
           <div className="lg:col-span-7 flex flex-col gap-6">
             
-            {/* Box Hình Ảnh Thí Nghiệm */}
-            <div className={`${mdCard} p-4 h-[400px] lg:h-[500px] flex items-center justify-center relative overflow-hidden group`}>
-              <div className="absolute top-4 right-4 flex gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button className="p-2 bg-white/80 dark:bg-black/50 backdrop-blur-md rounded-lg text-slate-700 dark:text-slate-300 hover:text-indigo-500"><Play className="w-4 h-4"/></button>
-                <button className="p-2 bg-white/80 dark:bg-black/50 backdrop-blur-md rounded-lg text-slate-700 dark:text-slate-300 hover:text-indigo-500"><RotateCcw className="w-4 h-4"/></button>
+            {/* Visualizer */}
+            <div className={`${mdCard} p-4 h-[400px] lg:h-[450px] flex items-center justify-center relative overflow-hidden group border-indigo-200/50 dark:border-indigo-500/20`}>
+              <div className="absolute top-4 left-4 flex gap-2 z-10">
+                <button onClick={() => setIsPlaying(!isPlaying)} className={`px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 transition-all shadow-md ${isPlaying ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'}`}>
+                  {isPlaying ? <><Square className="w-4 h-4 fill-white"/> Tạm dừng</> : <><Play className="w-4 h-4 fill-white"/> Bắt đầu</>}
+                </button>
+                <button onClick={() => { setIsPlaying(false); setTime(0); }} className="px-4 py-2 bg-slate-100 dark:bg-[#202020] rounded-xl text-slate-700 dark:text-slate-300 font-black hover:bg-slate-200 transition-colors flex items-center gap-2 shadow-sm">
+                  <RotateCcw className="w-4 h-4"/> Đặt lại
+                </button>
               </div>
-              {renderExperimentVisual()}
+              {renderVisuals()}
             </div>
 
-            {/* Box Điều Khiển Thông Số */}
-            <div className={`${mdCard} p-6 shrink-0`}>
-              {renderExperimentControls()}
-            </div>
+            {/* Bảng Điều Khiển Cơ Học */}
+            {['pendulum','horizontal','projectile'].includes(activeExp) && (
+              <div className={`${mdCard} p-6 shrink-0`}>
+                <h3 className="text-sm font-black uppercase text-slate-500 mb-4 flex items-center gap-2"><Settings2 className="w-4 h-4"/> Cấu hình vật lý</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                  {activeExp === 'pendulum' && [
+                    {k:'l', l:'Chiều dài (m)', min:0.1, max:5, s:0.1}, {k:'g', l:'Gia tốc (m/s²)', min:1, max:20, s:0.1}, {k:'m', l:'Khối lượng (kg)', min:0.1, max:10, s:0.1}
+                  ].map(c => (
+                    <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-indigo-600">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>
+                  ))}
+                  {['projectile','horizontal'].includes(activeExp) && [
+                    {k:'v0', l:'Vận tốc (m/s)', min:1, max:50, s:1}, {k:'h', l:'Độ cao (m)', min:0, max:50, s:1}
+                  ].map(c => (
+                    <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-blue-600">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>
+                  ))}
+                  {activeExp === 'projectile' && (
+                    <div><label className="flex justify-between text-xs font-bold mb-2"><span>Góc ném (°)</span><span className="text-blue-600">{params.angle}°</span></label><input type="range" min="0" max="90" step="1" value={params.angle} onChange={(e)=>setParams({...params, angle: Number(e.target.value)})} className={rangeClass}/></div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Bảng Điều Khiển Mạch Điện (Smart Grid Control) */}
+            {['kirchhoff','rc_circuit'].includes(activeExp) && (
+              <div className={`${mdCard} p-6 shrink-0 bg-indigo-50/50 dark:bg-indigo-900/10`}>
+                <h3 className="text-sm font-black uppercase text-indigo-600 dark:text-indigo-400 mb-4 flex items-center gap-2"><Edit3 className="w-4 h-4"/> Chỉnh sửa Linh kiện</h3>
+                {!selEdgeId ? (
+                  <p className="text-xs font-bold text-slate-500 italic">👆 Bấm vào bất kỳ nhánh nào trên sơ đồ mạch để thay đổi loại linh kiện (Tụ, Trở, Nguồn, Dây) và giá trị của nó.</p>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-4 items-end animate-in fade-in">
+                    <div className="w-full sm:w-1/2">
+                      <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-2 block">Loại linh kiện (Nhánh {selEdgeId})</label>
+                      <select 
+                        value={edges.find(e=>e.id===selEdgeId)?.type} 
+                        onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, type: e.target.value as ComponentType} : ed))}
+                        className={inputClass}
+                      >
+                        <option value="wire">Dây dẫn</option>
+                        <option value="R">Điện trở (R)</option>
+                        <option value="E">Nguồn điện (E)</option>
+                        <option value="C">Tụ điện (C)</option>
+                        <option value="open">Ngắt mạch (Open)</option>
+                      </select>
+                    </div>
+                    {edges.find(e=>e.id===selEdgeId)?.type !== 'wire' && edges.find(e=>e.id===selEdgeId)?.type !== 'open' && (
+                      <div className="w-full sm:w-1/2">
+                        <label className="text-xs font-bold text-slate-600 dark:text-slate-400 mb-2 block">Giá trị</label>
+                        <input type="number" value={edges.find(e=>e.id===selEdgeId)?.val} onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, val: Number(e.target.value)} : ed))} className={inputClass}/>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* CỘT PHẢI: SENAI ASSISTANT (5 COLUMNS) */}
-          <div className="lg:col-span-5 h-[600px] lg:h-auto bg-white dark:bg-[#161616] rounded-[2rem] border border-indigo-200 dark:border-indigo-500/30 shadow-xl overflow-hidden flex flex-col relative animate-in slide-in-from-right-8 duration-500">
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 z-20"></div>
-            
-            <div className="flex items-center gap-3 p-5 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#1A1A1A]/50 shrink-0 z-10">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center shadow-inner"><Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400"/></div>
-              <div>
-                <h4 className="font-black text-sm text-slate-900 dark:text-white">Gia sư Phòng Lab SenAI</h4>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hỏi đáp & Giải thích chuyên sâu</p>
-              </div>
+          {/* PHẢI: SENAI ASSISTANT */}
+          <div className="lg:col-span-5 flex flex-col bg-white dark:bg-[#161616] rounded-[2.5rem] border border-indigo-200 dark:border-indigo-500/30 shadow-xl overflow-hidden animate-in slide-in-from-right-8 h-[600px] lg:h-auto relative">
+            <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-blue-500 z-10 shrink-0"></div>
+            <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/80 dark:bg-[#1A1A1A]/80 flex gap-3 shrink-0">
+              <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center"><Bot className="w-5 h-5 text-indigo-600"/></div>
+              <div><h4 className="font-black text-sm text-slate-900 dark:text-white">Gia sư Lab SenAI</h4><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hỏi đáp theo cấu hình thực tế</p></div>
             </div>
 
-            <div ref={aiChatScrollRef} className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-6 bg-transparent">
-              {aiMessages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 mr-3 mt-1"><Bot className="w-4 h-4"/></div>}
-                  <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[13px] font-medium shadow-sm leading-relaxed overflow-x-auto ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : msg.isError ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 border border-rose-100 dark:border-rose-900/50 rounded-bl-sm' : 'bg-slate-50 dark:bg-[#202020] rounded-bl-sm border border-slate-100 dark:border-white/5 text-slate-800 dark:text-slate-200'}`}>
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkMath, remarkGfm]} 
-                      rehypePlugins={[rehypeKatex]} 
-                      components={{ 
-                        p: ({node, ...props}: any) => <p className="mb-2 last:mb-0" {...props} />, 
-                        strong: ({node, ...props}: any) => <strong className={`font-black ${msg.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...props} /> 
-                      }}
-                    >
-                      {msg.text}
+            <div ref={aiScrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+              {aiMessages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {m.role === 'model' && <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center mr-3 mt-1 shrink-0"><Bot className="w-4 h-4 text-indigo-600"/></div>}
+                  <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[13px] font-medium leading-relaxed shadow-sm ${m.role==='user'?'bg-indigo-600 text-white rounded-br-sm':m.err?'bg-rose-50 text-rose-600 rounded-bl-sm':'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 rounded-bl-sm'}`}>
+                    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p:({node,...p}:any)=><p className="mb-2 last:mb-0" {...p}/>, strong:({node,...p}:any)=><strong className="font-black text-indigo-500" {...p}/> }}>
+                      {m.text}
                     </ReactMarkdown>
                   </div>
                 </div>
               ))}
-              {isAiSearching && (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center"><Loader2 className="w-4 h-4 text-indigo-600 animate-spin"/></div>
-                  <div className="bg-slate-50 dark:bg-[#202020] px-5 py-3 rounded-[1.5rem] rounded-bl-sm text-[12px] text-slate-500 font-bold italic border border-slate-100 dark:border-white/5">SenAI đang phân tích hiện tượng...</div>
-                </div>
-              )}
+              {isAiLoading && <div className="flex gap-3 items-center"><Loader2 className="w-5 h-5 animate-spin text-indigo-600"/><span className="text-xs font-bold text-slate-400">SenAI đang tính toán...</span></div>}
             </div>
 
-            <div className="p-4 border-t border-slate-100 dark:border-white/5 bg-white dark:bg-[#1A1A1A] shrink-0 z-10">
+            <div className="p-4 bg-white dark:bg-[#1A1A1A] border-t border-slate-100 dark:border-white/5 shrink-0">
               <form onSubmit={handleAskSenAI} className="relative flex items-center">
-                <input type="text" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Hỏi về hiện tượng vật lý đang diễn ra..." className={`${mdInput} pr-14 rounded-full`} />
-                <button type="submit" disabled={!aiQuery.trim() || isAiSearching} className="absolute right-1.5 p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full transition-transform active:scale-95 shadow-md"><Send className="w-4 h-4 ml-0.5" /></button>
+                <input type="text" value={aiQuery} onChange={(e)=>setAiQuery(e.target.value)} placeholder="Nhờ AI tính dòng điện, chu kỳ..." className={`${inputClass} pr-12 rounded-full`} />
+                <button type="submit" disabled={!aiQuery.trim() || isAiLoading} className="absolute right-1.5 p-2.5 bg-indigo-600 text-white rounded-full disabled:opacity-50"><Send className="w-4 h-4 ml-0.5"/></button>
               </form>
             </div>
           </div>
