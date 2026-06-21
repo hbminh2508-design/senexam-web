@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, FlaskConical, Settings2, Play, Square, RotateCcw, Target, CircleDot, 
-  Send, Bot, Loader2, Sparkles, Activity, Cpu, Edit3, Maximize2, Minimize2, Waves, Rainbow, Magnet
+  Send, Bot, Loader2, Sparkles, Activity, Cpu, Edit3, Maximize2, Minimize2, Waves, 
+  Rainbow, Magnet, Menu, X, ChevronRight
 } from 'lucide-react'
 
 import ReactMarkdown from 'react-markdown'
@@ -14,25 +15,25 @@ import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 
 // ============================================================================
-// CONSTANTS, TYPES & PRESETS
+// CONSTANTS & UI STYLES
 // ============================================================================
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
-const inputClass = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 rounded-xl px-4 py-3 outline-none font-black text-sm shadow-inner"
+const inputClass = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 rounded-xl px-4 py-3 outline-none font-black text-sm shadow-inner text-slate-900 dark:text-white"
 const rangeClass = "w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
 
 type ExpType = 'pendulum' | 'horizontal' | 'projectile' | 'kirchhoff' | 'rc_circuit' | 'interference' | 'equipotential' | 'dispersion'
 type ComponentType = 'wire' | 'R' | 'E' | 'C' | 'open'
 type Edge = { id: string, x1: number, y1: number, x2: number, y2: number, type: ComponentType, val: number }
 
-const EXPERIMENTS: {id: ExpType, title: string, icon: any}[] = [
-  { id: 'pendulum', title: 'Con lắc đơn', icon: <CircleDot className="w-4 h-4"/> },
-  { id: 'horizontal', title: 'Ném ngang', icon: <ArrowLeft className="w-4 h-4 rotate-180"/> },
-  { id: 'projectile', title: 'Ném xiên', icon: <Target className="w-4 h-4"/> },
-  { id: 'kirchhoff', title: 'ĐL Kirchhoff', icon: <Activity className="w-4 h-4"/> },
-  { id: 'rc_circuit', title: 'Mạch R-C', icon: <Cpu className="w-4 h-4"/> },
-  { id: 'interference', title: 'Giao thoa Y-âng', icon: <Waves className="w-4 h-4"/> },
-  { id: 'equipotential', title: 'Đẳng thế & Đường sức', icon: <Magnet className="w-4 h-4"/> },
-  { id: 'dispersion', title: 'Tán sắc & Cầu vồng', icon: <Rainbow className="w-4 h-4"/> },
+const EXPERIMENTS: {id: ExpType, title: string, category: string, icon: any}[] = [
+  { id: 'pendulum', title: 'Con lắc đơn', category: 'Cơ học', icon: <CircleDot className="w-5 h-5"/> },
+  { id: 'horizontal', title: 'Ném ngang', category: 'Cơ học', icon: <ArrowLeft className="w-5 h-5 rotate-180"/> },
+  { id: 'projectile', title: 'Ném xiên', category: 'Cơ học', icon: <Target className="w-5 h-5"/> },
+  { id: 'interference', title: 'Giao thoa Y-âng', category: 'Quang học', icon: <Waves className="w-5 h-5"/> },
+  { id: 'dispersion', title: 'Tán sắc ánh sáng', category: 'Quang học', icon: <Rainbow className="w-5 h-5"/> },
+  { id: 'equipotential', title: 'Đường sức & Đẳng thế', category: 'Điện học', icon: <Magnet className="w-5 h-5"/> },
+  { id: 'kirchhoff', title: 'ĐL Kirchhoff', category: 'Điện học', icon: <Activity className="w-5 h-5"/> },
+  { id: 'rc_circuit', title: 'Mạch R-C', category: 'Điện học', icon: <Cpu className="w-5 h-5"/> },
 ]
 
 const initEdges = (preset: 'K' | 'RC'): Edge[] => [
@@ -48,28 +49,30 @@ const initEdges = (preset: 'K' | 'RC'): Edge[] => [
 export default function VirtualLabPage() {
   const router = useRouter()
   const [activeExp, setActiveExp] = useState<ExpType>('pendulum')
+  const [showSidebar, setShowSidebar] = useState(false) // 🌟 Ngăn kéo chứa danh sách thí nghiệm
   
   const [isPlaying, setIsPlaying] = useState(false)
   const [time, setTime] = useState(0)
 
-  // Tham số Vật lý Toàn cục
+  // 🌟 KHÔI PHỤC TOÀN BỘ PARAMETERS CHO MỌI THÍ NGHIỆM
   const [params, setParams] = useState({ 
-    l: 1, g: 9.8, m: 0.5, v0: 15, angle: 45, h: 10, // Cơ học
-    lambda: 0.5, a: 1, D: 2, // Giao thoa (um, mm, m)
-    q1: 1, q2: -1, // Đẳng thế (uC)
-    prismAngle: 60, n: 1.5 // Tán sắc
+    l: 1, g: 9.8, m: 0.5, // Con lắc
+    v0: 15, angle: 45, h: 10, // Ném
+    lambda: 0.5, a: 1, D: 2, // Giao thoa Y-âng
+    q1: 1, q2: -1, // Đẳng thế
+    prismAngle: 60, n: 1.5 // Lăng kính
   })
   
   // Trạng thái Lưới Mạch điện
   const [edges, setEdges] = useState<Edge[]>(initEdges('K'))
   const [selEdgeId, setSelEdgeId] = useState<string | null>(null)
-  const [isEditMode, setIsEditMode] = useState(false) // Toggle mode Edit/Ask AI
+  const [isEditMode, setIsEditMode] = useState(false)
 
   // AI States
   const [aiQuery, setAiQuery] = useState('')
-  const [aiMessages, setAiMessages] = useState<{role: 'user'|'model', text: string, err?: boolean}[]>([{ role: 'model', text: 'Chào bạn! Bấm **Bắt đầu** để chạy thí nghiệm. Bấm trực tiếp vào các hiện tượng/linh kiện để mình giải thích nhé! 🚀' }])
+  const [aiMessages, setAiMessages] = useState<{role: 'user'|'model', text: string, err?: boolean}[]>([{ role: 'model', text: 'Chào bạn! Mình là SenAI. Bạn hãy thay đổi các thông số ở bảng điều khiển và bấm **Bắt đầu** nhé. Mình có thể giải thích mọi hiện tượng trong này! 🚀' }])
   const [isAiLoading, setIsAiLoading] = useState(false)
-  const [isAiMax, setIsAiMax] = useState(false) // Phóng to SenAI
+  const [isAiMax, setIsAiMax] = useState(false) // 🌟 Phóng to Fullscreen SenAI
   const aiScrollRef = useRef<HTMLDivElement>(null)
 
   // Physics Loop
@@ -83,18 +86,18 @@ export default function VirtualLabPage() {
     return () => cancelAnimationFrame(req)
   }, [isPlaying])
 
-  // Reset on Tab Change
+  // Đổi thí nghiệm
   useEffect(() => {
-    setIsPlaying(false); setTime(0); setSelEdgeId(null); setIsEditMode(false)
+    setIsPlaying(false); setTime(0); setSelEdgeId(null); setIsEditMode(false); setShowSidebar(false)
     if (activeExp === 'kirchhoff') setEdges(initEdges('K'))
     if (activeExp === 'rc_circuit') setEdges(initEdges('RC'))
-    setAiMessages([{ role: 'model', text: `Chuyển sang: **${EXPERIMENTS.find(e=>e.id===activeExp)?.title}**. Bạn có câu hỏi nào về lý thuyết hay công thức không?` }])
+    setAiMessages([{ role: 'model', text: `Bạn đang ở phòng lab: **${EXPERIMENTS.find(e=>e.id===activeExp)?.title}**. Mình có thể hỗ trợ tính toán hay phân tích gì không?` }])
   }, [activeExp])
 
   useEffect(() => { if (aiScrollRef.current) aiScrollRef.current.scrollTop = aiScrollRef.current.scrollHeight }, [aiMessages, isAiLoading, isAiMax])
 
   // ==========================================================================
-  // LOGIC SENAI (NHẬN THỨC NGỮ CẢNH)
+  // LOGIC SENAI
   // ==========================================================================
   const handleAskSenAI = async (e?: React.FormEvent, directQ?: string) => {
     if(e) e.preventDefault()
@@ -103,14 +106,15 @@ export default function VirtualLabPage() {
     if (!directQ) setAiQuery('')
     setAiMessages(p => [...p, { role: 'user', text: q }]); setIsAiLoading(true)
 
-    let ctx = `Học sinh đang ở Thí nghiệm: ${EXPERIMENTS.find(x=>x.id===activeExp)?.title}. `
-    if (['pendulum','horizontal','projectile'].includes(activeExp)) ctx += `Thông số: l=${params.l}m, g=${params.g}m/s2, m=${params.m}kg, v0=${params.v0}m/s, góc=${params.angle}°, h=${params.h}m. Mô phỏng t=${time.toFixed(2)}s.`
-    else if (['kirchhoff','rc_circuit'].includes(activeExp)) ctx += `Cấu trúc Mạch: ${edges.map(e => `Cạnh ${e.id}(${e.type}=${e.val})`).join(', ')}.`
-    else if (activeExp === 'interference') ctx += `Giao thoa Y-âng: Bước sóng lambda=${params.lambda}um, a=${params.a}mm, D=${params.D}m.`
-    else if (activeExp === 'equipotential') ctx += `Điện trường: q1=${params.q1}uC, q2=${params.q2}uC.`
-    else if (activeExp === 'dispersion') ctx += `Tán sắc: Góc chiết quang=${params.prismAngle}°, Chiết suất=${params.n}.`
+    // Trích xuất ngữ cảnh chi tiết
+    let ctx = `Học sinh đang dùng Thí nghiệm: ${EXPERIMENTS.find(x=>x.id===activeExp)?.title}. `
+    if (['pendulum','horizontal','projectile'].includes(activeExp)) ctx += `Thông số: l=${params.l}m, g=${params.g}m/s2, m=${params.m}kg, v0=${params.v0}m/s, góc=${params.angle}°, h=${params.h}m. Mô phỏng đang chạy ở t=${time.toFixed(2)}s.`
+    else if (['kirchhoff','rc_circuit'].includes(activeExp)) ctx += `Mạch điện: ${edges.map(e => `Cạnh ${e.id}(${e.type}=${e.val})`).join(', ')}.`
+    else if (activeExp === 'interference') ctx += `Giao thoa Y-âng: Bước sóng lambda=${params.lambda}um, khoảng cách 2 khe a=${params.a}mm, D=${params.D}m.`
+    else if (activeExp === 'equipotential') ctx += `Điện trường: Điện tích q1=${params.q1}uC, q2=${params.q2}uC.`
+    else if (activeExp === 'dispersion') ctx += `Lăng kính: Góc chiết quang A=${params.prismAngle}°, Chiết suất n=${params.n}.`
     
-    const sysPrompt = `Bạn là SenAI, gia sư Vật lý. BỐI CẢNH THỰC TẾ: ${ctx}. Bắt buộc bọc công thức Toán học bằng $ hoặc $$, dùng dấu "." cho phép nhân, phẩy "," cho số thập phân. Trả lời thân thiện.`
+    const sysPrompt = `Bạn là SenAI. BỐI CẢNH: ${ctx}. YÊU CẦU: Giải thích dựa trên thông số trên. Bọc công thức bằng $ hoặc $$. Dùng dấu "." cho nhân, phẩy "," cho thập phân.`
 
     try {
       const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q, history: [], context: sysPrompt }) })
@@ -120,18 +124,142 @@ export default function VirtualLabPage() {
     setIsAiLoading(false)
   }
 
-  // Component Click Handler
-  const handleComponentClick = (id: string, type: string, name: string) => {
-    if (['kirchhoff', 'rc_circuit'].includes(activeExp) && isEditMode) {
-      setSelEdgeId(id); return
-    }
-    handleAskSenAI(undefined, `Hãy giải thích chi tiết về thành phần "${name}" trong thí nghiệm này (Vai trò, công thức liên quan).`)
+  const handleCompClick = (name: string) => {
+    if (['kirchhoff', 'rc_circuit'].includes(activeExp) && isEditMode) return // Bỏ qua nếu đang sửa mạch
+    handleAskSenAI(undefined, `Phân tích vai trò và công thức liên quan của thành phần: ${name}.`)
   }
 
   // ==========================================================================
-  // RENDER HÌNH ẢNH TRỰC QUAN (SVG ĐỘNG)
+  // ĐỒNG BỘ MÀU SẮC BƯỚC SÓNG (Hỗ trợ Y-âng & Tán sắc)
+  // ==========================================================================
+  const waveLengthToColor = (l: number) => {
+    if (l < 0.45) return 'violet'; if (l < 0.49) return 'blue'; if (l < 0.55) return 'green';
+    if (l < 0.58) return 'yellow'; if (l < 0.62) return 'orange'; return 'red'
+  }
+  const colorMap: Record<string, string> = { violet: '#8b5cf6', blue: '#3b82f6', green: '#10b981', yellow: '#eab308', orange: '#f97316', red: '#ef4444' }
+
+  // ==========================================================================
+  // RENDER SVG ĐỘNG ĐƯỢC ĐẠI TU
   // ==========================================================================
   const renderVisuals = () => {
+    if (activeExp === 'interference') {
+      // Khoảng vân i = lambda * D / a. Đã scale để hiển thị vừa màn hình.
+      const i_fringe = (params.lambda * params.D) / params.a 
+      const colorHex = colorMap[waveLengthToColor(params.lambda)]
+      const fringes = []
+      // Tạo mảng các vân sáng trên màn (Từ tâm 100 tỏa ra 2 bên)
+      for (let k = -10; k <= 10; k++) {
+        const yPos = 100 + k * i_fringe * 15 // Scale factor 15
+        if (yPos > 20 && yPos < 180) fringes.push({ k, yPos })
+      }
+
+      return (
+        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[450px]">
+          {/* Sóng cầu tỏa ra khi Play */}
+          {isPlaying && (
+            <g opacity="0.3">
+              {[0, 10, 20, 30].map(delay => (
+                <g key={delay} stroke={colorHex} fill="none" strokeWidth="1">
+                  <circle cx="50" cy={100 - params.a * 10} r={(time * 20 + delay) % 150} />
+                  <circle cx="50" cy={100 + params.a * 10} r={(time * 20 + delay) % 150} />
+                </g>
+              ))}
+            </g>
+          )}
+          {/* Nguồn sáng S & Hai khe S1, S2 */}
+          <line x1="50" y1="20" x2="50" y2="180" stroke="currentColor" strokeWidth="4" className="text-slate-400" />
+          <rect x="48" y={100 - params.a * 10 - 2} width="4" height="4" fill="white" className="cursor-pointer shadow-[0_0_10px_white]" onClick={()=>handleCompClick('Khe S1')} />
+          <rect x="48" y={100 + params.a * 10 - 2} width="4" height="4" fill="white" className="cursor-pointer shadow-[0_0_10px_white]" onClick={()=>handleCompClick('Khe S2')} />
+          
+          {/* Màn quan sát & Hệ vân */}
+          <rect x="278" y="20" width="4" height="160" fill="currentColor" className="text-slate-800 dark:text-slate-200" />
+          {fringes.map(f => (
+            <rect key={f.k} x="275" y={f.yPos - 2} width="10" height="4" fill={colorHex} className={`drop-shadow-[0_0_8px_${colorHex}]`} />
+          ))}
+          <text x="260" y="15" className="text-[10px] fill-slate-500 font-bold">Màn E (i = {i_fringe.toFixed(2)}mm)</text>
+        </svg>
+      )
+    }
+
+    if (activeExp === 'equipotential') {
+      // Vẽ đường sức dựa trên dấu của điện tích
+      const attract = params.q1 * params.q2 < 0
+      const bothPos = params.q1 > 0 && params.q2 > 0
+
+      return (
+        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[450px]">
+          {/* Mạng lưới đường sức */}
+          <g className="opacity-40" stroke="currentColor" fill="none">
+            {attract ? (
+              // Hút nhau: Đường nối giữa 2 điện tích
+              <>
+                <line x1="100" y1="100" x2="200" y2="100" className="text-slate-500" />
+                {[20, 40, 60].map(h => (
+                  <path key={h} d={`M 100 100 Q 150 ${100-h} 200 100`} className="text-slate-500" />
+                ))}
+                {[20, 40, 60].map(h => (
+                  <path key={h} d={`M 100 100 Q 150 ${100+h} 200 100`} className="text-slate-500" />
+                ))}
+              </>
+            ) : (
+              // Đẩy nhau: Các đường sức uốn cong ra xa
+              <>
+                {[20, 50, 80].map(r => <path key={r} d={`M 100 100 Q 140 ${100-r} 100 ${100-r*2}`} className="text-slate-500" />)}
+                {[20, 50, 80].map(r => <path key={r} d={`M 200 100 Q 160 ${100-r} 200 ${100-r*2}`} className="text-slate-500" />)}
+                {[20, 50, 80].map(r => <path key={r} d={`M 100 100 Q 140 ${100+r} 100 ${100+r*2}`} className="text-slate-500" />)}
+                {[20, 50, 80].map(r => <path key={r} d={`M 200 100 Q 160 ${100+r} 200 ${100+r*2}`} className="text-slate-500" />)}
+              </>
+            )}
+          </g>
+
+          {/* Mặt đẳng thế */}
+          <circle cx="100" cy="100" r="25" fill="none" stroke={params.q1>0?'red':'blue'} strokeDasharray="4" className="opacity-60 cursor-pointer" onClick={()=>handleCompClick('Mặt đẳng thế bao quanh q1')}/>
+          <circle cx="200" cy="100" r="25" fill="none" stroke={params.q2>0?'red':'blue'} strokeDasharray="4" className="opacity-60 cursor-pointer" onClick={()=>handleCompClick('Mặt đẳng thế bao quanh q2')}/>
+
+          {/* Điện tích */}
+          <circle cx="100" cy="100" r="10" className={`cursor-pointer ${params.q1>0?'fill-rose-500':'fill-blue-500'}`} onClick={()=>handleCompClick('Điện tích q1')} />
+          <text x="100" y="104" textAnchor="middle" className="text-xs font-black fill-white">{params.q1>0?'+':'-'}</text>
+          
+          <circle cx="200" cy="100" r="10" className={`cursor-pointer ${params.q2>0?'fill-rose-500':'fill-blue-500'}`} onClick={()=>handleCompClick('Điện tích q2')} />
+          <text x="200" y="104" textAnchor="middle" className="text-xs font-black fill-white">{params.q2>0?'+':'-'}</text>
+
+          {/* Electron di chuyển nếu hút nhau */}
+          {isPlaying && attract && (
+             <circle r="3" className="fill-yellow-400 drop-shadow-[0_0_5px_yellow]">
+               <animateMotion dur="2s" repeatCount="indefinite" path="M 100 100 Q 150 60 200 100" />
+             </circle>
+          )}
+        </svg>
+      )
+    }
+
+    if (activeExp === 'dispersion') {
+      const pA = params.prismAngle // Góc chiết quang
+      return (
+        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px]">
+          {/* Tia tới (Trắng) */}
+          <line x1="0" y1="120" x2="115" y2="95" stroke="white" strokeWidth="4" className="drop-shadow-[0_0_8px_white]" />
+          
+          {/* Lăng kính (Phóng to hơn) */}
+          <polygon points={`150,${150 - pA} 90,150 210,150`} fill="currentColor" className="text-cyan-500/20 stroke-cyan-500 stroke-2 cursor-pointer" onClick={()=>handleCompClick('Lăng kính thủy tinh')} />
+          <text x="145" y={170 - pA} className="text-[10px] fill-slate-400">A={pA}°</text>
+
+          {/* Tia ló (Tán sắc thành 7 màu) - Góc lệch phụ thuộc vào n */}
+          {isPlaying && (
+            <g className="animate-in fade-in duration-1000" transform={`translate(160, 95) rotate(${params.n * 10 - 15})`}>
+              <line x1="0" y1="0" x2="140" y2="-30" stroke="#ef4444" strokeWidth="2" className="drop-shadow-[0_0_5px_red]"/>
+              <line x1="0" y1="0" x2="140" y2="-15" stroke="#f97316" strokeWidth="2" className="drop-shadow-[0_0_5px_orange]"/>
+              <line x1="0" y1="0" x2="140" y2="0" stroke="#eab308" strokeWidth="2" className="drop-shadow-[0_0_5px_yellow]"/>
+              <line x1="0" y1="0" x2="140" y2="15" stroke="#10b981" strokeWidth="2" className="drop-shadow-[0_0_5px_green]"/>
+              <line x1="0" y1="0" x2="140" y2="30" stroke="#3b82f6" strokeWidth="2" className="drop-shadow-[0_0_5px_blue]"/>
+              <line x1="0" y1="0" x2="140" y2="45" stroke="#8b5cf6" strokeWidth="2" className="drop-shadow-[0_0_5px_purple]"/>
+            </g>
+          )}
+        </svg>
+      )
+    }
+
+    // CÁC THÍ NGHIỆM CƠ BẢN VÀ MẠCH ĐIỆN (KẾ THỪA BẢN TRƯỚC)
     if (activeExp === 'pendulum') {
       const w = Math.sqrt(params.g / params.l)
       const theta = (Math.PI / 6) * Math.cos(w * time)
@@ -140,8 +268,7 @@ export default function VirtualLabPage() {
         <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px]">
           <line x1="50" y1="20" x2="250" y2="20" stroke="currentColor" strokeWidth="4" className="text-slate-400" />
           <line x1="150" y1="20" x2={px} y2={py} stroke="currentColor" strokeWidth="2" className="text-indigo-400" />
-          <circle cx={px} cy={py} r={10 + params.m * 2} className="fill-indigo-600 cursor-pointer hover:fill-indigo-400" onClick={() => handleComponentClick('m', 'mass', 'Quả nặng (Vật m)')}/>
-          <text x="10" y="190" className="text-xs fill-slate-500 font-bold">t = {time.toFixed(2)}s | T = {(2*Math.PI/w).toFixed(2)}s</text>
+          <circle cx={px} cy={py} r={10 + params.m * 2} className="fill-indigo-600 cursor-pointer hover:fill-indigo-400" onClick={() => handleCompClick('Quả nặng m')}/>
         </svg>
       )
     }
@@ -158,7 +285,7 @@ export default function VirtualLabPage() {
           <line x1="10" y1="200" x2="340" y2="200" stroke="currentColor" strokeWidth="2" className="text-slate-300 dark:text-slate-700" />
           {params.h > 0 && <rect x="10" y={200 - params.h * 5} width="10" height={params.h * 5} className="fill-slate-400" />}
           <path d={pathD} fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="5,5" className="text-blue-500/50" />
-          <circle cx={x} cy={y} r="6" className="fill-rose-500 cursor-pointer" onClick={() => handleComponentClick('v', 'obj', 'Vật ném (Viên đạn)')} />
+          <circle cx={x} cy={y} r="6" className="fill-rose-500 cursor-pointer" onClick={() => handleCompClick('Vật ném')} />
         </svg>
       )
     }
@@ -177,7 +304,7 @@ export default function VirtualLabPage() {
             const mx = (e.x1 + e.x2) / 2; const my = (e.y1 + e.y2) / 2; const rot = e.x1 === e.x2 ? 90 : 0
             const isSel = isEditMode && selEdgeId === e.id
             return (
-              <g key={e.id} onClick={() => handleComponentClick(e.id, e.type, e.type==='R'?'Điện trở':e.type==='C'?'Tụ điện':e.type==='E'?'Nguồn điện':'Dây dẫn')} className="cursor-pointer group">
+              <g key={e.id} onClick={() => { isEditMode ? setSelEdgeId(e.id) : handleCompClick(`${e.type==='R'?'Điện trở':e.type==='C'?'Tụ điện':e.type==='E'?'Nguồn điện':'Dây'} nhánh ${e.id}`) }} className="cursor-pointer group">
                 <line x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke="transparent" strokeWidth="30" />
                 <g transform={`translate(${mx}, ${my}) rotate(${rot})`} className={`transition-all duration-300 ${isSel ? 'drop-shadow-[0_0_8px_rgba(99,102,241,0.8)] scale-105' : 'group-hover:drop-shadow-[0_0_5px_rgba(99,102,241,0.5)]'}`}>
                   {renderComp(e.type)}
@@ -187,80 +314,6 @@ export default function VirtualLabPage() {
               </g>
             )
           })}
-          {[ [50,50], [150,50], [250,50], [50,150], [150,150], [250,150] ].map((n, i) => <circle key={i} cx={n[0]} cy={n[1]} r="4" className="fill-slate-400" />)}
-        </svg>
-      )
-    }
-
-    if (activeExp === 'interference') {
-      // i = lambda * D / a (mm) -> Phóng to scale
-      const i = (params.lambda * params.D) / params.a 
-      let waveD = ""
-      for(let x=0; x<=300; x+=2) waveD += `${x===0?'M':'L'} ${x} ${100 - 40 * Math.pow(Math.cos(Math.PI * (x-150) / (i*20)), 2)}`
-      
-      return (
-        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px]">
-          <line x1="50" y1="20" x2="50" y2="180" stroke="currentColor" strokeWidth="4" className="text-slate-400" />
-          {/* Hai khe */}
-          <rect x="48" y={100 - params.a*10 - 2} width="4" height="4" className="fill-white" />
-          <rect x="48" y={100 + params.a*10 - 2} width="4" height="4" className="fill-white" />
-          {/* Màn quan sát */}
-          <line x1="280" y1="20" x2="280" y2="180" stroke="currentColor" strokeWidth="6" className="text-slate-800 dark:text-slate-200 cursor-pointer" onClick={()=>handleComponentClick('m','man','Màn quan sát (Vân giao thoa)')} />
-          {/* Sóng ánh sáng */}
-          {isPlaying && (
-            <g className="opacity-50">
-              <circle cx="50" cy={100 - params.a*10} r={20 + (time*50)%100} fill="none" stroke="cyan" strokeWidth="1" />
-              <circle cx="50" cy={100 + params.a*10} r={20 + (time*50)%100} fill="none" stroke="cyan" strokeWidth="1" />
-            </g>
-          )}
-          {/* Đồ thị vân sáng */}
-          <path d={waveD} fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-500 opacity-80" transform="translate(280, 0) rotate(90 0 100) scale(0.6) translate(-150, -50)" />
-        </svg>
-      )
-    }
-
-    if (activeExp === 'equipotential') {
-      return (
-        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px] overflow-hidden">
-          {/* Đường sức (Minh họa đơn giản bằng các cung tròn) */}
-          <g className="opacity-40">
-            {[0.5, 1, 1.5, 2].map(r => (
-              <path key={r} d={`M 100 100 A ${r*50} ${r*30} 0 0 1 200 100`} fill="none" stroke="currentColor" strokeWidth="1" className="text-slate-500" />
-            ))}
-            {[0.5, 1, 1.5, 2].map(r => (
-              <path key={r} d={`M 100 100 A ${r*50} ${r*30} 0 0 0 200 100`} fill="none" stroke="currentColor" strokeWidth="1" className="text-slate-500" />
-            ))}
-          </g>
-          {/* Mặt đẳng thế (Vòng tròn) */}
-          <circle cx="100" cy="100" r="20" fill="none" stroke="red" strokeWidth="1" strokeDasharray="4" className="opacity-60 cursor-pointer" onClick={()=>handleComponentClick('dt1','dt','Mặt đẳng thế q1')} />
-          <circle cx="200" cy="100" r="20" fill="none" stroke="blue" strokeWidth="1" strokeDasharray="4" className="opacity-60 cursor-pointer" onClick={()=>handleComponentClick('dt2','dt','Mặt đẳng thế q2')} />
-          
-          <circle cx="100" cy="100" r="8" className="fill-red-500 cursor-pointer" onClick={()=>handleComponentClick('q1','q','Điện tích q1')} />
-          <text x="100" y="104" textAnchor="middle" className="text-[10px] fill-white font-bold pointer-events-none">{params.q1 > 0 ? '+' : '-'}</text>
-          
-          <circle cx="200" cy="100" r="8" className="fill-blue-500 cursor-pointer" onClick={()=>handleComponentClick('q2','q','Điện tích q2')} />
-          <text x="200" y="104" textAnchor="middle" className="text-[10px] fill-white font-bold pointer-events-none">{params.q2 > 0 ? '+' : '-'}</text>
-        </svg>
-      )
-    }
-
-    if (activeExp === 'dispersion') {
-      return (
-        <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px]">
-          {/* Tia tới */}
-          <line x1="0" y1="120" x2="110" y2="100" stroke="white" strokeWidth="3" className="drop-shadow-[0_0_5px_white]" />
-          {/* Lăng kính */}
-          <polygon points="150,30 90,150 210,150" fill="currentColor" className="text-cyan-500/20 stroke-cyan-500 stroke-2 cursor-pointer" onClick={()=>handleComponentClick('lk','prism','Lăng kính tán sắc')} />
-          {/* Tia ló (Tán sắc) */}
-          {isPlaying && (
-            <g className="animate-in fade-in duration-1000">
-              <line x1="160" y1="90" x2="300" y2="60" stroke="red" strokeWidth="2" className="drop-shadow-[0_0_5px_red]"/>
-              <line x1="165" y1="100" x2="300" y2="80" stroke="yellow" strokeWidth="2" className="drop-shadow-[0_0_5px_yellow]"/>
-              <line x1="170" y1="110" x2="300" y2="100" stroke="green" strokeWidth="2" className="drop-shadow-[0_0_5px_green]"/>
-              <line x1="175" y1="120" x2="300" y2="120" stroke="blue" strokeWidth="2" className="drop-shadow-[0_0_5px_blue]"/>
-              <line x1="180" y1="130" x2="300" y2="140" stroke="purple" strokeWidth="2" className="drop-shadow-[0_0_5px_purple]"/>
-            </g>
-          )}
         </svg>
       )
     }
@@ -272,61 +325,99 @@ export default function VirtualLabPage() {
   // ==========================================================================
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-10 transition-colors duration-500">
+      
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
-      <header className="h-[80px] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl border-b border-slate-200 dark:border-white/5 flex items-center px-4 sm:px-8 sticky top-0 z-40 shadow-sm">
-        <button onClick={() => router.push('/dashboard')} className="p-3 bg-slate-100 dark:bg-[#202020] rounded-full hover:scale-105 mr-4"><ArrowLeft className="w-5 h-5"/></button>
-        <div><h1 className="font-black text-xl flex items-center gap-2"><FlaskConical className="text-indigo-500"/> Virtual Lab</h1></div>
+      {/* 🌟 SIDEBAR: NGĂN KÉO CHỌN THÍ NGHIỆM */}
+      {showSidebar && (
+        <div className="fixed inset-0 z-[100] flex">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm animate-in fade-in" onClick={() => setShowSidebar(false)}></div>
+          <div className="w-[300px] h-full bg-white dark:bg-[#121212] shadow-2xl relative z-10 p-6 flex flex-col animate-in slide-in-from-left-full duration-300 border-r border-slate-200 dark:border-white/5">
+            <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-white/5 pb-4">
+              <h2 className="font-black text-xl flex items-center gap-2"><FlaskConical className="text-indigo-500 w-6 h-6"/> Kho Thí Nghiệm</h2>
+              <button onClick={() => setShowSidebar(false)} className="p-2 bg-slate-100 dark:bg-[#202020] rounded-xl"><X className="w-4 h-4"/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {['Cơ học', 'Điện học', 'Quang học'].map(cat => (
+                <div key={cat} className="mb-4">
+                  <p className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 pl-2">{cat}</p>
+                  {EXPERIMENTS.filter(e => e.category === cat).map(exp => (
+                    <button key={exp.id} onClick={() => setActiveExp(exp.id as ExpType)} className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-sm mb-1 transition-all ${activeExp === exp.id ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400' : 'hover:bg-slate-50 dark:hover:bg-[#1A1A1A] text-slate-700 dark:text-slate-300'}`}>
+                      <span className="flex items-center gap-3">{exp.icon} {exp.title}</span>
+                      {activeExp === exp.id && <ChevronRight className="w-4 h-4"/>}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER */}
+      <header className="h-[80px] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl border-b border-slate-200 dark:border-white/5 flex items-center px-4 sm:px-8 sticky top-0 z-40 shadow-sm justify-between">
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push('/dashboard')} className="p-3 bg-slate-100 dark:bg-[#202020] rounded-full hover:scale-105"><ArrowLeft className="w-5 h-5"/></button>
+          <div className="h-6 w-[1px] bg-slate-300 dark:bg-slate-700 mx-2"></div>
+          <button onClick={() => setShowSidebar(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl font-black text-sm hover:bg-indigo-100 transition-colors">
+            <Menu className="w-4 h-4" /> Danh sách Thí nghiệm
+          </button>
+        </div>
+        <h1 className="font-black text-lg hidden sm:flex text-slate-800 dark:text-white">{EXPERIMENTS.find(e=>e.id===activeExp)?.title}</h1>
       </header>
 
+      {/* WORKSPACE */}
       <div className="max-w-[1500px] mx-auto pt-6 px-4 md:px-8 relative z-10">
-        
-        {/* TABS */}
-        <div className="flex overflow-x-auto gap-3 pb-4 mb-2 custom-scrollbar">
-          {EXPERIMENTS.map(exp => (
-            <button key={exp.id} onClick={() => setActiveExp(exp.id as ExpType)} className={`px-5 py-3 rounded-xl text-sm font-black flex items-center gap-2 whitespace-nowrap transition-all shadow-sm ${activeExp === exp.id ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-[#1A1A1A] border-slate-200 dark:border-white/10 hover:border-indigo-400'}`}>
-              {exp.icon} {exp.title}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-[75vh]">
           
           {/* CỘT TRÁI (Visual & Controls) */}
-          <div className={`${isAiMax ? 'hidden' : 'lg:col-span-7 flex flex-col gap-6'}`}>
+          <div className={`lg:col-span-7 flex flex-col gap-6 ${isAiMax ? 'hidden' : ''}`}>
             <div className={`${mdCard} p-4 h-[400px] lg:h-[450px] flex items-center justify-center relative overflow-hidden group`}>
               <div className="absolute top-4 left-4 flex gap-2 z-10">
                 <button onClick={() => setIsPlaying(!isPlaying)} className={`px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 shadow-md ${isPlaying ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'}`}>
-                  {isPlaying ? <><Square className="w-4 h-4"/> Tạm dừng</> : <><Play className="w-4 h-4"/> Bắt đầu</>}
+                  {isPlaying ? <><Square className="w-4 h-4 fill-white"/> Dừng</> : <><Play className="w-4 h-4 fill-white"/> Bắt đầu</>}
                 </button>
-                <button onClick={() => { setIsPlaying(false); setTime(0); }} className="px-4 py-2 bg-slate-100 dark:bg-[#202020] rounded-xl font-black shadow-sm"><RotateCcw className="w-4 h-4"/></button>
+                <button onClick={() => { setIsPlaying(false); setTime(0); }} className="p-2 bg-slate-100 dark:bg-[#202020] rounded-xl font-black"><RotateCcw className="w-5 h-5"/></button>
               </div>
               {renderVisuals()}
             </div>
 
-            {/* Controls */}
+            {/* Bảng Cấu Hình */}
             <div className={`${mdCard} p-6 shrink-0`}>
               <h3 className="text-sm font-black uppercase text-slate-500 mb-4 flex items-center gap-2"><Settings2 className="w-4 h-4"/> Cấu hình vật lý</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {activeExp === 'pendulum' && [
+                  {k:'l', l:'Chiều dài (m)', min:0.1, max:5, s:0.1}, {k:'g', l:'Gia tốc (m/s²)', min:1, max:20, s:0.1}, {k:'m', l:'Khối lượng (kg)', min:0.1, max:10, s:0.1}
+                ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-indigo-600">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>)}
+                
+                {['projectile','horizontal'].includes(activeExp) && [
+                  {k:'v0', l:'Vận tốc (m/s)', min:1, max:50, s:1}, {k:'h', l:'Độ cao (m)', min:0, max:50, s:1}
+                ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-blue-600">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>)}
+                {activeExp === 'projectile' && <div><label className="flex justify-between text-xs font-bold mb-2"><span>Góc ném (°)</span><span className="text-blue-600">{params.angle}°</span></label><input type="range" min="0" max="90" step="1" value={params.angle} onChange={(e)=>setParams({...params, angle: Number(e.target.value)})} className={rangeClass}/></div>}
+
                 {activeExp === 'interference' && [
-                  {k:'lambda', l:'Bước sóng (μm)', min:0.38, max:0.76, s:0.01}, {k:'a', l:'K/c 2 khe (mm)', min:0.5, max:3, s:0.1}, {k:'D', l:'K/c đến màn (m)', min:1, max:5, s:0.5}
+                  {k:'lambda', l:'Bước sóng (μm)', min:0.38, max:0.76, s:0.01}, {k:'a', l:'Khoảng cách 2 khe (mm)', min:0.5, max:3, s:0.1}, {k:'D', l:'K/c đến màn (m)', min:1, max:5, s:0.5}
                 ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-indigo-600">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>)}
                 
                 {activeExp === 'equipotential' && [
                   {k:'q1', l:'Điện tích q1 (μC)', min:-5, max:5, s:1}, {k:'q2', l:'Điện tích q2 (μC)', min:-5, max:5, s:1}
-                ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-indigo-600">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>)}
-                
+                ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-rose-500">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>)}
+
+                {activeExp === 'dispersion' && [
+                  {k:'prismAngle', l:'Góc chiết quang A (°)', min:30, max:90, s:1}, {k:'n', l:'Chiết suất n', min:1.2, max:2.0, s:0.1}
+                ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-bold mb-2"><span>{c.l}</span><span className="text-cyan-500">{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className={rangeClass}/></div>)}
+
                 {['kirchhoff','rc_circuit'].includes(activeExp) && (
-                  <div className="col-span-1 md:col-span-2 flex items-center gap-4 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl">
-                    <button onClick={() => {setIsEditMode(!isEditMode); setSelEdgeId(null)}} className={`px-4 py-2 rounded-xl text-xs font-black shadow-md transition-colors ${isEditMode ? 'bg-amber-500 text-white' : 'bg-white dark:bg-[#202020] text-slate-700 dark:text-slate-200'}`}>
-                      {isEditMode ? 'Đang Sửa Mạch (Tắt để Hỏi AI)' : 'Bật Chế độ Sửa Mạch'}
+                  <div className="col-span-1 md:col-span-2 flex flex-col md:flex-row gap-4 bg-slate-50 dark:bg-[#161616] p-4 rounded-xl border border-slate-200 dark:border-white/5">
+                    <button onClick={() => {setIsEditMode(!isEditMode); setSelEdgeId(null)}} className={`px-4 py-3 rounded-xl text-xs font-black shadow-md w-full md:w-auto ${isEditMode ? 'bg-amber-500 text-white' : 'bg-white dark:bg-[#252525] text-slate-700 dark:text-slate-200'}`}>
+                      {isEditMode ? 'Tắt chế độ Sửa (Bật Hỏi AI)' : 'Bật Sửa Mạch'}
                     </button>
                     {isEditMode && selEdgeId && (
-                      <div className="flex gap-2 items-center flex-1">
-                        <select value={edges.find(e=>e.id===selEdgeId)?.type} onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, type: e.target.value as ComponentType} : ed))} className="px-3 py-2 rounded-lg text-xs font-bold bg-white outline-none">
-                          <option value="wire">Dây</option><option value="R">Điện trở</option><option value="E">Nguồn</option><option value="C">Tụ</option><option value="open">Cắt</option>
+                      <div className="flex gap-2 flex-1">
+                        <select value={edges.find(e=>e.id===selEdgeId)?.type} onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, type: e.target.value as ComponentType} : ed))} className={`${inputClass} !py-2 w-1/2`}>
+                          <option value="wire">Dây</option><option value="R">Trở</option><option value="E">Nguồn</option><option value="C">Tụ</option><option value="open">Cắt</option>
                         </select>
-                        <input type="number" value={edges.find(e=>e.id===selEdgeId)?.val} onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, val: Number(e.target.value)} : ed))} className="w-20 px-3 py-2 rounded-lg text-xs font-bold outline-none"/>
+                        <input type="number" value={edges.find(e=>e.id===selEdgeId)?.val} onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, val: Number(e.target.value)} : ed))} className={`${inputClass} !py-2 w-1/2`} placeholder="Giá trị"/>
                       </div>
                     )}
                   </div>
@@ -335,12 +426,15 @@ export default function VirtualLabPage() {
             </div>
           </div>
 
-          {/* CỘT PHẢI (SenAI) */}
-          <div className={`${isAiMax ? 'fixed inset-4 z-50' : 'lg:col-span-5 h-[450px] lg:h-auto'} bg-white dark:bg-[#161616] rounded-[2.5rem] border border-indigo-200 dark:border-indigo-500/30 shadow-2xl overflow-hidden flex flex-col transition-all duration-300`}>
+          {/* 🌟 CỘT PHẢI (SenAI) - ĐÃ CẢI TIẾN WINDOW */}
+          <div className={`${isAiMax ? 'fixed inset-4 z-[200]' : 'lg:col-span-5 h-[500px] lg:h-auto'} bg-white dark:bg-[#161616] rounded-[2.5rem] border border-indigo-200 dark:border-indigo-500/30 shadow-[0_10px_40px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col transition-all duration-300 ease-in-out`}>
             <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-blue-500 shrink-0"></div>
+            
             <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/80 dark:bg-[#1A1A1A]/80 flex justify-between items-center shrink-0">
               <div className="flex gap-3"><div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center"><Bot className="w-5 h-5 text-indigo-600"/></div><div><h4 className="font-black text-sm">Gia sư Lab SenAI</h4><p className="text-[10px] font-bold text-slate-500 uppercase">Hỏi đáp theo cấu hình thực tế</p></div></div>
-              <button onClick={() => setIsAiMax(!isAiMax)} className="p-2 bg-slate-200 dark:bg-[#202020] rounded-lg hover:scale-105">{isAiMax ? <Minimize2 className="w-4 h-4"/> : <Maximize2 className="w-4 h-4"/>}</button>
+              <button onClick={() => setIsAiMax(!isAiMax)} className="p-2 bg-slate-200 dark:bg-[#252525] rounded-lg hover:bg-indigo-100 hover:text-indigo-600 transition-colors">
+                {isAiMax ? <Minimize2 className="w-4 h-4"/> : <Maximize2 className="w-4 h-4"/>}
+              </button>
             </div>
 
             <div ref={aiScrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
@@ -359,11 +453,12 @@ export default function VirtualLabPage() {
 
             <div className="p-4 bg-white dark:bg-[#1A1A1A] border-t shrink-0">
               <form onSubmit={handleAskSenAI} className="relative flex items-center">
-                <input type="text" value={aiQuery} onChange={(e)=>setAiQuery(e.target.value)} placeholder="Nhờ AI tính toán, giải thích..." className={`${inputClass} pr-12 rounded-full`} />
-                <button type="submit" disabled={!aiQuery.trim() || isAiLoading} className="absolute right-1.5 p-2.5 bg-indigo-600 text-white rounded-full"><Send className="w-4 h-4 ml-0.5"/></button>
+                <input type="text" value={aiQuery} onChange={(e)=>setAiQuery(e.target.value)} placeholder="Hỏi lý thuyết, công thức hoặc cách giải bài tập..." className={`${inputClass} pr-12 rounded-full`} />
+                <button type="submit" disabled={!aiQuery.trim() || isAiLoading} className="absolute right-1.5 p-2.5 bg-indigo-600 text-white rounded-full disabled:opacity-50 hover:bg-indigo-700 transition-colors"><Send className="w-4 h-4 ml-0.5"/></button>
               </form>
             </div>
           </div>
+          
         </div>
       </div>
     </div>
