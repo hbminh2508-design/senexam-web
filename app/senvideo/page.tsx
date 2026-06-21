@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
@@ -8,7 +8,7 @@ import {
   PlaySquare, Copy, CheckCircle2, MonitorPlay, Info, Cloud
 } from 'lucide-react'
 
-// Tái sử dụng API Upload Drive sếp đã viết
+// Tái sử dụng API Upload Drive
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 
 // --- CONSTANTS & STYLES ---
@@ -33,22 +33,47 @@ export default function SenVideoPage() {
   const [activeVideo, setActiveVideo] = useState<any | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Khởi tạo & Fetch Videos
+  // ==========================================================================
+  // KHỞI TẠO VÀ LẤY DỮ LIỆU TỪ SUPABASE
+  // ==========================================================================
   const fetchVideos = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return router.push('/login')
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return router.push('/login')
 
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    setUserRole(profile?.role || 'student')
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const role = profile?.role || 'student'
+      setUserRole(role)
 
-    // Fetch toàn bộ tài liệu (Supabase sẽ tự động áp dụng RLS để trả về file hợp lệ)
-    const { data } = await supabase.from('library_documents').select('*').order('created_at', { ascending: false })
-    if (data) {
-      // Lọc các file có đuôi video
-      const vids = data.filter(d => d.title.match(/\.(mp4|mkv|mov|avi|webm)$/i))
-      setVideos(vids)
+      // Lấy danh sách ID của Admin và Collab để hiển thị video dùng chung cho học sinh
+      const { data: admins } = await supabase.from('profiles').select('id').in('role', ['admin','collab'])
+      const adminIds = admins ? admins.map(a => a.id) : []
+
+      // Fetch toàn bộ tài liệu (Giới hạn 2000 để tối ưu RLS)
+      const { data, error } = await supabase.from('library_documents').select('*').order('created_at', { ascending: false }).limit(2000)
+      if (error) throw error;
+
+      if (data) {
+        // Thuật toán bọc thép: Lọc file video và Check quyền
+        const vids = data.filter(d => {
+          // 1. Phải là file Video (Đã sửa lỗi Regex cực mạnh để bắt mọi biến thể)
+          const isVideo = d.title && d.title.match(/\.(mp4|mkv|mov|avi|webm)$/i);
+          if (!isVideo) return false;
+
+          // 2. Quyền hiển thị (Học sinh chỉ thấy video của mình hoặc của Thầy cô)
+          if (role === 'student') {
+            return d.created_by === user.id || d.created_by === null || adminIds.includes(d.created_by);
+          }
+          // Admin thì thấy hết
+          return true;
+        })
+        setVideos(vids)
+      }
+    } catch (e) {
+      console.error("Lỗi fetch video:", e);
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -56,16 +81,22 @@ export default function SenVideoPage() {
     fetchVideos()
   }, [])
 
-  // Xử lý Upload Video (Đã vá lỗi mất đuôi file và lỗi phân quyền Folder)
+  // ==========================================================================
+  // XỬ LÝ TẢI LÊN VIDEO (UPLOAD VÀO DRIVE & ĐỒNG BỘ SUPABASE)
+  // ==========================================================================
   const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault(); if (uploadFiles.length === 0) return
-    setUploadStatus({ uploading: true, msg: 'Đang chuẩn bị dữ liệu...' })
+    e.preventDefault(); 
+    if (uploadFiles.length === 0) return
+    
+    setUploadStatus({ uploading: true, msg: 'Đang chuẩn bị dữ liệu phân quyền...' })
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      
-      // 1. Tự động tìm hoặc tạo thư mục 'Student' nếu người dùng là Học sinh
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user?.id).single()
+      const role = profile?.role || 'student'
+
+      // 1. Tự động định tuyến vào thư mục "Student" nếu là học sinh
       let uploadFolderId = null;
-      if (userRole === 'student') {
+      if (role === 'student') {
         const { data: folders } = await supabase.from('library_folders').select('id').eq('name', 'Student').eq('created_by', user?.id).single();
         if (folders) {
           uploadFolderId = folders.id;
@@ -78,40 +109,45 @@ export default function SenVideoPage() {
       for (let i = 0; i < uploadFiles.length; i++) {
         const file = uploadFiles[i]
         
-        // 2. BẢO VỆ ĐUÔI FILE: Tự động gắn thêm đuôi .mp4/.mov nếu sếp nhập tên tùy chỉnh mà quên ghi đuôi
+        // 2. BẢO VỆ ĐUÔI FILE: Tự động gắn thêm đuôi .mp4 nếu người dùng nhập tên tùy chỉnh mà quên ghi đuôi
         const fileExt = file.name.split('.').pop() || 'mp4';
         let finalTitle = (uploadFiles.length === 1 && uploadTitle) ? uploadTitle.trim() : file.name;
-        if (!finalTitle.toLowerCase().endsWith(`.${fileExt.toLowerCase()}`)) {
+        
+        if (!finalTitle.match(/\.(mp4|mkv|mov|avi|webm)$/i)) {
            finalTitle = `${finalTitle}.${fileExt}`;
         }
         
-        setUploadStatus({ uploading: true, msg: `Đang đẩy [${i+1}/${uploadFiles.length}] lên Drive...` })
+        setUploadStatus({ uploading: true, msg: `Đang đẩy [${i+1}/${uploadFiles.length}] lên Google Drive...` })
         const url = await initGoogleDriveUpload(finalTitle, file.type)
         const d = await uploadFileToGoogleDrive(url, file, finalTitle)
         
-        if (!d?.id) throw new Error('Lỗi Google Drive')
-        
-        // 3. Upload kèm theo folder_id để không bị kẹt RLS Supabase
+        if (!d?.id) throw new Error('Lỗi từ máy chủ Google Drive')
+
+        setUploadStatus({ uploading: true, msg: `Đang lưu dữ liệu vào hệ thống...` })
         await supabase.from('library_documents').insert({ 
           title: finalTitle, 
           drive_file_id: d.id, 
-          created_by: userRole === 'student' ? user?.id : null,
+          created_by: role === 'student' ? user?.id : null, // Admin up thì là Public (null)
           folder_id: uploadFolderId
         })
       }
       setUploadStatus({ uploading: false, msg: 'Thành công!' }); setUploadFiles([]); setUploadTitle('')
-      setTimeout(() => setShowUpload(false), 1000); fetchVideos()
-    } catch (err: any) { setUploadStatus({ uploading: false, msg: `Lỗi: ${err.message}` }) }
+      setTimeout(() => setShowUpload(false), 1000); 
+      fetchVideos()
+    } catch (err: any) { 
+      setUploadStatus({ uploading: false, msg: `Lỗi: ${err.message}` }) 
+    }
   }
-  
-  // Tạo link VLC & Copy
+
+  // ==========================================================================
+  // XỬ LÝ LẤY LINK & RENDER GIAO DIỆN
+  // ==========================================================================
   const vlcLink = activeVideo ? `${window.location.origin}/api/drive/stream?fileId=${activeVideo.drive_file_id}` : ''
   const handleCopy = () => {
     navigator.clipboard.writeText(vlcLink)
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
-  // Lọc Video
   const displayVideos = videos.filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-10 h-10 animate-spin text-indigo-500" /></div>
@@ -131,9 +167,8 @@ export default function SenVideoPage() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Tìm video..." className={`${inputClass} pl-10 py-2.5`} />
           </div>
-          {(userRole === 'admin' || userRole === 'collab') && (
-            <button onClick={() => setShowUpload(true)} className={`${headerBtn} bg-indigo-600 text-white hover:bg-indigo-700 border-none`}><UploadCloud className="w-4 h-4"/> Tải Video Lên</button>
-          )}
+          {/* Nút Upload chỉ dành cho Admin/Collab hoặc muốn mở cho Học sinh cũng được */}
+          <button onClick={() => setShowUpload(true)} className={`${headerBtn} bg-indigo-600 text-white hover:bg-indigo-700 border-none`}><UploadCloud className="w-4 h-4"/> Tải Video</button>
         </div>
       </header>
 
@@ -145,6 +180,7 @@ export default function SenVideoPage() {
             <div className="flex flex-col items-center justify-center pt-20 opacity-50">
               <Video className="w-20 h-20 mb-4 text-slate-400"/>
               <p className="font-black text-lg">Kho video trống</p>
+              <p className="text-sm font-bold text-slate-500 mt-2">Bấm 'Tải Video' góc trên để lưu bài giảng nhé!</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 animate-in fade-in">
