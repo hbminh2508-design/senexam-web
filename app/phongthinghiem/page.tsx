@@ -54,16 +54,15 @@ export default function VirtualLabPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [time, setTime] = useState(0)
 
-  // THÔNG SỐ VẬT LÝ (Real-time Bound)
+  // THÔNG SỐ VẬT LÝ
   const [params, setParams] = useState({ 
-    l: 1, g: 9.8, m: 0.5, // Con lắc
-    v0: 15, angle: 45, h: 10, // Ném
-    lambda: 0.55, a: 1, D: 2, // Giao thoa Y-âng
-    q1: 1, q2: -1, // Đẳng thế
-    prismAngle: 60, incidenceAngle: 45, n: 1.5 // Lăng kính (Thêm góc tới i)
+    l: 1, g: 9.8, m: 0.5, 
+    v0: 15, angle: 45, h: 10, 
+    lambda: 0.55, a: 1, D: 2, 
+    q1: 1, q2: -1, 
+    prismAngle: 60, incidenceAngle: 45, n: 1.5 
   })
   
-  // Trạng thái Lưới Mạch điện
   const [edges, setEdges] = useState<Edge[]>(initEdges('K'))
   const [selEdgeId, setSelEdgeId] = useState<string | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -75,7 +74,6 @@ export default function VirtualLabPage() {
   const [isAiMax, setIsAiMax] = useState(false) 
   const aiScrollRef = useRef<HTMLDivElement>(null)
 
-  // Động cơ Physics Loop
   useEffect(() => {
     let req: number, last = performance.now()
     const loop = (now: number) => {
@@ -86,7 +84,6 @@ export default function VirtualLabPage() {
     return () => cancelAnimationFrame(req)
   }, [isPlaying])
 
-  // Reset khi đổi Thí nghiệm
   useEffect(() => {
     setIsPlaying(false); setTime(0); setSelEdgeId(null); setIsEditMode(false); setShowSidebar(false)
     if (activeExp === 'kirchhoff') setEdges(initEdges('K'))
@@ -128,6 +125,13 @@ export default function VirtualLabPage() {
     handleAskSenAI(undefined, `Phân tích vai trò và công thức cốt lõi của thành phần: ${name} trong thí nghiệm này.`)
   }
 
+  // Helper cho Y-âng
+  const waveLengthToColor = (l: number) => {
+    if (l < 0.45) return 'violet'; if (l < 0.49) return 'blue'; if (l < 0.55) return 'green';
+    if (l < 0.58) return 'yellow'; if (l < 0.62) return 'orange'; return 'red'
+  }
+  const colorMap: Record<string, string> = { violet: '#8b5cf6', blue: '#3b82f6', green: '#10b981', yellow: '#eab308', orange: '#f97316', red: '#ef4444' }
+
   // ==========================================================================
   // RENDER SVG ĐỘNG (REAL-TIME PHYSICS)
   // ==========================================================================
@@ -137,23 +141,19 @@ export default function VirtualLabPage() {
       const A = params.prismAngle * Math.PI / 180
       const i1 = params.incidenceAngle * Math.PI / 180
       
-      // Vẽ lăng kính (Đỉnh ở 150, 40)
       const H = 100
       const leftX = 150 - H * Math.tan(A/2)
       const rightX = 150 + H * Math.tan(A/2)
       
-      // Điểm tới I trên mặt trái (Giả sử chiếu vào giữa H)
       const hitY = 90
       const hitX = 150 - (hitY - 40) * Math.tan(A/2)
 
-      // Xử lý Phản xạ toàn phần (TIR) & Khúc xạ các màu
       const colors = [
         { c: '#ef4444', dn: -0.015, name: 'Đỏ' }, { c: '#eab308', dn: -0.005, name: 'Vàng' },
         { c: '#10b981', dn: 0.005, name: 'Lục' }, { c: '#3b82f6', dn: 0.015, name: 'Lam' }, { c: '#8b5cf6', dn: 0.025, name: 'Tím' }
       ]
 
       let isTIR = false
-
       const rays = colors.map(color => {
         const n_color = params.n + color.dn
         const sin_r1 = Math.sin(i1) / n_color
@@ -161,43 +161,34 @@ export default function VirtualLabPage() {
         const r2 = A - r1
         const sin_i2 = n_color * Math.sin(r2)
 
+        // FIX LỖI TYPESCRIPT: Trả về đầy đủ property `dev` với giá trị 0 khi bị TIR
         if (sin_i2 >= 1 || isNaN(sin_i2)) {
           isTIR = true
-          return { ...color, tir: true }
+          return { ...color, tir: true, dev: 0 }
         }
 
         const i2 = Math.asin(sin_i2)
-        const dev = i1 + i2 - A // Góc lệch tổng cộng D
+        const dev = i1 + i2 - A 
         return { ...color, tir: false, dev }
       })
 
       return (
         <svg viewBox="0 0 300 200" className="w-full h-full max-w-[400px]">
-          {/* Lăng kính */}
           <polygon points={`150,40 ${leftX},140 ${rightX},140`} fill="currentColor" className="text-cyan-500/10 stroke-cyan-500 stroke-2 cursor-pointer" onClick={()=>handleCompClick('Lăng kính thủy tinh')} />
           <text x="145" y={60} className="text-[10px] fill-slate-400 font-bold">A={params.prismAngle}°</text>
-
-          {/* Tia tới (Trắng) */}
           <line x1={hitX - 80 * Math.cos(i1 - A/2)} y1={hitY - 80 * Math.sin(i1 - A/2)} x2={hitX} y2={hitY} stroke="white" strokeWidth="3" className="drop-shadow-[0_0_5px_white]" />
           
           {isPlaying && (
             <g className="animate-in fade-in duration-500">
               {rays.map((ray, idx) => {
-                if (ray.tir) {
-                  // Hiện tượng Phản xạ toàn phần
-                  return <line key={idx} x1={hitX} y1={hitY} x2={hitX + 50} y2={140} stroke={ray.c} strokeWidth="2" className="opacity-80"/>
-                }
-                // Khúc xạ ra ngoài (Biểu diễn đơn giản hóa góc lệch D để hiển thị rõ)
-                const exitAngle = ray.dev! * 2 // Phóng đại góc lệch để dễ nhìn
+                if (ray.tir) return <line key={idx} x1={hitX} y1={hitY} x2={hitX + 50} y2={140} stroke={ray.c} strokeWidth="2" className="opacity-80"/>
+                const exitAngle = ray.dev * 2
                 const endX = hitX + 100 + idx * 5
                 const endY = hitY + 50 * exitAngle + idx * 2
-                return (
-                  <path key={idx} d={`M ${hitX} ${hitY} L ${150 + 20} ${hitY + 10} L ${endX} ${endY}`} fill="none" stroke={ray.c} strokeWidth="2" className={`drop-shadow-[0_0_4px_${ray.c}]`}/>
-                )
+                return <path key={idx} d={`M ${hitX} ${hitY} L ${150 + 20} ${hitY + 10} L ${endX} ${endY}`} fill="none" stroke={ray.c} strokeWidth="2" className={`drop-shadow-[0_0_4px_${ray.c}]`}/>
               })}
             </g>
           )}
-
           {isTIR && isPlaying && <text x="150" y="170" textAnchor="middle" className="text-xs font-black fill-rose-500 animate-pulse">Cảnh báo: Đã xảy ra Phản xạ toàn phần!</text>}
         </svg>
       )
@@ -224,19 +215,15 @@ export default function VirtualLabPage() {
               </>
             )}
           </g>
-
           <circle cx="100" cy="100" r={Math.abs(params.q1)*5 + 15} fill="none" stroke={params.q1>0?'#ef4444':'#3b82f6'} strokeDasharray="4" className="opacity-60 cursor-pointer" onClick={()=>handleCompClick('Mặt đẳng thế q1')}/>
           <circle cx="200" cy="100" r={Math.abs(params.q2)*5 + 15} fill="none" stroke={params.q2>0?'#ef4444':'#3b82f6'} strokeDasharray="4" className="opacity-60 cursor-pointer" onClick={()=>handleCompClick('Mặt đẳng thế q2')}/>
-
           <circle cx="100" cy="100" r="10" className={`cursor-pointer ${params.q1>0?'fill-rose-500':'fill-blue-500'}`} onClick={()=>handleCompClick('Điện tích q1')} />
           <text x="100" y="104" textAnchor="middle" className="text-xs font-black fill-white pointer-events-none">{params.q1>0?'+':'-'}</text>
-          
           <circle cx="200" cy="100" r="10" className={`cursor-pointer ${params.q2>0?'fill-rose-500':'fill-blue-500'}`} onClick={()=>handleCompClick('Điện tích q2')} />
           <text x="200" y="104" textAnchor="middle" className="text-xs font-black fill-white pointer-events-none">{params.q2>0?'+':'-'}</text>
-
           {isPlaying && attract && (
              <circle r="3" className="fill-yellow-400 drop-shadow-[0_0_5px_yellow]">
-               <animateMotion dur="2s" repeatCount="indefinite" path="M 100 100 Q 150 40 200 100" />
+               <animateMotion dur="2s" repeatCount="indefinite" path="M 100 100 Q 150 60 200 100" />
              </circle>
           )}
         </svg>
@@ -247,7 +234,7 @@ export default function VirtualLabPage() {
     if (activeExp === 'interference') {
       const i_fringe = (params.lambda * params.D) / params.a 
       const wl = params.lambda
-      const colorHex = wl < 0.45 ? '#8b5cf6' : wl < 0.49 ? '#3b82f6' : wl < 0.55 ? '#10b981' : wl < 0.58 ? '#eab308' : wl < 0.62 ? '#f97316' : '#ef4444'
+      const colorHex = colorMap[waveLengthToColor(wl)]
       
       const fringes = []
       for (let k = -10; k <= 10; k++) {
@@ -278,7 +265,7 @@ export default function VirtualLabPage() {
       )
     }
 
-    // 4. MẠCH ĐIỆN VÀ CƠ HỌC CƠ BẢN (Giữ nguyên tối ưu)
+    // 4. MẠCH ĐIỆN VÀ CƠ HỌC CƠ BẢN
     if (activeExp === 'pendulum') {
       const w = Math.sqrt(params.g / params.l)
       const theta = (Math.PI / 6) * Math.cos(w * time)
@@ -347,7 +334,7 @@ export default function VirtualLabPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-10 transition-colors duration-500">
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
-      {/* 🌟 ĐÃ FIX: NGĂN KÉO SIDEBAR (DRAWER) */}
+      {/* 🌟 SIDEBAR: NGĂN KÉO CHỌN THÍ NGHIỆM */}
       {showSidebar && (
         <div className="fixed inset-0 z-[200] flex">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={() => setShowSidebar(false)}></div>
@@ -379,7 +366,7 @@ export default function VirtualLabPage() {
           <button onClick={() => router.push('/dashboard')} className="p-3 bg-slate-100 dark:bg-[#202020] rounded-full hover:scale-105"><ArrowLeft className="w-5 h-5"/></button>
           <div className="h-6 w-[1px] bg-slate-300 dark:bg-slate-700 mx-2"></div>
           <button onClick={() => setShowSidebar(true)} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 rounded-xl font-black text-sm hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors shadow-sm border border-indigo-100 dark:border-indigo-500/20">
-            <Menu className="w-4 h-4" /> Danh mục Thí nghiệm
+            <Menu className="w-4 h-4" /> Chọn Thí nghiệm
           </button>
         </div>
         <h1 className="font-black text-lg hidden sm:flex text-slate-800 dark:text-white bg-slate-50 dark:bg-[#202020] px-4 py-2 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner">
@@ -411,7 +398,7 @@ export default function VirtualLabPage() {
               {renderVisuals()}
             </div>
 
-            {/* BẢNG CẤU HÌNH VẬT LÝ (KHÔI PHỤC HOÀN TOÀN) */}
+            {/* BẢNG CẤU HÌNH VẬT LÝ */}
             <div className={`${mdCard} p-6 shrink-0`}>
               <h3 className="text-sm font-black uppercase text-slate-500 mb-4 flex items-center gap-2"><Settings2 className="w-4 h-4"/> Cấu hình vật lý</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -458,40 +445,39 @@ export default function VirtualLabPage() {
             </div>
           </div>
 
-          {/* 🌟 CỘT PHẢI (SenAI) - ĐÃ FIX FULLSCREEN CHE KHUẤT */}
-          <div className={`${isAiMax ? 'fixed inset-0 z-[9999] w-full h-[100dvh] rounded-none bg-white dark:bg-[#121212]' : 'lg:col-span-5 h-[500px] lg:h-auto bg-white dark:bg-[#161616] rounded-[2.5rem] shadow-xl'} border border-indigo-200 dark:border-indigo-500/30 overflow-hidden flex flex-col transition-all duration-300 ease-in-out`}>
+          {/* 🌟 CỘT PHẢI (SenAI) - ĐÃ SỬA CẤU TRÚC FULLSCREEN ĐỂ LUÔN BẤM ĐƯỢC CLOSE */}
+          <div className={`${isAiMax ? 'fixed inset-0 z-[9999] w-screen h-screen rounded-none bg-white dark:bg-[#121212] m-0 p-0' : 'lg:col-span-5 h-[500px] lg:h-auto bg-white dark:bg-[#161616] rounded-[2.5rem] shadow-xl'} border border-indigo-200 dark:border-indigo-500/30 overflow-hidden flex flex-col transition-all duration-300 ease-in-out`}>
             
-            <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-blue-500 shrink-0"></div>
+            <div className="h-1.5 bg-gradient-to-r from-indigo-500 to-blue-500 shrink-0 w-full"></div>
             
-            {/* Header dính chặt trên cùng (Sticky) để nút Maximize luôn bấm được */}
-            <div className={`p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/90 dark:bg-[#1A1A1A]/90 backdrop-blur-md flex justify-between items-center shrink-0 z-10 ${isAiMax ? 'pt-safe' : ''}`}>
+            <div className={`p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/90 dark:bg-[#1A1A1A]/90 backdrop-blur-md flex justify-between items-center shrink-0 w-full ${isAiMax ? 'pt-8 pb-4' : ''}`}>
               <div className="flex gap-3 items-center">
                 <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center border border-indigo-200 dark:border-indigo-500/30"><Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400"/></div>
                 <div><h4 className="font-black text-sm text-slate-900 dark:text-white">Gia sư Lab SenAI</h4><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hỏi đáp & Phân tích hiện tượng</p></div>
               </div>
-              <button onClick={() => setIsAiMax(!isAiMax)} className="p-2.5 bg-slate-200/50 dark:bg-[#252525] rounded-xl hover:bg-indigo-100 hover:text-indigo-600 transition-colors shadow-sm">
-                {isAiMax ? <Minimize2 className="w-5 h-5"/> : <Maximize2 className="w-5 h-5"/>}
+              <button onClick={() => setIsAiMax(!isAiMax)} className="p-3 bg-slate-200/50 dark:bg-[#252525] rounded-xl hover:bg-indigo-100 hover:text-indigo-600 transition-colors shadow-sm">
+                {isAiMax ? <Minimize2 className="w-6 h-6"/> : <Maximize2 className="w-5 h-5"/>}
               </button>
             </div>
 
-            <div ref={aiScrollRef} className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar bg-transparent">
+            <div ref={aiScrollRef} className="flex-1 overflow-y-auto p-5 md:p-8 space-y-6 custom-scrollbar bg-transparent w-full">
               {aiMessages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {m.role === 'model' && <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-center mr-3 mt-1 shrink-0"><Bot className="w-4 h-4 text-indigo-600 dark:text-indigo-400"/></div>}
-                  <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[13px] font-medium leading-relaxed shadow-sm overflow-x-auto ${m.role==='user'?'bg-indigo-600 text-white rounded-br-sm':m.err?'bg-rose-50 dark:bg-rose-900/20 text-rose-600 border border-rose-100 dark:border-rose-900/50 rounded-bl-sm':'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 rounded-bl-sm text-slate-800 dark:text-slate-200'}`}>
+                  <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14px] font-medium leading-relaxed shadow-sm overflow-x-auto ${m.role==='user'?'bg-indigo-600 text-white rounded-br-sm':m.err?'bg-rose-50 dark:bg-rose-900/20 text-rose-600 border border-rose-100 dark:border-rose-900/50 rounded-bl-sm':'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 rounded-bl-sm text-slate-800 dark:text-slate-200'}`}>
                     <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p:({node,...p}:any)=><p className="mb-2 last:mb-0" {...p}/>, strong:({node,...p}:any)=><strong className={`font-black ${m.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...p}/> }}>
                       {m.text}
                     </ReactMarkdown>
                   </div>
                 </div>
               ))}
-              {isAiLoading && <div className="flex gap-3 items-center"><Loader2 className="w-5 h-5 animate-spin text-indigo-600"/><span className="text-xs font-bold text-slate-500">SenAI đang suy nghĩ...</span></div>}
+              {isAiLoading && <div className="flex gap-3 items-center"><Loader2 className="w-5 h-5 animate-spin text-indigo-600"/><span className="text-xs font-bold text-slate-400">SenAI đang suy nghĩ...</span></div>}
             </div>
 
-            <div className={`p-4 bg-white dark:bg-[#1A1A1A] border-t border-slate-100 dark:border-white/5 shrink-0 ${isAiMax ? 'pb-safe' : ''}`}>
-              <form onSubmit={handleAskSenAI} className="relative flex items-center">
-                <input type="text" value={aiQuery} onChange={(e)=>setAiQuery(e.target.value)} placeholder="Nhờ AI tính toán, giải thích hiện tượng..." className={`${inputClass} pr-14 rounded-full py-3.5 bg-slate-50 dark:bg-[#252525] focus:bg-white`} />
-                <button type="submit" disabled={!aiQuery.trim() || isAiLoading} className="absolute right-2 p-2.5 bg-indigo-600 text-white rounded-full disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-md active:scale-95"><Send className="w-4 h-4 ml-0.5"/></button>
+            <div className={`p-4 md:p-6 bg-white dark:bg-[#1A1A1A] border-t border-slate-100 dark:border-white/5 shrink-0 w-full ${isAiMax ? 'pb-8' : ''}`}>
+              <form onSubmit={handleAskSenAI} className="relative flex items-center max-w-4xl mx-auto w-full">
+                <input type="text" value={aiQuery} onChange={(e)=>setAiQuery(e.target.value)} placeholder="Nhờ AI tính toán, giải thích hiện tượng..." className={`${inputClass} pr-16 rounded-full py-4 bg-slate-50 dark:bg-[#252525] focus:bg-white text-base`} />
+                <button type="submit" disabled={!aiQuery.trim() || isAiLoading} className="absolute right-2 p-3 bg-indigo-600 text-white rounded-full disabled:opacity-50 hover:bg-indigo-700 transition-colors shadow-md active:scale-95"><Send className="w-5 h-5 ml-0.5"/></button>
               </form>
             </div>
           </div>
