@@ -41,7 +41,7 @@ export default function SenVideoPage() {
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     setUserRole(profile?.role || 'student')
 
-    // Fetch từ library_documents nhưng chỉ lấy video
+    // Fetch toàn bộ tài liệu (Supabase sẽ tự động áp dụng RLS để trả về file hợp lệ)
     const { data } = await supabase.from('library_documents').select('*').order('created_at', { ascending: false })
     if (data) {
       // Lọc các file có đuôi video
@@ -56,28 +56,54 @@ export default function SenVideoPage() {
     fetchVideos()
   }, [])
 
-  // Xử lý Upload Video
+  // Xử lý Upload Video (Đã vá lỗi mất đuôi file và lỗi phân quyền Folder)
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault(); if (uploadFiles.length === 0) return
-    setUploadStatus({ uploading: true, msg: 'Đang khởi tạo kết nối Google Drive...' })
+    setUploadStatus({ uploading: true, msg: 'Đang chuẩn bị dữ liệu...' })
     try {
       const { data: { user } } = await supabase.auth.getUser()
+      
+      // 1. Tự động tìm hoặc tạo thư mục 'Student' nếu người dùng là Học sinh
+      let uploadFolderId = null;
+      if (userRole === 'student') {
+        const { data: folders } = await supabase.from('library_folders').select('id').eq('name', 'Student').eq('created_by', user?.id).single();
+        if (folders) {
+          uploadFolderId = folders.id;
+        } else {
+          const { data: newFolder } = await supabase.from('library_folders').insert({ name: 'Student', created_by: user?.id, parent_id: null }).select('id').single();
+          uploadFolderId = newFolder?.id || null;
+        }
+      }
+
       for (let i = 0; i < uploadFiles.length; i++) {
         const file = uploadFiles[i]
-        const title = (uploadFiles.length === 1 && uploadTitle) ? uploadTitle : file.name
+        
+        // 2. BẢO VỆ ĐUÔI FILE: Tự động gắn thêm đuôi .mp4/.mov nếu sếp nhập tên tùy chỉnh mà quên ghi đuôi
+        const fileExt = file.name.split('.').pop() || 'mp4';
+        let finalTitle = (uploadFiles.length === 1 && uploadTitle) ? uploadTitle.trim() : file.name;
+        if (!finalTitle.toLowerCase().endsWith(`.${fileExt.toLowerCase()}`)) {
+           finalTitle = `${finalTitle}.${fileExt}`;
+        }
         
         setUploadStatus({ uploading: true, msg: `Đang đẩy [${i+1}/${uploadFiles.length}] lên Drive...` })
-        const url = await initGoogleDriveUpload(title, file.type)
-        const d = await uploadFileToGoogleDrive(url, file, title)
+        const url = await initGoogleDriveUpload(finalTitle, file.type)
+        const d = await uploadFileToGoogleDrive(url, file, finalTitle)
         
         if (!d?.id) throw new Error('Lỗi Google Drive')
-        await supabase.from('library_documents').insert({ title, drive_file_id: d.id, created_by: user?.id })
+        
+        // 3. Upload kèm theo folder_id để không bị kẹt RLS Supabase
+        await supabase.from('library_documents').insert({ 
+          title: finalTitle, 
+          drive_file_id: d.id, 
+          created_by: userRole === 'student' ? user?.id : null,
+          folder_id: uploadFolderId
+        })
       }
       setUploadStatus({ uploading: false, msg: 'Thành công!' }); setUploadFiles([]); setUploadTitle('')
       setTimeout(() => setShowUpload(false), 1000); fetchVideos()
     } catch (err: any) { setUploadStatus({ uploading: false, msg: `Lỗi: ${err.message}` }) }
   }
-
+  
   // Tạo link VLC & Copy
   const vlcLink = activeVideo ? `${window.location.origin}/api/drive/stream?fileId=${activeVideo.drive_file_id}` : ''
   const handleCopy = () => {
