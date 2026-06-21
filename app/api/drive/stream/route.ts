@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 
 export const dynamic = 'force-dynamic'
-// Không cần ép runtime nodejs nữa vì native fetch chạy ngon trên mọi môi trường
 
 // Cấu hình OAuth2
 const oauth2Client = new google.auth.OAuth2(
@@ -23,20 +22,20 @@ export async function GET(request: NextRequest) {
 
     if (!fileId) return new NextResponse('Thiếu fileId', { status: 400 })
 
-    // 1. Lấy Access Token bảo mật (Tự động làm mới nếu hết hạn)
+    // 1. Lấy Access Token bảo mật
     const { token } = await oauth2Client.getAccessToken()
     if (!token) throw new Error('Không lấy được Access Token từ Google')
 
-    // 2. Bắt lệnh "Range" từ VLC hoặc Trình duyệt để xử lý tua/cắt đoạn
+    // 2. Bắt lệnh "Range" từ VLC / Trình duyệt để xử lý tua/cắt đoạn
     const rangeHeader = request.headers.get('range')
     const fetchHeaders: HeadersInit = {
-      'Authorization': `Bearer ${token}` // Gắn token bảo mật vào header
+      'Authorization': `Bearer ${token}`
     }
     if (rangeHeader) {
       fetchHeaders['Range'] = rangeHeader
     }
 
-    // 3. Dùng Native fetch() tạo đường ống xuyên thấu (Bỏ qua node:stream)
+    // 3. Dùng Native fetch() tạo đường ống trực tiếp
     const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     const driveResponse = await fetch(driveUrl, { headers: fetchHeaders })
 
@@ -44,13 +43,27 @@ export async function GET(request: NextRequest) {
       throw new Error(`Drive API Error: ${driveResponse.status}`)
     }
 
-    // 4. Sao chép và bổ sung Headers cho Client
-    const responseHeaders = new Headers(driveResponse.headers)
-    responseHeaders.set('Accept-Ranges', 'bytes') // Cực kỳ quan trọng để VLC biết có thể tua
+    // 4. 🌟 FIX LỖI PDF Ở ĐÂY: KHÔNG COPY TOÀN BỘ HEADER CỦA GOOGLE NỮA
+    // Tạo Headers mới tinh, sạch sẽ để trình duyệt không bị nhầm lẫn
+    const responseHeaders = new Headers()
+    
+    // Header cốt lõi cho VLC và Video
+    responseHeaders.set('Accept-Ranges', 'bytes') 
     responseHeaders.set('Access-Control-Allow-Origin', '*')
+    responseHeaders.set('Cache-Control', 'no-store, max-age=0') // Ép không lưu cache lỗi
 
-    // Nội suy đuôi file thông minh từ Content-Type
-    const contentType = driveResponse.headers.get('content-type') || 'application/octet-stream'
+    // Phục hồi Content-Type chính xác
+    const contentType = driveResponse.headers.get('content-type') || 'application/pdf'
+    responseHeaders.set('Content-Type', contentType)
+
+    // Lọc và giữ lại độ dài byte (Bắt buộc phải có để đọc được PDF)
+    const contentLength = driveResponse.headers.get('content-length')
+    if (contentLength) responseHeaders.set('Content-Length', contentLength)
+
+    const contentRange = driveResponse.headers.get('content-range')
+    if (contentRange) responseHeaders.set('Content-Range', contentRange)
+
+    // Nội suy đuôi file
     let ext = 'pdf'
     if (contentType.includes('mp4')) ext = 'mp4'
     else if (contentType.includes('matroska')) ext = 'mkv'
@@ -64,7 +77,7 @@ export async function GET(request: NextRequest) {
       `${download ? 'attachment' : 'inline'}; filename="senexam_file_${fileId}.${ext}"`
     )
 
-    // 5. Trả thẳng luồng Web Stream (body) nguyên bản từ Google Drive cho VLC
+    // 5. Trả thẳng luồng Web Stream cho Client
     return new NextResponse(driveResponse.body, {
       status: driveResponse.status,
       statusText: driveResponse.statusText,
