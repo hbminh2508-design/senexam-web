@@ -9,7 +9,7 @@ import {
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
   Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, 
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash, 
-  CheckCircle2, Info, BarChart3, FileText, Bot
+  CheckCircle2, Info, BarChart3, FileText, Bot, FlaskConical
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -885,67 +885,82 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 LƯỚI BENTO CẤP 2: BỘ 4 CÔNG CỤ CỐT LÕI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+        {/* 🌟 LƯỚI BENTO CẤP 2: BỘ 5 CÔNG CỤ (CHÈN THÊM PHÒNG THÍ NGHIỆM) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 lg:gap-6">
           
           <div 
             onClick={() => router.push('/focus')} 
-            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-7 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500"
+            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-6 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500"
           >
-            <div className="w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-inner border border-purple-100 dark:border-purple-500/20">
-              <Music2 className="w-7 h-7 drop-shadow-sm"/>
+            <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner border border-purple-100 dark:border-purple-500/20">
+              <Music2 className="w-6 h-6 drop-shadow-sm"/>
             </div>
-            <h3 className="text-lg font-black text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-center gap-1">
-              Phòng Tập Trung <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
+            <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-center gap-1">
+              Phòng Tập Trung <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
             </h3>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
               Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.
             </p>
           </div>
           
           <div 
             onClick={() => router.push('/library')} 
-            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-7 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500"
+            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-6 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500"
           >
-            <div className="w-14 h-14 rounded-2xl bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-inner border border-cyan-100 dark:border-cyan-500/20">
-              <FolderOpen className="w-7 h-7 drop-shadow-sm"/>
+            <div className="w-12 h-12 rounded-2xl bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner border border-cyan-100 dark:border-cyan-500/20">
+              <FolderOpen className="w-6 h-6 drop-shadow-sm"/>
             </div>
-            <h3 className="text-lg font-black text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors flex items-center gap-1">
-              Thư Viện Số <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
+            <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors flex items-center gap-1">
+              Thư Viện Số <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
             </h3>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
               Hàng ngàn tài liệu, sách và chuyên đề lưu trữ số.
+            </p>
+          </div>
+
+          {/* 🌟 NÚT MỚI: PHÒNG THÍ NGHIỆM ẢO */}
+          <div 
+            onClick={() => router.push('/phongthinghiem')} 
+            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-6 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500 relative overflow-hidden"
+          >
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-colors pointer-events-none"></div>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner border border-emerald-100 dark:border-emerald-500/20 relative z-10">
+              <FlaskConical className="w-6 h-6 drop-shadow-sm"/>
+            </div>
+            <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors flex items-center gap-1 relative z-10">
+              Phòng Thí Nghiệm <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
+            </h3>
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed relative z-10">
+              Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.
             </p>
           </div>
 
           <div 
             onClick={() => router.push('/forum')} 
-            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-7 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500"
+            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-6 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500"
           >
-            <div className="w-14 h-14 rounded-2xl bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-inner border border-sky-100 dark:border-sky-500/20">
-              <MessageSquare className="w-7 h-7 drop-shadow-sm"/>
+            <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner border border-sky-100 dark:border-sky-500/20">
+              <MessageSquare className="w-6 h-6 drop-shadow-sm"/>
             </div>
-            <h3 className="text-lg font-black text-slate-900 dark:text-white group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors flex items-center gap-1">
-              Cộng Đồng <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
+            <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors flex items-center gap-1">
+              Cộng Đồng <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
             </h3>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
               Thảo luận ẩn danh, giao lưu phương pháp học tập.
             </p>
           </div>
 
-          {/* NÚT MỞ TRANG TÍNH ĐIỂM */}
           <div 
             onClick={() => router.push('/tinhdiem')} 
-            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-7 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500 relative overflow-hidden"
+            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-6 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500"
           >
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl group-hover:bg-rose-500/20 transition-colors"></div>
-            <div className="relative z-10 w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-inner border border-rose-100 dark:border-rose-500/20">
-              <Calculator className="w-7 h-7 drop-shadow-sm"/>
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner border border-rose-100 dark:border-rose-500/20">
+              <Calculator className="w-6 h-6 drop-shadow-sm"/>
             </div>
-            <h3 className="relative z-10 text-lg font-black text-slate-900 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors flex items-center gap-1">
-              Tính điểm Đại học <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
+            <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors flex items-center gap-1">
+              Tính điểm ĐH <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
             </h3>
-            <p className="relative z-10 text-xs font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
               Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.
             </p>
           </div>
@@ -958,7 +973,7 @@ export default function DashboardPage() {
           className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 dark:from-indigo-900/50 dark:via-purple-900/50 dark:to-blue-900/50 backdrop-blur-2xl rounded-[2.5rem] p-8 sm:p-10 border border-indigo-300/50 dark:border-white/10 shadow-lg hover:shadow-xl hover:-translate-y-1 flex flex-col sm:flex-row items-start sm:items-center justify-between cursor-pointer group transition-all duration-500 relative overflow-hidden mt-5 lg:mt-6"
         >
           {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl mix-blend-overlay group-hover:scale-110 transition-transform duration-700"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl mix-blend-overlay group-hover:scale-110 transition-transform duration-700 pointer-events-none"></div>
           
           <div className="flex items-center gap-5 relative z-10">
             <div className="w-16 h-16 rounded-[1.2rem] bg-white/20 dark:bg-black/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner border border-white/30 shrink-0">
