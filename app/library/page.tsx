@@ -167,7 +167,6 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     const effectiveUserId = userIdOverride || currentUserId
     const requestId = ++fetchContentsRequestRef.current
 
-    // Khôi phục truy vấn an toàn, không gộp .eq và .is
     const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
     if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null)
 
@@ -303,7 +302,6 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const handleDragStart = (e: React.DragEvent, id: string, type: 'folder'|'document') => { if (!canManageLibrary) return; setDraggedItem({ id, type }); e.dataTransfer.effectAllowed = "move" }
   const handleDrop = async (e: React.DragEvent, targetId: string | null) => { e.preventDefault(); setDragOverId(null); if (!draggedItem || (draggedItem.type === 'folder' && draggedItem.id === targetId)) return; try { await supabase.from(draggedItem.type === 'document' ? 'library_documents' : 'library_folders').update(draggedItem.type === 'document' ? {folder_id: targetId} : {parent_id: targetId}).eq('id', draggedItem.id); fetchContents(currentFolderId) } catch(err){} setDraggedItem(null) }
 
-  // Khôi phục nguyên trạng Upload Google Drive của sếp
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault(); if (docFiles.length === 0) return
     try {
@@ -421,7 +419,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
                 <button onClick={() => setSortByName(!sortByName)} className={headerBtn}><ArrowUpDown className="w-4 h-4" /> {sortByName ? 'Xếp A-Z' : 'Xếp Ngày'}</button>
                 <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={headerBtn}><ListChecks className="w-4 h-4" /> Chọn</button>
                 <button onClick={() => setShowFolderModal(true)} className={headerBtn}><PlusCircle className="w-4 h-4 text-blue-500" /> Thư Mục</button>
-                <button onClick={() => setShowDocModal(true)} className={`${headerBtn} bg-indigo-600 text-white hover:bg-indigo-700`}><UploadCloud className="w-4 h-4" /> Tải Lên</button>
+                {/* 🌟 FIX BUGS MÀU NÚT "TẢI LÊN" LÀ Ở ĐÂY NÀY SẾP 🌟 */}
+                <button onClick={() => setShowDocModal(true)} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95 flex items-center gap-2">
+                  <UploadCloud className="w-4 h-4" /> Tải Lên
+                </button>
               </>
             )}
           </div>
