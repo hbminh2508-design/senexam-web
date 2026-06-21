@@ -13,7 +13,7 @@ import {
 // Imports hệ thống
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
-import ReactMarkdown from 'react-markdown' // Đã fix lỗi thiếu import
+import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
@@ -40,32 +40,32 @@ type AiMessage = { role: 'user' | 'model'; text: string; isError?: boolean }
 export default function LibraryPage({ searchParams = {} }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const router = useRouter()
   
-  // 1. STATES HỆ THỐNG
+  // STATES HỆ THỐNG
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState('student')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [libraryScope, setLibraryScope] = useState<LibraryScope>('private')
   const [adminUploaderIds, setAdminUploaderIds] = useState<string[]>([])
   
-  // 2. STATES DỮ LIỆU
+  // STATES DỮ LIỆU
   const [folders, setFolders] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
   const [folderPath, setFolderPath] = useState<{id: string | null, name: string}[]>([{ id: null, name: 'Trang chủ Thư viện' }])
   const currentFolderId = folderPath[folderPath.length - 1].id
   
-  // 3. STATES TÌM KIẾM & UI
+  // STATES TÌM KIẾM & UI
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [isCompact, setIsCompact] = useState(false)
   const [sortByName, setSortByName] = useState(false)
   
-  // 4. STATES BẢO MẬT & META
+  // STATES BẢO MẬT & META
   const [folderCustomizations, setFolderCustomizations] = useState<Record<string, { color?: string, icon?: string }>>({})
   const [documentSecurity, setDocumentSecurity] = useState<Record<string, DocumentSecurity>>({})
   const [unlockedDocumentIds, setUnlockedDocumentIds] = useState<Record<string, true>>({})
   const [studentUploadFolderId, setStudentUploadFolderId] = useState<string | null>(null)
   
-  // 5. STATES VẬT LÝ & TƯƠNG TÁC
+  // STATES VẬT LÝ & TƯƠNG TÁC
   const [previewDoc, setPreviewDoc] = useState<any | null>(null)
   const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
@@ -73,14 +73,13 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const [draggedItem, setDraggedItem] = useState<{id: string, type: 'folder' | 'document'} | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   
-  // 6. STATES MODAL
+  // STATES MODAL
   const [showFolderModal, setShowFolderModal] = useState(false); const [newFolderName, setNewFolderName] = useState('')
   const [showDocModal, setShowDocModal] = useState(false); const [docTitle, setDocTitle] = useState(''); const [docFiles, setDocFiles] = useState<File[]>([])
   const [uploadStatus, setUploadStatus] = useState<{type: 'idle'|'uploading'|'success'|'error', message: string}>({ type: 'idle', message: '' })
   const [showRenameModal, setShowRenameModal] = useState(false); const [renameTarget, setRenameTarget] = useState<SelectedItem | null>(null); const [renameInput, setRenameInput] = useState('')
-  const [showFolderSettingsModal, setShowFolderSettingsModal] = useState(false); const [folderSettingsTarget, setFolderSettingsTarget] = useState<any | null>(null); const [folderSettingsColor, setFolderSettingsColor] = useState<string | undefined>(); const [folderSettingsIcon, setFolderSettingsIcon] = useState<string | undefined>()
   
-  // 7. STATES AI & GLOBAL SEARCH
+  // STATES AI & GLOBAL SEARCH
   const [isAiMode, setIsAiMode] = useState(false)
   const [aiQuery, setAiQuery] = useState('')
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
@@ -146,31 +145,69 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     return null
   }
 
+  const isItemVisibleInScope = (item: any, itemKind: 'folder' | 'document', scope: LibraryScope, rootFolderId: string | null, userIdOverride?: string | null) => {
+    if (!isStudentLibrary) return true
+    const effectiveUserId = userIdOverride ?? currentUserId
+    const ownedByCurrentUser = !!effectiveUserId && item?.created_by === effectiveUserId
+    const isStudentRootContainer = itemKind === 'folder' && item?.id === studentUploadFolderId
+    if (!effectiveUserId) return true
+    if (scope === 'private') {
+      if (rootFolderId === null) return isStudentRootContainer || ownedByCurrentUser
+      return ownedByCurrentUser || isStudentRootContainer
+    }
+    if (rootFolderId === null) return !isStudentRootContainer && !ownedByCurrentUser
+    return !ownedByCurrentUser && !isStudentRootContainer
+  }
+
   // ============================================================================
-  // LOGIC ĐỒNG BỘ DỮ LIỆU CHÍNH (FETCH CONTENTS)
+  // LOGIC ĐỒNG BỘ DỮ LIỆU CHÍNH (ĐÃ KHÔI PHỤC)
   // ============================================================================
   const fetchContents = async (folderId: string | null, scopeOverride?: LibraryScope, userIdOverride?: string | null) => {
-    const scope = scopeOverride || libraryScope; const uid = userIdOverride || currentUserId; const reqId = ++fetchContentsRequestRef.current
-    const [fRes, dRes] = await Promise.all([
-      supabase.from('library_folders').select('*').order('created_at', { ascending: false }).eq(folderId ? 'parent_id' : 'parent_id', folderId || null).is(folderId ? '' : 'parent_id', folderId ? null : null),
-      supabase.from('library_documents').select('*').order('created_at', { ascending: false }).eq(folderId ? 'folder_id' : 'folder_id', folderId || null).is(folderId ? '' : 'folder_id', folderId ? null : null)
-    ])
-    
-    // Tối ưu hàm filter ngay trong quá trình nạp
-    const visibleF = (fRes.data || []).filter(f => !isStudentLibrary || (scope === 'private' ? (folderId === null ? f.id === studentUploadFolderId || f.created_by === uid : f.created_by === uid || f.id === studentUploadFolderId) : !f.created_by || adminUploaderIds.includes(f.created_by)))
-    const visibleD = (dRes.data || []).map((d: any) => ({ ...d, _security: getDocumentSecurity(d) })).filter((d: any) => (isAdmin || !d._security?.hidden) && (!isStudentLibrary || (scope === 'private' ? d.created_by === uid || d.folder_id === studentUploadFolderId : !d.created_by || adminUploaderIds.includes(d.created_by))))
+    const effectiveScope = scopeOverride || libraryScope
+    const effectiveUserId = userIdOverride || currentUserId
+    const requestId = ++fetchContentsRequestRef.current
 
-    if (reqId === fetchContentsRequestRef.current) {
-      setFolders(visibleF); setDocuments(visibleD)
+    // Khôi phục truy vấn an toàn, không gộp .eq và .is
+    const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
+    if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null)
+
+    const docQuery = supabase.from('library_documents').select('*').order('created_at', { ascending: false })
+    if (folderId) docQuery.eq('folder_id', folderId); else docQuery.is('folder_id', null)
+
+    const [folderRes, docRes] = await Promise.all([folderQuery, docQuery])
+    const fdata = folderRes.data || []
+    const docsWithSecurity = (docRes.data || []).map((doc: any) => ({ ...doc, _security: getDocumentSecurity(doc) }))
+
+    const visibleFolders = fdata.filter(folder => {
+      if (isStudentLibrary) {
+        if (effectiveScope === 'private') {
+          if (folderId === null) return folder.id === studentUploadFolderId || (effectiveUserId && folder.created_by === effectiveUserId)
+          return (effectiveUserId && folder.created_by === effectiveUserId) || folder.id === studentUploadFolderId
+        }
+        return (folder.created_by == null) || adminUploaderIds.includes(folder.created_by)
+      }
+      return true
+    })
+
+    const visibleDocs = docsWithSecurity.filter((doc: any) => {
+      if (!(isAdmin || !doc._security?.hidden)) return false
+      if (isStudentLibrary) {
+        if (effectiveScope === 'private') return (doc.created_by === effectiveUserId) || (doc.folder_id === studentUploadFolderId)
+        return (doc.created_by == null) || adminUploaderIds.includes(doc.created_by)
+      }
+      return true
+    })
+
+    if (requestId === fetchContentsRequestRef.current) {
+      setFolders(visibleFolders); setDocuments(visibleDocs)
       try {
-        const cMap: any = {}; visibleF.forEach(f => { if(f.color || f.icon) cMap[f.id] = {color: f.color, icon: f.icon} })
+        const cMap: any = {}; visibleFolders.forEach(f => { if(f.color || f.icon) cMap[f.id] = {color: f.color, icon: f.icon} })
         if (Object.keys(cMap).length > 0) { setFolderCustomizations(cMap); localStorage.setItem('library_folder_customizations', JSON.stringify(cMap)) }
       } catch(e) {}
     }
-    return { folders: visibleF, documents: visibleD }
+    return { folders: visibleFolders, documents: visibleDocs }
   }
 
-  // Khởi tạo App
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -179,12 +216,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
       setCurrentUserId(user.id); setUserRole(profile?.role || 'student')
 
       let initScope: LibraryScope = profile?.role === 'student' ? 'private' : 'shared'
-      try { const s = localStorage.getItem(LIBRARY_SCOPE_STORAGE_KEY); if (profile?.role === 'student' && (s === 'private' || s === 'shared')) initScope = s } catch(e) {}
+      try { const s = localStorage.getItem(LIBRARY_SCOPE_STORAGE_KEY); if (profile?.role === 'student' && (s === 'private' || s === 'shared')) initScope = s as LibraryScope } catch(e) {}
       try { const { data: admins } = await supabase.from('profiles').select('id').in('role', ['admin','collab']); if (admins) setAdminUploaderIds(admins.map(a => a.id)) } catch(e) {}
       
       setLibraryScope(initScope)
       const rootData = await fetchContents(null, initScope, user.id)
-      
       try { const r = sessionStorage.getItem(DOCUMENT_UNLOCK_STORAGE_KEY); if (r) setUnlockedDocumentIds(JSON.parse(r)) } catch(e) {}
 
       if (initScope === 'private' && !searchParams?.folder && !searchParams?.preview) {
@@ -207,10 +243,12 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     setSearchLoading(true)
     try {
       const [fRes, dRes, eRes] = await Promise.all([supabase.from('library_folders').select('*').limit(1000), supabase.from('library_documents').select('*').limit(1000), supabase.from('exams').select('*').limit(1000)])
-      const fMap = new Map((fRes.data || []).map((f:any) => [f.id, f]))
-      setSearchFoldersResults((fRes.data || []).filter((f:any) => f.name.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.name, q) - scoreRes(a.name, q)))
-      setSearchDocsResults((dRes.data || []).filter((d:any) => d.title.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.title, q) - scoreRes(a.title, q)))
-      setSearchExamsResults((eRes.data || []).filter((e:any) => e.title.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.title, q) - scoreRes(a.title, q)))
+      
+      const sf = (fRes.data || []).filter((f:any) => isItemVisibleInScope(f, 'folder', libraryScope, null, currentUserId) && f.name.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.name, q) - scoreRes(a.name, q))
+      const sd = (dRes.data || []).filter((d:any) => (isAdmin || !getDocumentSecurity(d)?.hidden) && isItemVisibleInScope(d, 'document', libraryScope, null, currentUserId) && d.title.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.title, q) - scoreRes(a.title, q))
+      const se = (eRes.data || []).filter((e:any) => e.title.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.title, q) - scoreRes(a.title, q))
+      
+      setSearchFoldersResults(sf); setSearchDocsResults(sd); setSearchExamsResults(se)
     } catch(e) {}
     setSearchLoading(false)
   }
@@ -223,8 +261,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     return () => clearTimeout(searchDebounceRef.current!)
   }, [searchQuery])
 
-  // SENAI Chat Logic
   useEffect(() => { if (aiChatScrollRef.current) aiChatScrollRef.current.scrollTop = aiChatScrollRef.current.scrollHeight }, [aiMessages, isAiSearching])
+  
   const handleAskSenAI = async (e: React.FormEvent) => {
     e.preventDefault(); const q = aiQuery.trim(); if (!q || isAiSearching) return;
     setAiQuery(''); setAiMessages(p => [...p, { role: 'user', text: q }]); setIsAiSearching(true)
@@ -233,10 +271,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
       const data = await res.json()
       if (data.text) {
         if (data.text.trim().length > 30) setAiMessages(p => [...p, { role: 'model', text: data.text.trim() }])
-        else {
-          setAiMessages(p => [...p, { role: 'model', text: `Mình đang lọc từ khóa **"${data.text.trim()}"** trên toàn hệ thống nhé!` }])
-          setSearchQuery(data.text.trim().replace(/["']/g, ''))
-        }
+        else { setAiMessages(p => [...p, { role: 'model', text: `Mình đang lọc từ khóa **"${data.text.trim()}"** trên hệ thống nhé!` }]); setSearchQuery(data.text.trim().replace(/["']/g, '')) }
       }
     } catch (e) { setAiMessages(p => [...p, { role: 'model', text: 'Lỗi máy chủ AI.', isError: true }]) }
     setIsAiSearching(false)
@@ -246,16 +281,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   // CÁC HÀM TƯƠNG TÁC VẬT LÝ (CRUD, CLIPBOARD, DRAG & DROP)
   // ============================================================================
   const syncLibraryScope = async (next: LibraryScope) => { setLibraryScope(next); localStorage.setItem(LIBRARY_SCOPE_STORAGE_KEY, next); setSearchQuery(''); setSelectedItems([]); setIsSelectMode(false); setClipboard(null); setFolderPath([{id: null, name: 'Sen Home'}]); const r = await fetchContents(null, next); if (next === 'private') { const t = await ensureStudentUploadFolder(r.folders); if (t) { setFolderPath([{id:null, name:'Sen Home'}, {id:t, name:STUDENT_UPLOAD_FOLDER_NAME}]); fetchContents(t, next) } } }
-  
-  // Đã fix lỗi Cannot find name 'handleOpenDocument'
   const handleOpenDocument = async (doc: any) => { const allowed = await requestDocumentAccess(doc); if (allowed) setPreviewDoc(doc) }
   const handleOpenFolder = async (id: string, name: string) => { setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]); setFolderPath([...folderPath, { id, name }]); fetchContents(id) }
   const handleNavigateBreadcrumb = async (idx: number) => { setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]); const np = folderPath.slice(0, idx + 1); setFolderPath(np); fetchContents(np[np.length - 1].id) }
-  
   const handleCreateFolder = async () => { if (!newFolderName.trim()) return; const { error } = await supabase.from('library_folders').insert({ name: newFolderName, created_by: currentUserId, parent_id: currentFolderId }); if (!error) { setShowFolderModal(false); setNewFolderName(''); fetchContents(currentFolderId) } else alert("Lỗi: " + error.message) }
   const handleRename = async () => { if (!renameInput.trim() || !renameTarget) return; try { await supabase.from(renameTarget.type === 'folder' ? 'library_folders' : 'library_documents').update(renameTarget.type === 'folder' ? {name: renameInput.trim()} : {title: renameInput.trim()}).eq('id', renameTarget.id); setShowRenameModal(false); setIsSelectMode(false); setSelectedItems([]); fetchContents(currentFolderId) } catch (e) { alert("Lỗi đổi tên!") } }
-  
-  // Đã fix lỗi Cannot find name 'handleSetClipboard'
   const toggleSelection = (id: string, type: 'folder' | 'document', data: any) => setSelectedItems(p => p.find(i => i.id === id) ? p.filter(i => i.id !== id) : [...p, { id, type, data }])
   const handleSetClipboard = (action: 'cut' | 'copy') => { setClipboard({ action, items: selectedItems }); setSelectedItems([]); setIsSelectMode(false) }
   const handlePaste = async () => {
@@ -273,19 +303,30 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const handleDragStart = (e: React.DragEvent, id: string, type: 'folder'|'document') => { if (!canManageLibrary) return; setDraggedItem({ id, type }); e.dataTransfer.effectAllowed = "move" }
   const handleDrop = async (e: React.DragEvent, targetId: string | null) => { e.preventDefault(); setDragOverId(null); if (!draggedItem || (draggedItem.type === 'folder' && draggedItem.id === targetId)) return; try { await supabase.from(draggedItem.type === 'document' ? 'library_documents' : 'library_folders').update(draggedItem.type === 'document' ? {folder_id: targetId} : {parent_id: targetId}).eq('id', draggedItem.id); fetchContents(currentFolderId) } catch(err){} setDraggedItem(null) }
 
+  // Khôi phục nguyên trạng Upload Google Drive của sếp
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault(); if (docFiles.length === 0) return
     try {
-      setUploadStatus({ type: 'uploading', message: `Xử lý ${docFiles.length} tài liệu...` }); let uFolder = currentFolderId
-      if (libraryScope === 'private' && isStudentLibrary && !uFolder) uFolder = studentUploadFolderId || await ensureStudentUploadFolder(folders)
+      setUploadStatus({ type: 'uploading', message: `Xử lý ${docFiles.length} tài liệu...` }); 
+      let uFolder = currentFolderId
+      if (libraryScope === 'private' && isStudentLibrary && !uFolder) {
+        uFolder = studentUploadFolderId || await ensureStudentUploadFolder(folders)
+      }
+      if (libraryScope === 'private' && !uFolder) throw new Error('Chưa xác định được thư mục đích để tải lên.')
+
       for (let i = 0; i < docFiles.length; i++) {
         const f = docFiles[i]; const t = (docFiles.length === 1 && docTitle) ? docTitle : f.name
         setUploadStatus({ type: 'uploading', message: `[${i+1}/${docFiles.length}] Up Google Drive...` })
-        const url = await initGoogleDriveUpload(t, f.type); const d = await uploadFileToGoogleDrive(url, f, t)
+        
+        const url = await initGoogleDriveUpload(t, f.type)
+        const d = await uploadFileToGoogleDrive(url, f, t)
+        
         if (!d?.id) throw new Error('Lỗi Drive')
         await supabase.from('library_documents').insert({ folder_id: uFolder, title: t, drive_file_id: d.id, created_by: libraryScope==='shared' ? null : currentUserId })
       }
-      setUploadStatus({ type: 'success', message: 'Thành công!' }); setDocTitle(''); setDocFiles([]); setTimeout(() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}) }, 1000); fetchContents(currentFolderId)
+      setUploadStatus({ type: 'success', message: 'Thành công!' }); setDocTitle(''); setDocFiles([]); 
+      setTimeout(() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}) }, 1500); 
+      fetchContents(currentFolderId)
     } catch (e: any) { setUploadStatus({ type: 'error', message: e.message }) }
   }
 
@@ -299,15 +340,14 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   // ============================================================================
   // RENDER GIAO DIỆN CHÍNH
   // ============================================================================
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-500" /></div>
+  if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-500 mb-4" /><p className="font-bold text-slate-500">Đang khởi tạo thư viện...</p></div>
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-32 transition-colors duration-500">
       
-      {/* 🌟 Nền Ambient Bóng Kính */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/5 dark:from-indigo-900/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
-      {/* 🌟 MODALS (Đã thu gọn css) */}
+      {/* 🌟 MODALS QUAN TRỌNG */}
       {previewDoc && (
         <div className="fixed inset-0 z-[999] bg-slate-900/80 backdrop-blur-xl flex items-center justify-center p-3 md:p-6 animate-in fade-in">
           <div className="bg-white dark:bg-[#121212] w-full max-w-5xl h-[90vh] rounded-[2rem] shadow-2xl border border-slate-200 dark:border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95">
@@ -334,7 +374,11 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"><div className={`${mdCard} w-full max-w-md p-8 shadow-2xl relative animate-in zoom-in-95`}><button onClick={() => {setShowDocModal(false); setDocFiles([])}} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-[#202020]"><X className="w-5 h-5"/></button><div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center mb-4"><UploadCloud className="w-6 h-6 text-emerald-500"/></div><h3 className="text-xl font-black mb-4">Tải tài liệu lên</h3><form onSubmit={handleUploadDocument} className="space-y-4"><input type="text" value={docTitle} onChange={e=>setDocTitle(e.target.value)} placeholder="Tên file hiển thị (nếu tải 1 file)..." className={mdInput} /><div className="border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-[#202020] cursor-pointer"><input type="file" multiple onChange={e=>setDocFiles(Array.from(e.target.files||[]))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /><FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" /><p className="font-bold text-sm text-slate-500">{docFiles.length > 0 ? `Đã chọn ${docFiles.length} file` : 'Kéo thả hoặc nhấn để chọn file'}</p></div>{uploadStatus.type!=='idle' && <div className="text-xs font-bold text-blue-500">{uploadStatus.message}</div>}<button type="submit" disabled={uploadStatus.type==='uploading'} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-md">{uploadStatus.type==='uploading' ? <Loader2 className="w-5 h-5 animate-spin mx-auto"/> : 'Bắt đầu tải'}</button></form></div></div>
       )}
 
-      {/* 🌟 FLOATING BARS VẬT LÝ */}
+      {showRenameModal && renameTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"><div className={`${mdCard} w-full max-w-sm p-8 shadow-2xl relative animate-in zoom-in-95`}><button onClick={() => setShowRenameModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-[#202020]"><X className="w-5 h-5"/></button><div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center mb-4"><Edit className="w-6 h-6 text-amber-500"/></div><h3 className="text-xl font-black mb-2">Đổi tên</h3><input type="text" value={renameInput} onChange={e=>setRenameInput(e.target.value)} className={`${mdInput} mb-6`} /><button onClick={handleRename} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold shadow-md">Lưu Tên Mới</button></div></div>
+      )}
+
+      {/* 🌟 FLOATING BARS (Thao tác nhóm) */}
       {isSelectMode && selectedItems.length > 0 && (
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#1A1A1A]/90 backdrop-blur-2xl border border-slate-200 dark:border-white/10 px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10"><span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-[#252525] px-3 py-1.5 rounded-lg">{selectedItems.length} mục</span><button onClick={handleBulkDelete} className="flex gap-2 bg-rose-50 text-rose-600 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-rose-100"><Trash2 className="w-4 h-4"/> Xóa</button><button onClick={()=>handleSetClipboard('cut')} className="flex gap-2 bg-slate-100 dark:bg-[#202020] px-4 py-2.5 rounded-xl font-bold text-sm"><Scissors className="w-4 h-4"/> Cắt</button><button onClick={()=>handleSetClipboard('copy')} className="flex gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-100"><Copy className="w-4 h-4"/> Copy</button></div>
       )}
@@ -393,8 +437,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3 mt-1"><Bot className="w-4 h-4"/></div>}
                   <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[13px] font-medium shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : msg.isError ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 dark:bg-[#202020] rounded-bl-sm border border-slate-100 dark:border-white/5'}`}>
-                    {/* Đã Fix lỗi ReactMarkdown missing imports & any type */}
-                    <ReactMarkdown components={{ p: ({node, ...props}: any) => <p className="m-0" {...props} />, strong: ({node, ...props}: any) => <strong className="font-black text-indigo-600 dark:text-indigo-400" {...props} /> }}>
+                    <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <p className="m-0" {...props} />, strong: ({node, ...props}: any) => <strong className="font-black text-indigo-600 dark:text-indigo-400" {...props} /> }}>
                       {msg.text}
                     </ReactMarkdown>
                   </div>
