@@ -9,7 +9,7 @@ import {
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
   Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, 
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash, 
-  CheckCircle2, Info, BarChart3, FileText, Bot, FlaskConical
+  CheckCircle2, Info, BarChart3, FileText, Bot, FlaskConical, PlaySquare
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -885,8 +885,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 🌟 LƯỚI BENTO CẤP 2: BỘ 5 CÔNG CỤ (CHÈN THÊM PHÒNG THÍ NGHIỆM) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 lg:gap-6">
+        {/* 🌟 LƯỚI BENTO CẤP 2: BỘ 6 CÔNG CỤ (CHÈN THÊM PHÒNG THÍ NGHIỆM) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 lg:gap-6">
           
           <div 
             onClick={() => router.push('/focus')} 
@@ -915,6 +915,22 @@ export default function DashboardPage() {
             </h3>
             <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
               Hàng ngàn tài liệu, sách và chuyên đề lưu trữ số.
+            </p>
+          </div>
+
+          <div 
+            onClick={() => router.push('/senvideo')} 
+            className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2rem] p-6 border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-lg hover:-translate-y-1 flex flex-col items-start cursor-pointer group transition-all duration-500 relative overflow-hidden"
+          >
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-colors pointer-events-none"></div>
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-inner border border-indigo-100 dark:border-indigo-500/20 relative z-10">
+              <PlaySquare className="w-6 h-6 drop-shadow-sm"/>
+            </div>
+            <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-1 relative z-10">
+              SenVideo <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all"/>
+            </h3>
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed relative z-10">
+              Xem luồng Stream chất lượng cao không giật lag.
             </p>
           </div>
 
