@@ -29,8 +29,9 @@ export default function SenVideoPage() {
   const [uploadTitle, setUploadTitle] = useState('')
   const [uploadStatus, setUploadStatus] = useState({ uploading: false, msg: '' })
 
-  // VLC Player States
+  // Video Player & VLC States
   const [activeVideo, setActiveVideo] = useState<any | null>(null)
+  const [showVlcInfo, setShowVlcInfo] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // ==========================================================================
@@ -45,26 +46,17 @@ export default function SenVideoPage() {
       const role = profile?.role || 'student'
       setUserRole(role)
 
-      // Lấy danh sách ID của Admin và Collab để hiển thị video dùng chung cho học sinh
       const { data: admins } = await supabase.from('profiles').select('id').in('role', ['admin','collab'])
       const adminIds = admins ? admins.map(a => a.id) : []
 
-      // Fetch toàn bộ tài liệu (Giới hạn 2000 để tối ưu RLS)
       const { data, error } = await supabase.from('library_documents').select('*').order('created_at', { ascending: false }).limit(2000)
       if (error) throw error;
 
       if (data) {
-        // Thuật toán bọc thép: Lọc file video và Check quyền
         const vids = data.filter(d => {
-          // 1. Phải là file Video (Đã sửa lỗi Regex cực mạnh để bắt mọi biến thể)
           const isVideo = d.title && d.title.match(/\.(mp4|mkv|mov|avi|webm)$/i);
           if (!isVideo) return false;
-
-          // 2. Quyền hiển thị (Học sinh chỉ thấy video của mình hoặc của Thầy cô)
-          if (role === 'student') {
-            return d.created_by === user.id || d.created_by === null || adminIds.includes(d.created_by);
-          }
-          // Admin thì thấy hết
+          if (role === 'student') return d.created_by === user.id || d.created_by === null || adminIds.includes(d.created_by);
           return true;
         })
         setVideos(vids)
@@ -94,7 +86,6 @@ export default function SenVideoPage() {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user?.id).single()
       const role = profile?.role || 'student'
 
-      // 1. Tự động định tuyến vào thư mục "Student" nếu là học sinh
       let uploadFolderId = null;
       if (role === 'student') {
         const { data: folders } = await supabase.from('library_folders').select('id').eq('name', 'Student').eq('created_by', user?.id).single();
@@ -108,14 +99,10 @@ export default function SenVideoPage() {
 
       for (let i = 0; i < uploadFiles.length; i++) {
         const file = uploadFiles[i]
-        
-        // 2. BẢO VỆ ĐUÔI FILE: Tự động gắn thêm đuôi .mp4 nếu người dùng nhập tên tùy chỉnh mà quên ghi đuôi
         const fileExt = file.name.split('.').pop() || 'mp4';
         let finalTitle = (uploadFiles.length === 1 && uploadTitle) ? uploadTitle.trim() : file.name;
         
-        if (!finalTitle.match(/\.(mp4|mkv|mov|avi|webm)$/i)) {
-           finalTitle = `${finalTitle}.${fileExt}`;
-        }
+        if (!finalTitle.match(/\.(mp4|mkv|mov|avi|webm)$/i)) finalTitle = `${finalTitle}.${fileExt}`;
         
         setUploadStatus({ uploading: true, msg: `Đang đẩy [${i+1}/${uploadFiles.length}] lên Google Drive...` })
         const url = await initGoogleDriveUpload(finalTitle, file.type)
@@ -127,7 +114,7 @@ export default function SenVideoPage() {
         await supabase.from('library_documents').insert({ 
           title: finalTitle, 
           drive_file_id: d.id, 
-          created_by: role === 'student' ? user?.id : null, // Admin up thì là Public (null)
+          created_by: role === 'student' ? user?.id : null,
           folder_id: uploadFolderId
         })
       }
@@ -140,11 +127,11 @@ export default function SenVideoPage() {
   }
 
   // ==========================================================================
-  // XỬ LÝ LẤY LINK & RENDER GIAO DIỆN
+  // XỬ LÝ LẤY LINK STREAM & VIDEO PLAYER
   // ==========================================================================
-  const vlcLink = activeVideo ? `${window.location.origin}/api/drive/stream?fileId=${activeVideo.drive_file_id}` : ''
+  const streamLink = activeVideo ? `${window.location.origin}/api/drive/stream?fileId=${activeVideo.drive_file_id}` : ''
   const handleCopy = () => {
-    navigator.clipboard.writeText(vlcLink)
+    navigator.clipboard.writeText(streamLink)
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
@@ -167,7 +154,6 @@ export default function SenVideoPage() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Tìm video..." className={`${inputClass} pl-10 py-2.5`} />
           </div>
-          {/* Nút Upload chỉ dành cho Admin/Collab hoặc muốn mở cho Học sinh cũng được */}
           <button onClick={() => setShowUpload(true)} className={`${headerBtn} bg-indigo-600 text-white hover:bg-indigo-700 border-none`}><UploadCloud className="w-4 h-4"/> Tải Video</button>
         </div>
       </header>
@@ -185,7 +171,7 @@ export default function SenVideoPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 animate-in fade-in">
               {displayVideos.map(vid => (
-                <div key={vid.id} onClick={() => setActiveVideo(vid)} className="group cursor-pointer bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 rounded-[1.5rem] p-4 hover:shadow-xl hover:-translate-y-1 transition-all">
+                <div key={vid.id} onClick={() => { setActiveVideo(vid); setShowVlcInfo(false); }} className="group cursor-pointer bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 rounded-[1.5rem] p-4 hover:shadow-xl hover:-translate-y-1 transition-all">
                   <div className="w-full aspect-video bg-indigo-100 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center mb-4 relative overflow-hidden">
                     <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center group-hover:scale-125 transition-transform"><PlaySquare className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/></div>
                     <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded-md text-[10px] text-white font-bold">DRIVE MP4</div>
@@ -200,44 +186,62 @@ export default function SenVideoPage() {
       </div>
 
       {/* ========================================================= */}
-      {/* 🌟 MODAL VLC PLAYER (LẤY LINK STREAM) */}
+      {/* 🌟 MODAL VIDEO PLAYER & TÍCH HỢP VLC STREAM */}
       {/* ========================================================= */}
       {activeVideo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in">
-          <div className={`${mdCard} w-full max-w-2xl p-0 shadow-2xl relative overflow-hidden animate-in zoom-in-95`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
+          <div className={`${mdCard} w-full max-w-5xl p-0 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 border border-slate-200 dark:border-white/10`}>
+            
             {/* Header Modal */}
-            <div className="p-6 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#1A1A1A]/50 flex justify-between items-center">
-              <h3 className="font-black text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400"><MonitorPlay className="w-6 h-6"/> Lấy Link Stream VLC</h3>
-              <button onClick={() => {setActiveVideo(null); setCopied(false)}} className="p-2 bg-slate-200 dark:bg-[#202020] rounded-full hover:scale-105"><X className="w-5 h-5"/></button>
+            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#1A1A1A]/50 flex justify-between items-center shrink-0">
+              <h3 className="font-black text-base sm:text-lg flex items-center gap-2 text-indigo-600 dark:text-indigo-400 truncate pr-4">
+                <MonitorPlay className="w-6 h-6 shrink-0"/> <span className="truncate">{activeVideo.title}</span>
+              </h3>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => setShowVlcInfo(!showVlcInfo)} className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm ${showVlcInfo ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50'}`}>
+                  <Cloud className="w-4 h-4"/> <span className="hidden sm:inline">VLC Stream</span>
+                </button>
+                <button onClick={() => {setActiveVideo(null); setCopied(false); setShowVlcInfo(false)}} className="p-2 bg-slate-200 dark:bg-[#202020] rounded-full hover:scale-105 hover:bg-rose-100 hover:text-rose-500 transition-all"><X className="w-5 h-5"/></button>
+              </div>
             </div>
 
-            <div className="p-6 md:p-8 space-y-6">
-              <div>
-                <p className="text-sm font-bold text-slate-500 mb-2">Video đã chọn:</p>
-                <p className="font-black text-slate-900 dark:text-white bg-slate-100 dark:bg-[#252525] p-3 rounded-xl line-clamp-2 border border-slate-200 dark:border-white/5">{activeVideo.title}</p>
-              </div>
+            {/* Khung chứa Video và Bảng hướng dẫn VLC */}
+            <div className="flex-1 overflow-hidden bg-black flex flex-col relative">
+              
+              {/* Web Video Player */}
+              <video 
+                src={streamLink} 
+                controls 
+                autoPlay 
+                playsInline
+                className="w-full h-full max-h-[75vh] object-contain bg-black outline-none"
+              />
 
-              {/* Box Copy Link */}
-              <div className="relative">
-                <label className="text-xs font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 mb-2 flex items-center gap-2"><Cloud className="w-4 h-4"/> Link Stream Trực Tiếp (Bypass Drive)</label>
-                <div className="flex gap-2">
-                  <input readOnly value={vlcLink} className={`${inputClass} !text-indigo-600 dark:!text-indigo-400 !bg-indigo-50 dark:!bg-indigo-900/10 truncate font-mono`} />
-                  <button onClick={handleCopy} className="px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 shrink-0">
-                    {copied ? <CheckCircle2 className="w-5 h-5"/> : <Copy className="w-5 h-5"/>} {copied ? 'Đã chép' : 'Copy'}
-                  </button>
+              {/* Bảng hướng dẫn VLC (Trượt xuống đè lên video nếu bật) */}
+              {showVlcInfo && (
+                <div className="absolute top-0 left-0 w-full p-6 bg-white/95 dark:bg-[#1E1E1E]/95 backdrop-blur-xl z-10 border-b border-slate-200 dark:border-white/10 animate-in slide-in-from-top-4 shadow-xl">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-black text-amber-600 dark:text-amber-400 flex items-center gap-2"><Info className="w-5 h-5"/> Mở rộng qua VLC (Chống giật lag)</h4>
+                    <button onClick={() => setShowVlcInfo(false)} className="p-1.5 bg-slate-100 dark:bg-[#2A2A2A] rounded-lg hover:text-rose-500"><X className="w-4 h-4"/></button>
+                  </div>
+                  
+                  <div className="relative mb-4">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 block">Copy Link Stream API này vào VLC:</label>
+                    <div className="flex gap-2">
+                      <input readOnly value={streamLink} className={`${inputClass} !text-indigo-600 dark:!text-indigo-400 !bg-indigo-50 dark:!bg-indigo-900/10 truncate font-mono`} />
+                      <button onClick={handleCopy} className="px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 shrink-0 shadow-md">
+                        {copied ? <CheckCircle2 className="w-5 h-5"/> : <Copy className="w-5 h-5"/>} <span className="hidden sm:inline">{copied ? 'Đã chép' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <ol className="text-[13px] font-medium text-amber-800 dark:text-amber-500 space-y-2.5 list-decimal list-inside bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30">
+                    <li>Tải và mở phần mềm <strong>VLC Media Player</strong> trên máy tính/điện thoại.</li>
+                    <li>Trên menu VLC, chọn <strong>Media</strong> <ArrowLeft className="w-3 h-3 inline rotate-180"/> <strong>Open Network Stream...</strong> (Phím tắt: <kbd className="bg-amber-200 dark:bg-amber-800 px-1 rounded shadow-sm">Ctrl + N</kbd>).</li>
+                    <li>Dán đường link vừa copy vào ô URL và bấm <strong>Play</strong>.</li>
+                  </ol>
                 </div>
-              </div>
-
-              {/* Hướng dẫn sử dụng VLC */}
-              <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-5 rounded-[1.5rem] mt-4">
-                <h4 className="font-black text-amber-700 dark:text-amber-400 mb-3 flex items-center gap-2"><Info className="w-5 h-5"/> Hướng dẫn xem qua VLC (Chống giật lag)</h4>
-                <ol className="text-[13px] font-medium text-amber-800 dark:text-amber-500 space-y-2.5 list-decimal list-inside">
-                  <li>Tải và mở phần mềm <strong>VLC Media Player</strong> trên máy tính/điện thoại.</li>
-                  <li>Trên menu VLC, chọn <strong>Media</strong> <ArrowLeft className="w-3 h-3 inline rotate-180"/> <strong>Open Network Stream...</strong> (Phím tắt: <kbd className="bg-amber-200 dark:bg-amber-800 px-1 rounded">Ctrl + N</kbd>).</li>
-                  <li>Dán đường link bạn vừa copy ở trên vào ô URL.</li>
-                  <li>Bấm <strong>Play (Phát)</strong> và thưởng thức video chất lượng gốc không giới hạn dung lượng!</li>
-                </ol>
-              </div>
+              )}
             </div>
           </div>
         </div>
