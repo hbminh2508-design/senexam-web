@@ -4,1228 +4,431 @@ import { useDeferredValue, useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
-  Folder, FileText, ArrowLeft, PlusCircle, Trash2, 
-  UploadCloud, Loader2, X, ChevronRight, Download, BookOpen, Search,
-  ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, Edit, ArrowUpDown, Maximize2, ExternalLink,
-  Image, Video, Music, Palette, Lock, Unlock, Eye, EyeOff, Cloud, Library, Home
+  Folder, FileText, ArrowLeft, PlusCircle, Trash2, UploadCloud, Loader2, X, ChevronRight, 
+  Download, BookOpen, Search, ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, 
+  Edit, ArrowUpDown, Maximize2, ExternalLink, Image, Video, Music, Palette, Lock, Unlock, 
+  Eye, EyeOff, Cloud, Library, Home, Sparkles, Bot, Send
 } from 'lucide-react'
 
+// Imports hệ thống
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
+import ReactMarkdown from 'react-markdown' // Đã fix lỗi thiếu import
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import remarkGfm from 'remark-gfm'
+import 'katex/dist/katex.min.css'
 
+// ============================================================================
+// CONSTANTS & TYPES
+// ============================================================================
 const glassCardStyles = "liquid-panel"
+const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
+const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent focus:border-indigo-500 rounded-xl px-4 py-3 outline-none transition-all font-medium text-sm shadow-inner"
+const headerBtn = "px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all backdrop-blur-md border border-white/60 dark:border-slate-700 bg-white/35 dark:bg-slate-800/55 text-slate-900 dark:text-white hover:bg-white/55 dark:hover:bg-slate-800/70 text-sm"
+
 const STUDENT_UPLOAD_FOLDER_NAME = 'Student'
-const LEGACY_STUDENT_UPLOAD_FOLDER_NAME = 'Dành cho học sinh/Sinh viên chia sẻ'
 const LIBRARY_SCOPE_STORAGE_KEY = 'library_scope_v1'
 const DOCUMENT_UNLOCK_STORAGE_KEY = 'library_document_unlocks_v1'
 const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
+
 type LibraryScope = 'private' | 'shared'
-
 type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
-type LibrarySearchParams = Record<string, string | string[] | undefined>
 type DocumentSecurity = { hidden?: boolean, passwordHash?: string, passwordSalt?: string }
-type DocumentSecurityMap = Record<string, DocumentSecurity>
+type AiMessage = { role: 'user' | 'model'; text: string; isError?: boolean }
 
-export default function LibraryPage({ searchParams = {} }: { searchParams?: LibrarySearchParams }) {
-  // build-fix: ensure all hooks are defined in component scope (moved search useEffect outside JSX)
+export default function LibraryPage({ searchParams = {} }: { searchParams?: Record<string, string | string[] | undefined> }) {
   const router = useRouter()
+  
+  // 1. STATES HỆ THỐNG
   const [loading, setLoading] = useState(true)
-  const [userRole, setUserRole] = useState<string>('student')
+  const [userRole, setUserRole] = useState('student')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [libraryScope, setLibraryScope] = useState<LibraryScope>('private')
   const [adminUploaderIds, setAdminUploaderIds] = useState<string[]>([])
   
+  // 2. STATES DỮ LIỆU
   const [folders, setFolders] = useState<any[]>([])
   const [documents, setDocuments] = useState<any[]>([])
-  
   const [folderPath, setFolderPath] = useState<{id: string | null, name: string}[]>([{ id: null, name: 'Trang chủ Thư viện' }])
   const currentFolderId = folderPath[folderPath.length - 1].id
-
+  
+  // 3. STATES TÌM KIẾM & UI
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [isCompact, setIsCompact] = useState(false)
-
-  // Folder customizations (color, icon) stored in localStorage to avoid DB migration
+  const [sortByName, setSortByName] = useState(false)
+  
+  // 4. STATES BẢO MẬT & META
   const [folderCustomizations, setFolderCustomizations] = useState<Record<string, { color?: string, icon?: string }>>({})
-  const [documentSecurity, setDocumentSecurity] = useState<DocumentSecurityMap>({})
+  const [documentSecurity, setDocumentSecurity] = useState<Record<string, DocumentSecurity>>({})
   const [unlockedDocumentIds, setUnlockedDocumentIds] = useState<Record<string, true>>({})
   const [studentUploadFolderId, setStudentUploadFolderId] = useState<string | null>(null)
-  const [showFolderSettingsModal, setShowFolderSettingsModal] = useState(false)
-  const [folderSettingsTarget, setFolderSettingsTarget] = useState<any | null>(null)
-  const [folderSettingsColor, setFolderSettingsColor] = useState<string | undefined>(undefined)
-  const [folderSettingsIcon, setFolderSettingsIcon] = useState<string | undefined>(undefined)
   
-  // STATE: SẮP XẾP A-Z
-  const [sortByName, setSortByName] = useState(false)
-
-  // Modal Create/Upload
-  const [showFolderModal, setShowFolderModal] = useState(false)
-  const [newFolderName, setNewFolderName] = useState('')
-  const [showDocModal, setShowDocModal] = useState(false)
-  const [docTitle, setDocTitle] = useState('')
-  const [docFiles, setDocFiles] = useState<File[]>([])
-  const [uploadStatus, setUploadStatus] = useState<{type: 'idle' | 'uploading' | 'success' | 'error', message: string}>({ type: 'idle', message: '' })
-
-  // 🌟 STATE MỚI: QUẢN LÝ XEM TRƯỚC TÀI LIỆU TRỰC TIẾP TRÊN WEB ĐỒNG BỘ
+  // 5. STATES VẬT LÝ & TƯƠNG TÁC
   const [previewDoc, setPreviewDoc] = useState<any | null>(null)
-
-  // Drag & Drop
-  const [draggedItem, setDraggedItem] = useState<{id: string, type: 'folder' | 'document'} | null>(null)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
-
-  // Select Mode & Clipboard
   const [isSelectMode, setIsSelectMode] = useState(false)
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([])
   const [clipboard, setClipboard] = useState<{action: 'cut' | 'copy', items: SelectedItem[]} | null>(null)
-
-  // Rename
-  const [showRenameModal, setShowRenameModal] = useState(false)
-  const [renameTarget, setRenameTarget] = useState<SelectedItem | null>(null)
-  const [renameInput, setRenameInput] = useState('')
-
-  // Global search results (search across whole library regardless of current folder)
+  const [draggedItem, setDraggedItem] = useState<{id: string, type: 'folder' | 'document'} | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  
+  // 6. STATES MODAL
+  const [showFolderModal, setShowFolderModal] = useState(false); const [newFolderName, setNewFolderName] = useState('')
+  const [showDocModal, setShowDocModal] = useState(false); const [docTitle, setDocTitle] = useState(''); const [docFiles, setDocFiles] = useState<File[]>([])
+  const [uploadStatus, setUploadStatus] = useState<{type: 'idle'|'uploading'|'success'|'error', message: string}>({ type: 'idle', message: '' })
+  const [showRenameModal, setShowRenameModal] = useState(false); const [renameTarget, setRenameTarget] = useState<SelectedItem | null>(null); const [renameInput, setRenameInput] = useState('')
+  const [showFolderSettingsModal, setShowFolderSettingsModal] = useState(false); const [folderSettingsTarget, setFolderSettingsTarget] = useState<any | null>(null); const [folderSettingsColor, setFolderSettingsColor] = useState<string | undefined>(); const [folderSettingsIcon, setFolderSettingsIcon] = useState<string | undefined>()
+  
+  // 7. STATES AI & GLOBAL SEARCH
+  const [isAiMode, setIsAiMode] = useState(false)
+  const [aiQuery, setAiQuery] = useState('')
+  const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
+  const [isAiSearching, setIsAiSearching] = useState(false)
+  const aiChatScrollRef = useRef<HTMLDivElement>(null)
+  
   const [searchFoldersResults, setSearchFoldersResults] = useState<any[] | null>(null)
   const [searchDocsResults, setSearchDocsResults] = useState<any[] | null>(null)
   const [searchExamsResults, setSearchExamsResults] = useState<any[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
+  
   const previewRef = useRef<HTMLDivElement | null>(null)
-  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
   const searchDebounceRef = useRef<number | null>(null)
-  const searchRequestRef = useRef(0)
   const fetchContentsRequestRef = useRef(0)
-  const [isEmbedPreview, setIsEmbedPreview] = useState(false)
   const studentFolderEnsureRef = useRef(false)
 
-  const readSearchParam = (key: string) => {
-    const value = searchParams[key]
-    return Array.isArray(value) ? value[0] ?? null : value ?? null
-  }
-
+  // ============================================================================
+  // CÁC HÀM TIỆN ÍCH & SECURITY
+  // ============================================================================
   const isAdmin = userRole === 'admin'
   const canManageLibrary = userRole === 'admin' || userRole === 'collab'
   const isStudentLibrary = userRole === 'student'
-  const canManageItem = (item: any) => canManageLibrary || (!!currentUserId && (item?.created_by === currentUserId || (libraryScope === 'shared' && item?.created_by == null)))
   const showAdminControls = canManageLibrary || isStudentLibrary
-  const getLibraryRootLabel = (scope: LibraryScope = libraryScope) => scope === 'private' ? 'SenCloud' : 'SenLib'
-  const getHomeLabel = () => 'Sen Home'
-  const headerButtonBase = 'w-full sm:w-auto px-4 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all backdrop-blur-md border border-white/60 dark:border-slate-700 bg-white/35 dark:bg-slate-800/55 text-slate-900 dark:text-white hover:bg-white/55 dark:hover:bg-slate-800/70'
-
-  const encodeDocumentSecurity = (security: DocumentSecurity) => {
-    if (!security.hidden && !security.passwordHash) return null
-    return `${DOCUMENT_SECURITY_PREFIX}${JSON.stringify(security)}`
-  }
-
-  const decodeDocumentSecurity = (description?: string | null) => {
-    if (!description || !description.startsWith(DOCUMENT_SECURITY_PREFIX)) return null
-    try {
-      return JSON.parse(description.slice(DOCUMENT_SECURITY_PREFIX.length)) as DocumentSecurity
-    } catch (error) {
-      return null
-    }
-  }
-
-  const getDocumentSecurity = (doc: any) => documentSecurity[doc.id] || decodeDocumentSecurity(doc.description) || {}
-
-  const saveDocumentSecurity = (next: DocumentSecurityMap) => {
-    setDocumentSecurity(next)
-  }
-
-  const saveUnlockedDocumentIds = (next: Record<string, true>) => {
-    setUnlockedDocumentIds(next)
-    try { sessionStorage.setItem(DOCUMENT_UNLOCK_STORAGE_KEY, JSON.stringify(next)) } catch (error) { /* ignore */ }
-  }
-
-  const readResponsePayload = async (response: Response) => {
-    const contentType = response.headers.get('content-type') || ''
-    const rawText = await response.text()
-
-    if (contentType.includes('application/json')) {
-      try {
-        return { ok: true, data: JSON.parse(rawText) }
-      } catch (error) {
-        return { ok: false, error: rawText || 'Phản hồi JSON không hợp lệ.' }
-      }
-    }
-
-    return { ok: false, error: rawText || `Lỗi kết nối server (${response.status})` }
-  }
-
-  const generateSalt = () => {
-    const bytes = crypto.getRandomValues(new Uint8Array(16))
-    return Array.from(bytes).map(byte => byte.toString(16).padStart(2, '0')).join('')
-  }
 
   const hashPassword = async (password: string, salt: string) => {
     const encoded = new TextEncoder().encode(`${salt}:${password}`)
     const digest = await crypto.subtle.digest('SHA-256', encoded)
-    return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('')
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+  }
+
+  const getDocumentSecurity = (doc: any) => {
+    if (documentSecurity[doc.id]) return documentSecurity[doc.id]
+    if (!doc.description || !doc.description.startsWith(DOCUMENT_SECURITY_PREFIX)) return {}
+    try { return JSON.parse(doc.description.slice(DOCUMENT_SECURITY_PREFIX.length)) } catch { return {} }
   }
 
   const isDocumentHidden = (doc: any) => !!getDocumentSecurity(doc)?.hidden
   const isDocumentLocked = (doc: any) => !!getDocumentSecurity(doc)?.passwordHash
   const isDocumentUnlocked = (doc: any) => isAdmin || !!unlockedDocumentIds[doc.id]
 
-  const persistDocumentState = async (docId: string, updater: (current: DocumentSecurity) => DocumentSecurity) => {
-    const next = { ...documentSecurity }
-    next[docId] = updater(next[docId] || {})
-    if (!next[docId].hidden && !next[docId].passwordHash) delete next[docId]
-    const { error } = await supabase.from('library_documents').update({ description: encodeDocumentSecurity(next[docId] || {}) }).eq('id', docId)
-    if (error) {
-      throw error
-    }
-    saveDocumentSecurity(next)
-  }
-
   const requestDocumentAccess = async (doc: any) => {
-    if (isDocumentHidden(doc) && !isAdmin) {
-      alert('Tài liệu này đang ẩn.')
-      return false
-    }
-
+    if (isDocumentHidden(doc) && !isAdmin) { alert('Tài liệu này đang ẩn.'); return false }
     if (isDocumentLocked(doc) && !isDocumentUnlocked(doc)) {
-      const password = window.prompt('Nhập mật khẩu để mở tài liệu')
+      const password = window.prompt('Tài liệu bảo mật. Nhập mật khẩu:')
       if (!password) return false
-
-      const security = getDocumentSecurity(doc)
-      if (!security?.passwordHash || !security.passwordSalt) return false
-
-      const enteredHash = await hashPassword(password, security.passwordSalt)
-      if (enteredHash !== security.passwordHash) {
-        alert('Mật khẩu không đúng.')
-        return false
-      }
-
-      saveUnlockedDocumentIds({ ...unlockedDocumentIds, [doc.id]: true })
+      const sec = getDocumentSecurity(doc)
+      if (!sec?.passwordHash || !sec.passwordSalt) return false
+      if (await hashPassword(password, sec.passwordSalt) !== sec.passwordHash) { alert('Sai mật khẩu!'); return false }
+      setUnlockedDocumentIds(p => { const n = {...p, [doc.id]: true}; try{sessionStorage.setItem(DOCUMENT_UNLOCK_STORAGE_KEY, JSON.stringify(n))}catch(e){}; return n })
     }
-
     return true
-  }
-
-  const toggleDocumentHidden = async (doc: any) => {
-    // Disabled: UI for hiding documents is intentionally removed.
-    // Keeping function as no-op to avoid accidental usage.
-    console.warn('toggleDocumentHidden is disabled in this deployment.')
-    return
-  }
-
-  const toggleDocumentLock = async (doc: any) => {
-    // Disabled: UI for locking documents is intentionally removed.
-    // Keeping function as no-op to avoid accidental usage.
-    console.warn('toggleDocumentLock is disabled in this deployment.')
-    return
   }
 
   const ensureStudentUploadFolder = async (rootFolders: any[]) => {
     if (studentFolderEnsureRef.current) return studentUploadFolderId
     studentFolderEnsureRef.current = true
-
-    const existing = rootFolders.find(folder => (
-      (folder.name === STUDENT_UPLOAD_FOLDER_NAME || folder.name === LEGACY_STUDENT_UPLOAD_FOLDER_NAME)
-      && folder.created_by === currentUserId
-    ))
-    if (existing?.id) {
-      setStudentUploadFolderId(existing.id)
-      return existing.id as string
-    }
-
+    const existing = rootFolders.find(f => (f.name === STUDENT_UPLOAD_FOLDER_NAME || f.name === 'Dành cho học sinh/Sinh viên chia sẻ') && f.created_by === currentUserId)
+    if (existing?.id) { setStudentUploadFolderId(existing.id); return existing.id }
     try {
-      const { data, error } = await supabase
-        .from('library_folders')
-        .insert({ name: STUDENT_UPLOAD_FOLDER_NAME, created_by: currentUserId, parent_id: null })
-        .select('id,name')
-        .single()
-
-      if (!error && data?.id) {
-        setStudentUploadFolderId(data.id)
-        return data.id as string
-      }
-    } catch (error) {
-      console.warn('Không thể tạo folder dành cho student', error)
-    }
-
+      const { data, error } = await supabase.from('library_folders').insert({ name: STUDENT_UPLOAD_FOLDER_NAME, created_by: currentUserId, parent_id: null }).select('id').single()
+      if (!error && data?.id) { setStudentUploadFolderId(data.id); return data.id }
+    } catch (e) {}
     return null
   }
 
-  const isItemVisibleInScope = (item: any, itemKind: 'folder' | 'document', scope: LibraryScope, rootFolderId: string | null, userIdOverride?: string | null) => {
-    if (!isStudentLibrary) return true
+  // ============================================================================
+  // LOGIC ĐỒNG BỘ DỮ LIỆU CHÍNH (FETCH CONTENTS)
+  // ============================================================================
+  const fetchContents = async (folderId: string | null, scopeOverride?: LibraryScope, userIdOverride?: string | null) => {
+    const scope = scopeOverride || libraryScope; const uid = userIdOverride || currentUserId; const reqId = ++fetchContentsRequestRef.current
+    const [fRes, dRes] = await Promise.all([
+      supabase.from('library_folders').select('*').order('created_at', { ascending: false }).eq(folderId ? 'parent_id' : 'parent_id', folderId || null).is(folderId ? '' : 'parent_id', folderId ? null : null),
+      supabase.from('library_documents').select('*').order('created_at', { ascending: false }).eq(folderId ? 'folder_id' : 'folder_id', folderId || null).is(folderId ? '' : 'folder_id', folderId ? null : null)
+    ])
+    
+    // Tối ưu hàm filter ngay trong quá trình nạp
+    const visibleF = (fRes.data || []).filter(f => !isStudentLibrary || (scope === 'private' ? (folderId === null ? f.id === studentUploadFolderId || f.created_by === uid : f.created_by === uid || f.id === studentUploadFolderId) : !f.created_by || adminUploaderIds.includes(f.created_by)))
+    const visibleD = (dRes.data || []).map((d: any) => ({ ...d, _security: getDocumentSecurity(d) })).filter((d: any) => (isAdmin || !d._security?.hidden) && (!isStudentLibrary || (scope === 'private' ? d.created_by === uid || d.folder_id === studentUploadFolderId : !d.created_by || adminUploaderIds.includes(d.created_by))))
 
-    const effectiveUserId = userIdOverride ?? currentUserId
-    const ownedByCurrentUser = !!effectiveUserId && item?.created_by === effectiveUserId
-    const isStudentRootContainer = itemKind === 'folder' && item?.id === studentUploadFolderId
-
-    if (!effectiveUserId) return true
-
-    if (scope === 'private') {
-      if (rootFolderId === null) return isStudentRootContainer || ownedByCurrentUser
-      return ownedByCurrentUser || isStudentRootContainer
+    if (reqId === fetchContentsRequestRef.current) {
+      setFolders(visibleF); setDocuments(visibleD)
+      try {
+        const cMap: any = {}; visibleF.forEach(f => { if(f.color || f.icon) cMap[f.id] = {color: f.color, icon: f.icon} })
+        if (Object.keys(cMap).length > 0) { setFolderCustomizations(cMap); localStorage.setItem('library_folder_customizations', JSON.stringify(cMap)) }
+      } catch(e) {}
     }
-
-    if (rootFolderId === null) return !isStudentRootContainer && !ownedByCurrentUser
-    return !ownedByCurrentUser && !isStudentRootContainer
+    return { folders: visibleF, documents: visibleD }
   }
 
-  const syncLibraryScope = async (nextScope: LibraryScope, nextUserId = currentUserId) => {
-    setLibraryScope(nextScope)
-    try { localStorage.setItem(LIBRARY_SCOPE_STORAGE_KEY, nextScope) } catch (error) { /* ignore */ }
-    setSearchQuery('')
-    setSearchFoldersResults(null)
-    setSearchDocsResults(null)
-    setSearchExamsResults(null)
-    setSearchLoading(false)
-    setPreviewDoc(null)
-    setSelectedItems([])
-    setIsSelectMode(false)
-    setClipboard(null)
-    setFolders([])
-    setDocuments([])
-    setFolderPath([{ id: null, name: getHomeLabel() }])
-    const rootData = await fetchContents(null, nextScope, nextUserId)
-
-    if (nextScope === 'private') {
-      const targetFolderId = await ensureStudentUploadFolder(rootData?.folders || [])
-      if (targetFolderId) {
-        const specialFolder = rootData?.folders?.find((folder: any) => folder.id === targetFolderId)
-        setFolderPath([{ id: null, name: getHomeLabel() }, { id: targetFolderId, name: specialFolder?.name || STUDENT_UPLOAD_FOLDER_NAME }])
-        await fetchContents(targetFolderId, nextScope, nextUserId)
-      }
-    }
-  }
-
+  // Khởi tạo App
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
+      if (!user) return router.push('/login')
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      setCurrentUserId(user.id)
-      setUserRole(profile?.role || 'student')
+      setCurrentUserId(user.id); setUserRole(profile?.role || 'student')
 
-      let initialScope: LibraryScope = 'private'
-      try {
-        const savedScope = localStorage.getItem(LIBRARY_SCOPE_STORAGE_KEY)
-        if (savedScope === 'private' || savedScope === 'shared') initialScope = savedScope
-      } catch (error) { /* ignore */ }
-
-      if ((profile?.role || 'student') !== 'student') {
-        initialScope = 'shared'
-      }
-
-      // fetch admin/collab ids to treat their uploads as "shared"
-      try {
-        const { data: admins } = await supabase.from('profiles').select('id,role').in('role', ['admin','collab'])
-        if (admins && Array.isArray(admins)) setAdminUploaderIds(admins.map((a: any) => a.id))
-      } catch (e) { /* ignore */ }
-
-      setLibraryScope(initialScope)
+      let initScope: LibraryScope = profile?.role === 'student' ? 'private' : 'shared'
+      try { const s = localStorage.getItem(LIBRARY_SCOPE_STORAGE_KEY); if (profile?.role === 'student' && (s === 'private' || s === 'shared')) initScope = s } catch(e) {}
+      try { const { data: admins } = await supabase.from('profiles').select('id').in('role', ['admin','collab']); if (admins) setAdminUploaderIds(admins.map(a => a.id)) } catch(e) {}
       
-      const rootData = await fetchContents(null, initialScope, user.id)
+      setLibraryScope(initScope)
+      const rootData = await fetchContents(null, initScope, user.id)
+      
+      try { const r = sessionStorage.getItem(DOCUMENT_UNLOCK_STORAGE_KEY); if (r) setUnlockedDocumentIds(JSON.parse(r)) } catch(e) {}
 
-      try {
-        const rawUnlocked = sessionStorage.getItem(DOCUMENT_UNLOCK_STORAGE_KEY)
-        if (rawUnlocked) setUnlockedDocumentIds(JSON.parse(rawUnlocked))
-      } catch (error) { /* ignore */ }
-
-      if (initialScope === 'private' && !readSearchParam('folder') && !readSearchParam('preview')) {
-        const targetFolderId = await ensureStudentUploadFolder(rootData?.folders || [])
-        if (targetFolderId) {
-          const specialFolder = rootData?.folders?.find((folder: any) => folder.id === targetFolderId)
-          setFolderPath([{ id: null, name: getHomeLabel() }, { id: targetFolderId, name: specialFolder?.name || STUDENT_UPLOAD_FOLDER_NAME }])
-          await fetchContents(targetFolderId, initialScope, user.id)
-        } else {
-          setFolderPath([{ id: null, name: getHomeLabel() }])
-        }
-      } else {
-        setFolderPath([{ id: null, name: getHomeLabel() }])
+      if (initScope === 'private' && !searchParams?.folder && !searchParams?.preview) {
+        const targetId = await ensureStudentUploadFolder(rootData?.folders || [])
+        if (targetId) { setFolderPath([{id: null, name: 'Sen Home'}, {id: targetId, name: rootData?.folders?.find((f:any)=>f.id===targetId)?.name || STUDENT_UPLOAD_FOLDER_NAME}]); await fetchContents(targetId, initScope, user.id) }
       }
-
       setLoading(false)
     }
-
-    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
-      document.documentElement.classList.add('dark')
-    }
+    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark')
     init()
   }, [router])
 
-  const routeQueryRef = useRef<string | null>(null)
-  const routeQueryKey = useMemo(() => JSON.stringify(searchParams), [searchParams])
-
-  useEffect(() => {
-    if (routeQueryRef.current === routeQueryKey) return
-    routeQueryRef.current = routeQueryKey
-
-    const applyRouteState = async () => {
-      try {
-        const previewId = readSearchParam('preview')
-        const folderId = readSearchParam('folder')
-        setIsEmbedPreview(readSearchParam('embed') === '1')
-
-        if (previewId) {
-          const { data, error } = await supabase.from('library_documents').select('*').eq('id', previewId).single()
-          if (!error && data) {
-            const allowed = await requestDocumentAccess(data)
-            if (allowed) setPreviewDoc(data)
-          }
-        } else {
-          setPreviewDoc(null)
-        }
-
-        if (folderId) {
-          const chain: { id: string | null, name: string }[] = []
-          let currentId: string | null = folderId
-          let guard = 0
-
-          while (currentId && guard < 20) {
-            const { data: folderData, error }: { data: { id: string, name: string, parent_id: string | null } | null, error: any } = await supabase.from('library_folders').select('id,name,parent_id').eq('id', currentId).single()
-            if (error || !folderData) break
-            chain.unshift({ id: folderData.id, name: folderData.name })
-            currentId = folderData.parent_id || null
-            guard += 1
-          }
-
-          const allowsFolder = !isStudentLibrary || libraryScope === 'shared' || chain.some(step => step.id === studentUploadFolderId)
-
-          if (chain.length > 0 && allowsFolder) {
-            const rootPath = [{ id: null, name: getHomeLabel() }, ...chain]
-            setFolderPath(rootPath)
-            await fetchContents(chain[chain.length - 1].id)
-          } else if (!previewId) {
-            setFolderPath([{ id: null, name: getHomeLabel() }])
-            await fetchContents(null)
-          }
-        } else if (!previewId) {
-          setFolderPath([{ id: null, name: getHomeLabel() }])
-          await fetchContents(null)
-        }
-      } catch (e) { /* ignore */ }
-    }
-
-    applyRouteState()
-  }, [routeQueryKey, searchParams, libraryScope, studentUploadFolderId, isStudentLibrary])
-
-  // Debounce searchQuery -> globalSearch
-  useEffect(() => {
-    if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current)
-    if (!searchQuery || searchQuery.trim().length < 2) {
-      searchRequestRef.current += 1
-      setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); setSearchLoading(false); return
-    }
-    // @ts-ignore
-    searchDebounceRef.current = window.setTimeout(() => { globalSearch(searchQuery) }, 500)
-    return () => { if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current) }
-  }, [searchQuery, libraryScope])
-
-  // Fullscreenchange listener to update state when user exits fullscreen
-  useEffect(() => {
-    const onFull = () => {
-      const fs = document.fullscreenElement || (document as any).webkitFullscreenElement
-      setIsPreviewFullscreen(!!fs)
-      if (!fs) {
-        // when exiting fullscreen, if preview was open we keep it
-      }
-    }
-    document.addEventListener('fullscreenchange', onFull)
-    document.addEventListener('webkitfullscreenchange', onFull)
-    return () => {
-      document.removeEventListener('fullscreenchange', onFull)
-      document.removeEventListener('webkitfullscreenchange', onFull)
-    }
-  }, [])
-
-  const scoreResult = (text: string, query: string) => {
-    const source = text.toLowerCase()
-    const needle = query.toLowerCase().trim()
-    if (!needle) return 0
-    if (source === needle) return 100
-    if (source.startsWith(needle)) return 80
-    if (source.includes(needle)) return 60
-    const words = needle.split(/\s+/).filter(Boolean)
-    const matchedWords = words.filter(word => source.includes(word)).length
-    return matchedWords * 10
-  }
-
-  const rankByQuery = (items: any[], query: string, labelGetter: (item: any) => string) => {
-    return [...items].sort((a, b) => scoreResult(labelGetter(b), query) - scoreResult(labelGetter(a), query))
-  }
-
-  const buildSearchBlob = (item: any, folderName?: string) => {
-    return Object.entries(item)
-      .filter(([key, value]) => {
-        if (key === '_security') return false
-        if (key === 'description' && typeof value === 'string' && value.startsWith(DOCUMENT_SECURITY_PREFIX)) return false
-        return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-      })
-      .map(([, value]) => String(value))
-      .concat(folderName ? [folderName] : [])
-      .join(' ')
-      .toLowerCase()
-  }
-
+  // ============================================================================
+  // TÌM KIẾM GLOBAL & SENAI SEARCH
+  // ============================================================================
+  const scoreRes = (txt: string, q: string) => { const s = txt.toLowerCase(); const n = q.toLowerCase().trim(); if(!n) return 0; if(s===n) return 100; if(s.startsWith(n)) return 80; if(s.includes(n)) return 60; return n.split(/\s+/).filter(w=>s.includes(w)).length * 10 }
+  
   const globalSearch = async (q: string) => {
-    const qtrim = q.trim()
-    if (!qtrim) {
-      searchRequestRef.current += 1
-      setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); setSearchLoading(false); return
-    }
-    const requestId = ++searchRequestRef.current
+    if (!q.trim()) { setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); return }
     setSearchLoading(true)
     try {
-      const [fRes, dRes, eRes] = await Promise.all([
-        supabase.from('library_folders').select('*').limit(1000),
-        supabase.from('library_documents').select('*').limit(1000),
-        supabase.from('exams').select('*').limit(1000)
-      ])
-      if (requestId !== searchRequestRef.current) return
-
-      const folders = fRes.data || []
-      const folderMap = new Map<string, any>(folders.map((folder: any) => [folder.id, folder]))
-      const folderBlobQuery = qtrim.toLowerCase()
-
-      const searchFolders = folders.filter((folder: any) => isItemVisibleInScope(folder, 'folder', libraryScope, null, currentUserId) && buildSearchBlob(folder).includes(folderBlobQuery))
-
-      const searchDocs = (dRes.data || [])
-        .map((doc: any) => ({ ...doc, folder_name: doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : '' }))
-        .filter((doc: any) => (isAdmin || !getDocumentSecurity(doc)?.hidden) && isItemVisibleInScope(doc, 'document', libraryScope, null, currentUserId) && (buildSearchBlob(doc, doc.folder_name).includes(folderBlobQuery) || (doc.folder_name && scoreResult(doc.folder_name, qtrim) > 0)))
-
-      const searchExams = (eRes.data || [])
-        .map((exam: any) => ({ ...exam, folder_name: exam.folder_id ? folderMap.get(exam.folder_id)?.name || exam.folder_name || '' : exam.folder_name || '' }))
-        .filter((exam: any) => buildSearchBlob(exam, exam.folder_name).includes(folderBlobQuery) || (exam.folder_name && scoreResult(exam.folder_name, qtrim) > 0))
-
-      setSearchFoldersResults(rankByQuery(searchFolders, qtrim, item => buildSearchBlob(item)))
-      setSearchDocsResults(rankByQuery(searchDocs, qtrim, item => buildSearchBlob(item, item.folder_name)))
-      setSearchExamsResults(rankByQuery(searchExams, qtrim, item => buildSearchBlob(item, item.folder_name)))
-    } catch (e) { console.warn('Search failed', e) }
-    if (requestId === searchRequestRef.current) setSearchLoading(false)
+      const [fRes, dRes, eRes] = await Promise.all([supabase.from('library_folders').select('*').limit(1000), supabase.from('library_documents').select('*').limit(1000), supabase.from('exams').select('*').limit(1000)])
+      const fMap = new Map((fRes.data || []).map((f:any) => [f.id, f]))
+      setSearchFoldersResults((fRes.data || []).filter((f:any) => f.name.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.name, q) - scoreRes(a.name, q)))
+      setSearchDocsResults((dRes.data || []).filter((d:any) => d.title.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.title, q) - scoreRes(a.title, q)))
+      setSearchExamsResults((eRes.data || []).filter((e:any) => e.title.toLowerCase().includes(q.toLowerCase())).sort((a:any, b:any) => scoreRes(b.title, q) - scoreRes(a.title, q)))
+    } catch(e) {}
+    setSearchLoading(false)
   }
 
   useEffect(() => {
+    if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current)
+    if (!searchQuery || searchQuery.trim().length < 2) { setSearchFoldersResults(null); setSearchDocsResults(null); setSearchExamsResults(null); return }
+    // @ts-ignore
+    searchDebounceRef.current = window.setTimeout(() => globalSearch(searchQuery), 500)
+    return () => clearTimeout(searchDebounceRef.current!)
+  }, [searchQuery])
+
+  // SENAI Chat Logic
+  useEffect(() => { if (aiChatScrollRef.current) aiChatScrollRef.current.scrollTop = aiChatScrollRef.current.scrollHeight }, [aiMessages, isAiSearching])
+  const handleAskSenAI = async (e: React.FormEvent) => {
+    e.preventDefault(); const q = aiQuery.trim(); if (!q || isAiSearching) return;
+    setAiQuery(''); setAiMessages(p => [...p, { role: 'user', text: q }]); setIsAiSearching(true)
     try {
-      const raw = localStorage.getItem('library_folder_customizations')
-      if (raw) setFolderCustomizations(JSON.parse(raw))
-    } catch (e) { /* ignore */ }
-  }, [])
-
-  const fetchContents = async (folderId: string | null, scopeOverride?: LibraryScope, userIdOverride?: string | null) => {
-    const effectiveScope = scopeOverride || libraryScope
-    const effectiveUserId = userIdOverride || currentUserId
-    const requestId = ++fetchContentsRequestRef.current
-
-    const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
-    if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null)
-
-    const docQuery = supabase.from('library_documents').select('*').order('created_at', { ascending: false })
-    if (folderId) docQuery.eq('folder_id', folderId); else docQuery.is('folder_id', null)
-
-    const [folderRes, docRes] = await Promise.all([folderQuery, docQuery])
-    const fdata = folderRes.data || []
-    const docsWithSecurity = (docRes.data || []).map((doc: any) => ({
-      ...doc,
-      _security: getDocumentSecurity(doc)
-    }))
-
-    const visibleFolders = fdata.filter(folder => {
-      if (isStudentLibrary) {
-        if (effectiveScope === 'private') {
-          if (folderId === null) return folder.id === studentUploadFolderId || (effectiveUserId && folder.created_by === effectiveUserId)
-          return (effectiveUserId && folder.created_by === effectiveUserId) || folder.id === studentUploadFolderId
-        }
-        // shared mode for students: only show folders uploaded by admins/collab or public (created_by null)
-        return (folder.created_by == null) || adminUploaderIds.includes(folder.created_by)
-      }
-
-      // admin/collab: see everything
-      return true
-    })
-
-    const visibleDocs = docsWithSecurity.filter((doc: any) => {
-      if (!(isAdmin || !doc._security?.hidden)) return false
-      if (isStudentLibrary) {
-        if (effectiveScope === 'private') return (doc.created_by === effectiveUserId) || (doc.folder_id === studentUploadFolderId)
-        return (doc.created_by == null) || adminUploaderIds.includes(doc.created_by)
-      }
-      return true
-    })
-
-    if (requestId === fetchContentsRequestRef.current) {
-      setFolders(visibleFolders)
-      // Đồng bộ màu/icon từ DB vào trạng thái client và localStorage
-      try {
-        const map: Record<string, { color?: string, icon?: string }> = {}
-        for (const f of fdata) {
-          if (f.id && (f.color || f.icon)) map[f.id] = { color: f.color, icon: f.icon }
-        }
-        if (Object.keys(map).length > 0) {
-          setFolderCustomizations(map)
-          try { localStorage.setItem('library_folder_customizations', JSON.stringify(map)) } catch (e) {}
-        }
-      } catch (e) { /* ignore */ }
-      setDocuments(visibleDocs)
-
-      const nextSecurity: DocumentSecurityMap = {}
-      for (const doc of docsWithSecurity) {
-        if (doc._security && (doc._security.hidden || doc._security.passwordHash)) {
-          nextSecurity[doc.id] = doc._security
+      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: `Người dùng tìm: "${q}". Trích xuất 1 TỪ KHÓA chính để điền vào thanh tìm kiếm. Không giải thích.`, history: [] }) })
+      const data = await res.json()
+      if (data.text) {
+        if (data.text.trim().length > 30) setAiMessages(p => [...p, { role: 'model', text: data.text.trim() }])
+        else {
+          setAiMessages(p => [...p, { role: 'model', text: `Mình đang lọc từ khóa **"${data.text.trim()}"** trên toàn hệ thống nhé!` }])
+          setSearchQuery(data.text.trim().replace(/["']/g, ''))
         }
       }
-      setDocumentSecurity(prev => {
-        const merged = { ...prev }
-        for (const doc of docsWithSecurity) {
-          if (nextSecurity[doc.id]) merged[doc.id] = nextSecurity[doc.id]
-          else delete merged[doc.id]
-        }
-        return merged
-      })
-    }
-
-    return { folders: visibleFolders, documents: visibleDocs }
+    } catch (e) { setAiMessages(p => [...p, { role: 'model', text: 'Lỗi máy chủ AI.', isError: true }]) }
+    setIsAiSearching(false)
   }
 
-  const handleOpenFolder = async (folderId: string, folderName: string) => {
-    setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
-    setFolderPath([...folderPath, { id: folderId, name: folderName }])
-    await fetchContents(folderId)
+  // ============================================================================
+  // CÁC HÀM TƯƠNG TÁC VẬT LÝ (CRUD, CLIPBOARD, DRAG & DROP)
+  // ============================================================================
+  const syncLibraryScope = async (next: LibraryScope) => { setLibraryScope(next); localStorage.setItem(LIBRARY_SCOPE_STORAGE_KEY, next); setSearchQuery(''); setSelectedItems([]); setIsSelectMode(false); setClipboard(null); setFolderPath([{id: null, name: 'Sen Home'}]); const r = await fetchContents(null, next); if (next === 'private') { const t = await ensureStudentUploadFolder(r.folders); if (t) { setFolderPath([{id:null, name:'Sen Home'}, {id:t, name:STUDENT_UPLOAD_FOLDER_NAME}]); fetchContents(t, next) } } }
+  
+  // Đã fix lỗi Cannot find name 'handleOpenDocument'
+  const handleOpenDocument = async (doc: any) => { const allowed = await requestDocumentAccess(doc); if (allowed) setPreviewDoc(doc) }
+  const handleOpenFolder = async (id: string, name: string) => { setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]); setFolderPath([...folderPath, { id, name }]); fetchContents(id) }
+  const handleNavigateBreadcrumb = async (idx: number) => { setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]); const np = folderPath.slice(0, idx + 1); setFolderPath(np); fetchContents(np[np.length - 1].id) }
+  
+  const handleCreateFolder = async () => { if (!newFolderName.trim()) return; const { error } = await supabase.from('library_folders').insert({ name: newFolderName, created_by: currentUserId, parent_id: currentFolderId }); if (!error) { setShowFolderModal(false); setNewFolderName(''); fetchContents(currentFolderId) } else alert("Lỗi: " + error.message) }
+  const handleRename = async () => { if (!renameInput.trim() || !renameTarget) return; try { await supabase.from(renameTarget.type === 'folder' ? 'library_folders' : 'library_documents').update(renameTarget.type === 'folder' ? {name: renameInput.trim()} : {title: renameInput.trim()}).eq('id', renameTarget.id); setShowRenameModal(false); setIsSelectMode(false); setSelectedItems([]); fetchContents(currentFolderId) } catch (e) { alert("Lỗi đổi tên!") } }
+  
+  // Đã fix lỗi Cannot find name 'handleSetClipboard'
+  const toggleSelection = (id: string, type: 'folder' | 'document', data: any) => setSelectedItems(p => p.find(i => i.id === id) ? p.filter(i => i.id !== id) : [...p, { id, type, data }])
+  const handleSetClipboard = (action: 'cut' | 'copy') => { setClipboard({ action, items: selectedItems }); setSelectedItems([]); setIsSelectMode(false) }
+  const handlePaste = async () => {
+    if (!clipboard) return; if (clipboard.action === 'cut' && clipboard.items.some(i => i.type === 'folder' && i.id === currentFolderId)) return alert("Lỗi Logic đệ quy!");
+    setLoading(true); try {
+      for (const item of clipboard.items) {
+        if (clipboard.action === 'cut') await supabase.from(item.type === 'folder' ? 'library_folders' : 'library_documents').update(item.type === 'folder' ? {parent_id: currentFolderId} : {folder_id: currentFolderId}).eq('id', item.id)
+        else await supabase.from(item.type === 'folder' ? 'library_folders' : 'library_documents').insert(item.type === 'folder' ? {name: item.data.name + ' (Sao)', parent_id: currentFolderId, created_by: currentUserId} : {title: item.data.title + ' (Sao)', drive_file_id: item.data.drive_file_id, folder_id: currentFolderId, created_by: currentUserId})
+      }
+      setClipboard(null); fetchContents(currentFolderId)
+    } catch(e) { alert("Lỗi dán!") } setLoading(false)
   }
+  const handleBulkDelete = async () => { if(!confirm(`Xóa ${selectedItems.length} mục?`)) return; setLoading(true); try { for (const item of selectedItems) await supabase.from(item.type === 'folder' ? 'library_folders' : 'library_documents').delete().eq('id', item.id); setSelectedItems([]); setIsSelectMode(false); fetchContents(currentFolderId) } catch(e){} setLoading(false) }
 
-  const handleNavigateBreadcrumb = async (index: number) => {
-    setSearchQuery(''); setIsSelectMode(false); setSelectedItems([]);
-    const newPath = folderPath.slice(0, index + 1)
-    setFolderPath(newPath)
-    await fetchContents(newPath[newPath.length - 1].id)
-  }
-
-  const handleCreateFolder = async () => {
-    if (!newFolderName.trim()) return
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('library_folders').insert({ 
-      name: newFolderName, created_by: user?.id, parent_id: currentFolderId 
-    })
-    if (!error) {
-      setShowFolderModal(false); setNewFolderName(''); fetchContents(currentFolderId)
-    } else { alert("Lỗi tạo thư mục: " + error.message) }
-  }
+  const handleDragStart = (e: React.DragEvent, id: string, type: 'folder'|'document') => { if (!canManageLibrary) return; setDraggedItem({ id, type }); e.dataTransfer.effectAllowed = "move" }
+  const handleDrop = async (e: React.DragEvent, targetId: string | null) => { e.preventDefault(); setDragOverId(null); if (!draggedItem || (draggedItem.type === 'folder' && draggedItem.id === targetId)) return; try { await supabase.from(draggedItem.type === 'document' ? 'library_documents' : 'library_folders').update(draggedItem.type === 'document' ? {folder_id: targetId} : {parent_id: targetId}).eq('id', draggedItem.id); fetchContents(currentFolderId) } catch(err){} setDraggedItem(null) }
 
   const handleUploadDocument = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (docFiles.length === 0) return
-
+    e.preventDefault(); if (docFiles.length === 0) return
     try {
-      setUploadStatus({ type: 'uploading', message: `Bắt đầu xử lý ${docFiles.length} tài liệu...` })
-      const { data: { user } } = await supabase.auth.getUser()
-      let uploadFolderId: string | null = currentFolderId
-
-      if (libraryScope === 'private' && userRole === 'student' && !uploadFolderId) {
-        uploadFolderId = studentUploadFolderId || await ensureStudentUploadFolder(folders)
-      }
-
-      if (libraryScope === 'private' && !uploadFolderId) {
-        throw new Error('Chưa xác định được thư mục đích để tải lên.')
-      }
-
+      setUploadStatus({ type: 'uploading', message: `Xử lý ${docFiles.length} tài liệu...` }); let uFolder = currentFolderId
+      if (libraryScope === 'private' && isStudentLibrary && !uFolder) uFolder = studentUploadFolderId || await ensureStudentUploadFolder(folders)
       for (let i = 0; i < docFiles.length; i++) {
-        const file = docFiles[i];
-        const finalTitle = (docFiles.length === 1 && docTitle.trim()) ? docTitle.trim() : file.name;
-
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang khởi tạo kết nối Google Drive: ${file.name}...` })
-
-        const uploadUrl = await initGoogleDriveUpload(finalTitle, file.type)
-
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đẩy file trực tiếp lên Google Drive...` })
-        const uploadedData = await uploadFileToGoogleDrive(uploadUrl, file, finalTitle)
-        const fileId = uploadedData?.id
-
-        if (!fileId) throw new Error('Không nhận được mã file từ Google Drive.')
-
-        setUploadStatus({ type: 'uploading', message: `[${i + 1}/${docFiles.length}] Đang đồng bộ vào Thư viện...` })
-        const { error: dbError } = await supabase.from('library_documents').insert({
-          folder_id: uploadFolderId,
-          title: finalTitle,
-          drive_file_id: fileId,
-          created_by: libraryScope === 'shared' ? null : user?.id
-        })
-        if (dbError) throw new Error(dbError.message)
+        const f = docFiles[i]; const t = (docFiles.length === 1 && docTitle) ? docTitle : f.name
+        setUploadStatus({ type: 'uploading', message: `[${i+1}/${docFiles.length}] Up Google Drive...` })
+        const url = await initGoogleDriveUpload(t, f.type); const d = await uploadFileToGoogleDrive(url, f, t)
+        if (!d?.id) throw new Error('Lỗi Drive')
+        await supabase.from('library_documents').insert({ folder_id: uFolder, title: t, drive_file_id: d.id, created_by: libraryScope==='shared' ? null : currentUserId })
       }
-      
-      setUploadStatus({ type: 'success', message: `Tuyệt vời! Đã tải thành công ${docFiles.length} tài liệu!` })
-      setDocTitle(''); setDocFiles([]); 
-      setTimeout(() => { setShowDocModal(false); setUploadStatus({type: 'idle', message: ''}) }, 2000);
-      fetchContents(currentFolderId)
-    } catch (err: any) { setUploadStatus({ type: 'error', message: err.message || 'Có lỗi xảy ra.' }) }
+      setUploadStatus({ type: 'success', message: 'Thành công!' }); setDocTitle(''); setDocFiles([]); setTimeout(() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}) }, 1000); fetchContents(currentFolderId)
+    } catch (e: any) { setUploadStatus({ type: 'error', message: e.message }) }
   }
 
-  const handleRename = async () => {
-    if (!renameInput.trim() || !renameTarget) return;
-    try {
-      if (renameTarget.type === 'folder') {
-        await supabase.from('library_folders').update({ name: renameInput.trim() }).eq('id', renameTarget.id);
-      } else {
-        await supabase.from('library_documents').update({ title: renameInput.trim() }).eq('id', renameTarget.id);
-      }
-      setShowRenameModal(false); setIsSelectMode(false); setSelectedItems([]);
-      fetchContents(currentFolderId);
-    } catch (e) {
-      alert("Lỗi đổi tên!");
-    }
-  }
+  // Tiện ích UI
+  const getFileKind = (t: string) => t.match(/\.(mp4|mov|webm)$/i) ? 'video' : t.match(/\.(mp3|wav)$/i) ? 'audio' : t.match(/\.(png|jpg|jpeg)$/i) ? 'image' : t.match(/\.pdf$/i) ? 'pdf' : 'other'
+  let dFolders = searchFoldersResults || folders.filter(f => f.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
+  let dDocs = searchDocsResults || documents.filter(d => d.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
+  if (sortByName) { dFolders.sort((a,b)=>a.name.localeCompare(b.name)); dDocs.sort((a,b)=>a.title.localeCompare(b.title)) }
+  const pUrls = useMemo(() => previewDoc ? { preview: `/api/drive/stream?fileId=${previewDoc.drive_file_id}`, download: `/api/drive/stream?fileId=${previewDoc.drive_file_id}&download=1`, open: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/view` } : {preview:'', download:'', open:''}, [previewDoc])
 
-  const handleDragStart = (e: React.DragEvent, id: string, type: 'folder' | 'document') => {
-    if (userRole !== 'admin' && userRole !== 'collab') return;
-    setDraggedItem({ id, type }); e.dataTransfer.effectAllowed = "move"
-  }
-
-  const handleDrop = async (e: React.DragEvent, targetFolderId: string | null) => {
-    e.preventDefault(); e.stopPropagation(); setDragOverId(null);
-    if (!draggedItem) return;
-    if (draggedItem.type === 'folder' && draggedItem.id === targetFolderId) return; 
-
-    try {
-      if (draggedItem.type === 'document') await supabase.from('library_documents').update({ folder_id: targetFolderId }).eq('id', draggedItem.id);
-      else if (draggedItem.type === 'folder') await supabase.from('library_folders').update({ parent_id: targetFolderId }).eq('id', draggedItem.id);
-      fetchContents(currentFolderId);
-    } catch (err) { alert("Lỗi khi di chuyển dữ liệu") }
-    setDraggedItem(null)
-  }
-
-  const toggleSelection = (id: string, type: 'folder' | 'document', data: any) => {
-    setSelectedItems(prev => {
-      const exists = prev.find(i => i.id === id);
-      if (exists) return prev.filter(i => i.id !== id);
-      return [...prev, { id, type, data }];
-    })
-  }
-
-  const handleSetClipboard = (action: 'cut' | 'copy') => {
-    setClipboard({ action, items: selectedItems });
-    setSelectedItems([]); setIsSelectMode(false);
-  }
-
-  const handlePaste = async () => {
-    if (!clipboard) return;
-    if (clipboard.action === 'cut' && clipboard.items.some(i => i.type === 'folder' && i.id === currentFolderId)) {
-      alert("Lỗi Logic: Không thể di chuyển thư mục vào bên trong chính nó!"); return;
-    }
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      for (const item of clipboard.items) {
-        if (clipboard.action === 'cut') {
-          if (item.type === 'folder') await supabase.from('library_folders').update({ parent_id: currentFolderId }).eq('id', item.id);
-          else await supabase.from('library_documents').update({ folder_id: currentFolderId }).eq('id', item.id);
-        } else {
-          if (item.type === 'folder') await supabase.from('library_folders').insert({ name: item.data.name + ' (Bản sao)', parent_id: currentFolderId, created_by: user?.id });
-          else await supabase.from('library_documents').insert({ title: item.data.title + ' (Bản sao)', drive_file_id: item.data.drive_file_id, folder_id: currentFolderId, created_by: user?.id });
-        }
-      }
-      setClipboard(null); await fetchContents(currentFolderId);
-    } catch (err: any) { alert("Có lỗi khi dán: " + err.message); }
-    setLoading(false);
-  }
-
-  const handleBulkDelete = async () => {
-    // allow if admin, or if current user owns all selected items
-    const allOwnedByUserOrShared = selectedItems.every(i => i.data?.created_by === currentUserId || (libraryScope === 'shared' && i.data?.created_by == null))
-    if (!isAdmin && !allOwnedByUserOrShared) return alert("Chỉ Admin hoặc chủ sở hữu mới có quyền xóa các mục này!");
-    if (!confirm(`Xóa vĩnh viễn ${selectedItems.length} mục đã chọn khỏi hệ thống?`)) return;
-    
-    setLoading(true);
-    try {
-      for (const item of selectedItems) {
-        if (item.type === 'folder') await supabase.from('library_folders').delete().eq('id', item.id);
-        else await supabase.from('library_documents').delete().eq('id', item.id);
-      }
-      setSelectedItems([]); setIsSelectMode(false); await fetchContents(currentFolderId);
-    } catch (err) { alert("Lỗi khi xóa hệ thống"); }
-    setLoading(false);
-  }
-
-  const handleDeleteFolder = async (id: string) => {
-    const folder = folders.find(f => f.id === id)
-    if (!folder) return alert('Thư mục không tồn tại')
-    if (!isAdmin && !(folder.created_by === currentUserId || (libraryScope === 'shared' && folder.created_by == null))) return alert('Bạn không có quyền xoá thư mục này')
-    if (!confirm('Bạn có chắc chắn muốn xoá Thư mục này cùng toàn bộ tài liệu bên trong?')) return
-    const { error } = await supabase.from('library_folders').delete().eq('id', id)
-    if (!error) setFolders(folders.filter(f => f.id !== id))
-  }
-  const handleDeleteDocument = async (id: string) => {
-    const doc = documents.find(d => d.id === id)
-    if (!doc) return alert('Tài liệu không tồn tại')
-    if (!isAdmin && !(doc.created_by === currentUserId || (libraryScope === 'shared' && doc.created_by == null))) return alert('Bạn không có quyền xoá tài liệu này')
-    if (!confirm('Xoá vĩnh viễn tài liệu này khỏi hệ thống?')) return
-    const { error } = await supabase.from('library_documents').delete().eq('id', id)
-    if (!error) setDocuments(documents.filter(d => d.id !== id))
-  }
-
-  const openFolderSettings = (folder: any) => {
-    setFolderSettingsTarget(folder)
-    const meta = folderCustomizations[folder.id] || {}
-    setFolderSettingsColor(meta.color)
-    setFolderSettingsIcon(meta.icon)
-    setShowFolderSettingsModal(true)
-  }
-
-  const saveFolderSettings = () => {
-    if (!folderSettingsTarget) return
-    const id = folderSettingsTarget.id
-    const next = { ...folderCustomizations, [id]: { color: folderSettingsColor, icon: folderSettingsIcon } }
-    setFolderCustomizations(next)
-    try { localStorage.setItem('library_folder_customizations', JSON.stringify(next)) } catch (e) {}
-    // Cập nhật vào Supabase để đồng bộ giữa thiết bị
-    (async () => {
-      try {
-        await supabase.from('library_folders').update({ color: folderSettingsColor || null, icon: folderSettingsIcon || null }).eq('id', id)
-        // Cập nhật nhanh state folders
-        setFolders(prev => prev.map(f => f.id === id ? { ...f, color: folderSettingsColor, icon: folderSettingsIcon } : f))
-      } catch (e) { console.warn('Không thể lưu cấu hình thư mục lên DB', e) }
-    })()
-    setShowFolderSettingsModal(false)
-  }
-
-  const handleOpenDocument = async (doc: any) => {
-    const allowed = await requestDocumentAccess(doc)
-    if (!allowed) return
-    setPreviewDoc(doc)
-  }
-
-  // ÁP DỤNG THUẬT TOÁN TÌM KIẾM & SẮP XẾP TỰ NHIÊN (NATURAL SORT)
-  // Helper to detect file kind from title extension
-  const getFileKind = (title: string) => {
-    const t = title.toLowerCase()
-    if (t.match(/\.(mp4|mov|webm|mkv)$/)) return 'video'
-    if (t.match(/\.(mp3|wav|ogg|m4a)$/)) return 'audio'
-    if (t.match(/\.(jpe?g|png|gif|bmp|webp|heic)$/)) return 'image'
-    if (t.match(/\.pdf$/)) return 'pdf'
-    return 'other'
-  }
-
-  let displayFolders = searchFoldersResults !== null ? (searchFoldersResults) : folders.filter(f => f.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
-  let displayDocuments = searchDocsResults !== null
-    ? (searchDocsResults)
-    : documents.filter(d => d.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()) && (isAdmin || !getDocumentSecurity(d)?.hidden))
-
-  if (sortByName) {
-    displayFolders.sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' }));
-    displayDocuments.sort((a, b) => a.title.localeCompare(b.title, 'vi', { numeric: true, sensitivity: 'base' }));
-  }
-
-  // TỐI ƯU URL PHỤC VỤ PREVIEW VÀ DIRECT DOWNLOAD TRÊN IPHONE
-  const proctorUrls = useMemo(() => {
-    if (!previewDoc) return { preview: '', download: '', driveOpen: '' };
-    return {
-      preview: `/api/drive/stream?fileId=${previewDoc.drive_file_id}`,
-      download: `/api/drive/stream?fileId=${previewDoc.drive_file_id}&download=1`,
-      driveOpen: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/view`
-    };
-  }, [previewDoc])
-
-  if (loading) return (
-    <div className="app-shell min-h-screen flex items-center justify-center font-bold text-blue-600 bg-transparent animate-in fade-in duration-500">
-      <div className="flex flex-col items-center gap-4">
-        <div className="relative">
-          <div className="absolute inset-0 bg-blue-400 rounded-full blur-lg opacity-20 animate-pulse"></div>
-          <Loader2 className="w-12 h-12 animate-spin relative" />
-        </div>
-        <p className="text-lg font-bold">Đang khởi tạo thư viện số...</p>
-      </div>
-    </div>
-  )
-
-  if (isEmbedPreview && previewDoc) {
-    return (
-      <div className="w-full h-full min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">Xem nhanh nội bộ</p>
-            <h3 className="font-black truncate">{previewDoc.title}</h3>
-          </div>
-          <button onClick={() => router.push(`/library?preview=${previewDoc.id}`)} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shrink-0">
-            Mở chi tiết
-          </button>
-        </div>
-        <div className="flex-1 min-h-0 relative bg-slate-100 dark:bg-slate-950">
-          <div ref={previewRef} className="absolute inset-0 flex items-center justify-center">
-            {(() => {
-              const kind = getFileKind(previewDoc.title || '')
-              if (kind === 'pdf') {
-                return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
-              }
-              if (kind === 'image') {
-                return <img src={proctorUrls.download} alt={previewDoc.title} className="max-h-full max-w-full object-contain" />
-              }
-              if (kind === 'video') {
-                return <video controls src={proctorUrls.download} className="max-h-full max-w-full bg-black" />
-              }
-              if (kind === 'audio') {
-                return <audio controls src={proctorUrls.download} className="w-full px-4" />
-              }
-              return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
-            })()}
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // ============================================================================
+  // RENDER GIAO DIỆN CHÍNH
+  // ============================================================================
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-500" /></div>
 
   return (
-    <div className="app-shell min-h-screen bg-transparent p-4 md:p-8 relative text-slate-900 dark:text-slate-100 font-sans overflow-x-hidden pb-32">
-      <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-gradient-to-bl from-blue-400/40 to-cyan-400/30 dark:from-blue-800/40 dark:to-cyan-900/30 rounded-full blur-[120px] pointer-events-none"></div>
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-32 transition-colors duration-500">
+      
+      {/* 🌟 Nền Ambient Bóng Kính */}
+      <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/5 dark:from-indigo-900/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
-      {/* 🌟 WINDOW LIVE PREVIEW (XEM FILE & TẢI TRỰC TIẾP KHÔNG BỊ VĂNG KHỎI WEB) */}
+      {/* 🌟 MODALS (Đã thu gọn css) */}
       {previewDoc && (
-        <div className="fixed inset-0 z-[999] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-5xl h-[90vh] rounded-[3rem] shadow-2xl border border-white/20 dark:border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
-            
-            {/* Header toolbar */}
-            <div className="h-16 px-4 sm:px-6 liquid-panel-strong rounded-t-[3rem] border-b dark:border-slate-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <FileText className="w-5 h-5 text-red-500 shrink-0 shadow-sm" />
-                <div className="truncate">
-                  <h3 className="font-extrabold text-sm md:text-base truncate">{previewDoc.title}</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tài liệu số hệ thống</p>
-                </div>
-              </div>
-              
-              {/* Toolbar điều hướng tệp đính kèm */}
-              <div className="flex items-center gap-2">
-                {/* 1. Nút tải trực tiếp */}
-                <a 
-                  href={proctorUrls.download} 
-                  className="p-2 md:px-4 py-2.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 transition-colors flex items-center gap-1.5 text-xs font-bold border border-blue-200/30"
-                  title="Tải tệp trực tiếp"
-                >
-                  <Download className="w-4 h-4" /> <span className="hidden sm:inline">Tải trực tiếp</span>
-                </a>
-                
-                {/* 2. Nút chuyển sang Drive ở góc trên bên phải */}
-                <a 
-                  href={proctorUrls.driveOpen} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="p-2 md:px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5 text-xs font-bold"
-                  title="Mở rộng bằng tab Google Drive"
-                >
-                  <ExternalLink className="w-4 h-4" /> <span className="hidden sm:inline">Mở rộng Drive</span>
-                </a>
-
-                {/* 2.5 Nút fullscreen */}
-                <button onClick={async () => {
-                  try {
-                    const el = previewRef.current || document.documentElement
-                    if (el.requestFullscreen) await el.requestFullscreen()
-                    else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen()
-                    setIsPreviewFullscreen(true)
-                  } catch (e) { console.warn('Fullscreen failed', e) }
-                }} className="p-2 md:px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-xs font-bold" title="Xem toàn màn hình">
-                  <Maximize2 className="w-4 h-4" /> <span className="hidden sm:inline">Toàn màn hình</span>
-                </button>
-
-                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1"></div>
-
-                {/* 3. Nút đóng cửa sổ */}
-                <button onClick={() => setPreviewDoc(null)} className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-red-500/10 hover:text-red-500 rounded-xl transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
+        <div className="fixed inset-0 z-[999] bg-slate-900/80 backdrop-blur-xl flex items-center justify-center p-3 md:p-6 animate-in fade-in">
+          <div className="bg-white dark:bg-[#121212] w-full max-w-5xl h-[90vh] rounded-[2rem] shadow-2xl border border-slate-200 dark:border-white/5 overflow-hidden flex flex-col animate-in zoom-in-95">
+            <div className="h-16 px-4 bg-slate-50/80 dark:bg-[#1A1A1A]/80 border-b border-slate-200 dark:border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3 truncate"><FileText className="w-5 h-5 text-indigo-500 shrink-0" /><h3 className="font-extrabold text-sm truncate">{previewDoc.title}</h3></div>
+              <div className="flex gap-2">
+                <a href={pUrls.download} className="p-2 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 rounded-xl font-bold text-xs flex items-center gap-1"><Download className="w-4 h-4"/>Tải</a>
+                <a href={pUrls.open} target="_blank" rel="noreferrer" className="p-2 bg-slate-100 dark:bg-[#202020] rounded-xl font-bold text-xs flex items-center gap-1"><ExternalLink className="w-4 h-4"/>Mở Drive</a>
+                <button onClick={() => setPreviewDoc(null)} className="p-2 bg-rose-50 text-rose-500 rounded-xl"><X className="w-5 h-5" /></button>
               </div>
             </div>
-
-            {/* Khung nhúng/preview cho nhiều loại tệp (pdf, ảnh, video, audio) */}
-            <div ref={previewRef} className="flex-1 bg-slate-100 dark:bg-slate-950 relative flex items-center justify-center">
-              {(() => {
-                const kind = getFileKind(previewDoc.title || '')
-                if (kind === 'pdf') {
-                  return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
-                }
-                if (kind === 'image') {
-                  return <img src={proctorUrls.download} alt={previewDoc.title} className="max-h-[86vh] max-w-full object-contain" />
-                }
-                if (kind === 'video') {
-                  return <video controls src={proctorUrls.download} className="max-h-[86vh] max-w-full bg-black" />
-                }
-                if (kind === 'audio') {
-                  return <audio controls src={proctorUrls.download} className="w-full" />
-                }
-                return <iframe src={proctorUrls.preview} className="absolute inset-0 w-full h-full border-none bg-transparent" allow="autoplay" />
-              })()}
+            <div ref={previewRef} className="flex-1 bg-slate-100/50 dark:bg-[#0A0A0A] flex items-center justify-center relative">
+              {getFileKind(previewDoc.title)==='pdf' ? <iframe src={pUrls.preview} className="absolute inset-0 w-full h-full border-none"/> : getFileKind(previewDoc.title)==='image' ? <img src={pUrls.download} className="max-h-[86vh] max-w-full object-contain"/> : <iframe src={pUrls.preview} className="absolute inset-0 w-full h-full border-none"/>}
             </div>
           </div>
         </div>
       )}
 
-      {/* --- FLOATING ACTION BARS --- */}
-      {isSelectMode && selectedItems.length > 0 && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white/50 dark:border-slate-700 apps-shadow px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10 duration-300">
-           <span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-lg">{selectedItems.length} mục đã chọn</span>
-           
-           {selectedItems.length === 1 && (canManageLibrary || (selectedItems[0].data?.created_by === currentUserId) || (libraryScope === 'shared' && selectedItems[0].data?.created_by == null)) && (
-             <button onClick={() => {
-               setRenameTarget(selectedItems[0]);
-               setRenameInput(selectedItems[0].type === 'folder' ? selectedItems[0].data.name : selectedItems[0].data.title);
-               setShowRenameModal(true);
-             }} className="flex items-center gap-2 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-4 py-2.5 rounded-xl hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors font-bold text-sm">
-               <Edit className="w-4 h-4"/> Đổi tên
-             </button>
-           )}
-
-           {(selectedItems.length > 0 && selectedItems.every(i => canManageItem(i.data))) && (
-             <button onClick={handleBulkDelete} className="flex items-center gap-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-xl hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-bold text-sm">
-               <Trash2 className="w-4 h-4"/> Xóa
-             </button>
-           )}
-           <button onClick={() => handleSetClipboard('cut')} className="flex items-center gap-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-4 py-2.5 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-bold text-sm">
-             <Scissors className="w-4 h-4"/> Cắt
-           </button>
-           <button onClick={() => handleSetClipboard('copy')} className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 py-2.5 rounded-xl hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors font-bold text-sm">
-             <Copy className="w-4 h-4"/> Sao chép
-           </button>
-        </div>
-      )}
-
-      {clipboard && !isSelectMode && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-blue-400/50 px-6 py-4 rounded-full shadow-[0_10px_40px_rgba(59,130,246,0.3)] flex items-center gap-4 z-[90] animate-bounce duration-700">
-           <div className="flex flex-col">
-             <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400">Đang lưu {clipboard.items.length} mục</span>
-             <span className="text-[10px] font-bold text-slate-500 uppercase">Lệnh: {clipboard.action === 'cut' ? 'Cắt' : 'Sao chép'}</span>
-           </div>
-           <button onClick={handlePaste} className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:scale-105 transition-transform font-bold text-sm shadow-md">
-             <ClipboardPaste className="w-4 h-4"/> Dán vào đây
-           </button>
-           <button onClick={() => setClipboard(null)} className="p-3 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
-             <X className="w-4 h-4"/>
-           </button>
-        </div>
-      )}
-
-      {/* --- MODAL ĐỔI TÊN --- */}
-      {showRenameModal && renameTarget && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
-            <button onClick={() => setShowRenameModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
-            <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center mb-4"><Edit className="w-6 h-6 text-amber-600 dark:text-amber-400"/></div>
-            <h3 className="text-xl font-black mb-2">Đổi tên {renameTarget.type === 'folder' ? 'thư mục' : 'tài liệu'}</h3>
-            <input type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-amber-500 mb-6 shadow-inner" />
-            <button onClick={handleRename} className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 shadow-md transition-all active:scale-95">Lưu Tên Mới</button>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODALS CREATE/UPLOAD --- */}
       {showFolderModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
-            <button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center mb-4"><Folder className="w-6 h-6 text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400"/></div>
-            <h3 className="text-xl font-black mb-2">Tạo thư mục mới</h3>
-            <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Tên thư mục..." className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-blue-500 mb-6 shadow-inner" />
-            <button onClick={handleCreateFolder} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 shadow-md transition-all active:scale-95">Tạo Thư Mục</button>
-          </div>
-        </div>
-      )}
-
-      {showFolderSettingsModal && folderSettingsTarget && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-sm p-6 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
-            <button onClick={() => setShowFolderSettingsModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
-            <div className="mb-4 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/60 dark:bg-slate-800/40">
-                <Folder className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-black text-lg">Cấu hình thư mục</h3>
-                <p className="text-xs text-slate-500">Thư mục: {folderSettingsTarget.name}</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Màu nổi bật</label>
-                <input type="color" value={folderSettingsColor || '#3b82f6'} onChange={(e) => setFolderSettingsColor(e.target.value)} className="w-20 h-10 p-0 border-none bg-transparent" />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Biểu tượng (emoji hoặc text)</label>
-                <input type="text" value={folderSettingsIcon || ''} onChange={(e) => setFolderSettingsIcon(e.target.value)} placeholder="Ví dụ: 📁, 📚, 🧪" className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 font-bold outline-none" />
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center gap-3">
-              <button onClick={saveFolderSettings} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold">Lưu</button>
-              <button onClick={() => setShowFolderSettingsModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 py-3 rounded-xl font-bold">Hủy</button>
-            </div>
-          </div>
-        </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"><div className={`${mdCard} w-full max-w-sm p-8 shadow-2xl relative animate-in zoom-in-95`}><button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-[#202020]"><X className="w-5 h-5"/></button><div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center mb-4"><Folder className="w-6 h-6 text-blue-500"/></div><h3 className="text-xl font-black mb-2">Tạo thư mục</h3><input type="text" value={newFolderName} onChange={e=>setNewFolderName(e.target.value)} className={`${mdInput} mb-6`} placeholder="Tên..." /><button onClick={handleCreateFolder} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow-md">Tạo mới</button></div></div>
       )}
 
       {showDocModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`${glassCardStyles} rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative animate-in zoom-in-95 duration-300`}>
-            <button onClick={() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}); setDocFiles([]) }} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X className="w-5 h-5"/></button>
-            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center mb-4"><UploadCloud className="w-6 h-6 text-emerald-600 dark:text-emerald-400"/></div>
-            <h3 className="text-xl font-black mb-4">Tải tài liệu lên</h3>
-            <form onSubmit={handleUploadDocument} className="space-y-4">
-              {docFiles.length <= 1 && (
-                <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Tên tài liệu hiển thị</label>
-                  <input type="text" value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="Nếu bỏ trống sẽ lấy tên gốc của file..." className="w-full bg-white/50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner" />
-                </div>
-              )}
-              
-              <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Chọn file (PDF, ảnh, video, audio)</label>
-                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <input type="file" accept=".pdf,image/*,video/*,audio/*" multiple onChange={(e) => setDocFiles(Array.from(e.target.files || []))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  <FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">
-                    {docFiles.length > 0 ? `Đã chọn ${docFiles.length} file tài liệu` : 'Nhấn vào đây để chọn file'}
-                  </p>
-                </div>
-                {docFiles.length > 0 && (
-                  <div className="mt-2 max-h-24 overflow-y-auto custom-scrollbar text-[11px] font-bold text-slate-500 space-y-1">
-                    {docFiles.map(f => <div key={f.name} className="truncate">📄 {f.name}</div>)}
-                  </div>
-                )}
-              </div>
-              
-              {uploadStatus.type !== 'idle' && <div className={`p-3 rounded-xl text-xs font-bold ${uploadStatus.type === 'uploading' ? 'bg-blue-50 text-blue-600' : uploadStatus.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{uploadStatus.message}</div>}
-              <button type="submit" disabled={uploadStatus.type === 'uploading'} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-3.5 rounded-xl font-bold flex justify-center items-center gap-2 shadow-md transition-all active:scale-95 mt-4">
-                {uploadStatus.type === 'uploading' ? <Loader2 className="w-5 h-5 animate-spin"/> : 'Bắt đầu tải lên'}
-              </button>
-            </form>
-          </div>
-        </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"><div className={`${mdCard} w-full max-w-md p-8 shadow-2xl relative animate-in zoom-in-95`}><button onClick={() => {setShowDocModal(false); setDocFiles([])}} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-[#202020]"><X className="w-5 h-5"/></button><div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center mb-4"><UploadCloud className="w-6 h-6 text-emerald-500"/></div><h3 className="text-xl font-black mb-4">Tải tài liệu lên</h3><form onSubmit={handleUploadDocument} className="space-y-4"><input type="text" value={docTitle} onChange={e=>setDocTitle(e.target.value)} placeholder="Tên file hiển thị (nếu tải 1 file)..." className={mdInput} /><div className="border-2 border-dashed border-slate-300 dark:border-white/10 rounded-xl p-6 text-center relative hover:bg-slate-50 dark:hover:bg-[#202020] cursor-pointer"><input type="file" multiple onChange={e=>setDocFiles(Array.from(e.target.files||[]))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" /><FileText className="w-8 h-8 text-emerald-500 mx-auto mb-2" /><p className="font-bold text-sm text-slate-500">{docFiles.length > 0 ? `Đã chọn ${docFiles.length} file` : 'Kéo thả hoặc nhấn để chọn file'}</p></div>{uploadStatus.type!=='idle' && <div className="text-xs font-bold text-blue-500">{uploadStatus.message}</div>}<button type="submit" disabled={uploadStatus.type==='uploading'} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold shadow-md">{uploadStatus.type==='uploading' ? <Loader2 className="w-5 h-5 animate-spin mx-auto"/> : 'Bắt đầu tải'}</button></form></div></div>
       )}
 
-  
-      <div className="relative z-10 max-w-[1400px] mx-auto">
+      {/* 🌟 FLOATING BARS VẬT LÝ */}
+      {isSelectMode && selectedItems.length > 0 && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#1A1A1A]/90 backdrop-blur-2xl border border-slate-200 dark:border-white/10 px-6 py-4 rounded-full shadow-2xl flex items-center gap-3 z-[90] animate-in slide-in-from-bottom-10"><span className="font-extrabold text-sm mr-2 text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-[#252525] px-3 py-1.5 rounded-lg">{selectedItems.length} mục</span><button onClick={handleBulkDelete} className="flex gap-2 bg-rose-50 text-rose-600 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-rose-100"><Trash2 className="w-4 h-4"/> Xóa</button><button onClick={()=>handleSetClipboard('cut')} className="flex gap-2 bg-slate-100 dark:bg-[#202020] px-4 py-2.5 rounded-xl font-bold text-sm"><Scissors className="w-4 h-4"/> Cắt</button><button onClick={()=>handleSetClipboard('copy')} className="flex gap-2 bg-blue-50 text-blue-600 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-100"><Copy className="w-4 h-4"/> Copy</button></div>
+      )}
+      {clipboard && !isSelectMode && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#1A1A1A]/90 backdrop-blur-2xl border border-indigo-400/50 px-6 py-4 rounded-full shadow-2xl flex items-center gap-4 z-[90] animate-bounce"><span className="font-extrabold text-sm text-indigo-600">Đang giữ {clipboard.items.length} mục</span><button onClick={handlePaste} className="flex gap-2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md hover:scale-105"><ClipboardPaste className="w-4 h-4"/> Dán</button><button onClick={()=>setClipboard(null)} className="p-3 bg-slate-100 dark:bg-[#202020] rounded-xl hover:bg-rose-100 text-rose-500"><X className="w-4 h-4"/></button></div>
+      )}
+
+      {/* 🌟 KẾT CẤU WORKSPACE CHÍNH */}
+      <div className="relative z-10 max-w-[1500px] mx-auto pt-6 px-4 md:px-8">
         
-        {/* HEADER & THANH TÌM KIẾM */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        {/* Header Controls */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
           <div className="flex-1">
-            <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition-colors mb-3">
-              <Home className="w-4 h-4" /> Sen Home
-            </button>
-            <h1 className="text-4xl font-black tracking-tight drop-shadow-sm flex items-center gap-3 mb-4">
-              {getLibraryRootLabel()} {libraryScope === 'private' ? <Cloud className="w-8 h-8 text-cyan-500 dark:text-cyan-400" /> : <Library className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />}
-            </h1>
-            
-            {/* Breadcrumb đường dẫn */}
-            <div className="flex items-center flex-wrap gap-2 text-sm font-bold bg-white/40 dark:bg-slate-800/40 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/60 dark:border-slate-700/50 w-fit shadow-sm">
+            <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors mb-3"><ArrowLeft className="w-4 h-4" /> Dashboard</button>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight flex items-center gap-3 mb-4 text-slate-900 dark:text-white">{libraryScope === 'private' ? 'SenCloud' : 'SenLib'} <Cloud className="w-8 h-8 text-cyan-500" /></h1>
+            <div className="flex items-center flex-wrap gap-2 text-sm font-bold bg-white/60 dark:bg-[#1A1A1A]/60 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-200/50 dark:border-white/5 w-fit shadow-sm">
               {folderPath.map((step, index) => (
-                <div key={index} className="flex items-center gap-2"
-                     onDragOver={(e) => { e.preventDefault(); setDragOverId(step.id || 'root') }}
-                     onDragLeave={() => setDragOverId(null)}
-                     onDrop={(e) => handleDrop(e, step.id)}
-                >
-                  <span onClick={() => handleNavigateBreadcrumb(index)} 
-                        className={`cursor-pointer px-2 py-1 rounded-lg transition-colors ${dragOverId === (step.id || 'root') ? 'bg-blue-200 dark:bg-blue-900 text-blue-700' : index === folderPath.length - 1 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:bg-white/50 dark:hover:bg-slate-700'}`}>
-                    {step.name}
-                  </span>
+                <div key={index} className="flex items-center gap-2" onDragOver={(e) => { e.preventDefault(); setDragOverId(step.id || 'root') }} onDragLeave={() => setDragOverId(null)} onDrop={(e) => handleDrop(e, step.id)}>
+                  <span onClick={() => handleNavigateBreadcrumb(index)} className={`cursor-pointer px-2 py-1 rounded-lg transition-colors ${dragOverId === (step.id || 'root') ? 'bg-indigo-100 text-indigo-700' : index === folderPath.length - 1 ? 'text-indigo-600' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-[#252525]'}`}>{step.name}</span>
                   {index < folderPath.length - 1 && <ChevronRight className="w-4 h-4 text-slate-400" />}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-center">
-            {/* Thanh Tìm kiếm */}
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-center">
+            {/* Thanh Tìm kiếm Vật lý */}
             <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); globalSearch(searchQuery) } }} placeholder="Tìm kiếm (toàn bộ thư viện)..." className={`${glassSearchInputClass} pl-9 pr-10 py-3`} />
-              <button onClick={() => globalSearch(searchQuery)} title="Tìm kiếm toàn cục" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-white/20 hover:bg-white/30 text-slate-700 dark:text-slate-200">{searchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}</button>
+              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm tài liệu..." className={`${mdInput} pl-10`} />
             </div>
 
-            <button onClick={() => setIsCompact(!isCompact)} className={`${headerButtonBase} ${isCompact ? 'ring-1 ring-slate-300/70 dark:ring-slate-600/70' : ''}`}>
-              {isCompact ? 'Chế độ Gọn' : 'Chế độ Thường'}
-            </button>
+            {/* Nút SenAI */}
+            <button onClick={() => setIsAiMode(!isAiMode)} className={`${headerBtn} ${isAiMode ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : ''}`}><Sparkles className={`w-4 h-4 ${isAiMode ? 'animate-pulse' : 'text-yellow-500'}`} /> SenAI Search</button>
 
-            {isStudentLibrary && (
-              <button
-                onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')}
-                className={`${headerButtonBase} ${libraryScope === 'private' ? 'border-cyan-200/80 dark:border-cyan-900/60 bg-cyan-50/65 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100/75 dark:hover:bg-cyan-900/50' : 'border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/65 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/75 dark:hover:bg-emerald-900/50'}`}
-                title={libraryScope === 'private' ? 'Chuyển sang SenLib' : 'Chuyển sang SenCloud'}
-              >
-                {libraryScope === 'private' ? <><Unlock className="w-4 h-4" /> SenCloud</> : <><Lock className="w-4 h-4" /> SenLib</>}
-              </button>
-            )}
-
-            {
-              /* Admin/collab-only controls */
-            }
+            {isStudentLibrary && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={headerBtn}>{libraryScope === 'private' ? <Unlock className="w-4 h-4 text-emerald-500"/> : <Lock className="w-4 h-4 text-cyan-500"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
+            
             {showAdminControls && (
               <>
-                {/* Sắp xếp A-Z */}
-                <button onClick={() => setSortByName(!sortByName)} className={`${headerButtonBase} ${sortByName ? 'border-indigo-300 bg-indigo-100/80 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/60' : ''}`}>
-                  <ArrowUpDown className="w-5 h-5" /> {sortByName ? 'Xếp theo Ngày' : 'Gọn gàng (A-Z)'}
-                </button>
-
-                {/* Sắp xếp (Chọn nhiều) */}
-                <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={`${headerButtonBase} ${isSelectMode ? 'border-amber-300 bg-amber-100/80 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/60' : ''}`}>
-                  <ListChecks className="w-5 h-5" /> {isSelectMode ? 'Hủy Chọn' : 'Sắp xếp (Chọn)'}
-                </button>
-
-                <>
-                  <button onClick={() => setShowFolderModal(true)} className={headerButtonBase}>
-                    <PlusCircle className="w-5 h-5 text-blue-600" /> Thư Mục
-                  </button>
-                  <button onClick={() => setShowDocModal(true)} className={`${headerButtonBase} border-sky-200/80 dark:border-sky-900/60 bg-sky-50/80 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:bg-sky-100/85 dark:hover:bg-sky-900/55`}>
-                    <UploadCloud className="w-5 h-5" /> Tải Lên
-                  </button>
-                </>
+                <button onClick={() => setSortByName(!sortByName)} className={headerBtn}><ArrowUpDown className="w-4 h-4" /> {sortByName ? 'Xếp A-Z' : 'Xếp Ngày'}</button>
+                <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className={headerBtn}><ListChecks className="w-4 h-4" /> Chọn</button>
+                <button onClick={() => setShowFolderModal(true)} className={headerBtn}><PlusCircle className="w-4 h-4 text-blue-500" /> Thư Mục</button>
+                <button onClick={() => setShowDocModal(true)} className={`${headerBtn} bg-indigo-600 text-white hover:bg-indigo-700`}><UploadCloud className="w-4 h-4" /> Tải Lên</button>
               </>
             )}
-            {/* Create/upload buttons are shown via `showAdminControls` (admin or student-private) */}
           </div>
         </div>
 
-        {/* --- MAIN CONTENT AREA --- */}
-        <div className={`${glassCardStyles} rounded-[3rem] p-6 md:p-10 min-h-[60vh] border-t-white/60 border-l-white/60 dark:border-t-white/20 dark:border-l-white/20 animate-in fade-in duration-500`}>
-          
-          {displayFolders.length === 0 && displayDocuments.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-20">
-              <Search className="w-16 h-16 mb-4" />
-              <p className="font-bold text-lg">Không tìm thấy thư mục hay tài liệu nào.</p>
+        {/* 🌟 WIDGET SENAI SMART SEARCH */}
+        {isAiMode && (
+          <div className="mb-8 bg-white dark:bg-[#161616] rounded-[2rem] border border-indigo-200 dark:border-indigo-500/30 shadow-xl overflow-hidden animate-in fade-in flex flex-col h-[350px]">
+            <div className="h-1.5 w-full bg-gradient-to-r from-indigo-500 to-blue-500"></div>
+            <div className="flex items-center gap-3 p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#1A1A1A]/50"><div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center"><Bot className="w-5 h-5 text-indigo-600"/></div><div><h4 className="font-black text-sm text-slate-900 dark:text-white">SenAI Assistant</h4><p className="text-[10px] font-bold text-slate-500 uppercase">Trợ lý tìm kiếm</p></div></div>
+            <div ref={aiChatScrollRef} className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-5 bg-white dark:bg-[#161616]">
+              {aiMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 mr-3 mt-1"><Bot className="w-4 h-4"/></div>}
+                  <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[13px] font-medium shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : msg.isError ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 dark:bg-[#202020] rounded-bl-sm border border-slate-100 dark:border-white/5'}`}>
+                    {/* Đã Fix lỗi ReactMarkdown missing imports & any type */}
+                    <ReactMarkdown components={{ p: ({node, ...props}: any) => <p className="m-0" {...props} />, strong: ({node, ...props}: any) => <strong className="font-black text-indigo-600 dark:text-indigo-400" {...props} /> }}>
+                      {msg.text}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              ))}
+              {isAiSearching && <div className="flex items-center gap-3"><Loader2 className="w-4 h-4 text-indigo-600 animate-spin"/><div className="text-[12px] text-slate-500 font-bold italic">SenAI đang suy nghĩ...</div></div>}
             </div>
+            <div className="p-4 border-t border-slate-100 dark:border-white/5 bg-white dark:bg-[#1A1A1A]">
+              <form onSubmit={handleAskSenAI} className="relative flex items-center">
+                <input type="text" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Nhập yêu cầu tìm kiếm tự nhiên..." className={`${mdInput} pr-14 rounded-full`} />
+                <button type="submit" disabled={!aiQuery.trim() || isAiSearching} className="absolute right-2 p-2 bg-indigo-600 text-white rounded-full"><Send className="w-4 h-4 ml-0.5" /></button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 🌟 LƯỚI HIỂN THỊ DỮ LIỆU */}
+        <div className={`${mdCard} p-6 md:p-8 min-h-[50vh]`}>
+          {dFolders.length === 0 && dDocs.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 pt-10"><Folder className="w-20 h-20 mb-4 stroke-[1]" /><p className="font-black text-xl mb-2">Chưa có dữ liệu</p></div>
           ) : (
             <>
-              {/* LƯỚI THƯ MỤC */}
-              {displayFolders.length > 0 && (
-                <div className="mb-10">
-                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Thư mục</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {displayFolders.map(folder => {
-                      const isSelected = selectedItems.some(i => i.id === folder.id);
+              {dFolders.length > 0 && (
+                <div className="mb-10 animate-in fade-in">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-5 flex gap-2"><Folder className="w-4 h-4"/> Thư mục</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                    {dFolders.map(f => {
+                      const sel = selectedItems.some(i => i.id === f.id);
                       return (
-                        <div key={folder.id} 
-                          draggable={!isSelectMode && showAdminControls}
-                            onDragStart={(e) => handleDragStart(e, folder.id, 'folder')}
-                            onDragOver={(e) => { if (!isSelectMode) { e.preventDefault(); setDragOverId(folder.id); } }}
-                            onDragLeave={() => setDragOverId(null)}
-                            onDrop={(e) => { if (!isSelectMode) handleDrop(e, folder.id); }}
-                            onClick={(e) => {
-                              if (isSelectMode) { e.preventDefault(); toggleSelection(folder.id, 'folder', folder); } 
-                              else { handleOpenFolder(folder.id, folder.name); }
-                            }} 
-                            className={`group cursor-pointer flex flex-col items-center gap-3 relative ${isCompact ? 'p-2 rounded-2xl' : 'p-4 rounded-[2rem]'} transition-all duration-300 ${dragOverId === folder.id ? 'bg-blue-100/50 dark:bg-blue-900/30 scale-105 border-2 border-dashed border-blue-400' : isSelected ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 shadow-md' : 'hover:bg-white/40 dark:hover:bg-slate-800/40 hover:scale-105 hover:shadow-lg'} animate-in fade-in duration-500`}>
-                          
-                          {isSelectMode && (
-                            <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
-                              {isSelected && <CheckCircle2 className="w-3 h-3" />}
-                            </div>
-                          )}
-
-                          {/* Settings quick action (admin/collab) */}
-                          {showAdminControls && (
-                            <button onClick={(e) => { e.stopPropagation(); openFolderSettings(folder) }} className="absolute top-2 left-2 p-1 rounded-lg bg-white/60 dark:bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Palette className="w-4 h-4 text-slate-600 dark:text-slate-200" />
-                            </button>
-                          )}
-
-                          <div className="relative w-20 h-16 flex items-center justify-center">
-                            <Folder
-                              className="w-full h-full drop-shadow-[0_10px_15px_rgba(59,130,246,0.18)] transition-transform group-hover:scale-110"
-                              strokeWidth={1.4}
-                              fill="currentColor"
-                              stroke="currentColor"
-                              style={{ color: folderCustomizations[folder.id]?.color || '#3b82f6' }}
-                            />
-                          </div>
-                          <p className={`font-black text-sm text-center ${isCompact ? 'text-[12px]' : ''} text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors line-clamp-2 px-1`}>{folderCustomizations[folder.id]?.icon ? <>{folderCustomizations[folder.id].icon} {highlightSearchText(folder.name, deferredSearchQuery)}</> : highlightSearchText(folder.name, deferredSearchQuery)}</p>
+                        <div key={f.id} draggable={!isSelectMode && showAdminControls} onDragStart={(e) => handleDragStart(e, f.id, 'folder')} onDragOver={(e) => { if (!isSelectMode) { e.preventDefault(); setDragOverId(f.id); } }} onDragLeave={() => setDragOverId(null)} onDrop={(e) => { if (!isSelectMode) handleDrop(e, f.id); }} onClick={(e) => { if (isSelectMode) { e.preventDefault(); toggleSelection(f.id, 'folder', f); } else { handleOpenFolder(f.id, f.name); } }} 
+                          className={`group cursor-pointer flex flex-col items-center justify-center gap-3 relative p-5 bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 rounded-[2rem] transition-all duration-300 ${dragOverId === f.id ? 'ring-2 ring-indigo-500 scale-105' : sel ? 'ring-2 ring-blue-500 shadow-md bg-blue-50 dark:bg-blue-900/20' : 'hover:-translate-y-1 hover:shadow-lg'}`}>
+                          {isSelectMode && <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 ${sel ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'}`}>{sel && <CheckCircle2 className="w-3 h-3" />}</div>}
+                          <Folder className="w-16 h-16 transition-transform group-hover:scale-110" strokeWidth={1.5} fill="currentColor" style={{ color: '#6366f1' }} />
+                          <p className="font-black text-[13px] text-center line-clamp-2 px-2 leading-tight">{highlightSearchText(f.name, deferredSearchQuery)}</p>
                         </div>
                       )
                     })}
@@ -1233,77 +436,26 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Libr
                 </div>
               )}
 
-              {/* LƯỚI TÀI LIỆU */}
-              {displayDocuments.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Tài liệu</h3>
+              {dDocs.length > 0 && (
+                <div className="animate-in fade-in">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-5 flex gap-2"><FileText className="w-4 h-4"/> Tài liệu</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {displayDocuments.map(doc => {
-                      const isSelected = selectedItems.some(i => i.id === doc.id);
-                      const kind = getFileKind(doc.title || '')
-                      const hidden = isDocumentHidden(doc)
-                      const locked = isDocumentLocked(doc)
+                    {dDocs.map(d => {
+                      const sel = selectedItems.some(i => i.id === d.id); const k = getFileKind(d.title || '')
                       return (
-                        <div key={doc.id} 
-                          draggable={!isSelectMode && showAdminControls}
-                            onDragStart={(e) => handleDragStart(e, doc.id, 'document')}
-                            onClick={(e) => {
-                              if (isSelectMode) { 
-                                e.preventDefault(); 
-                                toggleSelection(doc.id, 'document', doc); 
-                              } else { 
-                                handleOpenDocument(doc); 
-                              }
-                            }} 
-                            className={`backdrop-blur-md ${isCompact ? 'rounded-xl p-3' : 'rounded-[1.75rem] p-4'} transition-all duration-300 cursor-pointer group relative flex items-center gap-4 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-md transform scale-[1.02]' : 'bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:-translate-y-2 hover:shadow-xl hover:scale-105'} animate-in fade-in duration-500`}>
-                          
-                          {isSelectMode && (
-                            <div className={`absolute top-1/2 -translate-y-1/2 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 transition-colors ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-white/50'}`}>
-                              {isSelected && <CheckCircle2 className="w-3 h-3" />}
-                            </div>
-                          )}
-
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-blue-100 text-blue-600' : locked ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
-                            {kind === 'image' && <Image className="w-6 h-6" />}
-                            {kind === 'video' && <Video className="w-6 h-6" />}
-                            {kind === 'audio' && <Music className="w-6 h-6" />}
-                            {kind === 'pdf' && <FileText className="w-6 h-6" />}
-                            {kind === 'other' && <FileText className="w-6 h-6" />}
+                        <div key={d.id} draggable={!isSelectMode && showAdminControls} onDragStart={(e) => handleDragStart(e, d.id, 'document')} onClick={(e) => { if (isSelectMode) { e.preventDefault(); toggleSelection(d.id, 'document', d); } else { handleOpenDocument(d); } }} 
+                          className={`group cursor-pointer flex items-center gap-4 relative p-4 bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 rounded-[1.5rem] transition-all duration-300 ${sel ? 'ring-2 ring-blue-500 shadow-md bg-blue-50 dark:bg-blue-900/20 scale-[1.02]' : 'hover:-translate-y-1 hover:shadow-lg'}`}>
+                          {isSelectMode && <div className={`absolute top-1/2 -translate-y-1/2 right-4 w-5 h-5 rounded-full border-2 flex items-center justify-center z-10 ${sel ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'}`}>{sel && <CheckCircle2 className="w-3 h-3" />}</div>}
+                          <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 shadow-inner ${sel ? 'bg-blue-100 text-blue-600' : 'bg-rose-50 text-rose-500'}`}>
+                            {k === 'pdf' ? <FileText className="w-6 h-6"/> : k === 'image' ? <Image className="w-6 h-6"/> : <FileText className="w-6 h-6"/>}
                           </div>
-                          <div className={`flex-1 overflow-hidden transition-all ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
-                            <h3 className="font-bold text-slate-900 dark:text-white line-clamp-2 group-hover:text-blue-600 transition-colors text-sm leading-snug">{highlightSearchText(doc.title, deferredSearchQuery)}</h3>
-                            <span className="text-[10px] font-bold text-slate-400 mt-1 block">{doc.folder_name ? `${doc.folder_name} • ` : ''}{new Date(doc.created_at).toLocaleDateString('vi-VN')}</span>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {locked && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black bg-amber-100/90 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"><Lock className="w-3 h-3" /> Khóa</span>}
-                              {hidden && isAdmin && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black bg-slate-200/90 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200"><EyeOff className="w-3 h-3" /> Ẩn</span>}
-                            </div>
+                          <div className={`flex-1 min-w-0 ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
+                            <h3 className="font-black text-[13px] line-clamp-2 leading-snug">{highlightSearchText(d.title, deferredSearchQuery)}</h3>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{new Date(d.created_at).toLocaleDateString('vi-VN')}</p>
                           </div>
-
-                          {/* Admin controls for hide/lock removed per request */}
-                          
-                          {!isSelectMode && (
-                            <span className="absolute right-4 text-blue-500 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-xs transition-all font-bold">
-                              Đọc <Maximize2 className="w-3 h-3 ml-0.5" />
-                            </span>
-                          )}
                         </div>
                       )
                     })}
-                  </div>
-                </div>
-              )}
-
-              {/* Kết quả Đề thi khi tìm kiếm toàn cục */}
-              {searchExamsResults && searchExamsResults.length > 0 && (
-                <div className="mt-8">
-                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-wider mb-4 px-2 drop-shadow-sm">Đề thi liên quan</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {searchExamsResults.map((exam: any) => (
-                      <div key={exam.id} onClick={() => router.push(`/exams/${exam.id}`)} className="cursor-pointer p-4 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-white/50 dark:border-slate-700 hover:shadow-lg hover:-translate-y-1 transition-all">
-                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{exam.title}</h4>
-                        <p className="text-[11px] text-slate-500 mt-1">Loại: {exam.exam_type || 'Không rõ'}</p>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
