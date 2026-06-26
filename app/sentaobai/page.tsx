@@ -129,7 +129,7 @@ export default function SenTaoBaiPage() {
   }
 
   // ==========================================================================
-  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI (SẮP XẾP PHÂN KHU CHUYÊN BIỆT)
+  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI (HUẤN LUYỆN CHỐNG TRÙNG LẶP TUYỆT ĐỐI)
   // ==========================================================================
   const handleGenerateExam = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -153,7 +153,8 @@ export default function SenTaoBaiPage() {
 
       setGenStatus({ active: true, msg: 'SenAI đang kết nối tài liệu đám mây, đọc sâu lý thuyết và phân tách đề...' })
 
-      const aiSystemPrompt = `Bạn là một chuyên gia khảo thí quốc gia tối cao của hệ thống SenExam. Hãy biên soạn một bộ đề thi gồm chính xác ${numQuestions} câu hỏi bám sát và khai thác sâu sắc tư liệu nguồn được cung cấp.
+      // 🌟 TIÊU CHUẨN HUẤN LUYỆN PROMPT CHỐNG LẶP, ĐỌC SÂU 100% FILE TÀI LIỆU
+      const aiSystemPrompt = `Bạn là một chuyên gia khảo thí quốc gia tối cao của hệ thống SenExam. Hãy biên soạn một bộ đề thi gồm chính xác ${numQuestions} câu hỏi độc lập bám sát và khai thác sâu sắc tư liệu nguồn được cung cấp.
 
       MỨC ĐỘ TƯ DUY YÊU CẦU: "${difficulty}"
       CÁC DẠNG CÂU HỎI ĐƯỢC PHÉP TẠO: ${qTypes.join(', ')}.
@@ -161,22 +162,24 @@ export default function SenTaoBaiPage() {
       NỘI DUNG VĂN BẢN TRỰC TIẾP:
       ${directText || 'Không có văn bản trực tiếp, hãy đọc hoàn toàn từ các file đính kèm dưới đây.'}
 
-      DANH SÁCH MÃ ĐỊNH DANH TỆP TIN TỪ GOOGLE DRIVE (BẮT BUỘC ĐỌC SÂU, ĐỌC CHI TIẾT TỪNG TRANG FILE):
+      DANH SÁCH MÃ ĐỊNH DANH TỆP TIN TỪ GOOGLE DRIVE (BẮT BUỘC SỬ DỤNG BỘ ĐỌC SÂU ĐỂ QUÉT TỪNG DÒNG):
       ${driveFileIds.map(id => `- File Google Drive ID: ${id}`).join('\n')}
 
-      ❌ QUY TẮC NỘI DUNG TUYỆT ĐỐI CẤM VI PHẠM (ĐỂ TRÁNH LỖI LẶP LẠI):
-      1. TUYỆT ĐỐI KHÔNG tự bịa ra nội dung đại trà, sáo rỗng hay lặp đi lặp lại. Phải trích xuất và biến đổi sâu sắc dữ liệu, công thức, số liệu thực tế từ tệp tài liệu được nạp.
-      2. TUYỆT ĐỐI KHÔNG viết các tiền tố thừa thãi ở đầu câu hỏi như "Câu hỏi trắc nghiệm số X:", "Câu hỏi đúng sai tự động:", "Câu 1: ...". Hãy đi thẳng vào nội dung câu hỏi (Ví dụ: "Một vật dao động..."). Hệ thống giao diện của tôi đã tự động đánh số và chia phần độc lập.
-      3. Dấu nhân trong biểu thức toán/lý bắt buộc phải dùng dấu chấm ".".
-      4. Dấu thập phân bắt buộc phải dùng dấu phẩy ",".
-      5. Ký hiệu Vector bắt buộc phải viết dưới dạng LaTeX: \\overrightarrow{...}.
-      6. Hãy phân bổ số lượng câu hỏi đều cho các dạng câu hỏi được chọn và SẮP XẾP các câu hỏi trả về theo thứ tự nhóm dạng: Toàn bộ câu hỏi dạng 'choice' đứng đầu, tiếp theo là toàn bộ câu hỏi dạng 'true_false', và cuối cùng là dạng 'short_answer'.
-      
+      ⚠️ CHỈ THỊ HUẤN LUYỆN KHẮT KHE CHỐNG LẶP VÀ ĐỌC FILE (TUYỆT ĐỐI KHÔNG VI PHẠM):
+      1. BẮT BUỘC ĐỌC SÂU: Hãy gọi bộ nạp tài liệu từ Google Drive dựa trên danh sách ID được cung cấp để trích xuất triệt để từng định nghĩa, định lý, số liệu, và phương trình. Không được tự ý tạo các câu hỏi chung chung nằm ngoài phạm vi tài liệu đã gửi.
+      2. TRIỆT TIÊU SỰ TRÙNG LẶP: Mỗi câu hỏi trong tổng số ${numQuestions} câu phải kiểm tra một khái niệm, khía cạnh, công thức hoặc bài toán hoàn toàn khác nhau. Nghiêm cấm việc lặp lại cùng một nội dung kiến thức hay một dạng câu hỏi ở các câu khác nhau trong đề.
+      3. KHÔNG CHÈN TIỀN TỐ RÁC: Tuyệt đối không viết các cụm từ tự động như "Câu hỏi trắc nghiệm tự động số X:", "Câu hỏi đúng sai:", "Câu 1: ...". Hãy đi thẳng vào nội dung cốt lõi của câu hỏi (Ví dụ: "Một vật chuyển động..."). Hệ thống của tôi đã tự đánh số và phân khu.
+      4. QUY CHUẨN TOÁN HỌC HỆ THỐNG: 
+         - Dấu nhân trong tất cả các biểu thức toán/lý bắt buộc phải dùng dấu chấm ".".
+         - Dấu phẩy ở các biểu thức số thập phân lẻ bắt buộc phải dùng dấu phẩy "," (Ví dụ: 3,14 thay vì 3.14).
+         - Ký hiệu Vector bắt buộc phải viết dưới dạng LaTeX chuẩn: \\overrightarrow{...}.
+      5. SẮP XẾP PHÂN KHU HỆ THỐNG: Gom toàn bộ câu hỏi dạng 'choice' lên đầu, tiếp đến là 'true_false', và cuối cùng là 'short_answer'.
+
       YÊU CẦU ĐỊNH DẠNG ĐẦU RA CHUẨN JSON CHẶT CHẼ:
-      Trả về chuỗi mảng JSON trần (JSON array), tuyệt đối không bọc trong các ký tự khối mã kiểu \`\`\`json. Mỗi phần tử câu hỏi phải chứa thuộc tính "type" tương ứng:
-      1. Câu hỏi "type": "choice" -> { "type": "choice", "question": "Nội dung câu hỏi thẳng vào vấn đề", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "Đáp án A/B/C/D", "explain": "Lời giải" }
-      2. Câu hỏi "type": "true_false" -> { "type": "true_false", "question": "Mở đầu tình huống lệnh dẫn lớn cho 4 ý", "subQuestions": [{"text": "Mệnh đề a) ...", "answer": true}, {"text": "Mệnh đề b) ...", "answer": false}, {"text": "Mệnh đề c) ...", "answer": true}, {"text": "Mệnh đề d) ...", "answer": false}], "explain": "Lời giải" }
-      3. Câu hỏi "type": "short_answer" -> { "type": "short_answer", "question": "Câu hỏi tính toán yêu cầu điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy nếu lẻ", "explain": "Lời giải" }`
+      Trả về chuỗi mảng JSON trần (JSON array), tuyệt đối không bọc trong các ký tự khối mã kiểu \`\`\`json \`\`\`. Mỗi phần tử câu hỏi phải chứa thuộc tính "type" tương ứng:
+      1. Câu hỏi "type": "choice" -> { "type": "choice", "question": "Nội dung câu hỏi thẳng vào vấn đề", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "Đáp án A/B/C/D", "explain": "Lời giải chi tiết" }
+      2. Câu hỏi "type": "true_false" -> { "type": "true_false", "question": "Mở đầu tình huống lệnh dẫn lớn cho 4 ý", "subQuestions": [{"text": "Mệnh đề a) ...", "answer": true}, {"text": "Mệnh đề b) ...", "answer": false}, {"text": "Mệnh đề c) ...", "answer": true}, {"text": "Mệnh đề d) ...", "answer": false}], "explain": "Lời giải chi tiết" }
+      3. Câu hỏi "type": "short_answer" -> { "type": "short_answer", "question": "Câu hỏi tính toán yêu cầu điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy", "explain": "Lời giải chi tiết" }`
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -197,7 +200,7 @@ export default function SenTaoBaiPage() {
         parsedQuestions = mockFallbackQuestions(numQuestions, qTypes)
       }
 
-      // Sắp xếp lại mảng một lần nữa ở Frontend để đảm bảo tuyệt đối các câu cùng loại gom về chung một phần
+      // Đảm bảo tuyệt đối các câu cùng loại gom về chung một phần tại Frontend
       const typeOrder = { 'choice': 1, 'true_false': 2, 'short_answer': 3 }
       parsedQuestions.sort((a: any, b: any) => (typeOrder[a.type as QuestionType] || 1) - (typeOrder[b.type as QuestionType] || 1))
 
@@ -366,7 +369,6 @@ export default function SenTaoBaiPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* 🌟 ĐÃ SỬA: ĐỔI THÀNH Ô TỰ ĐIỀN SỐ PHÚT LÀM BÀI, TỐI ĐA 10000 PHÚT */}
                   <div>
                     <label className={labelClass}>Thời gian làm bài (Tối đa 10000 phút)</label>
                     <input 
@@ -466,7 +468,6 @@ export default function SenTaoBaiPage() {
                   const currentType = q.type || selectedExam.types[0]
                   let sectionHeader = null
 
-                  // Thuật toán chèn Header ngăn cách các phần thi I, II, III
                   if (currentType === 'choice' && !renderedChoiceHeader) {
                     renderedChoiceHeader = true
                     sectionHeader = (
@@ -499,7 +500,6 @@ export default function SenTaoBaiPage() {
                       
                       <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/5 rounded-[1.75rem] p-6 shadow-sm space-y-4 animate-in fade-in">
                         
-                        {/* Đã sửa: Chỉ ghi nhãn phân biệt dạng, tuyệt đối không in chuỗi text rác thừa thãi */}
                         <div className="w-fit px-3 py-1.5 bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-wider">
                           Câu {idx + 1}
                         </div>
