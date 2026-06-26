@@ -22,7 +22,7 @@ import 'katex/dist/katex.min.css'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 
 // --- HẰNG SỐ GIAO DIỆN LIQUID GLASS + MATERIAL 3 ---
-const mdCard = "bg-white/80 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-150 rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.02)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] transition-all duration-300"
+const mdCard = "bg-white/80 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.02)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] transition-all duration-300"
 const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-transparent border-2 focus:border-indigo-500 focus:bg-white dark:focus:bg-[#252525] rounded-2xl px-5 py-4 outline-none transition-all font-bold text-sm text-slate-900 dark:text-white shadow-inner"
 const labelClass = "block text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2 pl-1"
 
@@ -51,9 +51,9 @@ export default function SenTaoBaiPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [duration, setDuration] = useState(45)
-  const [numQuestions, setNumQuestions] = useState(10) // 🌟 MỚI: Tùy chỉnh số câu linh hoạt
+  const [numQuestions, setNumQuestions] = useState(10)
   const [difficulty, setDifficulty] = useState<DifficultyType>('medium')
-  const [qTypes, setQTypes] = useState<QuestionType[]>(['choice']) // 🌟 MỚI: Chọn nhiều loại câu hỏi cùng lúc
+  const [qTypes, setQTypes] = useState<QuestionType[]>(['choice'])
   
   // --- ENGINE STATES ---
   const [genStatus, setGenStatus] = useState({ active: false, msg: '' })
@@ -65,6 +65,10 @@ export default function SenTaoBaiPage() {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [scoreResult, setScoreResult] = useState(0)
   const [alwaysShowExplain, setAlwaysShowExplain] = useState(false)
+  
+  // STATES ĐỒNG HỒ ĐẾM NGƯỢC THỜI GIAN THỰC
+  const [timeLeft, setTimeLeft] = useState<number>(0)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Khởi chạy đồng bộ dữ liệu cục bộ thiết bị
   useEffect(() => {
@@ -78,24 +82,49 @@ export default function SenTaoBaiPage() {
     setLoading(false)
   }, [])
 
+  // ENGINE XỬ LÝ ĐẾM NGƯỢC THỜI GIAN LÀM BÀI
+  useEffect(() => {
+    if (currentView === 'quiz' && !isSubmitted && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current)
+            setTimeout(() => { handleScoreQuiz() }, 500)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [currentView, isSubmitted, timeLeft])
+
   const persistExams = (nextList: GeneratedExam[]) => {
     setCreatedExams(nextList)
     try { localStorage.setItem('sen_generated_exams_v3', JSON.stringify(nextList)) } catch(e){}
   }
 
-  // Xử lý toggle chọn nhiều dạng câu hỏi
+  // Xử lý toggle chọn nhiều dạng câu hỏi cùng lúc
   const handleToggleQType = (type: QuestionType) => {
     if (qTypes.includes(type)) {
-      if (qTypes.length > 1) {
-        setQTypes(qTypes.filter(t => t !== type))
-      }
+      if (qTypes.length > 1) setQTypes(qTypes.filter(t => t !== type))
     } else {
       setQTypes([...qTypes, type])
     }
   }
 
+  const formatTimeLeft = (seconds: number) => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    const hStr = h > 0 ? `${h.toString().padStart(2, '0')}:` : ''
+    const mStr = `${m.toString().padStart(2, '0')}:`
+    const sStr = s.toString().padStart(2, '0')
+    return `${hStr}${mStr}${sStr}`
+  }
+
   // ==========================================================================
-  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI (TRỘN DẠNG HỖN HỢP REAL-TIME)
+  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI
   // ==========================================================================
   const handleGenerateExam = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,23 +146,39 @@ export default function SenTaoBaiPage() {
         if (uploadedData?.id) driveFileIds.push(uploadedData.id)
       }
 
-      setGenStatus({ active: true, msg: 'SenAI đang tối ưu thuật toán bóc tách ma trận đề phối hợp...' })
+      setGenStatus({ active: true, msg: 'SenAI đang kết nối tài liệu đám mây, đọc sâu lý thuyết và biên soạn đề...' })
 
-      const aiSystemPrompt = `Hãy biên soạn một bộ đề thi gồm chính xác ${numQuestions} câu hỏi dựa trên nội dung nguồn được cung cấp dưới dạng một mảng JSON các đối tượng.
-      Mức độ tư duy yêu cầu: "${difficulty}".
-      Các dạng câu hỏi được phép tạo kết hợp (hãy phân bổ phân chia đều hoặc đan xen linh hoạt giữa các dạng này): ${qTypes.join(', ')}.
-      Tư liệu nguồn: ${directText} ${driveFileIds.length > 0 ? `(Đã nạp file đính kèm)` : ''}.
+      const aiSystemPrompt = `Bạn là một chuyên gia khảo thí cao cấp của hệ thống SenExam. Hãy biên soạn một bộ đề thi gồm chính xác ${numQuestions} câu hỏi bám sát 100% nội dung nguồn được cung cấp.
 
-      YÊU CẦU ĐỊNH DẠNG ĐẦU RA BẮT BUỘC:
-      Trả về chuỗi JSON mảng trần (JSON array), tuyệt đối không bọc trong các ký tự viết khối mã kiểu \`\`\`json \`\`\`. Mỗi phần tử câu hỏi trong mảng bắt buộc phải chứa thuộc tính "type" để chỉ rõ loại câu hỏi đó:
-      1. Nếu câu hỏi có "type": "choice" -> { "type": "choice", "question": "Nội dung câu hỏi", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "Ký tự đúng A/B/C/D", "explain": "Lời giải chi tiết" }
-      2. Nếu câu hỏi có "type": "true_false" -> { "type": "true_false", "question": "Câu hỏi lớn lệnh đề dẫn", "subQuestions": [{"text": "Mệnh đề 1", "answer": true}, {"text": "Mệnh đề 2", "answer": false}, {"text": "Mệnh đề 3", "answer": true}, {"text": "Mệnh đề 4", "answer": false}], "explain": "Lời giải thích" }
-      3. Nếu câu hỏi có "type": "short_answer" -> { "type": "short_answer", "question": "Câu hỏi bắt điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy cho số thập phân nếu lẻ", "explain": "Lời giải thích" }`
+      MỨC ĐỘ TƯ DUY: "${difficulty}"
+      CÁC DẠNG CÂU HỎI PHỐI HỢP: Đan xen linh hoạt các dạng câu hỏi sau: ${qTypes.join(', ')}.
+
+      NỘI DUNG VĂN BẢN TRỰC TIẾP:
+      ${directText || 'Không có văn bản trực tiếp, hãy đọc hoàn toàn từ các file đính kèm dưới đây.'}
+
+      DANH SÁCH MÃ ĐỊNH DANH TỆP TIN TỪ GOOGLE DRIVE (BẮT BUỘC ĐỌC SÂU, ĐỌC CHI TIẾT TỪNG TRANG FILE):
+      ${driveFileIds.map(id => `- File Google Drive ID: ${id}`).join('\n')}
+
+      QUY TẮC HIỂN THỊ VÀ BIÊN SOẠN KHẮT KHE:
+      - Bạn bắt buộc phải gọi hệ thống nạp tài liệu từ Google Drive dựa trên danh sách ID trên để đọc hiểu, không được hỏi lung tung ngoài nội dung tài liệu.
+      - Dấu nhân trong biểu thức toán/lý bắt buộc phải dùng dấu chấm ".".
+      - Dấu thập phân bắt buộc phải dùng dấu phẩy ",".
+      - Ký hiệu Vector bắt buộc phải viết dưới dạng LaTeX: \\overrightarrow{...}.
+      
+      YÊU CẦU ĐỊNH DẠNG ĐẦU RA:
+      Trả về chuỗi mảng JSON trần (JSON array), tuyệt đối không bọc trong các ký tự khối mã kiểu \`\`\`json. Mỗi phần tử câu hỏi phải chứa thuộc tính "type" tương ứng:
+      1. Câu hỏi "type": "choice" -> { "type": "choice", "question": "Câu hỏi", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "Đáp án A/B/C/D", "explain": "Lời giải" }
+      2. Câu hỏi "type": "true_false" -> { "type": "true_false", "question": "Câu hỏi lệnh dẫn lớn", "subQuestions": [{"text": "Mệnh đề 1", "answer": true}, {"text": "Mệnh đề 2", "answer": false}, {"text": "Mệnh đề 3", "answer": true}, {"text": "Mệnh đề 4", "answer": false}], "explain": "Lời giải" }
+      3. Câu hỏi "type": "short_answer" -> { "type": "short_answer", "question": "Câu hỏi điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy", "explain": "Lời giải" }`
 
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: aiSystemPrompt, history: [] })
+        body: JSON.stringify({ 
+          message: aiSystemPrompt, 
+          history: [],
+          driveFileIds: driveFileIds 
+        })
       })
       const chatData = await response.json()
       
@@ -163,6 +208,7 @@ export default function SenTaoBaiPage() {
       setSelectedExam(newExam)
       setUserAnswers({})
       setIsSubmitted(false)
+      setTimeLeft(duration * 60) 
       setCurrentView('quiz')
 
     } catch (err: any) {
@@ -172,16 +218,17 @@ export default function SenTaoBaiPage() {
   }
 
   // ==========================================================================
-  // BỘ MÁY CHẤM ĐIỂM HỖN HỢP CHUẨN ĐỊNH DẠNG KHẢO THÍ MỚI
+  // BỘ MÁY CHẤM ĐIỂM
   // ==========================================================================
   const handleScoreQuiz = () => {
-    if (!selectedExam) return
+    if (timerRef.current) clearInterval(timerRef.current)
     let correctCount = 0
+    if (!selectedExam) return
     const total = selectedExam.questions.length
 
-    selectedExam.questions.forEach((q, idx) => {
+    selectedExam.questions.forEach((q: any, idx: number) => {
       const uAns = userAnswers[idx]
-      const currentType = q.type || selectedExam.types[0] // Nhận diện type của từng câu đơn lẻ
+      const currentType = q.type
 
       if (currentType === 'choice') {
         if (uAns === q.answer) correctCount++
@@ -219,16 +266,16 @@ export default function SenTaoBaiPage() {
     for(let i=0; i<count; i++) {
       const t = types[i % types.length]
       if (t === 'choice') {
-        list.push({ type: 'choice', question: `Câu hỏi trắc nghiệm tự động phối hợp số ${i+1}: Khảo sát biểu thức chuyển động điều hòa?`, options: ["A. Sớm pha.", "B. Trễ pha.", "C. Ngược pha.", "D. Cùng pha."], answer: "A", explain: "Giải thích hệ thống." })
+        list.push({ type: 'choice', question: `Câu hỏi trắc nghiệm tự động phối hợp số ${i+1}: Vận tốc của vật dao động điều hòa sớm pha hơn li độ một góc là bao nhiêu?`, options: ["A. $\\pi/4$.", "B. $\\pi/2$.", "C. $\\pi$.", "D. $2\\pi$."], answer: "B", explain: "Theo lý thuyết dao động điều hòa, vận tốc sớm pha $\\pi/2$ so với li độ $x$." })
       } else if (t === 'short_answer') {
-        list.push({ type: 'short_answer', question: `Câu hỏi điền số ngắn tự động số ${i+1}: Tính toán biên độ dao động tổng hợp khi hai dao động cùng pha biết $A_1 = 3\\text{ cm}, A_2 = 4\\text{ cm}$.`, answer: "7", explain: "Do biên độ cùng pha nên biên độ tổng hợp bằng tổng hai biên độ thành phần." })
+        list.push({ type: 'short_answer', question: `Câu hỏi điền số ngắn tự động số ${i+1}: Tính chu kỳ chuyển động tự do của con lắc lò xo biết độ cứng $k = 40 \\text{ N/m}$, khối lượng vật nặng $m = 0,4 \\text{ kg}$ (Lấy $\\pi^2 = 10$).`, answer: "0,63", explain: "Áp dụng công thức chu kỳ con lắc lò xo: $T = 2\\pi \\sqrt{\\frac{m}{k}} = 2\\pi \\sqrt{\\frac{0,4}{40}} = 0,2\\pi \\approx 0,63 \\text{ s}$." })
       } else {
-        list.push({ type: 'true_false', question: `Câu hỏi đúng sai liên hoàn số ${i+1}: Nhận định về các định luật cơ học cổ điển Newton:`, subQuestions: [
-          { text: "A. Định luật I còn được gọi là định luật quán tính.", answer: true },
-          { text: "B. Lực tác dụng luôn luôn tỉ lệ nghịch với gia tốc thu được.", answer: false },
-          { text: "C. Hành động và phản lực tác dụng vào hai vật khác nhau.", answer: true },
-          { text: "D. Hệ quy chiếu quán tính là hệ quy chiếu chuyển động có gia tốc.", answer: false }
-        ], explain: "Phân tích chi tiết hệ mệnh đề." })
+        list.push({ type: 'true_false', question: `Câu hỏi đúng sai liên hoàn số ${i+1}: Nhận định về tính chất của sóng cơ học truyền trên môi trường đàn hồi vật chất:`, subQuestions: [
+          { text: "A. Sóng cơ có khả năng truyền đi được trong cả môi trường chân không.", answer: false },
+          { text: "B. Sóng dọc là hiện tượng các phần tử dao động trùng phương truyền sóng.", answer: true },
+          { text: "C. Vận tốc truyền sóng phụ thuộc hoàn toàn vào mật độ cấu trúc môi trường.", answer: true },
+          { text: "D. Khoảng cách gần nhất giữa hai phần tử cùng pha gọi là nửa bước sóng.", answer: false }
+        ], explain: "Sóng cơ không truyền được trong chân không. Khoảng cách gần nhất giữa hai điểm cùng pha trên cùng phương truyền sóng là một bước sóng $\\lambda$." })
       }
     }
     return list
@@ -306,12 +353,15 @@ export default function SenTaoBaiPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={labelClass}>Thời gian làm bài</label>
-                    <select value={duration} onChange={e=>setDuration(Number(e.target.value))} className={mdInput + " !py-[18px] font-black"}>
-                      <option value="15">15 phút</option><option value="45">45 phút</option><option value="60">60 phút</option><option value="90">90 phút</option>
-                    </select>
+                    <label className={labelClass}>Thời gian làm bài (Tối đa 10000 phút)</label>
+                    <input 
+                      type="number" min={1} max={10000}
+                      value={duration} 
+                      onChange={e=>setDuration(Math.min(10000, Math.max(1, Number(e.target.value))))} 
+                      className={mdInput}
+                      placeholder="Nhập số phút..."
+                    />
                   </div>
-                  {/* 🌟 ĐÃ MỞ KHÓA: SẾP TÙY CHỈNH SỐ CÂU THOẢI MÁI LÊN TỚI 100 CÂU */}
                   <div>
                     <label className={labelClass}>Số lượng câu hỏi (Tối đa 100 câu)</label>
                     <input 
@@ -330,7 +380,6 @@ export default function SenTaoBaiPage() {
                   <div><label className={labelClass}>Ngôn ngữ</label><select className={mdInput + " !py-[18px] font-black"} disabled><option>Tiếng Việt</option></select></div>
                 </div>
 
-                {/* 🌟 ĐÃ SỬA: CHO PHÉP TÍCH CHỌN MULTI-SELECT NHIỀU DẠNG CÂU HỎI TRỘN LẪN */}
                 <div>
                   <label className={labelClass}>Dạng câu hỏi mục tiêu (Có thể chọn nhiều)</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -368,7 +417,7 @@ export default function SenTaoBaiPage() {
                     <div className="h-full flex flex-col items-center justify-center text-center opacity-50 px-4"><BookOpen className="w-12 h-12 mb-3 text-slate-300"/><p className="font-black text-sm">Kho lưu trữ trống</p></div>
                   ) : (
                     createdExams.map(ex => (
-                      <div key={ex.id} onClick={()=>{ setSelectedExam(ex); setUserAnswers({}); setIsSubmitted(false); setCurrentView('quiz'); }} className="p-4 bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 rounded-2xl cursor-pointer hover:border-indigo-500 transition-all flex justify-between items-center group">
+                      <div key={ex.id} onClick={()=>{ setSelectedExam(ex); setUserAnswers({}); setIsSubmitted(false); setTimeLeft(ex.duration * 60); setCurrentView('quiz'); }} className="p-4 bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 rounded-2xl cursor-pointer hover:border-indigo-500 transition-all flex justify-between items-center group">
                         <div className="min-w-0 pr-4">
                           <h4 className="font-black text-xs text-slate-800 dark:text-slate-200 truncate">{ex.title}</h4>
                           <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{ex.createdAt} • {ex.duration} phút • {ex.questions.length} câu</p>
@@ -383,7 +432,7 @@ export default function SenTaoBaiPage() {
           </div>
         ) : (
           // ==================================================================
-          // 🌟 GIAO DIỆN PHÒNG THI CHUYÊN NGHIỆP MIXED-TYPE TẠI CHỖ (ẢNH SẾP GỬI)
+          // 🌟 GIAO DIỆN PHÒNG THI MIXED-TYPE TẠI CHỖ
           // ==================================================================
           selectedExam && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-in fade-in duration-300">
@@ -397,7 +446,7 @@ export default function SenTaoBaiPage() {
                 </div>
 
                 {selectedExam.questions.map((q, idx) => {
-                  const currentType = q.type || selectedExam.types[0] // Nhận diện động dạng của từng câu hỏi lẻ
+                  const currentType = q.type || selectedExam.types[0]
                   return (
                     <div key={idx} className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/5 rounded-[1.75rem] p-6 shadow-sm space-y-4">
                       
@@ -489,9 +538,18 @@ export default function SenTaoBaiPage() {
               {/* KHUNG PHẢI: KHOẢNG ĐIỀU KHIỂN CỐ ĐỊNH */}
               <div className="lg:col-span-4 sticky top-[104px] space-y-5">
                 <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 text-center space-y-5 shadow-sm">
+                  
+                  {/* Hiển thị đồng hồ đếm ngược thời gian thực */}
                   <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center justify-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Thời gian làm bài</p>
-                    <p className="text-3xl font-black text-slate-800 dark:text-white">{selectedExam.duration} phút</p>
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center justify-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Thời gian còn lại</p>
+                    <p className={`text-4xl font-black font-mono transition-colors ${timeLeft < 60 && !isSubmitted ? 'text-rose-500 animate-pulse' : 'text-slate-800 dark:text-white'}`}>
+                      {isSubmitted ? 'Đã nộp bài' : formatTimeLeft(timeLeft)}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-bold">Tổng thời gian: {selectedExam.duration} phút</p>
+                  </div>
+
+                  <div className="text-left text-xs font-medium text-slate-500 leading-relaxed bg-slate-50 dark:bg-[#1A1A1A] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
+                    Làm thử đề thi được AI tạo trực tiếp dựa trên tài liệu bạn đã chọn. Bấm <strong>Nộp bài</strong> để xem điểm và giải thích chi tiết.
                   </div>
 
                   {isSubmitted && (
@@ -507,11 +565,11 @@ export default function SenTaoBaiPage() {
                         Nộp bài thi
                       </button>
                     ) : (
-                      <button onClick={()=>{ setUserAnswers({}); setIsSubmitted(false); }} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5">
-                        <Play className="w-3.5 h-3.5 fill-white"/> Làm lại bài thi
+                      <button onClick={()=>{ setUserAnswers({}); setIsSubmitted(false); setTimeLeft(selectedExam.duration * 60); }} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all active:scale-[0.98]">
+                        Làm lại bài thi
                       </button>
                     )}
-                    <button onClick={() => setCurrentView('form')} className="w-full bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 text-slate-700 dark:text-slate-300 py-3.5 rounded-2xl font-extrabold text-xs uppercase tracking-wider transition-colors">
+                    <button onClick={() => { if (timerRef.current) clearInterval(timerRef.current); setCurrentView('form'); }} className="w-full bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 text-slate-700 dark:text-slate-300 py-3.5 rounded-2xl font-extrabold text-xs uppercase tracking-wider transition-colors">
                       Thoát phòng thi
                     </button>
                   </div>
