@@ -70,6 +70,11 @@ export default function SenTaoBaiPage() {
   const [timeLeft, setTimeLeft] = useState<number>(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Cờ hiệu để quản lý việc chèn tiêu đề phân khu (Phần I, II, III) trong vòng lặp map
+  let renderedChoiceHeader = false
+  let renderedTrueFalseHeader = false
+  let renderedShortHeader = false
+
   // Khởi chạy đồng bộ dữ liệu cục bộ thiết bị
   useEffect(() => {
     if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
@@ -124,7 +129,7 @@ export default function SenTaoBaiPage() {
   }
 
   // ==========================================================================
-  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI
+  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI (SẮP XẾP PHÂN KHU CHUYÊN BIỆT)
   // ==========================================================================
   const handleGenerateExam = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -146,12 +151,12 @@ export default function SenTaoBaiPage() {
         if (uploadedData?.id) driveFileIds.push(uploadedData.id)
       }
 
-      setGenStatus({ active: true, msg: 'SenAI đang kết nối tài liệu đám mây, đọc sâu lý thuyết và biên soạn đề...' })
+      setGenStatus({ active: true, msg: 'SenAI đang kết nối tài liệu đám mây, đọc sâu lý thuyết và phân tách đề...' })
 
-      const aiSystemPrompt = `Bạn là một chuyên gia khảo thí cao cấp của hệ thống SenExam. Hãy biên soạn một bộ đề thi gồm chính xác ${numQuestions} câu hỏi bám sát 100% nội dung nguồn được cung cấp.
+      const aiSystemPrompt = `Bạn là một chuyên gia khảo thí quốc gia tối cao của hệ thống SenExam. Hãy biên soạn một bộ đề thi gồm chính xác ${numQuestions} câu hỏi bám sát và khai thác sâu sắc tư liệu nguồn được cung cấp.
 
-      MỨC ĐỘ TƯ DUY: "${difficulty}"
-      CÁC DẠNG CÂU HỎI PHỐI HỢP: Đan xen linh hoạt các dạng câu hỏi sau: ${qTypes.join(', ')}.
+      MỨC ĐỘ TƯ DUY YÊU CẦU: "${difficulty}"
+      CÁC DẠNG CÂU HỎI ĐƯỢC PHÉP TẠO: ${qTypes.join(', ')}.
 
       NỘI DUNG VĂN BẢN TRỰC TIẾP:
       ${directText || 'Không có văn bản trực tiếp, hãy đọc hoàn toàn từ các file đính kèm dưới đây.'}
@@ -159,17 +164,19 @@ export default function SenTaoBaiPage() {
       DANH SÁCH MÃ ĐỊNH DANH TỆP TIN TỪ GOOGLE DRIVE (BẮT BUỘC ĐỌC SÂU, ĐỌC CHI TIẾT TỪNG TRANG FILE):
       ${driveFileIds.map(id => `- File Google Drive ID: ${id}`).join('\n')}
 
-      QUY TẮC HIỂN THỊ VÀ BIÊN SOẠN KHẮT KHE:
-      - Bạn bắt buộc phải gọi hệ thống nạp tài liệu từ Google Drive dựa trên danh sách ID trên để đọc hiểu, không được hỏi lung tung ngoài nội dung tài liệu.
-      - Dấu nhân trong biểu thức toán/lý bắt buộc phải dùng dấu chấm ".".
-      - Dấu thập phân bắt buộc phải dùng dấu phẩy ",".
-      - Ký hiệu Vector bắt buộc phải viết dưới dạng LaTeX: \\overrightarrow{...}.
+      ❌ QUY TẮC NỘI DUNG TUYỆT ĐỐI CẤM VI PHẠM (ĐỂ TRÁNH LỖI LẶP LẠI):
+      1. TUYỆT ĐỐI KHÔNG tự bịa ra nội dung đại trà, sáo rỗng hay lặp đi lặp lại. Phải trích xuất và biến đổi sâu sắc dữ liệu, công thức, số liệu thực tế từ tệp tài liệu được nạp.
+      2. TUYỆT ĐỐI KHÔNG viết các tiền tố thừa thãi ở đầu câu hỏi như "Câu hỏi trắc nghiệm số X:", "Câu hỏi đúng sai tự động:", "Câu 1: ...". Hãy đi thẳng vào nội dung câu hỏi (Ví dụ: "Một vật dao động..."). Hệ thống giao diện của tôi đã tự động đánh số và chia phần độc lập.
+      3. Dấu nhân trong biểu thức toán/lý bắt buộc phải dùng dấu chấm ".".
+      4. Dấu thập phân bắt buộc phải dùng dấu phẩy ",".
+      5. Ký hiệu Vector bắt buộc phải viết dưới dạng LaTeX: \\overrightarrow{...}.
+      6. Hãy phân bổ số lượng câu hỏi đều cho các dạng câu hỏi được chọn và SẮP XẾP các câu hỏi trả về theo thứ tự nhóm dạng: Toàn bộ câu hỏi dạng 'choice' đứng đầu, tiếp theo là toàn bộ câu hỏi dạng 'true_false', và cuối cùng là dạng 'short_answer'.
       
-      YÊU CẦU ĐỊNH DẠNG ĐẦU RA:
+      YÊU CẦU ĐỊNH DẠNG ĐẦU RA CHUẨN JSON CHẶT CHẼ:
       Trả về chuỗi mảng JSON trần (JSON array), tuyệt đối không bọc trong các ký tự khối mã kiểu \`\`\`json. Mỗi phần tử câu hỏi phải chứa thuộc tính "type" tương ứng:
-      1. Câu hỏi "type": "choice" -> { "type": "choice", "question": "Câu hỏi", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "Đáp án A/B/C/D", "explain": "Lời giải" }
-      2. Câu hỏi "type": "true_false" -> { "type": "true_false", "question": "Câu hỏi lệnh dẫn lớn", "subQuestions": [{"text": "Mệnh đề 1", "answer": true}, {"text": "Mệnh đề 2", "answer": false}, {"text": "Mệnh đề 3", "answer": true}, {"text": "Mệnh đề 4", "answer": false}], "explain": "Lời giải" }
-      3. Câu hỏi "type": "short_answer" -> { "type": "short_answer", "question": "Câu hỏi điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy", "explain": "Lời giải" }`
+      1. Câu hỏi "type": "choice" -> { "type": "choice", "question": "Nội dung câu hỏi thẳng vào vấn đề", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "Đáp án A/B/C/D", "explain": "Lời giải" }
+      2. Câu hỏi "type": "true_false" -> { "type": "true_false", "question": "Mở đầu tình huống lệnh dẫn lớn cho 4 ý", "subQuestions": [{"text": "Mệnh đề a) ...", "answer": true}, {"text": "Mệnh đề b) ...", "answer": false}, {"text": "Mệnh đề c) ...", "answer": true}, {"text": "Mệnh đề d) ...", "answer": false}], "explain": "Lời giải" }
+      3. Câu hỏi "type": "short_answer" -> { "type": "short_answer", "question": "Câu hỏi tính toán yêu cầu điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy nếu lẻ", "explain": "Lời giải" }`
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -189,6 +196,10 @@ export default function SenTaoBaiPage() {
       } catch (err) {
         parsedQuestions = mockFallbackQuestions(numQuestions, qTypes)
       }
+
+      // Sắp xếp lại mảng một lần nữa ở Frontend để đảm bảo tuyệt đối các câu cùng loại gom về chung một phần
+      const typeOrder = { 'choice': 1, 'true_false': 2, 'short_answer': 3 }
+      parsedQuestions.sort((a: any, b: any) => (typeOrder[a.type as QuestionType] || 1) - (typeOrder[b.type as QuestionType] || 1))
 
       const newExam: GeneratedExam = {
         id: 'exam_' + Date.now(),
@@ -266,22 +277,25 @@ export default function SenTaoBaiPage() {
     for(let i=0; i<count; i++) {
       const t = types[i % types.length]
       if (t === 'choice') {
-        list.push({ type: 'choice', question: `Câu hỏi trắc nghiệm tự động phối hợp số ${i+1}: Vận tốc của vật dao động điều hòa sớm pha hơn li độ một góc là bao nhiêu?`, options: ["A. $\\pi/4$.", "B. $\\pi/2$.", "C. $\\pi$.", "D. $2\\pi$."], answer: "B", explain: "Theo lý thuyết dao động điều hòa, vận tốc sớm pha $\\pi/2$ so với li độ $x$." })
+        list.push({ type: 'choice', question: "Một vật dao động điều hòa xuôi theo trục Ox. Vận tốc của vật dao động điều hòa sớm pha hơn li độ một góc là bao nhiêu?", options: ["A. $\\pi/4$.", "B. $\\pi/2$.", "C. $\\pi$.", "D. $2\\pi$."], answer: "B", explain: "Theo phương trình li độ và vận tốc, ta có $v$ luôn sớm pha $\\pi/2$ so với $x$." })
       } else if (t === 'short_answer') {
-        list.push({ type: 'short_answer', question: `Câu hỏi điền số ngắn tự động số ${i+1}: Tính chu kỳ chuyển động tự do của con lắc lò xo biết độ cứng $k = 40 \\text{ N/m}$, khối lượng vật nặng $m = 0,4 \\text{ kg}$ (Lấy $\\pi^2 = 10$).`, answer: "0,63", explain: "Áp dụng công thức chu kỳ con lắc lò xo: $T = 2\\pi \\sqrt{\\frac{m}{k}} = 2\\pi \\sqrt{\\frac{0,4}{40}} = 0,2\\pi \\approx 0,63 \\text{ s}$." })
+        list.push({ type: 'short_answer', question: "Tính chu kỳ chuyển động tự do của con lắc lò xo biết độ cứng $k = 40 \\text{ N/m}$, khối lượng vật nặng $m = 0,4 \\text{ kg}$ (Lấy $\\pi^2 = 10$).", answer: "0,63", explain: "Áp dụng công thức chu kỳ con lắc lò xo: $T = 2\\pi \\sqrt{\\frac{m}{k}} = 2\\pi \\sqrt{\\frac{0,4}{40}} = 0,2\\pi \\approx 0,63 \\text{ s}$." })
       } else {
-        list.push({ type: 'true_false', question: `Câu hỏi đúng sai liên hoàn số ${i+1}: Nhận định về tính chất của sóng cơ học truyền trên môi trường đàn hồi vật chất:`, subQuestions: [
-          { text: "A. Sóng cơ có khả năng truyền đi được trong cả môi trường chân không.", answer: false },
-          { text: "B. Sóng dọc là hiện tượng các phần tử dao động trùng phương truyền sóng.", answer: true },
-          { text: "C. Vận tốc truyền sóng phụ thuộc hoàn toàn vào mật độ cấu trúc môi trường.", answer: true },
-          { text: "D. Khoảng cách gần nhất giữa hai phần tử cùng pha gọi là nửa bước sóng.", answer: false }
-        ], explain: "Sóng cơ không truyền được trong chân không. Khoảng cách gần nhất giữa hai điểm cùng pha trên cùng phương truyền sóng là một bước sóng $\\lambda$." })
+        list.push({ type: 'true_false', question: "Nhận định về tính chất của sóng cơ học truyền trên môi trường đàn hồi vật chất phương chuyển động:", subQuestions: [
+          { text: "a) Sóng cơ có khả năng truyền đi được trong cả môi trường chân không tuyệt đối.", answer: false },
+          { text: "b) Sóng dọc là hiện tượng các phần tử dao động trùng phương truyền sóng.", answer: true },
+          { text: "c) Vận tốc truyền sóng phụ thuộc hoàn toàn vào mật độ cấu trúc môi trường.", answer: true },
+          { text: "d) Khoảng cách gần nhất giữa hai phần tử cùng pha gọi là nửa bước sóng.", answer: false }
+        ], explain: "Sóng cơ không truyền được trong chân không. Khoảng cách gần nhất giữa hai điểm cùng pha là một bước sóng $\\lambda$." })
       }
     }
     return list
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-600" /></div>
+  // Khởi lập lại trạng thái hiển thị tiêu đề phân khu cho lượt render mới
+  renderedChoiceHeader = false
+  renderedTrueFalseHeader = false
+  renderedShortHeader = false
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-24 transition-colors duration-500">
@@ -352,6 +366,7 @@ export default function SenTaoBaiPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* 🌟 ĐÃ SỬA: ĐỔI THÀNH Ô TỰ ĐIỀN SỐ PHÚT LÀM BÀI, TỐI ĐA 10000 PHÚT */}
                   <div>
                     <label className={labelClass}>Thời gian làm bài (Tối đa 10000 phút)</label>
                     <input 
@@ -380,6 +395,7 @@ export default function SenTaoBaiPage() {
                   <div><label className={labelClass}>Ngôn ngữ</label><select className={mdInput + " !py-[18px] font-black"} disabled><option>Tiếng Việt</option></select></div>
                 </div>
 
+                {/* CHO PHÉP TÍCH CHỌN MULTI-SELECT NHIỀU DẠNG CÂU HỎI TRỘN LẪN */}
                 <div>
                   <label className={labelClass}>Dạng câu hỏi mục tiêu (Có thể chọn nhiều)</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -432,110 +448,145 @@ export default function SenTaoBaiPage() {
           </div>
         ) : (
           // ==================================================================
-          // 🌟 GIAO DIỆN PHÒNG THI MIXED-TYPE TẠI CHỖ
+          // 🌟 GIAO DIỆN PHÒNG THI CHIA PHẦN ĐỘC LẬP CHUẨN KHẢO THÍ MỚI
           // ==================================================================
           selectedExam && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-in fade-in duration-300">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto">
               
               <div className="lg:col-span-8 space-y-5">
                 <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl p-4 rounded-[1.5rem] border border-slate-200 dark:border-white/5 flex items-center justify-between shadow-sm">
                   <div className="min-w-0">
-                    <h2 className="font-black text-sm text-slate-800 dark:text-white uppercase truncate">{selectedExam.title}</h2>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Đề thi AI hỗn hợp - {selectedExam.questions.length} câu hỏi</p>
+                    <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{selectedExam.title}</h2>
+                    <p className="text-xs font-bold text-slate-400 mt-1.5">{selectedExam.description}</p>
                   </div>
                 </div>
 
+                {/* VÒNG LẶP RENDER CÂU HỎI TỰ ĐỘNG CHÈN BANNER PHẦN THI CHUYÊN BIỆT */}
                 {selectedExam.questions.map((q, idx) => {
                   const currentType = q.type || selectedExam.types[0]
+                  let sectionHeader = null
+
+                  // Thuật toán chèn Header ngăn cách các phần thi I, II, III
+                  if (currentType === 'choice' && !renderedChoiceHeader) {
+                    renderedChoiceHeader = true
+                    sectionHeader = (
+                      <div className="p-5 bg-gradient-to-r from-indigo-500/10 to-transparent border-l-4 border-indigo-500 rounded-r-2xl my-4 animate-in fade-in">
+                        <h4 className="font-black text-xs uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Phần I: Câu hỏi trắc nghiệm nhiều lựa chọn (ABCD)</h4>
+                        <p className="text-[11px] font-bold text-slate-400 mt-1">Mỗi câu hỏi thí sinh chỉ chọn một phương án trả lời duy nhất.</p>
+                      </div>
+                    )
+                  } else if (currentType === 'true_false' && !renderedTrueFalseHeader) {
+                    renderedTrueFalseHeader = true
+                    sectionHeader = (
+                      <div className="p-5 bg-gradient-to-r from-rose-500/10 to-transparent border-l-4 border-rose-500 rounded-r-2xl my-4 animate-in fade-in">
+                        <h4 className="font-black text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400">Phần II: Câu hỏi trắc nghiệm Đúng / Sai</h4>
+                        <p className="text-[11px] font-bold text-slate-400 mt-1">Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn Đúng hoặc Sai.</p>
+                      </div>
+                    )
+                  } else if (currentType === 'short_answer' && !renderedShortHeader) {
+                    renderedShortHeader = true
+                    sectionHeader = (
+                      <div className="p-5 bg-gradient-to-r from-emerald-500/10 to-transparent border-l-4 border-emerald-500 rounded-r-2xl my-4 animate-in fade-in">
+                        <h4 className="font-black text-xs uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Phần III: Câu hỏi trắc nghiệm trả lời ngắn</h4>
+                        <p className="text-[11px] font-bold text-slate-400 mt-1">Thí sinh điền đáp án bằng số cụ thể vào các ô trống tương ứng (Làm tròn tối đa 2 số thập phân).</p>
+                      </div>
+                    )
+                  }
+
                   return (
-                    <div key={idx} className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/5 rounded-[1.75rem] p-6 shadow-sm space-y-4">
+                    <div key={idx} className="space-y-4">
+                      {sectionHeader}
                       
-                      <div className="w-fit px-3 py-1.5 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                        Câu {idx + 1} - {currentType === 'choice' ? 'Trắc nghiệm ABCD' : currentType === 'short_answer' ? 'Trả lời ngắn' : 'Đúng / Sai'}
-                      </div>
-
-                      <div className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-relaxed overflow-x-auto custom-scrollbar">
-                        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <p className="m-0" {...props} />, strong: ({node, ...props}: any) => <strong className="font-black text-indigo-500" {...props} /> }}>
-                          {q.question}
-                        </ReactMarkdown>
-                      </div>
-
-                      {/* 1. RENDER FORM TRẮC NGHIỆM ABCD */}
-                      {currentType === 'choice' && q.options && (
-                        <div className="space-y-2.5 pt-2">
-                          {q.options.map((opt: string) => {
-                            const letter = opt.trim().charAt(0).toUpperCase()
-                            const isSel = userAnswers[idx] === letter
-                            return (
-                              <button 
-                                key={opt} type="button" disabled={isSubmitted}
-                                onClick={() => setUserAnswers({ ...userAnswers, [idx]: letter })}
-                                className={`w-full p-4 rounded-xl text-xs font-bold text-left border transition-all flex items-center gap-4 ${isSel ? 'bg-indigo-50 border-indigo-500 dark:bg-indigo-950/30' : 'bg-white dark:bg-[#1A1A1A] border-slate-200 dark:border-white/5 hover:bg-slate-50'}`}
-                              >
-                                <div className={`w-6 h-6 rounded-full border flex items-center justify-center font-black shrink-0 ${isSel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-[#252525] border-slate-300'}`}>{letter}</div>
-                                <span className="flex-1 overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{opt.substring(2)}</ReactMarkdown></span>
-                                {(isSubmitted || alwaysShowExplain) && q.answer === letter && <Check className="w-4 h-4 text-emerald-500 shrink-0"/>}
-                              </button>
-                            )
-                          })}
+                      <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/5 rounded-[1.75rem] p-6 shadow-sm space-y-4 animate-in fade-in">
+                        
+                        {/* Đã sửa: Chỉ ghi nhãn phân biệt dạng, tuyệt đối không in chuỗi text rác thừa thãi */}
+                        <div className="w-fit px-3 py-1.5 bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                          Câu {idx + 1}
                         </div>
-                      )}
 
-                      {/* 2. RENDER FORM ĐÚNG SAI CHUẨN FORM MỚI */}
-                      {currentType === 'true_false' && q.subQuestions && (
-                        <div className="space-y-2.5 pt-2">
-                          {q.subQuestions.map((sub: any, subIdx: number) => {
-                            const currentAns = userAnswers[`${idx}_${subIdx}`]
-                            return (
-                              <div key={subIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-50 dark:bg-[#1A1A1A] rounded-xl border border-slate-100 dark:border-white/5 text-xs font-bold">
-                                <span className="text-slate-700 dark:text-slate-300 overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{sub.text}</ReactMarkdown></span>
-                                <div className="flex gap-2 shrink-0">
-                                  <button type="button" disabled={isSubmitted} onClick={() => setUserAnswers({ ...userAnswers, [`${idx}_${subIdx}`]: true })} className={`px-4 py-1.5 rounded-lg border text-[11px] font-black ${currentAns === true ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-[#252525] border-slate-200'}`}>Đúng</button>
-                                  <button type="button" disabled={isSubmitted} onClick={() => setUserAnswers({ ...userAnswers, [`${idx}_${subIdx}`]: false })} className={`px-4 py-1.5 rounded-lg border text-[11px] font-black ${currentAns === false ? 'bg-rose-600 text-white' : 'bg-white dark:bg-[#252525] border-slate-200'}`}>Sai</button>
-                                  {(isSubmitted || alwaysShowExplain) && <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase ${sub.answer ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{sub.answer ? 'Đúng' : 'Sai'}</span>}
-                                </div>
-                              </div>
-                            )
-                          })}
+                        <div className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-relaxed overflow-x-auto custom-scrollbar">
+                          <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <p className="m-0" {...props} />, strong: ({node, ...props}: any) => <strong className="font-black text-indigo-500" {...props} /> }}>
+                            {q.question}
+                          </ReactMarkdown>
                         </div>
-                      )}
 
-                      {/* 3. RENDER FORM 4 Ô ĐIỀN RỜI TRẢ LỜI NGẮN */}
-                      {currentType === 'short_answer' && (
-                        <div className="pt-2 space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex gap-1">
-                              {[0, 1, 2, 3].map(boxIdx => {
-                                const char = String(userAnswers[idx] || '')[boxIdx] || ''
-                                return (
-                                  <div key={boxIdx} className="w-9 h-11 rounded-lg bg-slate-50 dark:bg-[#1A1A1A] border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center font-black text-sm text-indigo-600 shadow-inner">{char}</div>
-                                )
-                              })}
-                            </div>
-                            <input 
-                              type="text" maxLength={4} disabled={isSubmitted}
-                              value={userAnswers[idx] || ''} onChange={(e) => setUserAnswers({ ...userAnswers, [idx]: e.target.value })}
-                              placeholder="Gõ số..." className="bg-slate-100 dark:bg-[#202020] border rounded-xl px-3 py-2 text-xs font-bold outline-none w-28 focus:border-indigo-500"
-                            />
+                        {/* 1. RENDER FORM TRẮC NGHIỆM ABCD */}
+                        {currentType === 'choice' && q.options && (
+                          <div className="space-y-2.5 pt-2">
+                            {q.options.map((opt: string) => {
+                              const letter = opt.trim().charAt(0).toUpperCase()
+                              const isSel = userAnswers[idx] === letter
+                              return (
+                                <button 
+                                  key={opt} type="button" disabled={isSubmitted}
+                                  onClick={() => setUserAnswers({ ...userAnswers, [idx]: letter })}
+                                  className={`w-full p-4 rounded-xl text-xs font-bold text-left border transition-all flex items-center gap-4 ${isSel ? 'bg-indigo-50 border-indigo-500 dark:bg-indigo-950/30' : 'bg-white dark:bg-[#1A1A1A] border-slate-200 dark:border-white/5 hover:bg-slate-50'}`}
+                                >
+                                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center font-black shrink-0 ${isSel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-[#252525] border-slate-300'}`}>{letter}</div>
+                                  <span className="flex-1 overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{opt.substring(2)}</ReactMarkdown></span>
+                                  {(isSubmitted || alwaysShowExplain) && q.answer === letter && <Check className="w-4 h-4 text-emerald-500 shrink-0"/>}
+                                </button>
+                              )
+                            })}
                           </div>
-                          {(isSubmitted || alwaysShowExplain) && <div className="text-xs font-black text-slate-400">Đáp án chuẩn: <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md font-mono">{q.answer}</span></div>}
-                        </div>
-                      )}
+                        )}
 
-                      {/* Giải thích lời giải chi tiết */}
-                      {(isSubmitted || alwaysShowExplain) && q.explain && (
-                        <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 rounded-2xl text-xs font-bold text-indigo-700 dark:text-indigo-400 mt-2 leading-relaxed">
-                          <span className="block uppercase font-black text-[10px] tracking-widest text-indigo-500 mb-1">Lời giải chi tiết từ SenAI:</span>
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.explain}</ReactMarkdown>
-                        </div>
-                      )}
+                        {/* 2. RENDER FORM ĐÚNG SAI CHUẨN KHẢO THÍ MỚI */}
+                        {currentType === 'true_false' && q.subQuestions && (
+                          <div className="space-y-2.5 pt-2">
+                            {q.subQuestions.map((sub: any, subIdx: number) => {
+                              const currentAns = userAnswers[`${idx}_${subIdx}`]
+                              return (
+                                <div key={subIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-50 dark:bg-[#1A1A1A] rounded-xl border border-slate-100 dark:border-white/5 text-xs font-bold">
+                                  <span className="text-slate-700 dark:text-slate-300 overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{sub.text}</ReactMarkdown></span>
+                                  <div className="flex gap-2 shrink-0">
+                                    <button type="button" disabled={isSubmitted} onClick={() => setUserAnswers({ ...userAnswers, [`${idx}_${subIdx}`]: true })} className={`px-4 py-1.5 rounded-lg border text-[11px] font-black ${currentAns === true ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-[#252525] border-slate-200'}`}>Đúng</button>
+                                    <button type="button" disabled={isSubmitted} onClick={() => setUserAnswers({ ...userAnswers, [`${idx}_${subIdx}`]: false })} className={`px-4 py-1.5 rounded-lg border text-[11px] font-black ${currentAns === false ? 'bg-rose-600 text-white' : 'bg-white dark:bg-[#252525] border-slate-200'}`}>Sai</button>
+                                    {(isSubmitted || alwaysShowExplain) && <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase ${sub.answer ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{sub.answer ? 'Đúng' : 'Sai'}</span>}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
 
+                        {/* 3. RENDER FORM 4 Ô ĐIỀN RỜI TRẢ LỜI NGẮN */}
+                        {currentType === 'short_answer' && (
+                          <div className="pt-2 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex gap-1">
+                                {[0, 1, 2, 3].map(boxIdx => {
+                                  const char = String(userAnswers[idx] || '')[boxIdx] || ''
+                                  return (
+                                    <div key={boxIdx} className="w-9 h-11 rounded-lg bg-slate-50 dark:bg-[#1A1A1A] border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center font-black text-sm text-indigo-600 shadow-inner">{char}</div>
+                                  )
+                                })}
+                              </div>
+                              <input 
+                                type="text" maxLength={4} disabled={isSubmitted}
+                                value={userAnswers[idx] || ''} onChange={(e) => setUserAnswers({ ...userAnswers, [idx]: e.target.value })}
+                                placeholder="Gõ số..." className="bg-slate-100 dark:bg-[#202020] border rounded-xl px-3 py-2 text-xs font-bold outline-none w-28 focus:border-indigo-500"
+                              />
+                            </div>
+                            {(isSubmitted || alwaysShowExplain) && <div className="text-xs font-black text-slate-400">Đáp án chuẩn: <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md font-mono">{q.answer}</span></div>}
+                          </div>
+                        )}
+
+                        {/* Giải thích lời giải chi tiết */}
+                        {(isSubmitted || alwaysShowExplain) && q.explain && (
+                          <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 rounded-2xl text-xs font-bold text-indigo-700 dark:text-indigo-400 mt-2 leading-relaxed">
+                            <span className="block uppercase font-black text-[10px] tracking-widest text-indigo-500 mb-1">Lời giải chi tiết từ SenAI:</span>
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.explain}</ReactMarkdown>
+                          </div>
+                        )}
+
+                      </div>
                     </div>
                   )
                 })}
               </div>
 
-              {/* KHUNG PHẢI: KHOẢNG ĐIỀU KHIỂN CỐ ĐỊNH */}
+              {/* KHUNG PHẢI: KHOẢNG ĐIỀU KHIỂN CỐ ĐỊNH CHẠY TIMER */}
               <div className="lg:col-span-4 sticky top-[104px] space-y-5">
                 <div className="bg-white dark:bg-[#121212] border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 text-center space-y-5 shadow-sm">
                   
@@ -545,7 +596,7 @@ export default function SenTaoBaiPage() {
                     <p className={`text-4xl font-black font-mono transition-colors ${timeLeft < 60 && !isSubmitted ? 'text-rose-500 animate-pulse' : 'text-slate-800 dark:text-white'}`}>
                       {isSubmitted ? 'Đã nộp bài' : formatTimeLeft(timeLeft)}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-bold">Tổng thời gian: {selectedExam.duration} phút</p>
+                    <p className="text-[10px] text-slate-400 font-bold">Tổng thời gian cài đặt: {selectedExam.duration} phút</p>
                   </div>
 
                   <div className="text-left text-xs font-medium text-slate-500 leading-relaxed bg-slate-50 dark:bg-[#1A1A1A] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
