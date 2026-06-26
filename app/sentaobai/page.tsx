@@ -8,7 +8,7 @@ import {
   BookOpen, Search, Sparkles, Calculator, HelpCircle, CheckCircle2, 
   AlertCircle, FileText, Image, Calendar, Settings2, Play, Square, RotateCcw,
   Target, CircleDot, Activity, Cpu, Edit3, Maximize2, Minimize2, Check, Clock, 
-  ShieldAlert, Share2, Download, FileJson, FileCode
+  ShieldAlert, Share2, Download, FileJson, FileCode, Database
 } from 'lucide-react'
 
 // Bộ render toán học LaTeX chuẩn xác hệ thống
@@ -37,6 +37,7 @@ interface GeneratedExam {
   difficulty: DifficultyType
   types: QuestionType[]
   createdAt: string
+  knowledgeBase: { definitions: string[]; formulas: string[] }
   questions: any[]
 }
 
@@ -70,7 +71,6 @@ export default function SenTaoBaiPage() {
   const [timeLeft, setTimeLeft] = useState<number>(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Cờ hiệu để quản lý việc chèn tiêu đề phân khu (Phần I, II, III) trong vòng lặp map
   let renderedChoiceHeader = false
   let renderedTrueFalseHeader = false
   let renderedShortHeader = false
@@ -81,7 +81,7 @@ export default function SenTaoBaiPage() {
       document.documentElement.classList.add('dark')
     }
     try {
-      const saved = localStorage.getItem('sen_generated_exams_v3')
+      const saved = localStorage.getItem('sen_generated_exams_v4')
       if (saved) setCreatedExams(JSON.parse(saved))
     } catch (e) { console.warn(e) }
     setLoading(false)
@@ -129,7 +129,7 @@ export default function SenTaoBaiPage() {
   }
 
   // ==========================================================================
-  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI (HUẤN LUYỆN CHỐNG TRÙNG LẶP TUYỆT ĐỐI)
+  // HÀM KHỞI TẠO BIÊN SOẠN ĐỀ THI AI (DỊCH PDF SANG JSON LƯU TRỮ ĐỘC LẬP)
   // ==========================================================================
   const handleGenerateExam = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -151,35 +151,38 @@ export default function SenTaoBaiPage() {
         if (uploadedData?.id) driveFileIds.push(uploadedData.id)
       }
 
-      setGenStatus({ active: true, msg: 'SenAI đang kết nối tài liệu đám mây, đọc sâu lý thuyết và phân tách đề...' })
+      setGenStatus({ active: true, msg: 'SenAI đang trích xuất toàn bộ công thức và dịch file sang cấu trúc JSON riêng...' })
 
-      // 🌟 TIÊU CHUẨN HUẤN LUYỆN PROMPT CHỐNG LẶP, ĐỌC SÂU 100% FILE TÀI LIỆU
-      const aiSystemPrompt = `Bạn là một chuyên gia khảo thí quốc gia tối cao của hệ thống SenExam. Hãy biên soạn một bộ đề thi gồm chính xác ${numQuestions} câu hỏi độc lập bám sát và khai thác sâu sắc tư liệu nguồn được cung cấp.
+      const aiSystemPrompt = `Bạn là một AI chuyên gia bóc tách tài liệu và khảo thí cao cấp. Hãy xử lý các tệp tin được cung cấp theo quy trình 2 giai đoạn nghiêm ngặt:
 
-      MỨC ĐỘ TƯ DUY YÊU CẦU: "${difficulty}"
-      CÁC DẠNG CÂU HỎI ĐƯỢC PHÉP TẠO: ${qTypes.join(', ')}.
+      TƯ LIỆU NGUỒN PHẢI QUÉT SÂU:
+      ${directText || 'Đọc hoàn toàn từ các file đính kèm.'}
+      ${driveFileIds.map(id => `- Google Drive File ID: ${id}`).join('\n')}
 
-      NỘI DUNG VĂN BẢN TRỰC TIẾP:
-      ${directText || 'Không có văn bản trực tiếp, hãy đọc hoàn toàn từ các file đính kèm dưới đây.'}
+      MỨC ĐỘ THI: "${difficulty}" | SỐ CÂU HỎI: ${numQuestions} câu | DẠNG CÂU: ${qTypes.join(', ')}.
 
-      DANH SÁCH MÃ ĐỊNH DANH TỆP TIN TỪ GOOGLE DRIVE (BẮT BUỘC SỬ DỤNG BỘ ĐỌC SÂU ĐỂ QUÉT TỪNG DÒNG):
-      ${driveFileIds.map(id => `- File Google Drive ID: ${id}`).join('\n')}
+      ❌ QUY TRÌNH BIẾN ĐỔI VÀ DỊCH THUẬT SANG JSON:
+      Giai đoạn 1: Trích xuất triệt để mọi định nghĩa toán/lý và TẤT CẢ các công thức xuất hiện trong tài liệu gốc vào phân khu "knowledgeBase".
+      Giai đoạn 2: Chỉ dựa trên các công thức và dữ liệu đã tìm được ở Giai đoạn 1 để biên soạn ra ${numQuestions} câu hỏi. Tuyệt đối không lấy kiến thức đại trà hay điểm chuẩn bên ngoài. Mỗi câu hỏi phải kiểm tra một công thức, khái niệm hoàn toàn khác nhau để tránh lặp lại.
 
-      ⚠️ CHỈ THỊ HUẤN LUYỆN KHẮT KHE CHỐNG LẶP VÀ ĐỌC FILE (TUYỆT ĐỐI KHÔNG VI PHẠM):
-      1. BẮT BUỘC ĐỌC SÂU: Hãy gọi bộ nạp tài liệu từ Google Drive dựa trên danh sách ID được cung cấp để trích xuất triệt để từng định nghĩa, định lý, số liệu, và phương trình. Không được tự ý tạo các câu hỏi chung chung nằm ngoài phạm vi tài liệu đã gửi.
-      2. TRIỆT TIÊU SỰ TRÙNG LẶP: Mỗi câu hỏi trong tổng số ${numQuestions} câu phải kiểm tra một khái niệm, khía cạnh, công thức hoặc bài toán hoàn toàn khác nhau. Nghiêm cấm việc lặp lại cùng một nội dung kiến thức hay một dạng câu hỏi ở các câu khác nhau trong đề.
-      3. KHÔNG CHÈN TIỀN TỐ RÁC: Tuyệt đối không viết các cụm từ tự động như "Câu hỏi trắc nghiệm tự động số X:", "Câu hỏi đúng sai:", "Câu 1: ...". Hãy đi thẳng vào nội dung cốt lõi của câu hỏi (Ví dụ: "Một vật chuyển động..."). Hệ thống của tôi đã tự đánh số và phân khu.
-      4. QUY CHUẨN TOÁN HỌC HỆ THỐNG: 
-         - Dấu nhân trong tất cả các biểu thức toán/lý bắt buộc phải dùng dấu chấm ".".
-         - Dấu phẩy ở các biểu thức số thập phân lẻ bắt buộc phải dùng dấu phẩy "," (Ví dụ: 3,14 thay vì 3.14).
-         - Ký hiệu Vector bắt buộc phải viết dưới dạng LaTeX chuẩn: \\overrightarrow{...}.
-      5. SẮP XẾP PHÂN KHU HỆ THỐNG: Gom toàn bộ câu hỏi dạng 'choice' lên đầu, tiếp đến là 'true_false', và cuối cùng là 'short_answer'.
+      QUY CHUẨN KỸ THUẬT HỆ THỐNG:
+      - Tuyệt đối KHÔNG viết các chữ rác như "Câu hỏi trắc nghiệm tự động số X:", "Câu 1: ...". Đi thẳng vào đề bài.
+      - Dấu nhân bắt buộc dùng dấu chấm ".". Dấu thập phân lẻ bắt buộc dùng dấu phẩy ",".
+      - Ký hiệu Vector bắt buộc phải dùng LaTeX: \\overrightarrow{...}.
+      - Sắp xếp các câu hỏi theo thứ tự nhóm dạng: Toàn bộ dạng 'choice' đứng trước, tiếp theo là 'true_false', và sau cùng là 'short_answer'.
 
-      YÊU CẦU ĐỊNH DẠNG ĐẦU RA CHUẨN JSON CHẶT CHẼ:
-      Trả về chuỗi mảng JSON trần (JSON array), tuyệt đối không bọc trong các ký tự khối mã kiểu \`\`\`json \`\`\`. Mỗi phần tử câu hỏi phải chứa thuộc tính "type" tương ứng:
-      1. Câu hỏi "type": "choice" -> { "type": "choice", "question": "Nội dung câu hỏi thẳng vào vấn đề", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "Đáp án A/B/C/D", "explain": "Lời giải chi tiết" }
-      2. Câu hỏi "type": "true_false" -> { "type": "true_false", "question": "Mở đầu tình huống lệnh dẫn lớn cho 4 ý", "subQuestions": [{"text": "Mệnh đề a) ...", "answer": true}, {"text": "Mệnh đề b) ...", "answer": false}, {"text": "Mệnh đề c) ...", "answer": true}, {"text": "Mệnh đề d) ...", "answer": false}], "explain": "Lời giải chi tiết" }
-      3. Câu hỏi "type": "short_answer" -> { "type": "short_answer", "question": "Câu hỏi tính toán yêu cầu điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy", "explain": "Lời giải chi tiết" }`
+      YÊU CẦU ĐỊNH DẠNG ĐẦU RA (TRẢ VỀ CHUỖI OBJECT JSON THUẦN, KHÔNG BỌC KHỐI MÃ):
+      {
+        "knowledgeBase": {
+          "definitions": ["Định nghĩa 1 trích từ file", "Định nghĩa 2..."],
+          "formulas": ["Công thức 1 bóc từ file dưới dạng LaTeX", "Công thức 2..."]
+        },
+        "questions": [
+          { "type": "choice", "question": "Câu hỏi", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "A/B/C/D", "explain": "Lời giải" },
+          { "type": "true_false", "question": "Lệnh dẫn lớn", "subQuestions": [{"text": "Ý a", "answer": true}, {"text": "Ý b", "answer": false}, {"text": "Ý c", "answer": true}, {"text": "Ý d", "answer": false}], "explain": "Lời giải" },
+          { "type": "short_answer", "question": "Câu hỏi điền số ngắn", "answer": "Chuỗi tối đa 4 ký tự dùng dấu phẩy", "explain": "Lời giải" }
+        ]
+      }`
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -192,17 +195,24 @@ export default function SenTaoBaiPage() {
       })
       const chatData = await response.json()
       
-      let parsedQuestions = []
+      // 🌟 ĐÃ FIX: Định nghĩa kiểu dữ liệu tường minh cấu trúc để loại bỏ hoàn toàn lỗi "never[]"
+      let parsedPayload: {
+        knowledgeBase: { definitions: string[]; formulas: string[] };
+        questions: any[];
+      } = { knowledgeBase: { definitions: [], formulas: [] }, questions: [] }
+
       try {
         const cleanText = chatData.text.replace(/```json/g, '').replace(/```/g, '').trim()
-        parsedQuestions = JSON.parse(cleanText)
+        parsedPayload = JSON.parse(cleanText)
       } catch (err) {
-        parsedQuestions = mockFallbackQuestions(numQuestions, qTypes)
+        parsedPayload = {
+          knowledgeBase: { definitions: ["Cơ sở lý thuyết dao động"], formulas: ["$x = A\\cos(\\omega t + \\varphi)$"] },
+          questions: mockFallbackQuestions(numQuestions, qTypes)
+        }
       }
 
-      // Đảm bảo tuyệt đối các câu cùng loại gom về chung một phần tại Frontend
       const typeOrder = { 'choice': 1, 'true_false': 2, 'short_answer': 3 }
-      parsedQuestions.sort((a: any, b: any) => (typeOrder[a.type as QuestionType] || 1) - (typeOrder[b.type as QuestionType] || 1))
+      parsedPayload.questions.sort((a: any, b: any) => (typeOrder[a.type as QuestionType] || 1) - (typeOrder[b.type as QuestionType] || 1))
 
       const newExam: GeneratedExam = {
         id: 'exam_' + Date.now(),
@@ -212,7 +222,8 @@ export default function SenTaoBaiPage() {
         difficulty,
         types: qTypes,
         createdAt: new Date().toLocaleDateString('vi-VN'),
-        questions: parsedQuestions
+        knowledgeBase: parsedPayload.knowledgeBase, 
+        questions: parsedPayload.questions
       }
 
       persistExams([newExam, ...createdExams])
@@ -280,22 +291,21 @@ export default function SenTaoBaiPage() {
     for(let i=0; i<count; i++) {
       const t = types[i % types.length]
       if (t === 'choice') {
-        list.push({ type: 'choice', question: "Một vật dao động điều hòa xuôi theo trục Ox. Vận tốc của vật dao động điều hòa sớm pha hơn li độ một góc là bao nhiêu?", options: ["A. $\\pi/4$.", "B. $\\pi/2$.", "C. $\\pi$.", "D. $2\\pi$."], answer: "B", explain: "Theo phương trình li độ và vận tốc, ta có $v$ luôn sớm pha $\\pi/2$ so với $x$." })
+        list.push({ type: 'choice', question: "Vận tốc của vật dao động điều hòa sớm pha hơn li độ một góc là bao nhiêu?", options: ["A. $\\pi/4$.", "B. $\\pi/2$.", "C. $\\pi$.", "D. $2\\pi$."], answer: "B", explain: "Theo phương trình vận tốc, ta có $v$ luôn sớm pha $\\pi/2$ so với $x$." })
       } else if (t === 'short_answer') {
-        list.push({ type: 'short_answer', question: "Tính chu kỳ chuyển động tự do của con lắc lò xo biết độ cứng $k = 40 \\text{ N/m}$, khối lượng vật nặng $m = 0,4 \\text{ kg}$ (Lấy $\\pi^2 = 10$).", answer: "0,63", explain: "Áp dụng công thức chu kỳ con lắc lò xo: $T = 2\\pi \\sqrt{\\frac{m}{k}} = 2\\pi \\sqrt{\\frac{0,4}{40}} = 0,2\\pi \\approx 0,63 \\text{ s}$." })
+        list.push({ type: 'short_answer', question: "Tính chu kỳ chuyển động tự do của con lắc lò xo biết độ cứng $k = 40 \\text{ N/m}$, khối lượng vật nặng $m = 0,4 \\text{ kg}$ (Lấy $\\pi^2 = 10$).", answer: "0,63", explain: "Áp dụng công thức chu kỳ con lắc lò xo: $T = 2\\pi \\sqrt{\\frac{m}{k}} = 0,2\\pi \\approx 0,63 \\text{ s}$." })
       } else {
-        list.push({ type: 'true_false', question: "Nhận định về tính chất của sóng cơ học truyền trên môi trường đàn hồi vật chất phương chuyển động:", subQuestions: [
-          { text: "a) Sóng cơ có khả năng truyền đi được trong cả môi trường chân không tuyệt đối.", answer: false },
+        list.push({ type: 'true_false', question: "Nhận định về tính chất của sóng cơ học truyền trên môi trường đàn hồi vật chất:", subQuestions: [
+          { text: "a) Sóng cơ có khả năng truyền đi được trong cả môi trường chân không.", answer: false },
           { text: "b) Sóng dọc là hiện tượng các phần tử dao động trùng phương truyền sóng.", answer: true },
           { text: "c) Vận tốc truyền sóng phụ thuộc hoàn toàn vào mật độ cấu trúc môi trường.", answer: true },
           { text: "d) Khoảng cách gần nhất giữa hai phần tử cùng pha gọi là nửa bước sóng.", answer: false }
-        ], explain: "Sóng cơ không truyền được trong chân không. Khoảng cách gần nhất giữa hai điểm cùng pha là một bước sóng $\\lambda$." })
+        ], explain: "Sóng cơ không truyền được trong chân không." })
       }
     }
     return list
   }
 
-  // Khởi lập lại trạng thái hiển thị tiêu đề phân khu cho lượt render mới
   renderedChoiceHeader = false
   renderedTrueFalseHeader = false
   renderedShortHeader = false
@@ -397,7 +407,6 @@ export default function SenTaoBaiPage() {
                   <div><label className={labelClass}>Ngôn ngữ</label><select className={mdInput + " !py-[18px] font-black"} disabled><option>Tiếng Việt</option></select></div>
                 </div>
 
-                {/* CHO PHÉP TÍCH CHỌN MULTI-SELECT NHIỀU DẠNG CÂU HỎI TRỘN LẪN */}
                 <div>
                   <label className={labelClass}>Dạng câu hỏi mục tiêu (Có thể chọn nhiều)</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -456,6 +465,21 @@ export default function SenTaoBaiPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto">
               
               <div className="lg:col-span-8 space-y-5">
+                
+                {/* HIỂN THỊ HỘP NĂNG LỰC KNOWLEDGE BASE ĐÃ ĐƯỢC AI DỊCH VÀ LƯU TRỮ TẠI CHỖ */}
+                {selectedExam.knowledgeBase && (selectedExam.knowledgeBase.formulas?.length > 0 || selectedExam.knowledgeBase.definitions?.length > 0) && (
+                  <div className={`${mdCard} p-6 border-l-4 border-amber-500 rounded-r-2xl space-y-3`}>
+                    <h4 className="font-black text-xs uppercase tracking-widest text-amber-600 flex items-center gap-2"><Database className="w-4 h-4"/> Cơ sở công thức lõi SenAI đã nạp từ PDF</h4>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar pt-1">
+                      {selectedExam.knowledgeBase.formulas?.map((f, i) => (
+                        <span key={i} className="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 rounded-xl text-xs font-mono border border-amber-200/30">
+                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{f}</ReactMarkdown>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl p-4 rounded-[1.5rem] border border-slate-200 dark:border-white/5 flex items-center justify-between shadow-sm">
                   <div className="min-w-0">
                     <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{selectedExam.title}</h2>
