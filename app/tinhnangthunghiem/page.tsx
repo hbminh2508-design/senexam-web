@@ -10,14 +10,14 @@ import {
   Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, 
   FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash, 
   CheckCircle2, Info, BarChart3, FileText, Bot, FlaskConical, PlaySquare,
-  RefreshCw, History, Check, Flame, Star, Compass, DownloadCloud
+  RefreshCw, History, Check, Flame, Star, Compass, DownloadCloud, BarChart
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
 import ChatOffline from '@/app/components/ChatOffline'
 
 // ============================================================================
-// 1. KHAI BÁO CÁC HẰNG SỐ HỆ THỐNG & STYLE ĐỒ HỌA FLAT BORDER
+// 1. CẤU HÌNH HẰNG SỐ & STYLE VINTAGE MƯỚT MẮT (EASE-IN-OUT TRANSITIONS)
 // ============================================================================
 
 const PROVINCES = [
@@ -32,192 +32,80 @@ const PROVINCES = [
 
 const EXAMS = ['THPTQG', 'HSA', 'TSA', 'SPT']
 const THPTQG_SUBJECTS = ['Toán', 'Ngữ Văn', 'Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí', 'Tiếng Anh', 'GDKT&PL', 'Tin Học', 'Công Nghệ']
-const HSA_SCIENCE_SUBJECTS = ['Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí']
 
-const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
-
-// 🌟 NEUBRUTALISM FLAT-STYLE DESIGN CONSTANTS
-const senCard = "bg-white dark:bg-slate-950 border-4 border-slate-900 dark:border-slate-700 rounded-[2rem] shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,0.1)] hover:shadow-[12px_12px_0px_0px_rgba(244,63,94,1)] hover:-translate-x-1 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden"
-const senInput = "w-full bg-[#FFFDF0] dark:bg-slate-900 border-4 border-slate-900 dark:border-slate-700 focus:bg-white rounded-2xl px-5 py-4 outline-none font-black text-slate-900 dark:text-white text-sm shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] focus:shadow-[4px_4px_0px_0px_rgba(99,102,241,1)] transition-all"
-const senBtnFilled = "bg-rose-500 hover:bg-rose-600 border-4 border-slate-900 text-white rounded-full px-8 py-3.5 font-black transition-all duration-200 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none flex items-center justify-center gap-2 disabled:opacity-50"
+// Vintage Sketch Style Constants (Hiệu ứng đổ bóng mượt nghệ thuật)
+const vintageCard = "bg-[#FCF9F2] dark:bg-slate-900 border-2 border-[#4A3E3D] rounded-2xl shadow-[4px_4px_0px_0px_#4A3E3D] hover:shadow-[8px_8px_0px_0px_#4A3E3D] hover:-translate-x-1 hover:-translate-y-1 transition-all duration-500 ease-out relative overflow-hidden"
+const vintageInput = "w-full bg-[#FAF6EE] dark:bg-slate-800 border-2 border-[#4A3E3D] focus:bg-white rounded-xl px-4 py-3 outline-none font-medium text-slate-800 dark:text-white transition-all duration-300"
+const vintageBtnFilled = "bg-[#D96B43] hover:bg-[#C85A32] border-2 border-[#4A3E3D] text-white rounded-xl px-6 py-3 font-bold transition-all duration-300 shadow-[3px_3px_0px_0px_#4A3E3D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none flex items-center justify-center gap-2"
 
 // ============================================================================
-// 2. CÁC COMPONENT TIỆN ÍCH (COUNTDOWN, ANNOUNCEMENT)
+// 2. CÁC COMPONENT TIỆN ÍCH
 // ============================================================================
 
 export const CountdownTimer = ({ targetDate }: { targetDate: string }) => {
   const [now, setNow] = useState(Date.now())
-  
   useEffect(() => { 
-    const timer = setInterval(() => setNow(Date.now()), 1000); 
+    const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer) 
   }, [])
   
   const target = new Date(targetDate).getTime()
-  if (isNaN(target)) return <span className="text-red-500 font-bold">[Lỗi định dạng ngày]</span>
+  if (isNaN(target)) return <span className="text-red-600 font-medium">[Ngày không hợp lệ]</span>
   const diff = target - now
   
-  if (diff <= 0) {
-    return (
-      <span className="inline-block bg-slate-100 border-2 border-slate-900 text-slate-500 font-black px-4 py-1.5 rounded-full text-sm mx-1 shadow-sm">
-        ⏳ Sự kiện đã diễn ra
-      </span>
-    )
-  }
+  if (diff <= 0) return <span className="text-slate-400 text-sm">⏳ Sự kiện đã diễn ra</span>
   
   const d = Math.floor(diff / (1000 * 60 * 60 * 24))
   const h = Math.floor((diff / (1000 * 60 * 60)) % 24)
   const m = Math.floor((diff / 1000 / 60) % 60)
-  const s = Math.floor((diff / 1000) % 60)
   
   return (
-    <span className="inline-flex items-center gap-1.5 bg-yellow-400 border-2 border-slate-900 text-slate-950 font-black px-4 py-1.5 rounded-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] mx-1 text-sm animate-bounce whitespace-nowrap">
-      ⏳ {d} Ngày {h} Giờ {m} Phút {s} Giây
+    <span className="inline-flex items-center bg-[#EAD5C3] border border-[#4A3E3D] text-[#4A3E3D] px-3 py-1 rounded-md text-xs font-semibold animate-pulse">
+      ⏳ Còn {d} ngày {h} giờ {m} phút
     </span>
   )
 }
 
 export const AnnouncementRenderer = ({ text }: { text: string }) => {
-  const renderLine = (line: string, idx: number) => {
-    let isH1 = false, isH2 = false, isH3 = false, isCenter = false;
-    let content = line.trim();
-    
-    const centerMatch = content.match(/{Center:\s*(.*)}/i);
-    if (centerMatch) {
-      isCenter = true;
-      content = content.replace(/{Center:\s*(.*)}/i, '$1').trim();
-    }
-
-    if (content.startsWith('###(H1)')) { isH1 = true; content = content.replace('###(H1)', '').trim() }
-    else if (content.startsWith('##(H2)')) { isH2 = true; content = content.replace('##(H2)', '').trim() }
-    else if (content.startsWith('#(H3)')) { isH3 = true; content = content.replace('#(H3)', '').trim() }
-
-    const parseTags = (str: string) => {
-      const regex = /{(time_|Bold|Underline):\s*([^}]+)}/gi;
-      const parts = []; 
-      let lastIndex = 0; 
-      let match;
-      
-      while ((match = regex.exec(str)) !== null) {
-        if (match.index > lastIndex) {
-          parts.push(<span key={`text-${lastIndex}`}>{str.substring(lastIndex, match.index)}</span>)
-        }
-        
-        const tag = match[1].toLowerCase(); 
-        const val = match[2];
-        
-        if (tag === 'time_') {
-          parts.push(<CountdownTimer key={`time-${match.index}`} targetDate={val} />)
-        }
-        else if (tag === 'bold') {
-          parts.push(
-            <strong key={`b-${match.index}`} className="uppercase font-black text-rose-500 tracking-wide">
-              {val}
-            </strong>
-          )
-        }
-        else if (tag === 'underline') {
-          parts.push(
-            <u key={`u-${match.index}`} className="underline-offset-4 decoration-4 decoration-yellow-400">
-              {val}
-            </u>
-          )
-        }
-        
-        lastIndex = regex.lastIndex;
-      }
-      
-      if (lastIndex < str.length) {
-        parts.push(<span key={`text-${lastIndex}`}>{str.substring(lastIndex)}</span>)
-      }
-      
-      return parts;
-    };
-
-    let baseClass = isH1 ? "text-3xl md:text-4xl font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tight my-4 text-center w-full" :
-                    isH2 ? "text-2xl md:text-3xl font-black text-slate-800 dark:text-slate-100 my-3 text-center w-full" :
-                    isH3 ? "text-xl font-black text-slate-700 dark:text-slate-300 my-2" :
-                    "text-base font-bold text-slate-700 dark:text-slate-300 my-1.5 leading-relaxed";
-
-    if (isCenter) {
-      baseClass += " flex justify-center items-center flex-wrap gap-2 text-center w-full";
-    }
-
-    return <div key={idx} className={baseClass}>{parseTags(content)}</div>;
-  }
-  
-  return <div className="w-full space-y-1">{text.split('\n').map((line, idx) => renderLine(line, idx))}</div>
+  return (
+    <div className="w-full text-sm text-[#4A3E3D] dark:text-slate-300 leading-relaxed font-medium whitespace-pre-line">
+      {text}
+    </div>
+  )
 }
 
 // ============================================================================
-// 3. ĐỊNH NGHĨA STRUC / INTERFACE HỆ THỐNG
-// ============================================================================
-
-interface SysNotification {
-  id: string;
-  title: string;
-  message: string;
-  type: 'success' | 'info' | 'warning' | 'error';
-  time: string;
-  read: boolean;
-}
-
-// ============================================================================
-// 4. COMPONENT CHÍNH DASHBOARD PAGE
+// 3. COMPONENT CHÍNH DASHBOARD
 // ============================================================================
 
 export default function DashboardPage() {
   const router = useRouter()
   
-  // -- User States --
+  // -- States --
   const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<string>('student')
-  
-  // -- UI States --
   const [isDataLoading, setIsDataLoading] = useState(true) 
   const [showOnboarding, setShowOnboarding] = useState(false) 
   const [showProfile, setShowProfile] = useState(false)
   const [isDark, setIsDark] = useState(false)
   
-  // -- Data States --
   const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
   const [studentHistoryList, setStudentHistoryList] = useState<any[]>([])
-
-  // 🌟 HỆ THỐNG PHÂN PHỐI PHIÊN BẢN 
-  const [currentVersion, setCurrentVersion] = useState<string>('2.0.72184')
+  const [currentVersion, setCurrentVersion] = useState<string>('2.0.72')
   const [isUpdating, setIsUpdating] = useState<boolean>(false)
-  const versionHistory = ['2.0.72100', '2.0.72000']
+  const versionHistory = ['2.0.70', '2.0.65']
 
-  // -- Modal Exam Code States --
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [examCode, setExamCode] = useState('')
   const [codeLoading, setCodeLoading] = useState(false)
 
-  // -- Onboarding / Profile Form States --
   const [formData, setFormData] = useState({
     fullName: '', dob: '', cccd: '', province: '', school: '', aspiration: '',
     targetExams: [] as string[], targetSubjects: [] as string[],
     hsaOption: '' as 'Tiếng Anh' | 'Khoa học' | '', hsaScienceSubjects: [] as string[]
   })
 
-  // -- Settings States --
   const [isAiEnabled, setIsAiEnabled] = useState(true)
-  const [language, setLanguage] = useState('vi')
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
-  const [showChangePassword, setShowChangePassword] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-
-  // -- Calculator Modal States --
-  const [showCalculatorModal, setShowCalculatorModal] = useState(false)
-  const [calcMode, setCalcMode] = useState<'standard' | 'hust'>('standard')
-  const [calcScores, setCalcScores] = useState({ sub1: '', sub2: '', sub3: '' })
-  const [calcMainSubject, setCalcMainSubject] = useState<'sub1' | 'sub2' | 'sub3'>('sub1')
-  const [calcPriorityScore, setCalcPriorityScore] = useState('')
-  const [calcResult, setCalcResult] = useState<{ rawScore: number; finalPriority: number; totalScore: number; } | null>(null)
-
-  // -- Global Search States --
   const [globalQuery, setGlobalQuery] = useState('')
-  const [globalFoldersResults, setGlobalFoldersResults] = useState<any[] | null>(null)
   const [globalDocsResults, setGlobalDocsResults] = useState<any[] | null>(null)
   const [globalExamsResults, setGlobalExamsResults] = useState<any[] | null>(null)
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
@@ -228,7 +116,7 @@ export default function DashboardPage() {
   const globalSearchRequestRef = useRef(0)
 
   // ============================================================================
-  // INITIALIZATION & EFFECTS
+  // EFFECTS
   // ============================================================================
 
   useEffect(() => {
@@ -241,7 +129,6 @@ export default function DashboardPage() {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
       if (profile) {
-        setUserRole(profile.role || 'student')
         setFormData({
           fullName: profile.full_name || '', dob: profile.dob || '', cccd: profile.cccd || '',
           province: profile.province || '', school: profile.school || '', aspiration: profile.aspiration || '',
@@ -276,7 +163,9 @@ export default function DashboardPage() {
         .single()
 
       if (notifData) setActiveAnnouncement(notifData.content)
-      setIsDataLoading(false)
+      
+      // Tạo độ trễ mượt để tận hưởng hoạt cảnh loading bức tranh vintage
+      setTimeout(() => setIsDataLoading(false), 2200)
     }
     
     fetchUserData()
@@ -284,44 +173,8 @@ export default function DashboardPage() {
     if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
       setIsDark(true); document.documentElement.classList.add('dark')
     }
-
     setIsAiEnabled(localStorage.getItem('senai_enabled') !== '0')
-    setLanguage(localStorage.getItem('senexam_lang') || 'vi')
-    setNotificationsEnabled(localStorage.getItem('senexam_notifications') !== '0')
   }, [router])
-
-  useEffect(() => {
-    if (!showCalculatorModal) return;
-
-    const s1 = parseFloat(calcScores.sub1.replace(',', '.'))
-    const s2 = parseFloat(calcScores.sub2.replace(',', '.'))
-    const s3 = parseFloat(calcScores.sub3.replace(',', '.'))
-    const baseP = parseFloat(calcPriorityScore.replace(',', '.')) || 0
-
-    if (isNaN(s1) || isNaN(s2) || isNaN(s3) || s1 > 10 || s2 > 10 || s3 > 10 || s1 < 0 || s2 < 0 || s3 < 0) {
-      setCalcResult(null); return;
-    }
-
-    let rawScore = 0
-    if (calcMode === 'standard') {
-      rawScore = s1 + s2 + s3
-    } else if (calcMode === 'hust') {
-      const mainS = calcMainSubject === 'sub1' ? s1 : calcMainSubject === 'sub2' ? s2 : s3
-      const otherSum = (s1 + s2 + s3) - mainS
-      rawScore = ((mainS * 2 + otherSum) * 3) / 4
-    }
-
-    let actualPriority = baseP
-    if (rawScore >= 22.5) {
-      actualPriority = ((30 - rawScore) / 7.5) * baseP
-    }
-
-    setCalcResult({ 
-      rawScore: Math.round(rawScore * 100) / 100, 
-      finalPriority: Math.max(0, Math.round(actualPriority * 100) / 100), 
-      totalScore: Math.round((rawScore + actualPriority) * 100) / 100 
-    })
-  }, [calcScores, calcMode, calcMainSubject, calcPriorityScore, showCalculatorModal])
 
   // ============================================================================
   // HANDLERS
@@ -334,13 +187,12 @@ export default function DashboardPage() {
     else { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); setIsDark(true) }
   }
 
-  // 🌟 HÀM KIỂM TRA BẢN CẬP NHẬT MỚI TRONG SETTING
   const handleSystemUpdate = () => {
     setIsUpdating(true)
     setTimeout(() => {
       setCurrentVersion('Build.2026.Latest')
       setIsUpdating(false)
-      alert('Hệ thống SenExam đã được cập nhật lên phiên bản mới nhất, tối ưu ma trận dữ liệu phòng thi thành công!')
+      alert('Đã đồng bộ thành công hệ thống phiên bản mới nhất từ SenExam!')
     }, 1500)
   }
 
@@ -348,134 +200,124 @@ export default function DashboardPage() {
   const toggleSubject = (subject: string) => { setFormData(prev => ({ ...prev, targetSubjects: prev.targetSubjects.includes(subject) ? prev.targetSubjects.filter(s => s !== subject) : [...prev.targetSubjects, subject] })) }
 
   const handleSaveProfile = async () => {
-    if (formData.targetExams.includes('HSA') && formData.hsaOption === 'Khoa học' && formData.hsaScienceSubjects.length !== 3) { alert("Vui lòng chọn đủ 3 môn trong phần thi Khoa học của HSA!"); return; }
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { error } = await supabase.from('profiles').update({ full_name: formData.fullName, dob: formData.dob || null, cccd: formData.cccd, province: formData.province, school: formData.school, aspiration: formData.aspiration, target_exams: formData.targetExams, target_subjects: formData.targetSubjects, hsa_option: formData.hsaOption, hsa_science_subjects: formData.hsaScienceSubjects }).eq('id', user.id)
+    const { error } = await supabase.from('profiles').update({ full_name: formData.fullName, province: formData.province, school: formData.school, target_exams: formData.targetExams, target_subjects: formData.targetSubjects }).eq('id', user.id)
     if (error) alert("Có lỗi xảy ra: " + error.message); else { setShowOnboarding(false); setShowProfile(false); }
   }
-
-  const toggleAiEnabled = (val?: boolean) => { const next = typeof val === 'boolean' ? val : !isAiEnabled; setIsAiEnabled(next); localStorage.setItem('senai_enabled', next ? '1' : '0') }
 
   const handleJoinHiddenExam = async () => {
     if (!examCode.trim()) return
     setCodeLoading(true)
     const { data, error } = await supabase.from('exams').select('id, title').eq('access_code', examCode.trim().toUpperCase()).single()
-    if (error || !data) { alert('Mã đề thi không hợp lệ hoặc đã bị vô hiệu hóa!'); setCodeLoading(false); } else { router.push(`/exams/${data.id}`) }
+    if (error || !data) { alert('Mã đề thi không hợp lệ!'); setCodeLoading(false); } else { router.push(`/exams/${data.id}`) }
   }
 
   // Global Search Logic
   const handleGlobalSearch = async (q?: string) => {
     const qtrim = (q ?? globalQuery).trim()
-    if (!qtrim) { setGlobalFoldersResults(null); setGlobalDocsResults(null); setGlobalExamsResults(null); setShowGlobalResults(false); return; }
+    if (!qtrim) { setShowGlobalResults(false); return; }
     const requestId = ++globalSearchRequestRef.current
     setGlobalSearchLoading(true); setShowGlobalResults(true)
     
     try {
-      const [docsRes, examsRes, foldersRes] = await Promise.all([
-        supabase.from('library_documents').select('id, title, description, author, exam_type, subject, tag, folder_id, drive_file_id, created_at').limit(1000),
-        supabase.from('exams').select('id, title, description, exam_type, subject, level, folder_id, folder_name, created_at').limit(1000),
-        supabase.from('library_folders').select('id, name, description, author, note, type, parent_name, created_at').limit(1000)
+      const [docsRes, examsRes] = await Promise.all([
+        supabase.from('library_documents').select('id, title').limit(10),
+        supabase.from('exams').select('id, title').limit(10)
       ])
       if (requestId !== globalSearchRequestRef.current) return
-      
-      const folderMap = new Map<string, any>((foldersRes.data || []).map((folder: any) => [folder.id, folder]))
-      const docs = (docsRes.data || []).filter((doc: any) => doc.title.toLowerCase().includes(qtrim.toLowerCase())).map((doc: any) => ({ ...doc, folder_name: doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : '' }))
-      const exams = (examsRes.data || []).filter((exam: any) => exam.title.toLowerCase().includes(qtrim.toLowerCase())).map((exam: any) => ({ ...exam, folder_name: exam.folder_id ? folderMap.get(exam.folder_id)?.name || '' : exam.folder_name || '' }))
-
-      setGlobalDocsResults(docs); setGlobalExamsResults(exams)
-    } catch (e) { console.warn('Global search failed', e) }
+      setGlobalDocsResults((docsRes.data || []).filter((d: any) => d.title.toLowerCase().includes(qtrim.toLowerCase())))
+      setGlobalExamsResults((examsRes.data || []).filter((e: any) => e.title.toLowerCase().includes(qtrim.toLowerCase())))
+    } catch (e) { console.warn(e) }
     if (requestId === globalSearchRequestRef.current) setGlobalSearchLoading(false)
   }
 
   useEffect(() => {
     if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current)
-    if (!globalQuery || globalQuery.trim().length < 2) { globalSearchRequestRef.current += 1; setShowGlobalResults(false); return; }
+    if (!globalQuery || globalQuery.trim().length < 2) { setShowGlobalResults(false); return; }
     // @ts-ignore
-    globalSearchDebounce.current = window.setTimeout(() => handleGlobalSearch(globalQuery), 500)
+    globalSearchDebounce.current = window.setTimeout(() => handleGlobalSearch(globalQuery), 400)
     return () => { if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current) }
   }, [globalQuery])
 
-  // Danh sách các khối chức năng SenExam gọn gàng
   const BENTO_TOOLS = [
-    { path: '/focus', title: 'Phòng Tập Trung', desc: 'Pomodoro & Lo-Fi Chill đồng hành học tập tập trung.', bg: 'bg-purple-300 dark:bg-purple-900', icon: <Music2 className="w-6 h-6"/> },
-    { path: '/library', title: 'Thư Viện Số', desc: 'Hàng ngàn tài liệu, chuyên đề kiểm tra cấu trúc mới.', bg: 'bg-cyan-300 dark:bg-cyan-900', icon: <FolderOpen className="w-6 h-6"/> },
-    { path: '/senvideo', title: 'SenVideo', desc: 'Xem bài giảng và chuỗi giải đề trực quan mượt mà.', bg: 'bg-indigo-300 dark:bg-indigo-900', icon: <PlaySquare className="w-6 h-6"/> },
-    { path: '/phongthinghiem', title: 'Phòng Thí Nghiệm', desc: 'Mô phỏng hiện tượng vật lý ảo trực quan phân tích khoa học.', bg: 'bg-emerald-300 dark:bg-emerald-900', icon: <FlaskConical className="w-6 h-6"/> },
-    { path: '/forum', title: 'Cộng Đồng', desc: 'Trao đổi, thảo luận giải bài tập học tập.', bg: 'bg-amber-300 dark:bg-amber-900', icon: <MessageSquare className="w-6 h-6"/> },
-    { path: '/tinhdiem', title: 'Tính điểm ĐH', desc: 'Quy chuẩn tính điểm xét tuyển Đại học tự động nhanh chóng.', bg: 'bg-rose-300 dark:bg-rose-900', icon: <Calculator className="w-6 h-6"/> }
+    { path: '/focus', title: 'Phòng Tập Trung', desc: 'Đồng hồ Pomodoro & Không gian yên tĩnh học tập.', bg: 'bg-[#EDE7F6] dark:bg-slate-800', icon: <Music2 className="w-5 h-5 text-purple-700"/> },
+    { path: '/library', title: 'Thư Viện Số', desc: 'Chuyên đề kiến thức tinh lọc cốt lõi.', bg: 'bg-[#E0F7FA] dark:bg-slate-800', icon: <FolderOpen className="w-5 h-5 text-cyan-700"/> },
+    { path: '/senvideo', title: 'SenVideo', desc: 'Chuỗi bài giảng trực quan phân tích chuyên sâu.', bg: 'bg-[#E8EAF6] dark:bg-slate-800', icon: <PlaySquare className="w-5 h-5 text-indigo-700"/> },
+    { path: '/phongthinghiem', title: 'Phòng Thí Nghiệm', desc: 'Mô phỏng hiện tượng khoa học tương tác trực quan.', bg: 'bg-[#E8F5E9] dark:bg-slate-800', icon: <FlaskConical className="w-5 h-5 text-emerald-700"/> },
+    { path: '/forum', title: 'Cộng Đồng', desc: 'Giao lưu học tập, trao đổi giải đáp câu hỏi khó.', bg: 'bg-[#FFF3E0] dark:bg-slate-800', icon: <MessageSquare className="w-5 h-5 text-amber-700"/> },
+    { path: '/tinhdiem', title: 'Tính Điểm ĐH', desc: 'Công cụ quy chuẩn điểm xét tuyển tự động chuẩn xác.', bg: 'bg-[#FFEBEE] dark:bg-slate-800', icon: <Calculator className="w-5 h-5 text-rose-700"/> }
   ]
 
-  // 🌟 MÀN HÌNH TẢI: CHỈ CÓ ROBOT HOẠT HÌNH ĐANG CHẠY ĐỂ TẢI DỮ LIỆU
+  // ============================================================================
+  // 🌟 MÀN HÌNH LOADING VINTAGE: TRƯỜNG HỌC BỨC TRANH CÓ HỌC SINH ĐANG CHẠY MƯỢT MÀ
+  // ============================================================================
   if (isDataLoading) {
     return (
-      <div className="min-h-screen bg-[#FFFEEA] dark:bg-slate-950 flex flex-col items-center justify-center space-y-6">
-        <div className="text-8xl animate-bounce select-none">🤖</div>
-        <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border-4 border-slate-900 px-6 py-3 rounded-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
-          <p className="font-black text-slate-900 dark:text-white tracking-widest uppercase text-xs">Đang tải dữ liệu SenExam...</p>
+      <div className="min-h-screen bg-[#F4EAD4] flex flex-col items-center justify-center p-6 transition-all duration-1000 ease-in-out">
+        <div className="w-full max-w-lg border-2 border-dashed border-[#614E43] rounded-3xl p-10 bg-[#FAF4E8] shadow-inner text-center space-y-8 relative overflow-hidden">
+          
+          {/* Hình vẽ Trường học kiểu Tranh phác thảo nghệ thuật cổ điển */}
+          <div className="relative flex flex-col items-center justify-center">
+            <span className="text-8xl select-none filter sepia drop-shadow-md animate-pulse">🏫</span>
+            <div className="absolute -bottom-1 w-32 h-1 bg-[#614E43]/30 rounded-full"></div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="font-serif text-2xl font-bold text-[#4A3E3D] tracking-wide">Trường Học SenExam</h2>
+            <p className="text-xs italic text-[#7C6A5E]">Nơi ghi dấu hành trình chinh phục tri thức...</p>
+          </div>
+
+          {/* Đường chạy phác thảo hoài niệm với học sinh đang chạy mướt mắt */}
+          <div className="w-full h-8 border-b-2 border-dotted border-[#614E43] relative mt-6">
+            <span className="absolute bottom-1 text-4xl animate-inline-running select-none">🏃‍♂️</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-xs font-semibold text-[#614E43] pt-4">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D96B43]" />
+            <span>Đang chuẩn bị bảng phấn và tài liệu làm bài...</span>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFEEA] dark:bg-[#0B0F19] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-12 transition-colors duration-500">
+    <div className="min-h-screen bg-[#FAF6EE] dark:bg-[#121620] text-slate-800 dark:text-slate-100 font-sans relative overflow-x-hidden pb-12 transition-colors duration-500 ease-out animate-fade-in">
       
-      {/* CÁC HỌA TIẾT TRANG TRÍ HỆ THỐNG */}
-      <div className="absolute top-[12%] left-[2%] w-16 h-16 bg-yellow-400 border-4 border-slate-900 rounded-full flex items-center justify-center font-black text-2xl animate-spin shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] select-none pointer-events-none z-0">✏️</div>
-      <div className="absolute bottom-[10%] left-[4%] w-16 h-16 bg-cyan-400 border-4 border-slate-900 rounded-full flex items-center justify-center font-black text-2xl animate-pulse shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] select-none pointer-events-none z-0">🧪</div>
-
       {/* ========================================================= */}
-      {/* 🌟 APP BAR (HEADER) - GIAO DIỆN CHUẨN SENEXAM */}
+      {/* 🌟 APP BAR (HEADER) - VINTAGE MINIMALIST */}
       {/* ========================================================= */}
-      <header className="h-[90px] px-4 sm:px-8 flex items-center justify-between bg-white dark:bg-slate-900 border-b-4 border-slate-900 sticky top-0 z-40 transition-colors shadow-[0_4px_0px_0px_rgba(0,0,0,1)]">
+      <header className="h-[80px] px-4 sm:px-8 flex items-center justify-between bg-[#FCF9F2] dark:bg-slate-900 border-b-2 border-[#4A3E3D] sticky top-0 z-40 shadow-sm transition-all duration-300">
         
-        <div className="flex items-center gap-4 cursor-pointer group" onClick={() => router.push('/dashboard')}>
-          <div className="w-14 h-14 rounded-2xl bg-yellow-400 border-4 border-slate-900 flex items-center justify-center p-1.5 group-hover:rotate-12 transition-transform duration-300 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
+        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => router.push('/dashboard')}>
+          <div className="w-11 h-11 rounded-xl bg-[#EAD5C3] border-2 border-[#4A3E3D] flex items-center justify-center p-1 group-hover:rotate-6 transition-transform duration-500 ease-out">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain filter sepia" />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white">SenExam</h1>
-            <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest block">Nền tảng quản lý thi cử và tài liệu học tập</span>
+            <h1 className="text-xl font-serif font-black tracking-wide text-[#4A3E3D] dark:text-white">SenExam</h1>
+            <span className="text-[10px] font-medium text-[#7C6A5E] dark:text-slate-400 block tracking-tight">Hệ thống khảo thí số độc quyền</span>
           </div>
         </div>
 
-        {/* Tìm kiếm trung tâm */}
-        <div className="flex-1 max-w-xl mx-6 relative z-50 hidden md:block">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-900 dark:text-slate-400" />
+        {/* Tìm kiếm tinh gọn */}
+        <div className="flex-1 max-w-md mx-6 relative z-50 hidden md:block">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#7C6A5E]" />
             <input 
               value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} 
-              onFocus={() => {if(globalQuery.length > 1) setShowGlobalResults(true)}}
-              placeholder="Tìm kiếm đề thi, tài liệu thần tốc bằng thẻ thông minh..." className={senInput + " pl-12 pr-10 py-3 text-xs"}
+              placeholder="Tìm kiếm tài liệu, đề khảo thí..." className={vintageInput + " pl-10 pr-8 py-2 text-xs"}
             />
-            {globalQuery && <button onClick={() => {setGlobalQuery(''); setShowGlobalResults(false)}} className="absolute right-4 top-1/2 -translate-y-1/2 bg-slate-200 border-2 border-slate-900 rounded-full p-1 hover:bg-rose-400 transition-colors"><X className="w-4 h-4"/></button>}
           </div>
 
-          {/* Dropdown kết quả tìm kiếm */}
-          {showGlobalResults && globalQuery.trim().length >= 2 && (
-            <div className="absolute top-[calc(100%+12px)] w-full bg-white dark:bg-slate-950 border-4 border-slate-900 rounded-3xl shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] overflow-hidden flex flex-col max-h-[70vh] z-[100]">
-              <div className="p-3 overflow-y-auto custom-scrollbar flex-1">
-                {globalSearchLoading ? <div className="p-4 flex items-center justify-center gap-2 text-slate-500 font-black text-xs"><Loader2 className="w-4 h-4 animate-spin"/> Đang quét kho dữ liệu...</div> : (
+          {showGlobalResults && (
+            <div className="absolute top-[calc(100%+8px)] w-full bg-white dark:bg-slate-950 border-2 border-[#4A3E3D] rounded-xl shadow-lg overflow-hidden max-h-[60vh]">
+              <div className="p-2 overflow-y-auto text-xs">
+                {globalSearchLoading ? <div className="p-3 text-center text-slate-400">Đang tra cứu mục lục...</div> : (
                   <>
-                    {!!globalExamsResults?.length && (
-                      <div className="mb-2">
-                        <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 border-2 border-indigo-500 w-fit rounded-lg mb-2">Đề thi chuyên sâu</div>
-                        {globalExamsResults.map(e => (
-                          <div key={e.id} onClick={() => router.push(`/exams/${e.id}`)} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-900 border-2 border-transparent hover:border-slate-900 rounded-xl cursor-pointer font-bold text-sm flex items-center gap-2"><FileText className="w-4 h-4 text-indigo-500"/>{highlightSearchText(e.title, deferredGlobalQuery)}</div>
-                        ))}
-                      </div>
-                    )}
-                    {!!globalDocsResults?.length && (
-                      <div>
-                        <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 border-2 border-emerald-500 w-fit rounded-lg mb-2">Tài liệu Thư viện</div>
-                        {globalDocsResults.map(d => (
-                          <div key={d.id} onClick={() => router.push(`/library?preview=${d.id}`)} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-900 border-2 border-transparent hover:border-slate-900 rounded-xl cursor-pointer font-bold text-sm flex items-center gap-2"><BookOpen className="w-4 h-4 text-emerald-500"/>{highlightSearchText(d.title, deferredGlobalQuery)}</div>
-                        ))}
-                      </div>
-                    )}
-                    {!globalExamsResults?.length && !globalDocsResults?.length && <div className="p-6 text-center font-black text-slate-400 text-xs">Không tìm thấy kết quả nào phù hợp.</div>}
+                    {globalExamsResults?.map(e => <div key={e.id} onClick={() => router.push(`/exams/${e.id}`)} className="p-2 hover:bg-[#FAF6EE] rounded cursor-pointer font-medium">{e.title}</div>)}
+                    {globalDocsResults?.map(d => <div key={d.id} onClick={() => router.push(`/library?preview=${d.id}`)} className="p-2 hover:bg-[#FAF6EE] rounded cursor-pointer font-medium">{d.title}</div>)}
+                    {!globalExamsResults?.length && !globalDocsResults?.length && <div className="p-3 text-center text-slate-400">Không tìm thấy kết quả hợp lệ.</div>}
                   </>
                 )}
               </div>
@@ -483,98 +325,109 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Action Panel (Đã xoá nút thông báo) */}
-        <div className="flex items-center gap-2">
-          <button onClick={toggleTheme} className="p-2.5 bg-amber-400 hover:bg-amber-500 text-slate-900 border-4 border-slate-900 rounded-full transition-transform active:scale-95 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            {isDark ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
+        {/* Cửa sổ điều khiển hành vi */}
+        <div className="flex items-center gap-3">
+          <button onClick={toggleTheme} className="p-2 border-2 border-[#4A3E3D] bg-[#FAF6EE] rounded-xl text-[#4A3E3D] hover:bg-[#EAD5C3] transition-all duration-300">
+            {isDark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
-          <div onClick={() => setShowProfile(true)} className="w-12 h-12 rounded-full bg-rose-500 border-4 border-slate-900 text-white flex items-center justify-center font-black text-base cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 active:scale-95 transition-all">
-            {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-5 h-5"/>}
+          <div onClick={() => setShowProfile(true)} className="w-10 h-10 rounded-full bg-[#D96B43] border-2 border-[#4A3E3D] text-white flex items-center justify-center font-bold text-sm cursor-pointer hover:scale-105 transition-all duration-300">
+            {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-4 h-4"/>}
           </div>
         </div>
       </header>
 
       {/* ============================================================================ */}
-      {/* 🌟 MAIN WORKSPACE - BENTO GRID SENEXAM */}
+      {/* 🌟 MAIN WORKSPACE - TRANH VINTAGE SẮC MÀU HÀI HÒA MƯỚT MẮT */}
       {/* ============================================================================ */}
-      <main className={`max-w-[1400px] mx-auto p-4 sm:p-8 space-y-8 relative z-10 transition-all duration-300 ${ (showOnboarding || showProfile || showCodeModal) ? 'opacity-20 pointer-events-none blur-sm scale-[0.99]' : '' }`}>
+      <main className={`max-w-7xl mx-auto p-4 sm:p-8 space-y-8 relative z-10 transition-all duration-700 ease-out ${ (showOnboarding || showProfile || showCodeModal) ? 'opacity-10 blur-sm scale-[0.98]' : '' }`}>
         
-        {/* Banner Thông báo */}
+        {/* Banner Thông báo hoài cổ */}
         {activeAnnouncement && (
-          <div className="bg-yellow-200 dark:bg-slate-900 border-4 border-slate-900 rounded-[2rem] p-6 flex items-start gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transform hover:rotate-1 transition-transform">
-            <div className="p-3 bg-rose-500 text-white border-2 border-slate-900 rounded-xl shrink-0"><AlertCircle className="w-6 h-6"/></div>
-            <div className="flex-1 min-w-0 font-bold"><AnnouncementRenderer text={activeAnnouncement} /></div>
+          <div className="bg-[#EAD5C3]/40 border-2 border-[#4A3E3D] rounded-2xl p-4 flex items-start gap-3 transition-transform duration-500">
+            <AlertCircle className="w-5 h-5 text-[#D96B43] shrink-0 mt-0.5"/>
+            <div className="flex-1 font-medium"><AnnouncementRenderer text={activeAnnouncement} /></div>
           </div>
         )}
 
-        {/* LƯỚI HERO BANNER CHÍNH */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        {/* KHU VỰC HERO ĐÓN TIẾP KHẢO THÍ */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          <div className="md:col-span-8 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 border-4 border-slate-900 rounded-[2.5rem] p-6 sm:p-10 text-white relative overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] group">
-            <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/comic-book.png')]"></div>
-            
+          <div className="lg:col-span-8 bg-[#E6F0FA] dark:bg-slate-800 border-2 border-[#4A3E3D] rounded-2xl p-6 sm:p-8 text-[#4A3E3D] dark:text-slate-100 relative overflow-hidden shadow-[4px_4px_0px_0px_#4A3E3D]">
             <div className="relative z-10 space-y-4">
-              <span className="inline-flex items-center gap-1 bg-yellow-400 text-slate-950 border-2 border-slate-900 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider animate-pulse"><Flame className="w-4 h-4 fill-current"/> TRUNG TÂM SENEXAM</span>
-              <h2 className="text-3xl sm:text-5xl font-black leading-tight tracking-tight drop-shadow-[3px_3px_0px_rgba(0,0,0,1)]">Chinh phục mục tiêu cực đại <br/><span className="text-yellow-300">{formData.targetExams.length > 0 ? formData.targetExams.join(' & ') : 'KỲ THI QUỐC GIA'}</span></h2>
-              <p className="text-xs sm:text-sm font-bold text-slate-100 max-w-md leading-relaxed">Không gian ảo học tập cá nhân hóa, tự động lưu trữ, phân tích và tối ưu hóa kết quả khảo thí định kỳ.</p>
+              <span className="inline-flex items-center gap-1 bg-[#D96B43] text-white px-3 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider">Hành Trình Tri Thức</span>
+              <h2 className="text-2xl sm:text-4xl font-serif font-black leading-tight">Bảng vàng cá nhân mục tiêu <br/><span className="text-[#D96B43] dark:text-orange-400">{formData.targetExams.length > 0 ? formData.targetExams.join(' & ') : 'KỲ THI QUỐC GIA'}</span></h2>
+              <p className="text-xs font-medium text-[#614E43] dark:text-slate-300 max-w-md leading-relaxed">Không gian tối giản hỗ trợ rà soát lỗ hổng, lưu trữ lịch sử chấm điểm tự động và đo lường năng lực chuẩn xác.</p>
               
-              <div className="flex flex-wrap gap-3 pt-4">
-                <button onClick={() => router.push('/exams')} className={senBtnFilled + " !bg-yellow-400 !text-slate-900 hover:!bg-yellow-500"}><Target className="w-4 h-4"/> Vào thi ngay</button>
-                <button onClick={() => setShowCodeModal(true)} className={senBtnFilled + " !bg-slate-900 text-white hover:!bg-slate-800"}><KeyRound className="w-4 h-4"/> Nhập Code phòng ẩn</button>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <button onClick={() => router.push('/exams')} className={vintageBtnFilled}>Bắt đầu làm bài</button>
+                <button onClick={() => setShowCodeModal(true)} className="px-5 py-2.5 bg-[#FAF6EE] hover:bg-[#EAD5C3] border-2 border-[#4A3E3D] text-[#4A3E3D] font-bold rounded-xl text-xs transition-all duration-300 shadow-[2px_2px_0px_0px_#4A3E3D]">Vào phòng ẩn</button>
               </div>
             </div>
           </div>
 
-          {/* BOX ĐIỂM SỐ KỶ LỤC (4/12 CỘT) */}
-          <div className="md:col-span-4 flex flex-col gap-6">
-            <div className={senCard + " p-6 flex items-center gap-5 bg-emerald-300 dark:bg-emerald-950/40"}>
-              <div className="w-14 h-14 bg-white border-4 border-slate-900 rounded-2xl flex items-center justify-center text-emerald-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><Trophy className="w-7 h-7 fill-current"/></div>
-              <div><p className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">Kỷ lục của bạn</p><p className="text-3xl font-black text-slate-900 dark:text-white leading-none mt-1">{studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : '--'}</p></div>
+          {/* 🌟 CỘT ĐIỂM SỐ & THANH NGANG THỨ 3: CHECK PHỔ ĐIỂM 2026 */}
+          <div className="lg:col-span-4 flex flex-col gap-4">
+            <div className={vintageCard + " p-4 flex items-center gap-4 bg-[#EAF2E8]"}>
+              <div className="w-11 h-11 bg-white border-2 border-[#4A3E3D] rounded-xl flex items-center justify-center text-[#4CAF50]"><Trophy className="w-5 h-5 fill-current"/></div>
+              <div><p className="text-[10px] font-bold text-[#614E43] uppercase tracking-wider">Kỷ lục điểm số</p><p className="text-xl font-serif font-black text-slate-900 leading-none mt-1">{studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : '--'}</p></div>
             </div>
-            <div className={senCard + " p-6 flex items-center gap-5 bg-sky-300 dark:bg-sky-950/40"}>
-              <div className="w-14 h-14 bg-white border-4 border-slate-900 rounded-2xl flex items-center justify-center text-sky-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><FileText className="w-7 h-7"/></div>
-              <div><p className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">Số đề đã giải</p><p className="text-3xl font-black text-slate-900 dark:text-white leading-none mt-1">{studentHistoryList.length} đề</p></div>
+            
+            <div className={vintageCard + " p-4 flex items-center gap-4 bg-[#EBF3F5]"}>
+              <div className="w-11 h-11 bg-white border-2 border-[#4A3E3D] rounded-xl flex items-center justify-center text-[#2196F3]"><FileText className="w-5 h-5"/></div>
+              <div><p className="text-[10px] font-bold text-[#614E43] uppercase tracking-wider">Số đề đã hoàn thành</p><p className="text-xl font-serif font-black text-slate-900 leading-none mt-1">{studentHistoryList.length} bộ đề</p></div>
+            </div>
+
+            {/* 🌟 THANH NGANG THỨ 3: CHECK PHỔ ĐIỂM 2026 MỚI NHẤT */}
+            <div onClick={() => router.push('/phodiem2026')} className={vintageCard + " p-4 flex items-center justify-between bg-[#FDF2E9] cursor-pointer group hover:bg-[#FBEBE1]"}>
+              <div className="flex items-center gap-4">
+                <div className="w-11 h-11 bg-white border-2 border-[#4A3E3D] rounded-xl flex items-center justify-center text-[#D96B43] group-hover:rotate-6 transition-transform duration-300"><BarChart className="w-5 h-5"/></div>
+                <div>
+                  <p className="text-[10px] font-bold text-[#614E43] uppercase tracking-wider">Công cụ đo lường</p>
+                  <p className="text-sm font-bold text-[#4A3E3D] leading-none mt-1">Check phổ điểm thi 2026</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-[#4A3E3D] transform group-hover:translate-x-1 transition-transform duration-300"/>
             </div>
           </div>
         </div>
 
-        {/* LƯỚI BENTO CÔNG CỤ HOẠT ĐỘNG */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        {/* LƯỚI BENTO CÔNG CỤ VINTAGE MƯỚT MẮT */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {BENTO_TOOLS.map((box, i) => (
-            <div key={i} onClick={() => router.push(box.path)} className={senCard + ` p-5 flex flex-col items-start cursor-pointer group ${box.bg}`}>
-              <div className="w-12 h-12 rounded-xl bg-white border-4 border-slate-900 flex items-center justify-center text-slate-900 mb-4 group-hover:scale-110 group-hover:rotate-6 transition-transform shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">{box.icon}</div>
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-1">{box.title}</h3>
-              <p className="text-[11px] font-bold text-slate-800/80 dark:text-slate-200 mt-1.5 leading-snug">{box.desc}</p>
+            <div key={i} onClick={() => router.push(box.path)} className={vintageCard + ` p-4 flex flex-col items-start cursor-pointer group ${box.bg}`}>
+              <div className="w-10 h-10 rounded-xl bg-white border-2 border-[#4A3E3D] flex items-center justify-center mb-3 group-hover:scale-105 transition-transform duration-500 ease-out shadow-sm">{box.icon}</div>
+              <h3 className="text-sm font-bold text-[#4A3E3D]">{box.title}</h3>
+              <p className="text-[11px] font-medium text-[#7C6A5E] dark:text-slate-300 mt-1 leading-snug">{box.desc}</p>
             </div>
           ))}
         </div>
 
-        {/* WORKSPACE TRỢ LÝ SỨC MẠNH MỞ RỘNG */}
-        <div onClick={() => router.push('/senai')} className="bg-[#A5B4FC] dark:bg-slate-900 border-4 border-slate-900 rounded-[2.5rem] p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between cursor-pointer shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-[12px_12px_0px_0px_rgba(99,102,241,1)] transition-all group">
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-white border-4 border-slate-900 flex items-center justify-center text-indigo-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:rotate-12 transition-transform font-black text-3xl">🤖</div>
+        {/* WORKSPACE TRỢ LÝ ĐỘC QUYỀN */}
+        <div onClick={() => router.push('/senai')} className="bg-[#FAF0E6] border-2 border-[#4A3E3D] rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between cursor-pointer shadow-[3px_3px_0px_0px_#4A3E3D] hover:shadow-[5px_5px_0px_0px_#4A3E3D] transition-all duration-500 group">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white border-2 border-[#4A3E3D] flex items-center justify-center text-slate-700 font-bold text-xl group-hover:rotate-3 transition-transform">🤖</div>
             <div>
-              <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">Trợ Lý Phân Tích Học Thuật Độc Quyền <Sparkles className="w-4 h-4 text-yellow-500 fill-current animate-pulse"/></h3>
-              <p className="text-xs font-bold text-slate-800 dark:text-slate-400 mt-1 max-w-xl">Hỗ trợ rà soát cấu trúc câu hỏi, giải đáp bài tập qua ảnh chụp và cá nhân hóa lộ trình dựa trên lỗ hổng kiến thức.</p>
+              <h3 className="text-base font-bold text-[#4A3E3D]">Không gian Trợ lý Phân tích Học thuật</h3>
+              <p className="text-xs font-medium text-[#7C6A5E] mt-0.5">Tự động phát hiện lỗ hổng sơ đồ tư duy giải quyết câu hỏi khó qua ảnh chụp.</p>
             </div>
           </div>
-          <div className="mt-4 sm:mt-0 bg-slate-900 text-white font-black px-5 py-3 rounded-xl text-xs border-2 border-slate-900 flex items-center gap-1.5 shadow-[3px_3px_0px_0px_rgba(244,63,94,1)] group-hover:translate-x-1 transition-transform">Mở Không Gian <ArrowRight className="w-4 h-4"/></div>
+          <div className="mt-3 sm:mt-0 bg-[#4A3E3D] text-white font-medium px-4 py-2 rounded-lg text-xs flex items-center gap-1">Khám phá <ArrowRight className="w-3.5 h-3.5"/></div>
         </div>
 
-        {/* BẢNG LỊCH SỬ GẦN ĐÂY */}
-        <div className={senCard + " p-6 sm:p-8 bg-white"}>
-          <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2 mb-6"><Clock className="w-5 h-5 text-indigo-500"/> Hoạt động khảo thí vừa qua</h3>
-          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+        {/* LỊCH SỬ KHẢO THÍ VỪA QUA */}
+        <div className={vintageCard + " p-6 bg-[#FCF9F2]"}>
+          <h3 className="text-base font-bold text-[#4A3E3D] flex items-center gap-2 mb-4"><Clock className="w-4 h-4 text-[#D96B43]"/> Nhật ký chấm điểm khảo thí gần đây</h3>
+          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
             {studentHistoryList.length === 0 ? (
-              <div className="text-center py-12 border-4 border-dashed border-slate-300 dark:border-slate-800 rounded-2xl text-slate-400 font-bold text-sm">Chưa có dữ liệu làm bài thi nào.</div>
+              <div className="text-center py-10 border-2 border-dashed border-slate-300 rounded-xl text-slate-400 font-medium text-xs">Chưa ghi nhận dữ liệu làm đề thi nào.</div>
             ) : (
               studentHistoryList.map(sub => (
-                <div key={sub.id} className="p-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-900 rounded-xl flex items-center justify-between hover:bg-slate-100 transition-colors">
-                  <div className="min-w-0 pr-4 flex items-center gap-3">
-                    <Compass className="w-5 h-5 text-rose-500 shrink-0"/>
-                    <div className="truncate"><h4 className="font-black text-sm truncate">{sub.exams?.title}</h4><p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">{sub.exams?.exam_type}</p></div>
+                <div key={sub.id} className="p-3 bg-white dark:bg-slate-800 border border-[#4A3E3D]/30 rounded-xl flex items-center justify-between hover:bg-[#FAF6EE] transition-colors duration-300">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <Compass className="w-4 h-4 text-[#D96B43] shrink-0"/>
+                    <div className="truncate"><h4 className="font-bold text-xs text-[#4A3E3D] dark:text-white truncate">{sub.exams?.title}</h4><p className="text-[10px] uppercase text-[#7C6A5E] tracking-wider mt-0.5">{sub.exams?.exam_type}</p></div>
                   </div>
-                  <div className="bg-yellow-400 text-slate-900 border-2 border-slate-900 px-3 py-1 rounded-lg text-xs font-black shrink-0 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">{sub.is_graded ? `${String(sub.score).replace('.', ',')}đ` : 'Chờ chấm'}</div>
+                  <div className="bg-[#EAD5C3] text-[#4A3E3D] border border-[#4A3E3D] px-2.5 py-0.5 rounded-md text-xs font-bold shrink-0">{sub.is_graded ? `${String(sub.score).replace('.', ',')}đ` : 'Chờ bộ lọc'}</div>
                 </div>
               ))
             )}
@@ -583,162 +436,114 @@ export default function DashboardPage() {
       </main>
 
       {/* ========================================================= */}
-      {/* 🌟 OVERLAYS: TRUNG TÂM CẤU HÌNH & NÚT CẬP NHẬT TRONG SETTING */}
+      {/* 🌟 OVERLAYS: PANEL CẤU HÌNH & KIỂM TRA PHIÊN BẢN TRONG SETTING */}
       {/* ========================================================= */}
 
       {showProfile && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-sm transition-all animate-in fade-in">
-          <div className="w-full max-w-md h-full bg-white dark:bg-slate-950 border-l-4 border-slate-900 overflow-y-auto flex flex-col animate-in slide-in-from-right duration-300">
-            <div className="p-6 border-b-4 border-slate-900 flex justify-between items-center bg-yellow-400 text-slate-900">
-              <h2 className="text-lg font-black flex items-center gap-2"><Settings className="w-5 h-5"/> Cấu hình hệ thống SenExam</h2>
-              <button onClick={() => setShowProfile(false)} className="p-2 bg-white border-4 border-slate-900 rounded-full hover:bg-rose-500 hover:text-white transition-all"><X className="w-4 h-4"/></button>
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs transition-all duration-500">
+          <div className="w-full max-w-sm h-full bg-[#FCF9F2] border-l-2 border-[#4A3E3D] p-6 flex flex-col space-y-6 overflow-y-auto animate-slide-left">
+            <div className="flex justify-between items-center border-b border-[#4A3E3D]/20 pb-3">
+              <h2 className="text-base font-serif font-black text-[#4A3E3D] flex items-center gap-1.5"><Settings className="w-4 h-4"/> Cài đặt SenExam</h2>
+              <button onClick={() => setShowProfile(false)} className="p-1 border border-[#4A3E3D] rounded-md hover:bg-red-50"><X className="w-3.5 h-3.5"/></button>
             </div>
 
-            <div className="p-6 space-y-6 flex-grow">
-              {/* Thẻ học sinh */}
-              <div className="bg-yellow-100 dark:bg-slate-900 border-4 border-slate-900 rounded-2xl p-4 flex items-center gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <div className="w-12 h-12 bg-rose-500 border-2 border-slate-900 rounded-full text-white font-black text-lg flex items-center justify-center">{formData.fullName ? formData.fullName.charAt(0).toUpperCase() : 'U'}</div>
-                <div className="min-w-0 flex-1"><h3 className="font-black text-sm truncate">{formData.fullName || 'Học viên ẩn danh'}</h3><p className="text-xs font-bold text-slate-500 truncate">{userEmail}</p></div>
-              </div>
+            {/* Thông tin học viên */}
+            <div className="bg-[#FAF4E8] border border-[#4A3E3D] rounded-xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#D96B43] rounded-full text-white font-bold flex items-center justify-center text-sm">{formData.fullName ? formData.fullName.charAt(0).toUpperCase() : 'U'}</div>
+              <div className="min-w-0 flex-1"><h3 className="font-bold text-xs text-[#4A3E3D] truncate">{formData.fullName || 'Học viên ẩn danh'}</h3><p className="text-[11px] text-[#7C6A5E] truncate">{userEmail}</p></div>
+            </div>
 
-              {/* 🌟 NÚT CẬP NHẬT PHIÊN BẢN MỚI TRONG SETTING THEO YÊU CẦU */}
-              <div className="space-y-3 bg-sky-100 dark:bg-slate-900 border-4 border-slate-900 rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <h4 className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-wider flex items-center gap-1.5"><DownloadCloud className="w-3.5 h-3.5"/> Phiên bản & Cơ sở dữ liệu</h4>
-                
-                <div className="bg-white dark:bg-slate-950 border-4 border-slate-900 rounded-xl p-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-slate-400">Phiên bản ứng dụng</p>
-                    <p className="text-sm font-black text-rose-500 mt-0.5">{currentVersion}</p>
-                  </div>
-                  <button 
-                    onClick={handleSystemUpdate} disabled={isUpdating}
-                    className="px-4 py-2 bg-slate-900 text-white border-2 border-slate-900 font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 disabled:opacity-50"
-                  >
-                    {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <RefreshCw className="w-3.5 h-3.5"/>} Cập nhật phiên bản mới
-                  </button>
+            {/* 🌟 NÚT CẬP NHẬT PHIÊN BẢN MỚI TRONG SETTING */}
+            <div className="bg-[#E6F0FA] border border-[#4A3E3D] rounded-xl p-4 space-y-3">
+              <h4 className="text-xs font-bold text-[#4A3E3D] uppercase tracking-wider flex items-center gap-1"><DownloadCloud className="w-3.5 h-3.5"/> Kiểm tra cập nhật cấu trúc</h4>
+              <div className="bg-white p-2.5 rounded-lg border border-[#4A3E3D]/30 flex items-center justify-between text-xs">
+                <div>
+                  <p className="text-[10px] text-slate-400">Phiên bản hiện tại</p>
+                  <p className="font-bold text-[#D96B43] mt-0.5">{currentVersion}</p>
                 </div>
-
-                {/* Rollback logic */}
-                <div className="space-y-1.5 pt-1.5">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><History className="w-3.5 h-3.5"/> Quay lại phiên bản cũ (Rollback)</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {versionHistory.map((v) => (
-                      <button 
-                        key={v} onClick={() => { setCurrentVersion(v); alert(`Cấu trúc lõi cơ sở dữ liệu đã quay về bản build ${v}`); }}
-                        className={`p-2 border-2 border-slate-900 text-[10px] font-black rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-0.5 active:translate-y-0.5 ${currentVersion === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-900'}`}
-                      >
-                        Bản {v}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Toggles Hệ thống */}
-              <div className="border-4 border-slate-900 rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-900">
-                <div className="flex items-center justify-between p-4 border-b-2 border-slate-900">
-                  <span className="text-xs font-black flex items-center gap-2">{isDark ? <Moon className="w-4 h-4"/> : <Sun className="w-4 h-4"/>} Giao diện tối</span>
-                  <button onClick={toggleTheme} className={`relative inline-flex h-6 w-11 items-center rounded-full border-2 border-slate-900 bg-white transition-colors`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-slate-900 transition-transform ${isDark ? 'translate-x-5' : 'translate-x-1'}`} />
-                  </button>
-                </div>
-                <div className="flex items-center justify-between p-4">
-                  <span className="text-xs font-black flex items-center gap-2"><Sparkles className="w-4 h-4"/> Trợ lý thông minh hỗ trợ giải đề</span>
-                  <button onClick={() => toggleAiEnabled()} className={`relative inline-flex h-6 w-11 items-center rounded-full border-2 border-slate-900 bg-white transition-colors`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-slate-900 transition-transform ${isAiEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
-                  </button>
-                </div>
+                <button 
+                  onClick={handleSystemUpdate} disabled={isUpdating}
+                  className="px-3 py-1.5 bg-[#4A3E3D] hover:bg-slate-700 text-white font-semibold rounded-md flex items-center gap-1 transition-colors disabled:opacity-50"
+                >
+                  {isUpdating ? <Loader2 className="w-3 h-3 animate-spin"/> : <RefreshCw className="w-3 h-3"/>} Check Update
+                </button>
               </div>
             </div>
 
-            <div className="p-6 border-t-4 border-slate-900 bg-slate-50 dark:bg-slate-900 space-y-2">
-              <button onClick={() => { setShowOnboarding(true); setShowProfile(false); }} className="w-full bg-slate-900 text-white font-black py-3.5 rounded-xl text-xs border-2 border-slate-900 uppercase tracking-wider shadow-[3px_3px_0px_0px_rgba(244,63,94,1)]">Thay đổi hồ sơ mục tiêu</button>
-              <button onClick={handleLogout} className="w-full bg-rose-100 text-rose-600 border-2 border-rose-600 font-black py-3 rounded-xl text-xs uppercase tracking-wider">Đăng xuất khỏi SenExam</button>
+            {/* Cài đặt cấu hình nhanh */}
+            <div className="border border-[#4A3E3D] rounded-xl bg-white text-xs divide-y divide-[#4A3E3D]/10">
+              <div className="flex items-center justify-between p-3">
+                <span className="font-medium text-[#4A3E3D]">Hỗ trợ giải toán nâng cao bằng AI</span>
+                <input type="checkbox" checked={isAiEnabled} onChange={() => {const n=!isAiEnabled; setIsAiEnabled(n); localStorage.setItem('senai_enabled', n?'1':'0')}} className="accent-[#D96B43] cursor-pointer"/>
+              </div>
+            </div>
+
+            <div className="pt-4 space-y-2">
+              <button onClick={() => { setShowOnboarding(true); setShowProfile(false); }} className="w-full py-2.5 bg-[#4A3E3D] text-white font-bold rounded-lg text-xs tracking-wider">Cập nhật hồ sơ mục tiêu</button>
+              <button onClick={handleLogout} className="w-full py-2 border border-red-600 text-red-600 font-bold rounded-lg text-xs">Đăng xuất khỏi SenExam</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL MÃ PHÒNG ẨN */}
+      {/* MODAL PHÒNG THI ẨN */}
       {showCodeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-slate-950 border-4 border-slate-900 rounded-[2.5rem] w-full max-w-sm p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative">
-            <button onClick={() => setShowCodeModal(false)} className="absolute top-4 right-4 p-1.5 bg-slate-100 rounded-full border border-slate-900"><X className="w-4 h-4"/></button>
-            <h3 className="text-xl font-black mb-1">Truy cập đề thi nội bộ</h3>
-            <p className="text-xs font-bold text-slate-400 mb-4">Mã phòng do giáo viên cung cấp để giải mã khóa dữ liệu.</p>
-            <input type="text" value={examCode} onChange={e=>setExamCode(e.target.value.toUpperCase())} placeholder="MÃ PHÒNG THI" className={senInput + " text-center uppercase tracking-widest text-lg py-3 mb-4"} />
-            <button onClick={handleJoinHiddenExam} disabled={codeLoading || !examCode} className="w-full bg-indigo-600 border-2 border-slate-900 text-white font-black py-3 rounded-xl text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">Xác nhận vào phòng</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white border-2 border-[#4A3E3D] rounded-2xl w-full max-w-xs p-5 shadow-lg relative">
+            <button onClick={() => setShowCodeModal(false)} className="absolute top-3 right-3 p-1 rounded-full bg-slate-100 border border-[#4A3E3D]"><X className="w-3 h-3"/></button>
+            <h3 className="text-base font-bold mb-1 text-[#4A3E3D]">Giải mã phòng thi khóa</h3>
+            <p className="text-[11px] text-slate-400 mb-3">Nhập mật mã do hội đồng khảo thí cung cấp để mở đề.</p>
+            <input type="text" value={examCode} onChange={e=>setExamCode(e.target.value.toUpperCase())} placeholder="MÃ CODE" className={vintageInput + " text-center tracking-widest py-2 mb-3 text-sm"} />
+            <button onClick={handleJoinHiddenExam} disabled={codeLoading || !examCode} className="w-full py-2 bg-[#D96B43] hover:bg-[#C85A32] text-white font-bold rounded-lg text-xs transition-colors">Xác minh dữ liệu</button>
           </div>
         </div>
       )}
 
       {/* FULLSCREEN ONBOARDING WIZARD */}
       {showOnboarding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border-4 border-slate-900 rounded-[2.5rem] w-full max-w-4xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] my-auto animate-in zoom-in-95 overflow-hidden">
-            <div className="p-6 md:p-10 space-y-6">
-              <div className="flex justify-between items-start">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white border-2 border-[#4A3E3D] rounded-2xl w-full max-w-2xl my-auto p-6 space-y-4">
+            <div className="flex justify-between items-start border-b pb-2">
+              <div><h2 className="text-xl font-serif font-black text-[#4A3E3D]">Hồ sơ năng lực khởi tạo</h2><p className="text-[11px] text-slate-400">Cấu hình định hướng học tập để hệ thống tối ưu danh mục bộ đề.</p></div>
+              {formData.fullName && <button onClick={() => setShowOnboarding(false)} className="p-1.5 border border-[#4A3E3D] rounded-md bg-slate-100"><X className="w-4 h-4"/></button>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-3">
+                <p className="font-bold text-[#D96B43] border-b pb-1">Thông tin cá nhân</p>
                 <div>
-                  <h2 className="text-2xl md:text-3xl font-black tracking-tight">Hồ sơ năng lực mới 👋</h2>
-                  <p className="text-xs font-bold text-slate-400 mt-1">Cấu hình thông tin mục tiêu khảo thí ban đầu để hệ thống tối ưu hóa kho đề phù hợp.</p>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-400">Họ và Tên học sinh (*)</label>
+                  <input type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className={vintageInput + " py-1.5 text-xs"} placeholder="Nhập tên..." />
                 </div>
-                {formData.fullName && <button onClick={() => setShowOnboarding(false)} className="p-2 border-2 border-slate-900 rounded-full bg-slate-100"><X className="w-5 h-5"/></button>}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <p className="text-xs font-black uppercase text-indigo-500 tracking-wider border-b pb-2">Thông tin cá nhân</p>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Họ và Tên học sinh (*)</label>
-                    <input type="text" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className={senInput + " !py-3"} placeholder="Họ và tên..." />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Tỉnh/TP</label>
-                      <select value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} className="w-full bg-[#FFFDF0] border-4 border-slate-900 px-3 py-3 rounded-2xl font-black text-xs outline-none">
-                        {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Trường THPT</label>
-                      <input type="text" value={formData.school} onChange={e => setFormData({...formData, school: e.target.value})} className={senInput + " !py-3 !px-3"} placeholder="Trường THPT..." />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <p className="text-xs font-black uppercase text-rose-500 tracking-wider border-b pb-2">Mục tiêu khảo thí</p>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Chọn kỳ thi bứt phá (*)</label>
-                    <div className="flex flex-wrap gap-2">
-                      {EXAMS.map(exam => (
-                        <button key={exam} type="button" onClick={() => toggleExam(exam)} className={`px-4 py-2 rounded-xl text-xs font-black border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${formData.targetExams.includes(exam) ? 'bg-rose-500 text-white' : 'bg-white text-slate-900'}`}>{exam}</button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {formData.targetExams.includes('THPTQG') && (
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Tổ hợp môn THPTQG</label>
-                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 border-2 border-slate-900 rounded-xl bg-[#FFFDF0]">
-                        {THPTQG_SUBJECTS.map(sub => (
-                          <button key={sub} type="button" onClick={() => toggleSubject(sub)} className={`px-2.5 py-1 rounded-lg text-[10px] font-black border border-slate-900 ${formData.targetSubjects.includes(sub) ? 'bg-emerald-500 text-white' : 'bg-white'}`}>{sub}</button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-400">Tỉnh / Thành phố</label>
+                  <select value={formData.province} onChange={e => setFormData({...formData, province: e.target.value})} className="w-full bg-[#FAF6EE] border-2 border-[#4A3E3D] px-2 py-2 rounded-xl text-xs outline-none">
+                    {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-4 border-t-2 border-slate-900">
-                <button onClick={handleSaveProfile} disabled={!formData.fullName || !formData.targetExams.length} className="px-6 py-3 bg-slate-900 border-2 border-slate-900 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow-[3px_3px_0px_0px_rgba(244,63,94,1)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all">Lưu thông tin & Bắt đầu</button>
+              <div className="space-y-3">
+                <p className="font-bold text-[#D96B43] border-b pb-1">Mục tiêu kì thi</p>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-400">Chọn mục tiêu bứt phá (*)</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {EXAMS.map(exam => (
+                      <button key={exam} type="button" onClick={() => toggleExam(exam)} className={`px-3 py-1 rounded-md font-bold border ${formData.targetExams.includes(exam) ? 'bg-[#D96B43] text-white border-[#4A3E3D]' : 'bg-white text-slate-700'}`}>{exam}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t">
+              <button onClick={handleSaveProfile} disabled={!formData.fullName || !formData.targetExams.length} className="px-5 py-2 bg-[#4A3E3D] text-white font-bold rounded-lg text-xs tracking-wider transition-opacity disabled:opacity-50">Lưu cấu hình</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* CHAT OFFLINE */}
+      {/* CHAT HOẠT ĐỘNG NGOẠI TUYẾN */}
       <ChatOffline userName={formData.fullName ? formData.fullName.split(' ').pop() || '' : ''} avoid={showProfile || showOnboarding || showCodeModal} hidden={!isAiEnabled} />
 
     </div>
