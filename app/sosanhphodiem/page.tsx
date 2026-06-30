@@ -59,7 +59,7 @@ const SUBJECTS_DATA: Record<string, any> = {
   }
 }
 
-// Giả lập Dữ liệu Phân phối Chuẩn cho các môn bị thiếu ảnh (Anh, GDCD, NN)
+// Giả lập Dữ liệu Phân phối Chuẩn cho các môn bị thiếu ảnh
 const fallbackNormalDistribution = (mean: number, stdDev: number, total: number, bins: number, step: number) => {
   return Array.from({ length: bins }, (_, i) => {
     const x = (i + 1) * step;
@@ -102,34 +102,26 @@ export default function SoSanhPhoDiemPage() {
     else { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); setIsDark(true) }
   }
 
-  // Lấy dữ liệu đồ thị hiện tại
   const currentData = SUBJECTS_DATA[selectedSubject]
   const chartData = currentData.data as number[]
   const maxChartVal = Math.max(...chartData, 1)
 
-  // THUẬT TOÁN AI PHÂN TÍCH VỊ THẾ PERCENTILE
+  // THUẬT TOÁN AI PHÂN TÍCH BÁCH PHÂN VỊ PERCENTILE
   const userPercentileInfo = useMemo(() => {
     if (!userScore) return null
     const val = parseFloat(userScore.replace(',', '.'))
     if (isNaN(val) || val < 0 || val > 10) return null
 
-    // Xác định cột điểm của User
     let userBinIndex = Math.floor(val / currentData.step) - 1;
     if (val === 0) userBinIndex = 0;
     if (val === 10) userBinIndex = currentData.bins - 1;
     userBinIndex = Math.max(0, Math.min(currentData.bins - 1, userBinIndex));
 
     const totalStudents = chartData.reduce((a, b) => a + b, 0)
-    // Tính tổng số lượng thí sinh có điểm <= điểm của User
     const studentsBelowOrEqual = chartData.slice(0, userBinIndex + 1).reduce((a, b) => a + b, 0)
-    
     const percentile = ((studentsBelowOrEqual / totalStudents) * 100).toFixed(1)
     
-    return {
-      percentile,
-      binIndex: userBinIndex,
-      totalStudents
-    }
+    return { percentile, binIndex: userBinIndex, totalStudents }
   }, [userScore, chartData, currentData])
 
   return (
@@ -276,25 +268,28 @@ export default function SoSanhPhoDiemPage() {
                     </div>
                   </div>
 
-                  {/* 🌟 FIX LỖI "TRẮNG TINH": SỬ DỤNG ABSOLUTE ĐỂ VẼ CỘT TỪ ĐÁY LÊN 100% ỔN ĐỊNH */}
-                  <div className="flex-1 w-full border-b-2 border-l-2 border-slate-200 dark:border-slate-800 pb-0 pl-1 relative flex items-end h-[350px] gap-[2px] sm:gap-1 mt-8 pt-4">
+                  {/* 🌟 BẢN FIX TUYỆT ĐỐI CHO SAFARI/CHROME CŨ: ÉP THẲNG HEIGHT INLINE LÊN THẺ FLEX */}
+                  <div className="w-full h-[350px] mt-6 flex items-end gap-[2px] sm:gap-1 border-b-2 border-l-2 border-slate-200 dark:border-slate-800 pl-1 pb-0">
                     {chartData.map((val, i) => {
                       const rangeStart = (i + 1) * currentData.step;
                       const isUserScore = userPercentileInfo && userPercentileInfo.binIndex === i;
-                      const heightPercent = Math.max((val / maxChartVal) * 100, 0.5); // Đảm bảo cột có độ cao tối thiểu
+                      // Tính toán độ cao phần trăm (tối thiểu 0.5% để không bị tàng hình với cột 0)
+                      const hPercent = Math.max((val / maxChartVal) * 100, 0.5);
                       
                       return (
-                        <div key={i} className="relative flex-1 group h-full">
-                          {/* Khối vẽ cột bằng Absolute bottom */}
-                          <div 
-                            style={{ height: `${heightPercent}%` }} 
-                            className={`absolute bottom-0 left-0 w-full rounded-t-sm transition-all duration-700 ease-out ${isUserScore ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)] z-10 scale-x-110 origin-bottom' : 'bg-indigo-500 dark:bg-indigo-600 group-hover:bg-indigo-400 dark:group-hover:bg-indigo-400'}`}
-                          >
-                            {/* Tooltip đặt ngay trên đỉnh cột để trượt lên trượt xuống theo cột */}
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black px-3 py-2 rounded-xl shadow-xl z-20 whitespace-nowrap animate-in zoom-in-95 pointer-events-none">
-                                <span className="text-slate-300 dark:text-slate-500 mb-0.5 border-b border-slate-700 dark:border-slate-200 pb-0.5">Điểm {rangeStart.toFixed(2)}</span>
-                                <span className="text-xs">{val.toLocaleString()} TS</span>
-                            </div>
+                        <div 
+                          key={i} 
+                          style={{ height: `${hPercent}%` }}
+                          className={`flex-1 rounded-t-sm relative group transition-all duration-500 ease-out ${
+                            isUserScore 
+                            ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)] z-10 scale-105' 
+                            : 'bg-indigo-500 dark:bg-indigo-600 hover:bg-indigo-400 dark:hover:bg-indigo-400'
+                          }`}
+                        >
+                          {/* Tooltip trực quan ghim trên đỉnh cột */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black px-3 py-2 rounded-xl shadow-xl z-20 whitespace-nowrap pointer-events-none animate-in zoom-in-95">
+                              <span className="text-slate-300 dark:text-slate-500 mb-0.5 border-b border-slate-700 dark:border-slate-200 pb-0.5">Điểm {rangeStart.toFixed(2)}</span>
+                              <span className="text-xs">{val.toLocaleString()} TS</span>
                           </div>
                         </div>
                       )
