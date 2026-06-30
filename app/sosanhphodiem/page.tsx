@@ -271,28 +271,30 @@ export default function SoSanhPhoDiemPage() {
                       <h3 className="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2"><BarChart3 className="w-5 h-5 text-indigo-500"/> Biểu đồ phân bổ điểm môn {selectedSubject}</h3>
                       <p className="text-xs font-bold text-slate-500 mt-1.5">Mô phỏng đường cong biểu đồ chuẩn dựa trên dữ liệu trích xuất chính thức.</p>
                     </div>
-                    <div className="px-3 py-1.5 bg-slate-100 dark:bg-[#202020] rounded-lg border border-slate-200 dark:border-white/5 text-[10px] font-black text-slate-500 tracking-widest uppercase">
+                    <div className="px-3 py-1.5 bg-slate-100 dark:bg-[#202020] rounded-lg border border-slate-200 dark:border-white/5 text-[10px] font-black text-slate-500 tracking-widest uppercase shrink-0">
                       Khoảng chia (Step): {currentData.step}đ
                     </div>
                   </div>
 
-                  {/* RENDER BIỂU ĐỒ CSS FLEXBOX LIQUID GLASS */}
-                  <div className="flex-1 w-full border-b-2 border-l-2 border-slate-200 dark:border-slate-800 pb-1 pl-1 relative flex items-end h-[350px] gap-[2px] sm:gap-1 mt-8">
+                  {/* 🌟 FIX LỖI "TRẮNG TINH": SỬ DỤNG ABSOLUTE ĐỂ VẼ CỘT TỪ ĐÁY LÊN 100% ỔN ĐỊNH */}
+                  <div className="flex-1 w-full border-b-2 border-l-2 border-slate-200 dark:border-slate-800 pb-0 pl-1 relative flex items-end h-[350px] gap-[2px] sm:gap-1 mt-8 pt-4">
                     {chartData.map((val, i) => {
                       const rangeStart = (i + 1) * currentData.step;
                       const isUserScore = userPercentileInfo && userPercentileInfo.binIndex === i;
+                      const heightPercent = Math.max((val / maxChartVal) * 100, 0.5); // Đảm bảo cột có độ cao tối thiểu
                       
                       return (
-                        <div key={i} className="relative flex-1 group flex flex-col justify-end h-full">
+                        <div key={i} className="relative flex-1 group h-full">
+                          {/* Khối vẽ cột bằng Absolute bottom */}
                           <div 
-                            style={{ height: `${Math.max((val / maxChartVal) * 100, 1)}%` }} 
-                            className={`w-full rounded-t-sm transition-all duration-700 ease-out ${isUserScore ? 'bg-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.6)] z-10 scale-110 origin-bottom' : 'bg-indigo-400 dark:bg-indigo-600 group-hover:bg-indigo-300 dark:group-hover:bg-indigo-400'}`}
-                          ></div>
-                          
-                          {/* Tooltip */}
-                          <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black px-3 py-2 rounded-xl shadow-xl z-20 whitespace-nowrap animate-in zoom-in-95 pointer-events-none">
-                              <span className="text-slate-300 dark:text-slate-500 mb-0.5 border-b border-slate-700 dark:border-slate-200 pb-0.5">Điểm {rangeStart.toFixed(2)}</span>
-                              <span className="text-xs">{val.toLocaleString()} TS</span>
+                            style={{ height: `${heightPercent}%` }} 
+                            className={`absolute bottom-0 left-0 w-full rounded-t-sm transition-all duration-700 ease-out ${isUserScore ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)] z-10 scale-x-110 origin-bottom' : 'bg-indigo-500 dark:bg-indigo-600 group-hover:bg-indigo-400 dark:group-hover:bg-indigo-400'}`}
+                          >
+                            {/* Tooltip đặt ngay trên đỉnh cột để trượt lên trượt xuống theo cột */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black px-3 py-2 rounded-xl shadow-xl z-20 whitespace-nowrap animate-in zoom-in-95 pointer-events-none">
+                                <span className="text-slate-300 dark:text-slate-500 mb-0.5 border-b border-slate-700 dark:border-slate-200 pb-0.5">Điểm {rangeStart.toFixed(2)}</span>
+                                <span className="text-xs">{val.toLocaleString()} TS</span>
+                            </div>
                           </div>
                         </div>
                       )
@@ -311,7 +313,7 @@ export default function SoSanhPhoDiemPage() {
 
                 {/* AI SO SÁNH NĂM 2026 */}
                 <div className={`${mdCard} p-6 md:p-8 border-l-4 border-amber-500 bg-gradient-to-r from-amber-50/50 to-transparent dark:from-amber-900/10`}>
-                  <h3 className="font-black text-base text-amber-600 dark:text-amber-500 flex items-center gap-2"><Bot className="w-5 h-5"/> Phân tích Điểm chuẩn tương đương AI</h3>
+                  <h3 className="font-black text-base text-amber-600 dark:text-amber-500 flex items-center gap-2"><Bot className="w-5 h-5"/> Trợ lý AI Phân tích & So sánh phổ điểm</h3>
                   <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mt-2.5 leading-relaxed max-w-3xl">Tính năng phân tích dự đoán chuyên sâu và so sánh độ khó tương đương giữa 2 năm (2025 vs 2026) đang được tạm khóa. Ngay khi có dữ liệu điểm thi chính thức năm 2026, AI sẽ tự động phân tích xem điểm số hiện tại của bạn tương đương với mức điểm chuẩn nào của các trường Đại học năm trước.</p>
                 </div>
               </div>
