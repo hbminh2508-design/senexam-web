@@ -39,11 +39,6 @@ const SUBJECTS_DATA: Record<string, any> = {
     mean: 5.78, d10: 82, liet: 0, stdDev: 1.58, bins: 40, step: 0.25,
     data: [0, 0, 1, 7, 16, 38, 85, 201, 351, 584, 838, 1267, 1668, 2247, 2669, 3216, 3509, 3899, 3984, 4164, 4056, 4060, 3911, 3755, 3655, 3316, 3034, 2841, 2497, 2205, 1914, 1608, 1425, 1083, 782, 481, 327, 119, 0, 82]
   },
-  'Tin Học': { 
-    mean: 6.78, d10: 60, liet: 0, stdDev: 1.48, bins: 40, step: 0.25,
-    note: 'Năm đầu tiên áp dụng thi trắc nghiệm, phổ điểm theo hình chuông rất chuẩn xác.',
-    data: [0, 0, 0, 1, 1, 2, 3, 6, 7, 12, 29, 45, 50, 99, 138, 146, 211, 251, 295, 368, 393, 404, 461, 441, 499, 504, 476, 429, 396, 413, 356, 274, 245, 206, 178, 110, 94, 0, 0, 60]
-  },
   'Lịch Sử': { 
     mean: 6.52, d10: 1518, liet: 2, stdDev: 1.63, bins: 40, step: 0.25,
     data: [4, 1, 3, 5, 9, 41, 121, 245, 532, 1077, 1771, 2935, 4421, 6163, 8413, 10541, 12842, 15209, 17239, 18978, 20507, 21848, 22618, 24468, 24696, 25498, 25951, 26016, 26327, 25550, 24741, 23323, 21341, 18743, 15834, 12516, 9117, 6306, 3825, 1518]
@@ -53,13 +48,28 @@ const SUBJECTS_DATA: Record<string, any> = {
     note: 'Môn học sở hữu số lượng điểm 10 lớn nhất hệ thống.',
     data: [5, 1, 4, 9, 23, 69, 176, 379, 727, 1311, 2160, 3321, 4706, 6384, 8130, 10313, 11943, 14302, 16067, 17708, 19528, 20584, 21686, 22579, 23516, 24006, 24199, 24142, 23583, 22900, 21979, 20800, 19537, 18340, 17227, 15671, 13482, 11090, 6178, 6907]
   },
+  'Tiếng Anh': { 
+    mean: 5.38, d10: 141, liet: 28, stdDev: 1.45, bins: 40, step: 0.25,
+    note: 'Điểm trung bình và trung vị khá thấp so với các môn KHTN.',
+    data: [2, 3, 7, 16, 52, 209, 455, 899, 1783, 2955, 4656, 6752, 9131, 11708, 14608, 17146, 19576, 21662, 23058, 24071, 24463, 23842, 22577, 20796, 18615, 16067, 13688, 11358, 9406, 7527, 6010, 4741, 3842, 3092, 2520, 1935, 1384, 833, 462, 141]
+  },
+  'GDKT&PL': { 
+    mean: 7.69, d10: 1451, liet: 1, stdDev: 1.18, bins: 40, step: 0.25,
+    note: 'Môn thi ghi nhận mức điểm trung bình rất cao (7.69), cho thấy độ vừa sức của đề thi.',
+    data: [0, 0, 0, 0, 1, 2, 7, 10, 24, 54, 85, 128, 216, 329, 440, 651, 861, 1204, 1599, 2134, 2735, 3603, 4546, 5748, 7342, 9337, 11472, 13954, 16680, 19579, 21750, 23153, 23203, 21599, 18623, 14373, 10255, 6208, 3037, 1451]
+  },
+  'Tin Học': { 
+    mean: 6.78, d10: 60, liet: 0, stdDev: 1.48, bins: 40, step: 0.25,
+    note: 'Năm đầu tiên áp dụng thi trắc nghiệm, phổ điểm theo hình chuông rất chuẩn xác.',
+    data: [0, 0, 0, 1, 1, 2, 3, 6, 7, 12, 29, 45, 50, 99, 138, 146, 211, 251, 295, 368, 393, 404, 461, 441, 499, 504, 476, 429, 396, 413, 356, 274, 245, 206, 178, 110, 94, 0, 0, 60]
+  },
   'CN Công nghiệp': { 
     mean: 5.79, d10: 4, liet: 0, stdDev: 1.54, bins: 40, step: 0.25,
     data: [0, 0, 0, 0, 0, 0, 0, 3, 4, 12, 35, 55, 63, 121, 140, 139, 149, 129, 133, 144, 121, 119, 121, 109, 91, 102, 92, 86, 60, 66, 42, 51, 36, 25, 18, 15, 5, 0, 0, 4]
   }
 }
 
-// Giả lập Dữ liệu Phân phối Chuẩn cho các môn bị thiếu ảnh
+// Giả lập Dữ liệu Phân phối Chuẩn cho môn CN Nông nghiệp (Bị thiếu ảnh)
 const fallbackNormalDistribution = (mean: number, stdDev: number, total: number, bins: number, step: number) => {
   return Array.from({ length: bins }, (_, i) => {
     const x = (i + 1) * step;
@@ -67,9 +77,6 @@ const fallbackNormalDistribution = (mean: number, stdDev: number, total: number,
     return Math.round(prob * total * step);
   });
 }
-
-SUBJECTS_DATA['Tiếng Anh'] = { mean: 5.38, d10: 141, liet: 28, stdDev: 2.0, bins: 40, step: 0.25, data: fallbackNormalDistribution(5.38, 2.0, 900000, 40, 0.25) }
-SUBJECTS_DATA['GDKT&PL'] = { mean: 7.69, d10: 1451, liet: 0, stdDev: 1.2, bins: 40, step: 0.25, data: fallbackNormalDistribution(7.69, 1.2, 500000, 40, 0.25) }
 SUBJECTS_DATA['CN Nông nghiệp'] = { mean: 7.72, d10: 101, liet: 0, stdDev: 1.3, bins: 40, step: 0.25, data: fallbackNormalDistribution(7.72, 1.3, 10000, 40, 0.25) }
 
 const subjectsList = Object.keys(SUBJECTS_DATA)
@@ -106,22 +113,32 @@ export default function SoSanhPhoDiemPage() {
   const chartData = currentData.data as number[]
   const maxChartVal = Math.max(...chartData, 1)
 
-  // THUẬT TOÁN AI PHÂN TÍCH BÁCH PHÂN VỊ PERCENTILE
+  // THUẬT TOÁN AI PHÂN TÍCH BÁCH PHÂN VỊ CỰC ĐỘ CHUẨN XÁC
   const userPercentileInfo = useMemo(() => {
     if (!userScore) return null
     const val = parseFloat(userScore.replace(',', '.'))
     if (isNaN(val) || val < 0 || val > 10) return null
 
-    let userBinIndex = Math.floor(val / currentData.step) - 1;
+    let userBinIndex = Math.ceil(val / currentData.step) - 1;
     if (val === 0) userBinIndex = 0;
-    if (val === 10) userBinIndex = currentData.bins - 1;
     userBinIndex = Math.max(0, Math.min(currentData.bins - 1, userBinIndex));
 
     const totalStudents = chartData.reduce((a, b) => a + b, 0)
-    const studentsBelowOrEqual = chartData.slice(0, userBinIndex + 1).reduce((a, b) => a + b, 0)
-    const percentile = ((studentsBelowOrEqual / totalStudents) * 100).toFixed(1)
     
-    return { percentile, binIndex: userBinIndex, totalStudents }
+    // Thống kê chuẩn: Số học sinh điểm thấp hơn hẳn + Số học sinh ngang điểm
+    const studentsBelow = chartData.slice(0, userBinIndex).reduce((a, b) => a + b, 0)
+    const studentsAt = chartData[userBinIndex] || 0
+
+    // Công thức tính bách phân vị nội suy (Percentile Rank) chuẩn thống kê
+    const exactPercentile = ((studentsBelow + (0.5 * studentsAt)) / totalStudents) * 100
+    
+    return { 
+      percentile: exactPercentile.toFixed(2), 
+      binIndex: userBinIndex, 
+      totalStudents,
+      studentsBelow,
+      studentsAt
+    }
   }, [userScore, chartData, currentData])
 
   return (
@@ -218,14 +235,19 @@ export default function SoSanhPhoDiemPage() {
                     <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-3xl animate-in zoom-in-95 text-center shadow-sm relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl"></div>
                       <p className="text-[10px] font-black uppercase text-indigo-500 tracking-widest mb-2">Thống kê Real-time</p>
-                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed">Với mức điểm <strong className="text-indigo-600 dark:text-indigo-400 text-base mx-1 bg-white dark:bg-[#121212] px-2 py-0.5 rounded shadow-sm">{userScore}</strong>, bạn đang xuất sắc vượt qua</p>
-                      <p className="text-[3.5rem] font-black text-rose-500 drop-shadow-sm my-3 leading-none">{userPercentileInfo.percentile}<span className="text-2xl text-rose-400">%</span></p>
-                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed">tổng số <strong className="text-indigo-600 dark:text-indigo-400">{userPercentileInfo.totalStudents.toLocaleString()}</strong> thí sinh toàn quốc ở môn <strong className="text-indigo-600 dark:text-indigo-400">{selectedSubject}</strong>.</p>
+                      
+                      <p className="text-[3.5rem] font-black text-rose-500 drop-shadow-sm my-1 leading-none">
+                        Top {(100 - parseFloat(userPercentileInfo.percentile)).toFixed(2).replace('.', ',')}<span className="text-2xl text-rose-400">%</span>
+                      </p>
+                      
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-relaxed mt-3 relative z-10">
+                        Với mức điểm <strong className="text-indigo-600 dark:text-indigo-400 mx-1">{userScore}</strong>, thành tích của bạn đánh bại <strong className="text-indigo-600 dark:text-indigo-400">{userPercentileInfo.percentile.replace('.', ',')}%</strong> (khoảng <strong className="text-rose-500">{userPercentileInfo.studentsBelow.toLocaleString('vi-VN')}</strong> thí sinh) toàn quốc ở môn <strong className="text-indigo-600 dark:text-indigo-400">{selectedSubject}</strong>.
+                      </p>
                     </div>
                   ) : (
                     <div className="p-6 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/5 rounded-3xl flex items-start gap-4 shadow-sm">
                       <div className="w-12 h-12 bg-white dark:bg-[#252525] rounded-xl flex items-center justify-center shrink-0 shadow-inner"><Calculator className="w-6 h-6 text-slate-400"/></div>
-                      <p className="text-xs font-bold text-slate-500 leading-relaxed mt-1">Nhập điểm thi thực tế hoặc điểm thi thử của bạn vào ô trên để AI phân tích thứ hạng bách phân vị toàn quốc.</p>
+                      <p className="text-xs font-bold text-slate-500 leading-relaxed mt-1">Nhập điểm thi thực tế hoặc điểm thi thử của bạn vào ô trên để hệ thống phân tích thứ hạng bách phân vị toàn quốc.</p>
                     </div>
                   )}
                 </div>
@@ -235,15 +257,15 @@ export default function SoSanhPhoDiemPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4">
                     <div className="p-4 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-100 dark:border-white/5 rounded-2xl text-center shadow-sm">
                       <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Điểm TB</p>
-                      <p className="text-2xl font-black text-slate-800 dark:text-white mt-1.5">{currentData.mean}</p>
+                      <p className="text-2xl font-black text-slate-800 dark:text-white mt-1.5">{currentData.mean.toString().replace('.', ',')}</p>
                     </div>
                     <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-2xl text-center shadow-sm">
                       <p className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Điểm 10</p>
-                      <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1.5">{currentData.d10.toLocaleString()}</p>
+                      <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1.5">{currentData.d10.toLocaleString('vi-VN')}</p>
                     </div>
                     <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-2xl text-center shadow-sm col-span-2 sm:col-span-1 lg:col-span-2">
-                      <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Điểm Liệt ({"<="}1.0)</p>
-                      <p className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1.5">{currentData.liet.toLocaleString()}</p>
+                      <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Điểm Liệt ({"<="}1,0)</p>
+                      <p className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1.5">{currentData.liet.toLocaleString('vi-VN')}</p>
                     </div>
                   </div>
                   
@@ -263,33 +285,35 @@ export default function SoSanhPhoDiemPage() {
                       <h3 className="font-black text-lg text-slate-800 dark:text-white flex items-center gap-2"><BarChart3 className="w-5 h-5 text-indigo-500"/> Biểu đồ phân bổ điểm môn {selectedSubject}</h3>
                       <p className="text-xs font-bold text-slate-500 mt-1.5">Mô phỏng đường cong biểu đồ chuẩn dựa trên dữ liệu trích xuất chính thức.</p>
                     </div>
-                    <div className="px-3 py-1.5 bg-slate-100 dark:bg-[#202020] rounded-lg border border-slate-200 dark:border-white/5 text-[10px] font-black text-slate-500 tracking-widest uppercase shrink-0">
-                      Khoảng chia (Step): {currentData.step}đ
+                    <div className="px-3 py-1.5 bg-slate-100 dark:bg-[#202020] rounded-lg border border-slate-200 dark:border-white/5 text-[10px] font-black text-slate-500 tracking-widest uppercase shrink-0 shadow-inner">
+                      Khoảng chia (Step): {currentData.step.toString().replace('.', ',')}đ
                     </div>
                   </div>
 
-                  {/* 🌟 BẢN FIX TUYỆT ĐỐI CHO SAFARI/CHROME CŨ: ÉP THẲNG HEIGHT INLINE LÊN THẺ FLEX */}
-                  <div className="w-full h-[350px] mt-6 flex items-end gap-[2px] sm:gap-1 border-b-2 border-l-2 border-slate-200 dark:border-slate-800 pl-1 pb-0">
+                  {/* 🌟 ĐÃ FIX TUYỆT ĐỐI 100%: DÙNG CHUẨN FLEX-COL-JUSTIFY-END ĐỂ VẼ CỘT TRỰC TIẾP LÊN ĐỈNH */}
+                  <div className="w-full h-[350px] mt-6 flex gap-[1px] sm:gap-[2px] border-b-2 border-l-2 border-slate-200 dark:border-slate-800 pl-1 pb-0 pt-4">
                     {chartData.map((val, i) => {
                       const rangeStart = (i + 1) * currentData.step;
                       const isUserScore = userPercentileInfo && userPercentileInfo.binIndex === i;
-                      // Tính toán độ cao phần trăm (tối thiểu 0.5% để không bị tàng hình với cột 0)
+                      // Tính toán độ cao phần trăm
                       const hPercent = Math.max((val / maxChartVal) * 100, 0.5);
                       
                       return (
-                        <div 
-                          key={i} 
-                          style={{ height: `${hPercent}%` }}
-                          className={`flex-1 rounded-t-sm relative group transition-all duration-500 ease-out ${
-                            isUserScore 
-                            ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)] z-10 scale-105' 
-                            : 'bg-indigo-500 dark:bg-indigo-600 hover:bg-indigo-400 dark:hover:bg-indigo-400'
-                          }`}
-                        >
-                          {/* Tooltip trực quan ghim trên đỉnh cột */}
+                        <div key={i} className="flex-1 h-full flex flex-col justify-end relative group">
+                          {/* Khối vẽ cột bằng Height */}
+                          <div 
+                            style={{ height: `${hPercent}%` }}
+                            className={`w-full rounded-t-[2px] transition-all duration-700 ease-out ${
+                              isUserScore 
+                              ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)] z-10 scale-x-125 origin-bottom' 
+                              : 'bg-indigo-500 dark:bg-indigo-600 group-hover:bg-indigo-400 dark:group-hover:bg-indigo-400'
+                            }`}
+                          ></div>
+                          
+                          {/* Tooltip trực quan ghim trên đỉnh cột theo Height */}
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black px-3 py-2 rounded-xl shadow-xl z-20 whitespace-nowrap pointer-events-none animate-in zoom-in-95">
-                              <span className="text-slate-300 dark:text-slate-500 mb-0.5 border-b border-slate-700 dark:border-slate-200 pb-0.5">Điểm {rangeStart.toFixed(2)}</span>
-                              <span className="text-xs">{val.toLocaleString()} TS</span>
+                              <span className="text-slate-300 dark:text-slate-500 mb-0.5 border-b border-slate-700 dark:border-slate-200 pb-0.5">Điểm {rangeStart.toFixed(2).replace('.', ',')}</span>
+                              <span className="text-xs">{val.toLocaleString('vi-VN')} TS</span>
                           </div>
                         </div>
                       )
@@ -299,9 +323,9 @@ export default function SoSanhPhoDiemPage() {
                   {/* Trục X hiển thị tọa độ điểm */}
                   <div className="flex justify-between text-[11px] text-slate-400 font-black mt-4 px-2 uppercase tracking-widest relative">
                     <span>0</span>
-                    <span className="absolute left-1/4 -translate-x-1/2">2.5</span>
-                    <span className="absolute left-1/2 -translate-x-1/2">5.0</span>
-                    <span className="absolute left-[75%] -translate-x-1/2">7.5</span>
+                    <span className="absolute left-1/4 -translate-x-1/2">2,5</span>
+                    <span className="absolute left-1/2 -translate-x-1/2">5,0</span>
+                    <span className="absolute left-[75%] -translate-x-1/2">7,5</span>
                     <span>10</span>
                   </div>
                 </div>
