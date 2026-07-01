@@ -7,6 +7,7 @@ import {
   ArrowLeft, BarChart3, Calculator, TrendingUp, Info, 
   AlertCircle, Bot, Lock, User, Moon, Sun
 } from 'lucide-react'
+import AdBanner from '@/components/AdBanner' // <-- Đã import AdBanner
 
 // --- MATERIAL 3 & LIQUID GLASS CONSTANTS ---
 const mdCard = "bg-white/70 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] border border-white/60 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] hover:shadow-xl hover:-translate-y-1 transition-all duration-500 ease-out relative overflow-hidden"
@@ -176,7 +177,7 @@ export default function SoSanhPhoDiemPage() {
       <div className="max-w-[1400px] mx-auto pt-8 px-4 md:px-8 relative z-10">
         
         {/* THANH ĐIỀU HƯỚNG NĂM THI */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl p-4 sm:p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/5 shadow-sm mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl p-4 sm:p-6 rounded-[2.5rem] border border-slate-200 dark:border-white/5 shadow-sm mb-6">
           <div className="min-w-0 pl-2">
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3"><BarChart3 className="text-indigo-500 w-7 h-7"/> Đối soát Phổ Điểm Quốc Gia</h2>
             <p className="text-xs font-bold text-slate-500 mt-1.5">Trích xuất chính xác 100% từ dữ liệu chính thức của Bộ Giáo dục và Đào tạo.</p>
@@ -185,6 +186,11 @@ export default function SoSanhPhoDiemPage() {
             <button onClick={() => setActiveYear('2025')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeYear === '2025' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Kỳ thi năm 2025</button>
             <button onClick={() => setActiveYear('2026')} className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${activeYear === '2026' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Năm 2026 (Mới)</button>
           </div>
+        </div>
+
+        {/* 👉 VỊ TRÍ QUẢNG CÁO 1: Banner ngang (Horizontal Banner) */}
+        <div className="mb-8">
+          <AdBanner dataAdSlot="MÃ_AD_SLOT_NGANG_CỦA_BẠN" />
         </div>
 
         {/* 🌟 VÙNG RENDER 2026: KHÓA CHỜ DỮ LIỆU */}
@@ -276,6 +282,10 @@ export default function SoSanhPhoDiemPage() {
                     </div>
                   )}
                 </div>
+
+                {/* 👉 VỊ TRÍ QUẢNG CÁO 2: Banner Dọc/Vuông lấp đầy phần chân cột bên trái */}
+                <AdBanner dataAdSlot="MÃ_AD_SLOT_VUÔNG_CỦA_BẠN" />
+
               </div>
 
               {/* PHẢI: BIỂU ĐỒ ĐƯỜNG CONG CSS THUẦN TÚY (8 COLUMNS) */}
