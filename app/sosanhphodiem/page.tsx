@@ -227,7 +227,6 @@ export default function UnifiedKhaoThiPage() {
   const chartData = currentData.data as number[]
   const maxChartVal = Math.max(...chartData, 1)
 
-
   // LÕI TOÁN HỌC: HÀM NỘI SUY BÁCH PHÂN VỊ CỦA MỘT MÔN BẤT KỲ
   const getPercentileForSubject = (subject: string, score: number, year: '2025' | '2026') => {
     const targetSub = STATS_DATA[year][subject]
@@ -356,16 +355,27 @@ export default function UnifiedKhaoThiPage() {
     // Bách phân vị tổng hợp đại diện (Composite Percentile Rank)
     const compositePercentile = (p1 + p2 + p3) / 3
 
+    // Bản đồ lưu trữ điểm số thành phần của khối xuất phát
+    const sourceScoreMap: Record<string, number> = {
+      [sourceSubjects[0]]: v1,
+      [sourceSubjects[1]]: v2,
+      [sourceSubjects[2]]: v3,
+    }
+
     // Ánh xạ phân bổ sang tất cả các khối mục tiêu
     return Object.keys(DYNAMIC_BLOCKS).map(blockName => {
       const targets = DYNAMIC_BLOCKS[blockName]
-      const s1Eq = getEquivalentScoreForYear(targets[0], compositePercentile, crossYear)
-      const s2Eq = getEquivalentScoreForYear(targets[1], compositePercentile, crossYear)
-      const s3Eq = getEquivalentScoreForYear(targets[2], compositePercentile, crossYear)
+      
+      // Khắc phục: Nếu môn học tồn tại ở khối thi gốc, giữ nguyên điểm thực tế.
+      // Nếu là môn mới, thực hiện tính toán nội suy từ bách phân vị tổng hợp liên khối.
+      const s1Eq = sourceScoreMap[targets[0]] !== undefined ? sourceScoreMap[targets[0]] : getEquivalentScoreForYear(targets[0], compositePercentile, crossYear)
+      const s2Eq = sourceScoreMap[targets[1]] !== undefined ? sourceScoreMap[targets[1]] : getEquivalentScoreForYear(targets[1], compositePercentile, crossYear)
+      const s3Eq = sourceScoreMap[targets[2]] !== undefined ? sourceScoreMap[targets[2]] : getEquivalentScoreForYear(targets[2], compositePercentile, crossYear)
+
       return {
         block: blockName,
         totalEquivalent: (s1Eq + s2Eq + s3Eq).toFixed(2),
-        breakdown: `${targets[0]}: ${s1Eq.toFixed(2)}; ${targets[1]}: ${s2Eq.toFixed(2)}; ${targets[2]}: ${s3Eq.toFixed(2)}`
+        breakdown: `${targets[0]}: ${s1Eq.toFixed(2).replace('.', ',')}; ${targets[1]}: ${s2Eq.toFixed(2).replace('.', ',')}; ${targets[2]}: ${s3Eq.toFixed(2).replace('.', ',')}`
       }
     })
   }, [crossScores, crossSourceBlock, crossYear])
@@ -640,7 +650,7 @@ export default function UnifiedKhaoThiPage() {
                     <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl text-center">
                       <p className="text-[10px] font-black text-emerald-500 uppercase">Quy đổi tương đương sang năm 2025</p>
                       <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{formatNum(singleSubjectEquivalent2025 || '0')} điểm</p>
-                      <p className="text-[10px] text-slate-400 font-bold mt-1">Nội suy dựa trên phân bố mẫu phổ điểm</p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1">Nội suy dựa trên phân bổ mẫu phổ điểm</p>
                     </div>
                   </div>
                 )}
