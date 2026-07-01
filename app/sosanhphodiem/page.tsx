@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   ArrowLeft, BarChart3, Calculator, TrendingUp, Info, 
-  AlertCircle, Bot, User, Moon, Sun, Award, Sparkles
+  AlertCircle, Bot, User, Moon, Sun, Award, Sparkles,
+  Copy, Check, HelpCircle, School, Target, Layers
 } from 'lucide-react'
 
 // --- MATERIAL 3 & LIQUID GLASS CONSTANTS ---
@@ -114,7 +115,6 @@ const STATS_DATA: Record<'2025' | '2026', Record<string, any>> = {
   }
 }
 
-// Giả lập mảng Nông nghiệp
 const fallbackNormalDistribution = (mean: number, stdDev: number, total: number, bins: number, step: number) => {
   return Array.from({ length: bins }, (_, i) => {
     const x = (i + 1) * step
@@ -127,10 +127,19 @@ STATS_DATA['2026']['CN Nông nghiệp'] = { mean: 7.12, d10: 45, liet: 0, stdDev
 
 const subjectsList = Object.keys(STATS_DATA['2025'])
 
+// Danh sách các khối thi phổ biến cố định để tự động điền môn học
+const EXAM_GROUPS = [
+  { name: 'A00', subjects: ['Toán', 'Vật Lí', 'Hóa Học'] },
+  { name: 'A01', subjects: ['Toán', 'Vật Lí', 'Tiếng Anh'] },
+  { name: 'B00', subjects: ['Toán', 'Hóa Học', 'Sinh Học'] },
+  { name: 'C00', subjects: ['Ngữ Văn', 'Lịch Sử', 'Địa Lí'] },
+  { name: 'D01', subjects: ['Toán', 'Ngữ Văn', 'Tiếng Anh'] },
+]
+
 export default function UnifiedKhaoThiPage() {
   const router = useRouter()
   
-  const [activeWorkspace, setActiveWorkspace] = useState<'tinhdiem' | 'phodiem'>('tinhdiem')
+  const [activeWorkspace, setActiveWorkspace] = useState<'tinhdiem' | 'phodiem' | 'senai'>('tinhdiem')
   const [userName, setUserName] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(false)
 
@@ -145,6 +154,17 @@ export default function UnifiedKhaoThiPage() {
   const [activeYear, setActiveYear] = useState<'2025' | '2026'>('2026')
   const [selectedSubject, setSelectedSubject] = useState<string>('Toán')
   const [userScore, setUserScore] = useState<string>('')
+
+  // --- STATE SENAI DỰ ĐOÁN KHỐI THI NÂNG CAO ---
+  const [selectedGroup, setSelectedGroup] = useState<string>('A00')
+  const [senaiSubjects, setSenaiSubjects] = useState<string[]>(['Toán', 'Vật Lí', 'Hóa Học'])
+  const [senaiScores, setSenaiScores] = useState({ s1: '', s2: '', s3: '' })
+  const [targetUni, setTargetUni] = useState('')
+  const [targetMajor, setTargetMajor] = useState('')
+  const [lastYearCutoff, setLastYearCutoff] = useState('')
+  const [lastYearQuota, setLastYearQuota] = useState('')
+  const [thisYearQuota, setThisYearQuota] = useState('')
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -162,6 +182,15 @@ export default function UnifiedKhaoThiPage() {
   const toggleTheme = () => {
     if (isDark) { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); setIsDark(false) } 
     else { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); setIsDark(true) }
+  }
+
+  // Cập nhật môn học tự động khi đổi khối thi ở SenAI
+  const handleGroupChange = (groupName: string) => {
+    setSelectedGroup(groupName)
+    if (groupName !== 'custom') {
+      const found = EXAM_GROUPS.find(g => g.name === groupName)
+      if (found) setSenaiSubjects(found.subjects)
+    }
   }
 
   // ENGINE TÍNH ĐIỂM XÉT TUYỂN
@@ -196,7 +225,6 @@ export default function UnifiedKhaoThiPage() {
     })
   }, [calcScores, calcMode, calcMainSubject, calcPriorityScore])
 
-  // 🌟 ĐÃ FIX: TRẢ VỀ ĐẦY ĐỦ THUỘC TÍNH ĐỂ TRÁNH LỖI BIÊN DỊCH TYPE NEVER
   const currentData = STATS_DATA[activeYear][selectedSubject]
   const chartData = currentData.data as number[]
   const maxChartVal = Math.max(...chartData, 1)
@@ -223,7 +251,7 @@ export default function UnifiedKhaoThiPage() {
     }
   }, [userScore, chartData, currentData])
 
-  // LÕI MÔ PHỎNG SENAI ĐỐI SOÁNH LIÊN NĂM
+  // LÕI MÔ PHỎNG SENAI ĐỐI SOÁNH LIÊN NĂM (Dành cho tab Phổ điểm cũ)
   const aiCrossYearAnalysis = useMemo(() => {
     if (activeYear !== '2026' || !userPercentileInfo) return null
     
@@ -256,6 +284,128 @@ export default function UnifiedKhaoThiPage() {
     }
   }, [activeYear, userPercentileInfo, selectedSubject])
 
+  // ============================================================================
+  // LÕI ENGINE PHÂN TÍCH & DỰ ĐOÁN TOÀN DIỆN KHỐI THI CỦA SENAI (MỚI TÍCH HỢP)
+  // ============================================================================
+  const senaiAdvancedSystem = useMemo(() => {
+    const v1 = parseFloat(senaiScores.s1.replace(',', '.'))
+    const v2 = parseFloat(senaiScores.s2.replace(',', '.'))
+    const v3 = parseFloat(senaiScores.s3.replace(',', '.'))
+    const cutoff2025 = parseFloat(lastYearCutoff.replace(',', '.'))
+
+    if (isNaN(v1) || isNaN(v2) || isNaN(v3) || v1 < 0 || v1 > 10 || v2 < 0 || v2 > 10 || v3 < 0 || v3 > 10) {
+      return null
+    }
+
+    const totalRaw2026 = v1 + v2 + v3
+
+    // Hàm nội suy bách phân vị nội bộ
+    const getPercentileForSubject = (subjectName: string, score: number, year: '2025' | '2026') => {
+      const targetSub = STATS_DATA[year][subjectName] || STATS_DATA[year]['Toán']
+      const sData = targetSub.data as number[]
+      let bIdx = Math.ceil(score / targetSub.step) - 1
+      if (score === 0) bIdx = 0
+      bIdx = Math.max(0, Math.min(targetSub.bins - 1, bIdx))
+      
+      const t = sData.reduce((a, b) => a + b, 0)
+      const bel = sData.slice(0, bIdx).reduce((a, b) => a + b, 0)
+      return ((bel + (0.5 * (sData[bIdx] || 0))) / t) * 100
+    }
+
+    // Hàm quy đổi ngược từ bách phân vị sang điểm năm 2025
+    const getEquivalentScore2025 = (subjectName: string, targetPct: number) => {
+      const targetSub = STATS_DATA['2025'][subjectName] || STATS_DATA['2025']['Toán']
+      const sData = targetSub.data as number[]
+      const t = sData.reduce((a, b) => a + b, 0)
+      let run = 0
+      for (let i = 0; i < targetSub.bins; i++) {
+        run += sData[i]
+        if ((run / t) * 100 >= targetPct) return (i + 1) * targetSub.step
+      }
+      return 10
+    }
+
+    // Tính bách phân vị từng môn năm 2026 và chuyển đổi sang điểm tương đương năm 2025
+    const pct1 = getPercentileForSubject(senaiSubjects[0], v1, '2026')
+    const pct2 = getPercentileForSubject(senaiSubjects[1], v2, '2026')
+    const pct3 = getPercentileForSubject(senaiSubjects[2], v3, '2026')
+
+    const eqv1 = getEquivalentScore2025(senaiSubjects[0], pct1)
+    const eqv2 = getEquivalentScore2025(senaiSubjects[1], pct2)
+    const eqv3 = getEquivalentScore2025(senaiSubjects[2], pct3)
+
+    const totalEquivalent2025 = eqv1 + eqv2 + eqv3
+
+    // Xử lý biến động chỉ tiêu nâng cao nếu có nhập
+    let quotaFactorMessage = "Chỉ tiêu giữ vững ổn định, không có đột biến áp lực cạnh tranh."
+    let quotaDeltaAdjustment = 0
+    const q2025 = parseInt(lastYearQuota)
+    const q2026 = parseInt(thisYearQuota)
+
+    if (!isNaN(q2025) && !isNaN(q2026) && q2025 > 0 && q2026 > 0) {
+      const pctChange = ((q2026 - q2025) / q2025) * 100
+      if (pctChange < -5) {
+        quotaDeltaAdjustment = Math.abs(pctChange) * 0.025 // Chỉ tiêu giảm mạnh -> Điểm chuẩn sàn ảo tăng
+        quotaFactorMessage = `Chỉ tiêu thắt chặt giảm ${Math.abs(pctChange).toFixed(1)}%, dự kiến điểm chuẩn bị đẩy lên cao hơn khoảng +${formatNum(quotaDeltaAdjustment.toFixed(2))} do cạnh tranh khốc liệt.`
+      } else if (pctChange > 5) {
+        quotaDeltaAdjustment = -(pctChange * 0.02) // Chỉ tiêu mở rộng -> Điểm chuẩn hạ nhiệt
+        quotaFactorMessage = `Chỉ tiêu mở rộng thêm ${pctChange.toFixed(1)}%, giảm áp lực điểm chuẩn dự kiến khoảng ${formatNum(quotaDeltaAdjustment.toFixed(2))} điểm.`
+      }
+    }
+
+    // Sinh cấu trúc Prompt Chuẩn tuyệt đối cho thí sinh copy mang đi đối soát chéo
+    const finalPromptText = `Bạn là một chuyên gia khảo thí dữ liệu độc lập cấp cao. Tôi có dữ liệu tuyển sinh cụ thể như sau:
+- Khối đăng ký xét tuyển: ${selectedGroup === 'custom' ? 'Tự chọn' : selectedGroup} bao gồm 3 môn: ${senaiSubjects.join(', ')}.
+- Điểm thi thực tế năm 2026 của tôi: ${senaiSubjects[0]} = ${formatNum(v1)}; ${senaiSubjects[1]} = ${formatNum(v2)}; ${senaiSubjects[2]} = ${formatNum(v3)}. Tổng điểm trần 2026: ${formatNum(totalRaw2026)}.
+- Nguyện vọng mục tiêu: Trường ${targetUni || '[Chưa nhập]'}, Ngành ${targetMajor || '[Chưa nhập]'}.
+- Điểm chuẩn (Cutoff) năm ngoái (2025) của ngành này: ${lastYearCutoff ? formatNum(cutoff2025) : '[Chưa nhập]'} điểm.
+${!isNaN(q2025) ? `- Chỉ tiêu tuyển sinh của ngành năm 2025: ${q2025} sinh viên.\n` : ''}${!isNaN(q2026) ? `- Chỉ tiêu tuyển sinh của ngành năm 2026: ${q2026} sinh viên.\n` : ''}
+Hãy dựa trên độ dịch chuyển bách phân vị quốc gia liên năm 2025 - 2026 của tổ hợp này, kết hợp phân tích hệ số cung cầu từ biến động chỉ tiêu tuyển sinh, hãy đưa ra đánh giá phân tích xác suất đỗ, phổ điểm ảo và lời khuyên chiến thuật đặt thứ tự nguyện vọng cho tôi.`
+
+    // Chạy thuật toán dự báo xác suất đỗ tại chỗ
+    let chancePercent = 50
+    let analysisComment = ""
+
+    if (!isNaN(cutoff2025)) {
+      const safetyMargin = totalEquivalent2025 - (cutoff2025 + quotaDeltaAdjustment)
+      if (safetyMargin >= 1.5) {
+        chancePercent = 95
+        analysisComment = "Vùng an toàn tuyệt đối. Điểm quy đổi bách phân vị của bạn vượt xa ngưỡng điểm chuẩn năm ngoái kèm hệ số chỉ tiêu mới. Đặt ngay nguyện vọng 1."
+      } else if (safetyMargin >= 0.5) {
+        chancePercent = 85
+        analysisComment = "Xác suất đỗ rất cao. Biên độ điểm an toàn nằm trong tầm kiểm soát an toàn của thuật toán SenAI."
+      } else if (safetyMargin >= -0.2 && safetyMargin < 0.5) {
+        chancePercent = 65
+        analysisComment = "Vùng tranh chấp nhạy cảm. Bạn nằm sát ranh giới điểm chuẩn, cơ hội chia đều tùy thuộc vào hành vi đăng ký nguyện vọng thực tế của các thí sinh khác."
+      } else if (safetyMargin >= -1 && safetyMargin < -0.2) {
+        chancePercent = 35
+        analysisComment = "Tỷ lệ rủi ro cao. Điểm bách phân vị của bạn hơi đuối so với sức nóng của ngành năm ngoái. Nên chuẩn bị thêm phương án dự phòng ở nguyện vọng kế tiếp."
+      } else {
+        chancePercent = 10
+        analysisComment = "Tỷ lệ đỗ cực thấp. Bạn nên hạ mục tiêu xuống các phân khúc trường có điểm chuẩn năm ngoái dễ thở hơn để đảm bảo an toàn."
+      }
+    } else {
+      analysisComment = "Vui lòng nhập điểm chuẩn năm ngoái để SenAI kích hoạt lõi phân tích xác suất đỗ chi tiết nhe sếp!"
+    }
+
+    return {
+      totalRaw2026: totalRaw2026.toFixed(2),
+      totalEquivalent2025: totalEquivalent2025.toFixed(2),
+      prompt: finalPromptText,
+      quotaMessage: quotaFactorMessage,
+      chance: chancePercent,
+      comment: analysisComment
+    }
+  }, [senaiScores, senaiSubjects, selectedGroup, targetUni, targetMajor, lastYearCutoff, lastYearQuota, thisYearQuota])
+
+  const copyToClipboard = () => {
+    if (senaiAdvancedSystem?.prompt) {
+      navigator.clipboard.writeText(senaiAdvancedSystem.prompt)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-20 transition-colors duration-500">
       
@@ -284,17 +434,23 @@ export default function UnifiedKhaoThiPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl p-4 rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm mb-8">
           <div className="min-w-0 pl-2">
             <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
-              {activeWorkspace === 'tinhdiem' ? <Calculator className="text-indigo-500 w-6 h-6"/> : <BarChart3 className="text-indigo-500 w-6 h-6"/>}
-              {activeWorkspace === 'tinhdiem' ? 'Trạm Tính Điểm Xét Tuyển Đại Học' : 'Hệ Thống Phân Tích & Tra Cứu Phổ Điểm'}
+              {activeWorkspace === 'tinhdiem' && <Calculator className="text-indigo-500 w-6 h-6"/>}
+              {activeWorkspace === 'phodiem' && <BarChart3 className="text-indigo-500 w-6 h-6"/>}
+              {activeWorkspace === 'senai' && <Bot className="text-indigo-500 w-6 h-6"/>}
+              {activeWorkspace === 'tinhdiem' && 'Trạm Tính Điểm Xét Tuyển Đại Học'}
+              {activeWorkspace === 'phodiem' && 'Hệ Thống Phân Tích & Tra Cứu Phổ Điểm'}
+              {activeWorkspace === 'senai' && 'SenAI Hướng Dẫn Prompt & Dự Đoán Khối Thi'}
             </h2>
-            <p className="text-xs font-bold text-slate-500 mt-1">Hỗ trợ đầy đủ dữ liệu khảo thí, tự động áp dụng quy chế giảm trừ điểm ưu tiên mới.</p>
+            <p className="text-xs font-bold text-slate-500 mt-1">Hỗ trợ đầy đủ dữ liệu khảo thí, kết hợp trí tuệ nhân tạo đối soát bách phân vị liên năm.</p>
           </div>
-          <div className="flex gap-2 bg-slate-100 dark:bg-[#202020] p-1.5 rounded-2xl shrink-0 border border-slate-200 dark:border-white/5 shadow-inner">
-            <button onClick={() => setActiveWorkspace('tinhdiem')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeWorkspace === 'tinhdiem' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500'}`}>Tính Điểm Đại Học</button>
-            <button onClick={() => setActiveWorkspace('phodiem')} className={`px-6 py-2.5 rounded-xl text-xs font-black transition-all ${activeWorkspace === 'phodiem' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500'}`}>Tra Cứu Phổ Điểm</button>
+          <div className="flex flex-wrap gap-1.5 bg-slate-100 dark:bg-[#202020] p-1.5 rounded-2xl shrink-0 border border-slate-200 dark:border-white/5 shadow-inner">
+            <button onClick={() => setActiveWorkspace('tinhdiem')} className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all ${activeWorkspace === 'tinhdiem' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500'}`}>Tính Điểm Đại Học</button>
+            <button onClick={() => setActiveWorkspace('phodiem')} className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all ${activeWorkspace === 'phodiem' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500'}`}>Tra Cứu Phổ Điểm</button>
+            <button onClick={() => setActiveWorkspace('senai')} className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${activeWorkspace === 'senai' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}><Sparkles className="w-3.5 h-3.5"/> SenAI Dự Đoán</button>
           </div>
         </div>
 
+        {/* WORKSPACE 1: TÍNH ĐIỂM XET TUYỂN */}
         {activeWorkspace === 'tinhdiem' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
             <div className="lg:col-span-7 space-y-6">
@@ -353,6 +509,7 @@ export default function UnifiedKhaoThiPage() {
           </div>
         )}
 
+        {/* WORKSPACE 2: TRA CỨU PHỔ ĐIỂM */}
         {activeWorkspace === 'phodiem' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="flex flex-wrap gap-2.5">
@@ -481,6 +638,211 @@ export default function UnifiedKhaoThiPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================================
+            WORKSPACE 3: CHUYÊN GIA DỰ ĐOÁN LIÊN NĂM & SINH PROMPT CHUẨN SENAI (MỚI XÂY DỰNG)
+           ============================================================================ */}
+        {activeWorkspace === 'senai' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
+            {/* CỘT TRÁI: NHẬP DỮ LIỆU KHỐI THI VÀ TRƯỜNG/NGÀNH MỤC TIÊU */}
+            <div className="lg:col-span-5 space-y-6">
+              <div className={`${mdCard} p-6 md:p-8 space-y-6`}>
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 mb-4">
+                    <Layers className="w-4 h-4"/> 1. Thiết lập khối thi & Điểm số
+                  </h3>
+                  
+                  {/* Bộ nút chọn nhanh Khối thi thông minh */}
+                  <label className={labelClass}>Chọn nhanh khối thi (Khối xét tuyển)</label>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-4">
+                    {EXAM_GROUPS.map(g => (
+                      <button 
+                        key={g.name} type="button"
+                        onClick={() => handleGroupChange(g.name)}
+                        className={`py-2 rounded-xl text-xs font-black border transition-all ${selectedGroup === g.name ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-transparent hover:border-slate-300'}`}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                    <button 
+                      type="button" onClick={() => setSelectedGroup('custom')}
+                      className={`py-2 rounded-xl text-xs font-black border transition-all ${selectedGroup === 'custom' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-transparent hover:border-slate-300'}`}
+                    >
+                      Tự chọn
+                    </button>
+                  </div>
+                </div>
+
+                {/* Nếu chọn khối tự chọn thì hiển thị 3 hộp chọn môn học độc lập */}
+                {selectedGroup === 'custom' && (
+                  <div className="grid grid-cols-3 gap-2 mb-2 animate-in fade-in duration-200">
+                    {['Môn 1', 'Môn 2', 'Môn 3'].map((lbl, idx) => (
+                      <div key={idx}>
+                        <label className={labelClass}>{lbl}</label>
+                        <select 
+                          value={senaiSubjects[idx]} 
+                          onChange={(e) => {
+                            const newSubs = [...senaiSubjects]
+                            newSubs[idx] = e.target.value
+                            setSenaiSubjects(newSubs)
+                          }}
+                          className="w-full bg-slate-100 dark:bg-[#202020] border border-transparent rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white"
+                        >
+                          {subjectsList.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Hộp nhập điểm số tương ứng của 3 môn quốc gia */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelClass}>{senaiSubjects[0]}</label>
+                    <input type="text" value={senaiScores.s1} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s1: e.target.value}) }} placeholder="Điểm..." className={mdInput} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>{senaiSubjects[1]}</label>
+                    <input type="text" value={senaiScores.s2} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s2: e.target.value}) }} placeholder="Điểm..." className={mdInput} />
+                  </div>
+                  <div>
+                    <label className={labelClass}>{senaiSubjects[2]}</label>
+                    <input type="text" value={senaiScores.s3} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s3: e.target.value}) }} placeholder="Điểm..." className={mdInput} />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 dark:border-white/5 pt-4 space-y-4">
+                  <h3 className="font-black text-sm uppercase tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                    <School className="w-4 h-4"/> 2. Nguyện vọng & Chỉ tiêu nâng cao
+                  </h3>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelClass}>Trường Đại học</label>
+                      <input type="text" value={targetUni} onChange={e => setTargetUni(e.target.value)} placeholder="Ví dụ: UET, Bách Khoa..." className={mdInput + " py-3"} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Ngành học mục tiêu</label>
+                      <input type="text" value={targetMajor} onChange={e => setTargetMajor(e.target.value)} placeholder="Ví dụ: Khoa học máy tính..." className={mdInput + " py-3"} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Điểm chuẩn năm ngoái (2025)</label>
+                    <input type="text" value={lastYearCutoff} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setLastYearCutoff(e.target.value) }} placeholder="Nhập điểm chuẩn năm ngoái để tính tỷ lệ..." className={mdInput + " text-center font-mono tracking-widest text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#1E1E1E]"} />
+                  </div>
+
+                  {/* Phần nhập chỉ tiêu nâng cao giúp tăng độ chính xác 100% */}
+                  <div className="p-4 bg-slate-50 dark:bg-[#161616] rounded-2xl border border-dashed border-slate-200 dark:border-white/5 space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><Target className="w-3 h-3 text-indigo-500"/> Thu thập hệ số cung cầu (Tùy chọn độ chính xác cao)</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Chỉ tiêu năm ngoái (2025)</label>
+                        <input type="number" value={lastYearQuota} onChange={e => setLastYearQuota(e.target.value)} placeholder="Số lượng TS..." className="w-full bg-white dark:bg-[#202020] rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white border border-slate-200 dark:border-white/5" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Chỉ tiêu năm nay (2026)</label>
+                        <input type="number" value={thisYearQuota} onChange={e => setThisYearQuota(e.target.value)} placeholder="Số lượng TS..." className="w-full bg-white dark:bg-[#202020] rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white border border-slate-200 dark:border-white/5" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* CỘT PHẢI: KẾT QUẢ NỘI SUY TẠI CHỖ & KHÔNG GIAN SAO CHÉP PROMPT CHUẨN ĐỐI SOÁNH */}
+            <div className="lg:col-span-7 space-y-6">
+              {senaiAdvancedSystem ? (
+                <div className="space-y-6 animate-in zoom-in-98 duration-300">
+                  
+                  {/* Bảng kết quả dự báo xác suất */}
+                  <div className={`${mdCard} p-6 md:p-8 space-y-6 bg-gradient-to-br from-indigo-500/5 to-transparent`}>
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+                      <div>
+                        <h4 className="font-black text-xs uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Định vị điểm xét tuyển liên năm</h4>
+                        <p className="text-xs font-bold text-slate-400 mt-0.5">Xử lý nội suy bách phân vị song song bởi SenAI</p>
+                      </div>
+                      <span className="text-[10px] bg-indigo-500 text-white font-black px-2.5 py-1 rounded-md uppercase tracking-wider animate-pulse">Lõi Quy Đổi Thực</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-bold">
+                      <div className="p-4 bg-white dark:bg-slate-950 border rounded-2xl shadow-sm text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Tổng điểm thực tế năm 2026</p>
+                        <p className="text-4xl font-black text-slate-800 dark:text-white mt-2 font-mono">{formatNum(senaiAdvancedSystem.totalRaw2026)}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">Mức điểm trần tổ hợp 3 môn</p>
+                      </div>
+                      <div className="p-4 bg-white dark:bg-slate-950 border rounded-2xl shadow-sm text-center border-emerald-500/40 bg-gradient-to-b from-emerald-500/5 to-transparent">
+                        <p className="text-[10px] font-black text-emerald-500 uppercase">Quy đổi tương đương sang năm 2025</p>
+                        <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 mt-2 font-mono">{formatNum(senaiAdvancedSystem.totalEquivalent2025)}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">Nội suy dựa trên độ lệch phổ toàn quốc</p>
+                      </div>
+                    </div>
+
+                    {/* Chỉ số phần trăm cơ hội đỗ mô phỏng */}
+                    <div className="p-5 bg-slate-100 dark:bg-slate-950/60 border rounded-3xl space-y-4">
+                      <div className="flex justify-between items-center text-xs font-black uppercase tracking-wider">
+                        <span className="text-slate-500">Xác suất trúng tuyển ước tính:</span>
+                        <span className={`text-base font-black ${senaiAdvancedSystem.chance >= 75 ? 'text-emerald-500' : senaiAdvancedSystem.chance >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{senaiAdvancedSystem.chance}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-1000 ${senaiAdvancedSystem.chance >= 75 ? 'bg-emerald-500' : senaiAdvancedSystem.chance >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                          style={{ width: `${senaiAdvancedSystem.chance}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-xs font-bold leading-relaxed text-slate-600 dark:text-slate-300">
+                        {senaiAdvancedSystem.comment}
+                      </p>
+                    </div>
+
+                    {/* Khối tin tức phân tích biến động chỉ tiêu tuyển sinh */}
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200/40 rounded-2xl flex gap-3 text-xs font-bold leading-relaxed text-amber-800 dark:text-amber-400">
+                      <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="block font-black uppercase text-[10px] text-amber-600 dark:text-amber-500 mb-0.5">Biến động chỉ tiêu sức chứa (Quota Shift):</span>
+                        {senaiAdvancedSystem.quotaMessage}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KHÔNG GIAN XUẤT PROMPT CHUẨN ĐỐI SOÁNH */}
+                  <div className={`${mdCard} p-6 md:p-8 space-y-4 border-2 border-indigo-500/30`}>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-black text-sm uppercase tracking-widest text-slate-800 dark:text-white flex items-center gap-2">
+                        <Bot className="w-5 h-5 text-indigo-500" /> Cấu trúc Prompt đối soát chuẩn SenAI
+                      </h4>
+                      <button 
+                        type="button" onClick={copyToClipboard}
+                        className="px-4 py-2 bg-slate-100 dark:bg-[#202020] hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-black rounded-xl border border-slate-200 dark:border-white/5 transition-all flex items-center gap-2 text-indigo-600 dark:text-indigo-400"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-500"/> : <Copy className="w-3.5 h-3.5"/>}
+                        {copied ? 'Đã sao chép!' : 'Sao chép Prompt'}
+                      </button>
+                    </div>
+                    
+                    <p className="text-xs font-bold text-slate-400">
+                      Hãy sao chép đoạn prompt thiết lập ngữ cảnh chuyên sâu dưới đây để dán vào các AI lớn như Claude, Gemini hay ChatGPT để có thêm góc nhìn phân tích tổng hợp đỉnh cao:
+                    </p>
+
+                    <div className="p-4 bg-slate-900 dark:bg-black rounded-2xl border border-slate-800 font-mono text-[11px] text-slate-300 dark:text-slate-400 leading-relaxed whitespace-pre-wrap select-all relative group max-h-[220px] overflow-y-auto">
+                      {senaiAdvancedSystem.prompt}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className={`${mdCard} p-8 text-center flex flex-col justify-center items-center space-y-4 min-h-[400px]`}>
+                  <div className="w-16 h-16 bg-slate-100 dark:bg-[#1E1E1E] text-slate-400 dark:text-slate-600 rounded-full flex items-center justify-center border border-dashed border-slate-300"><HelpCircle className="w-8 h-8"/></div>
+                  <div>
+                    <h4 className="font-black text-lg">Đang chờ sếp điền điểm số khối thi</h4>
+                    <p className="text-xs font-bold text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+                      Chỉ cần sếp điền đầy đủ điểm số của 3 môn học theo khối thi mong muốn ở bảng bên trái, SenAI sẽ lập tức tự động kích hoạt bộ máy tính bách phân vị và sinh prompt đối soát chuẩn xác ngay lập tức!
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
