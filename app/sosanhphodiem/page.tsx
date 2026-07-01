@@ -1,12 +1,18 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { 
   ArrowLeft, BarChart3, Calculator, TrendingUp, Info, 
-  AlertCircle, Bot, User, Moon, Sun, Award, Sparkles, Loader2, GraduationCap
+  AlertCircle, Bot, User, Moon, Sun, Award, Sparkles, Loader2, GraduationCap, Send, MessageSquare, Trash2
 } from 'lucide-react'
+
+// 🌟 THƯ VIỆN RENDER VĂN BẢN THÂN THIỆN (CHUYỂN ĐỔI CHỮ THÔ THÀNH GIAO DIỆN ĐẸP)
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 // --- MATERIAL 3 & LIQUID GLASS CONSTANTS ---
 const mdCard = "bg-white/70 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] border border-white/60 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] hover:shadow-xl hover:-translate-y-1 transition-all duration-500 ease-out relative overflow-hidden"
@@ -128,6 +134,7 @@ const subjectsList = Object.keys(STATS_DATA['2025'])
 
 export default function UnifiedKhaoThiPage() {
   const router = useRouter()
+  const scrollRef = useRef<HTMLDivElement>(null)
   
   const [activeWorkspace, setActiveWorkspace] = useState<'tinhdiem' | 'phodiem' | 'senai'>('tinhdiem')
   const [userName, setUserName] = useState<string | null>(null)
@@ -145,7 +152,7 @@ export default function UnifiedKhaoThiPage() {
   const [selectedSubject, setSelectedSubject] = useState<string>('Toán')
   const [userScore, setUserScore] = useState<string>('')
 
-  // --- STATE SENAI CHỌN TRƯỜNG & ĐỒNG BỘ API TRỰC TIẾP ---
+  // --- STATE SENAI CHỌN TRƯỜNG & ĐỒNG BỘ CHAT ---
   const [senaiGroup, setSenaiGroup] = useState('A00')
   const [senaiSubjects, setSenaiSubjects] = useState(['Toán', 'Vật Lí', 'Hóa Học'])
   const [senaiScores, setSenaiScores] = useState({ s1: '', s2: '', s3: '' })
@@ -155,8 +162,9 @@ export default function UnifiedKhaoThiPage() {
   const [lastYearQuota, setLastYearQuota] = useState('')
   const [thisYearQuota, setThisYearQuota] = useState('')
   
-  // States quản lý kết quả AI Real-time
-  const [senaiAiResponse, setSenaiAiResponse] = useState<string>('')
+  // Mảng lưu trữ hội thoại của SenAI
+  const [senaiChatMessages, setSenaiChatMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([])
+  const [followUpInput, setFollowUpInput] = useState('')
   const [isSenaiLoading, setIsSenaiLoading] = useState(false)
   const [senaiError, setSenaiError] = useState<string | null>(null)
 
@@ -173,12 +181,18 @@ export default function UnifiedKhaoThiPage() {
     }
   }, [])
 
+  // Cuộn xuống khi có hội thoại mới
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [senaiChatMessages, isSenaiLoading])
+
   const toggleTheme = () => {
     if (isDark) { document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light'); setIsDark(false) } 
     else { document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark'); setIsDark(true) }
   }
 
-  // Tự động điều hướng map môn thi
   const handleSenaiGroupChange = (group: string) => {
     setSenaiGroup(group)
     if (group === 'A00') setSenaiSubjects(['Toán', 'Vật Lí', 'Hóa Học'])
@@ -246,7 +260,6 @@ export default function UnifiedKhaoThiPage() {
     }
   }, [userScore, chartData, currentData])
 
-  // LÕI MÔ PHỎNG SENAI ĐỐI SOÁNH LIÊN NĂM
   const aiCrossYearAnalysis = useMemo(() => {
     if (activeYear !== '2026' || !userPercentileInfo) return null
     
@@ -274,31 +287,50 @@ export default function UnifiedKhaoThiPage() {
       equivalentScore: calculatedScore2025.toFixed(2),
       status: isHarder ? 'Đề thi phân hóa cao hơn' : 'Phổ điểm dịch chuyển lên phân khu điểm cao',
       advice: isHarder 
-        ? '- Mức điểm này tương đương mức điểm cao hơn của năm ngoái. Cơ hội cạnh tranh vào các trường Đại học Top đầu của sếp rất khả quan.'
-        : '- Do phổ điểm chung dịch chuyển lên, sếp nên cân nhắc nộp thêm nguyện vọng dự phòng an toàn từ 0,5 đến 1 điểm.'
+        ? '- Mức điểm này tương đương mức điểm cao hơn của năm ngoái. Cơ hội cạnh tranh vào các trường Đại học Top đầu của bạn rất khả quan.'
+        : '- Do phổ điểm chung dịch chuyển lên, bạn nên cân nhắc nộp thêm nguyện vọng dự phòng an toàn từ 0,5 đến 1 điểm.'
     }
   }, [activeYear, userPercentileInfo, selectedSubject])
 
   // ============================================================================
-  // LÕI GỌI API GEMINI TRỰC TIẾP TỪ ROUTE ĐỂ PHÂN TÍCH KHẢ NĂNG ĐẬU
+  // HÀM KÍCH HOẠT DỰ ĐOÁN BAN ĐẦU HOẶC GỬI CÂU HỎI HỎI THÊM
   // ============================================================================
-  const handleActivateSenaiPrediction = async () => {
-    const s1 = parseFloat(senaiScores.s1.replace(',', '.'))
-    const s2 = parseFloat(senaiScores.s2.replace(',', '.'))
-    const s3 = parseFloat(senaiScores.s3.replace(',', '.'))
+  const handleSendToSenai = async (e?: React.FormEvent, customPrompt?: string) => {
+    if (e) e.preventDefault()
+    
+    const isFirstTime = !customPrompt
+    let userMessagePayload = ""
 
-    if (isNaN(s1) || isNaN(s2) || isNaN(s3) || !targetUni.trim() || !targetMajor.trim() || !lastYearCutoff.trim()) {
-      setSenaiError('Vui lòng điền đầy đủ thông tin điểm số 3 môn, trường học, ngành học và điểm chuẩn năm ngoái để kích hoạt bộ lọc nhe sếp!')
-      return
+    if (isFirstTime) {
+      const s1 = parseFloat(senaiScores.s1.replace(',', '.'))
+      const s2 = parseFloat(senaiScores.s2.replace(',', '.'))
+      const s3 = parseFloat(senaiScores.s3.replace(',', '.'))
+
+      if (isNaN(s1) || isNaN(s2) || isNaN(s3) || !targetUni.trim() || !targetMajor.trim() || !lastYearCutoff.trim()) {
+        setSenaiError('Vui lòng điền đầy đủ thông tin điểm số 3 môn, trường học, ngành học và điểm chuẩn năm ngoái nhe sếp!')
+        return
+      }
+      
+      const totalRaw2026 = s1 + s2 + s3
+      userMessagePayload = `Hãy phân tích khả năng trúng tuyển năm 2026 dựa trên thông số cụ thể sau:
+      1. Khối xét tuyển: ${senaiGroup === 'custom' ? 'Tự chọn tổ hợp' : senaiGroup} (Bao gồm: ${senaiSubjects.join(', ')}).
+      2. Điểm số thi thực tế năm 2026: ${senaiSubjects[0]} = ${formatNum(s1)}; ${senaiSubjects[1]} = ${formatNum(s2)}; ${senaiSubjects[2]} = ${formatNum(s3)}. Tổng điểm trần: ${formatNum(totalRaw2026.toFixed(2))}.
+      3. Nguyện vọng mục tiêu: Trường Đại Học ${targetUni} - Ngành ${targetMajor}.
+      4. Điểm chuẩn năm ngoái (2025): ${lastYearCutoff} điểm.
+      5. Biến động chỉ tiêu cung cầu: Chỉ tiêu năm 2025 = ${lastYearQuota || 'Không rõ'}; Chỉ tiêu năm 2026 = ${thisYearQuota || 'Không rõ'}.
+      Hãy xuất một báo cáo ngắn gọn, tường minh bao gồm: Đánh giá tổng quan, Dự báo phổ điểm ảo ảnh hưởng đến ngành này, Ước lượng xác suất đỗ (%), và Chiến thuật xếp nguyện vọng.`
+
+      setSenaiChatMessages([{ role: 'user', text: `Yêu cầu phân tích nguyện vọng vào trường ${targetUni} - Ngành ${targetMajor}` }])
+    } else {
+      if (!followUpInput.trim()) return
+      userMessagePayload = followUpInput.trim()
+      setSenaiChatMessages(prev => [...prev, { role: 'user', text: userMessagePayload }])
+      setFollowUpInput('')
     }
 
     setIsSenaiLoading(true)
     setSenaiError(null)
-    setSenaiAiResponse('')
 
-    const totalRaw2026 = s1 + s2 + s3
-
-    // Xây dựng Context chuyên sâu cho mô hình tư vấn phụ huynh/học sinh chọn trường
     const systemContext = `THÔNG TIN CỐT LÕI VỀ HỆ THỐNG:
     - Tên phân hệ: SenAI Tuyển Sinh - Phân tích Phổ điểm & Dự đoán khả năng trúng tuyển dành cho Phụ huynh và Thí sinh.
     - Đơn vị phát triển: Hoàng Bình Minh (UET).
@@ -306,21 +338,18 @@ export default function UnifiedKhaoThiPage() {
     - Vai trò: Đóng vai trò là một chuyên gia khảo thí tuyển sinh Đại học độc lập cấp cao. Hãy phân tích với thái độ chân thành, khoa học, dễ hiểu đối với phụ huynh và học sinh, tránh lan man.
     - Nhiệm vụ: Đánh giá xác suất trúng tuyển dựa vào dữ liệu người dùng cung cấp, so sánh trực diện phổ điểm ảo và độ dịch chuyển bách phân vị quốc gia liên năm. Đưa ra lời khuyên chiến thuật đặt thứ tự nguyện vọng an toàn.`
 
-    const userMessagePayload = `Hãy phân tích khả năng trúng tuyển năm 2026 dựa trên thông số cụ thể sau:
-    1. Khối xét tuyển: ${senaiGroup === 'custom' ? 'Tự chọn tổ hợp' : senaiGroup} (Bao gồm: ${senaiSubjects.join(', ')}).
-    2. Điểm số thi thực tế năm 2026: ${senaiSubjects[0]} = ${formatNum(s1)}; ${senaiSubjects[1]} = ${formatNum(s2)}; ${senaiSubjects[2]} = ${formatNum(s3)}. Tổng điểm trần: ${formatNum(totalRaw2026.toFixed(2))}.
-    3. Nguyện vọng mục tiêu: Trường Đại Học ${targetUni} - Ngành ${targetMajor}.
-    4. Điểm chuẩn năm ngoái (2025): ${lastYearCutoff} điểm.
-    5. Biến động chỉ tiêu cung cầu: Chỉ tiêu năm 2025 = ${lastYearQuota || 'Không rõ'}; Chỉ tiêu năm 2026 = ${thisYearQuota || 'Không rõ'}.
-    Hãy xuất một báo cáo ngắn gọn, tường minh bao gồm: Đánh giá tổng quan, Dự báo phổ điểm ảo ảnh hưởng đến ngành này, Ước lượng xác suất đỗ (%), và Chiến thuật xếp nguyện vọng.`
-
     try {
+      const currentHistory = isFirstTime ? [] : senaiChatMessages.map(m => ({
+        role: m.role,
+        content: m.text
+      }))
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessagePayload,
-          history: [],
+          history: currentHistory,
           images: [],
           context: systemContext
         }),
@@ -329,15 +358,22 @@ export default function UnifiedKhaoThiPage() {
       const data = await response.json().catch(() => null)
 
       if (response.ok && data.text) {
-        setSenaiAiResponse(data.text)
+        // Làm sạch dữ liệu văn bản nhận về trước khi đưa vào renderer
+        let cleanedText = data.text.replace(/\\%/g, '%').replace(/\\$/g, '$')
+        setSenaiChatMessages(prev => [...prev, { role: 'model', text: cleanedText }])
       } else {
         throw new Error(data?.error || 'Hệ thống Gemini API trả về phản hồi trống.')
       }
     } catch (err: any) {
-      setSenaiError(err?.message || 'Không thể kết nối đến Trạm xử lý SenAI, vui lòng kiểm tra lại cấu hình Route API.')
+      setSenaiError(err?.message || 'Không thể kết nối đến Trạm xử lý SenAI, vui lòng kiểm tra lại hệ thống.')
     } finally {
       setIsSenaiLoading(false)
     }
+  }
+
+  const handleClearChat = () => {
+    setSenaiChatMessages([])
+    setSenaiError(null)
   }
 
   return (
@@ -576,18 +612,18 @@ export default function UnifiedKhaoThiPage() {
           </div>
         )}
 
-        {/* WORKSPACE 3: SENAI CHỌN TRƯỜNG & DỰ ĐOÁN ĐẬU TRỰC TIẾP QUA API */}
+        {/* WORKSPACE 3: PHÂN HỆ KHÔNG GIAN TƯ VẤN TRỰC TIẾP SENAI DÀNH CHO PHỤ HUYNH VÀ HỌC SINH */}
         {activeWorkspace === 'senai' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
-            {/* CỘT TRÁI: ĐIỀN THÔNG TIN TỔ HỢP & CHỈ TIÊU TRƯỜNG NGÀNH */}
+            {/* CỘT TRÁI: ĐIỀN THÔNG TIN TỔ HỢP & BIẾN ĐỘNG CHỈ TIÊU TRƯỜNG NGÀNH */}
             <div className="lg:col-span-5 space-y-6">
               <div className={`${mdCard} p-6 md:p-8 space-y-6`}>
                 <div>
                   <h3 className="font-black text-sm uppercase tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-2 mb-4">
-                    <GraduationCap className="w-5 h-5"/> 1. Cấu hình khối xét tuyển & Điểm thi
+                    <GraduationCap className="w-5 h-5"/> 1. Thiết lập tổ hợp & Điểm số
                   </h3>
                   
-                  <label className={labelClass}>Lựa chọn nhanh tổ hợp</label>
+                  <label className={labelClass}>Lựa chọn nhanh khối xét tuyển</label>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
                     {['A00', 'A01', 'B00', 'C00', 'D01'].map(group => (
                       <button
@@ -607,7 +643,6 @@ export default function UnifiedKhaoThiPage() {
                   </div>
                 </div>
 
-                {/* Dropdown tự chọn cấu hình môn học */}
                 {senaiGroup === 'custom' && (
                   <div className="grid grid-cols-3 gap-2 animate-in fade-in duration-200">
                     {[0, 1, 2].map(idx => (
@@ -629,7 +664,6 @@ export default function UnifiedKhaoThiPage() {
                   </div>
                 )}
 
-                {/* Điểm số thành phần */}
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className={labelClass}>{senaiSubjects[0]}</label>
@@ -645,10 +679,9 @@ export default function UnifiedKhaoThiPage() {
                   </div>
                 </div>
 
-                {/* Nguyện vọng trường ngành */}
                 <div className="border-t border-slate-100 dark:border-white/5 pt-4 space-y-4">
                   <h3 className="font-black text-sm uppercase tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
-                    <Bot className="w-4 h-4"/> 2. Nguyện vọng mục tiêu & Điểm chuẩn 2025
+                    <Bot className="w-4 h-4"/> 2. Nguyện vọng & Chỉ tiêu liên năm
                   </h3>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -657,97 +690,145 @@ export default function UnifiedKhaoThiPage() {
                       <input type="text" value={targetUni} onChange={e => setTargetUni(e.target.value)} placeholder="Ví dụ: UET, Bách Khoa..." className={mdInput + " py-3"} />
                     </div>
                     <div>
-                      <label className={labelClass}>Ngành học</label>
+                      <label className={labelClass}>Ngành đăng ký</label>
                       <input type="text" value={targetMajor} onChange={e => setTargetMajor(e.target.value)} placeholder="Ví dụ: Khoa học máy tính..." className={mdInput + " py-3"} />
                     </div>
                   </div>
 
                   <div>
                     <label className={labelClass}>Điểm chuẩn năm ngoái (2025)</label>
-                    <input type="text" value={lastYearCutoff} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setLastYearCutoff(e.target.value) }} placeholder="Điểm chuẩn năm 2025..." className={mdInput + " tracking-widest text-center font-mono text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#1E1E1E]"} />
+                    <input type="text" value={lastYearCutoff} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setLastYearCutoff(e.target.value) }} placeholder="Điểm trúng tuyển năm 2025..." className={mdInput + " tracking-widest text-center font-mono text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#1E1E1E]"} />
                   </div>
 
-                  {/* Chỉ tiêu xét tuyển liên năm */}
                   <div className="p-4 bg-slate-50 dark:bg-[#161616] rounded-2xl border border-dashed border-slate-200 dark:border-white/5 space-y-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><TrendingUp className="w-3 h-3 text-indigo-500"/> Khảo sát chỉ tiêu cung cầu nâng cao</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1"><TrendingUp className="w-3 h-3 text-indigo-500"/> Khảo sát chỉ tiêu (Tăng độ chính xác đoán điểm)</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-400 mb-1">Chỉ tiêu năm ngoái (2025)</label>
-                        <input type="number" value={lastYearQuota} onChange={e => setLastYearQuota(e.target.value)} placeholder="Số lượng..." className="w-full bg-white dark:bg-[#202020] rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white border border-slate-200 dark:border-white/5" />
+                        <input type="number" value={lastYearQuota} onChange={e => setLastYearQuota(e.target.value)} placeholder="Năm ngoái..." className="w-full bg-white dark:bg-[#202020] rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white border border-slate-200 dark:border-white/5" />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-400 mb-1">Chỉ tiêu năm nay (2026)</label>
-                        <input type="number" value={thisYearQuota} onChange={e => setThisYearQuota(e.target.value)} placeholder="Số lượng..." className="w-full bg-white dark:bg-[#202020] rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white border border-slate-200 dark:border-white/5" />
+                        <input type="number" value={thisYearQuota} onChange={e => setThisYearQuota(e.target.value)} placeholder="Năm nay..." className="w-full bg-white dark:bg-[#202020] rounded-xl p-2.5 text-xs font-bold outline-none text-slate-900 dark:text-white border border-slate-200 dark:border-white/5" />
                       </div>
                     </div>
                   </div>
 
-                  {/* Nút kích hoạt gọi API trực tiếp */}
                   <button
                     type="button"
-                    onClick={handleActivateSenaiPrediction}
+                    onClick={() => handleSendToSenai()}
                     disabled={isSenaiLoading}
                     className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-[#202020] text-white rounded-2xl font-black text-sm uppercase tracking-wider shadow-lg active:scale-[0.99] transition-all flex items-center justify-center gap-2"
                   >
-                    {isSenaiLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : <Sparkles className="w-4 h-4"/>}
-                    {isSenaiLoading ? 'SenAI Đang phân tích...' : 'Kích hoạt SenAI dự đoán'}
+                    {isSenaiLoading && senaiChatMessages.length === 0 ? <Loader2 className="w-5 h-5 animate-spin"/> : <Sparkles className="w-4 h-4"/>}
+                    Xác nhận và Chạy máy dự đoán
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* CỘT PHẢI: HIỂN THỊ KẾT QUẢ DỰ ĐOÁN LIÊN NĂM TỪ GEMINI API */}
+            {/* CỘT PHẢI: KHÔNG GIAN INTERACTIVE CHAT ĐƯỢC PHÂN TÍCH RENDER ĐẸP MẮT */}
             <div className="lg:col-span-7 space-y-6">
               {senaiError && (
-                <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-2xl flex gap-3 text-xs font-bold text-rose-600 dark:text-rose-400 animate-in fade-in">
+                <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-2xl flex gap-3 text-xs font-bold text-rose-600 dark:text-rose-400">
                   <AlertCircle className="w-5 h-5 shrink-0"/>
                   <div>{senaiError}</div>
                 </div>
               )}
 
-              {isSenaiLoading && (
-                <div className={`${mdCard} p-8 text-center flex flex-col justify-center items-center space-y-4 min-h-[400px]`}>
-                  <div className="relative w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-full flex items-center justify-center border border-indigo-100 dark:border-indigo-500/20 shadow-md">
-                    <Sparkles className="w-8 h-8 text-yellow-500 animate-pulse"/>
+              {senaiChatMessages.length > 0 ? (
+                <div className={`${mdCard} p-0 flex flex-col h-[680px] border-2 border-indigo-500/20 relative animate-in zoom-in-98 duration-300`}>
+                  
+                  {/* Header Trạm Tư Vấn */}
+                  <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-[#151515]/50 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950 rounded-xl text-indigo-600 dark:text-indigo-400">
+                        <Bot className="w-4 h-4"/>
+                      </div>
+                      <div>
+                        <h4 className="font-black text-xs uppercase tracking-widest text-slate-800 dark:text-white">Trạm tư vấn hướng nghiệp SenAI</h4>
+                        <p className="text-[10px] font-bold text-slate-400">Kết nối trực tiếp Gemini Engine</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={handleClearChat}
+                      className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl transition-colors"
+                      title="Làm mới cuộc trò chuyện"
+                    >
+                      <Trash2 className="w-4 h-4"/>
+                    </button>
                   </div>
-                  <div>
-                    <h4 className="font-black text-lg">Hệ thống đang tích hợp bộ lọc phổ điểm quốc gia...</h4>
-                    <p className="text-xs font-bold text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
-                      SenAI đang gọi kết nối API đối soát song song bách phân vị liên năm cùng cán cân biến động cung cầu chỉ tiêu của ngành học mục tiêu. Sếp vui lòng đợi trong giây lát nhe!
-                    </p>
+
+                  {/* Vùng luồng hội thoại tin nhắn cuộn mượt mà */}
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" ref={scrollRef}>
+                    {senaiChatMessages.map((msg, index) => (
+                      <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-200`}>
+                        <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] shadow-sm text-sm ${
+                          msg.role === 'user' 
+                            ? 'bg-indigo-600 text-white rounded-br-sm font-bold' 
+                            : 'bg-white dark:bg-[#1E1E1E] border border-slate-100 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm font-medium leading-relaxed'
+                        }`}>
+                          
+                          {/* 🌟 BỘ LỌC RENDER MARKDOWN TRỰC QUAN ĐỂ KHÔNG BỊ LỖI CHỮ THÔ */}
+                          <ReactMarkdown
+                            remarkPlugins={[remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                            components={{
+                              p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                              strong: ({node, ...props}) => <strong className={`font-black ${msg.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
+                              ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
+                              li: ({node, ...props}) => <li className="pl-0.5" {...props} />,
+                              h3: ({node, ...props}) => <h3 className="text-base font-black border-b border-slate-100 dark:border-slate-800 pb-1 mb-2 mt-3 text-indigo-600 dark:text-indigo-400" {...props} />,
+                            }}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    ))}
+
+                    {isSenaiLoading && (
+                      <div className="flex justify-start items-center gap-2.5 animate-pulse">
+                        <div className="p-2 bg-indigo-50 dark:bg-[#202020] rounded-xl text-indigo-500">
+                          <Loader2 className="w-4 h-4 animate-spin"/>
+                        </div>
+                        <span className="text-xs font-bold text-slate-400 italic">SenAI đang tính toán dữ liệu cung cầu...</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* 🌟 THANH CHAT TƯƠNG TÁC DƯỚI CHÂN TRANG ĐỂ PHỤ HUYNH VÀ HỌC SINH HỎI THÊM */}
+                  <div className="p-3 bg-slate-50/80 dark:bg-[#121212]/80 border-t border-slate-100 dark:border-white/5 shrink-0">
+                    <form onSubmit={(e) => handleSendToSenai(e, 'followup')} className="relative flex items-center bg-white dark:bg-[#202020] border border-slate-200 dark:border-slate-800 rounded-2xl px-2 py-1.5 shadow-inner focus-within:border-indigo-500 transition-colors">
+                      <input 
+                        type="text"
+                        value={followUpInput}
+                        onChange={(e) => setFollowUpInput(e.target.value)}
+                        placeholder="Phụ huynh & học sinh hỏi thêm về học phí, cơ hội việc làm, nguyện vọng dự phòng tại đây..."
+                        className="flex-1 bg-transparent text-xs font-bold text-slate-900 dark:text-white outline-none px-3 py-2 placeholder:text-slate-400"
+                        disabled={isSenaiLoading}
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSenaiLoading || !followUpInput.trim()}
+                        className="p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 dark:disabled:bg-[#2A2A2A] disabled:text-slate-400 text-white rounded-xl transition-all shrink-0"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </form>
+                  </div>
+
                 </div>
-              )}
-
-              {!isSenaiLoading && senaiAiResponse && (
-                <div className={`${mdCard} p-6 md:p-8 space-y-4 border-2 border-indigo-500/30 animate-in zoom-in-98 duration-300`}>
-                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
-                    <h4 className="font-black text-sm uppercase tracking-widest text-slate-800 dark:text-white flex items-center gap-2">
-                      <Bot className="w-5 h-5 text-indigo-500" /> Báo cáo phân tích cơ hội trúng tuyển từ SenAI
-                    </h4>
-                    <span className="text-[10px] bg-emerald-500 text-white font-black px-2.5 py-1 rounded-md uppercase tracking-wider shadow-sm">Báo cáo chính thức</span>
-                  </div>
-
-                  {/* Hiển thị văn bản trả về trực tiếp từ app/api/chat/route.ts */}
-                  <div className="text-sm font-medium leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans bg-slate-50 dark:bg-[#161616] p-6 rounded-3xl border border-slate-200/60 dark:border-white/5 max-h-[500px] overflow-y-auto custom-scrollbar">
-                    {senaiAiResponse}
-                  </div>
-
-                  <p className="text-[10px] font-bold text-slate-400 text-center">
-                    Mô hình dự báo dựa trên thống kê toán học của Bộ GD&ĐT phối hợp cùng thuật toán phân tích hành vi độc lập SenAI.
-                  </p>
-                </div>
-              )}
-
-              {!isSenaiLoading && !senaiAiResponse && !senaiError && (
-                <div className={`${mdCard} p-8 text-center flex flex-col justify-center items-center space-y-4 min-h-[400px]`}>
+              ) : (
+                <div className={`${mdCard} p-8 text-center flex flex-col justify-center items-center space-y-4 min-h-[500px]`}>
                   <div className="w-16 h-16 bg-slate-100 dark:bg-[#1E1E1E] text-slate-400 dark:text-slate-600 rounded-full flex items-center justify-center border border-dashed border-slate-300">
-                    <GraduationCap className="w-8 h-8"/>
+                    <MessageSquare className="w-8 h-8"/>
                   </div>
                   <div>
-                    <h4 className="font-black text-lg">Không gian tư vấn trúng tuyển thông minh</h4>
+                    <h4 className="font-black text-lg">Đang chờ cấu hình dữ liệu</h4>
                     <p className="text-xs font-bold text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">
-                      Điền thông tin điểm số năm 2026 và nguyện vọng ở bảng bên trái, sau đó nhấn nút <strong>"Kích hoạt SenAI dự đoán"</strong> để hệ thống tự động đọc dữ liệu và trả về kết quả phân tích tại chỗ cho gia đình sếp nhé!
+                      Quý phụ huynh và các em hãy điền thông số điểm thi, trường, ngành xét tuyển ở cột bên trái, hệ thống sẽ tự động tổng hợp dữ liệu cung cầu chỉ tiêu và mở không gian đối thoại thông minh trực tiếp tại đây.
                     </p>
                   </div>
                 </div>
