@@ -471,7 +471,7 @@ export default function ExamRoomPage() {
         <div className="flex items-center gap-4">
           <button onClick={() => { if(confirm("Hủy bài thi hiện tại?")) { const doc = document as any; if(doc.fullscreenElement || doc.webkitFullscreenElement) { if(doc.exitFullscreen) doc.exitFullscreen().catch(()=>{}); } router.push('/exams') } }} className="p-1.5 bg-white/70 dark:bg-slate-800/80 rounded-full text-slate-500 border border-white/60 dark:border-white/10"><ArrowLeft className="w-4 h-4" /></button>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 border rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0"><img src="/logo.png" alt="Logo" className="w-full h-full object-contain" /></div>
+            <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 border rounded-lg flex items-center justify-center p-1.5 shadow-sm shrink-0"><img src="/logo.png" alt="Logo" className="w-full h-full object-contain scale-110" /></div>
             <div>
               <h1 className="font-extrabold text-xs md:text-sm max-w-[180px] md:max-w-xs truncate tracking-tight">{exam?.title}</h1>
                 <div className="flex gap-2 mt-0.5 text-[9px] md:text-[10px] font-bold">

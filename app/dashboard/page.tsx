@@ -676,8 +676,8 @@ export default function DashboardPage() {
           className="flex items-center gap-3 cursor-pointer group shrink-0" 
           onClick={() => router.push('/dashboard')}
         >
-          <div className="w-12 h-12 rounded-[16px] bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/20 border border-slate-200 dark:border-white/10 flex items-center justify-center p-2.5 group-hover:scale-105 transition-transform duration-300 shadow-sm">
-            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain drop-shadow-sm" />
+          <div className="w-14 h-14 rounded-[18px] bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/20 border border-slate-200 dark:border-white/10 flex items-center justify-center p-2.5 group-hover:scale-105 transition-transform duration-300 shadow-sm">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain drop-shadow-sm scale-110" />
           </div>
           <div className="hidden md:block">
             <h1 className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white leading-none">SenExam</h1>

@@ -291,8 +291,8 @@ export default function DashboardPage() {
       <header className="h-[80px] px-4 sm:px-8 flex items-center justify-between bg-[#FCF9F2] dark:bg-slate-900 border-b-2 border-[#4A3E3D] sticky top-0 z-40 shadow-sm transition-all duration-300">
         
         <div className="flex items-center gap-3 cursor-pointer group" onClick={() => router.push('/dashboard')}>
-          <div className="w-11 h-11 rounded-xl bg-[#EAD5C3] border-2 border-[#4A3E3D] flex items-center justify-center p-1 group-hover:rotate-6 transition-transform duration-500 ease-out">
-            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain filter sepia" />
+          <div className="w-14 h-14 rounded-xl bg-[#EAD5C3] border-2 border-[#4A3E3D] flex items-center justify-center p-1.5 group-hover:rotate-6 transition-transform duration-500 ease-out">
+            <img src="/logo.png" alt="Logo" className="w-full h-full object-contain filter sepia scale-110" />
           </div>
           <div>
             <h1 className="text-xl font-serif font-black tracking-wide text-[#4A3E3D] dark:text-white">SenExam</h1>
