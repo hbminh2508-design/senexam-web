@@ -20,12 +20,16 @@ type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'short_
 
 type AnswerValue = string | string[] | Record<string, string> | null
 
+type ImageRef = { page: number; box: [number, number, number, number] }
+
+type QuestionEntry = { text: string; options?: string[]; imageRef?: ImageRef; imageBase64?: string }
+
 type ExamSection = {
   id: string
   type: QuestionType
   name: string
   questionCount: number
-  questionEntries: Record<string, { text: string; options?: string[] }>
+  questionEntries: Record<string, QuestionEntry>
   correctAnswers: Record<string, AnswerValue>
   scoringMode: 'auto_divide'
   sectionTotalPoints: number
@@ -50,6 +54,69 @@ const fileToBase64 = (file: File): Promise<UploadedFile> => new Promise((resolve
   reader.onerror = reject
   reader.readAsDataURL(file)
 })
+
+const MAX_RENDER_PAGES = 12
+
+// Render các trang PDF thành ảnh (client-side) để AI có thể định vị hình vẽ/đồ thị trong câu hỏi
+const renderPdfPagesToCanvases = async (file: File): Promise<HTMLCanvasElement[]> => {
+  const pdfjsLib = await import('pdfjs-dist')
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  }
+  const buffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+  const pageCount = Math.min(pdf.numPages, MAX_RENDER_PAGES)
+  const canvases: HTMLCanvasElement[] = []
+  for (let i = 1; i <= pageCount; i++) {
+    const page = await pdf.getPage(i)
+    const viewport = page.getViewport({ scale: 1.3 })
+    const canvas = document.createElement('canvas')
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) continue
+    await page.render({ canvasContext: ctx, viewport }).promise
+    canvases.push(canvas)
+  }
+  return canvases
+}
+
+const canvasToJpegBase64 = (canvas: HTMLCanvasElement) => canvas.toDataURL('image/jpeg', 0.65).split(',')[1]
+
+// Cắt vùng ảnh (hình vẽ/đồ thị) khỏi trang PDF đã render, theo toạ độ chuẩn hoá 0-1000 do AI trả về
+const cropCanvasRegion = (canvas: HTMLCanvasElement, box: [number, number, number, number]): string | null => {
+  const [ymin, xmin, ymax, xmax] = box
+  const sx = Math.max(0, (xmin / 1000) * canvas.width)
+  const sy = Math.max(0, (ymin / 1000) * canvas.height)
+  const sw = Math.min(canvas.width - sx, Math.max(1, ((xmax - xmin) / 1000) * canvas.width))
+  const sh = Math.min(canvas.height - sy, Math.max(1, ((ymax - ymin) / 1000) * canvas.height))
+  const out = document.createElement('canvas')
+  out.width = sw
+  out.height = sh
+  const ctx = out.getContext('2d')
+  if (!ctx) return null
+  ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh)
+  return out.toDataURL('image/jpeg', 0.85)
+}
+
+const getErrorMessage = (e: unknown): string => {
+  if (e instanceof Error) return e.message
+  if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
+    return (e as { message: string }).message
+  }
+  return 'Đã có lỗi xảy ra, vui lòng thử lại.'
+}
+
+const isAnswered = (v: AnswerValue): boolean => {
+  if (v === null || v === undefined) return false
+  if (Array.isArray(v)) return v.length > 0
+  if (typeof v === 'object') return Object.values(v).some(Boolean)
+  return String(v).trim().length > 0
+}
+
+const scrollToQuestion = (key: string) => {
+  document.getElementById(`q-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
 
 const isQuestionCorrect = (studentAns: AnswerValue, correctAns: AnswerValue, type: QuestionType) => {
   if (correctAns === null || correctAns === undefined) return false
@@ -118,16 +185,40 @@ export default function TrialFeaturePage() {
     try {
       const files = await Promise.all([questionFile, answerFile].filter(Boolean).map(f => fileToBase64(f as File)))
 
+      let pageCanvases: HTMLCanvasElement[] = []
+      let pageImages: string[] = []
+      try {
+        pageCanvases = await renderPdfPagesToCanvases(questionFile)
+        pageImages = pageCanvases.map(canvasToJpegBase64)
+      } catch {
+        // Nếu render ảnh trang thất bại (PDF lỗi/bảo mật...), vẫn tiếp tục tạo đề không kèm ảnh minh hoạ
+      }
+
       const res = await fetch('/api/generate-interactive-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files }),
+        body: JSON.stringify({ files, pageImages }),
       })
       const data = await res.json()
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'AI không thể xử lý tệp đã tải lên.')
       }
+
+      // Cắt ảnh minh hoạ (hình vẽ/đồ thị) cho từng câu hỏi mà AI xác định có tham chiếu hình
+      const examStructure: ExamSection[] = (data.examStructure as ExamSection[]).map(section => ({
+        ...section,
+        questionEntries: Object.fromEntries(
+          Object.entries(section.questionEntries || {}).map(([qIdx, entry]) => {
+            const { imageRef, ...rest } = entry
+            if (imageRef && pageCanvases[imageRef.page - 1]) {
+              const imageBase64 = cropCanvasRegion(pageCanvases[imageRef.page - 1], imageRef.box)
+              return [qIdx, imageBase64 ? { ...rest, imageBase64 } : rest]
+            }
+            return [qIdx, rest]
+          })
+        ),
+      }))
 
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
@@ -137,7 +228,7 @@ export default function TrialFeaturePage() {
         user_id: user.id,
         title: data.title,
         source_file_names: sourceNames,
-        exam_structure: data.examStructure,
+        exam_structure: examStructure,
       })
       if (insertError) throw insertError
 
@@ -146,7 +237,7 @@ export default function TrialFeaturePage() {
       await fetchExams()
       setMode('list')
     } catch (e) {
-      setGenerateError(e instanceof Error ? e.message : 'Đã có lỗi xảy ra, vui lòng thử lại.')
+      setGenerateError(getErrorMessage(e))
     } finally {
       setGenerating(false)
     }
@@ -238,7 +329,7 @@ export default function TrialFeaturePage() {
         )}
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-10 py-10 space-y-6 relative z-10">
+      <main className={`mx-auto px-4 sm:px-6 lg:px-10 py-10 space-y-6 relative z-10 ${mode === 'take' ? 'max-w-5xl' : 'max-w-3xl'}`}>
 
         {/* ============ TẠO ĐỀ MỚI ============ */}
         {mode === 'create' && (
@@ -248,7 +339,7 @@ export default function TrialFeaturePage() {
                 <UploadCloud className="w-5 h-5 text-indigo-500"/> Tải lên tệp đề thi
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1.5">
-                Tải tối đa 2 tệp PDF: đề bài (bắt buộc) và bảng đáp án riêng (nếu có). AI sẽ tự đọc, phân loại dạng câu hỏi (trắc nghiệm, đúng/sai, trả lời ngắn...) và tạo thành đề tương tác.
+                Tải tối đa 2 tệp PDF: đề bài (bắt buộc) và bảng đáp án riêng (nếu có). AI sẽ tự đọc, phân loại dạng câu hỏi (trắc nghiệm, đúng/sai, trả lời ngắn...), tự cắt hình vẽ/đồ thị đi kèm câu hỏi (nếu có) và tạo thành đề tương tác.
               </p>
             </div>
 
@@ -337,29 +428,77 @@ export default function TrialFeaturePage() {
         )}
 
         {/* ============ LÀM BÀI ============ */}
-        {mode === 'take' && activeExam && (
-          <div className="space-y-6">
-            <div className={`${mdCard} p-6 flex items-center justify-between`}>
-              <h2 className="font-black text-lg text-slate-900 dark:text-white">{activeExam.title}</h2>
-              <button onClick={() => setMode('result')} className={mdButtonFilled}>
-                <CheckCircle2 className="w-4 h-4"/> Nộp bài
-              </button>
-            </div>
+        {mode === 'take' && activeExam && (() => {
+          const totalQuestions = activeExam.exam_structure.reduce((sum, s) => sum + s.questionCount, 0)
+          const answeredCount = activeExam.exam_structure.reduce((sum, s) => sum + Array.from({ length: s.questionCount }).filter((_, qIdx) => isAnswered(answers[`${s.id}-${qIdx}`])).length, 0)
+          const progressPct = totalQuestions ? Math.round((answeredCount / totalQuestions) * 100) : 0
 
-            {activeExam.exam_structure.map(section => (
-              <div key={section.id} className={`${mdCard} p-6 space-y-5`}>
-                <h3 className="font-black text-xs uppercase tracking-wider text-indigo-600 dark:text-indigo-400 border-b border-slate-200 dark:border-white/10 pb-3">
-                  {section.name}
-                </h3>
-                {Array.from({ length: section.questionCount }).map((_, qIdx) => {
-                  const entry = section.questionEntries?.[qIdx] ?? section.questionEntries?.[String(qIdx)]
-                  const key = `${section.id}-${qIdx}`
-                  const currentAns = answers[key]
-                  return (
-                    <div key={qIdx} className="p-4 bg-slate-50 dark:bg-[#161616] rounded-2xl border border-slate-100 dark:border-white/5 space-y-3">
-                      <p className="font-bold text-sm text-slate-800 dark:text-slate-200">
-                        Câu {qIdx + 1}{entry?.text ? `: ${entry.text}` : ''}
-                      </p>
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 items-start">
+              {/* Thanh điều hướng câu hỏi + tiến độ - lấp khoảng trống bên trái trên màn lớn */}
+              <div className="hidden lg:block sticky top-24">
+                <div className={`${mdCard} p-5 space-y-4`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{answeredCount}/{totalQuestions}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Đã trả lời</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 dark:bg-[#252525] rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${progressPct}%` }}/>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
+                    {activeExam.exam_structure.map(section => (
+                      <div key={section.id}>
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1.5 truncate">{section.name}</p>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                            const key = `${section.id}-${qIdx}`
+                            const answered = isAnswered(answers[key])
+                            return (
+                              <button key={qIdx} onClick={() => scrollToQuestion(key)} className={`w-8 h-8 rounded-lg text-[11px] font-black flex items-center justify-center transition-colors ${answered ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-[#252525] text-slate-500 hover:bg-slate-200 dark:hover:bg-[#2A2A2A]'}`}>
+                                {qIdx + 1}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button onClick={() => setMode('result')} className={`${mdButtonFilled} w-full`}>
+                    <CheckCircle2 className="w-4 h-4"/> Nộp bài
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-6 min-w-0">
+                <div className={`${mdCard} p-6 flex items-center justify-between gap-3`}>
+                  <h2 className="font-black text-lg text-slate-900 dark:text-white truncate">{activeExam.title}</h2>
+                  <button onClick={() => setMode('result')} className={`${mdButtonFilled} shrink-0`}>
+                    <CheckCircle2 className="w-4 h-4"/> Nộp bài
+                  </button>
+                </div>
+
+                {activeExam.exam_structure.map(section => (
+                  <div key={section.id} className={`${mdCard} p-6 space-y-5`}>
+                    <h3 className="font-black text-xs uppercase tracking-wider text-indigo-600 dark:text-indigo-400 border-b border-slate-200 dark:border-white/10 pb-3">
+                      {section.name}
+                    </h3>
+                    {Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                      const entry = section.questionEntries?.[qIdx] ?? section.questionEntries?.[String(qIdx)]
+                      const key = `${section.id}-${qIdx}`
+                      const currentAns = answers[key]
+                      return (
+                        <div key={qIdx} id={`q-${key}`} className="p-4 bg-slate-50 dark:bg-[#161616] rounded-2xl border border-slate-100 dark:border-white/5 space-y-3 scroll-mt-24">
+                          <p className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                            Câu {qIdx + 1}{entry?.text ? `: ${entry.text}` : ''}
+                          </p>
+                          {entry?.imageBase64 && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={entry.imageBase64} alt={`Hình minh hoạ câu ${qIdx + 1}`} className="max-w-full rounded-xl border border-slate-200 dark:border-white/10" />
+                          )}
 
                       {section.type === 'single_choice' && (
                         entry?.options?.length ? (
@@ -417,9 +556,11 @@ export default function TrialFeaturePage() {
                   )
                 })}
               </div>
-            ))}
-          </div>
-        )}
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ============ KẾT QUẢ ============ */}
         {mode === 'result' && activeExam && (() => {
