@@ -601,14 +601,17 @@ export default function DashboardPage() {
         </div>
 
         {/* Thanh "Tất cả tính năng" trung tâm (thay thế thanh search) */}
-        <div className="flex-1 max-w-2xl mx-4 md:mx-8 relative z-50">
+        <div className="flex-1 min-w-0 max-w-2xl mx-2 sm:mx-4 md:mx-8 relative z-50">
           <button
             onClick={() => setShowFeatureMenu(v => !v)}
-            className="w-full flex items-center gap-3 bg-slate-100/80 dark:bg-[#1A1A1A] hover:bg-slate-200/50 dark:hover:bg-[#202020] border-2 border-transparent rounded-full pl-5 pr-4 py-3 transition-all shadow-inner"
+            className="w-full flex items-center gap-2 sm:gap-3 bg-slate-100/80 dark:bg-[#1A1A1A] hover:bg-slate-200/50 dark:hover:bg-[#202020] border-2 border-transparent rounded-full pl-3 pr-2.5 py-2.5 sm:pl-5 sm:pr-4 sm:py-3 transition-all shadow-inner"
           >
             <LayoutGrid className="w-5 h-5 text-indigo-500 shrink-0"/>
-            <span className="flex-1 text-left font-bold text-sm text-slate-500 dark:text-slate-400">Tất cả tính năng</span>
-            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${showFeatureMenu ? 'rotate-90' : ''}`}/>
+            <span className="flex-1 min-w-0 text-left font-bold text-sm text-slate-500 dark:text-slate-400 truncate">
+              <span className="sm:hidden">Tính năng</span>
+              <span className="hidden sm:inline">Tất cả tính năng</span>
+            </span>
+            <ChevronRight className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${showFeatureMenu ? 'rotate-90' : ''}`}/>
           </button>
 
           {/* Dropdown Menu tính năng (Floating Card) */}
@@ -643,34 +646,34 @@ export default function DashboardPage() {
         </div>
 
         {/* Nút Action góc phải */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
           {(userRole === 'admin' || userRole === 'collab') && (
-            <button 
-              onClick={() => router.push('/admin')} 
+            <button
+              onClick={() => router.push('/admin')}
               className="hidden lg:flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-[#1E1E1E] dark:hover:bg-indigo-900/30 dark:text-indigo-400 px-5 py-3 rounded-full font-extrabold text-sm transition-colors border border-indigo-200 dark:border-indigo-900/50 shadow-sm"
             >
               <ShieldCheck className="w-4 h-4"/> Bảng Quản trị
             </button>
           )}
-          
-          <button 
-            onClick={() => setShowNotifications(true)} 
-            className="p-3 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] text-slate-600 dark:text-slate-300 transition-colors active:scale-95 relative"
+
+          <button
+            onClick={() => setShowNotifications(true)}
+            className="p-2.5 sm:p-3 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] text-slate-600 dark:text-slate-300 transition-colors active:scale-95 relative"
           >
             <Bell className="w-5 h-5"/>
-            {unreadCount > 0 && <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-white dark:border-[#121212] rounded-full"></span>}
+            {unreadCount > 0 && <span className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5 w-2.5 h-2.5 bg-red-500 border-2 border-white dark:border-[#121212] rounded-full"></span>}
           </button>
-          
-          <button 
-            onClick={toggleTheme} 
-            className="p-3 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] text-slate-600 dark:text-slate-300 transition-colors active:scale-95"
+
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 sm:p-3 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] text-slate-600 dark:text-slate-300 transition-colors active:scale-95"
           >
             {isDark ? <Sun className="w-5 h-5 text-amber-400"/> : <Moon className="w-5 h-5"/>}
           </button>
-          
-          <button 
-            onClick={() => setShowProfile(true)} 
-            className="ml-2 w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-blue-500 text-white flex items-center justify-center font-black shadow-md hover:shadow-lg hover:scale-105 transition-all"
+
+          <button
+            onClick={() => setShowProfile(true)}
+            className="ml-1 sm:ml-2 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-blue-500 text-white flex items-center justify-center font-black shadow-md hover:shadow-lg hover:scale-105 transition-all shrink-0"
           >
             {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-5 h-5"/>}
           </button>

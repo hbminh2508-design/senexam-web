@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Chỉ hỗ trợ tối đa 2 tệp' }, { status: 400 })
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
 
     const parts = [
       ...files.map(f => ({ inlineData: { data: f.base64, mimeType: f.mimeType || 'application/pdf' } })),

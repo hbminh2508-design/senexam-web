@@ -254,18 +254,18 @@ export default function ForumPage() {
                     
                     {/* 🌟 NÚT QUẢN LÝ CHO ADMIN/COLLAB (GHIM & XÓA) */}
                     {canManage && (
-                      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={(e) => handleTogglePin(e, post.id, post.is_pinned)} 
+                      <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => handleTogglePin(e, post.id, post.is_pinned)}
                           title={post.is_pinned ? "Bỏ ghim" : "Ghim lên đầu"}
-                          className="p-1.5 bg-white/60 dark:bg-slate-700/60 hover:bg-orange-100 dark:hover:bg-orange-900/40 text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 rounded-md border border-white/40 dark:border-slate-600 transition-colors backdrop-blur-sm"
+                          className="p-2 sm:p-1.5 bg-white/60 dark:bg-slate-700/60 hover:bg-orange-100 dark:hover:bg-orange-900/40 text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 rounded-md border border-white/40 dark:border-slate-600 transition-colors backdrop-blur-sm"
                         >
                           {post.is_pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
                         </button>
-                        <button 
-                          onClick={(e) => handleDeletePost(e, post.id)} 
+                        <button
+                          onClick={(e) => handleDeletePost(e, post.id)}
                           title="Xóa bài viết"
-                          className="p-1.5 bg-white/60 dark:bg-slate-700/60 hover:bg-red-100 dark:hover:bg-red-900/40 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 rounded-md border border-white/40 dark:border-slate-600 transition-colors backdrop-blur-sm"
+                          className="p-2 sm:p-1.5 bg-white/60 dark:bg-slate-700/60 hover:bg-red-100 dark:hover:bg-red-900/40 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 rounded-md border border-white/40 dark:border-slate-600 transition-colors backdrop-blur-sm"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

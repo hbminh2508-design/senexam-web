@@ -159,8 +159,16 @@ export default function SenVideoPage() {
         </div>
       </header>
 
+      {/* Ô TÌM KIẾM RIÊNG CHO MOBILE (ẩn trên md+ vì đã có ở header) */}
+      <div className="md:hidden px-4 pt-4 relative z-10">
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Tìm video..." className={`${inputClass} w-full pl-10 py-2.5`} />
+        </div>
+      </div>
+
       {/* MAIN WORKSPACE */}
-      <div className="max-w-[1400px] mx-auto pt-8 px-4 md:px-8 relative z-10">
+      <div className="max-w-[1400px] mx-auto pt-4 md:pt-8 px-4 md:px-8 relative z-10">
         <div className={`${mdCard} p-6 md:p-8 min-h-[70vh]`}>
           
           {displayVideos.length === 0 ? (
