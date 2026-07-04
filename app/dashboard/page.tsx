@@ -9,7 +9,7 @@ import {
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, LayoutGrid,
   Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound,
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash,
-  CheckCircle2, Info, BarChart3, FileText, FlaskConical, PlaySquare
+  CheckCircle2, Info, BarChart3, FileText, FlaskConical, PlaySquare, Wand2
 } from 'lucide-react'
 
 import ChatOffline from '@/app/components/ChatOffline'
@@ -48,6 +48,7 @@ const FEATURE_COLOR_MAP: Record<string, string> = {
   emerald: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20",
   sky: "bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-100 dark:border-sky-500/20",
   rose: "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-500/20",
+  amber: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-500/20",
 }
 
 // Khai báo Interface cho Notification
@@ -555,6 +556,7 @@ export default function DashboardPage() {
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
     { key: 'forum', label: 'Cộng Đồng', desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.', icon: MessageSquare, color: 'sky', onSelect: () => router.push('/forum') },
     { key: 'score', label: 'Tính điểm ĐH', desc: 'Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.', icon: Calculator, color: 'rose', onSelect: () => router.push('/tinhdiem') },
+    { key: 'trial', label: 'Tính năng thử nghiệm', desc: 'AI tự đọc PDF và tạo đề tương tác để luyện tập.', icon: Wand2, color: 'amber', onSelect: () => router.push('/tinhnangthunghiem') },
   ] as const
 
   // ============================================================================
