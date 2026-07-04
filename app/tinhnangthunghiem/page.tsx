@@ -386,7 +386,7 @@ export default function TrialFeaturePage() {
                       {section.type === 'multiple_choice' && (
                         <div className="flex gap-2 flex-wrap">
                           {(entry?.options?.length ? entry.options.map((_, i) => String.fromCharCode(65 + i)) : ['A', 'B', 'C', 'D']).map(label => {
-                            const arr = currentAns || []
+                            const arr = Array.isArray(currentAns) ? currentAns : []
                             const selected = arr.includes(label)
                             return (
                               <button key={label} onClick={() => handleAnswer(section.id, qIdx, selected ? arr.filter((a: string) => a !== label) : [...arr, label])} className={`w-10 h-10 rounded-lg border text-xs font-black ${selected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white dark:bg-[#202020] border-slate-200 dark:border-white/10'}`}>{label}</button>
@@ -398,7 +398,7 @@ export default function TrialFeaturePage() {
                       {section.type === 'true_false' && (
                         <div className="space-y-2">
                           {['a', 'b', 'c', 'd'].map(sub => {
-                            const val = currentAns?.[sub]
+                            const val = (currentAns && typeof currentAns === 'object' && !Array.isArray(currentAns)) ? currentAns[sub] : undefined
                             return (
                               <div key={sub} className="flex items-center gap-3 text-xs font-bold">
                                 <span className="text-slate-400 w-5">Ý {sub}:</span>
@@ -411,7 +411,7 @@ export default function TrialFeaturePage() {
                       )}
 
                       {section.type === 'short_answer' && (
-                        <input type="text" value={currentAns || ''} onChange={(e) => handleAnswer(section.id, qIdx, e.target.value)} placeholder="Nhập đáp án..." className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"/>
+                        <input type="text" value={typeof currentAns === 'string' ? currentAns : ''} onChange={(e) => handleAnswer(section.id, qIdx, e.target.value)} placeholder="Nhập đáp án..." className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"/>
                       )}
                     </div>
                   )
