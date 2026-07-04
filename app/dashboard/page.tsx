@@ -9,7 +9,7 @@ import {
   ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
   Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, 
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash, 
-  CheckCircle2, Info, BarChart3, FileText, Bot, FlaskConical, PlaySquare
+  CheckCircle2, Info, BarChart3, FileText, FlaskConical, PlaySquare
 } from 'lucide-react'
 
 import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -207,6 +207,7 @@ export default function DashboardPage() {
   // -- Data States --
   const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
   const [studentHistoryList, setStudentHistoryList] = useState<any[]>([])
+  const [recentVideos, setRecentVideos] = useState<any[]>([])
   const [notifications, setNotifications] = useState<SysNotification[]>([
     { id: '1', title: 'SenExam V2.0', message: 'Hệ thống Material Design 3 đã được cập nhật thành công.', type: 'success', time: 'Vừa xong', read: false }
   ])
@@ -312,8 +313,23 @@ export default function DashboardPage() {
           .order('created_at', { ascending: false })
         
         setStudentHistoryList(subHistory || [])
-      } else { 
-        setShowOnboarding(true) 
+
+        // Fetch Video mới nhất cho khối SenVideo trên Dashboard
+        const role = profile.role || 'student'
+        const { data: admins } = await supabase.from('profiles').select('id').in('role', ['admin', 'collab'])
+        const adminIds = admins ? admins.map(a => a.id) : []
+        const { data: docsData } = await supabase.from('library_documents').select('id, title, drive_file_id, created_by, created_at').order('created_at', { ascending: false }).limit(100)
+        if (docsData) {
+          const vids = docsData.filter(d => {
+            const isVideo = d.title && d.title.match(/\.(mp4|mkv|mov|avi|webm)$/i)
+            if (!isVideo) return false
+            if (role === 'student') return d.created_by === user.id || d.created_by === null || adminIds.includes(d.created_by)
+            return true
+          }).slice(0, 6)
+          setRecentVideos(vids)
+        }
+      } else {
+        setShowOnboarding(true)
       }
 
       // Fetch Thông báo (Announcements)
@@ -983,34 +999,39 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* 🌟 NÚT MỞ RỘNG SENAI WORKSPACE (FULL WIDTH BENTO GRID) */}
-        <div 
-          onClick={() => router.push('/senai')} 
-          className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-500 dark:from-indigo-900/50 dark:via-purple-900/50 dark:to-blue-900/50 backdrop-blur-2xl rounded-[2.5rem] p-8 sm:p-10 border border-indigo-300/50 dark:border-white/10 shadow-lg hover:shadow-xl hover:-translate-y-1 flex flex-col sm:flex-row items-start sm:items-center justify-between cursor-pointer group transition-all duration-500 relative overflow-hidden mt-5 lg:mt-6"
-        >
-          {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl mix-blend-overlay group-hover:scale-110 transition-transform duration-700 pointer-events-none"></div>
-          
-          <div className="flex items-center gap-5 relative z-10">
-            <div className="w-16 h-16 rounded-[1.2rem] bg-white/20 dark:bg-black/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner border border-white/30 shrink-0">
-              <Bot className="w-8 h-8 drop-shadow-sm" />
-            </div>
-            <div>
-              <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2 mb-1.5 drop-shadow-md">
-                SenAI Workspace Mở Rộng <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse"/>
+        {/* 🌟 VIDEO MỚI NHẤT (SENVIDEO) VỚI THUMBNAIL */}
+        {recentVideos.length > 0 && (
+          <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2.5rem] p-8 border border-slate-200 dark:border-white/5 shadow-sm mt-5 lg:mt-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                <PlaySquare className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/>
+                Video mới nhất
               </h3>
-              <p className="text-sm font-medium text-white/90 max-w-xl leading-relaxed drop-shadow-sm">
-                Trợ lý ảo toàn năng với không gian làm việc chuyên biệt. Hỗ trợ tải lên hình ảnh, giải toán chi tiết và lưu trữ toàn bộ lịch sử trò chuyện của bạn.
-              </p>
+              <button onClick={() => router.push('/senvideo')} className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:gap-2 transition-all">
+                Xem tất cả <ArrowRight className="w-3.5 h-3.5"/>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              {recentVideos.map(vid => (
+                <div key={vid.id} onClick={() => router.push('/senvideo')} className="group cursor-pointer">
+                  <div className="w-full aspect-video bg-indigo-100 dark:bg-indigo-900/20 rounded-xl overflow-hidden relative mb-2">
+                    <img
+                      src={`/api/drive/thumbnail?fileId=${vid.drive_file_id}`}
+                      alt={vid.title}
+                      loading="lazy"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors">
+                      <PlaySquare className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transition-opacity"/>
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-bold line-clamp-2 leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{vid.title}</p>
+                </div>
+              ))}
             </div>
           </div>
-          
-          <div className="mt-6 sm:mt-0 relative z-10 shrink-0 self-end sm:self-auto">
-            <div className="bg-white text-indigo-600 font-black px-6 py-3.5 rounded-full flex items-center gap-2 shadow-md group-hover:bg-indigo-50 transition-colors active:scale-95">
-              Mở Workspace <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* 🌟 LỊCH SỬ BÀI LÀM KIỂU BẢNG (LIST VIEW V2.0) */}
         <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2.5rem] p-8 border border-slate-200 dark:border-white/5 shadow-sm">

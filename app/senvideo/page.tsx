@@ -22,6 +22,7 @@ export default function SenVideoPage() {
   const [userRole, setUserRole] = useState('student')
   const [videos, setVideos] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [failedThumbs, setFailedThumbs] = useState<Record<string, boolean>>({})
 
   // Upload States
   const [showUpload, setShowUpload] = useState(false)
@@ -173,7 +174,22 @@ export default function SenVideoPage() {
               {displayVideos.map(vid => (
                 <div key={vid.id} onClick={() => { setActiveVideo(vid); setShowVlcInfo(false); }} className="group cursor-pointer bg-slate-50 dark:bg-[#161616] border border-slate-200 dark:border-white/5 rounded-[1.5rem] p-4 hover:shadow-xl hover:-translate-y-1 transition-all">
                   <div className="w-full aspect-video bg-indigo-100 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center mb-4 relative overflow-hidden">
-                    <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center group-hover:scale-125 transition-transform"><PlaySquare className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/></div>
+                    {failedThumbs[vid.id] ? (
+                      <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center group-hover:scale-125 transition-transform"><PlaySquare className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/></div>
+                    ) : (
+                      <>
+                        <img
+                          src={`/api/drive/thumbnail?fileId=${vid.drive_file_id}`}
+                          alt={vid.title}
+                          loading="lazy"
+                          onError={() => setFailedThumbs(prev => ({ ...prev, [vid.id]: true }))}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 transition-all"><PlaySquare className="w-6 h-6 text-white"/></div>
+                        </div>
+                      </>
+                    )}
                     <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded-md text-[10px] text-white font-bold">DRIVE MP4</div>
                   </div>
                   <h3 className="font-black text-[13px] line-clamp-2 leading-snug group-hover:text-indigo-600 transition-colors">{vid.title}</h3>
