@@ -1,18 +1,17 @@
 'use client'
 
-import { useDeferredValue, useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
-import { 
-  BookOpen, Clock, Trophy, Target, LogOut, User, 
-  ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, Search,
-  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound, 
-  Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash, 
+import {
+  BookOpen, Clock, Trophy, Target, LogOut, User,
+  ChevronRight, MessageSquare, Zap, ShieldCheck, AlertCircle, LayoutGrid,
+  Settings, X, Sun, Moon, MapPin, GraduationCap, Loader2, Eye, KeyRound,
+  Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator, Hash,
   CheckCircle2, Info, BarChart3, FileText, FlaskConical, PlaySquare
 } from 'lucide-react'
 
-import { glassSearchInputClass, glassSearchPanelClass, highlightSearchText } from '@/app/components/searchUtils'
 import ChatOffline from '@/app/components/ChatOffline'
 
 // ============================================================================
@@ -33,14 +32,23 @@ const EXAMS = ['THPTQG', 'HSA', 'TSA', 'SPT']
 const THPTQG_SUBJECTS = ['Toán', 'Ngữ Văn', 'Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí', 'Tiếng Anh', 'GDKT&PL', 'Tin Học', 'Công Nghệ']
 const HSA_SCIENCE_SUBJECTS = ['Vật Lí', 'Hóa Học', 'Sinh Học', 'Lịch Sử', 'Địa Lí']
 
-const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
-
 // 🌟 MATERIAL DESIGN 3 + LIQUID GLASS CONSTANTS
 const mdCard = "bg-white/70 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-150 rounded-[2rem] border border-white/60 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] hover:shadow-xl hover:-translate-y-1 transition-all duration-500 ease-out relative overflow-hidden"
 const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-transparent focus:bg-white dark:focus:bg-[#2A2A2A] border-2 focus:border-indigo-500 rounded-2xl px-5 py-4 outline-none transition-all font-bold text-slate-900 dark:text-white text-sm shadow-inner"
 const mdButtonFilled = "bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-8 py-3.5 font-black transition-all duration-300 shadow-md hover:shadow-xl active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
 const mdButtonTonal = "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 rounded-full px-6 py-3 font-extrabold transition-all duration-300 active:scale-95 flex items-center justify-center gap-2"
 const mdIconButton = "p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors active:scale-95"
+
+// Bảng màu tĩnh cho menu "Tất cả tính năng" (giữ literal để Tailwind JIT nhận diện)
+const FEATURE_COLOR_MAP: Record<string, string> = {
+  indigo: "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/20",
+  slate: "bg-slate-100 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700/40",
+  purple: "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-500/20",
+  cyan: "bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 border-cyan-100 dark:border-cyan-500/20",
+  emerald: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20",
+  sky: "bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-100 dark:border-sky-500/20",
+  rose: "bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-500/20",
+}
 
 // Khai báo Interface cho Notification
 interface SysNotification {
@@ -252,17 +260,8 @@ export default function DashboardPage() {
     totalScore: number;
   } | null>(null)
 
-  // -- Global Search States --
-  const [globalQuery, setGlobalQuery] = useState('')
-  const [globalFoldersResults, setGlobalFoldersResults] = useState<any[] | null>(null)
-  const [globalDocsResults, setGlobalDocsResults] = useState<any[] | null>(null)
-  const [globalExamsResults, setGlobalExamsResults] = useState<any[] | null>(null)
-  const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
-  const [showGlobalResults, setShowGlobalResults] = useState(false)
-  
-  const deferredGlobalQuery = useDeferredValue(globalQuery)
-  const globalSearchDebounce = useRef<number | null>(null)
-  const globalSearchRequestRef = useRef(0)
+  // -- Menu "Tất cả tính năng" (thay thế thanh search) --
+  const [showFeatureMenu, setShowFeatureMenu] = useState(false)
 
   // ĐẾM THÔNG BÁO CHƯA ĐỌC
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
@@ -546,119 +545,17 @@ export default function DashboardPage() {
     }
   }
 
-  // Global Search Logic
-  const scoreSearchText = (value: string, query: string) => {
-    const source = value.toLowerCase()
-    const needle = query.toLowerCase().trim()
-    if (!needle) return 0
-    if (source === needle) return 100
-    if (source.startsWith(needle)) return 85
-    if (source.includes(needle)) return 60
-    return needle.split(/\s+/).filter(Boolean).reduce((score, word) => score + (source.includes(word) ? 10 : 0), 0)
-  }
-
-  const rankResults = <T extends Record<string, any>>(items: T[], query: string, textSelector: (item: T) => string) => {
-    return [...items].sort((left, right) => scoreSearchText(textSelector(right), query) - scoreSearchText(textSelector(left), query))
-  }
-
-  const getDocSearchText = (doc: any, folderName?: string) => [
-    doc.title,
-    typeof doc.description === 'string' && doc.description.startsWith(DOCUMENT_SECURITY_PREFIX) ? '' : doc.description,
-    doc.author,
-    doc.exam_type,
-    doc.subject,
-    doc.tag,
-    folderName,
-    doc.drive_file_id
-  ].filter(Boolean).join(' ')
-
-  const getExamSearchText = (exam: any, folderName?: string) => [
-    exam.title,
-    exam.description,
-    exam.exam_type,
-    exam.subject,
-    exam.level,
-    exam.folder_name,
-    folderName
-  ].filter(Boolean).join(' ')
-
-  const getFolderSearchText = (folder: any) => [
-    folder.name,
-    folder.description,
-    folder.author,
-    folder.note,
-    folder.type,
-    folder.parent_name
-  ].filter(Boolean).join(' ')
-
-  const handleGlobalSearch = async (q?: string) => {
-    const qtrim = (q ?? globalQuery).trim()
-    if (!qtrim) { 
-      setGlobalFoldersResults(null); 
-      setGlobalDocsResults(null); 
-      setGlobalExamsResults(null); 
-      setShowGlobalResults(false); 
-      return 
-    }
-    
-    const requestId = ++globalSearchRequestRef.current
-    setGlobalSearchLoading(true); 
-    setShowGlobalResults(true)
-    
-    try {
-      const [docsRes, examsRes, foldersRes] = await Promise.all([
-        supabase.from('library_documents').select('id, title, description, author, exam_type, subject, tag, folder_id, drive_file_id, created_at').limit(1000),
-        supabase.from('exams').select('id, title, description, exam_type, subject, level, folder_id, folder_name, created_at').limit(1000),
-        supabase.from('library_folders').select('id, name, description, author, note, type, parent_name, created_at').limit(1000)
-      ])
-      
-      if (requestId !== globalSearchRequestRef.current) return
-      
-      const folderMap = new Map<string, any>((foldersRes.data || []).map((folder: any) => [folder.id, folder]))
-      const folderMatches = (foldersRes.data || []).filter((folder: any) => getFolderSearchText(folder).toLowerCase().includes(qtrim.toLowerCase()))
-      const folderMatchIds = new Set(folderMatches.map((folder: any) => folder.id))
-
-      const docs = (docsRes.data || [])
-        .filter((doc: any) => {
-          const folderName = doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : ''
-          return getDocSearchText(doc, folderName).toLowerCase().includes(qtrim.toLowerCase()) || (doc.folder_id && folderMatchIds.has(doc.folder_id))
-        })
-        .map((doc: any) => ({ ...doc, folder_name: doc.folder_id ? folderMap.get(doc.folder_id)?.name || '' : '' }))
-
-      const exams = (examsRes.data || [])
-        .filter((exam: any) => {
-          const folderName = exam.folder_id ? folderMap.get(exam.folder_id)?.name || exam.folder_name || '' : exam.folder_name || ''
-          return getExamSearchText(exam, folderName).toLowerCase().includes(qtrim.toLowerCase()) || (exam.folder_id && folderMatchIds.has(exam.folder_id))
-        })
-        .map((exam: any) => ({ ...exam, folder_name: exam.folder_id ? folderMap.get(exam.folder_id)?.name || '' : exam.folder_name || '' }))
-
-      setGlobalFoldersResults(rankResults(folderMatches, qtrim, item => getFolderSearchText(item)))
-      setGlobalDocsResults(rankResults(docs, qtrim, item => getDocSearchText(item, item.folder_name || '')))
-      setGlobalExamsResults(rankResults(exams, qtrim, item => getExamSearchText(item, item.folder_name || '')))
-    } catch (e) { 
-      console.warn('Global search failed', e) 
-    }
-    
-    if (requestId === globalSearchRequestRef.current) {
-      setGlobalSearchLoading(false)
-    }
-  }
-
-  // Debounce auto-search
-  useEffect(() => {
-    if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current)
-    if (!globalQuery || globalQuery.trim().length < 2) {
-      globalSearchRequestRef.current += 1
-      setShowGlobalResults(false)
-      setGlobalFoldersResults(null)
-      setGlobalDocsResults(null)
-      setGlobalExamsResults(null)
-      return
-    }
-    // @ts-ignore
-    globalSearchDebounce.current = window.setTimeout(() => handleGlobalSearch(globalQuery), 500)
-    return () => { if (globalSearchDebounce.current) window.clearTimeout(globalSearchDebounce.current) }
-  }, [globalQuery])
+  // Danh sách "Tất cả tính năng" — thêm tính năng mới ở đây, không cần thêm ô mới ngoài màn hình chính
+  const FEATURES = [
+    { key: 'exams', label: 'Vào thi ngay', desc: 'Kho đề thi thử bám sát cấu trúc mới nhất.', icon: Target, color: 'indigo', onSelect: () => router.push('/exams') },
+    { key: 'code', label: 'Nhập Code Đề', desc: 'Truy cập nhanh một đề thi bằng mã code.', icon: KeyRound, color: 'slate', onSelect: () => setShowCodeModal(true) },
+    { key: 'focus', label: 'Phòng Tập Trung', desc: 'Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.', icon: Music2, color: 'purple', onSelect: () => router.push('/focus') },
+    { key: 'library', label: 'Thư Viện Số', desc: 'Hàng ngàn tài liệu, sách và chuyên đề lưu trữ số.', icon: FolderOpen, color: 'cyan', onSelect: () => router.push('/library') },
+    { key: 'senvideo', label: 'SenVideo', desc: 'Xem luồng Stream chất lượng cao không giật lag.', icon: PlaySquare, color: 'indigo', onSelect: () => router.push('/senvideo') },
+    { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
+    { key: 'forum', label: 'Cộng Đồng', desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.', icon: MessageSquare, color: 'sky', onSelect: () => router.push('/forum') },
+    { key: 'score', label: 'Tính điểm ĐH', desc: 'Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.', icon: Calculator, color: 'rose', onSelect: () => router.push('/tinhdiem') },
+  ] as const
 
   // ============================================================================
   // RENDER UI CHÍNH
@@ -701,79 +598,45 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Thanh tìm kiếm trung tâm (Material Omnibox) */}
+        {/* Thanh "Tất cả tính năng" trung tâm (thay thế thanh search) */}
         <div className="flex-1 max-w-2xl mx-4 md:mx-8 relative z-50">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-            <input 
-              value={globalQuery} 
-              onChange={(e) => setGlobalQuery(e.target.value)} 
-              onFocus={() => {if(globalQuery.length > 1) setShowGlobalResults(true)}}
-              placeholder="Tìm tài liệu, đề thi, chuyên đề..." 
-              className="w-full bg-slate-100/80 dark:bg-[#1A1A1A] hover:bg-slate-200/50 dark:hover:bg-[#202020] focus:bg-white dark:focus:bg-[#1A1A1A] border-2 border-transparent focus:border-indigo-500 rounded-full pl-12 pr-12 py-3 outline-none transition-all font-bold text-sm text-slate-900 dark:text-white shadow-inner focus:shadow-md"
-            />
-            {globalQuery && (
-              <button 
-                onClick={() => {setGlobalQuery(''); setShowGlobalResults(false)}} 
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-200 dark:bg-slate-800 p-1.5 rounded-full transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          <button
+            onClick={() => setShowFeatureMenu(v => !v)}
+            className="w-full flex items-center gap-3 bg-slate-100/80 dark:bg-[#1A1A1A] hover:bg-slate-200/50 dark:hover:bg-[#202020] border-2 border-transparent rounded-full pl-5 pr-4 py-3 transition-all shadow-inner"
+          >
+            <LayoutGrid className="w-5 h-5 text-indigo-500 shrink-0"/>
+            <span className="flex-1 text-left font-bold text-sm text-slate-500 dark:text-slate-400">Tất cả tính năng</span>
+            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${showFeatureMenu ? 'rotate-90' : ''}`}/>
+          </button>
 
-          {/* Dropdown Kết quả tìm kiếm (Floating Card) */}
-          {showGlobalResults && globalQuery.trim().length >= 2 && (
-            <div className="absolute top-[calc(100%+12px)] w-full bg-white dark:bg-[#1E1E1E] rounded-3xl border border-slate-200 dark:border-white/5 shadow-2xl overflow-hidden flex flex-col max-h-[70vh] animate-in fade-in slide-in-from-top-2 duration-200 z-[100]">
-              <div className="p-3 overflow-y-auto custom-scrollbar flex-1">
-                
-                {globalSearchLoading && (
-                  <div className="p-4 flex items-center justify-center gap-2 text-slate-500 font-bold text-sm">
-                    <Loader2 className="w-4 h-4 animate-spin"/> Đang tìm trong cơ sở dữ liệu...
-                  </div>
-                )}
-                
-                {/* Kết quả Đề thi */}
-                {!!globalExamsResults?.length && (
-                  <div className="mb-3">
-                    <div className="px-4 py-2 text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Đề thi chuyên sâu</div>
-                    {globalExamsResults.map(e => (
-                      <div key={e.id} onClick={() => router.push(`/exams/${e.id}`)} className="mx-2 px-4 py-3 hover:bg-slate-50 dark:hover:bg-[#2A2A2A] rounded-2xl cursor-pointer transition-colors flex items-center gap-4 group">
-                        <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl group-hover:scale-110 transition-transform"><FileText className="w-5 h-5"/></div>
-                        <div>
-                          <div className="font-extrabold text-sm text-slate-900 dark:text-white">{highlightSearchText(e.title, deferredGlobalQuery)}</div>
-                          <div className="text-xs text-slate-500 font-medium mt-0.5">{e.exam_type} • {e.subject}</div>
+          {/* Dropdown Menu tính năng (Floating Card) */}
+          {showFeatureMenu && (
+            <>
+              <div className="fixed inset-0 z-[90]" onClick={() => setShowFeatureMenu(false)} />
+              <div className="absolute top-[calc(100%+12px)] w-full bg-white dark:bg-[#1E1E1E] rounded-3xl border border-slate-200 dark:border-white/5 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[100] p-3 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {FEATURES.map(f => {
+                    const Icon = f.icon
+                    const colorClass = FEATURE_COLOR_MAP[f.color] ?? FEATURE_COLOR_MAP.indigo
+                    return (
+                      <button
+                        key={f.key}
+                        onClick={() => { f.onSelect(); setShowFeatureMenu(false) }}
+                        className="flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-[#2A2A2A] transition-colors text-left group"
+                      >
+                        <div className={`p-2.5 rounded-xl border shrink-0 group-hover:scale-110 transition-transform ${colorClass}`}>
+                          <Icon className="w-5 h-5"/>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Kết quả Tài liệu Thư viện */}
-                {!!globalDocsResults?.length && (
-                  <div>
-                    <div className="px-4 py-2 text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Tài liệu Thư viện</div>
-                    {globalDocsResults.map(d => (
-                      <div key={d.id} onClick={() => router.push(`/library?preview=${d.id}`)} className="mx-2 px-4 py-3 hover:bg-slate-50 dark:hover:bg-[#2A2A2A] rounded-2xl cursor-pointer transition-colors flex items-center gap-4 group">
-                        <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl group-hover:scale-110 transition-transform"><BookOpen className="w-5 h-5"/></div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-extrabold text-sm text-slate-900 dark:text-white truncate">{highlightSearchText(d.title, deferredGlobalQuery)}</div>
-                          <div className="text-xs text-slate-500 font-medium mt-0.5 truncate">{d.folder_name || 'Tài liệu độc lập'}</div>
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-sm text-slate-900 dark:text-white">{f.label}</div>
+                          <div className="text-xs text-slate-500 font-medium mt-0.5 truncate">{f.desc}</div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {!globalSearchLoading && !globalExamsResults?.length && !globalDocsResults?.length && (
-                  <div className="p-10 flex flex-col items-center justify-center text-center">
-                    <Search className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-4"/>
-                    <p className="text-slate-600 dark:text-slate-400 font-bold">Không tìm thấy kết quả phù hợp với "{globalQuery}"</p>
-                    <p className="text-sm text-slate-500 mt-2">Hãy thử sử dụng các từ khóa ngắn gọn hoặc bao quát hơn.</p>
-                  </div>
-                )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
