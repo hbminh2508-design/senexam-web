@@ -75,7 +75,7 @@ const renderPdfPagesToCanvases = async (file: File): Promise<HTMLCanvasElement[]
     canvas.height = viewport.height
     const ctx = canvas.getContext('2d')
     if (!ctx) continue
-    await page.render({ canvasContext: ctx, viewport }).promise
+    await page.render({ canvas, canvasContext: ctx, viewport }).promise
     canvases.push(canvas)
   }
   return canvases
