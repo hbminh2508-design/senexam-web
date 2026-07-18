@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 
 import { AnnouncementRenderer } from './_home/Announcement'
-import { THEME_COLORS, DEFAULT_THEME_COLOR } from '@/app/components/modernTheme'
+import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
 import type { Feature } from './_home/types'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
@@ -467,6 +467,17 @@ export default function DashboardPage() {
   // ============================================================================
 
   if (isDataLoading) {
+    if (newUiEnabled) {
+      return (
+        <div
+          className="min-h-screen flex flex-col items-center justify-center font-sans"
+          style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        >
+          <Loader2 className="w-8 h-8 animate-spin mb-4" style={{ color: 'var(--accent)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Đang tải không gian SenExam...</p>
+        </div>
+      )
+    }
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] flex flex-col items-center justify-center">
         <Loader2 className="w-12 h-12 animate-spin text-indigo-600 dark:text-indigo-400 mb-6" />

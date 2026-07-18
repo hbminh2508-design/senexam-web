@@ -11,7 +11,7 @@ import {
 
 // 🌟 APPLE'S LIQUID GLASS CSS CONSTANTS
 const glassCardStyles = "bg-white/70 dark:bg-[#1A1A1A]/70 backdrop-blur-3xl backdrop-saturate-[2] border border-white/50 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]"
-const inputStyles = "w-full bg-white/50 dark:bg-[#0A0A0A]/50 backdrop-blur-md rounded-2xl pl-12 pr-12 py-4 outline-none border-2 border-transparent focus:border-blue-500/50 focus:bg-white dark:focus:bg-[#121212] shadow-inner transition-all text-sm font-bold text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-500"
+const inputStyles = "w-full bg-white/60 dark:bg-[#0A0A0A]/60 backdrop-blur-md rounded-2xl pl-12 pr-12 py-4 outline-none border-2 border-transparent focus:border-blue-500/60 focus:bg-white dark:focus:bg-[#121212] focus:shadow-[0_0_0_4px_rgba(59,130,246,0.1)] shadow-inner transition-all duration-200 text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -60,6 +60,7 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
+
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] flex items-center justify-center p-4 relative text-slate-900 dark:text-slate-100 font-sans overflow-hidden transition-colors duration-500">
@@ -135,14 +136,14 @@ export default function LoginPage() {
                   <GraduationCap className="w-8 h-8 text-white" />
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                  {isLogin ? 'Welcome Back' : 'Tạo tài khoản'}
+                  {isLogin ? 'Chào mừng trở lại' : 'Tạo tài khoản'}
                 </h2>
                 <p className="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">
                   {isLogin ? 'Đăng nhập để tiếp tục' : 'Tham gia cộng đồng sĩ tử'}
                 </p>
               </div>
 
-              <form onSubmit={handleAuth} className="space-y-4">
+              <form onSubmit={handleAuth} className="space-y-5">
                 <div className="relative group/input">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within/input:text-blue-500 transition-colors z-10" />
                   <input 
@@ -165,8 +166,8 @@ export default function LoginPage() {
                     required
                     className={inputStyles}
                   />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors z-10"
                   >
@@ -181,10 +182,10 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={loading || !email || !password}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white disabled:from-slate-300 disabled:to-slate-300 dark:disabled:from-slate-800 dark:disabled:to-slate-800 dark:disabled:text-slate-500 py-4 mt-2 rounded-[1.2rem] font-black shadow-[0_8px_20px_rgba(79,70,229,0.3)] text-sm uppercase tracking-wider transition-all active:scale-[0.98] flex items-center justify-center gap-2 group/btn"
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 hover:shadow-[0_10px_28px_rgba(79,70,229,0.4)] text-white disabled:from-slate-300 disabled:to-slate-300 dark:disabled:from-slate-800 dark:disabled:to-slate-800 dark:disabled:text-slate-500 py-4 mt-2 rounded-[1.2rem] font-black shadow-[0_8px_20px_rgba(79,70,229,0.3)] text-sm uppercase tracking-wider transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 group/btn"
                 >
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                     <>

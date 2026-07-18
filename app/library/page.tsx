@@ -345,7 +345,17 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   // ============================================================================
   // RENDER GIAO DIỆN CHÍNH
   // ============================================================================
-  if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-500 mb-4" /><p className="font-bold text-slate-500">Đang khởi tạo thư viện...</p></div>
+  if (loading) {
+    if (newUiEnabled) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center font-sans" style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}>
+          <Loader2 className="w-8 h-8 animate-spin mb-3" style={{ color: 'var(--accent)' }} />
+          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Đang khởi tạo thư viện...</p>
+        </div>
+      )
+    }
+    return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-500 mb-4" /><p className="font-bold text-slate-500">Đang khởi tạo thư viện...</p></div>
+  }
 
   if (newUiEnabled) {
     return (

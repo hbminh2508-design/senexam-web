@@ -1,13 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Loader2, Send, Sparkles, X, Maximize2, Minimize2, Zap, Settings2 } from 'lucide-react'
+import { Bot, Loader2, Send, Sparkles, X, Maximize2, Minimize2, Zap, Settings2, MessageSquareHeart } from 'lucide-react'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC (LATEX)
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { supabase } from '@/lib/supabaseClient'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+
+const FEEDBACK_PREFIX_RE = /^feedback\s*:\s*(.+)$/i
 
 type ChatMessage = {
   role: 'user' | 'model'
@@ -101,12 +106,37 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
   ])
   
   const chatScrollRef = useRef<HTMLDivElement>(null)
+  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark')
+  }, [])
 
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
     }
   }, [chatMessages, isChatLoading, isChatOpen, isFullscreen])
+
+  // 🌟 GỬI FEEDBACK QUA CHAT: gõ "Feedback: nội dung" ở cả 2 chế độ, không gọi AI, lưu thẳng vào Supabase
+  const handleSendFeedback = async (content: string) => {
+    setIsChatLoading(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { error } = await supabase.from('feedback').insert({
+        user_id: user?.id ?? null,
+        content,
+        mode: isOnlineMode ? 'advanced' : 'basic',
+      })
+      if (error) throw error
+      setChatMessages(prev => [...prev, { role: 'model', text: 'Đã ghi nhận phản hồi của bạn, cảm ơn bạn đã góp ý! Đội ngũ SenExam sẽ xem xét sớm.' }])
+    } catch (err: any) {
+      setChatMessages(prev => [...prev, { role: 'model', text: `Không gửi được phản hồi lúc này (${err?.message || 'lỗi kết nối'}). Bạn thử lại sau nhé.` }])
+    } finally {
+      setIsChatLoading(false)
+    }
+  }
 
   const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,6 +147,14 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
     const nextHistory: ChatMessage[] = [...chatMessages, { role: 'user', text: userMessage }]
     setChatMessages(nextHistory)
+
+    // 0. Phím nóng "Feedback: ..." — chặn trước, không gửi lên AI
+    const feedbackMatch = userMessage.match(FEEDBACK_PREFIX_RE)
+    if (feedbackMatch && feedbackMatch[1].trim()) {
+      handleSendFeedback(feedbackMatch[1].trim())
+      return
+    }
+
     setIsChatLoading(true)
 
     // 1. Chế độ Cơ bản (Offline)
@@ -192,65 +230,88 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
   if (hidden) return null
 
-  const chatContainerBase = "bg-white/95 dark:bg-[#121212]/95 backdrop-blur-3xl border border-slate-200/60 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden animate-in fade-in duration-300"
-  
-  const chatSizeClasses = isFullscreen 
-    ? "fixed inset-4 sm:inset-6 md:inset-10 lg:inset-x-32 lg:inset-y-12 z-[150] rounded-[2rem]" 
+  const modernVars = getModernThemeVars(themeColor, isDark)
+
+  const chatContainerBase = newUiEnabled
+    ? "shadow-xl flex flex-col overflow-hidden animate-in fade-in duration-300"
+    : "bg-white/95 dark:bg-[#121212]/95 backdrop-blur-3xl border border-slate-200/60 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden animate-in fade-in duration-300"
+
+  const chatSizeClasses = isFullscreen
+    ? "fixed inset-4 sm:inset-6 md:inset-10 lg:inset-x-32 lg:inset-y-12 z-[150] rounded-[2rem]"
     : `mb-4 w-[360px] sm:w-[420px] h-[600px] max-h-[80vh] rounded-3xl z-[100] ${avoid ? 'lg:mr-[28rem]' : ''}`
 
   return (
-    <div className={`fixed bottom-6 right-6 z-[100] flex flex-col items-end ${isFullscreen ? 'w-full h-full pointer-events-none' : ''}`}>
-      
+    <div
+      className={`fixed bottom-6 right-6 z-[100] flex flex-col items-end ${isFullscreen ? 'w-full h-full pointer-events-none' : ''}`}
+      style={newUiEnabled ? (modernVars as React.CSSProperties) : undefined}
+    >
+
       {isChatOpen && (
-        <div className={`${chatContainerBase} ${chatSizeClasses} pointer-events-auto`}>
-          
-          <div className={`px-5 py-4 flex items-center justify-between shadow-sm z-10 transition-colors duration-500 ${isOnlineMode ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : 'bg-gradient-to-r from-slate-700 to-slate-600 dark:from-slate-800 dark:to-slate-900'}`}>
-            <div className="flex items-center gap-3 text-white">
-              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-inner">
-                {isOnlineMode ? <Sparkles className="w-5 h-5 text-yellow-300" /> : <Bot className="w-5 h-5" />}
+        <div className={`${chatContainerBase} ${chatSizeClasses} pointer-events-auto`} style={newUiEnabled ? { background: 'var(--surface)', border: '1px solid var(--border)' } : undefined}>
+
+          <div
+            className={newUiEnabled ? "px-5 py-4 flex items-center justify-between z-10" : `px-5 py-4 flex items-center justify-between shadow-sm z-10 transition-colors duration-500 ${isOnlineMode ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : 'bg-gradient-to-r from-slate-700 to-slate-600 dark:from-slate-800 dark:to-slate-900'}`}
+            style={newUiEnabled ? { background: 'var(--surface)', borderBottom: '1px solid var(--border)' } : undefined}
+          >
+            <div className={`flex items-center gap-3 ${newUiEnabled ? '' : 'text-white'}`} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
+              <div
+                className={newUiEnabled ? "w-10 h-10 rounded-2xl flex items-center justify-center" : "w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-inner"}
+                style={newUiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
+              >
+                {isOnlineMode ? <Sparkles className="w-5 h-5" style={newUiEnabled ? undefined : { color: '#FDE047' }} /> : <Bot className="w-5 h-5" />}
               </div>
               <div>
                 <h3 className="font-black text-[15px] leading-tight flex items-center gap-1.5">
                   SenAI {isOnlineMode ? 'Nâng cao' : 'Cơ bản'}
-                  {isOnlineMode && <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300"/>}
-                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-white/20 tracking-widest">Beta</span>
+                  {isOnlineMode && <Zap className="w-3.5 h-3.5" style={{ color: newUiEnabled ? 'var(--accent)' : '#FDE047' }} fill={newUiEnabled ? 'var(--accent)' : '#FDE047'}/>}
+                  <span
+                    className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest"
+                    style={newUiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'rgba(255,255,255,0.2)' }}
+                  >Beta</span>
                 </h3>
-                <p className="text-[11px] text-white/80 font-medium truncate max-w-[160px] sm:max-w-[200px]">
+                <p className={`text-[11px] font-medium truncate max-w-[160px] sm:max-w-[200px] ${newUiEnabled ? '' : 'text-white/80'}`} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                   {isOnlineMode ? 'Hỏi đáp AI & Tìm thư viện' : 'Điều hướng & Giới thiệu Tác giả'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5">
-              <div 
-                className="hidden sm:flex items-center gap-1.5 bg-white/10 border border-white/20 p-1 rounded-full mr-2 cursor-pointer"
+              <div
+                className={newUiEnabled ? "hidden sm:flex items-center gap-1.5 p-1 rounded-full mr-2 cursor-pointer" : "hidden sm:flex items-center gap-1.5 bg-white/10 border border-white/20 p-1 rounded-full mr-2 cursor-pointer"}
+                style={newUiEnabled ? { background: 'var(--accent-soft)' } : undefined}
                 onClick={() => setIsOnlineMode(!isOnlineMode)}
                 title={isOnlineMode ? "Chuyển sang chế độ Offline" : "Kích hoạt Gemini AI"}
               >
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${!isOnlineMode ? 'bg-white text-slate-800 shadow-sm' : 'text-white/70'}`}><Bot className="w-3.5 h-3.5"/></div>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${isOnlineMode ? 'bg-white text-indigo-600 shadow-sm' : 'text-white/70'}`}><Sparkles className="w-3.5 h-3.5"/></div>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${!isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white text-slate-800 shadow-sm') : (newUiEnabled ? '' : 'text-white/70')}`} style={newUiEnabled ? (!isOnlineMode ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}><Bot className="w-3.5 h-3.5"/></div>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white text-indigo-600 shadow-sm') : (newUiEnabled ? '' : 'text-white/70')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}><Sparkles className="w-3.5 h-3.5"/></div>
               </div>
 
-              <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
+              <button onClick={() => setIsFullscreen(!isFullscreen)} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
-              
-              <button onClick={handleToggleChat} className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors">
+
+              <button onClick={handleToggleChat} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 <X className="w-5 h-5" />
               </button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-slate-50/50 dark:bg-transparent" ref={chatScrollRef}>
+          <div className={newUiEnabled ? "flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar" : "flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-slate-50/50 dark:bg-transparent"} style={newUiEnabled ? { background: 'var(--bg)' } : undefined} ref={chatScrollRef}>
             {chatMessages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'model' && (
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm ${isOnlineMode ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 mt-1 shadow-sm ${newUiEnabled ? '' : (isOnlineMode ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400')}`}
+                    style={newUiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
+                  >
                     {isOnlineMode ? <Sparkles className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                   </div>
                 )}
-                
-                <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14.5px] font-medium leading-relaxed shadow-sm overflow-x-auto ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
+
+                <div
+                  className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14.5px] font-medium leading-relaxed shadow-sm overflow-x-auto ${newUiEnabled ? (msg.role === 'user' ? 'text-white rounded-br-sm' : 'rounded-bl-sm') : (msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm')}`}
+                  style={newUiEnabled ? (msg.role === 'user' ? { background: 'var(--accent)' } : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }) : undefined}
+                >
                   {/* 🌟 SỬ DỤNG BỘ RENDER MARKDOWN TẠI ĐÂY */}
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}
@@ -286,49 +347,60 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
             {isChatLoading && (
               <div className="flex justify-start items-end">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 shadow-sm ${isOnlineMode ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600' : 'bg-slate-200 dark:bg-slate-800 text-slate-600'}`}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 shadow-sm ${newUiEnabled ? '' : (isOnlineMode ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600' : 'bg-slate-200 dark:bg-slate-800 text-slate-600')}`}
+                  style={newUiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
+                >
                   {isOnlineMode ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Bot className="w-4 h-4" />}
                 </div>
-                <div className="bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 px-5 py-3.5 rounded-[1.5rem] rounded-bl-sm shadow-sm flex items-center gap-2.5">
+                <div className={newUiEnabled ? "px-5 py-3.5 rounded-[1.5rem] rounded-bl-sm shadow-sm flex items-center gap-2.5" : "bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 px-5 py-3.5 rounded-[1.5rem] rounded-bl-sm shadow-sm flex items-center gap-2.5"} style={newUiEnabled ? { background: 'var(--surface)', border: '1px solid var(--border)' } : undefined}>
                   <span className="flex gap-1">
-                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
-                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
-                    <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
+                    <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: newUiEnabled ? 'var(--accent)' : '#818cf8' }}></span>
+                    <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{animationDelay: '0.2s', background: newUiEnabled ? 'var(--accent)' : '#6366f1'}}></span>
+                    <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{animationDelay: '0.4s', background: newUiEnabled ? 'var(--accent)' : '#4f46e5'}}></span>
                   </span>
-                  <span className="text-[13px] text-slate-500 font-bold italic block ml-1">Sen đang suy nghĩ...</span>
+                  <span className={`text-[13px] font-bold italic block ml-1 ${newUiEnabled ? '' : 'text-slate-500'}`} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>Sen đang suy nghĩ...</span>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="p-4 bg-white dark:bg-[#1A1A1A] border-t border-slate-100 dark:border-white/5">
+          <div className={newUiEnabled ? "p-4" : "p-4 bg-white dark:bg-[#1A1A1A] border-t border-slate-100 dark:border-white/5"} style={newUiEnabled ? { background: 'var(--surface)', borderTop: '1px solid var(--border)' } : undefined}>
             <form onSubmit={handleSendChatMessage} className="flex items-center gap-3 relative">
               <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder={isOnlineMode ? "Hỏi bài toán, tra tài liệu..." : "Tìm đề thi, tài liệu, hỏi tác giả..."}
-                className="flex-1 bg-slate-100 dark:bg-[#252525] border border-transparent focus:border-indigo-500 dark:focus:border-indigo-400 rounded-full pl-5 pr-14 py-3.5 text-sm font-semibold outline-none transition-all shadow-inner placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-white"
+                placeholder={isOnlineMode ? "Hỏi bài toán, tra tài liệu... (gõ Feedback: để góp ý)" : "Tìm đề thi, tài liệu, hỏi tác giả..."}
+                className={newUiEnabled ? "flex-1 rounded-full pl-5 pr-14 py-3.5 text-sm font-semibold outline-none transition-all bg-transparent" : "flex-1 bg-slate-100 dark:bg-[#252525] border border-transparent focus:border-indigo-500 dark:focus:border-indigo-400 rounded-full pl-5 pr-14 py-3.5 text-sm font-semibold outline-none transition-all shadow-inner placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-900 dark:text-white"}
+                style={newUiEnabled ? { border: '1px solid var(--border)', color: 'var(--text)' } : undefined}
               />
               <button
                 type="submit"
                 disabled={!chatInput.trim() || isChatLoading}
-                className={`absolute right-2 p-2.5 rounded-full transition-transform active:scale-95 shadow-md flex items-center justify-center disabled:opacity-50 disabled:shadow-none ${isOnlineMode ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-700 hover:bg-slate-800 text-white'}`}
+                className={`absolute right-2 p-2.5 rounded-full transition-transform active:scale-95 shadow-md flex items-center justify-center disabled:opacity-50 disabled:shadow-none ${newUiEnabled ? 'text-white' : (isOnlineMode ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-700 hover:bg-slate-800 text-white')}`}
+                style={newUiEnabled ? { background: 'var(--accent)' } : undefined}
               >
                 <Send className="w-4 h-4 ml-0.5" />
               </button>
             </form>
-            
+
+            <div className="mt-2.5 flex items-center gap-1.5 px-1">
+              <MessageSquareHeart className="w-3 h-3 shrink-0" style={{ color: newUiEnabled ? 'var(--text-muted)' : '#94a3b8' }} />
+              <span className="text-[10px] font-medium" style={{ color: newUiEnabled ? 'var(--text-muted)' : '#94a3b8' }}>Gõ <strong>Feedback: nội dung</strong> để gửi góp ý trực tiếp cho đội ngũ SenExam</span>
+            </div>
+
             <div className="sm:hidden mt-3 flex justify-between items-center px-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <span className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 ${newUiEnabled ? '' : 'text-slate-400'}`} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 <Settings2 className="w-3 h-3"/> Đổi Engine
               </span>
-              <div 
-                className="flex items-center gap-1 bg-slate-100 dark:bg-[#252525] border border-slate-200 dark:border-white/5 p-0.5 rounded-full cursor-pointer"
+              <div
+                className={newUiEnabled ? "flex items-center gap-1 p-0.5 rounded-full cursor-pointer" : "flex items-center gap-1 bg-slate-100 dark:bg-[#252525] border border-slate-200 dark:border-white/5 p-0.5 rounded-full cursor-pointer"}
+                style={newUiEnabled ? { border: '1px solid var(--border)' } : undefined}
                 onClick={() => setIsOnlineMode(!isOnlineMode)}
               >
-                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${!isOnlineMode ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm' : 'text-slate-400'}`}>Cơ Bản</div>
-                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${isOnlineMode ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400'}`}>Nâng Cao</div>
+                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${!isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (!isOnlineMode ? { background: 'var(--bg)', color: 'var(--text)' } : { color: 'var(--text-muted)' }) : undefined}>Cơ Bản</div>
+                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${isOnlineMode ? (newUiEnabled ? 'text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}>Nâng Cao</div>
               </div>
             </div>
           </div>
@@ -338,12 +410,15 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       <button
         onClick={handleToggleChat}
         className={`pointer-events-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] text-white font-black transition-all duration-300 hover:scale-105 active:scale-95 z-[100] border border-white/20
-          ${isChatOpen 
-            ? 'bg-slate-800 hover:bg-slate-700 shadow-none' 
-            : isOnlineMode 
-              ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500' 
-              : 'bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600'
+          ${isChatOpen
+            ? 'bg-slate-800 hover:bg-slate-700 shadow-none'
+            : newUiEnabled
+              ? ''
+              : isOnlineMode
+                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'
+                : 'bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600'
           }`}
+        style={!isChatOpen && newUiEnabled ? { background: 'var(--accent)' } : undefined}
       >
         {isChatOpen ? <X className="w-6 h-6" /> : (
           <>

@@ -144,7 +144,16 @@ export default function SenVideoPage() {
 
   const displayVideos = videos.filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-10 h-10 animate-spin text-indigo-500" /></div>
+  if (loading) {
+    if (newUiEnabled) {
+      return (
+        <div className="min-h-screen flex items-center justify-center font-sans" style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}>
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
+        </div>
+      )
+    }
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-10 h-10 animate-spin text-indigo-500" /></div>
+  }
 
   if (newUiEnabled) {
     return (

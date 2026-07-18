@@ -80,6 +80,19 @@ export default function ExamsLibraryPage() {
   })
 
   if (loading) {
+    if (newUiEnabled) {
+      return (
+        <div
+          className="min-h-screen flex items-center justify-center font-sans"
+          style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        >
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Đang tải kho tài liệu SenExam...</p>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="app-shell min-h-screen flex items-center justify-center bg-transparent">
         <div className="flex flex-col items-center gap-4 text-blue-600 dark:text-blue-500">

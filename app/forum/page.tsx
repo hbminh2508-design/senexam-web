@@ -158,7 +158,16 @@ export default function ForumPage() {
     return past.toLocaleDateString('vi-VN')
   }
 
-  if (loading) return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
+  if (loading) {
+    if (newUiEnabled) {
+      return (
+        <div className="min-h-screen flex items-center justify-center font-sans" style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}>
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
+        </div>
+      )
+    }
+    return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
+  }
 
   const canManage = currentUserRole === 'admin' || currentUserRole === 'collab'
 
