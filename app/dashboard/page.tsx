@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -15,6 +15,7 @@ import {
 import { AnnouncementRenderer } from './_home/Announcement'
 import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
 import type { Feature } from './_home/types'
+import pkg from '@/package.json'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
 const LegacyHome = dynamic(() => import('./_home/LegacyHome'), {
@@ -93,6 +94,7 @@ export default function DashboardPage() {
   const [showCodeModal, setShowCodeModal] = useState(false)
   const [examCode, setExamCode] = useState('')
   const [codeLoading, setCodeLoading] = useState(false)
+  const examCodeInputRefs = useRef<Array<HTMLInputElement | null>>([])
 
   // -- Onboarding / Profile Form States --
   const [formData, setFormData] = useState({
@@ -436,9 +438,36 @@ export default function DashboardPage() {
     if (error || !data) { 
       alert('Mã đề thi không hợp lệ hoặc đã bị vô hiệu hóa!'); 
       setCodeLoading(false) 
-    } else { 
-      router.push(`/exams/${data.id}`) 
+    } else {
+      router.push(`/exams/${data.id}`)
     }
+  }
+
+  // -- OTP-style Exam Code Box Handlers --
+  const handleExamCodeBoxChange = (index: number, rawValue: string) => {
+    const char = rawValue.trim().slice(-1).toUpperCase()
+    const chars = examCode.padEnd(6, ' ').split('')
+    chars[index] = char || ' '
+    const next = chars.join('').replace(/\s+$/, '')
+    setExamCode(next)
+    if (char && index < 5) {
+      examCodeInputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleExamCodeBoxKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !examCode[index] && index > 0) {
+      examCodeInputRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleExamCodeBoxPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    if (!pasted) return
+    setExamCode(pasted)
+    const focusIndex = Math.min(pasted.length, 5)
+    examCodeInputRefs.current[focusIndex]?.focus()
   }
 
   // Calculator Score Input Handler
@@ -530,13 +559,22 @@ export default function DashboardPage() {
               <h3 className="text-2xl font-black mb-2 text-slate-900 dark:text-white">Truy cập đề ẩn</h3>
               <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 font-medium leading-relaxed">Nhập mã Code do giáo viên cung cấp để giải khóa đề thi bảo mật.</p>
               
-              <input 
-                type="text" 
-                value={examCode} 
-                onChange={(e) => setExamCode(e.target.value.toUpperCase())} 
-                placeholder="NHẬP MÃ TẠI ĐÂY" 
-                className="w-full bg-slate-50 dark:bg-[#121212] border-transparent focus:bg-white dark:focus:bg-[#121212] border-2 focus:border-indigo-500 rounded-2xl px-5 py-4 text-slate-900 dark:text-white font-black tracking-widest text-center text-xl outline-none transition-all mb-6 uppercase shadow-inner" 
-              />
+              <div className="flex items-center justify-between gap-2 mb-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => { examCodeInputRefs.current[i] = el }}
+                    type="text"
+                    inputMode="text"
+                    maxLength={1}
+                    value={examCode[i] ?? ''}
+                    onChange={(e) => handleExamCodeBoxChange(i, e.target.value)}
+                    onKeyDown={(e) => handleExamCodeBoxKeyDown(i, e)}
+                    onPaste={handleExamCodeBoxPaste}
+                    className="w-full aspect-square min-w-0 bg-slate-50 dark:bg-[#121212] border-transparent focus:bg-white dark:focus:bg-[#121212] border-2 focus:border-indigo-500 rounded-2xl text-slate-900 dark:text-white font-black text-center text-xl outline-none transition-all uppercase shadow-inner"
+                  />
+                ))}
+              </div>
               
               <button 
                 onClick={handleJoinHiddenExam} 
@@ -551,11 +589,28 @@ export default function DashboardPage() {
 
       {/* 2. Slide-over Profile / Cài đặt hệ thống */}
       {showProfile && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm transition-all duration-300">
-          <div className="w-full max-w-md h-full bg-white dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5">
-            <div className="p-6 flex justify-between items-center sticky top-0 z-10 bg-white/80 dark:bg-[#1E1E1E]/80 backdrop-blur-xl border-b border-slate-100 dark:border-white/5">
-              <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Settings className="w-5 h-5 text-indigo-500"/> Cài đặt
+        <div
+          className={`fixed inset-0 z-50 flex justify-end bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm transition-all duration-300`}
+          style={newUiEnabled ? { ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)' } as React.CSSProperties : undefined}
+        >
+          <div
+            className={
+              newUiEnabled
+                ? 'w-full max-w-md my-4 mr-4 h-[calc(100%-2rem)] rounded-2xl shadow-2xl overflow-y-auto flex flex-col animate-in slide-in-from-right border'
+                : 'w-full max-w-md h-full bg-white dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5'
+            }
+            style={newUiEnabled ? { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
+          >
+            <div
+              className={
+                newUiEnabled
+                  ? 'p-6 flex justify-between items-center sticky top-0 z-10 backdrop-blur-xl border-b'
+                  : 'p-6 flex justify-between items-center sticky top-0 z-10 bg-white/80 dark:bg-[#1E1E1E]/80 backdrop-blur-xl border-b border-slate-100 dark:border-white/5'
+              }
+              style={newUiEnabled ? { background: 'color-mix(in srgb, var(--surface) 80%, transparent)', borderColor: 'var(--border)' } : undefined}
+            >
+              <h2 className={newUiEnabled ? 'text-xl font-black flex items-center gap-2' : 'text-xl font-black text-slate-900 dark:text-white flex items-center gap-2'} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
+                <Settings className={newUiEnabled ? 'w-5 h-5' : 'w-5 h-5 text-indigo-500'} style={newUiEnabled ? { color: 'var(--accent)' } : undefined} /> Cài đặt
               </h2>
               <button onClick={() => setShowProfile(false)} className="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
@@ -717,22 +772,36 @@ export default function DashboardPage() {
             </div>
 
             {/* 🌟 THÊM NÚT ĐĂNG XUẤT VÀ CẬP NHẬT HỒ SƠ TẠI ĐÂY */}
-            <div className="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-[#121212] flex flex-col gap-3">
-              <button 
-                onClick={() => { setShowOnboarding(true); setShowProfile(false); }} 
+            <div
+              className={
+                newUiEnabled
+                  ? 'p-6 border-t flex flex-col gap-3 rounded-b-2xl'
+                  : 'p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-[#121212] flex flex-col gap-3'
+              }
+              style={newUiEnabled ? { borderColor: 'var(--border)', background: 'var(--surface)' } : undefined}
+            >
+              <button
+                onClick={() => { setShowOnboarding(true); setShowProfile(false); }}
                 className="w-full bg-slate-900 hover:bg-black dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 text-white rounded-2xl py-4 font-black transition-all shadow-md active:scale-95 text-sm uppercase tracking-wider"
               >
                 Cập nhật Hồ sơ Năng lực
               </button>
 
-              <button 
-                onClick={handleLogout} 
+              <button
+                onClick={handleLogout}
                 className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/10 dark:hover:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/30 rounded-2xl py-4 font-black transition-all shadow-sm active:scale-95 text-sm uppercase tracking-wider flex items-center justify-center gap-2"
               >
                 <LogOut className="w-5 h-5" /> Đăng xuất tài khoản
               </button>
+
+              <p
+                className={newUiEnabled ? 'text-center text-[11px] font-medium pt-1' : 'text-center text-[11px] font-medium text-slate-400 dark:text-slate-600 pt-1'}
+                style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}
+              >
+                Phiên bản {pkg.version}
+              </p>
             </div>
-            
+
           </div>
         </div>
       )}

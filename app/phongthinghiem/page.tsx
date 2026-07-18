@@ -14,6 +14,9 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+
 // ============================================================================
 // CONSTANTS, TYPES & PRESETS
 // ============================================================================
@@ -48,6 +51,8 @@ const initEdges = (preset: 'K' | 'RC'): Edge[] => [
 
 export default function VirtualLabPage() {
   const router = useRouter()
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
   const [activeExp, setActiveExp] = useState<ExpType>('pendulum')
   const [showSidebar, setShowSidebar] = useState(false)
   
@@ -92,6 +97,10 @@ export default function VirtualLabPage() {
   }, [activeExp])
 
   useEffect(() => { if (aiScrollRef.current) aiScrollRef.current.scrollTop = aiScrollRef.current.scrollHeight }, [aiMessages, isAiLoading, isAiMax])
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark')
+  }, [])
 
   // ==========================================================================
   // GIAO TIẾP SENAI
@@ -325,6 +334,193 @@ export default function VirtualLabPage() {
       )
     }
     return null
+  }
+
+  // ==========================================================================
+  // RENDER APP (MODERN / BETA)
+  // ==========================================================================
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans relative pb-10"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        {/* SIDEBAR: NGĂN KÉO CHỌN THÍ NGHIỆM */}
+        {showSidebar && (
+          <div className="fixed inset-0 z-[200] flex">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowSidebar(false)}></div>
+            <div className="w-[300px] h-full relative z-10 p-6 flex flex-col" style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}>
+              <div className="flex justify-between items-center mb-6 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+                <h2 className="font-semibold text-base flex items-center gap-2" style={{ color: 'var(--accent)' }}><FlaskConical className="w-5 h-5"/> Menu Thí Nghiệm</h2>
+                <button onClick={() => setShowSidebar(false)} className="p-2 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"><X className="w-4 h-4"/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">
+                {['Cơ học', 'Điện học', 'Quang học'].map(cat => (
+                  <div key={cat} className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest pl-2 mb-2" style={{ color: 'var(--text-muted)' }}>{cat}</p>
+                    {EXPERIMENTS.filter(e => e.category === cat).map(exp => (
+                      <button
+                        key={exp.id}
+                        onClick={() => setActiveExp(exp.id as ExpType)}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl font-medium text-sm transition-colors"
+                        style={activeExp === exp.id ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text)', border: '1px solid transparent' }}
+                      >
+                        <span className="flex items-center gap-3">{exp.icon} {exp.title}</span>
+                        {activeExp === exp.id && <ChevronRight className="w-4 h-4 opacity-70"/>}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* HEADER */}
+        <header className="h-[72px] flex items-center px-4 sm:px-8 sticky top-0 z-40 justify-between" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/dashboard')} className="p-2.5 rounded-full hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"><ArrowLeft className="w-5 h-5"/></button>
+            <div className="h-6 w-px" style={{ background: 'var(--border)' }}></div>
+            <button
+              onClick={() => setShowSidebar(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm"
+              style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+            >
+              <Menu className="w-4 h-4" /> Chọn Thí nghiệm
+            </button>
+          </div>
+          <h1 className="font-semibold text-sm hidden sm:flex px-4 py-2 rounded-lg" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+            {EXPERIMENTS.find(e=>e.id===activeExp)?.title}
+          </h1>
+        </header>
+
+        {/* WORKSPACE */}
+        <div className="max-w-[1500px] mx-auto pt-6 px-4 md:px-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-[75vh]">
+
+            {/* CỘT TRÁI (Visual & Controls) */}
+            <div className={`lg:col-span-7 flex flex-col gap-6 ${isAiMax ? 'hidden' : ''}`}>
+
+              <div className="rounded-2xl p-4 h-[400px] lg:h-[450px] flex items-center justify-center relative overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <div className="absolute top-4 left-4 flex gap-2 z-10">
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+                    style={isPlaying ? { background: '#DC2626', color: '#fff' } : { background: 'var(--accent)', color: '#fff' }}
+                  >
+                    {isPlaying ? <><Square className="w-4 h-4 fill-white"/> Dừng</> : <><Play className="w-4 h-4 fill-white"/> Bắt đầu</>}
+                  </button>
+                  <button onClick={() => { setIsPlaying(false); setTime(0); }} className="p-2 rounded-lg" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}><RotateCcw className="w-5 h-5"/></button>
+                </div>
+
+                {!isEditMode && ['kirchhoff', 'rc_circuit'].includes(activeExp) && (
+                  <div className="absolute top-4 right-4 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                    <Info className="w-3.5 h-3.5"/> Chế độ Học (Bấm vào mạch để hỏi)
+                  </div>
+                )}
+
+                {renderVisuals()}
+              </div>
+
+              {/* BẢNG CẤU HÌNH VẬT LÝ */}
+              <div className="rounded-2xl p-6 shrink-0" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <h3 className="text-xs font-semibold uppercase mb-4 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}><Settings2 className="w-4 h-4"/> Cấu hình vật lý</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+
+                  {activeExp === 'pendulum' && [
+                    {k:'l', l:'Chiều dài l (m)', min:0.1, max:5, s:0.1}, {k:'g', l:'Gia tốc g (m/s²)', min:1, max:20, s:0.1}, {k:'m', l:'Khối lượng m (kg)', min:0.1, max:10, s:0.1}
+                  ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-medium mb-2"><span style={{ color: 'var(--text-muted)' }}>{c.l}</span><span style={{ color: 'var(--accent)' }}>{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className="w-full h-2 rounded-lg appearance-none cursor-pointer" style={{ background: 'var(--border)', accentColor: 'var(--accent)' }}/></div>)}
+
+                  {['projectile','horizontal'].includes(activeExp) && [
+                    {k:'v0', l:'Vận tốc v0 (m/s)', min:1, max:50, s:1}, {k:'h', l:'Độ cao h (m)', min:0, max:50, s:1}
+                  ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-medium mb-2"><span style={{ color: 'var(--text-muted)' }}>{c.l}</span><span style={{ color: 'var(--accent)' }}>{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className="w-full h-2 rounded-lg appearance-none cursor-pointer" style={{ background: 'var(--border)', accentColor: 'var(--accent)' }}/></div>)}
+                  {activeExp === 'projectile' && <div><label className="flex justify-between text-xs font-medium mb-2"><span style={{ color: 'var(--text-muted)' }}>Góc ném α (°)</span><span style={{ color: 'var(--accent)' }}>{params.angle}°</span></label><input type="range" min="0" max="90" step="1" value={params.angle} onChange={(e)=>setParams({...params, angle: Number(e.target.value)})} className="w-full h-2 rounded-lg appearance-none cursor-pointer" style={{ background: 'var(--border)', accentColor: 'var(--accent)' }}/></div>}
+
+                  {activeExp === 'interference' && [
+                    {k:'lambda', l:'Bước sóng λ (μm)', min:0.38, max:0.76, s:0.01}, {k:'a', l:'Khoảng cách 2 khe a (mm)', min:0.5, max:3, s:0.1}, {k:'D', l:'K/c đến màn D (m)', min:1, max:5, s:0.5}
+                  ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-medium mb-2"><span style={{ color: 'var(--text-muted)' }}>{c.l}</span><span style={{ color: 'var(--accent)' }}>{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className="w-full h-2 rounded-lg appearance-none cursor-pointer" style={{ background: 'var(--border)', accentColor: 'var(--accent)' }}/></div>)}
+
+                  {activeExp === 'equipotential' && [
+                    {k:'q1', l:'Điện tích q1 (μC)', min:-5, max:5, s:1}, {k:'q2', l:'Điện tích q2 (μC)', min:-5, max:5, s:1}
+                  ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-medium mb-2"><span style={{ color: 'var(--text-muted)' }}>{c.l}</span><span style={{ color: 'var(--accent)' }}>{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className="w-full h-2 rounded-lg appearance-none cursor-pointer" style={{ background: 'var(--border)', accentColor: 'var(--accent)' }}/></div>)}
+
+                  {activeExp === 'dispersion' && [
+                    {k:'prismAngle', l:'Góc chiết quang A (°)', min:30, max:90, s:1}, {k:'incidenceAngle', l:'Góc tới i (°)', min:0, max:90, s:1}, {k:'n', l:'Chiết suất n', min:1.2, max:2.0, s:0.1}
+                  ].map(c => <div key={c.k}><label className="flex justify-between text-xs font-medium mb-2"><span style={{ color: 'var(--text-muted)' }}>{c.l}</span><span style={{ color: 'var(--accent)' }}>{params[c.k as keyof typeof params]}</span></label><input type="range" min={c.min} max={c.max} step={c.s} value={params[c.k as keyof typeof params]} onChange={(e)=>setParams({...params, [c.k]: Number(e.target.value)})} className="w-full h-2 rounded-lg appearance-none cursor-pointer" style={{ background: 'var(--border)', accentColor: 'var(--accent)' }}/></div>)}
+
+                  {['kirchhoff','rc_circuit'].includes(activeExp) && (
+                    <div className="col-span-1 md:col-span-2 flex flex-col md:flex-row gap-4 p-4 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <button
+                        onClick={() => {setIsEditMode(!isEditMode); setSelEdgeId(null)}}
+                        className="px-4 py-3 rounded-lg text-xs font-semibold w-full md:w-auto transition-colors"
+                        style={isEditMode ? { background: '#D97706', color: '#fff' } : { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                      >
+                        {isEditMode ? 'Đóng Sửa Mạch (Bật Hỏi AI)' : 'Bật chế độ Sửa Mạch'}
+                      </button>
+                      {isEditMode && selEdgeId ? (
+                        <div className="flex gap-2 flex-1">
+                          <select value={edges.find(e=>e.id===selEdgeId)?.type} onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, type: e.target.value as ComponentType} : ed))} className="w-1/2 rounded-lg px-3 py-2 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }}>
+                            <option value="wire">Dây dẫn</option><option value="R">Điện trở (R)</option><option value="E">Nguồn (E)</option><option value="C">Tụ điện (C)</option><option value="open">Ngắt mạch</option>
+                          </select>
+                          <input type="number" value={edges.find(e=>e.id===selEdgeId)?.val} onChange={(e)=>setEdges(edges.map(ed=>ed.id===selEdgeId ? {...ed, val: Number(e.target.value)} : ed))} className="w-1/2 rounded-lg px-3 py-2 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} placeholder="Giá trị"/>
+                        </div>
+                      ) : (
+                        isEditMode && <div className="text-xs font-medium flex-1 flex items-center pl-2" style={{ color: '#D97706' }}>👆 Bấm vào đoạn dây trên hình để sửa đổi.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* CỘT PHẢI (SenAI) */}
+            <div
+              className={`${isAiMax ? 'fixed inset-0 z-[9999] w-screen h-screen rounded-none m-0 p-0' : 'lg:col-span-5 h-[500px] lg:h-auto rounded-2xl'} overflow-hidden flex flex-col`}
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            >
+              <div className={`p-4 flex justify-between items-center shrink-0 w-full ${isAiMax ? 'pt-8 pb-4' : ''}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                <div className="flex gap-3 items-center">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}><Bot className="w-5 h-5" style={{ color: 'var(--accent)' }}/></div>
+                  <div>
+                    <h4 className="font-semibold text-sm flex items-center gap-1.5">Gia sư Lab SenAI <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span></h4>
+                    <p className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Hỏi đáp & Phân tích hiện tượng</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsAiMax(!isAiMax)} className="p-2.5 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+                  {isAiMax ? <Minimize2 className="w-5 h-5"/> : <Maximize2 className="w-5 h-5"/>}
+                </button>
+              </div>
+
+              <div ref={aiScrollRef} className="flex-1 overflow-y-auto p-5 md:p-8 space-y-6 custom-scrollbar w-full">
+                {aiMessages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {m.role === 'model' && <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3 mt-1 shrink-0" style={{ background: 'var(--accent-soft)' }}><Bot className="w-4 h-4" style={{ color: 'var(--accent)' }}/></div>}
+                    <div
+                      className="max-w-[85%] px-5 py-3.5 rounded-2xl text-[14px] font-medium leading-relaxed overflow-x-auto"
+                      style={m.role==='user' ? { background: 'var(--accent)', color: '#fff' } : m.err ? { background: 'rgba(220,38,38,0.08)', color: '#DC2626', border: '1px solid rgba(220,38,38,0.2)' } : { background: 'var(--bg)', border: '1px solid var(--border)' }}
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p:({node,...p}:any)=><p className="mb-2 last:mb-0" {...p}/>, strong:({node,...p}:any)=><strong className="font-semibold" style={{ color: m.role === 'user' ? '#fff' : 'var(--accent)' }} {...p}/> }}>
+                        {m.text}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                ))}
+                {isAiLoading && <div className="flex gap-3 items-center"><Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--accent)' }}/><span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>SenAI đang suy nghĩ...</span></div>}
+              </div>
+
+              <div className={`p-4 md:p-6 shrink-0 w-full ${isAiMax ? 'pb-8' : ''}`} style={{ borderTop: '1px solid var(--border)' }}>
+                <form onSubmit={handleAskSenAI} className="relative flex items-center max-w-4xl mx-auto w-full">
+                  <input type="text" value={aiQuery} onChange={(e)=>setAiQuery(e.target.value)} placeholder="Nhờ AI tính toán, giải thích hiện tượng..." className="w-full rounded-full px-4 py-4 pr-16 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
+                  <button type="submit" disabled={!aiQuery.trim() || isAiLoading} className="absolute right-2 p-3 rounded-full disabled:opacity-50" style={{ background: 'var(--accent)', color: '#fff' }}><Send className="w-5 h-5 ml-0.5"/></button>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // ==========================================================================

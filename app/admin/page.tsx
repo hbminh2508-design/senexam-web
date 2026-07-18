@@ -4,13 +4,17 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
-import { 
-  UploadCloud, FileText, Users, LogOut, PlusCircle, 
-  Trash2, Layers, X, ClipboardList, 
+import {
+  UploadCloud, FileText, Users, LogOut, PlusCircle,
+  Trash2, Layers, X, ClipboardList,
   KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard,
   Sparkles, Bell, AlertCircle, Loader2, FileInput, Sun, Moon, Clipboard,
-  Bot, Send, Code, Play, CheckCircle2, Database, Shuffle, Home, Image as ImageIcon
+  Bot, Send, Code, Play, CheckCircle2, Database, Shuffle, Home, Image as ImageIcon,
+  MessageSquare
 } from 'lucide-react'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC
 import ReactMarkdown from 'react-markdown'
@@ -70,7 +74,14 @@ export default function AdminDashboard() {
   const [isDark, setIsDark] = useState(false)
   
   // 🌟 TABS QUẢN TRỊ
-  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab' | 'feedback'>('overview')
+
+  // 🌟 GIAO DIỆN MỚI (BETA) - đọc cờ bật/tắt + màu chủ đề từ localStorage
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+
+  // 🌟 GÓP Ý NGƯỜI DÙNG (feedback từ hotkey "Feedback: ..." trong ChatOffline)
+  const [feedbackList, setFeedbackList] = useState<any[]>([])
+  const [feedbackCount, setFeedbackCount] = useState<number>(0)
 
   // 🌟 THỐNG KÊ TỔNG QUAN
   const [overviewStats, setOverviewStats] = useState<{ examCount: number; userCount: number; submissionCount: number; pendingGradeCount: number } | null>(null)
@@ -224,11 +235,28 @@ export default function AdminDashboard() {
         await refreshSubmissionsList()
       } else if (activeTab === 'overview') {
         await fetchOverviewStats()
+      } else if (activeTab === 'feedback') {
+        await refreshFeedbackList()
       }
       setIsFetchingData(false)
     }
     fetchData()
   }, [activeTab, isAdmin])
+
+  // 🌟 Đếm tổng số góp ý để hiện badge trên tab, không phụ thuộc tab đang mở
+  useEffect(() => {
+    if (!isAdmin) return
+    supabase.from('feedback').select('id', { count: 'exact', head: true }).then(({ count }) => setFeedbackCount(count || 0))
+  }, [isAdmin])
+
+  const refreshFeedbackList = async () => {
+    const { data } = await supabase
+      .from('feedback')
+      .select(`*, profiles:user_id (full_name)`)
+      .order('created_at', { ascending: false })
+    setFeedbackList(data || [])
+    setFeedbackCount(data?.length || 0)
+  }
 
   const fetchOverviewStats = async () => {
     setIsFetchingOverview(true)
@@ -906,7 +934,490 @@ export default function AdminDashboard() {
     return String(ans)
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center font-black text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 text-sm">Xác thực thẩm quyền hệ thống...</div>
+  // 🌟 Nội dung tab "Tạo Đề Từ PDF", "Làm Đề (SenAI Powered)" và "Thành Viên" cùng các modal
+  // thao tác nhanh — dùng chung cho cả giao diện cũ (legacy) và giao diện mới (Beta) để
+  // tránh trùng lặp mã nguồn khổng lồ. Các tab này giữ nguyên phong cách hiển thị legacy
+  // ngay cả khi Modern UI được bật (chỉ được bọc trong khung nền hiện đại).
+  const renderLegacyStyledTabs = () => (
+    <>
+      {activeTab === 'upload' && (
+        <form onSubmit={handleUploadExam} className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8 animate-in fade-in">
+           <div className="xl:col-span-1 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 shadow-sm space-y-5">
+            <h2 className="text-xs font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest flex items-center gap-2 mb-4"><FileText className="w-4 h-4"/>Thông tin chung</h2>
+            <div>
+              <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Tiêu đề đề thi</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ví dụ: Đề khảo sát HSA..." className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:bg-white dark:focus:bg-[#252525] focus:border-indigo-500 font-bold shadow-inner transition-all"/>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Thời gian (phút)</label>
+                <input type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value) || 50)} className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm text-slate-900 dark:text-white font-black focus:outline-none focus:border-indigo-500 shadow-inner"/>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Số lượt thi</label>
+                <input type="number" value={maxAttempts} onChange={(e) => setMaxAttempts(parseInt(e.target.value) || 1)} className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm text-slate-900 dark:text-white font-black focus:outline-none focus:border-indigo-500 shadow-inner"/>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Tệp tin PDF gốc (*)</label>
+              <div className="border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl p-5 text-center relative bg-slate-50 dark:bg-[#202020] hover:bg-slate-100 transition-colors group">
+                <input type="file" accept="application/pdf" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{file ? file.name : 'Nhấp hoặc kéo file PDF vào đây'}</p>
+              </div>
+            </div>
+
+            {/* ĐÃ CẬP NHẬT CHỌN KHỐI THI BẰNG LIST ĐƯỢC CHỈ ĐỊNH */}
+            <div>
+              <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Chọn Khối Thi</label>
+              <select value={selectedBlock} onChange={(e) => { setSelectedBlock(e.target.value); setSelectedSubjects(EXAM_BLOCKS.find(b => b.code === e.target.value)?.subs || []) }} className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:bg-white dark:focus:bg-[#252525] focus:border-indigo-500 shadow-inner transition-all cursor-pointer">
+                {EXAM_BLOCKS.map(b => <option key={b.code} value={b.code}>Khối {b.code} ({b.name})</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold mb-2 text-slate-500 uppercase tracking-wider">Môn thi thành phần</label>
+              <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-3 border border-slate-200 dark:border-white/5 rounded-xl bg-slate-50 dark:bg-[#1A1A1A] custom-scrollbar">
+                {currentBlockData.subs.map(sub => (
+                  <button key={sub} type="button" onClick={() => toggleSubject(sub)} className={`px-4 py-2 text-[11px] font-black rounded-lg transition-all border ${selectedSubjects.includes(sub) ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm scale-95' : 'bg-white dark:bg-[#252525] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-indigo-400'}`}>{sub}</button>
+                ))}
+              </div>
+            </div>
+            <div className="pt-4 border-t border-slate-100 dark:border-white/5 space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center">
+                  <input type="checkbox" checked={isHiddenExam} onChange={(e) => setIsHiddenExam(e.target.checked)} className="peer appearance-none w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-all"/>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white absolute opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"/>
+                </div>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-500 transition-colors">Thi bảo mật (Cấp mã Access Code)</span>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center">
+                  <input type="checkbox" checked={requireProctoring} onChange={(e) => setRequireProctoring(e.target.checked)} className="peer appearance-none w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-all"/>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white absolute opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"/>
+                </div>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-500 transition-colors">Giám sát AI (Chống chuyển Tab)</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Cột 2: Lưới cấu trúc */}
+          <div className="xl:col-span-2 space-y-6">
+            <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm">
+               <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-sm font-black uppercase text-indigo-500 tracking-widest flex items-center gap-2"><Layers className="w-4 h-4"/>Cấu trúc Ma trận đề</h2>
+                  <button type="button" onClick={addSection} className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-5 py-2.5 rounded-xl text-xs font-black shadow-sm"><PlusCircle className="w-4 h-4"/> Thêm phần thi</button>
+               </div>
+
+               {examStructure.length === 0 ? (
+                <div className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-10 text-center flex flex-col items-center justify-center">
+                  <Layers className="w-10 h-10 text-slate-300 dark:text-slate-700 mb-3"/>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm font-bold">Chưa có phần thi nào được khởi tạo.</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Nhấn nút "Thêm phần thi" phía trên để tạo khối mới.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {examStructure.map((section, sIdx) => (
+                    <div key={section.id} className="border border-slate-200 dark:border-white/5 rounded-[1.5rem] bg-slate-50 dark:bg-[#121212] overflow-hidden shadow-sm">
+
+                      <div className="p-5 bg-white dark:bg-[#1E1E1E] border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+                          <span className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-sm font-black text-indigo-600 dark:text-indigo-400 shadow-inner">{sIdx+1}</span>
+                          <input type="text" value={section.name} onChange={(e) => updateSection(section.id, 'name', e.target.value)} className="bg-transparent font-black text-base text-slate-900 dark:text-white border-b-2 border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none py-1 px-1 w-full transition-colors"/>
+                        </div>
+                        <button type="button" onClick={() => removeSection(section.id)} className="text-slate-400 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 p-2 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
+                      </div>
+
+                      <div className="p-5 space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Môn thi</label>
+                            <select value={section.subject} onChange={(e) => updateSection(section.id, 'subject', e.target.value)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer">
+                              <option value="">Chọn môn</option>
+                              {selectedSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tổng điểm khối</label>
+                            <input type="number" step="any" value={section.sectionTotalPoints} onChange={(e) => updateSection(section.id, 'sectionTotalPoints', parseFloat(e.target.value) || 0)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"/>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tổng số câu hỏi</label>
+                            <input type="number" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 0)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"/>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Chia điểm tự động</label>
+                            <select value={section.scoringMode} onChange={(e) => updateSection(section.id, 'scoringMode', e.target.value)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer">
+                              <option value="auto_divide">Chia đều điểm</option>
+                              <option value="custom">Tùy biến từng câu</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-100/50 dark:bg-[#1A1A1A] rounded-2xl p-4 border border-slate-200/50 dark:border-white/5">
+                          <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-white/5 pb-2">
+                            <h4 className="text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Filter className="w-3.5 h-3.5"/> Phân định cấu trúc câu</h4>
+                            <button type="button" onClick={() => handleAddMixedRange(section.id)} className="text-[10px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-lg font-black hover:bg-indigo-200 transition-colors flex items-center gap-1"><PlusCircle className="w-3 h-3"/> Thêm dải câu</button>
+                          </div>
+
+                          <div className="space-y-2">
+                            {(section.mixedRanges || []).map((range, rIdx) => (
+                              <div key={rIdx} className="flex items-center gap-3 bg-white dark:bg-[#252525] border border-slate-200 dark:border-white/5 p-2 rounded-xl flex-wrap text-xs font-semibold shadow-sm">
+                                <span className="text-slate-500">Từ câu:</span>
+                                <input type="number" value={range.start} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'start', parseInt(e.target.value)||1)} className="w-14 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 p-1.5 rounded-lg font-black text-center text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"/>
+                                <span className="text-slate-500">đến câu:</span>
+                                <input type="number" value={range.end} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'end', parseInt(e.target.value)||1)} className="w-14 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 p-1.5 rounded-lg font-black text-center text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"/>
+
+                                <select value={range.type} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'type', e.target.value)} className="bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 p-1.5 rounded-lg font-bold text-slate-900 dark:text-white focus:outline-none cursor-pointer">
+                                  <option value="single_choice">Trắc nghiệm đơn (A,B,C,D)</option>
+                                  <option value="true_false">Trắc nghiệm Đúng/Sai liên hoàn</option>
+                                  <option value="short_answer">Điền đáp án ngắn / Điền số</option>
+                                  <option value="essay">Tự luận / Chấm tay</option>
+                                </select>
+
+                                <button type="button" onClick={() => handleRemoveMixedRange(section.id, rIdx)} className="text-rose-500 ml-auto font-black text-[10px] uppercase px-3 py-1.5 bg-rose-50 dark:bg-rose-900/20 rounded-lg hover:bg-rose-100 transition-colors">Xóa</button>
+                              </div>
+                            ))}
+                            {(!section.mixedRanges || section.mixedRanges.length === 0) && (
+                              <p className="text-xs font-medium text-slate-400 italic">Mặc định toàn bộ là Trắc nghiệm đơn.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-xs text-slate-700 dark:text-slate-300 font-black flex items-center gap-1.5 bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/10 shadow-sm px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-colors">
+                            <KeyRound className="w-4 h-4 text-slate-400"/> {editingKeysSectionId === section.id ? 'Đóng bảng Key' : 'Kiểm tra Đáp án'}
+                          </button>
+                          <button type="button" onClick={() => setParseTextModalId(section.id)} className="text-xs text-indigo-700 dark:text-indigo-300 font-black flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-500/30 shadow-sm px-4 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors">
+                            <FileText className="w-4 h-4 text-indigo-500"/> 1. Quét chia vùng Auto
+                          </button>
+                          <button type="button" onClick={() => setQuickAnswersModalId(section.id)} className="text-xs text-emerald-700 dark:text-emerald-300 font-black flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-500/30 shadow-sm px-4 py-2.5 rounded-xl hover:bg-emerald-100 transition-colors">
+                            <Clipboard className="w-4 h-4 text-emerald-500"/> 2. Dán chuỗi Đáp án
+                          </button>
+                        </div>
+
+                        {editingKeysSectionId === section.id && section.questionCount > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto p-4 bg-white dark:bg-[#1A1A1A] rounded-[1.5rem] border border-slate-200 dark:border-white/10 mt-4 custom-scrollbar shadow-inner">
+                            {Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                              let cType = 'short_answer'
+                              let optionsCount = 4
+                              if (section.mixedRanges) {
+                                const matchedRange = section.mixedRanges.find(r => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
+                                if (matchedRange) {
+                                  cType = matchedRange.type
+                                  optionsCount = matchedRange.optionsCount || 4
+                                }
+                              }
+                              const currentAns = section.correctAnswers[qIdx]
+                              return (
+                                <div key={qIdx} className="p-3 border border-slate-200 dark:border-white/5 rounded-2xl bg-slate-50 dark:bg-[#202020] flex flex-col justify-between text-xs font-medium shadow-sm transition-colors hover:border-indigo-300">
+                                  <div className="flex justify-between items-center mb-2.5">
+                                    <span className="font-black text-slate-800 dark:text-white">Câu {qIdx + 1}:</span>
+                                    <span className="text-[9px] text-slate-500 bg-slate-200 dark:bg-black/50 px-2 py-0.5 rounded-md uppercase font-black tracking-widest">{cType.replace('_', ' ')}</span>
+                                  </div>
+                                  {cType === 'single_choice' && (
+                                    <div className="flex gap-1.5">
+                                      {['A', 'B', 'C', 'D'].slice(0, optionsCount).map(opt => (
+                                        <button key={opt} type="button" onClick={() => handleSetCorrectAnswer(section.id, qIdx, opt)} className={`flex-1 py-1.5 rounded-lg font-black transition-all ${currentAns === opt ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-white dark:bg-[#252525] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-indigo-400'}`}>{opt}</button>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {cType === 'true_false' && (
+                                    <div className="space-y-1.5 bg-white dark:bg-[#252525] p-2 rounded-xl border border-slate-200 dark:border-white/10">
+                                      {['a', 'b', 'c', 'd'].map(sub => {
+                                        const subAns = currentAns?.[sub]
+                                        return (
+                                          <div key={sub} className="flex items-center justify-between gap-2 border-b last:border-0 border-slate-100 dark:border-white/5 pb-1.5 last:pb-0">
+                                            <span className="uppercase font-black text-slate-500 bg-slate-100 dark:bg-black/40 w-5 h-5 flex items-center justify-center rounded-md">{sub}</span>
+                                            <div className="flex gap-1.5">
+                                              <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'Đ')} className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all ${subAns === 'Đ' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-black/40 text-slate-500 hover:bg-emerald-100'}`}>ĐÚNG</button>
+                                              <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'S')} className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all ${subAns === 'S' ? 'bg-rose-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-black/40 text-slate-500 hover:bg-rose-100'}`}>SAI</button>
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                  {cType !== 'single_choice' && cType !== 'true_false' && cType !== 'essay' && (
+                                    <input type="text" value={typeof currentAns === 'object' ? Object.values(currentAns).join('') : (currentAns || '')} onChange={(e) => handleSetCorrectAnswer(section.id, qIdx, e.target.value)} placeholder="Nhập đáp án..." className="w-full bg-white dark:bg-[#252525] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-inner"/>
+                                  )}
+                                  {cType === 'essay' && <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-2 rounded-xl text-center"><span className="text-[10px] text-amber-600 dark:text-amber-400 font-black uppercase tracking-widest">Chấm thủ công</span></div>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white dark:bg-[#1A1A1A] p-6 rounded-[2rem] shadow-sm flex justify-between items-center mt-6">
+               <div className="text-sm font-black">{uploadStatus.message || 'Hệ thống sẵn sàng...'}</div>
+               <button type="submit" className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-black shadow-md"><Save className="w-5 h-5 inline mr-2"/> Phát hành Đề thi</button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* 🌟 TAB 2 MỚI: TẠO ĐỀ BẰNG AI (SENAI POWERED) */}
+      {activeTab === 'senai' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)] animate-in fade-in duration-500">
+
+          {/* Cột trái: Chat với SenAI */}
+          <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] flex flex-col overflow-hidden shadow-sm">
+            <div className="p-5 border-b border-slate-200 dark:border-white/5 flex items-center gap-3 bg-gradient-to-r from-indigo-500/10 to-transparent">
+              <div className="w-10 h-10 rounded-[12px] bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+                <Bot className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/>
+              </div>
+              <div>
+                <h2 className="font-black text-slate-900 dark:text-white flex items-center gap-2">SenAI Đề Thi <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500"/></h2>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tự động bóc tách & Format Toán học</p>
+              </div>
+            </div>
+
+            <div ref={aiChatScrollRef} className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
+              {aiMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.role === 'model' && (
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 mr-3 mt-1 shadow-sm border border-indigo-400/20">
+                      <Bot className="w-4 h-4"/>
+                    </div>
+                  )}
+                  <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.2rem] text-[14px] font-medium leading-relaxed shadow-sm overflow-x-auto ${msg.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                        strong: ({node, ...props}) => <strong className={`font-extrabold ${msg.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...props} />,
+                        code: ({node, inline, ...props}: any) => inline ? <code className="bg-slate-200 dark:bg-black/30 px-1.5 py-0.5 rounded text-pink-500 dark:text-pink-300 text-[12px] font-mono" {...props} /> : <div className="bg-slate-800 p-3 rounded-lg my-2"><code className="text-white/80 font-mono text-[12px]" {...props} /></div>
+                      }}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
+
+                    {msg.codeSnippet && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> JSON Sinh thành công</span>
+                        <button onClick={() => {setCurrentGeneratedCode(msg.codeSnippet!); setAiPreviewMode('preview')}} className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition-colors flex items-center gap-1.5"><Eye className="w-3.5 h-3.5"/> Xem trước Đề</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {isAiLoading && (
+                <div className="flex justify-start items-end">
+                  <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-600 shrink-0 mr-3 shadow-sm border border-indigo-400/20">
+                    <Sparkles className="w-4 h-4 animate-pulse text-yellow-500"/>
+                  </div>
+                  <div className="bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 px-5 py-3.5 rounded-[1.2rem] rounded-bl-sm shadow-sm flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-500"/>
+                    <span className="text-[12px] text-slate-500 font-bold">Đang phân tích cấu trúc...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-[#121212] border-t border-slate-200 dark:border-white/5 shrink-0">
+              <form onSubmit={handleSendAiMessage} className="relative flex items-end gap-2 bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-[1.5rem] p-1.5 focus-within:border-indigo-400/50 shadow-sm transition-all">
+                <textarea
+                  value={aiChatInput} onChange={(e) => setAiChatInput(e.target.value)}
+                  onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); handleSendAiMessage(e as any) } }}
+                  placeholder="Dán nội dung đề thi vào đây để AI bóc tách (Nhấn Shift + Enter để xuống dòng)..."
+                  className="flex-1 bg-transparent border-none outline-none resize-none py-3 px-3 max-h-[120px] custom-scrollbar text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400"
+                  rows={1}
+                />
+                <button type="submit" disabled={!aiChatInput.trim() || isAiLoading} className="p-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 dark:disabled:bg-[#252525] disabled:text-slate-400 text-white rounded-full transition-transform active:scale-95 shadow-md shrink-0 m-1">
+                  <Send className="w-4 h-4 ml-0.5" />
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Cột phải: Preview và Quản lý Code */}
+          <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] flex flex-col overflow-hidden shadow-sm">
+            <div className="p-3 border-b border-slate-200 dark:border-white/5 flex items-center justify-between bg-slate-50 dark:bg-[#121212] shrink-0">
+              <div className="flex bg-slate-200/50 dark:bg-[#202020] p-1 rounded-xl">
+                <button onClick={() => setAiPreviewMode('preview')} className={`px-5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${aiPreviewMode === 'preview' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'}`}><Eye className="w-4 h-4"/> Chế độ Xem trước</button>
+                <button onClick={() => setAiPreviewMode('code')} className={`px-5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${aiPreviewMode === 'code' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'}`}><Code className="w-4 h-4"/> Chỉnh sửa Mã JSON</button>
+              </div>
+              {currentGeneratedCode && (
+                <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-500/20 transition-transform active:scale-95 flex items-center gap-1.5"><Save className="w-4 h-4"/> Lưu & Xuất bản</button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-100/50 dark:bg-[#121212]/50">
+              {aiPreviewMode === 'code' ? (
+                <textarea
+                  value={currentGeneratedCode || ''}
+                  onChange={(e) => setCurrentGeneratedCode(e.target.value)}
+                  placeholder="Mã JSON sẽ hiển thị ở đây..."
+                  className="w-full h-full min-h-[400px] bg-slate-900 text-green-400 font-mono p-5 rounded-2xl outline-none text-xs focus:ring-2 focus:ring-indigo-500 shadow-inner leading-relaxed custom-scrollbar"
+                />
+              ) : (
+                <div className="w-full h-full rounded-2xl bg-white dark:bg-[#1E1E1E] border border-slate-200 dark:border-white/5 p-6 shadow-sm overflow-y-auto custom-scrollbar">
+                  {renderAiPreview()}
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {activeTab === 'collab' && currentUserRole === 'admin' && (
+        <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm animate-in fade-in duration-300">
+          <h2 className="text-sm font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest mb-6 flex items-center gap-2"><Users className="w-4 h-4"/>Phân quyền Hệ thống</h2>
+          {isFetchingData ? <div className="text-xs font-bold text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Đang truy xuất danh sách...</div> : (
+            <div className="overflow-x-auto custom-scrollbar border border-slate-200 dark:border-white/5 rounded-[1.5rem] bg-white dark:bg-[#1E1E1E]">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#121212] text-slate-500 dark:text-slate-400 uppercase font-black text-[10px] tracking-widest">
+                    <th className="py-4 px-5">Người dùng</th>
+                    <th className="py-4 px-5">Trường học</th>
+                    <th className="py-4 px-5">Quyền hạn (Role)</th>
+                    <th className="py-4 px-5 text-right">Cập nhật</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usersList.map(u => (
+                    <tr key={u.id} className="border-b last:border-0 border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525] transition-colors group">
+                      <td className="py-4 px-5 font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black">{u.full_name?.charAt(0) || 'U'}</div>
+                        {u.full_name || 'Chưa cập nhật'}
+                      </td>
+                      <td className="py-4 px-5 font-medium text-slate-600 dark:text-slate-400">{u.school || '-'}</td>
+                      <td className="py-4 px-5">
+                        <select
+                          value={u.role || 'student'}
+                          onChange={(e) => handleUpdateRole(u.id, e.target.value)}
+                          className="bg-slate-100 dark:bg-[#202020] border border-transparent hover:border-slate-300 dark:hover:border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white outline-none cursor-pointer transition-colors shadow-inner"
+                        >
+                          <option value="student">Học sinh (Student)</option>
+                          <option value="collab">Giáo viên (Collab)</option>
+                          <option value="admin">Quản trị viên (Admin)</option>
+                        </select>
+                      </td>
+                      <td className="py-4 px-5 text-right">
+                        <span className="text-[10px] font-black uppercase text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">Auto Saved</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  )
+
+  // 🌟 Modal quét cấu trúc PDF & dán chuỗi đáp án nhanh — dùng chung cho cả hai giao diện.
+  const renderQuickModals = () => (
+    <>
+      {parseTextModalId && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1A1A1A] w-full max-w-2xl rounded-[2rem] border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-[#121212]/50">
+              <div className="flex items-center gap-3 text-slate-900 dark:text-white">
+                <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center"><Layers className="w-5 h-5" /></div>
+                <div>
+                  <h3 className="font-black text-base">Nạp Cấu Trúc Đề Tự Động</h3>
+                  <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mt-0.5">Quét bằng AI Zero-Regret</p>
+                </div>
+              </div>
+              <button onClick={() => setParseTextModalId(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-[#252525] rounded-full transition-colors"><X className="w-5 h-5 text-slate-500"/></button>
+            </div>
+
+            <div className="p-8 space-y-6">
+              <div className="flex gap-2 p-1.5 bg-slate-100 dark:bg-[#202020] rounded-[1.2rem]">
+                <button type="button" onClick={() => setAnswerMethod('text')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${answerMethod === 'text' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Dán Text nội dung</button>
+                <button type="button" onClick={() => setAnswerMethod('pdf')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${answerMethod === 'pdf' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Nạp qua tệp PDF</button>
+              </div>
+
+              {answerMethod === 'text' ? (
+                <div className="space-y-4 animate-in fade-in">
+                  <textarea
+                    value={examTextToParse}
+                    onChange={(e) => setExamTextToParse(e.target.value)}
+                    placeholder="Dán toàn bộ nội dung chữ của đề bài thi vào đây để AI tự động đếm câu hỏi và phân tích dạng bài..."
+                    rows={8}
+                    className="w-full bg-slate-50 dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-2xl p-5 text-sm font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner custom-scrollbar"
+                  />
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button type="button" onClick={() => setParseTextModalId(null)} className="px-6 py-3 bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 dark:hover:bg-[#252525] text-slate-700 dark:text-slate-300 font-bold rounded-xl text-sm transition-colors">Hủy</button>
+                    <button type="button" onClick={handleProcessRawTextParsingDirectly} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-sm shadow-[0_8px_20px_rgba(79,70,229,0.3)] active:scale-95 transition-transform flex items-center gap-2"><Sparkles className="w-4 h-4"/> Phân tích Text</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in fade-in text-center">
+                  <div className="border-2 border-dashed border-slate-300 dark:border-white/10 rounded-[2rem] p-12 text-center relative bg-slate-50 dark:bg-[#121212] hover:bg-slate-100 dark:hover:bg-[#1A1A1A] transition-colors group">
+                    <input type="file" accept=".pdf" onChange={handleProcessPdfTextParsing} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                    <UploadCloud className="w-12 h-12 text-indigo-500 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+                    <p className="text-sm font-black text-slate-700 dark:text-white">Nhấp chọn hoặc kéo thả tệp PDF vào đây</p>
+                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-2 bg-slate-200 dark:bg-black/30 inline-block px-3 py-1 rounded-full">Yêu cầu: Đề thi có chứa ký hiệu phân định (VD: Câu 1., Câu 2.)</p>
+                  </div>
+                  {uploadStatus.type === 'uploading' && (
+                    <div className="flex items-center justify-center gap-2 text-sm font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 py-3 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+                      <Loader2 className="w-5 h-5 animate-spin"/> {uploadStatus.message}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quickAnswersModalId && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1A1A1A] w-full max-w-xl rounded-[2rem] border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-[#121212]/50">
+              <div className="flex items-center gap-3 text-slate-900 dark:text-white">
+                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center"><Clipboard className="w-5 h-5" /></div>
+                <div>
+                  <h3 className="font-black text-base">Nạp Chuỗi Đáp Án Nhanh</h3>
+                  <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mt-0.5">Tự động điền theo thứ tự</p>
+                </div>
+              </div>
+              <button onClick={() => setQuickAnswersModalId(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-[#252525] rounded-full transition-colors"><X className="w-5 h-5 text-slate-500"/></button>
+            </div>
+
+            <div className="p-8 space-y-5">
+              <div className="bg-emerald-50 dark:bg-[#121212] border border-emerald-200 dark:border-emerald-900/50 rounded-2xl p-5 text-xs text-emerald-800 dark:text-emerald-300 font-medium leading-relaxed shadow-sm">
+                <p className="font-black mb-2 flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400"><Sparkles className="w-4 h-4"/> Thuật toán bóc tách thông minh hỗ trợ các cú pháp:</p>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="bg-white dark:bg-[#1A1A1A] p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm"><p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Viết liền</p><code className="font-mono font-bold text-slate-700 dark:text-white">1.A 2.B 3.ĐSĐĐ 4.12,5</code></div>
+                  <div className="bg-white dark:bg-[#1A1A1A] p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm"><p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Xuống dòng</p><code className="font-mono font-bold text-slate-700 dark:text-white">1. A<br/>2. B<br/>3. Đ S Đ Đ</code></div>
+                </div>
+              </div>
+
+              <textarea
+                value={quickAnswersText}
+                onChange={(e) => setQuickAnswersText(e.target.value)}
+                placeholder="Dán nội dung chuỗi đáp án tại đây..."
+                rows={6}
+                className="w-full bg-slate-50 dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-2xl p-5 text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner transition-all custom-scrollbar"
+              />
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button type="button" onClick={() => setQuickAnswersModalId(null)} className="px-6 py-3 bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 dark:hover:bg-[#252525] text-slate-700 dark:text-slate-300 font-bold rounded-xl text-sm transition-colors">Hủy bỏ</button>
+                <button type="button" onClick={handleProcessQuickAnswersText} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-sm shadow-[0_8px_20px_rgba(16,185,129,0.3)] transition-transform active:scale-95 flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Đồng bộ Đáp án</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
+  if (loading) {
+    if (newUiEnabled) return <ModernLoading themeColor={themeColor} isDark={isDark} label="Xác thực thẩm quyền hệ thống..." />
+    return <div className="min-h-screen flex items-center justify-center font-black text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 text-sm">Xác thực thẩm quyền hệ thống...</div>
+  }
 
   if (selectedSubForGrading) {
     const pdfUrl = `https://drive.google.com/file/d/${selectedSubForGrading.exams?.drive_file_id}/preview`
@@ -1000,9 +1511,269 @@ export default function AdminDashboard() {
     )
   }
 
+  // 🌟 GIAO DIỆN MỚI (BETA) — reskin phẳng, chuyên nghiệp, dùng biến CSS --bg/--surface/--border/--text/--accent.
+  // Giữ nguyên toàn bộ handler/state/Supabase call; chỉ đổi lớp vỏ hiển thị.
+  if (newUiEnabled) {
+    const modernVars = getModernThemeVars(themeColor, isDark)
+    const TABS: { key: typeof activeTab; label: string; icon: any; badge?: number }[] = [
+      { key: 'overview', label: 'Tổng Quan', icon: LayoutDashboard },
+      { key: 'upload', label: 'Tạo Đề Từ PDF', icon: PlusCircle },
+      { key: 'senai', label: 'Làm Đề (SenAI)', icon: Sparkles },
+      { key: 'bank', label: 'Ngân Hàng Đề Thi', icon: Database },
+      { key: 'manage', label: 'Kho Đề', icon: Layers },
+      { key: 'submissions', label: 'Chấm Điểm', icon: ClipboardList },
+      ...(currentUserRole === 'admin' ? [{ key: 'collab' as const, label: 'Thành Viên', icon: Users }] : []),
+      { key: 'feedback', label: 'Góp Ý', icon: MessageSquare, badge: feedbackCount },
+    ]
+
+    return (
+      <div
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        className="min-h-screen font-sans"
+        style={{ ...modernVars, background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        {/* HEADER */}
+        <header className="sticky top-0 z-40 backdrop-blur-xl px-6 h-[72px] flex items-center justify-between" style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+              <LayoutDashboard className="w-5 h-5"/>
+            </div>
+            <div>
+              <h1 className="font-black text-base tracking-tight leading-none" style={{ color: 'var(--text)' }}>Trạm Quản Trị Hệ Thống</h1>
+              <p className="text-[10px] font-bold uppercase tracking-widest mt-1" style={{ color: 'var(--text-muted)' }}>Quyền hạn: <span style={{ color: 'var(--accent)' }}>{currentUserRole}</span></p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button onClick={() => router.push('/dashboard')} className="px-3.5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-opacity hover:opacity-80" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+              <Home className="w-4 h-4"/> <span className="hidden sm:inline">Về trang chủ</span>
+            </button>
+            <button onClick={toggleTheme} className="p-2.5 rounded-full transition-opacity hover:opacity-80" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+              {isDark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+            </button>
+            <div className="relative">
+              <button onClick={() => setShowNotificationBox(!showNotificationBox)} className="p-2.5 rounded-full relative transition-opacity hover:opacity-80" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{unreadCount}</span>}
+              </button>
+              {showNotificationBox && (
+                <div className="absolute right-0 mt-3 w-80 rounded-[1.25rem] shadow-2xl p-4 space-y-2.5 z-50 max-h-96 overflow-y-auto custom-scrollbar" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex justify-between items-center pb-3 text-[10px] font-black uppercase tracking-widest" style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                    <span>Nhật ký tác vụ</span>
+                    <button onClick={() => setNotifications([])} className="text-rose-500 hover:text-rose-400">Xóa sạch</button>
+                  </div>
+                  {notifications.length === 0 ? <p className="text-[11px] text-center py-6 font-bold" style={{ color: 'var(--text-muted)' }}>Không có tác vụ mới.</p> : notifications.map(n => (
+                    <div key={n.id} className="p-3 rounded-xl text-xs flex items-start gap-3" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${n.type === 'success' ? 'text-emerald-500' : n.type === 'error' ? 'text-rose-500' : 'text-blue-500'}`}/>
+                      <div><p className="font-black" style={{ color: 'var(--text)' }}>{n.title}</p><p className="mt-1 font-medium leading-relaxed" style={{ color: 'var(--text-muted)' }}>{n.message}</p></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-8">
+          {/* TAB BAR */}
+          <div className="flex flex-wrap gap-1.5 mb-8 p-1.5 rounded-2xl overflow-x-auto custom-scrollbar hide-scroll" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            {TABS.map(t => {
+              const Icon = t.icon
+              const active = activeTab === t.key
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key)}
+                  className="px-4 py-2.5 text-xs font-bold flex items-center gap-2 rounded-xl whitespace-nowrap transition-colors"
+                  style={active ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}
+                >
+                  <Icon className="w-3.5 h-3.5"/>{t.label}
+                  {!!t.badge && t.badge > 0 && (
+                    <span className="text-[9px] font-black min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center" style={active ? { background: 'rgba(255,255,255,0.3)', color: '#fff' } : { background: 'var(--accent)', color: '#fff' }}>{t.badge}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* OVERVIEW */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {isFetchingOverview ? (
+                <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tổng hợp số liệu..." fullScreen={false} />
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      { label: 'Đề thi', value: overviewStats?.examCount, icon: Layers },
+                      { label: 'Người dùng', value: overviewStats?.userCount, icon: Users },
+                      { label: 'Bài đã nộp', value: overviewStats?.submissionCount, icon: ClipboardList },
+                      { label: 'Chờ chấm', value: overviewStats?.pendingGradeCount, icon: AlertCircle },
+                    ].map((s, i) => {
+                      const Icon = s.icon
+                      return (
+                        <div key={i} className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><Icon className="w-4.5 h-4.5"/></div>
+                          <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
+                          <p className="text-2xl font-black" style={{ color: 'var(--text)' }}>{s.value ?? '--'}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="rounded-[1.5rem] p-6 lg:p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <h2 className="text-sm font-black uppercase tracking-widest mb-5 flex items-center gap-2" style={{ color: 'var(--accent)' }}><ClipboardList className="w-4 h-4"/>Hoạt động gần đây</h2>
+                    <div className="space-y-2">
+                      {overviewRecent.length === 0 ? (
+                        <p className="text-sm font-medium py-6 text-center" style={{ color: 'var(--text-muted)' }}>Chưa có hoạt động nào.</p>
+                      ) : overviewRecent.map((sub: any) => (
+                        <div key={sub.id} className="flex items-center justify-between gap-4 p-3.5 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate" style={{ color: 'var(--text)' }}>{sub.exams?.title || 'Đề thi đã xóa'}</p>
+                            <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub.profiles?.full_name || 'Ẩn danh'} · {new Date(sub.created_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
+                          </div>
+                          <span className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${sub.is_graded ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                            {sub.is_graded ? 'Đã chấm' : 'Chờ chấm'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TẠO ĐỀ PDF / LÀM ĐỀ SENAI / THÀNH VIÊN — giữ phong cách hiển thị cũ, chỉ bọc trong khung nền hiện đại */}
+          {(activeTab === 'upload' || activeTab === 'senai' || activeTab === 'collab') && (
+            <div className="rounded-[1.5rem] p-1" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="p-4">{renderLegacyStyledTabs()}</div>
+            </div>
+          )}
+
+          {/* KHO ĐỀ */}
+          {activeTab === 'manage' && (
+            <div className="rounded-[1.5rem] p-6 lg:p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--accent)' }}><Layers className="w-4 h-4"/>Kho đề thi trực tuyến hiện hành</h2>
+                {selectedExamIds.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold px-3 py-1.5 rounded-lg" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{selectedExamIds.length} đề đã chọn</span>
+                    <button onClick={handleBulkDeleteExams} className="text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5"/> Xóa hàng loạt</button>
+                  </div>
+                )}
+              </div>
+              {isFetchingData ? <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang quét kho dữ liệu..." fullScreen={false} /> : (
+                <div className="overflow-x-auto custom-scrollbar rounded-2xl" style={{ border: '1px solid var(--border)' }}>
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="uppercase font-black text-[10px] tracking-widest" style={{ background: 'var(--bg)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                        <th className="py-4 px-5 w-10"><input type="checkbox" checked={filteredExams.length > 0 && selectedExamIds.length === filteredExams.length} onChange={toggleSelectAllExams} className="w-4 h-4 rounded cursor-pointer" /></th>
+                        <th className="py-4 px-5">Tiêu đề đề thi</th>
+                        <th className="py-4 px-5">Kỳ thi</th>
+                        <th className="py-4 px-5">Thời gian</th>
+                        <th className="py-4 px-5">Mã Truy Cập (Đề Ẩn)</th>
+                        <th className="py-4 px-5 text-right">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredExams.map(e => (
+                        <tr key={e.id} className="transition-colors" style={{ borderBottom: '1px solid var(--border)', background: selectedExamIds.includes(e.id) ? 'var(--accent-soft)' : 'transparent' }}>
+                          <td className="py-4 px-5"><input type="checkbox" checked={selectedExamIds.includes(e.id)} onChange={() => toggleExamSelection(e.id)} className="w-4 h-4 rounded cursor-pointer" /></td>
+                          <td className="py-4 px-5 font-bold max-w-[300px] truncate" style={{ color: 'var(--text)' }}>{e.title}</td>
+                          <td className="py-4 px-5 font-black" style={{ color: 'var(--accent)' }}>{e.exam_type}</td>
+                          <td className="py-4 px-5 font-bold" style={{ color: 'var(--text-muted)' }}>{e.duration} phút</td>
+                          <td className="py-4 px-5">
+                            {e.is_hidden ? (
+                              <span className="px-3 py-1.5 rounded-lg font-mono font-black flex items-center gap-2 w-fit" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><KeyRound className="w-3.5 h-3.5"/> {e.access_code}</span>
+                            ) : (
+                              <span className="text-xs font-bold italic" style={{ color: 'var(--text-muted)' }}>Công khai</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 text-right">
+                            <button onClick={() => handleDeleteExam(e.id)} className="text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-900/20 dark:hover:bg-rose-600 font-bold px-4 py-2 rounded-xl transition-all text-xs">Xóa bỏ</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredExams.length === 0 && <tr><td colSpan={6} className="py-10 text-center font-bold text-sm" style={{ color: 'var(--text-muted)' }}>Chưa có đề thi nào trong kho lưu trữ.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* CHẤM ĐIỂM */}
+          {activeTab === 'submissions' && (
+            <div className="rounded-[1.5rem] p-6 lg:p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2" style={{ color: 'var(--accent)' }}><ClipboardList className="w-4 h-4"/>Danh sách bài làm chờ duyệt</h2>
+              {isFetchingData ? <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang đồng bộ cổng bài làm..." fullScreen={false} /> : (
+                <div className="overflow-x-auto custom-scrollbar rounded-2xl" style={{ border: '1px solid var(--border)' }}>
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="uppercase font-black text-[10px] tracking-widest" style={{ background: 'var(--bg)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                        <th className="py-4 px-5">Thí sinh</th>
+                        <th className="py-4 px-5">Đề thi</th>
+                        <th className="py-4 px-5">Thời gian nộp</th>
+                        <th className="py-4 px-5">Điểm số</th>
+                        <th className="py-4 px-5 text-right">Hội đồng chấm</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSubmissions.map(s => (
+                        <tr key={s.id} className="transition-colors" style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td className="py-4 px-5 font-bold max-w-[200px] truncate" style={{ color: 'var(--text)' }}>{s.profiles?.full_name || 'Học sinh ẩn danh'}</td>
+                          <td className="py-4 px-5 font-bold max-w-[250px] truncate" style={{ color: 'var(--text-muted)' }}>{s.exams?.title}</td>
+                          <td className="py-4 px-5 font-medium text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(s.created_at).toLocaleString('vi-VN')}</td>
+                          <td className="py-4 px-5 font-black text-base text-emerald-600 dark:text-emerald-400">{s.is_graded ? String(s.score).replace('.', ',') : <span className="text-amber-500 text-xs italic">Chờ chấm</span>}</td>
+                          <td className="py-4 px-5 text-right">
+                            <button onClick={() => openGradingView(s)} className="font-bold px-4 py-2 rounded-xl transition-all text-xs flex items-center justify-end gap-1.5 ml-auto" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                              <PenTool className="w-3.5 h-3.5"/> Chấm bài
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredSubmissions.length === 0 && <tr><td colSpan={5} className="py-10 text-center font-bold text-sm" style={{ color: 'var(--text-muted)' }}>Không có bài làm nào cần chấm.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* GÓP Ý NGƯỜI DÙNG */}
+          {activeTab === 'feedback' && (
+            <div className="rounded-[1.5rem] p-6 lg:p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2" style={{ color: 'var(--accent)' }}><MessageSquare className="w-4 h-4"/>Góp ý từ người dùng ({feedbackList.length})</h2>
+              {isFetchingData ? <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải góp ý..." fullScreen={false} /> : (
+                <div className="space-y-3">
+                  {feedbackList.length === 0 && <p className="py-10 text-center font-bold text-sm" style={{ color: 'var(--text-muted)' }}>Chưa có góp ý nào được gửi.</p>}
+                  {feedbackList.map((f: any) => (
+                    <div key={f.id} className="p-4 rounded-2xl flex flex-col gap-2" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <span className="font-bold text-sm" style={{ color: 'var(--text)' }}>{f.profiles?.full_name || 'Ẩn danh'}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase px-2 py-1 rounded-lg" style={f.mode === 'advanced' ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'var(--surface)', color: 'var(--text-muted)' }}>{f.mode === 'advanced' ? 'Advanced' : 'Basic'}</span>
+                          <span className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>{new Date(f.created_at).toLocaleString('vi-VN')}</span>
+                        </div>
+                      </div>
+                      <p className="text-sm font-medium whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{f.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {renderQuickModals()}
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
-      
+
       {/* 🌟 Nền Ambient Liquid Glass */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/5 dark:from-indigo-900/20 dark:to-blue-900/10 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
@@ -1064,6 +1835,10 @@ export default function AdminDashboard() {
           <button onClick={() => setActiveTab('manage')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'manage' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Layers className="w-4 h-4"/>Kho Đề</button>
           <button onClick={() => setActiveTab('submissions')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'submissions' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><ClipboardList className="w-4 h-4"/>Chấm Điểm</button>
           <button onClick={() => setActiveTab('collab')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'collab' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Users className="w-4 h-4"/>Thành Viên</button>
+          <button onClick={() => setActiveTab('feedback')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'feedback' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>
+            <MessageSquare className="w-4 h-4"/>Góp Ý
+            {feedbackCount > 0 && <span className="bg-rose-500 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">{feedbackCount}</span>}
+          </button>
         </div>
 
         {/* 🌟 TAB TỔNG QUAN (OVERVIEW DASHBOARD) */}
@@ -1119,334 +1894,8 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* 🌟 TAB 1: TẠO ĐỀ PDF TRUYỀN THỐNG GIỮ NGUYÊN BÊN TRÊN */}
-        {activeTab === 'upload' && (
-          <form onSubmit={handleUploadExam} className="grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8 animate-in fade-in">
-             <div className="xl:col-span-1 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 shadow-sm space-y-5">
-              <h2 className="text-xs font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest flex items-center gap-2 mb-4"><FileText className="w-4 h-4"/>Thông tin chung</h2>
-              <div>
-                <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Tiêu đề đề thi</label>
-                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ví dụ: Đề khảo sát HSA..." className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:bg-white dark:focus:bg-[#252525] focus:border-indigo-500 font-bold shadow-inner transition-all"/>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Thời gian (phút)</label>
-                  <input type="number" value={duration} onChange={(e) => setDuration(parseInt(e.target.value) || 50)} className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm text-slate-900 dark:text-white font-black focus:outline-none focus:border-indigo-500 shadow-inner"/>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Số lượt thi</label>
-                  <input type="number" value={maxAttempts} onChange={(e) => setMaxAttempts(parseInt(e.target.value) || 1)} className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm text-slate-900 dark:text-white font-black focus:outline-none focus:border-indigo-500 shadow-inner"/>
-                </div>
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Tệp tin PDF gốc (*)</label>
-                <div className="border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl p-5 text-center relative bg-slate-50 dark:bg-[#202020] hover:bg-slate-100 transition-colors group">
-                  <input type="file" accept="application/pdf" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  <UploadCloud className="w-8 h-8 text-indigo-500 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{file ? file.name : 'Nhấp hoặc kéo file PDF vào đây'}</p>
-                </div>
-              </div>
-              
-              {/* ĐÃ CẬP NHẬT CHỌN KHỐI THI BẰNG LIST ĐƯỢC CHỈ ĐỊNH */}
-              <div>
-                <label className="block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Chọn Khối Thi</label>
-                <select value={selectedBlock} onChange={(e) => { setSelectedBlock(e.target.value); setSelectedSubjects(EXAM_BLOCKS.find(b => b.code === e.target.value)?.subs || []) }} className="w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:bg-white dark:focus:bg-[#252525] focus:border-indigo-500 shadow-inner transition-all cursor-pointer">
-                  {EXAM_BLOCKS.map(b => <option key={b.code} value={b.code}>Khối {b.code} ({b.name})</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold mb-2 text-slate-500 uppercase tracking-wider">Môn thi thành phần</label>
-                <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-3 border border-slate-200 dark:border-white/5 rounded-xl bg-slate-50 dark:bg-[#1A1A1A] custom-scrollbar">
-                  {currentBlockData.subs.map(sub => (
-                    <button key={sub} type="button" onClick={() => toggleSubject(sub)} className={`px-4 py-2 text-[11px] font-black rounded-lg transition-all border ${selectedSubjects.includes(sub) ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm scale-95' : 'bg-white dark:bg-[#252525] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-indigo-400'}`}>{sub}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="pt-4 border-t border-slate-100 dark:border-white/5 space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className="relative flex items-center justify-center">
-                    <input type="checkbox" checked={isHiddenExam} onChange={(e) => setIsHiddenExam(e.target.checked)} className="peer appearance-none w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-all"/>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-white absolute opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"/>
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-500 transition-colors">Thi bảo mật (Cấp mã Access Code)</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className="relative flex items-center justify-center">
-                    <input type="checkbox" checked={requireProctoring} onChange={(e) => setRequireProctoring(e.target.checked)} className="peer appearance-none w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 checked:bg-indigo-500 checked:border-indigo-500 transition-all"/>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-white absolute opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"/>
-                  </div>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-500 transition-colors">Giám sát AI (Chống chuyển Tab)</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Cột 2: Lưới cấu trúc */}
-            <div className="xl:col-span-2 space-y-6">
-              <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm">
-                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-sm font-black uppercase text-indigo-500 tracking-widest flex items-center gap-2"><Layers className="w-4 h-4"/>Cấu trúc Ma trận đề</h2>
-                    <button type="button" onClick={addSection} className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-5 py-2.5 rounded-xl text-xs font-black shadow-sm"><PlusCircle className="w-4 h-4"/> Thêm phần thi</button>
-                 </div>
-                 
-                 {examStructure.length === 0 ? (
-                  <div className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-10 text-center flex flex-col items-center justify-center">
-                    <Layers className="w-10 h-10 text-slate-300 dark:text-slate-700 mb-3"/>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm font-bold">Chưa có phần thi nào được khởi tạo.</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Nhấn nút "Thêm phần thi" phía trên để tạo khối mới.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {examStructure.map((section, sIdx) => (
-                      <div key={section.id} className="border border-slate-200 dark:border-white/5 rounded-[1.5rem] bg-slate-50 dark:bg-[#121212] overflow-hidden shadow-sm">
-                        
-                        <div className="p-5 bg-white dark:bg-[#1E1E1E] border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-4 flex-wrap">
-                          <div className="flex items-center gap-3 flex-1 min-w-[200px]">
-                            <span className="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-sm font-black text-indigo-600 dark:text-indigo-400 shadow-inner">{sIdx+1}</span>
-                            <input type="text" value={section.name} onChange={(e) => updateSection(section.id, 'name', e.target.value)} className="bg-transparent font-black text-base text-slate-900 dark:text-white border-b-2 border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none py-1 px-1 w-full transition-colors"/>
-                          </div>
-                          <button type="button" onClick={() => removeSection(section.id)} className="text-slate-400 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 p-2 rounded-lg transition-colors"><Trash2 className="w-5 h-5"/></button>
-                        </div>
-
-                        <div className="p-5 space-y-6">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Môn thi</label>
-                              <select value={section.subject} onChange={(e) => updateSection(section.id, 'subject', e.target.value)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer">
-                                <option value="">Chọn môn</option>
-                                {selectedSubjects.map(s => <option key={s} value={s}>{s}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tổng điểm khối</label>
-                              <input type="number" step="any" value={section.sectionTotalPoints} onChange={(e) => updateSection(section.id, 'sectionTotalPoints', parseFloat(e.target.value) || 0)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"/>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Tổng số câu hỏi</label>
-                              <input type="number" value={section.questionCount} onChange={(e) => updateSection(section.id, 'questionCount', parseInt(e.target.value) || 0)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"/>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Chia điểm tự động</label>
-                              <select value={section.scoringMode} onChange={(e) => updateSection(section.id, 'scoringMode', e.target.value)} className="w-full bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-xs font-bold rounded-xl p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm cursor-pointer">
-                                <option value="auto_divide">Chia đều điểm</option>
-                                <option value="custom">Tùy biến từng câu</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          <div className="bg-slate-100/50 dark:bg-[#1A1A1A] rounded-2xl p-4 border border-slate-200/50 dark:border-white/5">
-                            <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-white/5 pb-2">
-                              <h4 className="text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Filter className="w-3.5 h-3.5"/> Phân định cấu trúc câu</h4>
-                              <button type="button" onClick={() => handleAddMixedRange(section.id)} className="text-[10px] bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-lg font-black hover:bg-indigo-200 transition-colors flex items-center gap-1"><PlusCircle className="w-3 h-3"/> Thêm dải câu</button>
-                            </div>
-
-                            <div className="space-y-2">
-                              {(section.mixedRanges || []).map((range, rIdx) => (
-                                <div key={rIdx} className="flex items-center gap-3 bg-white dark:bg-[#252525] border border-slate-200 dark:border-white/5 p-2 rounded-xl flex-wrap text-xs font-semibold shadow-sm">
-                                  <span className="text-slate-500">Từ câu:</span>
-                                  <input type="number" value={range.start} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'start', parseInt(e.target.value)||1)} className="w-14 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 p-1.5 rounded-lg font-black text-center text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"/>
-                                  <span className="text-slate-500">đến câu:</span>
-                                  <input type="number" value={range.end} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'end', parseInt(e.target.value)||1)} className="w-14 bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 p-1.5 rounded-lg font-black text-center text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"/>
-                                  
-                                  <select value={range.type} onChange={(e) => handleUpdateMixedRange(section.id, rIdx, 'type', e.target.value)} className="bg-slate-50 dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 p-1.5 rounded-lg font-bold text-slate-900 dark:text-white focus:outline-none cursor-pointer">
-                                    <option value="single_choice">Trắc nghiệm đơn (A,B,C,D)</option>
-                                    <option value="true_false">Trắc nghiệm Đúng/Sai liên hoàn</option>
-                                    <option value="short_answer">Điền đáp án ngắn / Điền số</option>
-                                    <option value="essay">Tự luận / Chấm tay</option>
-                                  </select>
-
-                                  <button type="button" onClick={() => handleRemoveMixedRange(section.id, rIdx)} className="text-rose-500 ml-auto font-black text-[10px] uppercase px-3 py-1.5 bg-rose-50 dark:bg-rose-900/20 rounded-lg hover:bg-rose-100 transition-colors">Xóa</button>
-                                </div>
-                              ))}
-                              {(!section.mixedRanges || section.mixedRanges.length === 0) && (
-                                <p className="text-xs font-medium text-slate-400 italic">Mặc định toàn bộ là Trắc nghiệm đơn.</p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2 pt-2">
-                            <button type="button" onClick={() => setEditingKeysSectionId(editingKeysSectionId === section.id ? null : section.id)} className="text-xs text-slate-700 dark:text-slate-300 font-black flex items-center gap-1.5 bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/10 shadow-sm px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-colors">
-                              <KeyRound className="w-4 h-4 text-slate-400"/> {editingKeysSectionId === section.id ? 'Đóng bảng Key' : 'Kiểm tra Đáp án'}
-                            </button>
-                            <button type="button" onClick={() => setParseTextModalId(section.id)} className="text-xs text-indigo-700 dark:text-indigo-300 font-black flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-500/30 shadow-sm px-4 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors">
-                              <FileText className="w-4 h-4 text-indigo-500"/> 1. Quét chia vùng Auto
-                            </button>
-                            <button type="button" onClick={() => setQuickAnswersModalId(section.id)} className="text-xs text-emerald-700 dark:text-emerald-300 font-black flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-500/30 shadow-sm px-4 py-2.5 rounded-xl hover:bg-emerald-100 transition-colors">
-                              <Clipboard className="w-4 h-4 text-emerald-500"/> 2. Dán chuỗi Đáp án
-                            </button>
-                          </div>
-
-                          {editingKeysSectionId === section.id && section.questionCount > 0 && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto p-4 bg-white dark:bg-[#1A1A1A] rounded-[1.5rem] border border-slate-200 dark:border-white/10 mt-4 custom-scrollbar shadow-inner">
-                              {Array.from({ length: section.questionCount }).map((_, qIdx) => {
-                                let cType = 'short_answer'
-                                let optionsCount = 4
-                                if (section.mixedRanges) {
-                                  const matchedRange = section.mixedRanges.find(r => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
-                                  if (matchedRange) {
-                                    cType = matchedRange.type
-                                    optionsCount = matchedRange.optionsCount || 4
-                                  }
-                                }
-                                const currentAns = section.correctAnswers[qIdx]
-                                return (
-                                  <div key={qIdx} className="p-3 border border-slate-200 dark:border-white/5 rounded-2xl bg-slate-50 dark:bg-[#202020] flex flex-col justify-between text-xs font-medium shadow-sm transition-colors hover:border-indigo-300">
-                                    <div className="flex justify-between items-center mb-2.5">
-                                      <span className="font-black text-slate-800 dark:text-white">Câu {qIdx + 1}:</span>
-                                      <span className="text-[9px] text-slate-500 bg-slate-200 dark:bg-black/50 px-2 py-0.5 rounded-md uppercase font-black tracking-widest">{cType.replace('_', ' ')}</span>
-                                    </div>
-                                    {cType === 'single_choice' && (
-                                      <div className="flex gap-1.5">
-                                        {['A', 'B', 'C', 'D'].slice(0, optionsCount).map(opt => (
-                                          <button key={opt} type="button" onClick={() => handleSetCorrectAnswer(section.id, qIdx, opt)} className={`flex-1 py-1.5 rounded-lg font-black transition-all ${currentAns === opt ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-white dark:bg-[#252525] text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:border-indigo-400'}`}>{opt}</button>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {cType === 'true_false' && (
-                                      <div className="space-y-1.5 bg-white dark:bg-[#252525] p-2 rounded-xl border border-slate-200 dark:border-white/10">
-                                        {['a', 'b', 'c', 'd'].map(sub => {
-                                          const subAns = currentAns?.[sub]
-                                          return (
-                                            <div key={sub} className="flex items-center justify-between gap-2 border-b last:border-0 border-slate-100 dark:border-white/5 pb-1.5 last:pb-0">
-                                              <span className="uppercase font-black text-slate-500 bg-slate-100 dark:bg-black/40 w-5 h-5 flex items-center justify-center rounded-md">{sub}</span>
-                                              <div className="flex gap-1.5">
-                                                <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'Đ')} className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all ${subAns === 'Đ' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-black/40 text-slate-500 hover:bg-emerald-100'}`}>ĐÚNG</button>
-                                                <button type="button" onClick={() => handleSetCorrectAnswerTF(section.id, qIdx, sub, 'S')} className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all ${subAns === 'S' ? 'bg-rose-500 text-white shadow-sm' : 'bg-slate-100 dark:bg-black/40 text-slate-500 hover:bg-rose-100'}`}>SAI</button>
-                                              </div>
-                                            </div>
-                                          )
-                                        })}
-                                      </div>
-                                    )}
-                                    {cType !== 'single_choice' && cType !== 'true_false' && cType !== 'essay' && (
-                                      <input type="text" value={typeof currentAns === 'object' ? Object.values(currentAns).join('') : (currentAns || '')} onChange={(e) => handleSetCorrectAnswer(section.id, qIdx, e.target.value)} placeholder="Nhập đáp án..." className="w-full bg-white dark:bg-[#252525] border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-inner"/>
-                                    )}
-                                    {cType === 'essay' && <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-2 rounded-xl text-center"><span className="text-[10px] text-amber-600 dark:text-amber-400 font-black uppercase tracking-widest">Chấm thủ công</span></div>}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              <div className="bg-white dark:bg-[#1A1A1A] p-6 rounded-[2rem] shadow-sm flex justify-between items-center mt-6">
-                 <div className="text-sm font-black">{uploadStatus.message || 'Hệ thống sẵn sàng...'}</div>
-                 <button type="submit" className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-black shadow-md"><Save className="w-5 h-5 inline mr-2"/> Phát hành Đề thi</button>
-              </div>
-            </div>
-          </form>
-        )}
-
-        {/* 🌟 TAB 2 MỚI: TẠO ĐỀ BẰNG AI (SENAI POWERED) */}
-        {activeTab === 'senai' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)] animate-in fade-in duration-500">
-            
-            {/* Cột trái: Chat với SenAI */}
-            <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] flex flex-col overflow-hidden shadow-sm">
-              <div className="p-5 border-b border-slate-200 dark:border-white/5 flex items-center gap-3 bg-gradient-to-r from-indigo-500/10 to-transparent">
-                <div className="w-10 h-10 rounded-[12px] bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
-                  <Bot className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/>
-                </div>
-                <div>
-                  <h2 className="font-black text-slate-900 dark:text-white flex items-center gap-2">SenAI Đề Thi <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500"/></h2>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tự động bóc tách & Format Toán học</p>
-                </div>
-              </div>
-
-              <div ref={aiChatScrollRef} className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
-                {aiMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.role === 'model' && (
-                      <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 mr-3 mt-1 shadow-sm border border-indigo-400/20">
-                        <Bot className="w-4 h-4"/>
-                      </div>
-                    )}
-                    <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.2rem] text-[14px] font-medium leading-relaxed shadow-sm overflow-x-auto ${msg.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
-                      <ReactMarkdown
-                        remarkPlugins={[remarkMath]}
-                        rehypePlugins={[rehypeKatex]}
-                        components={{
-                          p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
-                          strong: ({node, ...props}) => <strong className={`font-extrabold ${msg.role === 'user' ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`} {...props} />,
-                          code: ({node, inline, ...props}: any) => inline ? <code className="bg-slate-200 dark:bg-black/30 px-1.5 py-0.5 rounded text-pink-500 dark:text-pink-300 text-[12px] font-mono" {...props} /> : <div className="bg-slate-800 p-3 rounded-lg my-2"><code className="text-white/80 font-mono text-[12px]" {...props} /></div>
-                        }}
-                      >
-                        {msg.text}
-                      </ReactMarkdown>
-                      
-                      {msg.codeSnippet && (
-                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
-                          <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> JSON Sinh thành công</span>
-                          <button onClick={() => {setCurrentGeneratedCode(msg.codeSnippet!); setAiPreviewMode('preview')}} className="text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-200 transition-colors flex items-center gap-1.5"><Eye className="w-3.5 h-3.5"/> Xem trước Đề</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {isAiLoading && (
-                  <div className="flex justify-start items-end">
-                    <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-600 shrink-0 mr-3 shadow-sm border border-indigo-400/20">
-                      <Sparkles className="w-4 h-4 animate-pulse text-yellow-500"/>
-                    </div>
-                    <div className="bg-white dark:bg-[#202020] border border-slate-200 dark:border-white/5 px-5 py-3.5 rounded-[1.2rem] rounded-bl-sm shadow-sm flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-500"/>
-                      <span className="text-[12px] text-slate-500 font-bold">Đang phân tích cấu trúc...</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-4 bg-slate-50 dark:bg-[#121212] border-t border-slate-200 dark:border-white/5 shrink-0">
-                <form onSubmit={handleSendAiMessage} className="relative flex items-end gap-2 bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/10 rounded-[1.5rem] p-1.5 focus-within:border-indigo-400/50 shadow-sm transition-all">
-                  <textarea
-                    value={aiChatInput} onChange={(e) => setAiChatInput(e.target.value)}
-                    onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); handleSendAiMessage(e as any) } }}
-                    placeholder="Dán nội dung đề thi vào đây để AI bóc tách (Nhấn Shift + Enter để xuống dòng)..."
-                    className="flex-1 bg-transparent border-none outline-none resize-none py-3 px-3 max-h-[120px] custom-scrollbar text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400"
-                    rows={1}
-                  />
-                  <button type="submit" disabled={!aiChatInput.trim() || isAiLoading} className="p-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 dark:disabled:bg-[#252525] disabled:text-slate-400 text-white rounded-full transition-transform active:scale-95 shadow-md shrink-0 m-1">
-                    <Send className="w-4 h-4 ml-0.5" />
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            {/* Cột phải: Preview và Quản lý Code */}
-            <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] flex flex-col overflow-hidden shadow-sm">
-              <div className="p-3 border-b border-slate-200 dark:border-white/5 flex items-center justify-between bg-slate-50 dark:bg-[#121212] shrink-0">
-                <div className="flex bg-slate-200/50 dark:bg-[#202020] p-1 rounded-xl">
-                  <button onClick={() => setAiPreviewMode('preview')} className={`px-5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${aiPreviewMode === 'preview' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'}`}><Eye className="w-4 h-4"/> Chế độ Xem trước</button>
-                  <button onClick={() => setAiPreviewMode('code')} className={`px-5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 ${aiPreviewMode === 'code' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'}`}><Code className="w-4 h-4"/> Chỉnh sửa Mã JSON</button>
-                </div>
-                {currentGeneratedCode && (
-                  <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-500/20 transition-transform active:scale-95 flex items-center gap-1.5"><Save className="w-4 h-4"/> Lưu & Xuất bản</button>
-                )}
-              </div>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-100/50 dark:bg-[#121212]/50">
-                {aiPreviewMode === 'code' ? (
-                  <textarea 
-                    value={currentGeneratedCode || ''} 
-                    onChange={(e) => setCurrentGeneratedCode(e.target.value)}
-                    placeholder="Mã JSON sẽ hiển thị ở đây..."
-                    className="w-full h-full min-h-[400px] bg-slate-900 text-green-400 font-mono p-5 rounded-2xl outline-none text-xs focus:ring-2 focus:ring-indigo-500 shadow-inner leading-relaxed custom-scrollbar"
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-2xl bg-white dark:bg-[#1E1E1E] border border-slate-200 dark:border-white/5 p-6 shadow-sm overflow-y-auto custom-scrollbar">
-                    {renderAiPreview()}
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-        )}
+        {/* TẠO ĐỀ TỪ PDF & LÀM ĐỀ SENAI (dùng chung với renderLegacyStyledTabs) */}
+        {renderLegacyStyledTabs()}
 
         {/* QUẢN LÝ KHO ĐỀ */}
         {activeTab === 'manage' && (
@@ -1544,47 +1993,26 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* QUẢN LÝ THÀNH VIÊN */}
-        {activeTab === 'collab' && currentUserRole === 'admin' && (
+
+        {/* GÓP Ý NGƯỜI DÙNG */}
+        {activeTab === 'feedback' && (
           <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm animate-in fade-in duration-300">
-            <h2 className="text-sm font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest mb-6 flex items-center gap-2"><Users className="w-4 h-4"/>Phân quyền Hệ thống</h2>
-            {isFetchingData ? <div className="text-xs font-bold text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Đang truy xuất danh sách...</div> : (
-              <div className="overflow-x-auto custom-scrollbar border border-slate-200 dark:border-white/5 rounded-[1.5rem] bg-white dark:bg-[#1E1E1E]">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#121212] text-slate-500 dark:text-slate-400 uppercase font-black text-[10px] tracking-widest">
-                      <th className="py-4 px-5">Người dùng</th>
-                      <th className="py-4 px-5">Trường học</th>
-                      <th className="py-4 px-5">Quyền hạn (Role)</th>
-                      <th className="py-4 px-5 text-right">Cập nhật</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usersList.map(u => (
-                      <tr key={u.id} className="border-b last:border-0 border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525] transition-colors group">
-                        <td className="py-4 px-5 font-bold text-slate-900 dark:text-white flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black">{u.full_name?.charAt(0) || 'U'}</div>
-                          {u.full_name || 'Chưa cập nhật'}
-                        </td>
-                        <td className="py-4 px-5 font-medium text-slate-600 dark:text-slate-400">{u.school || '-'}</td>
-                        <td className="py-4 px-5">
-                          <select 
-                            value={u.role || 'student'} 
-                            onChange={(e) => handleUpdateRole(u.id, e.target.value)}
-                            className="bg-slate-100 dark:bg-[#202020] border border-transparent hover:border-slate-300 dark:hover:border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white outline-none cursor-pointer transition-colors shadow-inner"
-                          >
-                            <option value="student">Học sinh (Student)</option>
-                            <option value="collab">Giáo viên (Collab)</option>
-                            <option value="admin">Quản trị viên (Admin)</option>
-                          </select>
-                        </td>
-                        <td className="py-4 px-5 text-right">
-                          <span className="text-[10px] font-black uppercase text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">Auto Saved</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <h2 className="text-sm font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest mb-6 flex items-center gap-2"><MessageSquare className="w-4 h-4"/>Góp ý từ người dùng ({feedbackList.length})</h2>
+            {isFetchingData ? <div className="text-xs font-bold text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Đang tải góp ý...</div> : (
+              <div className="space-y-3">
+                {feedbackList.length === 0 && <p className="py-10 text-center text-slate-400 font-bold text-sm">Chưa có góp ý nào được gửi.</p>}
+                {feedbackList.map((f: any) => (
+                  <div key={f.id} className="p-4 rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#161616] flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">{f.profiles?.full_name || 'Ẩn danh'}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg ${f.mode === 'advanced' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{f.mode === 'advanced' ? 'Advanced' : 'Basic'}</span>
+                        <span className="text-[11px] font-medium text-slate-400">{new Date(f.created_at).toLocaleString('vi-VN')}</span>
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{f.content}</p>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1592,103 +2020,7 @@ export default function AdminDashboard() {
 
       </div>
 
-      {/* ===================================================================== */}
-      {/* 🌟 MODALS QUÉT PDF VÀ DÁN ĐÁP ÁN (GIỮ NGUYÊN TỪ BẢN TRƯỚC VÀ NÂNG CẤP UI) */}
-      {/* ===================================================================== */}
-      
-      {parseTextModalId && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1A1A1A] w-full max-w-2xl rounded-[2rem] border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-[#121212]/50">
-              <div className="flex items-center gap-3 text-slate-900 dark:text-white">
-                <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center"><Layers className="w-5 h-5" /></div>
-                <div>
-                  <h3 className="font-black text-base">Nạp Cấu Trúc Đề Tự Động</h3>
-                  <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mt-0.5">Quét bằng AI Zero-Regret</p>
-                </div>
-              </div>
-              <button onClick={() => setParseTextModalId(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-[#252525] rounded-full transition-colors"><X className="w-5 h-5 text-slate-500"/></button>
-            </div>
-            
-            <div className="p-8 space-y-6">
-              <div className="flex gap-2 p-1.5 bg-slate-100 dark:bg-[#202020] rounded-[1.2rem]">
-                <button type="button" onClick={() => setAnswerMethod('text')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${answerMethod === 'text' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Dán Text nội dung</button>
-                <button type="button" onClick={() => setAnswerMethod('pdf')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${answerMethod === 'pdf' ? 'bg-white dark:bg-[#2A2A2A] text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'}`}>Nạp qua tệp PDF</button>
-              </div>
-
-              {answerMethod === 'text' ? (
-                <div className="space-y-4 animate-in fade-in">
-                  <textarea 
-                    value={examTextToParse} 
-                    onChange={(e) => setExamTextToParse(e.target.value)} 
-                    placeholder="Dán toàn bộ nội dung chữ của đề bài thi vào đây để AI tự động đếm câu hỏi và phân tích dạng bài..." 
-                    rows={8} 
-                    className="w-full bg-slate-50 dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-2xl p-5 text-sm font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner custom-scrollbar" 
-                  />
-                  <div className="flex justify-end gap-3 pt-2">
-                    <button type="button" onClick={() => setParseTextModalId(null)} className="px-6 py-3 bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 dark:hover:bg-[#252525] text-slate-700 dark:text-slate-300 font-bold rounded-xl text-sm transition-colors">Hủy</button>
-                    <button type="button" onClick={handleProcessRawTextParsingDirectly} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-sm shadow-[0_8px_20px_rgba(79,70,229,0.3)] active:scale-95 transition-transform flex items-center gap-2"><Sparkles className="w-4 h-4"/> Phân tích Text</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4 animate-in fade-in text-center">
-                  <div className="border-2 border-dashed border-slate-300 dark:border-white/10 rounded-[2rem] p-12 text-center relative bg-slate-50 dark:bg-[#121212] hover:bg-slate-100 dark:hover:bg-[#1A1A1A] transition-colors group">
-                    <input type="file" accept=".pdf" onChange={handleProcessPdfTextParsing} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                    <UploadCloud className="w-12 h-12 text-indigo-500 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-                    <p className="text-sm font-black text-slate-700 dark:text-white">Nhấp chọn hoặc kéo thả tệp PDF vào đây</p>
-                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-2 bg-slate-200 dark:bg-black/30 inline-block px-3 py-1 rounded-full">Yêu cầu: Đề thi có chứa ký hiệu phân định (VD: Câu 1., Câu 2.)</p>
-                  </div>
-                  {uploadStatus.type === 'uploading' && (
-                    <div className="flex items-center justify-center gap-2 text-sm font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 py-3 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
-                      <Loader2 className="w-5 h-5 animate-spin"/> {uploadStatus.message}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {quickAnswersModalId && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#1A1A1A] w-full max-w-xl rounded-[2rem] border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-[#121212]/50">
-              <div className="flex items-center gap-3 text-slate-900 dark:text-white">
-                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center"><Clipboard className="w-5 h-5" /></div>
-                <div>
-                  <h3 className="font-black text-base">Nạp Chuỗi Đáp Án Nhanh</h3>
-                  <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mt-0.5">Tự động điền theo thứ tự</p>
-                </div>
-              </div>
-              <button onClick={() => setQuickAnswersModalId(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-[#252525] rounded-full transition-colors"><X className="w-5 h-5 text-slate-500"/></button>
-            </div>
-
-            <div className="p-8 space-y-5">
-              <div className="bg-emerald-50 dark:bg-[#121212] border border-emerald-200 dark:border-emerald-900/50 rounded-2xl p-5 text-xs text-emerald-800 dark:text-emerald-300 font-medium leading-relaxed shadow-sm">
-                <p className="font-black mb-2 flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400"><Sparkles className="w-4 h-4"/> Thuật toán bóc tách thông minh hỗ trợ các cú pháp:</p>
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                  <div className="bg-white dark:bg-[#1A1A1A] p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm"><p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Viết liền</p><code className="font-mono font-bold text-slate-700 dark:text-white">1.A 2.B 3.ĐSĐĐ 4.12,5</code></div>
-                  <div className="bg-white dark:bg-[#1A1A1A] p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm"><p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Xuống dòng</p><code className="font-mono font-bold text-slate-700 dark:text-white">1. A<br/>2. B<br/>3. Đ S Đ Đ</code></div>
-                </div>
-              </div>
-              
-              <textarea 
-                value={quickAnswersText} 
-                onChange={(e) => setQuickAnswersText(e.target.value)} 
-                placeholder="Dán nội dung chuỗi đáp án tại đây..." 
-                rows={6} 
-                className="w-full bg-slate-50 dark:bg-[#121212] border border-slate-200 dark:border-white/10 rounded-2xl p-5 text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner transition-all custom-scrollbar" 
-              />
-              
-              <div className="flex justify-end gap-3 pt-3">
-                <button type="button" onClick={() => setQuickAnswersModalId(null)} className="px-6 py-3 bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 dark:hover:bg-[#252525] text-slate-700 dark:text-slate-300 font-bold rounded-xl text-sm transition-colors">Hủy bỏ</button>
-                <button type="button" onClick={handleProcessQuickAnswersText} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-sm shadow-[0_8px_20px_rgba(16,185,129,0.3)] transition-transform active:scale-95 flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Đồng bộ Đáp án</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderQuickModals()}
 
     </div>
   )

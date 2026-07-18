@@ -16,7 +16,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getAccentHex } from '@/app/components/modernTheme'
+import { getAccentHex, getModernThemeVars } from '@/app/components/modernTheme'
 
 // Khai báo global cho YouTube Iframe API để fix lỗi TypeScript
 declare global {
@@ -94,7 +94,8 @@ const mdCard = "bg-white/5 dark:bg-[#1A1A1A]/60 backdrop-blur-2xl backdrop-satur
 // ============================================================================
 export default function FocusRoomPage() {
   const router = useRouter()
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(true)
   const accentColor = newUiEnabled ? getAccentHex(themeColor, true) : '#22d3ee'
   const cardClass = newUiEnabled
     ? "bg-white/[0.04] border border-white/10 shadow-none rounded-2xl overflow-hidden transition-colors"
@@ -107,6 +108,7 @@ export default function FocusRoomPage() {
   // -- States: Giao diện & Chủ đề --
   const [backgroundId, setBackgroundId] = useState(STUDY_BACKGROUNDS[0].id)
   const activeBackground = useMemo(() => STUDY_BACKGROUNDS.find(item => item.id === backgroundId) ?? STUDY_BACKGROUNDS[0], [backgroundId])
+  const modernBgColor = backgroundId === 'midnight' ? '#0f172a' : backgroundId === 'forest' ? '#064e3b' : backgroundId === 'sunset' ? '#7c2d12' : '#101a33'
 
   // -- States: Bộ đếm thời gian --
   const [timerMode, setTimerMode] = useState<TimerMode>('countdown')
@@ -200,6 +202,8 @@ export default function FocusRoomPage() {
       if (docs) setLibraryDocs(docs)
     }
     fetchUserAndLibrary()
+
+    setIsDark(document.documentElement.classList.contains('dark'))
   }, [])
 
   // Lưu Custom Videos vào Local Storage
@@ -412,6 +416,389 @@ export default function FocusRoomPage() {
   }
 
   // ============================================================================
+  // RENDER UI CHÍNH (MODERN / BETA)
+  // ============================================================================
+  if (newUiEnabled) {
+    return (
+      <div
+        className="h-screen w-full flex flex-col font-sans overflow-hidden"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: modernBgColor, color: 'var(--text)' } as React.CSSProperties}
+      >
+        {isDragging && <div className="fixed inset-0 z-[9999] cursor-col-resize" />}
+
+        {/* HEADER */}
+        <header className="h-[64px] shrink-0 px-6 flex items-center justify-between relative z-40" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/dashboard')} className="p-2.5 rounded-full hover:bg-white/[0.06] transition-colors" style={{ border: '1px solid var(--border)' }}>
+              <ArrowLeft className="w-5 h-5"/>
+            </button>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2">
+                Focus Room <Sparkles className="w-4 h-4" style={{ color: 'var(--accent)' }}/>
+              </h1>
+              <p className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Không gian luyện thi đỉnh cao</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {STUDY_BACKGROUNDS.map(bg => {
+              const dotColor = bg.id === 'midnight' ? '#0f172a' : bg.id === 'forest' ? '#064e3b' : bg.id === 'sunset' ? '#7c2d12' : '#101a33'
+              return (
+                <button
+                  key={bg.id}
+                  onClick={() => setBackgroundId(bg.id)}
+                  title={bg.name}
+                  className="w-7 h-7 rounded-full transition-all"
+                  style={{ background: dotColor, border: backgroundId === bg.id ? '2px solid var(--accent)' : '2px solid transparent' }}
+                />
+              )
+            })}
+          </div>
+        </header>
+
+        {/* MAIN SPLIT LAYOUT */}
+        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative custom-scrollbar">
+
+          {/* PANEL TRÁI: ĐIỀU KHIỂN FOCUS */}
+          <div
+            className="w-full lg:w-[var(--left-width)] h-auto lg:h-full p-4 lg:p-6 flex flex-col gap-4 lg:overflow-y-auto custom-scrollbar shrink-0"
+            style={{ '--left-width': `${leftWidth}%` } as React.CSSProperties}
+          >
+            {/* HÀNG 1: ĐỒNG HỒ & TRÌNH PHÁT NHẠC */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+              {/* THẺ ĐỒNG HỒ */}
+              <div className="rounded-2xl p-6 flex flex-col items-center justify-center relative overflow-hidden min-h-[280px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <div className="flex items-center gap-2 rounded-full p-1 mb-6" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <button onClick={() => setTimerMode('countdown')} className="px-4 py-1.5 rounded-full text-xs font-medium transition-colors" style={timerMode === 'countdown' ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}>Đếm ngược</button>
+                  <button onClick={() => setTimerMode('stopwatch')} className="px-4 py-1.5 rounded-full text-xs font-medium transition-colors" style={timerMode === 'stopwatch' ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}>Tính giờ</button>
+                </div>
+
+                <div className="text-[4.5rem] lg:text-[5.5rem] font-bold tracking-tighter leading-none mb-6">
+                  {currentTimerDisplay}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setIsRunning(!isRunning)} className="w-14 h-14 rounded-full flex items-center justify-center transition-transform active:scale-95" style={{ background: 'var(--accent)', color: '#fff' }}>
+                    {isRunning ? <PauseCircle className="w-8 h-8"/> : <PlayCircle className="w-8 h-8"/>}
+                  </button>
+                  <button onClick={() => { setIsRunning(false); if(timerMode==='countdown') setCountdownSeconds(parseInt(countdownInput)*60); else setStopwatchSeconds(0) }} className="w-12 h-12 rounded-full flex items-center justify-center transition-colors hover:bg-white/[0.06]" style={{ border: '1px solid var(--border)' }}>
+                    <TimerReset className="w-5 h-5"/>
+                  </button>
+                </div>
+
+                {timerMode === 'countdown' && !isRunning && (
+                  <div className="mt-6 flex items-center gap-2">
+                    <span className="text-xs font-medium uppercase" style={{ color: 'var(--text-muted)' }}>Cài đặt (phút):</span>
+                    <input
+                      type="number"
+                      value={countdownInput}
+                      onChange={(e) => { setCountdownInput(e.target.value); setCountdownSeconds(parseInt(e.target.value)*60 || 0) }}
+                      className="w-16 rounded-lg px-2 py-1 text-center font-semibold text-sm outline-none bg-transparent"
+                      style={{ border: '1px solid var(--border)' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* THẺ TRÌNH PHÁT VIDEO LOFI & CUSTOM LINK */}
+              <div className="rounded-2xl flex flex-col p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <div className="flex items-center justify-between mb-4 px-2">
+                  <h3 className="font-semibold text-xs uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+                    <Music2 className="w-4 h-4"/> Lofi & Media
+                  </h3>
+                  <button onClick={() => setIsVideoMaximized(true)} className="p-1.5 rounded-lg transition-colors hover:bg-white/[0.06]" style={{ color: 'var(--text-muted)' }} title="Phóng to Video">
+                    <Maximize2 className="w-4 h-4"/>
+                  </button>
+                </div>
+
+                <div className={`bg-black overflow-hidden z-[200] ${isVideoMaximized ? 'fixed inset-0 sm:inset-4 sm:rounded-2xl shadow-2xl' : 'relative w-full aspect-video rounded-xl mb-4'}`} style={!isVideoMaximized ? { border: '1px solid var(--border)' } : undefined}>
+                  {isVideoMaximized && (
+                    <button onClick={() => setIsVideoMaximized(false)} className="absolute top-4 right-4 z-50 p-3 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors">
+                      <Minimize2 className="w-6 h-6"/>
+                    </button>
+                  )}
+                  <div id="focus-yt-player" className="w-full h-full pointer-events-none sm:pointer-events-auto"></div>
+                </div>
+
+                {/* Media Controls */}
+                <div className="rounded-xl p-3 flex items-center gap-4" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <Volume2 className="w-5 h-5 shrink-0" style={{ color: 'var(--text-muted)' }}/>
+                  <input
+                    type="range" min={0} max={100} value={volumeLevel}
+                    onChange={(e) => setVolumeLevel(Number(e.target.value))}
+                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                    style={{ background: 'var(--border)', accentColor: 'var(--accent)' }}
+                  />
+                </div>
+
+                {/* Quick Playlist Core */}
+                <div className="mt-3 flex overflow-x-auto gap-2 custom-scrollbar pb-2">
+                  {LOFI_PLAYLIST.map(track => (
+                    <button
+                      key={track.videoId} onClick={() => setSelectedVideoId(track.videoId)}
+                      className="shrink-0 px-4 py-2 rounded-xl text-xs font-medium transition-colors whitespace-nowrap"
+                      style={selectedVideoId === track.videoId ? { background: 'var(--accent-soft)', border: '1px solid var(--accent)', color: 'var(--accent)' } : { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                    >
+                      {track.title}
+                    </button>
+                  ))}
+                </div>
+
+                {/* KHU VỰC THÊM NHẠC YOUTUBE TÙY CHỈNH */}
+                <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                  <h4 className="text-[10px] font-semibold uppercase mb-2 flex items-center gap-1" style={{ color: 'var(--accent)' }}><LinkIcon className="w-3 h-3"/> Thêm video tùy chỉnh</h4>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      value={customVideoUrl}
+                      onChange={(e) => setCustomVideoUrl(e.target.value)}
+                      placeholder="Dán link YouTube (VD: https://youtu.be/...)"
+                      className="w-full rounded-xl px-3 py-2.5 text-xs font-medium outline-none bg-transparent"
+                      style={{ border: '1px solid var(--border)' }}
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={customVideoTitle}
+                        onChange={(e) => setCustomVideoTitle(e.target.value)}
+                        placeholder="Tiêu đề (Không bắt buộc)"
+                        className="flex-1 rounded-xl px-3 py-2.5 text-xs font-medium outline-none bg-transparent"
+                        style={{ border: '1px solid var(--border)' }}
+                      />
+                      <button
+                        onClick={handleAddVideoToStream}
+                        className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-semibold transition-opacity hover:opacity-90 flex items-center gap-1"
+                        style={{ background: 'var(--accent)', color: '#fff' }}
+                      >
+                        <PlusCircle className="w-3.5 h-3.5"/> Thêm
+                      </button>
+                    </div>
+                    {videoFormError && <p className="text-[10px] font-medium mt-0.5" style={{ color: '#F87171' }}>{videoFormError}</p>}
+                  </div>
+
+                  {/* Danh sách nhạc đã thêm */}
+                  {customVideos.length > 0 && (
+                    <div className="mt-3 flex overflow-x-auto gap-2 custom-scrollbar pb-2">
+                      {customVideos.map((track, idx) => (
+                        <div key={track.videoId} className="shrink-0 flex items-center">
+                          <button
+                            onClick={() => setSelectedVideoId(track.videoId)}
+                            className="px-3 py-2 rounded-l-xl text-xs font-medium transition-colors whitespace-nowrap"
+                            style={selectedVideoId === track.videoId ? { background: 'var(--accent-soft)', border: '1px solid var(--accent)', color: 'var(--accent)' } : { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                          >
+                            {track.title}
+                          </button>
+                          <button
+                            onClick={() => setCustomVideos(prev => prev.filter((_, i) => i !== idx))}
+                            className="px-2 py-2 rounded-r-xl transition-colors hover:text-rose-400"
+                            style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: 'none', color: 'var(--text-muted)' }}
+                            title="Xóa khỏi luồng phát"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* HÀNG 2: THƯ VIỆN & TÀI LIỆU */}
+            <div className="rounded-2xl p-6 flex-1 flex flex-col min-h-[350px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-xs uppercase tracking-widest flex items-center gap-2" style={{ color: '#34D399' }}>
+                  <LibraryBig className="w-4 h-4"/> Thư viện Tài liệu
+                </h3>
+                {activeLibraryDoc && (
+                  <button onClick={() => setActiveLibraryDoc(null)} className="text-xs px-3 py-1 rounded-full font-medium transition-colors" style={{ background: 'rgba(244,63,94,0.12)', color: '#FB7185' }}>
+                    Đóng File
+                  </button>
+                )}
+              </div>
+
+              {!activeLibraryDoc && (
+                <div className="flex items-center gap-3 rounded-xl px-4 py-2.5 mb-4" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <Search className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                  <input
+                    value={libraryQuery}
+                    onChange={e => setLibraryQuery(e.target.value)}
+                    placeholder="Tìm tài liệu theo tên..."
+                    className="bg-transparent border-none outline-none text-sm w-full"
+                  />
+                </div>
+              )}
+
+              {activeLibraryDoc && activeLibraryDoc.drive_file_id ? (
+                <div className="flex-1 bg-white rounded-xl overflow-hidden relative" style={{ border: '1px solid var(--border)' }}>
+                  <iframe src={`https://drive.google.com/file/d/${activeLibraryDoc.drive_file_id}/preview`} className="absolute inset-0 w-full h-full border-none"></iframe>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto custom-scrollbar rounded-xl p-2 grid grid-cols-1 sm:grid-cols-2 gap-2" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  {filteredDocs.map(doc => (
+                    <div key={doc.id} onClick={() => setActiveLibraryDoc(doc)} className="p-3 rounded-xl cursor-pointer transition-colors flex items-start gap-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(52,211,153,0.15)', color: '#34D399' }}>
+                        <FileText className="w-4 h-4"/>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" title={doc.title}>{doc.title}</p>
+                        <p className="text-[10px] uppercase tracking-widest mt-1" style={{ color: 'var(--text-muted)' }}>Click để mở PDF</p>
+                      </div>
+                    </div>
+                  ))}
+                  {libraryDocs.length > 0 && filteredDocs.length === 0 && (
+                    <p className="text-center col-span-full py-10 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Không tìm thấy tài liệu phù hợp.</p>
+                  )}
+                  {libraryDocs.length === 0 && (
+                    <p className="text-center col-span-full py-10 text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Đang tải tài liệu...</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* DRAGGABLE DIVIDER */}
+          <div
+            onMouseDown={() => setIsDragging(true)}
+            className="hidden lg:flex w-1.5 hover:w-2 cursor-col-resize z-30 transition-all items-center justify-center relative"
+            style={{ background: 'var(--border)' }}
+          >
+            <div className="h-8 w-1 rounded-full" style={{ background: 'var(--text-muted)' }}></div>
+          </div>
+
+          {/* PANEL PHẢI: SEN AI WORKSPACE */}
+          <div
+            className="w-full lg:w-[var(--right-width)] h-[600px] lg:h-full lg:border-l border-t lg:border-t-0 flex flex-col relative shrink-0"
+            style={{ '--right-width': `${100 - leftWidth}%`, background: 'var(--surface)', borderColor: 'var(--border)' } as React.CSSProperties}
+          >
+
+            {/* AI Header */}
+            <div className="p-4 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
+                <Bot className="w-5 h-5" style={{ color: 'var(--accent)' }}/>
+              </div>
+              <div>
+                <h2 className="font-semibold flex items-center gap-2">
+                  Gia sư SenAI <Sparkles className="w-4 h-4" style={{ color: 'var(--accent)' }}/>
+                  <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
+                </h2>
+                <p className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Hỗ trợ giải bài & Điều khiển phòng</p>
+              </div>
+            </div>
+
+            {/* AI Chat History */}
+            <div ref={chatScrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.role === 'model' && (
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 mt-1" style={{ background: 'var(--accent-soft)' }}>
+                      <Bot className="w-4 h-4" style={{ color: 'var(--accent)' }}/>
+                    </div>
+                  )}
+
+                  <div className={`max-w-[90%] flex flex-col gap-2 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+
+                    {msg.files && msg.files.length > 0 && (
+                      <div className="flex flex-wrap gap-2 justify-end mb-1">
+                        {msg.files.map((file, i) => (
+                          <div key={i} className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-xl overflow-hidden bg-black/50" style={{ border: '1px solid var(--border)' }}>
+                            {file.isPdf ? (
+                              <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center" style={{ color: 'var(--text-muted)' }}>
+                                <FileText className="w-8 h-8 mb-1"/>
+                                <span className="text-[10px] font-medium truncate w-full">{file.name}</span>
+                              </div>
+                            ) : (
+                              <img src={file.url} alt="Upload" className="w-full h-full object-cover"/>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {msg.text && (
+                      <div
+                        className="px-5 py-3.5 rounded-2xl text-[14px] font-medium leading-relaxed overflow-x-auto"
+                        style={msg.role === 'user' ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--bg)', border: '1px solid var(--border)' }}
+                      >
+                        <ReactMarkdown
+                          remarkPlugins={[remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                          components={{
+                            p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                            strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
+                            a: ({node, ...props}) => <a className="underline font-semibold" style={{ color: msg.role === 'user' ? '#fff' : 'var(--accent)' }} target="_blank" {...props} />,
+                            code: ({node, inline, ...props}: any) =>
+                              inline
+                                ? <code className="px-1.5 py-0.5 rounded text-[12px] font-mono" style={{ background: 'rgba(0,0,0,0.15)' }} {...props} />
+                                : <div className="p-3 rounded-lg my-2" style={{ background: 'rgba(0,0,0,0.15)' }}><code className="font-mono text-[12px]" {...props} /></div>
+                          }}
+                        >
+                          {msg.text}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {isChatLoading && (
+                <div className="flex justify-start items-end">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3" style={{ background: 'var(--accent-soft)' }}>
+                    <Sparkles className="w-4 h-4 animate-pulse" style={{ color: 'var(--accent)' }}/>
+                  </div>
+                  <div className="px-5 py-3.5 rounded-2xl flex items-center gap-2" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                    <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }}/>
+                    <span className="text-[12px] font-medium" style={{ color: 'var(--text-muted)' }}>SenAI đang suy nghĩ...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* AI Input Area */}
+            <div className="p-4 shrink-0" style={{ background: 'var(--bg)', borderTop: '1px solid var(--border)' }}>
+
+              {selectedFiles.length > 0 && (
+                <div className="flex items-center gap-2 mb-3 p-2 rounded-xl overflow-x-auto" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-black group" style={{ border: '1px solid var(--border)' }}>
+                      {file.isPdf ? <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }}><FileText className="w-5 h-5"/></div> : <img src={file.url} alt="Preview" className="w-full h-full object-cover"/>}
+                      <button onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== index))} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4 text-rose-400"/></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <form onSubmit={handleSendMessage} className="relative flex items-end gap-2 rounded-2xl p-1.5 transition-colors" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,application/pdf" multiple className="hidden" />
+
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 rounded-full transition-colors shrink-0 hover:bg-white/[0.06]" style={{ color: 'var(--text-muted)' }}>
+                  <ImageIcon className="w-5 h-5"/>
+                </button>
+
+                <textarea
+                  ref={textareaRef} value={chatInput} onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); handleSendMessage() } }}
+                  placeholder="Gửi PDF/Ảnh để giải bài, hoặc nhờ cài giờ học..."
+                  className="flex-1 bg-transparent border-none outline-none resize-none py-3 px-1 max-h-[120px] custom-scrollbar text-sm font-medium"
+                  rows={1}
+                />
+
+                <button type="submit" disabled={(!chatInput.trim() && selectedFiles.length === 0) || isChatLoading} className="p-3 rounded-full transition-transform active:scale-95 shrink-0 disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>
+                  <Send className="w-4 h-4 ml-0.5" />
+                </button>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================================
   // RENDER UI CHÍNH
   // ============================================================================
   return (
@@ -419,7 +806,7 @@ export default function FocusRoomPage() {
       className={`h-screen w-full flex flex-col text-white font-sans overflow-hidden transition-colors duration-1000 ${activeBackground.className}`}
       style={{ '--accent': accentColor } as React.CSSProperties}
     >
-      
+
       {/* 🌟 OVERLAY TRONG SUỐT CHO KÉO THẢ CHỐNG LAG IFRAME */}
       {isDragging && <div className="fixed inset-0 z-[9999] cursor-col-resize" />}
 

@@ -63,6 +63,15 @@
   scroll-behavior: auto !important;
 }
 
+/* Hoạt ảnh loading dùng chung cho giao diện Modern/Beta trên toàn bộ app */
+@keyframes modern-loading-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+.modern-loading-dot {
+  animation: modern-loading-bounce 1.1s ease-in-out infinite;
+}
+
 @layer utilities {
   .app-shell {
     position: relative;

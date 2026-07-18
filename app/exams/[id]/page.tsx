@@ -3,13 +3,17 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { 
-  Clock, ArrowLeft, Send, FileQuestion, LayoutList, 
-  UploadCloud, Bookmark, AlertTriangle, ShieldAlert, PlayCircle, Maximize2, Loader2, Move
+import {
+  Clock, ArrowLeft, Send, FileQuestion, LayoutList,
+  UploadCloud, Bookmark, AlertTriangle, ShieldAlert, PlayCircle, Maximize2, Loader2, Move,
+  CheckCircle2, Circle
 } from 'lucide-react'
 
 // IMPORT LINH KIỆN GIÁM THỊ AI
 import ProctorCamera from '@/app/components/ProctorCamera'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 export default function ExamRoomPage() {
   const params = useParams()
@@ -17,6 +21,8 @@ export default function ExamRoomPage() {
   const [exam, setExam] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
   
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [savedQuestions, setSavedQuestions] = useState<Record<string, boolean>>({})
@@ -80,6 +86,9 @@ export default function ExamRoomPage() {
       setLoading(false)
     }
     fetchExamAndAttempts()
+
+    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+    setIsDark(dark)
   }, [params.id, router])
 
   // Timer đếm ngược giờ thi
@@ -363,6 +372,9 @@ export default function ExamRoomPage() {
   }, [exam])
 
   if (loading) {
+    if (newUiEnabled) {
+      return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang cấu trúc phòng thi ảo..." />
+    }
     return (
       <div className="app-shell min-h-screen bg-transparent flex items-center justify-center">
         <div className="liquid-panel-strong rounded-3xl px-8 py-6 border border-white/20 text-slate-800 dark:text-slate-100 font-bold shadow-lg flex items-center gap-3">
@@ -375,6 +387,56 @@ export default function ExamRoomPage() {
 
   // PHÒNG CHỜ VÀO THI
   if (!hasStarted) {
+    if (newUiEnabled) {
+      return (
+        <div
+          className="min-h-screen flex flex-col items-center justify-center p-4 font-sans"
+          data-motion={animationsEnabled ? 'on' : 'off'}
+          style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        >
+          <div className="w-full max-w-2xl rounded-2xl p-6 md:p-10" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="w-14 h-14 rounded-xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
+              <ShieldAlert className="w-7 h-7" style={{ color: 'var(--accent)' }} />
+            </div>
+            <h1 className="text-xl md:text-2xl font-semibold text-center tracking-tight mb-2">{exam?.title}</h1>
+            <p className="text-center mb-6 text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+              Thời gian: {exam?.duration} phút • Hệ: {exam?.exam_type}
+            </p>
+
+            <div className="rounded-xl p-5 text-left mb-6 space-y-4" style={{ border: '1px solid var(--border)' }}>
+              <h3 className="text-sm font-semibold flex items-center gap-2 pb-2" style={{ color: '#DC2626', borderBottom: '1px solid var(--border)' }}>
+                <AlertTriangle className="w-4 h-4" /> QUY CHẾ BẢO MẬT PHÒNG THI
+              </h3>
+              <ul className="text-xs space-y-3 font-medium list-none pl-0" style={{ color: 'var(--text-muted)' }}>
+                <li className="flex items-start gap-2"><span>–</span> <span>Hệ thống ép chế độ <b style={{ color: 'var(--text)' }}>Toàn màn hình</b> bảo mật tối đa.</span></li>
+                <li className="flex items-start gap-2"><span>–</span> <span>Nghiêm cấm thoát màn hình, chuyển Tab. Vi phạm quá <b style={{ color: 'var(--text)' }}>3 lần</b> hệ thống tự động thu bài.</span></li>
+                {exam?.require_proctoring && (
+                  <li className="flex items-start gap-2 p-2.5 rounded-lg" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                    <span>–</span> <span><b>Giám thị AI (Camera) đang bật:</b> Chặn đứng hoàn toàn hành vi cầm điện thoại lên chụp ảnh màn hình đề thi để tra cứu ứng dụng giải bài tập ngoại vi.</span>
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            {isAttemptExceeded ? (
+              <div className="p-4 rounded-xl text-center text-sm font-semibold" style={{ background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.25)', color: '#DC2626' }}>
+                Bạn đã đạt giới hạn làm bài cho phép ({attemptCount}/{exam?.max_attempts} lượt).
+              </div>
+            ) : (
+              <button
+                onClick={handleStartExam}
+                disabled={isRequestingCam}
+                className="w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-60"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                {isRequestingCam ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+                {isRequestingCam ? 'Đang kích hoạt hệ thống kiểm duyệt...' : 'Xác nhận vào phòng thi'}
+              </button>
+            )}
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="app-shell min-h-screen bg-transparent flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
         <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-blue-600/15 rounded-full filter blur-[120px]"></div>
@@ -408,6 +470,344 @@ export default function ExamRoomPage() {
               {isRequestingCam ? 'Đang kích hoạt hệ thống kiểm duyệt...' : 'Xác nhận vào phòng thi'}
             </button>
           )}
+        </div>
+      </div>
+    )
+  }
+
+  if (newUiEnabled) {
+    const vars = getModernThemeVars(themeColor, isDark)
+    const timeCritical = timeLeft < 300
+    return (
+      <div
+        className="h-screen w-full flex flex-col overflow-hidden select-none font-sans"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...vars, background: 'var(--bg)', color: 'var(--text)', overscrollBehaviorY: 'contain' } as React.CSSProperties}
+      >
+        {/* OVERLAY XÁC NHẬN NỘP BÀI */}
+        {showSubmitConfirm && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+            <div className="w-full max-w-sm rounded-2xl p-6 text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <Send className="w-9 h-9 mx-auto mb-3" style={{ color: 'var(--accent)' }} />
+              <h2 className="text-lg font-semibold">Nộp bài thi?</h2>
+              <p className="text-xs font-medium mb-6" style={{ color: 'var(--text-muted)' }}>Bạn có chắc chắn muốn kết thúc bài thi ngay bây giờ?</p>
+              <div className="flex gap-2">
+                <button onClick={() => setShowSubmitConfirm(false)} className="flex-1 py-2.5 rounded-xl font-semibold text-xs" style={{ background: 'var(--border)', color: 'var(--text)' }}>Quay lại</button>
+                <button onClick={() => { setShowSubmitConfirm(false); processSubmit(false); }} className="flex-1 py-2.5 rounded-xl font-semibold text-xs" style={{ background: 'var(--accent)', color: '#fff' }}>Xác nhận nộp</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* OVERLAY CẢNH BÁO VI PHẠM */}
+        {violationAlert && (
+          <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-6 text-center" style={{ background: 'rgba(60,0,0,0.85)' }}>
+            <div className="w-full max-w-md rounded-2xl p-6 md:p-8 space-y-4" style={{ background: 'var(--surface)', border: '1px solid rgba(220,38,38,0.4)' }}>
+              <ShieldAlert className="w-12 h-12 mx-auto" style={{ color: '#DC2626' }} />
+              <h2 className="text-lg font-semibold">{violationAlert.title}</h2>
+              <p className="text-xs font-medium leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>{violationAlert.desc}</p>
+              {!violationAlert.isFatal ? (
+                <button onClick={() => setViolationAlert(null)} className="w-full font-semibold py-3 rounded-xl text-xs" style={{ background: '#DC2626', color: '#fff' }}>Tôi đã hiểu &amp; Tiếp tục làm bài</button>
+              ) : (
+                <div className="flex items-center justify-center gap-2 font-semibold py-3 rounded-xl text-xs" style={{ background: 'rgba(220,38,38,0.12)', color: '#DC2626' }}><Loader2 className="w-4 h-4 animate-spin" /> Hệ thống đang khóa hòm bài nộp...</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* POPUP THỜI GIAN ÂN HẠN KHÔI PHỤC FULLSCREEN */}
+        {graceCountdown !== null && !violationAlert && (
+          <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center p-6 text-center" style={{ background: 'rgba(60,0,0,0.8)' }}>
+            <div className="w-full max-w-sm rounded-2xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid rgba(220,38,38,0.4)' }}>
+              <AlertTriangle className="w-11 h-11 mx-auto" style={{ color: '#DC2626' }} />
+              <h2 className="text-base font-semibold">MẤT KẾT NỐI AN TOÀN!</h2>
+              <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Hệ thống phát hiện cử chỉ thoát màn hình bảo mật.</p>
+              <div className="text-3xl font-bold" style={{ color: '#DC2626' }}>Còn lại: {graceCountdown} giây</div>
+              <button onClick={requestFullscreenMode} className="w-full font-semibold py-3 rounded-xl text-xs" style={{ background: 'var(--accent)', color: '#fff' }}>Khôi phục Toàn màn hình</button>
+            </div>
+          </div>
+        )}
+
+        {/* GIÁM THỊ AI */}
+        {hasStarted && exam?.require_proctoring && (
+          <div className="fixed bottom-4 left-4 z-[100] rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+            <ProctorCamera onViolation={handleProctorViolation} />
+          </div>
+        )}
+
+        {/* HEADER STICKY: LUÔN HIỂN THỊ THỜI GIAN + NÚT NỘP BÀI */}
+        <header className="h-16 flex items-center justify-between px-4 md:px-6 shrink-0 z-10" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => { if (confirm('Hủy bài thi hiện tại?')) { const doc = document as any; if (doc.fullscreenElement || doc.webkitFullscreenElement) { if (doc.exitFullscreen) doc.exitFullscreen().catch(() => {}) } router.push('/exams') } }}
+              className="p-1.5 rounded-full shrink-0"
+              style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="font-semibold text-xs md:text-sm truncate max-w-[140px] md:max-w-xs">{exam?.title}</h1>
+              <span
+                className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] md:text-[10px] font-semibold"
+                style={violations > 0 ? { background: 'rgba(220,38,38,0.12)', color: '#DC2626' } : { background: 'rgba(16,185,129,0.12)', color: '#059669' }}
+              >
+                Vi phạm: {violations}/3
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 md:gap-4 shrink-0">
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-sm md:text-lg"
+              style={timeCritical ? { color: '#DC2626', background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)' } : { color: 'var(--accent)', background: 'var(--accent-soft)', border: '1px solid var(--border)' }}
+            >
+              <Clock className="w-4 h-4 md:w-5 md:h-5" />{formatTime(timeLeft)}
+            </div>
+            <button onClick={requestFullscreenMode} title="Toàn màn hình" className="p-2 rounded-xl" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button onClick={handleManualSubmit} disabled={submitting} className="flex items-center gap-1.5 px-3 md:px-5 py-2 rounded-xl font-semibold text-xs md:text-sm transition-opacity hover:opacity-90 disabled:opacity-60" style={{ background: 'var(--accent)', color: '#fff' }}>
+              <Send className="w-3.5 h-3.5" /> Nộp bài
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
+          {(exam?.creation_mode !== 'interactive_mode' && cachedPdfUrl) && (
+            <div className="flex-1 h-[38vh] md:h-full relative" style={{ background: 'var(--surface)' }}>
+              <iframe src={cachedPdfUrl} className="absolute inset-0 w-full h-full border-none bg-transparent"></iframe>
+            </div>
+          )}
+
+          <div
+            className="h-full flex flex-col overflow-hidden"
+            style={{
+              ...(exam?.creation_mode !== 'interactive_mode' && cachedPdfUrl
+                ? { width: '100%', borderLeft: '1px solid var(--border)' }
+                : { width: '100%' }),
+            }}
+          >
+            {/* SƠ ĐỒ CÂU HỎI: rõ ràng trạng thái đã trả lời / chưa trả lời / đã ghim, luôn hiển thị, chỉ 1 lần chạm để nhảy tới câu */}
+            <div className="shrink-0 p-3 md:p-4 max-h-[30vh] overflow-y-auto custom-scrollbar" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  <LayoutList className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} /> Sơ đồ câu hỏi
+                </div>
+                <div className="flex items-center gap-3 text-[9px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: 'var(--accent)' }} /> Đã trả lời</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#D97706' }} /> Đã ghim</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ border: '1px solid var(--border)' }} /> Chưa làm</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {exam?.exam_structure?.map((section: any) =>
+                  Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                    const key = `${section.id}-${qIdx}`
+                    const isAnswered = answers[key] !== undefined && (typeof answers[key] === 'object' ? Object.keys(answers[key]).length > 0 : String(answers[key]).trim() !== '')
+                    const globalNum = qIdx + (computedOffsets[section.id] || 0) + 1
+                    const style = savedQuestions[key]
+                      ? { background: '#D97706', color: '#fff', border: '1px solid #D97706' }
+                      : isAnswered
+                        ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' }
+                        : { background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => { const targetEl = document.getElementById(`q-${key}`); if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' }) }}
+                        className="w-8 h-8 text-[11px] font-semibold rounded-lg flex items-center justify-center transition-opacity hover:opacity-80"
+                        style={style}
+                      >
+                        {globalNum}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* NỘI DUNG CÂU HỎI */}
+            <div className={`flex-1 p-3 md:p-4 overflow-y-auto custom-scrollbar ${exam?.creation_mode === 'interactive_mode' ? 'max-w-4xl mx-auto w-full space-y-6 py-6' : 'space-y-4'}`}>
+              {exam?.exam_structure?.map((section: any) => (
+                <div key={section.id} className="p-4 md:p-5 rounded-2xl space-y-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <h3 className="font-semibold text-xs uppercase tracking-wider flex items-center gap-1.5 pb-2" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                    <FileQuestion className="w-4 h-4" style={{ color: 'var(--accent)' }} /> {section.name}
+                  </h3>
+
+                  <div className="space-y-5">
+                    {Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                      const key = `${section.id}-${qIdx}`
+                      const currentAns = answers[key]
+                      const globalQNumber = qIdx + (computedOffsets[section.id] || 0) + 1
+
+                      let currentType = section.type
+                      let currentOptionsCount = section.optionsCount || 4
+
+                      if (section.type === 'mixed' && section.mixedRanges) {
+                        const range = section.mixedRanges.find((r: any) => (qIdx + 1) >= r.start && (qIdx + 1) <= r.end)
+                        if (range) {
+                          currentType = range.type
+                          currentOptionsCount = range.optionsCount || 4
+                        } else {
+                          currentType = 'short_answer'
+                        }
+                      }
+
+                      const isAnswered = currentAns !== undefined && (typeof currentAns === 'object' ? Object.keys(currentAns).length > 0 : String(currentAns).trim() !== '')
+
+                      return (
+                        <div
+                          key={qIdx}
+                          id={`q-${key}`}
+                          className="p-4 rounded-xl space-y-3"
+                          style={savedQuestions[key] ? { border: '1px solid #D97706', background: 'rgba(217,119,6,0.08)' } : { border: '1px solid var(--border)' }}
+                        >
+                          <div className="flex justify-between items-center pb-2" style={{ borderBottom: '1px solid var(--border)' }}>
+                            <span className="font-semibold text-xs flex items-center gap-1.5" style={{ color: 'var(--accent)' }}>
+                              {isAnswered ? <CheckCircle2 className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }} /> : <Circle className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />}
+                              Câu hỏi {globalQNumber}
+                            </span>
+                            <button
+                              onClick={() => toggleSaveQuestion(section.id, qIdx)}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold"
+                              style={savedQuestions[key] ? { background: '#D97706', color: '#fff', border: '1px solid #D97706' } : { color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                            >
+                              <Bookmark className="w-3 h-3" /> {savedQuestions[key] ? 'Đã ghim' : 'Ghim câu'}
+                            </button>
+                          </div>
+
+                          {exam?.creation_mode === 'interactive_mode' && section.questionEntries?.[qIdx]?.text && (
+                            <div className="text-sm font-medium leading-relaxed mb-3 p-3 rounded-xl whitespace-pre-wrap" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                              {section.questionEntries[qIdx].text}
+                            </div>
+                          )}
+
+                          <div className="pt-1">
+                            {currentType === 'single_choice' && (
+                              <div className="space-y-2">
+                                {section.questionEntries?.[qIdx]?.options ? (
+                                  <div className="grid grid-cols-1 gap-2">
+                                    {section.questionEntries[qIdx].options.map((optText: string, oIdx: number) => {
+                                      const charLabel = String.fromCharCode(65 + oIdx)
+                                      const selected = currentAns === charLabel
+                                      return (
+                                        <button
+                                          type="button"
+                                          key={charLabel}
+                                          onClick={() => handleAnswerSelect(section.id, qIdx, charLabel)}
+                                          className="w-full p-3 text-left rounded-xl font-medium text-xs flex items-center gap-3 transition-opacity hover:opacity-90"
+                                          style={selected ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : { background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                                        >
+                                          <span className="w-6 h-6 rounded-full flex items-center justify-center font-semibold shrink-0" style={selected ? { background: '#fff', color: 'var(--accent)' } : { background: 'var(--accent-soft)', color: 'var(--accent)' }}>{charLabel}</span>
+                                          <span>{optText}</span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-2 flex-wrap">
+                                    {Array.from({ length: currentOptionsCount }).map((_, oIdx) => {
+                                      const l = String.fromCharCode(65 + oIdx)
+                                      const selected = currentAns === l
+                                      return (
+                                        <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, l)} className="w-9 h-9 rounded-full text-xs font-semibold transition-opacity hover:opacity-90" style={selected ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : { background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}>{l}</button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {currentType === 'multiple_choice' && (
+                              <div className="flex gap-2 flex-wrap">
+                                {Array.from({ length: currentOptionsCount }).map((_, oIdx) => {
+                                  const l = String.fromCharCode(65 + oIdx)
+                                  const ansArr = currentAns || []
+                                  const isSel = ansArr.includes(l)
+                                  return (
+                                    <button key={l} onClick={() => handleAnswerSelect(section.id, qIdx, isSel ? ansArr.filter((a: any) => a !== l) : [...ansArr, l])} className="w-9 h-9 rounded-lg text-xs font-semibold transition-opacity hover:opacity-90" style={isSel ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : { background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}>{l}</button>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {currentType === 'true_false' && (
+                              <div className="space-y-2 text-xs font-semibold">
+                                {['a', 'b', 'c', 'd'].map(subLabel => {
+                                  const subVal = currentAns?.[subLabel]
+                                  return (
+                                    <div key={subLabel} className="flex items-center gap-3">
+                                      <span className="w-5" style={{ color: 'var(--text-muted)' }}>Ý {subLabel}:</span>
+                                      <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'Đ')} className="px-4 py-1.5 rounded-lg text-[10px] font-semibold" style={subVal === 'Đ' ? { background: '#059669', color: '#fff', border: '1px solid #059669' } : { background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}>Đúng</button>
+                                      <button onClick={() => handleAnswerSelectTF(section.id, qIdx, subLabel, 'S')} className="px-4 py-1.5 rounded-lg text-[10px] font-semibold" style={subVal === 'S' ? { background: '#DC2626', color: '#fff', border: '1px solid #DC2626' } : { background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}>Sai</button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {currentType === 'short_answer' && (
+                              <input
+                                type="text"
+                                value={currentAns || ''}
+                                onChange={(e) => handleAnswerSelect(section.id, qIdx, e.target.value)}
+                                placeholder="Nhập kết quả điền số hoặc biểu thức..."
+                                className="w-full rounded-xl px-3 py-2 text-xs font-medium outline-none"
+                                style={{ background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                              />
+                            )}
+
+                            {currentType === 'drag_drop' && (
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap gap-2 p-2.5 rounded-xl min-h-12 items-center" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                                  <span className="text-[10px] font-semibold uppercase mr-1" style={{ color: 'var(--text-muted)' }}>Lựa chọn:</span>
+                                  {section.dragDropOptions?.[qIdx]?.map((opt: string) => {
+                                    const selected = currentAns === opt
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={opt}
+                                        onClick={() => handleAnswerSelect(section.id, qIdx, opt)}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-opacity hover:opacity-90"
+                                        style={selected ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                                      >
+                                        <Move className="w-3 h-3" /> {opt}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                                <div className="text-xs font-semibold flex items-center gap-2">
+                                  <span style={{ color: 'var(--text-muted)' }}>Vùng thả vào ô trống:</span>
+                                  <span className="px-4 py-2 rounded-lg" style={currentAns ? { background: 'var(--accent-soft)', color: 'var(--accent)', border: '2px dashed var(--accent)', fontWeight: 700 } : { border: '2px dashed var(--border)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                    {currentAns || 'Chưa chọn từ khóa'}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {currentType === 'essay' && (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={currentAns?.text || ''}
+                                  onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, text: e.target.value })}
+                                  placeholder="Gõ lời giải tự luận..."
+                                  className="w-full min-h-[100px] rounded-xl p-2.5 text-xs font-medium outline-none"
+                                  style={{ background: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                                />
+                                <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                                  <UploadCloud className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                                  <input type="file" onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, file: e.target.files?.[0] })} className="text-[10px] w-full" style={{ color: 'var(--text-muted)' }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     )

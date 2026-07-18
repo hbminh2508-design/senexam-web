@@ -15,7 +15,7 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm' // Thêm thư viện hỗ trợ render Bảng (Table)
 import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getAccentHex } from '@/app/components/modernTheme'
+import { getAccentHex, getModernThemeVars } from '@/app/components/modernTheme'
 
 // Các hằng số giao diện chuẩn Material Design 3 + Liquid Glass
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm transition-all duration-300"
@@ -45,7 +45,7 @@ type ChatMessage = {
 export default function ScoreCalculatorPage() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(false)
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
   const accentColor = newUiEnabled ? getAccentHex(themeColor, isDark) : (isDark ? '#818CF8' : '#4F46E5')
 
   // Navigation Tabs
@@ -240,12 +240,438 @@ ${calcMode === 'standard'
     }
   }
 
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans relative pb-10"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        {/* Header App Bar */}
+        <header className="h-[72px] px-6 lg:px-10 flex items-center justify-between sticky top-0 z-40" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/dashboard')} className="p-2.5 rounded-full hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+              <ArrowLeft className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent)', color: '#fff' }}>
+                <Calculator className="w-5 h-5"/>
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold tracking-tight leading-none">Công Cụ Tính Điểm</h1>
+                <span className="text-[10px] font-medium uppercase tracking-widest mt-1 block" style={{ color: 'var(--text-muted)' }}>Quy chuẩn xét tuyển Đại học</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-[1200px] mx-auto p-4 md:p-8 relative z-10">
+
+          {/* Navigation Tabs (Pill Buttons) */}
+          <div className="flex overflow-x-auto gap-3 pb-4 mb-6 custom-scrollbar hide-scroll">
+            <button onClick={() => setActiveExam('THPTQG')} className="px-5 py-3 rounded-full text-sm font-medium flex items-center gap-2 whitespace-nowrap transition-colors" style={activeExam === 'THPTQG' ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              <GraduationCap className="w-4 h-4"/> Thi THPT Quốc Gia
+            </button>
+            <button onClick={() => setActiveExam('HSA')} className="px-5 py-3 rounded-full text-sm font-medium flex items-center gap-2 whitespace-nowrap transition-colors" style={activeExam === 'HSA' ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              <Target className="w-4 h-4"/> ĐGNL (HSA)
+            </button>
+            <button onClick={() => setActiveExam('TSA')} className="px-5 py-3 rounded-full text-sm font-medium flex items-center gap-2 whitespace-nowrap transition-colors" style={activeExam === 'TSA' ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+              <BookOpen className="w-4 h-4"/> ĐGTD (TSA)
+            </button>
+          </div>
+
+          {activeExam !== 'THPTQG' ? (
+            <div className="rounded-2xl p-16 flex flex-col items-center justify-center text-center" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6" style={{ background: 'var(--accent-soft)' }}>
+                <Sparkles className="w-8 h-8" style={{ color: 'var(--accent)' }}/>
+              </div>
+              <h2 className="text-xl font-semibold mb-3">Tính năng đang phát triển</h2>
+              <p className="max-w-lg font-medium leading-relaxed text-sm" style={{ color: 'var(--text-muted)' }}>Bảng quy đổi điểm cho các kỳ thi Đánh giá Năng lực (HSA) và Đánh giá Tư duy (TSA) đang được AI cập nhật công thức nội suy mới nhất từ các trường đại học. Vui lòng quay lại sau!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+
+              {/* PANEL TRÁI: NHẬP LIỆU */}
+              <div className="lg:col-span-7 space-y-6">
+
+                {/* KHỐI 1: TÙY CHỌN PHƯƠNG THỨC */}
+                <div className="rounded-2xl p-6 md:p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest mb-6 flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+                    <Calculator className="w-4 h-4"/> Phương thức xét tuyển
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div
+                      onClick={() => setCalcMode('standard')}
+                      className="p-5 rounded-2xl cursor-pointer transition-colors"
+                      style={calcMode === 'standard' ? { border: '2px solid var(--accent)', background: 'var(--accent-soft)' } : { border: '2px solid var(--border)', background: 'var(--bg)' }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-semibold text-base" style={{ color: calcMode === 'standard' ? 'var(--accent)' : 'var(--text)' }}>Đại học chung</span>
+                        {calcMode === 'standard' && <CheckCircle2 className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                      </div>
+                      <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Tổng 3 môn + Ưu tiên</p>
+                    </div>
+
+                    <div
+                      onClick={() => setCalcMode('hust')}
+                      className="p-5 rounded-2xl cursor-pointer transition-colors"
+                      style={calcMode === 'hust' ? { border: '2px solid #DC2626', background: 'rgba(220,38,38,0.08)' } : { border: '2px solid var(--border)', background: 'var(--bg)' }}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-semibold text-base" style={{ color: calcMode === 'hust' ? '#DC2626' : 'var(--text)' }}>ĐH Bách Khoa</span>
+                        {calcMode === 'hust' && <CheckCircle2 className="w-5 h-5" style={{ color: '#DC2626' }}/>}
+                      </div>
+                      <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Môn chính nhân hệ số 2</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* KHỐI 2: CHỌN KHỐI THI VÀ ĐIỂM THÀNH PHẦN */}
+                <div className="rounded-2xl p-6 md:p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xs font-semibold uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                      <Hash className="w-4 h-4"/> Điểm thi Tổ hợp
+                    </h3>
+                    {calcMode === 'hust' && <span className="text-[10px] font-semibold uppercase px-3 py-1 rounded-full" style={{ background: 'rgba(220,38,38,0.1)', color: '#DC2626' }}>Chọn 1 môn nhân đôi</span>}
+                  </div>
+
+                  {/* Dropdown Khối Thi */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2 ml-1" style={{ color: 'var(--accent)' }}>Chọn Khối Thi Xét Tuyển</label>
+                    <select
+                      value={selectedBlock}
+                      onChange={(e) => setSelectedBlock(e.target.value)}
+                      className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent cursor-pointer"
+                      style={{ border: '1px solid var(--border)' }}
+                    >
+                      {EXAM_BLOCKS.map(b => (
+                        <option key={b.code} value={b.code}>
+                          Khối {b.code} ({b.name})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-4">
+                    {[0, 1, 2].map((idx) => {
+                      const num = idx + 1
+                      const key = `sub${num}` as keyof typeof scores
+                      const isMain = calcMode === 'hust' && mainSubject === key
+                      const subjectName = currentBlockData.subs[idx]
+
+                      return (
+                        <div key={key} className="flex items-center gap-3 md:gap-4 p-2 rounded-2xl transition-colors" style={isMain ? { background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.2)' } : { border: '1px solid transparent' }}>
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Điểm môn {subjectName}</label>
+                            <input
+                              type="text"
+                              placeholder="VD: 8,5"
+                              value={scores[key]}
+                              onChange={(e) => handleScoreChange(key, e.target.value)}
+                              className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent"
+                              style={{ border: '1px solid var(--border)' }}
+                            />
+                          </div>
+
+                          {/* Button Chọn Môn Chính (Bách Khoa Mode) */}
+                          <div className={`shrink-0 flex items-end transition-all duration-300 ${calcMode === 'hust' ? 'w-auto opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
+                            <button
+                              onClick={() => setMainSubject(key)}
+                              className="h-[46px] mt-6 px-4 rounded-xl text-xs font-semibold transition-colors"
+                              style={isMain ? { background: '#DC2626', color: '#fff' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                            >
+                              {isMain ? '★ MÔN CHÍNH (x2)' : 'Đặt môn chính'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* KHỐI 3: ĐIỂM ƯU TIÊN */}
+                <div className="rounded-2xl p-6 md:p-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest mb-6 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+                    <MapPin className="w-4 h-4"/> Điểm Ưu tiên (Khu vực / Đối tượng)
+                  </h3>
+
+                  <div className="mb-6">
+                    <input
+                      type="text"
+                      placeholder="Tổng điểm ưu tiên của bạn (VD: 0,75)"
+                      value={priorityScore}
+                      onChange={(e) => {
+                        if (e.target.value === '' || /^[0-9.,]*$/.test(e.target.value)) setPriorityScore(e.target.value)
+                      }}
+                      className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent"
+                      style={{ border: '1px solid var(--border)' }}
+                    />
+                  </div>
+
+                  <div className="p-5 rounded-2xl relative overflow-hidden" style={{ background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)' }}>
+                    <p className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: '#D97706' }}><Info className="w-4 h-4"/> Bảng tra cứu điểm cộng:</p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-medium" style={{ color: '#D97706' }}>
+                      <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid rgba(217,119,6,0.15)' }}><strong>KV1:</strong> +0.75 điểm</div>
+                      <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid rgba(217,119,6,0.15)' }}><strong>KV2:</strong> +0.25 điểm</div>
+                      <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid rgba(217,119,6,0.15)' }}><strong>KV2-NT:</strong> +0.5 điểm</div>
+                      <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid rgba(217,119,6,0.15)' }}><strong>KV3:</strong> 0 điểm</div>
+                      <div className="sm:col-span-2 p-2.5 rounded-lg" style={{ background: 'var(--surface)', border: '1px solid rgba(217,119,6,0.15)' }}><strong>Đối tượng đặc biệt:</strong> +1.0 đến +2.0 điểm</div>
+                    </div>
+
+                    <p className="pt-3 mt-3 text-[11px] font-medium italic opacity-80" style={{ borderTop: '1px solid rgba(217,119,6,0.2)' }}>
+                      * Lưu ý: Hệ thống sẽ tự động áp dụng công thức giảm trừ điểm ưu tiên của Bộ GD&ĐT nếu tổng điểm 3 môn của bạn ≥ 22.5.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* PANEL PHẢI: KẾT QUẢ ĐẦU RA & TƯ VẤN AI LIÊN TỤC */}
+              <div className="lg:col-span-5 relative">
+                <div
+                  ref={rightPanelRef}
+                  className="sticky top-[100px] space-y-6 max-h-[calc(100vh-120px)] overflow-y-auto custom-scrollbar pb-10"
+                >
+
+                  {/* THẺ HIỂN THỊ KẾT QUẢ CỐT LÕI */}
+                  <div className="rounded-2xl p-0 overflow-hidden shrink-0" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+
+                    {/* Nửa trên: Banner Kết quả */}
+                    <div className="p-8 md:p-10 text-white relative flex flex-col items-center justify-center min-h-[220px]" style={{ background: 'var(--accent)' }}>
+                      <div className="relative z-10 flex flex-col items-center text-center w-full">
+                        <BarChart3 className="w-10 h-10 mb-4 opacity-90"/>
+                        <h3 className="text-xs font-semibold text-white/80 uppercase tracking-widest mb-2">Điểm Xét Tuyển Cuối Cùng</h3>
+
+                        <div className="text-[4.5rem] md:text-[5.5rem] font-bold tracking-tighter leading-none mb-4">
+                          {result ? String(result.totalScore.toFixed(2)).replace('.', ',') : '--'}
+                        </div>
+
+                        <p className="text-[11px] font-semibold uppercase text-white/90 bg-black/20 px-4 py-2 rounded-full">
+                          {calcMode === 'standard' ? 'THANG ĐIỂM 30 (HỆ CƠ BẢN)' : 'THANG ĐIỂM 30 (HỆ BÁCH KHOA)'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Nửa dưới: Break-down chi tiết */}
+                    <div className="p-6 md:p-8 space-y-4">
+
+                      <div className="flex justify-between items-center p-4 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                        <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Điểm khối gốc (Chưa cộng):</span>
+                        <span className="text-lg font-semibold">
+                          {result ? String(result.rawScore.toFixed(2)).replace('.', ',') : '0,00'}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center p-4 rounded-xl relative overflow-hidden" style={{ background: 'rgba(5,150,105,0.06)', border: '1px solid rgba(5,150,105,0.15)' }}>
+                        <div className="relative z-10 flex flex-col">
+                          <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Điểm ưu tiên thực nhận:</span>
+                          {result && result.rawScore >= 22.5 && parseFloat(priorityScore) > 0 && (
+                            <span className="text-[10px] mt-1 font-medium italic flex items-center gap-1" style={{ color: '#D97706' }}><AlertCircle className="w-3 h-3"/> Đã giảm trừ do điểm gốc ≥ 22.5</span>
+                          )}
+                        </div>
+                        <span className="relative z-10 text-lg font-semibold" style={{ color: '#059669' }}>
+                          +{result ? String(result.finalPriority.toFixed(2)).replace('.', ',') : '0,00'}
+                        </span>
+                      </div>
+
+                      {!result && (
+                        <div className="text-center pt-4 pb-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Vui lòng điền đủ điểm 3 môn để xem kết quả</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* WIDGET ĐAM MÊ VÀ TƯ VẤN SENAI */}
+                  {result && (
+                    <div className="flex flex-col gap-6">
+
+                      {/* BẢNG ĐÁNH GIÁ ĐAM MÊ NGAY KHI VỪA CÓ ĐIỂM */}
+                      {!showAiBox && (
+                        <div className="rounded-2xl p-6" style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)' }}>
+                          <h3 className="text-xs font-semibold uppercase tracking-widest mb-2 flex items-center gap-2" style={{ color: 'var(--accent)' }}><Briefcase className="w-4 h-4"/> Định hướng đam mê của bạn</h3>
+                          <p className="text-xs font-medium mb-5" style={{ color: 'var(--text-muted)' }}>Chọn các lĩnh vực bạn yêu thích để SenAI đưa ra lời khuyên "đo ni đóng giày" nhất với số điểm của bạn nhé.</p>
+
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {PRESET_PASSIONS.map(passion => (
+                              <button
+                                key={passion}
+                                onClick={() => togglePassion(passion)}
+                                className="px-4 py-2 rounded-xl text-xs font-medium transition-colors"
+                                style={selectedPassions.includes(passion) ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                              >
+                                {passion}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="mb-5">
+                            <input
+                              type="text"
+                              placeholder="Hoặc tự gõ ngành nghề bạn mơ ước vào đây..."
+                              value={customPassion}
+                              onChange={(e) => setCustomPassion(e.target.value)}
+                              className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent"
+                              style={{ border: '1px solid var(--border)' }}
+                            />
+                          </div>
+
+                          <button
+                            onClick={handleAskSenAI}
+                            className="w-full flex items-center justify-center gap-2.5 rounded-xl p-4 font-semibold transition-opacity hover:opacity-90"
+                            style={{ background: 'var(--accent)', color: '#fff' }}
+                          >
+                            <Sparkles className="w-5 h-5"/>
+                            Tư vấn Ngành học theo Đam mê
+                            <ChevronRight className="w-4 h-4 opacity-70"/>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* KHUNG CHAT TƯ VẤN SENAI */}
+                      {showAiBox && (
+                        <div className="rounded-2xl relative overflow-hidden flex flex-col h-[650px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+
+                          {/* Chat Header */}
+                          <div className="flex items-center justify-between p-5 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
+                                <Bot className="w-5 h-5" style={{ color: 'var(--accent)' }}/>
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-sm flex items-center gap-1.5">Gia sư Tuyển sinh SenAI <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span></h4>
+                                <p className="text-[9px] font-medium uppercase tracking-widest mt-0.5" style={{ color: 'var(--text-muted)' }}>Big Data: 248 Trường & 2400 Ngành</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Chat History Area */}
+                          <div
+                            ref={aiChatScrollRef}
+                            className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6"
+                          >
+                            {aiMessages.map((msg, idx) => (
+                              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                {msg.role === 'model' && (
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3 mt-1" style={{ background: 'var(--accent-soft)' }}>
+                                    <Bot className="w-4 h-4" style={{ color: 'var(--accent)' }}/>
+                                  </div>
+                                )}
+
+                                <div
+                                  className="max-w-[85%] px-5 py-3.5 rounded-2xl text-[14px] font-medium leading-relaxed overflow-x-auto"
+                                  style={msg.role === 'user' ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--bg)', border: '1px solid var(--border)' }}
+                                >
+                                  <ReactMarkdown
+                                    remarkPlugins={[remarkMath, remarkGfm]}
+                                    rehypePlugins={[rehypeKatex]}
+                                    components={{
+                                      p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                      strong: ({node, ...props}) => <strong className="font-semibold" style={{ color: msg.role === 'user' ? '#fff' : 'var(--accent)' }} {...props} />,
+                                      ul: ({node, ...props}) => <ul className="list-disc ml-5 mb-2 space-y-1" {...props} />,
+                                      ol: ({node, ...props}) => <ol className="list-decimal ml-5 mb-2 space-y-1" {...props} />,
+                                      li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                                      h3: ({node, ...props}) => <h3 className="text-base font-semibold mb-2 mt-3" {...props} />,
+
+                                      table: ({node, ...props}) => (
+                                        <div className="overflow-x-auto my-4 rounded-xl" style={{ border: '1px solid var(--border)' }}>
+                                          <table className="w-full text-left border-collapse text-sm min-w-full" {...props} />
+                                        </div>
+                                      ),
+                                      thead: ({node, ...props}) => <thead style={{ background: 'var(--accent-soft)' }} {...props} />,
+                                      tbody: ({node, ...props}) => <tbody {...props} />,
+                                      tr: ({node, ...props}) => <tr {...props} />,
+                                      th: ({node, ...props}) => <th className="px-4 py-3 font-semibold" style={{ borderRight: '1px solid var(--border)' }} {...props} />,
+                                      td: ({node, ...props}) => <td className="px-4 py-3 align-top" style={{ borderRight: '1px solid var(--border)' }} {...props} />,
+                                    }}
+                                  >
+                                    {msg.text}
+                                  </ReactMarkdown>
+                                </div>
+                              </div>
+                            ))}
+
+                            {isAiLoading && (
+                              <div className="flex justify-start items-end">
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mr-3" style={{ background: 'var(--accent-soft)' }}>
+                                  <Sparkles className="w-4 h-4 animate-pulse" style={{ color: 'var(--accent)' }}/>
+                                </div>
+                                <div className="px-5 py-3.5 rounded-2xl flex items-center gap-2" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                                  <span className="flex gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--accent)' }}></span>
+                                    <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '0.2s' }}></span>
+                                    <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '0.4s' }}></span>
+                                  </span>
+                                  <span className="text-[12px] font-medium italic ml-1" style={{ color: 'var(--text-muted)' }}>Đang truy xuất phổ điểm 2025...</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Chat Input */}
+                          <div className="p-4 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+                            <form onSubmit={handleSendFollowUp} className="relative flex items-center">
+                              <input
+                                type="text"
+                                value={aiInput}
+                                onChange={(e) => setAiInput(e.target.value)}
+                                placeholder="Hỏi thêm về các trường/ngành khác..."
+                                className="w-full rounded-full pl-5 pr-14 py-3 outline-none text-sm font-medium bg-transparent"
+                                style={{ border: '1px solid var(--border)' }}
+                              />
+                              <button
+                                type="submit"
+                                disabled={!aiInput.trim() || isAiLoading}
+                                className="absolute right-1.5 p-2 rounded-full transition-opacity disabled:opacity-50 flex items-center justify-center"
+                                style={{ background: 'var(--accent)', color: '#fff' }}
+                              >
+                                <Send className="w-4 h-4 ml-0.5" />
+                              </button>
+                            </form>
+                          </div>
+
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Nút tác vụ phụ */}
+                  <div className="flex justify-center pt-2">
+                     <button
+                      onClick={() => {
+                        setScores({sub1:'', sub2:'', sub3:''});
+                        setPriorityScore('');
+                        setResult(null);
+                        setShowAiBox(false);
+                        setAiMessages([]);
+                        setAiInput('');
+                        setSelectedPassions([]);
+                        setCustomPassion('');
+                      }}
+                      className="text-sm font-medium transition-colors px-6 py-2.5 rounded-full"
+                      style={{ color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}
+                    >
+                       Làm mới bộ tính
+                     </button>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+          )}
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div
       className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 relative overflow-x-hidden pb-10"
       style={{ '--accent': accentColor } as React.CSSProperties}
     >
-      
+
       {/* Nền đồ họa Background Ambient */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/20 to-purple-500/10 dark:from-indigo-900/30 dark:to-purple-900/20 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="fixed bottom-[-10%] right-[-5%] w-[700px] h-[700px] bg-gradient-to-tl from-blue-500/15 to-cyan-500/10 dark:from-blue-900/20 dark:to-cyan-900/10 rounded-full blur-[120px] pointer-events-none"></div>
