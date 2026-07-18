@@ -56,6 +56,13 @@
   }
 }
 
+/* Tắt hiệu ứng chuyển động khi người dùng bật "Hiệu ứng chuyển động: Tắt" trong Cài đặt */
+[data-motion="off"] * {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+
 @layer utilities {
   .app-shell {
     position: relative;

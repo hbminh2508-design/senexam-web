@@ -120,6 +120,8 @@ export default function DashboardPage() {
   const [newUiSaving, setNewUiSaving] = useState(false)
   const [themeColor, setThemeColor] = useState<string>(DEFAULT_THEME_COLOR)
   const [themeColorSaving, setThemeColorSaving] = useState(false)
+  const [uiDensity, setUiDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  const [animationsEnabled, setAnimationsEnabled] = useState(true)
 
   // ----------------------------------------------------------------------------
   // 🌟 CALCULATOR MODAL STATES (TÍNH ĐIỂM ĐẠI HỌC)
@@ -141,11 +143,13 @@ export default function DashboardPage() {
   // ĐẾM THÔNG BÁO CHƯA ĐỌC
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
 
-  // Đồng bộ cờ Giao diện mới + màu chủ đề ra localStorage để các trang khác đọc nhanh
+  // Đồng bộ cờ Giao diện mới + màu chủ đề + mật độ/animation ra localStorage để các trang khác đọc nhanh
   useEffect(() => {
     localStorage.setItem('senexam_new_ui', newUiEnabled ? '1' : '0')
     localStorage.setItem('senexam_theme_color', themeColor)
-  }, [newUiEnabled, themeColor])
+    localStorage.setItem('senexam_density', uiDensity)
+    localStorage.setItem('senexam_animations', animationsEnabled ? '1' : '0')
+  }, [newUiEnabled, themeColor, uiDensity, animationsEnabled])
 
   // ============================================================================
   // INITIALIZATION & EFFECTS
@@ -230,6 +234,8 @@ export default function DashboardPage() {
     setIsAiEnabled(localStorage.getItem('senai_enabled') !== '0')
     setLanguage(localStorage.getItem('senexam_lang') || 'vi')
     setNotificationsEnabled(localStorage.getItem('senexam_notifications') !== '0')
+    setUiDensity(localStorage.getItem('senexam_density') === 'compact' ? 'compact' : 'comfortable')
+    setAnimationsEnabled(localStorage.getItem('senexam_animations') !== '0')
   }, [router])
 
   // Lắng nghe sự kiện để tính điểm tự động trong Modal Calculator
@@ -491,6 +497,8 @@ export default function DashboardPage() {
         setShowCodeModal={setShowCodeModal}
         overlayActive={overlayActive}
         themeColor={themeColor}
+        density={uiDensity}
+        animationsEnabled={animationsEnabled}
       />
 
 
@@ -606,19 +614,49 @@ export default function DashboardPage() {
                   </div>
 
                   {newUiEnabled && (
-                    <div className="p-4.5 pt-0">
-                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Màu chủ đề</p>
-                      <div className="flex flex-wrap gap-3">
-                        {THEME_COLORS.map(c => (
+                    <div className="p-4.5 pt-0 space-y-5">
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Màu chủ đề</p>
+                        <div className="flex flex-wrap gap-3">
+                          {THEME_COLORS.map(c => (
+                            <button
+                              key={c.key}
+                              onClick={() => changeThemeColor(c.key)}
+                              disabled={themeColorSaving}
+                              title={c.label}
+                              className={`w-8 h-8 rounded-full transition-all disabled:opacity-60 ${themeColor === c.key ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-offset-[#121212] dark:ring-white scale-110' : 'hover:scale-105'}`}
+                              style={{ background: isDark ? c.dark : c.light }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Mật độ hiển thị</p>
+                        <div className="flex items-center gap-2 bg-slate-100 dark:bg-[#1A1A1A] rounded-xl p-1 w-fit">
                           <button
-                            key={c.key}
-                            onClick={() => changeThemeColor(c.key)}
-                            disabled={themeColorSaving}
-                            title={c.label}
-                            className={`w-8 h-8 rounded-full transition-all disabled:opacity-60 ${themeColor === c.key ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-offset-[#121212] dark:ring-white scale-110' : 'hover:scale-105'}`}
-                            style={{ background: isDark ? c.dark : c.light }}
-                          />
-                        ))}
+                            onClick={() => setUiDensity('comfortable')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${uiDensity === 'comfortable' ? 'bg-white dark:bg-[#2A2A2A] text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}
+                          >
+                            Thoải mái
+                          </button>
+                          <button
+                            onClick={() => setUiDensity('compact')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${uiDensity === 'compact' ? 'bg-white dark:bg-[#2A2A2A] text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}
+                          >
+                            Gọn
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-slate-900 dark:text-white text-sm">Hiệu ứng chuyển động</p>
+                          <p className="text-[11px] font-medium text-slate-500">Tắt để mượt hơn trên máy yếu</p>
+                        </div>
+                        <button onClick={() => setAnimationsEnabled(v => !v)} className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors shrink-0 ${animationsEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-[#333333]'}`}>
+                          <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${animationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
                       </div>
                     </div>
                   )}

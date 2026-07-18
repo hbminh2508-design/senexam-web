@@ -70,7 +70,15 @@ export default function AdminDashboard() {
   const [isDark, setIsDark] = useState(false)
   
   // 🌟 TABS QUẢN TRỊ
-  const [activeTab, setActiveTab] = useState<'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab'>('upload')
+  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab'>('overview')
+
+  // 🌟 THỐNG KÊ TỔNG QUAN
+  const [overviewStats, setOverviewStats] = useState<{ examCount: number; userCount: number; submissionCount: number; pendingGradeCount: number } | null>(null)
+  const [overviewRecent, setOverviewRecent] = useState<any[]>([])
+  const [isFetchingOverview, setIsFetchingOverview] = useState(false)
+
+  // 🌟 CHỌN HÀNG LOẠT (BULK ACTIONS) CHO KHO ĐỀ
+  const [selectedExamIds, setSelectedExamIds] = useState<string[]>([])
 
   const [selectedSubForGrading, setSelectedSubForGrading] = useState<any | null>(null)
   const [gradingScores, setGradingScores] = useState<Record<string, string>>({})
@@ -205,6 +213,7 @@ export default function AdminDashboard() {
     if (!isAdmin) return
     const fetchData = async () => {
       setIsFetchingData(true)
+      setSelectedExamIds([])
       if (activeTab === 'manage') {
         const { data } = await supabase.from('exams').select('*').order('created_at', { ascending: false })
         setExamsList(data || [])
@@ -213,11 +222,56 @@ export default function AdminDashboard() {
         setUsersList(data || [])
       } else if (activeTab === 'submissions') {
         await refreshSubmissionsList()
+      } else if (activeTab === 'overview') {
+        await fetchOverviewStats()
       }
       setIsFetchingData(false)
     }
     fetchData()
   }, [activeTab, isAdmin])
+
+  const fetchOverviewStats = async () => {
+    setIsFetchingOverview(true)
+    try {
+      const [examsCountRes, usersCountRes, subsCountRes, pendingRes, recentSubsRes] = await Promise.all([
+        supabase.from('exams').select('id', { count: 'exact', head: true }),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('submissions').select('id', { count: 'exact', head: true }),
+        supabase.from('submissions').select('id', { count: 'exact', head: true }).eq('is_graded', false),
+        supabase.from('submissions').select('*, profiles:user_id (full_name), exams:exam_id (title, exam_type)').order('created_at', { ascending: false }).limit(8),
+      ])
+      setOverviewStats({
+        examCount: examsCountRes.count || 0,
+        userCount: usersCountRes.count || 0,
+        submissionCount: subsCountRes.count || 0,
+        pendingGradeCount: pendingRes.count || 0,
+      })
+      setOverviewRecent(recentSubsRes.data || [])
+    } catch (e) {
+      // Bỏ qua lỗi thống kê, không chặn các tab quản trị khác
+    }
+    setIsFetchingOverview(false)
+  }
+
+  const toggleExamSelection = (id: string) => {
+    setSelectedExamIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const toggleSelectAllExams = () => {
+    setSelectedExamIds(prev => prev.length === filteredExams.length ? [] : filteredExams.map((e: any) => e.id))
+  }
+
+  const handleBulkDeleteExams = async () => {
+    if (selectedExamIds.length === 0) return
+    if (!confirm(`Xóa vĩnh viễn ${selectedExamIds.length} đề thi đã chọn khỏi kho lưu trữ?`)) return
+    const { error } = await supabase.from('exams').delete().in('id', selectedExamIds)
+    if (!error) {
+      setExamsList(prev => prev.filter(e => !selectedExamIds.includes(e.id)))
+      setSelectedExamIds([])
+    } else {
+      alert('Lỗi xóa hàng loạt: ' + error.message)
+    }
+  }
 
   // CÁC HÀM XỬ LÝ FORM TRUYỀN THỐNG
   const addSection = () => { setExamStructure([...examStructure, { id: Date.now().toString(), type: 'mixed', name: `Phần thi số ${examStructure.length + 1}`, subject: selectedSubjects[0] || currentBlockData.subs[0], questionCount: 0, optionsCount: 4, correctAnswers: {}, scoringMode: 'auto_divide', sectionTotalPoints: 10, customPoints: {}, mixedRanges: [], questionEntries: {} }]) }
@@ -1000,6 +1054,7 @@ export default function AdminDashboard() {
       {/* SECTIONS CONTROLLER */}
       <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-8 relative z-10">
         <div className="flex border-b border-slate-200 dark:border-white/10 mb-8 gap-1 overflow-x-auto custom-scrollbar hide-scroll">
+          <button onClick={() => setActiveTab('overview')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><LayoutDashboard className="w-4 h-4"/>Tổng Quan</button>
           <button onClick={() => setActiveTab('upload')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'upload' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><PlusCircle className="w-4 h-4"/>Tạo Đề Từ PDF</button>
           
           {/* 🌟 TABS MỚI */}
@@ -1010,6 +1065,59 @@ export default function AdminDashboard() {
           <button onClick={() => setActiveTab('submissions')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'submissions' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><ClipboardList className="w-4 h-4"/>Chấm Điểm</button>
           <button onClick={() => setActiveTab('collab')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'collab' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Users className="w-4 h-4"/>Thành Viên</button>
         </div>
+
+        {/* 🌟 TAB TỔNG QUAN (OVERVIEW DASHBOARD) */}
+        {activeTab === 'overview' && (
+          <div className="animate-in fade-in duration-300 space-y-6">
+            {isFetchingOverview ? (
+              <div className="text-xs font-bold text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Đang tổng hợp số liệu...</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-2xl p-5 shadow-sm">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3"><Layers className="w-4.5 h-4.5"/></div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Đề thi</p>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{overviewStats?.examCount ?? '--'}</p>
+                  </div>
+                  <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-2xl p-5 shadow-sm">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3"><Users className="w-4.5 h-4.5"/></div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Người dùng</p>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{overviewStats?.userCount ?? '--'}</p>
+                  </div>
+                  <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-2xl p-5 shadow-sm">
+                    <div className="w-9 h-9 rounded-xl bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 flex items-center justify-center mb-3"><ClipboardList className="w-4.5 h-4.5"/></div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Bài đã nộp</p>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{overviewStats?.submissionCount ?? '--'}</p>
+                  </div>
+                  <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-2xl p-5 shadow-sm">
+                    <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3"><AlertCircle className="w-4.5 h-4.5"/></div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Chờ chấm</p>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{overviewStats?.pendingGradeCount ?? '--'}</p>
+                  </div>
+                </div>
+
+                <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm">
+                  <h2 className="text-sm font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest mb-5 flex items-center gap-2"><ClipboardList className="w-4 h-4"/>Hoạt động gần đây</h2>
+                  <div className="space-y-2">
+                    {overviewRecent.length === 0 ? (
+                      <p className="text-sm text-slate-400 font-medium py-6 text-center">Chưa có hoạt động nào.</p>
+                    ) : overviewRecent.map((sub: any) => (
+                      <div key={sub.id} className="flex items-center justify-between gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-[#161616] border border-slate-100 dark:border-white/5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{sub.exams?.title || 'Đề thi đã xóa'}</p>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">{sub.profiles?.full_name || 'Ẩn danh'} · {new Date(sub.created_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</p>
+                        </div>
+                        <span className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase ${sub.is_graded ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                          {sub.is_graded ? 'Đã chấm' : 'Chờ chấm'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* 🌟 TAB 1: TẠO ĐỀ PDF TRUYỀN THỐNG GIỮ NGUYÊN BÊN TRÊN */}
         {activeTab === 'upload' && (
@@ -1343,12 +1451,23 @@ export default function AdminDashboard() {
         {/* QUẢN LÝ KHO ĐỀ */}
         {activeTab === 'manage' && (
           <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm animate-in fade-in duration-300">
-            <h2 className="text-sm font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest mb-6 flex items-center gap-2"><Layers className="w-4 h-4"/>Kho đề thi trực tuyến hiện hành</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-sm font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest flex items-center gap-2"><Layers className="w-4 h-4"/>Kho đề thi trực tuyến hiện hành</h2>
+              {selectedExamIds.length > 0 && (
+                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-[#252525] px-3 py-1.5 rounded-lg">{selectedExamIds.length} đề đã chọn</span>
+                  <button onClick={handleBulkDeleteExams} className="text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5 shadow-sm"><Trash2 className="w-3.5 h-3.5"/> Xóa hàng loạt</button>
+                </div>
+              )}
+            </div>
             {isFetchingData ? <div className="text-xs font-bold text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Đang quét kho dữ liệu...</div> : (
               <div className="overflow-x-auto custom-scrollbar border border-slate-200 dark:border-white/5 rounded-[1.5rem] bg-white dark:bg-[#1E1E1E]">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#121212] text-slate-500 dark:text-slate-400 uppercase font-black text-[10px] tracking-widest">
+                      <th className="py-4 px-5 w-10">
+                        <input type="checkbox" checked={filteredExams.length > 0 && selectedExamIds.length === filteredExams.length} onChange={toggleSelectAllExams} className="w-4 h-4 rounded accent-indigo-600 cursor-pointer" />
+                      </th>
                       <th className="py-4 px-5">Tiêu đề đề thi</th>
                       <th className="py-4 px-5">Kỳ thi</th>
                       <th className="py-4 px-5">Thời gian</th>
@@ -1358,7 +1477,10 @@ export default function AdminDashboard() {
                   </thead>
                   <tbody>
                     {filteredExams.map(e => (
-                      <tr key={e.id} className="border-b last:border-0 border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525] transition-colors group">
+                      <tr key={e.id} className={`border-b last:border-0 border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525] transition-colors group ${selectedExamIds.includes(e.id) ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}>
+                        <td className="py-4 px-5">
+                          <input type="checkbox" checked={selectedExamIds.includes(e.id)} onChange={() => toggleExamSelection(e.id)} className="w-4 h-4 rounded accent-indigo-600 cursor-pointer" />
+                        </td>
                         <td className="py-4 px-5 font-bold text-slate-900 dark:text-white max-w-[300px] truncate">{e.title}</td>
                         <td className="py-4 px-5 font-black text-indigo-600 dark:text-indigo-400">{e.exam_type}</td>
                         <td className="py-4 px-5 font-bold text-slate-600 dark:text-slate-300">{e.duration} phút</td>
@@ -1376,7 +1498,7 @@ export default function AdminDashboard() {
                         </td>
                       </tr>
                     ))}
-                    {filteredExams.length === 0 && <tr><td colSpan={5} className="py-10 text-center text-slate-400 font-bold text-sm">Chưa có đề thi nào trong kho lưu trữ.</td></tr>}
+                    {filteredExams.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-slate-400 font-bold text-sm">Chưa có đề thi nào trong kho lưu trữ.</td></tr>}
                   </tbody>
                 </table>
               </div>

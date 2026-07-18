@@ -93,7 +93,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const [searchExamsResults, setSearchExamsResults] = useState<any[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
 
   const previewRef = useRef<HTMLDivElement | null>(null)
@@ -351,6 +351,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     return (
       <div
         className="min-h-screen font-sans pb-24"
+        data-motion={animationsEnabled ? 'on' : 'off'}
         style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
       >
         {previewDoc && (

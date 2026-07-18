@@ -35,7 +35,7 @@ export default function ForumPage() {
   const [uploadStatus, setUploadStatus] = useState('')
 
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
 
   const fetchPosts = async () => {
@@ -166,6 +166,7 @@ export default function ForumPage() {
     return (
       <div
         className="min-h-screen font-sans pb-16"
+        data-motion={animationsEnabled ? 'on' : 'off'}
         style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
       >
         {showCreateModal && (

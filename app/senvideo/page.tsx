@@ -36,7 +36,7 @@ export default function SenVideoPage() {
   const [activeVideo, setActiveVideo] = useState<any | null>(null)
   const [showVlcInfo, setShowVlcInfo] = useState(false)
   const [copied, setCopied] = useState(false)
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
 
   // ==========================================================================
@@ -150,6 +150,7 @@ export default function SenVideoPage() {
     return (
       <div
         className="min-h-screen font-sans pb-16"
+        data-motion={animationsEnabled ? 'on' : 'off'}
         style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
       >
         <header className="h-16 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>

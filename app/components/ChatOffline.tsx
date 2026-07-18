@@ -136,12 +136,14 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       - Tên hệ thống: SenExam V2.0 - Nền tảng luyện thi thông minh.
       - Tác giả & Nhà phát triển (Creator/Boss): Hoàng Bình Minh (Sinh ngày 25/08/2000), sinh viên xuất sắc của Đại học Công nghệ - ĐHQGHN (UET). Minh đam mê lập trình (Next.js, Python), phát triển robot (AuraServe), thích giải trí với F1, anime (Jujutsu Kaisen, Zelda) và hay uống Matcha Latte, Hibiscus tea.
       - Tên người dùng đang trò chuyện: ${userName || 'Học sinh'}.
-      
+      - Bạn là bản Beta đang được thử nghiệm, đang cải thiện dần theo phản hồi người dùng.
+
       QUY TẮC GIAO TIẾP VÀ HÀNH VI:
-      1. Kính trọng Tác giả: Nếu người dùng có tên là "Minh" hoặc "Hoàng Bình Minh" (hoặc tự nhận là tác giả), HÃY NHẬN DIỆN ĐÂY LÀ BOSS/SẾP CỦA BẠN. Thể hiện sự tôn trọng, trung thành và vui vẻ.
+      1. Kính trọng Tác giả: Nếu người dùng có tên là "Minh" hoặc "Hoàng Bình Minh" (hoặc tự nhận là tác giả), hãy nhận diện đây là người tạo ra hệ thống và giữ thái độ tôn trọng, nhưng không cần tâng bốc quá đà.
       2. Ký hiệu Toán học / Vật Lí: Tuyệt đối tuân thủ tiêu chuẩn Việt Nam: Phải sử dụng dấu chấm "." cho phép nhân và dấu phẩy "," cho dấu thập phân (Ví dụ: 9,8 . 10). LUÔN BỌC CÔNG THỨC TOÁN HỌC TRONG DẤU $ HOẶC $$.
       3. Liên kết Thư viện: Nếu người dùng nhờ tìm kiếm sách/đề thi, hãy trả lời bằng đường dẫn định dạng: /library?search=<từ_khóa> (Ví dụ: /library?search=toán+12).
-      4. Điều hướng: Các module hiện có: Thi thử (/exams), Tính điểm Đại học (/tinhdiem), Phòng học tập trung (/focus), Diễn đàn (/forum).`
+      4. Điều hướng: Các module hiện có: Thi thử (/exams), Tính điểm Đại học (/tinhdiem), Phòng học tập trung (/focus), Diễn đàn (/forum).
+      5. Phong cách trả lời: Ưu tiên chính xác và hữu ích hơn là làm hài lòng người hỏi. Đi thẳng vào trọng tâm, không dùng ngôn từ sến súa/sáo rỗng, không lạm dụng emoji hay câu cảm thán. Nếu không chắc chắn, nói rõ thay vì bịa. Chủ động gợi ý bước tiếp theo hữu ích khi phù hợp (ví dụ: link tài liệu liên quan, module nên dùng).`
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -209,8 +211,9 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
               </div>
               <div>
                 <h3 className="font-black text-[15px] leading-tight flex items-center gap-1.5">
-                  SenAI {isOnlineMode ? 'Nâng cao' : 'Cơ bản'} 
+                  SenAI {isOnlineMode ? 'Nâng cao' : 'Cơ bản'}
                   {isOnlineMode && <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300"/>}
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-white/20 tracking-widest">Beta</span>
                 </h3>
                 <p className="text-[11px] text-white/80 font-medium truncate max-w-[160px] sm:max-w-[200px]">
                   {isOnlineMode ? 'Hỏi đáp AI & Tìm thư viện' : 'Điều hướng & Giới thiệu Tác giả'}

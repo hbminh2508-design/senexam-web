@@ -15,6 +15,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getAccentHex } from '@/app/components/modernTheme'
 
 // Khai báo global cho YouTube Iframe API để fix lỗi TypeScript
 declare global {
@@ -92,7 +94,12 @@ const mdCard = "bg-white/5 dark:bg-[#1A1A1A]/60 backdrop-blur-2xl backdrop-satur
 // ============================================================================
 export default function FocusRoomPage() {
   const router = useRouter()
-  
+  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const accentColor = newUiEnabled ? getAccentHex(themeColor, true) : '#22d3ee'
+  const cardClass = newUiEnabled
+    ? "bg-white/[0.04] border border-white/10 shadow-none rounded-2xl overflow-hidden transition-colors"
+    : mdCard
+
   // -- Cấu trúc Layout (Split Pane Responsive) --
   const [leftWidth, setLeftWidth] = useState(55) // Theo phần trăm (%)
   const [isDragging, setIsDragging] = useState(false)
@@ -340,18 +347,24 @@ export default function FocusRoomPage() {
     setTimeout(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight }, 50)
 
     try {
-      const systemContext = `Bạn là SenAI - Trợ lý Học tập thông minh trong Phòng Tập Trung (Focus Room) của hệ thống SenExam.
+      const systemContext = `Bạn là SenAI (bản Beta) - Trợ lý Học tập trong Phòng Tập Trung (Focus Room) của hệ thống SenExam.
       Tên người dùng: ${userName}. (Nếu tên chứa chữ "Minh", đây là Boss/Người sáng lập hệ thống).
-      
+
       NHIỆM VỤ ĐẶC BIỆT (SMART ACTIONS):
       Bạn có quyền ĐIỀU KHIỂN phòng học của học sinh bằng cách chèn các [MÃ LỆNH] vào câu trả lời của mình. Hãy tự động chèn mã nếu người dùng yêu cầu đặt giờ học hoặc chuyển nhạc:
       1. Để đặt đồng hồ đếm ngược: Chèn [TIMER:số_phút]. Ví dụ: [TIMER:25] (để đặt 25 phút).
       2. Để chuyển nhạc/video: Chèn [PLAY:YoutubeID]. Ví dụ nhạc Lofi: [PLAY:DWcJFNfaw9c], Piano: [PLAY:2OEL4P1Rz04], Mưa: [PLAY:7NOSDKb0HlU].
-      
+
       QUY TẮC HIỂN THỊ:
       - Sử dụng dấu chấm "." cho phép nhân, phẩy "," cho thập phân.
       - LUÔN LUÔN BỌC CÔNG THỨC TOÁN HỌC TRONG DẤU $ (inline) hoặc $$ (block).
-      - Hãy đọc kỹ file ảnh/PDF người dùng gửi lên để giải đáp thật chi tiết, từng bước một.`
+      - Hãy đọc kỹ file ảnh/PDF người dùng gửi lên để giải đáp thật chi tiết, từng bước một, chỉ ra rõ chỗ học sinh dễ sai.
+
+      PHONG CÁCH TRẢ LỜI:
+      - Đi thẳng vào trọng tâm, ưu tiên độ chính xác và tính hữu ích hơn là làm hài lòng người hỏi.
+      - Không dùng ngôn từ sến súa, sáo rỗng, cảm thán quá đà hay quá nhiều emoji trang trí; chỉ dùng emoji khi thực sự làm rõ ý.
+      - Nếu không chắc chắn về một bước giải, hãy nói rõ thay vì bịa cho trôi chảy.
+      - Chủ động gợi ý bước tiếp theo hữu ích (ví dụ: đặt giờ học phù hợp với độ khó câu hỏi) thay vì chỉ trả lời máy móc.`
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -402,7 +415,10 @@ export default function FocusRoomPage() {
   // RENDER UI CHÍNH
   // ============================================================================
   return (
-    <div className={`h-screen w-full flex flex-col text-white font-sans overflow-hidden transition-colors duration-1000 ${activeBackground.className}`}>
+    <div
+      className={`h-screen w-full flex flex-col text-white font-sans overflow-hidden transition-colors duration-1000 ${activeBackground.className}`}
+      style={{ '--accent': accentColor } as React.CSSProperties}
+    >
       
       {/* 🌟 OVERLAY TRONG SUỐT CHO KÉO THẢ CHỐNG LAG IFRAME */}
       {isDragging && <div className="fixed inset-0 z-[9999] cursor-col-resize" />}
@@ -427,7 +443,7 @@ export default function FocusRoomPage() {
               key={bg.id}
               onClick={() => setBackgroundId(bg.id)}
               title={bg.name}
-              className={`w-8 h-8 rounded-full border-2 transition-all ${backgroundId === bg.id ? 'border-cyan-400 scale-110' : 'border-transparent hover:border-white/50'}`}
+              className={`w-8 h-8 rounded-full border-2 transition-all ${backgroundId === bg.id ? 'border-[var(--accent)] scale-110' : 'border-transparent hover:border-white/50'}`}
               style={{ background: bg.id === 'midnight' ? '#0f172a' : bg.id === 'forest' ? '#064e3b' : bg.id === 'sunset' ? '#7c2d12' : '#101a33' }}
             />
           ))}
@@ -448,12 +464,12 @@ export default function FocusRoomPage() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             
             {/* THẺ ĐỒNG HỒ */}
-            <div className={`${mdCard} p-6 flex flex-col items-center justify-center relative overflow-hidden group min-h-[280px]`}>
+            <div className={`${cardClass} p-6 flex flex-col items-center justify-center relative overflow-hidden group min-h-[280px]`}>
               <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-50"></div>
               
               <div className="flex items-center gap-2 bg-white/10 rounded-full p-1 mb-6 border border-white/10">
-                <button onClick={() => setTimerMode('countdown')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${timerMode === 'countdown' ? 'bg-cyan-500 text-black shadow-md' : 'text-white/60 hover:text-white'}`}>Đếm ngược</button>
-                <button onClick={() => setTimerMode('stopwatch')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${timerMode === 'stopwatch' ? 'bg-cyan-500 text-black shadow-md' : 'text-white/60 hover:text-white'}`}>Tính giờ</button>
+                <button onClick={() => setTimerMode('countdown')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${timerMode === 'countdown' ? 'bg-[var(--accent)] text-black shadow-md' : 'text-white/60 hover:text-white'}`}>Đếm ngược</button>
+                <button onClick={() => setTimerMode('stopwatch')} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${timerMode === 'stopwatch' ? 'bg-[var(--accent)] text-black shadow-md' : 'text-white/60 hover:text-white'}`}>Tính giờ</button>
               </div>
 
               <div className="text-[5rem] lg:text-[6rem] font-black tracking-tighter leading-none mb-6 drop-shadow-[0_0_20px_rgba(34,211,238,0.3)]">
@@ -461,7 +477,7 @@ export default function FocusRoomPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <button onClick={() => setIsRunning(!isRunning)} className="w-14 h-14 rounded-full bg-cyan-400 hover:bg-cyan-300 text-black flex items-center justify-center transition-transform active:scale-95 shadow-[0_0_20px_rgba(34,211,238,0.4)]">
+                <button onClick={() => setIsRunning(!isRunning)} className="w-14 h-14 rounded-full bg-[var(--accent)] hover:opacity-90 text-black flex items-center justify-center transition-transform active:scale-95 shadow-[0_0_20px_rgba(34,211,238,0.4)]">
                   {isRunning ? <PauseCircle className="w-8 h-8"/> : <PlayCircle className="w-8 h-8"/>}
                 </button>
                 <button onClick={() => { setIsRunning(false); if(timerMode==='countdown') setCountdownSeconds(parseInt(countdownInput)*60); else setStopwatchSeconds(0) }} className="w-12 h-12 rounded-full border border-white/20 hover:bg-white/10 flex items-center justify-center transition-colors">
@@ -476,16 +492,16 @@ export default function FocusRoomPage() {
                     type="number" 
                     value={countdownInput}
                     onChange={(e) => { setCountdownInput(e.target.value); setCountdownSeconds(parseInt(e.target.value)*60 || 0) }}
-                    className="w-16 bg-black/30 border border-white/20 rounded-lg px-2 py-1 text-center font-bold text-sm outline-none focus:border-cyan-400"
+                    className="w-16 bg-black/30 border border-white/20 rounded-lg px-2 py-1 text-center font-bold text-sm outline-none focus:border-[var(--accent)]"
                   />
                 </div>
               )}
             </div>
 
             {/* THẺ TRÌNH PHÁT VIDEO LOFI & CUSTOM LINK */}
-            <div className={`${mdCard} flex flex-col p-4`}>
+            <div className={`${cardClass} flex flex-col p-4`}>
               <div className="flex items-center justify-between mb-4 px-2">
-                <h3 className="font-black text-sm uppercase tracking-widest text-cyan-400 flex items-center gap-2">
+                <h3 className="font-black text-sm uppercase tracking-widest text-[var(--accent)] flex items-center gap-2">
                   <Music2 className="w-4 h-4"/> Lofi & Media
                 </h3>
                 <button onClick={() => setIsVideoMaximized(true)} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white" title="Phóng to Video">
@@ -510,7 +526,7 @@ export default function FocusRoomPage() {
                 <input 
                   type="range" min={0} max={100} value={volumeLevel} 
                   onChange={(e) => setVolumeLevel(Number(e.target.value))}
-                  className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                  className="w-full h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
                 />
               </div>
 
@@ -519,7 +535,7 @@ export default function FocusRoomPage() {
                 {LOFI_PLAYLIST.map(track => (
                   <button 
                     key={track.videoId} onClick={() => setSelectedVideoId(track.videoId)}
-                    className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border transition-colors whitespace-nowrap ${selectedVideoId === track.videoId ? 'bg-cyan-500/20 border-cyan-400 text-cyan-100' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white/70'}`}
+                    className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border transition-colors whitespace-nowrap ${selectedVideoId === track.videoId ? 'bg-[var(--accent)]/20 border-[var(--accent)] text-[var(--accent)]' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white/70'}`}
                   >
                     {track.title}
                   </button>
@@ -528,24 +544,24 @@ export default function FocusRoomPage() {
 
               {/* 🌟 KHU VỰC THÊM NHẠC YOUTUBE TÙY CHỈNH */}
               <div className="mt-3 pt-3 border-t border-white/10">
-                <h4 className="text-[10px] font-black uppercase text-cyan-400 mb-2 flex items-center gap-1"><LinkIcon className="w-3 h-3"/> Thêm video tùy chỉnh</h4>
+                <h4 className="text-[10px] font-black uppercase text-[var(--accent)] mb-2 flex items-center gap-1"><LinkIcon className="w-3 h-3"/> Thêm video tùy chỉnh</h4>
                 <div className="flex flex-col gap-2">
                   <input 
                     value={customVideoUrl}
                     onChange={(e) => setCustomVideoUrl(e.target.value)}
                     placeholder="Dán link YouTube (VD: https://youtu.be/...)"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-cyan-400 transition-colors"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-[var(--accent)] transition-colors"
                   />
                   <div className="flex gap-2">
                     <input 
                       value={customVideoTitle}
                       onChange={(e) => setCustomVideoTitle(e.target.value)}
                       placeholder="Tiêu đề (Không bắt buộc)"
-                      className="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-cyan-400 transition-colors"
+                      className="flex-1 bg-black/20 border border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-[var(--accent)] transition-colors"
                     />
                     <button 
                       onClick={handleAddVideoToStream}
-                      className="shrink-0 bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 rounded-xl text-xs font-black transition-colors flex items-center gap-1 shadow-md"
+                      className="shrink-0 bg-[var(--accent)] hover:bg-[var(--accent)] text-black px-4 py-2.5 rounded-xl text-xs font-black transition-colors flex items-center gap-1 shadow-md"
                     >
                       <PlusCircle className="w-3.5 h-3.5"/> Thêm
                     </button>
@@ -560,7 +576,7 @@ export default function FocusRoomPage() {
                       <div key={track.videoId} className="shrink-0 flex items-center group/track shadow-sm">
                         <button 
                           onClick={() => setSelectedVideoId(track.videoId)}
-                          className={`px-3 py-2 rounded-l-xl text-xs font-bold border-y border-l transition-colors whitespace-nowrap ${selectedVideoId === track.videoId ? 'bg-cyan-500/20 border-cyan-400 text-cyan-100' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white/70'}`}
+                          className={`px-3 py-2 rounded-l-xl text-xs font-bold border-y border-l transition-colors whitespace-nowrap ${selectedVideoId === track.videoId ? 'bg-[var(--accent)]/20 border-[var(--accent)] text-[var(--accent)]' : 'bg-white/5 border-white/10 hover:bg-white/10 text-white/70'}`}
                         >
                           {track.title}
                         </button>
@@ -582,7 +598,7 @@ export default function FocusRoomPage() {
           </div>
 
           {/* HÀNG 2: THƯ VIỆN & TÀI LIỆU */}
-          <div className={`${mdCard} p-6 flex-1 flex flex-col min-h-[350px]`}>
+          <div className={`${cardClass} p-6 flex-1 flex flex-col min-h-[350px]`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-black text-sm uppercase tracking-widest text-emerald-400 flex items-center gap-2">
                 <LibraryBig className="w-4 h-4"/> Thư viện Tài liệu
@@ -642,9 +658,9 @@ export default function FocusRoomPage() {
         {/* ========================================================= */}
         <div 
           onMouseDown={() => setIsDragging(true)}
-          className="hidden lg:flex w-1.5 hover:w-2 bg-white/5 hover:bg-cyan-400/50 cursor-col-resize z-30 transition-all items-center justify-center relative group"
+          className="hidden lg:flex w-1.5 hover:w-2 bg-white/5 hover:bg-[var(--accent)]/50 cursor-col-resize z-30 transition-all items-center justify-center relative group"
         >
-          <div className="h-8 w-1 bg-white/30 rounded-full group-hover:bg-cyan-400"></div>
+          <div className="h-8 w-1 bg-white/30 rounded-full group-hover:bg-[var(--accent)]"></div>
         </div>
 
         {/* ========================================================= */}
@@ -661,7 +677,10 @@ export default function FocusRoomPage() {
               <Bot className="w-6 h-6 text-indigo-400"/>
             </div>
             <div>
-              <h2 className="font-black text-white flex items-center gap-2">Gia sư SenAI <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400"/></h2>
+              <h2 className="font-black text-white flex items-center gap-2">
+                Gia sư SenAI <Sparkles className="w-4 h-4 text-yellow-400 fill-yellow-400"/>
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 tracking-widest">Beta</span>
+              </h2>
               <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest">Hỗ trợ giải bài & Điều khiển phòng</p>
             </div>
           </div>
@@ -709,7 +728,7 @@ export default function FocusRoomPage() {
                         components={{
                           p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
                           strong: ({node, ...props}) => <strong className="font-extrabold text-white" {...props} />,
-                          a: ({node, ...props}) => <a className="underline font-bold text-cyan-400 hover:text-cyan-300" target="_blank" {...props} />,
+                          a: ({node, ...props}) => <a className="underline font-bold text-[var(--accent)] hover:opacity-80" target="_blank" {...props} />,
                           code: ({node, inline, ...props}: any) => 
                             inline 
                               ? <code className="bg-black/30 px-1.5 py-0.5 rounded text-pink-300 text-[12px] font-mono" {...props} />

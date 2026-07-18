@@ -110,7 +110,7 @@ export default function VirtualLabPage() {
     else if (activeExp === 'equipotential') ctx += `Điện trường: Điện tích q1=${params.q1}uC, q2=${params.q2}uC.`
     else if (activeExp === 'dispersion') ctx += `Lăng kính: Góc chiết quang A=${params.prismAngle}°, Góc tới i=${params.incidenceAngle}°, Chiết suất n=${params.n}.`
     
-    const sysPrompt = `Bạn là SenAI, gia sư Vật lý. BỐI CẢNH THỰC TẾ: ${ctx}. Bọc công thức Toán học bằng $ hoặc $$, dùng dấu "." cho phép nhân, phẩy "," cho số thập phân.`
+    const sysPrompt = `Bạn là SenAI (bản Beta), gia sư Vật lý. BỐI CẢNH THỰC TẾ: ${ctx}. Bọc công thức Toán học bằng $ hoặc $$, dùng dấu "." cho phép nhân, phẩy "," cho số thập phân. Giải thích ngắn gọn, đi thẳng vào bản chất hiện tượng và công thức liên quan, không dùng ngôn từ sến súa hay cảm thán quá đà.`
 
     try {
       const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q, history: [], context: sysPrompt }) })
@@ -453,7 +453,7 @@ export default function VirtualLabPage() {
             <div className={`p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/90 dark:bg-[#1A1A1A]/90 backdrop-blur-md flex justify-between items-center shrink-0 w-full ${isAiMax ? 'pt-8 pb-4' : ''}`}>
               <div className="flex gap-3 items-center">
                 <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center border border-indigo-200 dark:border-indigo-500/30"><Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400"/></div>
-                <div><h4 className="font-black text-sm text-slate-900 dark:text-white">Gia sư Lab SenAI</h4><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hỏi đáp & Phân tích hiện tượng</p></div>
+                <div><h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">Gia sư Lab SenAI <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 tracking-widest">Beta</span></h4><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Hỏi đáp & Phân tích hiện tượng</p></div>
               </div>
               <button onClick={() => setIsAiMax(!isAiMax)} className="p-3 bg-slate-200/50 dark:bg-[#252525] rounded-xl hover:bg-indigo-100 hover:text-indigo-600 transition-colors shadow-sm">
                 {isAiMax ? <Minimize2 className="w-6 h-6"/> : <Maximize2 className="w-5 h-5"/>}

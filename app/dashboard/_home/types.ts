@@ -32,4 +32,6 @@ export type HomeProps = {
   setShowCodeModal: (v: boolean) => void
   overlayActive: boolean
   themeColor: string
+  density: 'comfortable' | 'compact'
+  animationsEnabled: boolean
 }

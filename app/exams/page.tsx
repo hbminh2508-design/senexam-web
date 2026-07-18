@@ -22,7 +22,7 @@ export default function ExamsLibraryPage() {
   const [loading, setLoading] = useState(true)
   const [exams, setExams] = useState<any[]>([])
   const [userSubmissions, setUserSubmissions] = useState<any[]>([])
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -94,6 +94,7 @@ export default function ExamsLibraryPage() {
     return (
       <div
         className="min-h-screen font-sans pb-16"
+        data-motion={animationsEnabled ? 'on' : 'off'}
         style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

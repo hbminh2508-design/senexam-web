@@ -24,13 +24,15 @@ export default function ModernHome({
   router, userRole, formData, isDark, toggleTheme, unreadCount,
   setShowNotifications, setShowProfile, showFeatureMenu, setShowFeatureMenu,
   FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
-  overlayActive, themeColor,
+  overlayActive, themeColor, density, animationsEnabled,
 }: HomeProps) {
   const bestScore = studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : null
+  const isCompact = density === 'compact'
 
   return (
     <div
       className="min-h-screen font-sans pb-16"
+      data-motion={animationsEnabled ? 'on' : 'off'}
       style={{
         // Bảng màu trung tính ấm, giảm hiệu ứng blur/gradient nặng để trang tải nhẹ hơn
         ...getModernThemeVars(themeColor, isDark),
@@ -120,7 +122,7 @@ export default function ModernHome({
       </header>
 
       <main
-        className={`max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 transition-opacity duration-200 ${overlayActive ? 'opacity-30 pointer-events-none select-none' : ''}`}
+        className={`max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 transition-opacity duration-200 ${isCompact ? 'py-5 space-y-5' : 'py-8 space-y-8'} ${overlayActive ? 'opacity-30 pointer-events-none select-none' : ''}`}
       >
         {activeAnnouncement && (
           <div className="rounded-xl p-5 flex items-start gap-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

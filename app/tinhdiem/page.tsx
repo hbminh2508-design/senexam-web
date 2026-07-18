@@ -14,6 +14,8 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm' // Thêm thư viện hỗ trợ render Bảng (Table)
 import 'katex/dist/katex.min.css'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getAccentHex } from '@/app/components/modernTheme'
 
 // Các hằng số giao diện chuẩn Material Design 3 + Liquid Glass
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm transition-all duration-300"
@@ -43,6 +45,8 @@ type ChatMessage = {
 export default function ScoreCalculatorPage() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(false)
+  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const accentColor = newUiEnabled ? getAccentHex(themeColor, isDark) : (isDark ? '#818CF8' : '#4F46E5')
 
   // Navigation Tabs
   const [activeExam, setActiveExam] = useState<'THPTQG' | 'HSA' | 'TSA'>('THPTQG')
@@ -163,10 +167,10 @@ export default function ScoreCalculatorPage() {
     if (customPassion.trim()) allPassions.push(customPassion.trim())
     const passionText = allPassions.length > 0 ? allPassions.join(', ') : 'Chưa định hướng rõ ràng'
 
-    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. 
-    Nhiệm vụ của bạn là tư vấn trường, ngành phù hợp dựa trên ĐIỂM SỐ, KHỐI THI và ĐAM MÊ NGHỀ NGHIỆP của học sinh. 
-    Lưu ý quan trọng: Dữ liệu của 248 trường đại học và hơn 2400 ngành được cập nhật đến năm 2025. Hãy tham chiếu mức điểm chuẩn năm 2025 để dự báo. 
-    Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn".`
+    const systemContext = `Bạn là SenAI (bản Beta) - Gia sư Tuyển sinh Đại học năm 2026.
+    Nhiệm vụ của bạn là tư vấn trường, ngành phù hợp dựa trên ĐIỂM SỐ, KHỐI THI và ĐAM MÊ NGHỀ NGHIỆP của học sinh.
+    Lưu ý quan trọng: Dữ liệu của 248 trường đại học và hơn 2400 ngành được cập nhật đến năm 2025. Hãy tham chiếu mức điểm chuẩn năm 2025 để dự báo.
+    Trình bày bằng danh sách Markdown, rõ ràng, đi thẳng vào trọng tâm, xưng "Mình" gọi "Bạn". Không dùng ngôn từ sến súa hay cảm thán quá đà. Nếu điểm số nằm ở mức rủi ro với nguyện vọng nào, hãy nói thẳng thay vì né tránh, và luôn gợi ý thêm phương án an toàn.`
 
     const prompt = `Mình vừa tính điểm xét tuyển trên hệ thống:
 - Tổng điểm xét tuyển: **${result.totalScore}** (Thang 30)
@@ -214,7 +218,7 @@ ${calcMode === 'standard'
     setAiMessages(newHistory)
     setIsAiLoading(true)
 
-    const systemContext = `Bạn là SenAI - Gia sư Tuyển sinh Đại học năm 2026. Tham chiếu mức điểm chuẩn năm 2025 (dữ liệu của 248 trường và hơn 2400 ngành) để đưa ra dự báo. Trình bày bằng danh sách Markdown, thân thiện, rõ ràng, xưng "Mình" gọi "Bạn". Học sinh đang có ${result?.totalScore} điểm, khối ${selectedBlock}.`
+    const systemContext = `Bạn là SenAI (bản Beta) - Gia sư Tuyển sinh Đại học năm 2026. Tham chiếu mức điểm chuẩn năm 2025 (dữ liệu của 248 trường và hơn 2400 ngành) để đưa ra dự báo. Trình bày bằng danh sách Markdown, rõ ràng, đi thẳng vào trọng tâm, xưng "Mình" gọi "Bạn". Không dùng ngôn từ sến súa hay cảm thán quá đà. Học sinh đang có ${result?.totalScore} điểm, khối ${selectedBlock}.`
 
     try {
       const res = await fetch('/api/chat', {
@@ -237,7 +241,10 @@ ${calcMode === 'standard'
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 relative overflow-x-hidden pb-10">
+    <div
+      className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 relative overflow-x-hidden pb-10"
+      style={{ '--accent': accentColor } as React.CSSProperties}
+    >
       
       {/* Nền đồ họa Background Ambient */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/20 to-purple-500/10 dark:from-indigo-900/30 dark:to-purple-900/20 rounded-full blur-[120px] pointer-events-none"></div>
@@ -265,13 +272,13 @@ ${calcMode === 'standard'
         
         {/* Navigation Tabs (Pill Buttons) */}
         <div className="flex overflow-x-auto gap-3 pb-4 mb-6 custom-scrollbar hide-scroll">
-          <button onClick={() => setActiveExam('THPTQG')} className={`px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-sm border ${activeExam === 'THPTQG' ? 'bg-indigo-600 text-white border-transparent' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525]'}`}>
+          <button onClick={() => setActiveExam('THPTQG')} className={`px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-sm border ${activeExam === 'THPTQG' ? 'bg-[var(--accent)] text-white border-transparent' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525]'}`}>
             <GraduationCap className="w-5 h-5"/> Thi THPT Quốc Gia
           </button>
-          <button onClick={() => setActiveExam('HSA')} className={`px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-sm border ${activeExam === 'HSA' ? 'bg-indigo-600 text-white border-transparent' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525]'}`}>
+          <button onClick={() => setActiveExam('HSA')} className={`px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-sm border ${activeExam === 'HSA' ? 'bg-[var(--accent)] text-white border-transparent' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525]'}`}>
             <Target className="w-5 h-5"/> ĐGNL (HSA)
           </button>
-          <button onClick={() => setActiveExam('TSA')} className={`px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-sm border ${activeExam === 'TSA' ? 'bg-indigo-600 text-white border-transparent' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525]'}`}>
+          <button onClick={() => setActiveExam('TSA')} className={`px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-sm border ${activeExam === 'TSA' ? 'bg-[var(--accent)] text-white border-transparent' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525]'}`}>
             <BookOpen className="w-5 h-5"/> ĐGTD (TSA)
           </button>
         </div>
@@ -497,7 +504,7 @@ ${calcMode === 'standard'
                             <button 
                               key={passion} 
                               onClick={() => togglePassion(passion)}
-                              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${selectedPassions.includes(passion) ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-indigo-400'}`}
+                              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${selectedPassions.includes(passion) ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-md' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-[var(--accent)]'}`}
                             >
                               {passion}
                             </button>
@@ -537,7 +544,7 @@ ${calcMode === 'standard'
                               <Bot className="w-5 h-5"/>
                             </div>
                             <div>
-                              <h4 className="font-black text-slate-900 dark:text-white text-sm">Gia sư Tuyển sinh SenAI</h4>
+                              <h4 className="font-black text-slate-900 dark:text-white text-sm flex items-center gap-1.5">Gia sư Tuyển sinh SenAI <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 tracking-widest">Beta</span></h4>
                               <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Big Data: 248 Trường & 2400 Ngành</p>
                             </div>
                           </div>
@@ -556,7 +563,7 @@ ${calcMode === 'standard'
                                 </div>
                               )}
 
-                              <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14px] font-medium leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm overflow-x-auto'}`}>
+                              <div className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14px] font-medium leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-[var(--accent)] text-white rounded-br-sm' : 'bg-slate-50 dark:bg-[#202020] border border-slate-100 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm overflow-x-auto'}`}>
                                 {/* SỬ DỤNG REACT-MARKDOWN ĐỂ RENDER CHUẨN CÔNG THỨC VÀ MARKDOWN BẢNG */}
                                 <ReactMarkdown
                                   remarkPlugins={[remarkMath, remarkGfm]}
@@ -597,7 +604,7 @@ ${calcMode === 'standard'
                                 <span className="flex gap-1">
                                   <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
                                   <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
-                                  <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
+                                  <span className="w-1.5 h-1.5 bg-[var(--accent)] rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
                                 </span>
                                 <span className="text-[12px] text-slate-500 font-bold italic ml-1">Đang truy xuất phổ điểm 2025...</span>
                               </div>
@@ -618,7 +625,7 @@ ${calcMode === 'standard'
                             <button
                               type="submit"
                               disabled={!aiInput.trim() || isAiLoading}
-                              className="absolute right-1.5 p-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full transition-transform active:scale-95 shadow-md flex items-center justify-center disabled:opacity-50"
+                              className="absolute right-1.5 p-2 bg-[var(--accent)] hover:opacity-90 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-full transition-transform active:scale-95 shadow-md flex items-center justify-center disabled:opacity-50"
                             >
                               <Send className="w-4 h-4 ml-0.5" />
                             </button>
