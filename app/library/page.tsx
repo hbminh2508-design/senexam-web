@@ -13,6 +13,8 @@ import {
 // Imports hệ thống
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -91,6 +93,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const [searchExamsResults, setSearchExamsResults] = useState<any[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   
+  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
+
   const previewRef = useRef<HTMLDivElement | null>(null)
   const searchDebounceRef = useRef<number | null>(null)
   const fetchContentsRequestRef = useRef(0)
@@ -228,7 +233,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
       }
       setLoading(false)
     }
-    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark')
+    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+    if (dark) document.documentElement.classList.add('dark')
+    setIsDark(dark)
     init()
   }, [router])
 
@@ -339,6 +346,204 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   // RENDER GIAO DIỆN CHÍNH
   // ============================================================================
   if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-500 mb-4" /><p className="font-bold text-slate-500">Đang khởi tạo thư viện...</p></div>
+
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans pb-24"
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        {previewDoc && (
+          <div className="fixed inset-0 z-[999] bg-black/70 flex items-center justify-center p-3 md:p-6">
+            <div className="w-full max-w-5xl h-[90vh] rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="h-14 px-4 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                <div className="flex items-center gap-2 truncate"><FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} /><h3 className="font-medium text-sm truncate">{previewDoc.title}</h3></div>
+                <div className="flex gap-1.5 shrink-0">
+                  <a href={pUrls.download} className="p-2 rounded-lg text-xs font-medium flex items-center gap-1" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><Download className="w-3.5 h-3.5"/>Tải</a>
+                  <a href={pUrls.open} target="_blank" rel="noreferrer" className="p-2 rounded-lg text-xs font-medium flex items-center gap-1 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"><ExternalLink className="w-3.5 h-3.5"/>Mở Drive</a>
+                  <button onClick={() => setPreviewDoc(null)} className="p-2 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-4 h-4" /></button>
+                </div>
+              </div>
+              <div ref={previewRef} className="flex-1 bg-black/5 dark:bg-black/40 flex items-center justify-center relative">
+                {getFileKind(previewDoc.title)==='pdf' ? <iframe src={pUrls.preview} className="absolute inset-0 w-full h-full border-none"/> : getFileKind(previewDoc.title)==='image' ? <img src={pUrls.download} className="max-h-[86vh] max-w-full object-contain"/> : <iframe src={pUrls.preview} className="absolute inset-0 w-full h-full border-none"/>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showFolderModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+            <div className="w-full max-w-sm rounded-2xl p-6 relative" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <button onClick={() => setShowFolderModal(false)} className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-4 h-4"/></button>
+              <h3 className="text-base font-semibold mb-4 flex items-center gap-2"><Folder className="w-4 h-4" style={{ color: 'var(--accent)' }}/> Tạo thư mục</h3>
+              <input type="text" value={newFolderName} onChange={e=>setNewFolderName(e.target.value)} className="w-full rounded-lg px-3 py-2.5 text-sm outline-none bg-transparent mb-4" style={{ border: '1px solid var(--border)' }} placeholder="Tên thư mục..." />
+              <button onClick={handleCreateFolder} className="w-full py-2.5 rounded-lg text-sm font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>Tạo mới</button>
+            </div>
+          </div>
+        )}
+
+        {showDocModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+            <div className="w-full max-w-md rounded-2xl p-6 relative" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <button onClick={() => {setShowDocModal(false); setDocFiles([])}} className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-4 h-4"/></button>
+              <h3 className="text-base font-semibold mb-4 flex items-center gap-2"><UploadCloud className="w-4 h-4" style={{ color: 'var(--accent)' }}/> Tải tài liệu lên</h3>
+              <form onSubmit={handleUploadDocument} className="space-y-3">
+                <input type="text" value={docTitle} onChange={e=>setDocTitle(e.target.value)} placeholder="Tên hiển thị (nếu tải 1 file)..." className="w-full rounded-lg px-3 py-2.5 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
+                <div className="rounded-xl p-5 text-center relative cursor-pointer" style={{ border: '1px dashed var(--border)' }}>
+                  <input type="file" multiple onChange={e=>setDocFiles(Array.from(e.target.files||[]))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <FileText className="w-6 h-6 mx-auto mb-2" style={{ color: 'var(--accent)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{docFiles.length > 0 ? `Đã chọn ${docFiles.length} file` : 'Kéo thả hoặc nhấn để chọn file'}</p>
+                </div>
+                {uploadStatus.type!=='idle' && <div className="text-xs font-medium" style={{ color: 'var(--accent)' }}>{uploadStatus.message}</div>}
+                <button type="submit" disabled={uploadStatus.type==='uploading'} className="w-full py-2.5 rounded-lg text-sm font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>{uploadStatus.type==='uploading' ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : 'Bắt đầu tải'}</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showRenameModal && renameTarget && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+            <div className="w-full max-w-sm rounded-2xl p-6 relative" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <button onClick={() => setShowRenameModal(false)} className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-4 h-4"/></button>
+              <h3 className="text-base font-semibold mb-4 flex items-center gap-2"><Edit className="w-4 h-4" style={{ color: 'var(--accent)' }}/> Đổi tên</h3>
+              <input type="text" value={renameInput} onChange={e=>setRenameInput(e.target.value)} className="w-full rounded-lg px-3 py-2.5 text-sm outline-none bg-transparent mb-4" style={{ border: '1px solid var(--border)' }} />
+              <button onClick={handleRename} className="w-full py-2.5 rounded-lg text-sm font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>Lưu tên mới</button>
+            </div>
+          </div>
+        )}
+
+        {isSelectMode && selectedItems.length > 0 && (
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full shadow-lg flex items-center gap-2 z-[90]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <span className="font-medium text-xs px-2.5 py-1 rounded-md" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{selectedItems.length} mục</span>
+            <button onClick={handleBulkDelete} className="flex gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs" style={{ color: '#DC2626' }}><Trash2 className="w-3.5 h-3.5"/> Xóa</button>
+            <button onClick={()=>handleSetClipboard('cut')} className="flex gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"><Scissors className="w-3.5 h-3.5"/> Cắt</button>
+            <button onClick={()=>handleSetClipboard('copy')} className="flex gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"><Copy className="w-3.5 h-3.5"/> Copy</button>
+          </div>
+        )}
+        {clipboard && !isSelectMode && (
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full shadow-lg flex items-center gap-3 z-[90]" style={{ background: 'var(--surface)', border: '1px solid var(--accent)' }}>
+            <span className="font-medium text-xs" style={{ color: 'var(--accent)' }}>Đang giữ {clipboard.items.length} mục</span>
+            <button onClick={handlePaste} className="flex gap-1.5 px-4 py-2 rounded-lg text-xs font-medium" style={{ background: 'var(--accent)', color: '#fff' }}><ClipboardPaste className="w-3.5 h-3.5"/> Dán</button>
+            <button onClick={()=>setClipboard(null)} className="p-2 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-3.5 h-3.5"/></button>
+          </div>
+        )}
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
+            <div className="flex-1">
+              <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-medium mb-3" style={{ color: 'var(--text-muted)' }}><ArrowLeft className="w-4 h-4" /> Dashboard</button>
+              <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2 mb-3">{libraryScope === 'private' ? 'SenCloud' : 'SenLib'} <Cloud className="w-5 h-5" style={{ color: 'var(--accent)' }} /></h1>
+              <div className="flex items-center flex-wrap gap-1.5 text-sm">
+                {folderPath.map((step, index) => (
+                  <div key={index} className="flex items-center gap-1.5" onDragOver={(e) => { e.preventDefault(); setDragOverId(step.id || 'root') }} onDragLeave={() => setDragOverId(null)} onDrop={(e) => handleDrop(e, step.id)}>
+                    <span onClick={() => handleNavigateBreadcrumb(index)} className="cursor-pointer px-2 py-1 rounded-md transition-colors" style={{ color: index === folderPath.length - 1 ? 'var(--accent)' : 'var(--text-muted)', background: dragOverId === (step.id || 'root') ? 'var(--accent-soft)' : 'transparent' }}>{step.name}</span>
+                    {index < folderPath.length - 1 && <ChevronRight className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative w-full sm:w-56">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm tài liệu..." className="w-full rounded-lg pl-9 pr-3 py-2 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
+              </div>
+              <button onClick={() => setIsAiMode(!isAiMode)} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={isAiMode ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { border: '1px solid var(--border)' }}><Sparkles className="w-3.5 h-3.5" /> SenAI</button>
+              {isStudentLibrary && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}>{libraryScope === 'private' ? <Unlock className="w-3.5 h-3.5"/> : <Lock className="w-3.5 h-3.5"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
+              {showAdminControls && (
+                <>
+                  <button onClick={() => setSortByName(!sortByName)} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}><ArrowUpDown className="w-3.5 h-3.5" /> {sortByName ? 'A-Z' : 'Ngày'}</button>
+                  <button onClick={() => { setIsSelectMode(!isSelectMode); setSelectedItems([]); setClipboard(null); }} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}><ListChecks className="w-3.5 h-3.5" /> Chọn</button>
+                  <button onClick={() => setShowFolderModal(true)} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}><PlusCircle className="w-3.5 h-3.5" /> Thư mục</button>
+                  <button onClick={() => setShowDocModal(true)} className="px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ background: 'var(--accent)', color: '#fff' }}><UploadCloud className="w-3.5 h-3.5" /> Tải lên</button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {isAiMode && (
+            <div className="mb-6 rounded-2xl overflow-hidden flex flex-col h-[320px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-3 p-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}><Bot className="w-4 h-4" style={{ color: 'var(--accent)' }}/></div>
+                <div><h4 className="font-medium text-sm">SenAI Assistant</h4></div>
+              </div>
+              <div ref={aiChatScrollRef} className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-3">
+                {aiMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className="max-w-[85%] px-4 py-2.5 rounded-xl text-[13px]" style={msg.role === 'user' ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--accent-soft)' }}>
+                      <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <p className="m-0" {...props} /> }}>
+                        {msg.text}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                ))}
+                {isAiSearching && <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}><Loader2 className="w-3.5 h-3.5 animate-spin"/> SenAI đang suy nghĩ...</div>}
+              </div>
+              <div className="p-3" style={{ borderTop: '1px solid var(--border)' }}>
+                <form onSubmit={handleAskSenAI} className="relative flex items-center">
+                  <input type="text" value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Nhập yêu cầu tìm kiếm tự nhiên..." className="w-full rounded-full pl-4 pr-12 py-2.5 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
+                  <button type="submit" disabled={!aiQuery.trim() || isAiSearching} className="absolute right-1.5 p-2 rounded-full" style={{ background: 'var(--accent)', color: '#fff' }}><Send className="w-3.5 h-3.5" /></button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            {dFolders.length === 0 && dDocs.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-center" style={{ color: 'var(--text-muted)' }}><Folder className="w-10 h-10 mb-3" /><p className="font-medium">Chưa có dữ liệu</p></div>
+            ) : (
+              <>
+                {dFolders.length > 0 && (
+                  <div className="mb-8">
+                    <h3 className="text-xs font-medium uppercase tracking-wide mb-3 flex gap-1.5 items-center" style={{ color: 'var(--text-muted)' }}><Folder className="w-3.5 h-3.5"/> Thư mục</h3>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                      {dFolders.map(f => {
+                        const sel = selectedItems.some(i => i.id === f.id);
+                        return (
+                          <div key={f.id} draggable={!isSelectMode && showAdminControls} onDragStart={(e) => handleDragStart(e, f.id, 'folder')} onDragOver={(e) => { if (!isSelectMode) { e.preventDefault(); setDragOverId(f.id); } }} onDragLeave={() => setDragOverId(null)} onDrop={(e) => { if (!isSelectMode) handleDrop(e, f.id); }} onClick={(e) => { if (isSelectMode) { e.preventDefault(); toggleSelection(f.id, 'folder', f); } else { handleOpenFolder(f.id, f.name); } }}
+                            className="group cursor-pointer flex flex-col items-center justify-center gap-2 relative p-4 rounded-xl transition-colors"
+                            style={{ border: '1px solid var(--border)', background: dragOverId === f.id ? 'var(--accent-soft)' : sel ? 'var(--accent-soft)' : 'transparent' }}>
+                            {isSelectMode && <div className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center z-10" style={sel ? { background: 'var(--accent)' } : { border: '1px solid var(--border)' }}>{sel && <CheckCircle2 className="w-2.5 h-2.5 text-white" />}</div>}
+                            <Folder className="w-9 h-9" strokeWidth={1.5} style={{ color: 'var(--accent)' }} />
+                            <p className="text-xs font-medium text-center line-clamp-2 leading-tight">{highlightSearchText(f.name, deferredSearchQuery)}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {dDocs.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-medium uppercase tracking-wide mb-3 flex gap-1.5 items-center" style={{ color: 'var(--text-muted)' }}><FileText className="w-3.5 h-3.5"/> Tài liệu</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {dDocs.map(d => {
+                        const sel = selectedItems.some(i => i.id === d.id); const k = getFileKind(d.title || '')
+                        return (
+                          <div key={d.id} draggable={!isSelectMode && showAdminControls} onDragStart={(e) => handleDragStart(e, d.id, 'document')} onClick={(e) => { if (isSelectMode) { e.preventDefault(); toggleSelection(d.id, 'document', d); } else { handleOpenDocument(d); } }}
+                            className="group cursor-pointer flex items-center gap-3 relative p-3.5 rounded-xl transition-colors"
+                            style={{ border: '1px solid var(--border)', background: sel ? 'var(--accent-soft)' : 'transparent' }}>
+                            {isSelectMode && <div className="absolute top-1/2 -translate-y-1/2 right-3.5 w-4 h-4 rounded-full flex items-center justify-center z-10" style={sel ? { background: 'var(--accent)' } : { border: '1px solid var(--border)' }}>{sel && <CheckCircle2 className="w-2.5 h-2.5 text-white" />}</div>}
+                            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                              {k === 'image' ? <Image className="w-4 h-4"/> : <FileText className="w-4 h-4"/>}
+                            </div>
+                            <div className={`flex-1 min-w-0 ${isSelectMode ? 'pr-7' : 'pr-1'}`}>
+                              <h3 className="text-xs font-medium line-clamp-2 leading-snug">{highlightSearchText(d.title, deferredSearchQuery)}</h3>
+                              <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{new Date(d.created_at).toLocaleDateString('vi-VN')}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-32 transition-colors duration-500">

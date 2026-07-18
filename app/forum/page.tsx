@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
 
 const glassCardStyles = "liquid-panel"
 const CATEGORIES = ['Tất cả', 'Hỏi đáp bài tập', 'Chia sẻ tài liệu', 'Thảo luận chung', 'Góc tâm sự']
@@ -33,6 +35,8 @@ export default function ForumPage() {
   const [uploadStatus, setUploadStatus] = useState('')
 
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
 
   const fetchPosts = async () => {
     // Sắp xếp ưu tiên bài được ghim (is_pinned) lên trước, sau đó mới tới thời gian mới nhất
@@ -63,9 +67,11 @@ export default function ForumPage() {
     }
     initData()
 
-    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
+    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+    if (dark) {
       document.documentElement.classList.add('dark')
     }
+    setIsDark(dark)
   }, [])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,6 +161,148 @@ export default function ForumPage() {
   if (loading) return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
 
   const canManage = currentUserRole === 'admin' || currentUserRole === 'collab'
+
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans pb-16"
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+            <div className="rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-5">
+                  <h2 className="text-lg font-semibold flex items-center gap-2"><Edit3 className="w-5 h-5" style={{ color: 'var(--accent)' }}/> Chủ đề thảo luận mới</h2>
+                  <button onClick={() => setShowCreateModal(false)} className="p-2 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"><X className="w-4 h-4"/></button>
+                </div>
+                <form onSubmit={handleCreatePost} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Chủ đề bài viết (*)</label>
+                    <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full rounded-lg px-3 py-2.5 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} placeholder="VD: Xin tài liệu ôn tập Toán ĐGNL..." required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Chuyên mục</label>
+                    <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="w-full sm:w-1/2 rounded-lg px-3 py-2.5 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }}>
+                      {CATEGORIES.filter(c => c !== 'Tất cả').map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Nội dung chi tiết (*)</label>
+                    <textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} className="w-full min-h-[130px] rounded-lg px-3 py-2.5 text-sm outline-none bg-transparent resize-y" style={{ border: '1px solid var(--border)' }} placeholder="Nhập nội dung chia sẻ hoặc câu hỏi..." required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>Đính kèm tài liệu (Max 1GB)</label>
+                    <div className="relative flex items-center justify-center p-5 rounded-xl cursor-pointer" style={{ border: '1px dashed var(--border)' }}>
+                      <input type="file" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                      <div className="flex flex-col items-center gap-1.5 pointer-events-none text-center">
+                        <Paperclip className="w-5 h-5" style={{ color: 'var(--accent)' }}/>
+                        {attachedFile ? (
+                          <><p className="text-sm font-medium truncate max-w-[250px]">{attachedFile.name}</p><p className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatBytes(attachedFile.size)}</p></>
+                        ) : (
+                          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Nhấn hoặc kéo thả file vào đây</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {isSubmitting && (
+                    <div className="p-3 rounded-lg text-sm font-medium flex items-center gap-2" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                      <Loader2 className="w-4 h-4 animate-spin" /> {uploadStatus}
+                    </div>
+                  )}
+                  <div className="flex justify-end pt-2">
+                    <button type="submit" disabled={isSubmitting || !newTitle || !newContent} className="px-6 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50" style={{ background: 'var(--accent)', color: '#fff' }}>
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>} Xuất bản
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-opacity ${showCreateModal ? 'opacity-30 pointer-events-none' : ''}`}>
+          <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-medium mb-4" style={{ color: 'var(--text-muted)' }}>
+            <ChevronLeft className="w-4 h-4" /> Về trang chủ
+          </button>
+
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">Hội Sĩ Tử <MessageSquare className="w-5 h-5" style={{ color: 'var(--accent)' }}/></h1>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Giải đáp thắc mắc, chia sẻ tài liệu và thảo luận đề thi.</p>
+            </div>
+            <button onClick={() => setShowCreateModal(true)} className="px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2" style={{ background: 'var(--accent)', color: '#fff' }}>
+              <Edit3 className="w-4 h-4"/> Đăng chủ đề mới
+            </button>
+          </div>
+
+          <div className="rounded-xl p-3 flex flex-col sm:flex-row gap-3 mb-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+              <input type="text" placeholder="Tìm kiếm câu hỏi, tài liệu..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full rounded-lg pl-9 pr-3 py-2 text-sm outline-none bg-transparent" />
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+              {CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => setActiveCategory(cat)} className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" style={activeCategory === cat ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}>{cat}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {filteredPosts.length === 0 ? (
+              <div className="rounded-2xl p-16 text-center" style={{ border: '1px dashed var(--border)' }}>
+                <MessageCircle className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+                <h3 className="font-medium">Chưa có bài thảo luận nào</h3>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Hãy là người đầu tiên khơi mào chủ đề này!</p>
+              </div>
+            ) : (
+              filteredPosts.map((post) => (
+                <div
+                  key={post.id}
+                  onClick={() => router.push(`/forum/${post.id}`)}
+                  className="rounded-xl p-5 cursor-pointer transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.03] group"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+                >
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <h3 className="text-base font-semibold line-clamp-2 flex items-center gap-1.5">
+                      {post.is_pinned && <Pin className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent)' }} />}
+                      {highlightSearchText(post.title, deferredSearchQuery)}
+                    </h3>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{post.category}</span>
+                      {canManage && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={(e) => handleTogglePin(e, post.id, post.is_pinned)} title={post.is_pinned ? "Bỏ ghim" : "Ghim"} className="p-1.5 rounded-md hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">
+                            {post.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                          </button>
+                          <button onClick={(e) => handleDeletePost(e, post.id)} title="Xóa" className="p-1.5 rounded-md hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm line-clamp-2 mb-3" style={{ color: 'var(--text-muted)' }}>{highlightSearchText(post.content, deferredSearchQuery)}</p>
+                  {post.drive_file_id && (
+                    <div className="mb-3 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                      <Download className="w-3.5 h-3.5"/> {post.file_name}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-3 text-xs font-medium" style={{ borderTop: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" /> {post.profiles?.full_name || 'Thành viên ẩn danh'}</span>
+                      <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {timeAgo(post.created_at)}</span>
+                    </div>
+                    <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {post.comments?.[0]?.count || 0}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell min-h-screen bg-transparent text-slate-900 dark:text-slate-100 relative font-sans overflow-x-hidden pb-20">

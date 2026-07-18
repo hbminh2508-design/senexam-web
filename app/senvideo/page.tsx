@@ -10,6 +10,8 @@ import {
 
 // Tái sử dụng API Upload Drive
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
 
 // --- CONSTANTS & STYLES ---
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
@@ -34,6 +36,8 @@ export default function SenVideoPage() {
   const [activeVideo, setActiveVideo] = useState<any | null>(null)
   const [showVlcInfo, setShowVlcInfo] = useState(false)
   const [copied, setCopied] = useState(false)
+  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
 
   // ==========================================================================
   // KHỞI TẠO VÀ LẤY DỮ LIỆU TỪ SUPABASE
@@ -70,7 +74,9 @@ export default function SenVideoPage() {
   }
 
   useEffect(() => {
-    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark')
+    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+    if (dark) document.documentElement.classList.add('dark')
+    setIsDark(dark)
     fetchVideos()
   }, [])
 
@@ -139,6 +145,121 @@ export default function SenVideoPage() {
   const displayVideos = videos.filter(v => v.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-10 h-10 animate-spin text-indigo-500" /></div>
+
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans pb-16"
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        <header className="h-16 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push('/dashboard')} className="p-2 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"><ArrowLeft className="w-4 h-4"/></button>
+            <h1 className="font-semibold text-base flex items-center gap-2"><PlaySquare className="w-4 h-4" style={{ color: 'var(--accent)' }}/> SenVideo</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative hidden md:block w-56">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+              <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Tìm video..." className="w-full rounded-lg pl-9 pr-3 py-2 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
+            </div>
+            <button onClick={() => setShowUpload(true)} className="px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5" style={{ background: 'var(--accent)', color: '#fff' }}><UploadCloud className="w-4 h-4"/> Tải Video</button>
+          </div>
+        </header>
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {displayVideos.length === 0 ? (
+            <div className="rounded-2xl p-16 text-center" style={{ border: '1px dashed var(--border)' }}>
+              <Video className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }}/>
+              <p className="font-medium">Kho video trống</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Bấm "Tải Video" góc trên để lưu bài giảng nhé!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {displayVideos.map(vid => (
+                <div key={vid.id} onClick={() => { setActiveVideo(vid); setShowVlcInfo(false); }} className="group cursor-pointer rounded-xl p-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="w-full aspect-video rounded-lg flex items-center justify-center mb-2 relative overflow-hidden" style={{ background: 'var(--accent-soft)' }}>
+                    {failedThumbs[vid.id] ? (
+                      <PlaySquare className="w-6 h-6" style={{ color: 'var(--accent)' }}/>
+                    ) : (
+                      <img
+                        src={`/api/drive/thumbnail?fileId=${vid.drive_file_id}`}
+                        alt={vid.title}
+                        loading="lazy"
+                        onError={() => setFailedThumbs(prev => ({ ...prev, [vid.id]: true }))}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <h3 className="text-xs font-medium line-clamp-2 leading-snug">{vid.title}</h3>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {activeVideo && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/70">
+            <div className="w-full max-w-4xl rounded-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <div className="p-4 flex justify-between items-center shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                <h3 className="font-medium text-sm truncate pr-4 flex items-center gap-2"><MonitorPlay className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }}/> {activeVideo.title}</h3>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => setShowVlcInfo(!showVlcInfo)} className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                    <Cloud className="w-3.5 h-3.5"/> VLC
+                  </button>
+                  <button onClick={() => {setActiveVideo(null); setCopied(false); setShowVlcInfo(false)}} className="p-1.5 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-4 h-4"/></button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-hidden bg-black flex flex-col relative">
+                <video src={streamLink} controls autoPlay playsInline className="w-full h-full max-h-[70vh] object-contain bg-black outline-none" />
+                {showVlcInfo && (
+                  <div className="absolute top-0 left-0 w-full p-5" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-medium text-sm flex items-center gap-2"><Info className="w-4 h-4" style={{ color: 'var(--accent)' }}/> Mở qua VLC (chống giật lag)</h4>
+                      <button onClick={() => setShowVlcInfo(false)} className="p-1.5 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-3.5 h-3.5"/></button>
+                    </div>
+                    <div className="flex gap-2 mb-3">
+                      <input readOnly value={streamLink} className="flex-1 rounded-lg px-3 py-2 text-xs font-mono outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
+                      <button onClick={handleCopy} className="px-4 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0" style={{ background: 'var(--accent)', color: '#fff' }}>
+                        {copied ? <CheckCircle2 className="w-4 h-4"/> : <Copy className="w-4 h-4"/>} {copied ? 'Đã chép' : 'Copy'}
+                      </button>
+                    </div>
+                    <ol className="text-xs space-y-1.5 list-decimal list-inside" style={{ color: 'var(--text-muted)' }}>
+                      <li>Mở <strong>VLC Media Player</strong>.</li>
+                      <li>Vào <strong>Media → Open Network Stream</strong> (Ctrl+N).</li>
+                      <li>Dán link vừa copy và bấm <strong>Play</strong>.</li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showUpload && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+            <div className="w-full max-w-md rounded-2xl p-6 relative" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+              <button onClick={() => setShowUpload(false)} className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"><X className="w-4 h-4"/></button>
+              <h3 className="text-base font-semibold mb-4 flex items-center gap-2"><UploadCloud className="w-4 h-4" style={{ color: 'var(--accent)' }}/> Upload Video</h3>
+              <form onSubmit={handleUpload} className="space-y-3">
+                {uploadFiles.length <= 1 && (
+                  <input type="text" value={uploadTitle} onChange={e=>setUploadTitle(e.target.value)} placeholder="Tên hiển thị (nếu trống lấy tên file)..." className="w-full rounded-lg px-3 py-2.5 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
+                )}
+                <div className="rounded-xl p-5 text-center relative cursor-pointer" style={{ border: '1px dashed var(--border)' }}>
+                  <input type="file" accept="video/*" multiple onChange={e=>setUploadFiles(Array.from(e.target.files||[]))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <Video className="w-6 h-6 mx-auto mb-2" style={{ color: 'var(--accent)' }} />
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{uploadFiles.length > 0 ? `Đã chọn ${uploadFiles.length} video` : 'Kéo thả video vào đây'}</p>
+                </div>
+                {uploadStatus.msg && <div className="text-xs font-medium" style={{ color: 'var(--accent)' }}>{uploadStatus.msg}</div>}
+                <button type="submit" disabled={uploadStatus.uploading} className="w-full py-2.5 rounded-lg text-sm font-medium flex justify-center items-center gap-2" style={{ background: 'var(--accent)', color: '#fff' }}>
+                  {uploadStatus.uploading ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Tải lên Drive'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-20 transition-colors duration-500">

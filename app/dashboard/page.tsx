@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import { AnnouncementRenderer } from './_home/Announcement'
+import { THEME_COLORS, DEFAULT_THEME_COLOR } from '@/app/components/modernTheme'
 import type { Feature } from './_home/types'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
@@ -84,7 +85,6 @@ export default function DashboardPage() {
   // -- Data States --
   const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
   const [studentHistoryList, setStudentHistoryList] = useState<any[]>([])
-  const [recentVideos, setRecentVideos] = useState<any[]>([])
   const [notifications, setNotifications] = useState<SysNotification[]>([
     { id: '1', title: 'SenExam V2.0', message: 'Hệ thống Material Design 3 đã được cập nhật thành công.', type: 'success', time: 'Vừa xong', read: false }
   ])
@@ -118,6 +118,8 @@ export default function DashboardPage() {
   // -- Giao diện mới (Beta) — cờ bật thử nghiệm, lưu theo tài khoản trên Supabase --
   const [newUiEnabled, setNewUiEnabled] = useState(false)
   const [newUiSaving, setNewUiSaving] = useState(false)
+  const [themeColor, setThemeColor] = useState<string>(DEFAULT_THEME_COLOR)
+  const [themeColorSaving, setThemeColorSaving] = useState(false)
 
   // ----------------------------------------------------------------------------
   // 🌟 CALCULATOR MODAL STATES (TÍNH ĐIỂM ĐẠI HỌC)
@@ -138,6 +140,12 @@ export default function DashboardPage() {
 
   // ĐẾM THÔNG BÁO CHƯA ĐỌC
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
+
+  // Đồng bộ cờ Giao diện mới + màu chủ đề ra localStorage để các trang khác đọc nhanh
+  useEffect(() => {
+    localStorage.setItem('senexam_new_ui', newUiEnabled ? '1' : '0')
+    localStorage.setItem('senexam_theme_color', themeColor)
+  }, [newUiEnabled, themeColor])
 
   // ============================================================================
   // INITIALIZATION & EFFECTS
@@ -160,6 +168,7 @@ export default function DashboardPage() {
       if (profile) {
         setUserRole(profile.role || 'student')
         setNewUiEnabled(!!profile.new_ui_enabled)
+        setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
         setFormData({
           fullName: profile.full_name || '', 
           dob: profile.dob || '', 
@@ -186,21 +195,6 @@ export default function DashboardPage() {
           .order('created_at', { ascending: false })
         
         setStudentHistoryList(subHistory || [])
-
-        // Fetch Video mới nhất cho khối SenVideo trên Dashboard
-        const role = profile.role || 'student'
-        const { data: admins } = await supabase.from('profiles').select('id').in('role', ['admin', 'collab'])
-        const adminIds = admins ? admins.map(a => a.id) : []
-        const { data: docsData } = await supabase.from('library_documents').select('id, title, drive_file_id, created_by, created_at').order('created_at', { ascending: false }).limit(100)
-        if (docsData) {
-          const vids = docsData.filter(d => {
-            const isVideo = d.title && d.title.match(/\.(mp4|mkv|mov|avi|webm)$/i)
-            if (!isVideo) return false
-            if (role === 'student') return d.created_by === user.id || d.created_by === null || adminIds.includes(d.created_by)
-            return true
-          }).slice(0, 6)
-          setRecentVideos(vids)
-        }
       } else {
         setShowOnboarding(true)
       }
@@ -394,6 +388,21 @@ export default function DashboardPage() {
     setNewUiSaving(false)
   }
 
+  const changeThemeColor = async (colorKey: string) => {
+    const prev = themeColor
+    setThemeColor(colorKey)
+    setThemeColorSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { error } = await supabase.from('profiles').update({ theme_color: colorKey }).eq('id', user.id)
+      if (error) {
+        setThemeColor(prev)
+        alert('Không thể lưu màu chủ đề: ' + error.message)
+      }
+    }
+    setThemeColorSaving(false)
+  }
+
   const handleChangePassword = async () => {
     if (newPassword.length < 6) { 
       alert('Mật khẩu phải có ít nhất 6 ký tự'); 
@@ -479,9 +488,9 @@ export default function DashboardPage() {
         FEATURES={FEATURES as unknown as Feature[]}
         activeAnnouncement={activeAnnouncement}
         studentHistoryList={studentHistoryList}
-        recentVideos={recentVideos}
         setShowCodeModal={setShowCodeModal}
         overlayActive={overlayActive}
+        themeColor={themeColor}
       />
 
 
@@ -595,6 +604,24 @@ export default function DashboardPage() {
                       <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${newUiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                   </div>
+
+                  {newUiEnabled && (
+                    <div className="p-4.5 pt-0">
+                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Màu chủ đề</p>
+                      <div className="flex flex-wrap gap-3">
+                        {THEME_COLORS.map(c => (
+                          <button
+                            key={c.key}
+                            onClick={() => changeThemeColor(c.key)}
+                            disabled={themeColorSaving}
+                            title={c.label}
+                            className={`w-8 h-8 rounded-full transition-all disabled:opacity-60 ${themeColor === c.key ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-offset-[#121212] dark:ring-white scale-110' : 'hover:scale-105'}`}
+                            style={{ background: isDark ? c.dark : c.light }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

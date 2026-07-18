@@ -29,7 +29,7 @@ export type HomeProps = {
   FEATURES: readonly Feature[]
   activeAnnouncement: string | null
   studentHistoryList: any[]
-  recentVideos: any[]
   setShowCodeModal: (v: boolean) => void
   overlayActive: boolean
+  themeColor: string
 }

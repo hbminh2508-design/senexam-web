@@ -3,9 +3,10 @@
 import {
   BookOpen, Clock, Trophy, User, ChevronRight, ShieldCheck, AlertCircle,
   LayoutGrid, Sun, Moon, KeyRound, Target, Bell, Lock, ArrowRight,
-  FileText, PlaySquare,
+  FileText,
 } from 'lucide-react'
 import { AnnouncementRenderer } from './Announcement'
+import { getModernThemeVars } from '@/app/components/modernTheme'
 import type { HomeProps } from './types'
 
 const FEATURE_COLOR_MAP: Record<string, string> = {
@@ -22,8 +23,8 @@ const FEATURE_COLOR_MAP: Record<string, string> = {
 export default function ModernHome({
   router, userRole, formData, isDark, toggleTheme, unreadCount,
   setShowNotifications, setShowProfile, showFeatureMenu, setShowFeatureMenu,
-  FEATURES, activeAnnouncement, studentHistoryList, recentVideos, setShowCodeModal,
-  overlayActive,
+  FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
+  overlayActive, themeColor,
 }: HomeProps) {
   const bestScore = studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : null
 
@@ -32,14 +33,7 @@ export default function ModernHome({
       className="min-h-screen font-sans pb-16"
       style={{
         // Bảng màu trung tính ấm, giảm hiệu ứng blur/gradient nặng để trang tải nhẹ hơn
-        // @ts-ignore custom properties
-        '--bg': isDark ? '#171614' : '#FAF8F4',
-        '--surface': isDark ? '#1E1D1A' : '#FFFFFF',
-        '--border': isDark ? 'rgba(255,255,255,0.08)' : 'rgba(30,25,20,0.09)',
-        '--text': isDark ? '#EDEAE3' : '#231F1B',
-        '--text-muted': isDark ? '#A6A196' : '#6B6558',
-        '--accent': isDark ? '#E28560' : '#BD5D3A',
-        '--accent-soft': isDark ? 'rgba(226,133,96,0.14)' : 'rgba(189,93,58,0.09)',
+        ...getModernThemeVars(themeColor, isDark),
         background: 'var(--bg)',
         color: 'var(--text)',
       } as React.CSSProperties}
@@ -201,35 +195,6 @@ export default function ModernHome({
             )
           })}
         </div>
-
-        {recentVideos.length > 0 && (
-          <div className="rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <PlaySquare className="w-4 h-4" style={{ color: 'var(--accent)' }}/> Video mới nhất
-              </h3>
-              <button onClick={() => router.push('/senvideo')} className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--accent)' }}>
-                Xem tất cả <ArrowRight className="w-3 h-3"/>
-              </button>
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-              {recentVideos.map(vid => (
-                <div key={vid.id} onClick={() => router.push('/senvideo')} className="group cursor-pointer">
-                  <div className="w-full aspect-video rounded-lg overflow-hidden relative mb-1.5" style={{ background: 'var(--accent-soft)' }}>
-                    <img
-                      src={`/api/drive/thumbnail?fileId=${vid.drive_file_id}`}
-                      alt={vid.title}
-                      loading="lazy"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <p className="text-[11px] font-medium line-clamp-2 leading-snug">{vid.title}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <h3 className="text-sm font-semibold flex items-center gap-2 mb-5">

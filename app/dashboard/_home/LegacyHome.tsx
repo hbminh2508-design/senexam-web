@@ -5,7 +5,7 @@ import {
   ChevronRight, ShieldCheck, AlertCircle, LayoutGrid,
   Sun, Moon, KeyRound, Target,
   Bell, Sparkles, Lock, ArrowRight,
-  FileText, PlaySquare
+  FileText,
 } from 'lucide-react'
 import { AnnouncementRenderer } from './Announcement'
 import type { HomeProps } from './types'
@@ -24,7 +24,7 @@ const FEATURE_COLOR_MAP: Record<string, string> = {
 export default function LegacyHome({
   router, userRole, formData, isDark, toggleTheme, unreadCount,
   setShowNotifications, setShowProfile, showFeatureMenu, setShowFeatureMenu,
-  FEATURES, activeAnnouncement, studentHistoryList, recentVideos, setShowCodeModal,
+  FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
   overlayActive,
 }: HomeProps) {
   return (
@@ -229,39 +229,6 @@ export default function LegacyHome({
             )
           })}
         </div>
-
-        {recentVideos.length > 0 && (
-          <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2.5rem] p-8 border border-slate-200 dark:border-white/5 shadow-sm mt-5 lg:mt-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                <PlaySquare className="w-6 h-6 text-indigo-600 dark:text-indigo-400"/>
-                Video mới nhất
-              </h3>
-              <button onClick={() => router.push('/senvideo')} className="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1 hover:gap-2 transition-all">
-                Xem tất cả <ArrowRight className="w-3.5 h-3.5"/>
-              </button>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              {recentVideos.map(vid => (
-                <div key={vid.id} onClick={() => router.push('/senvideo')} className="group cursor-pointer">
-                  <div className="w-full aspect-video bg-indigo-100 dark:bg-indigo-900/20 rounded-xl overflow-hidden relative mb-2">
-                    <img
-                      src={`/api/drive/thumbnail?fileId=${vid.drive_file_id}`}
-                      alt={vid.title}
-                      loading="lazy"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors">
-                      <PlaySquare className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 drop-shadow-md transition-opacity"/>
-                    </div>
-                  </div>
-                  <p className="text-[11px] font-bold line-clamp-2 leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{vid.title}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2.5rem] p-8 border border-slate-200 dark:border-white/5 shadow-sm">
           <div className="flex items-center justify-between mb-8">
