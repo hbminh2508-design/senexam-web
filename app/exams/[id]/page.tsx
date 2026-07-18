@@ -580,12 +580,12 @@ export default function ExamRoomPage() {
           )}
 
           <div
-            className="h-full flex flex-col overflow-hidden"
-            style={{
-              ...(exam?.creation_mode !== 'interactive_mode' && cachedPdfUrl
-                ? { width: '100%', borderLeft: '1px solid var(--border)' }
-                : { width: '100%' }),
-            }}
+            className={`h-full flex flex-col overflow-hidden ${exam?.creation_mode !== 'interactive_mode' && cachedPdfUrl ? 'w-full md:w-[430px] lg:w-[470px] shrink-0' : 'w-full'}`}
+            style={
+              exam?.creation_mode !== 'interactive_mode' && cachedPdfUrl
+                ? { borderLeft: '1px solid var(--border)', background: 'var(--bg)' }
+                : { background: 'var(--bg)' }
+            }
           >
             {/* SƠ ĐỒ CÂU HỎI: rõ ràng trạng thái đã trả lời / chưa trả lời / đã ghim, luôn hiển thị, chỉ 1 lần chạm để nhảy tới câu */}
             <div className="shrink-0 p-3 md:p-4 max-h-[30vh] overflow-y-auto custom-scrollbar" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>

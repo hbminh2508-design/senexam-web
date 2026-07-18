@@ -14,6 +14,7 @@ import {
 
 import { AnnouncementRenderer } from './_home/Announcement'
 import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
+import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
 import type { Feature } from './_home/types'
 import pkg from '@/package.json'
 
@@ -151,6 +152,7 @@ export default function DashboardPage() {
     localStorage.setItem('senexam_theme_color', themeColor)
     localStorage.setItem('senexam_density', uiDensity)
     localStorage.setItem('senexam_animations', animationsEnabled ? '1' : '0')
+    window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
   }, [newUiEnabled, themeColor, uiDensity, animationsEnabled])
 
   // ============================================================================
@@ -548,17 +550,26 @@ export default function DashboardPage() {
 
       {/* 1. Modal Nhập Code Đề Private */}
       {showCodeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-           <div className="bg-white dark:bg-[#1E1E1E] rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border border-slate-100 dark:border-white/5">
-              <button onClick={() => setShowCodeModal(false)} className="absolute top-5 right-5 p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] transition-colors"><X className="w-5 h-5 text-slate-500"/></button>
-              
-              <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-[1.2rem] flex items-center justify-center mb-6 border border-indigo-100 dark:border-indigo-500/20 shadow-inner">
-                <KeyRound className="w-8 h-8 text-indigo-600 dark:text-indigo-400"/>
+        <div
+          className={newUiEnabled ? 'fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200' : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200'}
+          style={newUiEnabled ? { ...getModernThemeVars(themeColor, isDark), background: 'rgba(0,0,0,0.45)' } as React.CSSProperties : undefined}
+        >
+           <div
+             className={newUiEnabled ? 'rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border' : 'bg-white dark:bg-[#1E1E1E] rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border border-slate-100 dark:border-white/5'}
+             style={newUiEnabled ? { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
+           >
+              <button onClick={() => setShowCodeModal(false)} className="absolute top-5 right-5 p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><X className="w-5 h-5" style={newUiEnabled ? { color: 'var(--text-muted)' } : { color: '#64748b' }}/></button>
+
+              <div
+                className={newUiEnabled ? 'w-16 h-16 rounded-[1.2rem] flex items-center justify-center mb-6 border' : 'w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-[1.2rem] flex items-center justify-center mb-6 border border-indigo-100 dark:border-indigo-500/20 shadow-inner'}
+                style={newUiEnabled ? { background: 'var(--accent-soft)', borderColor: 'var(--accent)' } : undefined}
+              >
+                <KeyRound className={newUiEnabled ? 'w-8 h-8' : 'w-8 h-8 text-indigo-600 dark:text-indigo-400'} style={newUiEnabled ? { color: 'var(--accent)' } : undefined}/>
               </div>
-              
-              <h3 className="text-2xl font-black mb-2 text-slate-900 dark:text-white">Truy cập đề ẩn</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 font-medium leading-relaxed">Nhập mã Code do giáo viên cung cấp để giải khóa đề thi bảo mật.</p>
-              
+
+              <h3 className={newUiEnabled ? 'text-2xl font-black mb-2' : 'text-2xl font-black mb-2 text-slate-900 dark:text-white'}>Truy cập đề ẩn</h3>
+              <p className={newUiEnabled ? 'text-sm mb-6 font-medium leading-relaxed' : 'text-slate-500 dark:text-slate-400 text-sm mb-6 font-medium leading-relaxed'} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>Nhập mã Code do giáo viên cung cấp để giải khóa đề thi bảo mật.</p>
+
               <div className="flex items-center justify-between gap-2 mb-6">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <input
@@ -571,15 +582,19 @@ export default function DashboardPage() {
                     onChange={(e) => handleExamCodeBoxChange(i, e.target.value)}
                     onKeyDown={(e) => handleExamCodeBoxKeyDown(i, e)}
                     onPaste={handleExamCodeBoxPaste}
-                    className="w-full aspect-square min-w-0 bg-slate-50 dark:bg-[#121212] border-transparent focus:bg-white dark:focus:bg-[#121212] border-2 focus:border-indigo-500 rounded-2xl text-slate-900 dark:text-white font-black text-center text-xl outline-none transition-all uppercase shadow-inner"
+                    className={newUiEnabled ? 'w-full aspect-square min-w-0 border-2 rounded-2xl font-black text-center text-xl outline-none transition-all uppercase' : 'w-full aspect-square min-w-0 bg-slate-50 dark:bg-[#121212] border-transparent focus:bg-white dark:focus:bg-[#121212] border-2 focus:border-indigo-500 rounded-2xl text-slate-900 dark:text-white font-black text-center text-xl outline-none transition-all uppercase shadow-inner'}
+                    style={newUiEnabled ? { background: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
+                    onFocus={newUiEnabled ? (e) => { e.currentTarget.style.borderColor = 'var(--accent)' } : undefined}
+                    onBlur={newUiEnabled ? (e) => { e.currentTarget.style.borderColor = 'var(--border)' } : undefined}
                   />
                 ))}
               </div>
-              
-              <button 
-                onClick={handleJoinHiddenExam} 
-                disabled={codeLoading || !examCode} 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl w-full py-4 font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base"
+
+              <button
+                onClick={handleJoinHiddenExam}
+                disabled={codeLoading || !examCode}
+                className={newUiEnabled ? 'rounded-2xl w-full py-4 font-black transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base' : 'bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl w-full py-4 font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base'}
+                style={newUiEnabled ? { background: 'var(--accent)', color: '#fff' } : undefined}
               >
                 {codeLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Mở khóa phòng thi'}
               </button>
