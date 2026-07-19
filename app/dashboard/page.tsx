@@ -17,7 +17,6 @@ import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/com
 import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
 import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion } from '@/lib/systemRelease'
 import type { Feature } from './_home/types'
-import pkg from '@/package.json'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
 const LegacyHome = dynamic(() => import('./_home/LegacyHome'), {
@@ -154,6 +153,7 @@ export default function DashboardPage() {
       setIsBetaTester(true)
       localStorage.setItem('senexam_beta_tester', '1')
       window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
+      refreshPublishedVersion(true)
       setShowBetaJoinModal(false)
       setBetaAnswer1('')
       setBetaAnswer2('')
@@ -171,6 +171,19 @@ export default function DashboardPage() {
     setIsBetaTester(false)
     localStorage.setItem('senexam_beta_tester', '0')
     window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
+    refreshPublishedVersion(false)
+  }
+
+  // -- Phiên bản đang hiển thị: ưu tiên bản đã công bố trên kênh của người dùng (cập nhật
+  // ngay khi Admin đẩy version mới, không phụ thuộc build tĩnh của package.json) --
+  const [publishedVersion, setPublishedVersion] = useState<string | null>(null)
+  const displayVersion = publishedVersion || CURRENT_APP_VERSION
+
+  const refreshPublishedVersion = async (betaTester: boolean) => {
+    const release = await fetchSystemRelease()
+    if (!release) return
+    const channelVersion = betaTester && release.beta_published ? release.beta_version : (release.stable_published ? release.stable_version : null)
+    setPublishedVersion(channelVersion)
   }
 
   // -- Kiểm tra cập nhật phiên bản mới do Admin đẩy ra (theo đúng kênh Beta/Chính thức) --
@@ -184,6 +197,10 @@ export default function DashboardPage() {
     const channelChangelog = isBetaTester ? release?.beta_changelog : release?.stable_changelog
     const channelPublished = isBetaTester ? release?.beta_published : release?.stable_published
     const acked = getAckedVersion()
+
+    if (release && channelPublished && channelVersion) {
+      setPublishedVersion(channelVersion)
+    }
 
     if (
       release && channelPublished && channelVersion &&
@@ -256,6 +273,7 @@ export default function DashboardPage() {
         setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
         setIsBetaTester(!!profile.is_beta_tester)
         localStorage.setItem('senexam_beta_tester', profile.is_beta_tester ? '1' : '0')
+        refreshPublishedVersion(!!profile.is_beta_tester)
         setFormData({
           fullName: profile.full_name || '', 
           dob: profile.dob || '', 
@@ -953,7 +971,7 @@ export default function DashboardPage() {
                 className={newUiEnabled ? 'text-center text-[11px] font-medium pt-1' : 'text-center text-[11px] font-medium text-slate-400 dark:text-slate-600 pt-1'}
                 style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}
               >
-                Phiên bản {pkg.version}
+                Phiên bản {displayVersion}
               </p>
 
               {/* Kiểm tra cập nhật */}
