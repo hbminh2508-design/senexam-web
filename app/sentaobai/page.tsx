@@ -21,6 +21,11 @@ import 'katex/dist/katex.min.css'
 // Cấu nối trực tiếp Google Drive API
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 
+// Hệ thống Giao diện mới (Beta) — cờ tính năng theo tài khoản
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
+
 // --- HẰNG SỐ GIAO DIỆN LIQUID GLASS + MATERIAL 3 ---
 const mdCard = "bg-white/80 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.02)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] transition-all duration-300"
 const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-transparent border-2 focus:border-indigo-500 focus:bg-white dark:focus:bg-[#252525] rounded-2xl px-5 py-4 outline-none transition-all font-bold text-sm text-slate-900 dark:text-white shadow-inner"
@@ -45,6 +50,10 @@ export default function SenTaoBaiPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [currentView, setCurrentView] = useState<'form' | 'quiz'>('form')
+
+  // --- GIAO DIỆN MỚI (BETA) ---
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
 
   // --- FORM CONFIG STATES ---
   const [directText, setDirectText] = useState('')
@@ -79,6 +88,7 @@ export default function SenTaoBaiPage() {
   useEffect(() => {
     if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
       document.documentElement.classList.add('dark')
+      setIsDark(true)
     }
     try {
       const saved = localStorage.getItem('sen_generated_exams_v4')
@@ -309,6 +319,379 @@ export default function SenTaoBaiPage() {
   renderedChoiceHeader = false
   renderedTrueFalseHeader = false
   renderedShortHeader = false
+
+  // ==========================================================================
+  // GIAO DIỆN MỚI (BETA) — reskin phẳng dùng biến CSS, giữ nguyên toàn bộ
+  // state/handler/logic phía trên. Người dùng chưa bật cờ sẽ thấy giao diện
+  // Liquid Glass gốc bên dưới không đổi.
+  // ==========================================================================
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans relative pb-24"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        <header className="h-[72px] px-4 sm:px-8 flex items-center justify-between sticky top-0 z-40" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => { currentView === 'quiz' ? setCurrentView('form') : router.push('/dashboard') }} className="p-2.5 rounded-full transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+              <ArrowLeft className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent)', color: '#fff' }}>
+                <FileCode className="w-5 h-5"/>
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold tracking-tight leading-none flex items-center gap-2">
+                  SenTạoBài
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
+                </h1>
+                <span className="text-[10px] font-medium uppercase tracking-widest mt-1 block" style={{ color: 'var(--text-muted)' }}>Biên soạn khảo thí AI phối hợp</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-[1500px] mx-auto pt-6 px-4 md:px-8 relative z-10">
+          {currentView === 'form' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <form onSubmit={handleGenerateExam} className="lg:col-span-7 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 space-y-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--accent)' }}><UploadCloud className="w-4 h-4"/> Dán nội dung trực tiếp</h3>
+                  <div className="rounded-2xl p-4" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                    <textarea
+                      value={directText} onChange={e => setDirectText(e.target.value)}
+                      placeholder="Dán đoạn văn, bài học, ghi chú hoặc nội dung cần tạo đề thi..."
+                      className="w-full bg-transparent border-none outline-none text-sm font-medium h-32 resize-none leading-relaxed"
+                      style={{ color: 'var(--text)' }}
+                    />
+                  </div>
+
+                  <div className="text-center space-y-3">
+                    <div className="flex justify-center">
+                      <div className="px-5 py-2.5 font-semibold text-xs rounded-full flex items-center gap-2 cursor-pointer relative" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                        <input type="file" accept=".pdf,image/*" multiple onChange={e=>setUploadFiles(Array.from(e.target.files||[]))} className="absolute inset-0 opacity-0 cursor-pointer"/>
+                        <UploadCloud className="w-4 h-4"/> Tải lên file từ máy
+                      </div>
+                    </div>
+                    <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>Hỗ trợ PDF, Ảnh. Tổng nguồn tối đa 100 MB.</p>
+                    {attachedFiles.length > 0 && (
+                      <div className="text-left p-3 rounded-xl max-h-20 overflow-y-auto custom-scrollbar text-xs font-medium space-y-1" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{attachedFiles.map(f => <div key={f.name}>📄 {f.name}</div>)}</div>
+                    )}
+                    <div className="w-full rounded-full h-8 flex items-center px-4 justify-between text-[11px] font-semibold" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      <span>Tổng dung lượng nguồn:</span><span>{attachedFiles.length > 0 ? `${(attachedFiles.reduce((s,f)=>s+f.size,0)/1024).toFixed(1)} KB` : '0 KB'} / 100 MB</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl p-6 md:p-8 space-y-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--text-muted)' }}><Settings2 className="w-4 h-4"/> Cấu hình tạo đề thi</h3>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Tiêu đề đề thi</label>
+                    <input type="text" value={title} onChange={e=>setTitle(e.target.value)} placeholder="Nhập tiêu đề đề thi tự động..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Mô tả đề thi</label>
+                    <textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Mô tả tóm tắt..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent h-20 resize-none" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Thời gian làm bài (Tối đa 10000 phút)</label>
+                      <input
+                        type="number" min={1} max={10000}
+                        value={duration}
+                        onChange={e=>setDuration(Math.min(10000, Math.max(1, Number(e.target.value))))}
+                        className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                        placeholder="Nhập số phút..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Số lượng câu hỏi (Tối đa 100 câu)</label>
+                      <input
+                        type="number" min={1} max={100}
+                        value={numQuestions}
+                        onChange={e=>setNumQuestions(Math.min(100, Math.max(1, Number(e.target.value))))}
+                        className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Độ khó</label>
+                      <select value={difficulty} onChange={e=>setDifficulty(e.target.value as DifficultyType)} className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent cursor-pointer" style={{ border: '1px solid var(--border)', color: 'var(--text)' }}>
+                        <option value="easy">Cơ bản</option><option value="medium">Trung bình</option><option value="hard">Nâng cao</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Ngôn ngữ</label>
+                      <select className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent cursor-not-allowed opacity-60" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} disabled><option>Tiếng Việt</option></select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Dạng câu hỏi mục tiêu (Có thể chọn nhiều)</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        {type: 'choice', text: 'Trắc nghiệm ABCD'}, {type: 'true_false', text: 'Đúng / Sai (4 ý)'}, {type: 'short_answer', text: 'Trả lời ngắn (Điền ô)'}
+                      ].map(item => {
+                        const isSelected = qTypes.includes(item.type as QuestionType)
+                        return (
+                          <button key={item.type} type="button" onClick={() => handleToggleQType(item.type as QuestionType)} className="p-4 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between" style={isSelected ? { border: '2px solid var(--accent)', background: 'var(--accent-soft)', color: 'var(--accent)' } : { border: '2px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}>
+                            <span>{item.text}</span>
+                            <div className="w-4 h-4 rounded-full border flex items-center justify-center" style={isSelected ? { background: 'var(--accent)', borderColor: 'var(--accent)' } : { borderColor: 'var(--border)' }}>{isSelected && <Check className="w-2.5 h-2.5 text-white"/>}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {genStatus.active && (
+                    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--accent-soft)' }}>
+                      <ModernLoading themeColor={themeColor} isDark={isDark} label={genStatus.msg} fullScreen={false} />
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-3 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+                    <button type="button" onClick={()=>router.push('/dashboard')} className="px-6 py-3.5 rounded-xl font-semibold text-xs uppercase tracking-wider" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>Hủy bỏ</button>
+                    <button type="submit" disabled={genStatus.active} className="px-8 py-3.5 rounded-xl font-semibold text-xs uppercase tracking-wider disabled:opacity-50" style={{ background: 'var(--accent)', color: '#fff' }}>Tạo đề thi phối hợp</button>
+                  </div>
+                </div>
+              </form>
+
+              <div className="lg:col-span-5 h-[550px] lg:h-[700px] flex flex-col gap-6">
+                <div className="rounded-2xl p-6 md:p-8 flex flex-col h-full" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest mb-4 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}><Calendar className="w-4 h-4"/> Đề thi tự tạo của bạn ({createdExams.length})</h3>
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                    {createdExams.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center opacity-50 px-4"><BookOpen className="w-12 h-12 mb-3" style={{ color: 'var(--text-muted)' }}/><p className="font-semibold text-sm">Kho lưu trữ trống</p></div>
+                    ) : (
+                      createdExams.map(ex => (
+                        <div key={ex.id} onClick={()=>{ setSelectedExam(ex); setUserAnswers({}); setIsSubmitted(false); setTimeLeft(ex.duration * 60); setCurrentView('quiz'); }} className="p-4 rounded-2xl cursor-pointer transition-colors flex justify-between items-center group" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                          <div className="min-w-0 pr-4">
+                            <h4 className="font-semibold text-xs truncate">{ex.title}</h4>
+                            <p className="text-[10px] font-medium mt-1 uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{ex.createdAt} • {ex.duration} phút • {ex.questions.length} câu</p>
+                          </div>
+                          <button onClick={(e)=>{e.stopPropagation(); handleDeleteExam(ex.id, e)}} className="p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--text-muted)' }}><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            selectedExam && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto">
+                <div className="lg:col-span-8 space-y-5">
+                  {selectedExam.knowledgeBase && (selectedExam.knowledgeBase.formulas?.length > 0 || selectedExam.knowledgeBase.definitions?.length > 0) && (
+                    <div className="rounded-2xl p-6 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '4px solid var(--accent)' }}>
+                      <h4 className="font-semibold text-xs uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--accent)' }}><Database className="w-4 h-4"/> Cơ sở công thức lõi SenAI đã nạp từ PDF</h4>
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar pt-1">
+                        {selectedExam.knowledgeBase.formulas?.map((f, i) => (
+                          <span key={i} className="px-3 py-1.5 rounded-xl text-xs font-mono" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{f}</ReactMarkdown>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-4 rounded-2xl flex items-center justify-between" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="min-w-0">
+                      <h2 className="text-2xl font-semibold tracking-tight">{selectedExam.title}</h2>
+                      <p className="text-xs font-medium mt-1.5" style={{ color: 'var(--text-muted)' }}>{selectedExam.description}</p>
+                    </div>
+                  </div>
+
+                  {selectedExam.questions.map((q, idx) => {
+                    const currentType = q.type || selectedExam.types[0]
+                    let sectionHeader = null
+
+                    if (currentType === 'choice' && !renderedChoiceHeader) {
+                      renderedChoiceHeader = true
+                      sectionHeader = (
+                        <div className="p-5 rounded-2xl my-4" style={{ background: 'var(--accent-soft)', borderLeft: '4px solid var(--accent)' }}>
+                          <h4 className="font-semibold text-xs uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Phần I: Câu hỏi trắc nghiệm nhiều lựa chọn (ABCD)</h4>
+                          <p className="text-[11px] font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Mỗi câu hỏi thí sinh chỉ chọn một phương án trả lời duy nhất.</p>
+                        </div>
+                      )
+                    } else if (currentType === 'true_false' && !renderedTrueFalseHeader) {
+                      renderedTrueFalseHeader = true
+                      sectionHeader = (
+                        <div className="p-5 rounded-2xl my-4" style={{ background: 'var(--accent-soft)', borderLeft: '4px solid var(--accent)' }}>
+                          <h4 className="font-semibold text-xs uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Phần II: Câu hỏi trắc nghiệm Đúng / Sai</h4>
+                          <p className="text-[11px] font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn Đúng hoặc Sai.</p>
+                        </div>
+                      )
+                    } else if (currentType === 'short_answer' && !renderedShortHeader) {
+                      renderedShortHeader = true
+                      sectionHeader = (
+                        <div className="p-5 rounded-2xl my-4" style={{ background: 'var(--accent-soft)', borderLeft: '4px solid var(--accent)' }}>
+                          <h4 className="font-semibold text-xs uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Phần III: Câu hỏi trắc nghiệm trả lời ngắn</h4>
+                          <p className="text-[11px] font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Thí sinh điền đáp án bằng số cụ thể vào các ô trống tương ứng (Làm tròn tối đa 2 số thập phân).</p>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div key={idx} className="space-y-4">
+                        {sectionHeader}
+
+                        <div className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+
+                          <div className="w-fit px-3 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-wider" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>
+                            Câu {idx + 1}
+                          </div>
+
+                          <div className="text-sm font-medium leading-relaxed overflow-x-auto custom-scrollbar">
+                            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <p className="m-0" {...props} />, strong: ({node, ...props}: any) => <strong className="font-semibold" style={{ color: 'var(--accent)' }} {...props} /> }}>
+                              {q.question}
+                            </ReactMarkdown>
+                          </div>
+
+                          {currentType === 'choice' && q.options && (
+                            <div className="space-y-2.5 pt-2">
+                              {q.options.map((opt: string) => {
+                                const letter = opt.trim().charAt(0).toUpperCase()
+                                const isSel = userAnswers[idx] === letter
+                                return (
+                                  <button
+                                    key={opt} type="button" disabled={isSubmitted}
+                                    onClick={() => setUserAnswers({ ...userAnswers, [idx]: letter })}
+                                    className="w-full p-4 rounded-xl text-xs font-medium text-left transition-colors flex items-center gap-4"
+                                    style={isSel ? { background: 'var(--accent-soft)', border: '1px solid var(--accent)' } : { background: 'var(--bg)', border: '1px solid var(--border)' }}
+                                  >
+                                    <div className="w-6 h-6 rounded-full flex items-center justify-center font-semibold shrink-0" style={isSel ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', border: '1px solid var(--border)' }}>{letter}</div>
+                                    <span className="flex-1 overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{opt.substring(2)}</ReactMarkdown></span>
+                                    {(isSubmitted || alwaysShowExplain) && q.answer === letter && <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }}/>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {currentType === 'true_false' && q.subQuestions && (
+                            <div className="space-y-2.5 pt-2">
+                              {q.subQuestions.map((sub: any, subIdx: number) => {
+                                const currentAns = userAnswers[`${idx}_${subIdx}`]
+                                return (
+                                  <div key={subIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl text-xs font-medium" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                                    <span className="overflow-x-auto custom-scrollbar"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={{ p: ({node, ...props}: any) => <span {...props} /> }}>{sub.text}</ReactMarkdown></span>
+                                    <div className="flex gap-2 shrink-0">
+                                      <button type="button" disabled={isSubmitted} onClick={() => setUserAnswers({ ...userAnswers, [`${idx}_${subIdx}`]: true })} className="px-4 py-1.5 rounded-lg text-[11px] font-semibold" style={currentAns === true ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', border: '1px solid var(--border)' }}>Đúng</button>
+                                      <button type="button" disabled={isSubmitted} onClick={() => setUserAnswers({ ...userAnswers, [`${idx}_${subIdx}`]: false })} className="px-4 py-1.5 rounded-lg text-[11px] font-semibold" style={currentAns === false ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', border: '1px solid var(--border)' }}>Sai</button>
+                                      {(isSubmitted || alwaysShowExplain) && <span className="px-2 py-1 rounded-md text-[10px] font-semibold uppercase" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{sub.answer ? 'Đúng' : 'Sai'}</span>}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {currentType === 'short_answer' && (
+                            <div className="pt-2 space-y-3">
+                              <div className="flex items-center gap-3">
+                                <div className="flex gap-1">
+                                  {[0, 1, 2, 3].map(boxIdx => {
+                                    const char = String(userAnswers[idx] || '')[boxIdx] || ''
+                                    return (
+                                      <div key={boxIdx} className="w-9 h-11 rounded-lg flex items-center justify-center font-semibold text-sm" style={{ background: 'var(--bg)', border: '2px solid var(--border)', color: 'var(--accent)' }}>{char}</div>
+                                    )
+                                  })}
+                                </div>
+                                <input
+                                  type="text" maxLength={4} disabled={isSubmitted}
+                                  value={userAnswers[idx] || ''} onChange={(e) => setUserAnswers({ ...userAnswers, [idx]: e.target.value })}
+                                  placeholder="Gõ số..." className="rounded-xl px-3 py-2 text-xs font-medium outline-none w-28 bg-transparent"
+                                  style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                                />
+                              </div>
+                              {(isSubmitted || alwaysShowExplain) && <div className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Đáp án chuẩn: <span className="px-2 py-1 rounded-md font-mono" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{q.answer}</span></div>}
+                            </div>
+                          )}
+
+                          {(isSubmitted || alwaysShowExplain) && q.explain && (
+                            <div className="p-4 rounded-2xl text-xs font-medium mt-2 leading-relaxed" style={{ background: 'var(--accent-soft)', color: 'var(--text)' }}>
+                              <span className="block uppercase font-semibold text-[10px] tracking-widest mb-1" style={{ color: 'var(--accent)' }}>Lời giải chi tiết từ SenAI:</span>
+                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.explain}</ReactMarkdown>
+                            </div>
+                          )}
+
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="lg:col-span-4 sticky top-[96px] space-y-5">
+                  <div className="rounded-2xl p-6 text-center space-y-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest flex items-center justify-center gap-1.5" style={{ color: 'var(--text-muted)' }}><Clock className="w-3.5 h-3.5"/> Thời gian còn lại</p>
+                      <p className="text-4xl font-semibold font-mono transition-colors" style={{ color: timeLeft < 60 && !isSubmitted ? '#e11d48' : 'var(--text)' }}>
+                        {isSubmitted ? 'Đã nộp bài' : formatTimeLeft(timeLeft)}
+                      </p>
+                      <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Tổng thời gian cài đặt: {selectedExam.duration} phút</p>
+                    </div>
+
+                    <div className="text-left text-xs font-medium leading-relaxed p-4 rounded-2xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      Làm thử đề thi được AI tạo trực tiếp dựa trên tài liệu bạn đã chọn. Bấm <strong>Nộp bài</strong> để xem điểm và giải thích chi tiết.
+                    </div>
+
+                    {isSubmitted && (
+                      <div className="p-4 rounded-2xl" style={{ background: 'var(--accent-soft)' }}>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Kết quả thi</p>
+                        <p className="text-3xl font-semibold" style={{ color: 'var(--accent)' }}>{String(scoreResult).replace('.', ',')} <span className="text-xs" style={{ color: 'var(--text-muted)' }}>/ 10 Điểm</span></p>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {!isSubmitted ? (
+                        <button onClick={handleScoreQuiz} className="w-full font-semibold py-4 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-[0.98]" style={{ background: 'var(--accent)', color: '#fff' }}>
+                          Nộp bài thi
+                        </button>
+                      ) : (
+                        <button onClick={()=>{ setUserAnswers({}); setIsSubmitted(false); setTimeLeft(selectedExam.duration * 60); }} className="w-full font-semibold py-4 rounded-xl text-xs uppercase tracking-wider transition-all active:scale-[0.98]" style={{ background: 'var(--accent)', color: '#fff' }}>
+                          Làm lại bài thi
+                        </button>
+                      )}
+                      <button onClick={() => { if (timerRef.current) clearInterval(timerRef.current); setCurrentView('form'); }} className="w-full py-3.5 rounded-2xl font-semibold text-xs uppercase tracking-wider transition-colors" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                        Thoát phòng thi
+                      </button>
+                    </div>
+
+                    <div className="pt-3 flex items-center justify-center gap-2" style={{ borderTop: '1px solid var(--border)' }}>
+                      <input
+                        type="checkbox" id="show_exp_modern" checked={alwaysShowExplain}
+                        onChange={(e)=>setAlwaysShowExplain(e.target.checked)}
+                        className="w-4 h-4 cursor-pointer"
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      <label htmlFor="show_exp_modern" className="text-xs font-medium cursor-pointer select-none" style={{ color: 'var(--text-muted)' }}>Hiện đáp án & Giải thích luôn</label>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl flex items-center gap-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><Sparkles className="w-5 h-5"/></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>AI Tokens</p>
+                      <p className="font-semibold text-xs mt-0.5">3,44M còn lại</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-24 transition-colors duration-500">

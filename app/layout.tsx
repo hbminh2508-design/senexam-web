@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
+import ClientErrorReporter from "./components/ClientErrorReporter";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,6 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body className="app-shell min-h-screen flex flex-col bg-background text-foreground">
+        <ClientErrorReporter />
         {children}
       </body>
     </html>

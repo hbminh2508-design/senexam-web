@@ -9,12 +9,13 @@ import {
   LogOut, User, MessageSquare,
   Settings, X, Sun, Moon, GraduationCap, Loader2, KeyRound,
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator,
-  FlaskConical, PlaySquare, Wand2, Palette, Target
+  FlaskConical, PlaySquare, Wand2, Palette, Target, RefreshCw, Rocket, CheckCircle2
 } from 'lucide-react'
 
 import { AnnouncementRenderer } from './_home/Announcement'
 import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
 import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
+import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION } from '@/lib/systemRelease'
 import type { Feature } from './_home/types'
 import pkg from '@/package.json'
 
@@ -125,6 +126,22 @@ export default function DashboardPage() {
   const [themeColorSaving, setThemeColorSaving] = useState(false)
   const [uiDensity, setUiDensity] = useState<'comfortable' | 'compact'>('comfortable')
   const [animationsEnabled, setAnimationsEnabled] = useState(true)
+
+  // -- Kiểm tra cập nhật phiên bản mới do Admin đẩy ra --
+  const [updateCheckState, setUpdateCheckState] = useState<'idle' | 'checking' | 'up_to_date' | 'available'>('idle')
+  const [latestReleaseInfo, setLatestReleaseInfo] = useState<{ version: string; changelog: string } | null>(null)
+
+  const handleCheckForUpdate = async () => {
+    setUpdateCheckState('checking')
+    const release = await fetchSystemRelease()
+    if (release && release.is_published && isNewerVersion(CURRENT_APP_VERSION, release.latest_version)) {
+      setLatestReleaseInfo({ version: release.latest_version, changelog: release.changelog })
+      setUpdateCheckState('available')
+    } else {
+      setLatestReleaseInfo(null)
+      setUpdateCheckState('up_to_date')
+    }
+  }
 
   // ----------------------------------------------------------------------------
   // 🌟 CALCULATOR MODAL STATES (TÍNH ĐIỂM ĐẠI HỌC)
@@ -606,7 +623,7 @@ export default function DashboardPage() {
       {showProfile && (
         <div
           className={`fixed inset-0 z-50 flex justify-end bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm transition-all duration-300`}
-          style={newUiEnabled ? { ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)' } as React.CSSProperties : undefined}
+          style={newUiEnabled ? getModernThemeVars(themeColor, isDark) : undefined}
         >
           <div
             className={
@@ -815,6 +832,50 @@ export default function DashboardPage() {
               >
                 Phiên bản {pkg.version}
               </p>
+
+              {/* Kiểm tra cập nhật */}
+              <div className="pt-1">
+                {updateCheckState === 'available' && latestReleaseInfo ? (
+                  <div
+                    className={newUiEnabled ? 'rounded-2xl p-4 space-y-3' : 'rounded-2xl p-4 space-y-3 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30'}
+                    style={newUiEnabled ? { background: 'var(--accent-soft)', border: '1px solid var(--accent)' } : undefined}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Rocket className="w-4 h-4" style={newUiEnabled ? { color: 'var(--accent)' } : undefined} />
+                      <p className={newUiEnabled ? 'font-black text-sm' : 'font-black text-sm text-emerald-700 dark:text-emerald-400'} style={newUiEnabled ? { color: 'var(--accent)' } : undefined}>
+                        Có bản cập nhật mới: v{latestReleaseInfo.version}
+                      </p>
+                    </div>
+                    {latestReleaseInfo.changelog && (
+                      <p className={newUiEnabled ? 'text-xs whitespace-pre-wrap' : 'text-xs whitespace-pre-wrap text-slate-600 dark:text-slate-300'} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
+                        {latestReleaseInfo.changelog}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => window.location.reload()}
+                      className={newUiEnabled ? 'w-full rounded-xl py-2.5 font-black text-xs flex items-center justify-center gap-2 text-white' : 'w-full rounded-xl py-2.5 font-black text-xs flex items-center justify-center gap-2 text-white bg-emerald-600 hover:bg-emerald-700'}
+                      style={newUiEnabled ? { background: 'var(--accent)' } : undefined}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Cập nhật ngay
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleCheckForUpdate}
+                    disabled={updateCheckState === 'checking'}
+                    className={newUiEnabled ? 'w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold disabled:opacity-60 border' : 'w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 disabled:opacity-60'}
+                    style={newUiEnabled ? { borderColor: 'var(--border)', color: 'var(--text-muted)' } : undefined}
+                  >
+                    {updateCheckState === 'checking' ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang kiểm tra...</>
+                    ) : updateCheckState === 'up_to_date' ? (
+                      <><CheckCircle2 className="w-3.5 h-3.5" /> Đã là bản mới nhất</>
+                    ) : (
+                      <><RefreshCw className="w-3.5 h-3.5" /> Kiểm tra cập nhật</>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>

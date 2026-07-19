@@ -14,6 +14,10 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 
+// Hệ thống Giao diện mới (Beta) — cờ tính năng theo tài khoản
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+
 // --- MATERIAL 3 & LIQUID GLASS CONSTANTS ---
 const mdCard = "bg-white/70 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] border border-white/60 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] hover:shadow-xl hover:-translate-y-1 transition-all duration-500 ease-out relative overflow-hidden"
 const mdInput = "w-full bg-slate-100 dark:bg-[#202020] border-transparent focus:bg-white dark:focus:bg-[#2A2A2A] border-2 focus:border-indigo-500 rounded-2xl px-5 py-4 outline-none transition-all font-bold text-slate-900 dark:text-white text-sm shadow-inner"
@@ -152,6 +156,9 @@ export default function UnifiedKhaoThiPage() {
   const [activeWorkspace, setActiveWorkspace] = useState<'tinhdiem' | 'phodiem' | 'senai' | 'quydoikhoi'>('tinhdiem')
   const [userName, setUserName] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(false)
+
+  // --- GIAO DIỆN MỚI (BETA) ---
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
 
   // --- STATE TÍNH ĐIỂM ---
   const [calcMode, setCalcMode] = useState<'standard' | 'hust'>('standard')
@@ -480,6 +487,562 @@ export default function UnifiedKhaoThiPage() {
     } finally {
       setIsSenaiLoading(false)
     }
+  }
+
+  // ==========================================================================
+  // GIAO DIỆN MỚI (BETA) — reskin phẳng dùng biến CSS, giữ nguyên toàn bộ
+  // state/handler/logic phía trên. Người dùng chưa bật cờ sẽ thấy giao diện
+  // Liquid Glass gốc bên dưới không đổi.
+  // ==========================================================================
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans relative pb-20"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        <header className="h-[72px] px-4 sm:px-8 flex items-center justify-between sticky top-0 z-40" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/dashboard')} className="p-2.5 rounded-full transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+              <ArrowLeft className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent)', color: '#fff' }}>
+                <BarChart3 className="w-5 h-5"/>
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold tracking-tight leading-none flex items-center gap-2">
+                  SenKhảoThí
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
+                </h1>
+                <span className="text-[10px] font-medium uppercase tracking-widest mt-1 block" style={{ color: 'var(--text-muted)' }}>Đối soát phổ điểm tổng hợp</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={toggleTheme} className="p-2.5 rounded-full transition-colors" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+              {isDark ? <Sun className="w-5 h-5" style={{ color: 'var(--accent)' }}/> : <Moon className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>}
+            </button>
+          </div>
+        </header>
+
+        <div className="max-w-[1400px] mx-auto pt-8 px-4 md:px-8 relative z-10">
+          {/* THANH ĐIỀU HƯỚNG KHÔNG GIAN LÀM VIỆC */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl mb-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="min-w-0 pl-2">
+              <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2.5">
+                {activeWorkspace === 'tinhdiem' && <Calculator className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                {activeWorkspace === 'phodiem' && <BarChart3 className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                {activeWorkspace === 'senai' && <Bot className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                {activeWorkspace === 'quydoikhoi' && <Shuffle className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                {activeWorkspace === 'tinhdiem' && 'Trạm Tính Điểm Xét Tuyển Đại Học'}
+                {activeWorkspace === 'phodiem' && 'Hệ Thống Phân Tích & Tra Cứu Phổ Điểm'}
+                {activeWorkspace === 'senai' && 'Định Vị Tỷ Lệ Đậu Trường Ngành - SenAI'}
+                {activeWorkspace === 'quydoikhoi' && 'Quy Đổi Bách Phân Vị Tương Đương Liên Khối'}
+              </h2>
+              <p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Dữ liệu khảo thí chuẩn hóa mẫu quốc gia độc lập điều hành bởi SenAI.</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 p-1.5 rounded-2xl shrink-0" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+              <button onClick={() => setActiveWorkspace('tinhdiem')} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors" style={activeWorkspace === 'tinhdiem' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>Tính Điểm</button>
+              <button onClick={() => setActiveWorkspace('phodiem')} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors" style={activeWorkspace === 'phodiem' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>Tra Cứu Phổ Điểm</button>
+              <button onClick={() => setActiveWorkspace('senai')} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors" style={activeWorkspace === 'senai' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>SenAI Dự Đoán</button>
+              <button onClick={() => setActiveWorkspace('quydoikhoi')} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1" style={activeWorkspace === 'quydoikhoi' ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}><Shuffle className="w-3.5 h-3.5"/> Quy Đổi Khối</button>
+            </div>
+          </div>
+
+          {/* KHÔNG GIAN 1: TÍNH ĐIỂM */}
+          {activeWorkspace === 'tinhdiem' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 space-y-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <h3 className="font-semibold text-xs uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Cấu hình điểm tổ hợp xét tuyển</h3>
+                    <select value={calcMode} onChange={e => setCalcMode(e.target.value as any)} className="rounded-xl px-4 py-2 text-xs font-semibold outline-none bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }}>
+                      <option value="standard">Phương thức Tiêu chuẩn (Thang 30)</option>
+                      <option value="hust">Phương thức Nhân đôi môn chính (Bách Khoa)</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {['sub1', 'sub2', 'sub3'].map((sub, i) => (
+                      <div key={sub}>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Môn thứ {i + 1}</label>
+                        <input type="text" value={(calcScores as any)[sub]} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCalcScores({...calcScores, [sub]: e.target.value}) }} placeholder="Điểm số..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                        {calcMode === 'hust' && <button type="button" onClick={()=>setCalcMainSubject(sub as any)} className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-semibold uppercase transition-colors" style={calcMainSubject===sub ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Môn chính</button>}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Điểm ưu tiên khu vực / đối tượng gốc</label>
+                    <input type="text" value={calcPriorityScore} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCalcPriorityScore(e.target.value) }} placeholder="Ví dụ: 0.25, 0.5, 0.75..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 text-center min-h-[340px] flex flex-col justify-center space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><Award className="w-7 h-7"/></div>
+                  <div><h3 className="font-semibold text-lg">Bảng điểm quy đổi</h3><p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Kết quả áp dụng thuật toán giảm trừ tuyến tính</p></div>
+
+                  {calcResult ? (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl grid grid-cols-2 gap-2 text-xs font-semibold" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                        <div style={{ borderRight: '1px solid var(--border)' }}><p className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>Điểm trần 3 môn</p><p className="text-xl font-semibold mt-1">{formatNum(calcResult.rawScore)}</p></div>
+                        <div><p className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>Điểm UT thực nhận</p><p className="text-xl font-semibold mt-1" style={{ color: 'var(--accent)' }}>{formatNum(calcResult.finalPriority)}</p></div>
+                      </div>
+                      <div className="p-5 rounded-3xl" style={{ background: 'var(--accent)', color: '#fff' }}><p className="text-[10px] font-semibold uppercase tracking-widest opacity-80">Điểm xét tuyển chính thức</p><p className="text-5xl font-semibold mt-1.5 font-mono">{formatNum(calcResult.totalScore)}</p></div>
+                    </div>
+                  ) : (
+                    <div className="p-6 rounded-2xl text-xs font-medium" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>Vui lòng điền đủ điểm số thành phần để kích hoạt bộ máy tính điểm xét tuyển.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* KHÔNG GIAN 2: TRA CỨU PHỔ ĐIỂM ĐƠN MÔN + CHAT */}
+          {activeWorkspace === 'phodiem' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7 space-y-6">
+                <div className="flex flex-wrap gap-2">
+                  {subjectsList.map(sub => (
+                    <button
+                      key={sub} onClick={() => setSelectedSubject(sub)}
+                      className="px-4 py-2 rounded-full text-xs font-semibold transition-colors"
+                      style={selectedSubject === sub ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                    >
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="rounded-2xl p-6 md:p-8 min-h-[460px] flex flex-col justify-between" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <h3 className="font-semibold text-lg flex items-center gap-2"><BarChart3 className="w-5 h-5" style={{ color: 'var(--accent)' }}/> Hình dạng phổ điểm môn {selectedSubject}</h3>
+                      <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--text-muted)' }}>Dữ liệu bách phân vị chuẩn hóa liên năm từ Bộ GD&ĐT.</p>
+                    </div>
+                    <div className="flex gap-1.5 p-1 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <button onClick={() => setActiveYear('2025')} className="px-3 py-1.5 text-[10px] font-semibold rounded-lg transition-colors" style={activeYear === '2025' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>2025</button>
+                      <button onClick={() => setActiveYear('2026')} className="px-3 py-1.5 text-[10px] font-semibold rounded-lg transition-colors" style={activeYear === '2026' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>2026</button>
+                    </div>
+                  </div>
+
+                  <div className="w-full h-[280px] mt-6 flex gap-[1px] sm:gap-1 pl-1 pb-0" style={{ borderBottom: '2px solid var(--border)', borderLeft: '2px solid var(--border)' }}>
+                    {chartData.map((val: number, i: number) => {
+                      const hPercent = Math.max((val / maxChartVal) * 100, 0.5)
+                      const isUserScore = userPercentileInfo && userPercentileInfo.binIndex === i
+
+                      return (
+                        <div key={i} className="flex-1 h-full flex flex-col justify-end relative group">
+                          <div
+                            style={{ height: `${hPercent}%`, background: isUserScore ? '#e11d48' : 'var(--accent)' }}
+                            className="w-full rounded-t-[2px] transition-all duration-700 ease-out"
+                          ></div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex justify-between text-[11px] font-semibold mt-4 px-2 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                    <span>0</span><span>2,5</span><span>5,0</span><span>7,5</span><span>10</span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Nhập điểm thi môn {selectedSubject} để đối soát bách phân vị</label>
+                    <input
+                      type="text" value={userScore}
+                      onChange={(e) => { const val = e.target.value; if (val === '' || /^[0-9.,]*$/.test(val)) setUserScore(val) }}
+                      placeholder="Ví dụ: 7.25 hoặc 8,5..."
+                      className="w-full rounded-2xl px-5 py-4 outline-none text-lg text-center tracking-widest font-medium bg-transparent"
+                      style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                    />
+                  </div>
+
+                  {userPercentileInfo && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-2xl text-center" style={{ background: 'var(--accent-soft)' }}>
+                        <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--accent)' }}>Thứ hạng quốc gia ước tính</p>
+                        <p className="text-2xl font-semibold mt-1" style={{ color: '#e11d48' }}>Top {(100 - parseFloat(userPercentileInfo.percentile)).toFixed(2).replace('.', ',')}%</p>
+                        <p className="text-[10px] font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Vượt qua {formatNum(userPercentileInfo.percentile)}% thí sinh toàn quốc</p>
+                      </div>
+                      <div className="p-4 rounded-2xl text-center" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                        <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--accent)' }}>Quy đổi tương đương sang năm 2025</p>
+                        <p className="text-2xl font-semibold mt-1" style={{ color: 'var(--accent)' }}>{formatNum(singleSubjectEquivalent2025 || '0')} điểm</p>
+                        <p className="text-[10px] font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Nội suy dựa trên phân bổ mẫu phổ điểm</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 space-y-6">
+                <div className="rounded-2xl flex flex-col h-[640px] overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="px-6 py-4 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-xl" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><Bot className="w-4 h-4"/></div>
+                      <div>
+                        <h4 className="font-semibold text-xs uppercase tracking-widest">Trợ lý phổ điểm đơn môn</h4>
+                        <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Giải đáp thế học, độ phân hóa đề thi</p>
+                      </div>
+                    </div>
+                    {userPercentileInfo && (
+                      <button
+                        onClick={() => handleSendPhodiemChat(undefined, true)}
+                        className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg uppercase tracking-wider"
+                        style={{ background: 'var(--accent)', color: '#fff' }}
+                      >
+                        Kích hoạt phân tích
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar" ref={scrollRefPhodiem}>
+                    {phodiemChatMessages.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-60">
+                        <GraduationCap className="w-10 h-10 mb-2" style={{ color: 'var(--text-muted)' }}/>
+                        <p className="text-xs font-medium max-w-xs leading-relaxed">Phụ huynh & các em học sinh nhập điểm bên trái sau đó nhấn nút "Kích hoạt phân tích" hoặc đặt câu hỏi ở thanh dưới chân để SenAI giải đáp phổ điểm ảo.</p>
+                      </div>
+                    ) : (
+                      phodiemChatMessages.map((msg, idx) => (
+                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className="max-w-[90%] px-4 py-3 rounded-[1.3rem] text-xs font-medium leading-relaxed" style={msg.role === 'user' ? { background: 'var(--accent)', color: '#fff', borderBottomRightRadius: '0.3rem' } : { background: 'var(--bg)', border: '1px solid var(--border)', borderBottomLeftRadius: '0.3rem' }}>
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                              {msg.text}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {isPhodiemLoading && (
+                      <div className="flex justify-start items-center gap-2 text-[11px] font-medium italic" style={{ color: 'var(--text-muted)' }}>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'var(--accent)' }}/> SenAI đang phân tích phổ điểm ảo...
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+                    <form onSubmit={(e) => handleSendPhodiemChat(e, false)} className="relative flex items-center rounded-2xl px-2 py-1.5" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <input
+                        type="text" value={phodiemChatInput} onChange={e => setPhodiemChatInput(e.target.value)}
+                        placeholder="Mức điểm này có dễ đỗ đại học top đầu không?..."
+                        className="flex-1 bg-transparent text-xs font-medium outline-none px-2"
+                        style={{ color: 'var(--text)' }}
+                        disabled={isPhodiemLoading}
+                      />
+                      <button type="submit" disabled={isPhodiemLoading || !phodiemChatInput.trim()} className="p-2 rounded-xl disabled:opacity-40" style={{ background: 'var(--accent)', color: '#fff' }}>
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* KHÔNG GIAN 3: SENAI DỰ ĐOÁN TỔ HỢP + CHAT */}
+          {activeWorkspace === 'senai' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-5 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 space-y-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <h3 className="font-semibold text-sm uppercase tracking-widest flex items-center gap-2 mb-4" style={{ color: 'var(--accent)' }}>
+                      <GraduationCap className="w-5 h-5"/> 1. Thiết lập tổ hợp xét tuyển & Điểm 2026
+                    </h3>
+
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Lựa chọn nhanh khối thi</label>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
+                      {['A00', 'A01', 'B00', 'C00', 'D01'].map(group => (
+                        <button
+                          key={group} type="button" onClick={() => handleSenaiGroupChange(group)}
+                          className="py-2 rounded-xl text-xs font-semibold transition-colors"
+                          style={senaiGroup === group ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                        >
+                          {group}
+                        </button>
+                      ))}
+                      <button
+                        type="button" onClick={() => setSenaiGroup('custom')}
+                        className="py-2 rounded-xl text-xs font-semibold transition-colors"
+                        style={senaiGroup === 'custom' ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                      >
+                        Tự chọn
+                      </button>
+                    </div>
+                  </div>
+
+                  {senaiGroup === 'custom' && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[0, 1, 2].map(idx => (
+                        <div key={idx}>
+                          <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Môn {idx + 1}</label>
+                          <select
+                            value={senaiSubjects[idx]}
+                            onChange={e => {
+                              const updated = [...senaiSubjects]
+                              updated[idx] = e.target.value
+                              setSenaiSubjects(updated)
+                            }}
+                            className="w-full rounded-xl p-3 text-xs font-medium outline-none bg-transparent"
+                            style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                          >
+                            {subjectsList.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{senaiSubjects[0]}</label>
+                      <input type="text" value={senaiScores.s1} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s1: e.target.value}) }} placeholder="Điểm..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{senaiSubjects[1]}</label>
+                      <input type="text" value={senaiScores.s2} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s2: e.target.value}) }} placeholder="Điểm..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{senaiSubjects[2]}</label>
+                      <input type="text" value={senaiScores.s3} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s3: e.target.value}) }} placeholder="Điểm..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
+                    <h3 className="font-semibold text-sm uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+                      <Bot className="w-4 h-4"/> 2. Nguyện vọng mục tiêu & Chỉ tiêu xét tuyển
+                    </h3>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Trường Đại học</label>
+                        <input type="text" value={targetUni} onChange={e => setTargetUni(e.target.value)} placeholder="Ví dụ: UET, Bách Khoa..." className="w-full rounded-xl px-4 py-2.5 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Ngành đăng ký</label>
+                        <input type="text" value={targetMajor} onChange={e => setTargetMajor(e.target.value)} placeholder="Ví dụ: Khoa học máy tính..." className="w-full rounded-xl px-4 py-2.5 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Điểm chuẩn năm ngoái (2025)</label>
+                      <input type="text" value={lastYearCutoff} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setLastYearCutoff(e.target.value) }} placeholder="Điểm trúng tuyển 2025..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium text-center font-mono bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--accent)' }} />
+                    </div>
+
+                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg)', border: '1px dashed var(--border)' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1" style={{ color: 'var(--text-muted)' }}><TrendingUp className="w-3 h-3" style={{ color: 'var(--accent)' }}/> Khảo sát biến động tổng chỉ tiêu (Cung / Cầu)</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Chỉ tiêu năm ngoái (2025)</label>
+                          <input type="number" value={lastYearQuota} onChange={e => setLastYearQuota(e.target.value)} placeholder="Năm ngoái..." className="w-full rounded-xl p-2.5 text-xs font-medium outline-none bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Chỉ tiêu năm nay (2026)</label>
+                          <input type="number" value={thisYearQuota} onChange={e => setThisYearQuota(e.target.value)} placeholder="Năm nay..." className="w-full rounded-xl p-2.5 text-xs font-medium outline-none bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button" onClick={() => handleSendSenaiChat()} disabled={isSenaiLoading}
+                      className="w-full py-4 rounded-2xl font-semibold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      style={{ background: 'var(--accent)', color: '#fff' }}
+                    >
+                      {isSenaiLoading && senaiChatMessages.length === 0 ? <Loader2 className="w-5 h-5 animate-spin"/> : <Sparkles className="w-4 h-4"/>}
+                      Kích hoạt SenAI dự đoán tỷ lệ đậu
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 space-y-6">
+                {advancedExamBlockAnalysis && (
+                  <div className="rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ background: 'var(--surface)', border: '1px dashed var(--border)' }}>
+                    <div className="p-4 rounded-2xl text-center" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tổng điểm thực tế khối {senaiGroup} (2026)</p>
+                      <p className="text-3xl font-semibold mt-1 font-mono" style={{ color: 'var(--accent)' }}>{formatNum(advancedExamBlockAnalysis.totalRaw2026)}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl text-center" style={{ background: 'var(--accent-soft)' }}>
+                      <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--accent)' }}>Quy đổi bách phân vị tương đương sang năm 2025</p>
+                      <p className="text-3xl font-semibold mt-1 font-mono" style={{ color: 'var(--accent)' }}>{formatNum(advancedExamBlockAnalysis.totalEquivalent2025)}</p>
+                    </div>
+                  </div>
+                )}
+
+                {senaiChatMessages.length > 0 ? (
+                  <div className="rounded-2xl flex flex-col h-[580px] relative overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar" ref={scrollRefSenai}>
+                      {senaiChatMessages.map((msg, index) => (
+                        <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className="max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-xs font-medium leading-relaxed" style={msg.role === 'user' ? { background: 'var(--accent)', color: '#fff', borderBottomRightRadius: '0.3rem' } : { background: 'var(--bg)', border: '1px solid var(--border)', borderBottomLeftRadius: '0.3rem' }}>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkMath]}
+                              rehypePlugins={[rehypeKatex]}
+                              components={{
+                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                strong: ({node, ...props}) => <strong className="font-semibold" style={{ color: msg.role === 'user' ? '#fff' : 'var(--accent)' }} {...props} />,
+                                ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-2 space-y-1" {...props} />,
+                                ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-2 space-y-1" {...props} />,
+                                li: ({node, ...props}) => <li className="pl-0.5" {...props} />,
+                                h3: ({node, ...props}) => <h3 className="text-sm font-semibold pb-1 mb-2 mt-3" style={{ borderBottom: '1px solid var(--border)', color: 'var(--accent)' }} {...props} />,
+                              }}
+                            >
+                              {msg.text}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      ))}
+                      {isSenaiLoading && (
+                        <div className="flex justify-start items-center gap-2 text-xs font-medium italic" style={{ color: 'var(--text-muted)' }}>
+                          <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--accent)' }}/> SenAI đang tính toán xác suất phân phối điểm chuẩn ảo...
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+                      <form onSubmit={(e) => handleSendSenaiChat(e, true)} className="relative flex items-center rounded-2xl px-2 py-1.5" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                        <input
+                          type="text" value={followUpInput} onChange={(e) => setFollowUpInput(e.target.value)}
+                          placeholder="Hỏi thêm SenAI về cơ hội việc làm, học phí, hoặc trường đại học dự phòng an toàn..."
+                          className="flex-1 bg-transparent text-xs font-medium outline-none px-3 py-2"
+                          style={{ color: 'var(--text)' }}
+                          disabled={isSenaiLoading}
+                        />
+                        <button type="submit" disabled={isSenaiLoading || !followUpInput.trim()} className="p-2.5 rounded-xl" style={{ background: 'var(--accent)', color: '#fff' }}>
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl p-8 text-center flex flex-col justify-center items-center space-y-4 min-h-[500px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'var(--bg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                      <Bot className="w-8 h-8"/>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-lg">Không gian tư vấn trúng tuyển thông minh</h4>
+                      <p className="text-xs font-medium mt-2 max-w-sm mx-auto leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                        Điền thông số điểm số khối thi năm 2026 và nguyện vọng mục tiêu ở bảng bên trái, hệ thống sẽ tự động tổng hợp dữ liệu cung cầu chỉ tiêu và mở không gian đối thoại thông minh trực tiếp tại đây.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* KHÔNG GIAN 4: QUY ĐỔI BÁCH PHÂN VỊ LIÊN KHỐI — mục dùng ít hơn, giữ bố cục gọn nhẹ, vẫn dùng biến CSS đồng bộ giao diện mới */}
+          {activeWorkspace === 'quydoikhoi' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-5 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 space-y-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <h3 className="font-semibold text-sm uppercase tracking-widest flex items-center gap-2 mb-4" style={{ color: 'var(--accent)' }}>
+                      <Shuffle className="w-5 h-5"/> Khối thi gốc xuất phát
+                    </h3>
+
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Chọn khối thi hiện có điểm</label>
+                    <select
+                      value={crossSourceBlock}
+                      onChange={e => setCrossSourceBlock(e.target.value)}
+                      className="w-full rounded-2xl px-4 py-3.5 font-medium text-sm outline-none mb-4 bg-transparent"
+                      style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                    >
+                      {['A00', 'A01', 'B00', 'C00', 'C01', 'D00', 'D07'].map(b => <option key={b} value={b}>Khối thi {b}</option>)}
+                    </select>
+
+                    <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Chọn năm dữ liệu</label>
+                    <div className="flex gap-2 mb-4 p-1.5 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <button type="button" onClick={() => setCrossYear('2025')} className="flex-1 py-2 text-xs font-semibold rounded-lg transition-colors" style={crossYear === '2025' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>Phổ điểm 2025</button>
+                      <button type="button" onClick={() => setCrossYear('2026')} className="flex-1 py-2 text-xs font-semibold rounded-lg transition-colors" style={crossYear === '2026' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>Phổ điểm 2026</button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Điền điểm số chi tiết các môn thành phần</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-1 truncate" style={{ color: 'var(--text-muted)' }}>{DYNAMIC_BLOCKS[crossSourceBlock]?.[0]}</label>
+                        <input type="text" value={crossScores.s1} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCrossScores({...crossScores, s1: e.target.value}) }} placeholder="Môn 1..." className="w-full rounded-xl px-3 py-3 outline-none text-sm font-medium text-center font-mono bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-1 truncate" style={{ color: 'var(--text-muted)' }}>{DYNAMIC_BLOCKS[crossSourceBlock]?.[1]}</label>
+                        <input type="text" value={crossScores.s2} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCrossScores({...crossScores, s2: e.target.value}) }} placeholder="Môn 2..." className="w-full rounded-xl px-3 py-3 outline-none text-sm font-medium text-center font-mono bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-1 truncate" style={{ color: 'var(--text-muted)' }}>{DYNAMIC_BLOCKS[crossSourceBlock]?.[2]}</label>
+                        <input type="text" value={crossScores.s3} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCrossScores({...crossScores, s3: e.target.value}) }} placeholder="Môn 3..." className="w-full rounded-xl px-3 py-3 outline-none text-sm font-medium text-center font-mono bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 space-y-6">
+                {crossBlockConversionSystem ? (
+                  <div className="rounded-2xl p-6 md:p-8 space-y-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div>
+                      <h3 className="font-semibold text-base flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+                        <Shuffle className="w-5 h-5"/> Kết quả quy đổi ma trận tương đương liên khối
+                      </h3>
+                      <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--text-muted)' }}>Dựa trên thuật toán cân bằng độ lệch bách phân vị phân phối mẫu quốc gia.</p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs font-medium border-collapse">
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }} className="uppercase tracking-wider">
+                            <th className="py-3 pl-2">Khối mục tiêu</th>
+                            <th className="py-3 text-center">Tổng điểm tương đương</th>
+                            <th className="py-3 pl-4">Cấu trúc nội suy từng môn thành phần</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {crossBlockConversionSystem.map(item => (
+                            <tr
+                              key={item.block}
+                              style={item.block === crossSourceBlock ? { borderBottom: '1px solid var(--border)', background: 'var(--accent-soft)', color: 'var(--accent)' } : { borderBottom: '1px solid var(--border)' }}
+                              className="transition-colors last:border-0"
+                            >
+                              <td className="py-4 pl-3 text-sm font-semibold flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }}></span>
+                                Khối {item.block}
+                              </td>
+                              <td className="py-4 text-center font-mono text-base font-semibold" style={{ color: 'var(--accent)' }}>
+                                {formatNum(item.totalEquivalent)}
+                              </td>
+                              <td className="py-4 pl-4 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                {item.breakdown}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="p-4 rounded-2xl text-[11px] leading-relaxed font-medium" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      <Info className="w-4 h-4 inline mr-1 -mt-0.5" style={{ color: 'var(--accent)' }}/>
+                      <strong style={{ color: 'var(--text)' }}>Ý nghĩa khảo thí:</strong> Mức độ cạnh tranh năng lực tương đương của thí sinh đó khi quy đổi sang các khối thi còn lại sẽ neo giữ chính xác tại mức điểm số được liệt kê ở cột trên. Đây là mỏ neo định vị vàng giúp phụ huynh đổi hướng chọn tổ hợp xét tuyển cực kỳ an toàn.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl p-8 text-center flex flex-col justify-center items-center min-h-[400px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mb-2" style={{ background: 'var(--bg)', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                      <Shuffle className="w-8 h-8"/>
+                    </div>
+                    <h4 className="font-semibold text-lg">Đang chờ sếp điền điểm số khối gốc</h4>
+                    <p className="text-xs font-medium max-w-xs mx-auto mt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>Hệ thống sẽ lập tức ánh xạ bách phân vị sang các khối thi mục tiêu ngay khi nhận đủ điểm số thành phần.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    )
   }
 
   return (

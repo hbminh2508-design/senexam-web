@@ -10,11 +10,12 @@ import {
   KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard,
   Sparkles, Bell, AlertCircle, Loader2, FileInput, Sun, Moon, Clipboard,
   Bot, Send, Code, Play, CheckCircle2, Database, Shuffle, Home, Image as ImageIcon,
-  MessageSquare
+  MessageSquare, Rocket, History, Bug, FlaskConical
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+import { fetchSystemRelease, logReleaseAction, CURRENT_APP_VERSION, type SystemRelease } from '@/lib/systemRelease'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC
 import ReactMarkdown from 'react-markdown'
@@ -74,7 +75,7 @@ export default function AdminDashboard() {
   const [isDark, setIsDark] = useState(false)
   
   // 🌟 TABS QUẢN TRỊ
-  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab' | 'feedback'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab' | 'feedback' | 'release'>('overview')
 
   // 🌟 GIAO DIỆN MỚI (BETA) - đọc cờ bật/tắt + màu chủ đề từ localStorage
   const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
@@ -82,6 +83,12 @@ export default function AdminDashboard() {
   // 🌟 GÓP Ý NGƯỜI DÙNG (feedback từ hotkey "Feedback: ..." trong ChatOffline)
   const [feedbackList, setFeedbackList] = useState<any[]>([])
   const [feedbackCount, setFeedbackCount] = useState<number>(0)
+  const [systemRelease, setSystemRelease] = useState<SystemRelease | null>(null)
+  const [releaseVersionInput, setReleaseVersionInput] = useState('')
+  const [releaseChangelogInput, setReleaseChangelogInput] = useState('')
+  const [releaseSaving, setReleaseSaving] = useState(false)
+  const [releaseLogs, setReleaseLogs] = useState<any[]>([])
+  const [clientErrors, setClientErrors] = useState<any[]>([])
 
   // 🌟 THỐNG KÊ TỔNG QUAN
   const [overviewStats, setOverviewStats] = useState<{ examCount: number; userCount: number; submissionCount: number; pendingGradeCount: number } | null>(null)
@@ -237,6 +244,8 @@ export default function AdminDashboard() {
         await fetchOverviewStats()
       } else if (activeTab === 'feedback') {
         await refreshFeedbackList()
+      } else if (activeTab === 'release') {
+        await refreshReleaseTab()
       }
       setIsFetchingData(false)
     }
@@ -256,6 +265,68 @@ export default function AdminDashboard() {
       .order('created_at', { ascending: false })
     setFeedbackList(data || [])
     setFeedbackCount(data?.length || 0)
+  }
+
+  // 🌟 Tab "Cập nhật hệ thống": tải trạng thái phát hành hiện tại + nhật ký thao tác + lỗi client
+  const refreshReleaseTab = async () => {
+    const [release, logsRes, errorsRes] = await Promise.all([
+      fetchSystemRelease(),
+      supabase.from('release_log').select('*').order('created_at', { ascending: false }).limit(30),
+      supabase.from('client_error_log').select('*').order('created_at', { ascending: false }).limit(30),
+    ])
+    setSystemRelease(release)
+    setReleaseVersionInput(release?.latest_version || CURRENT_APP_VERSION)
+    setReleaseChangelogInput(release?.changelog || '')
+    setReleaseLogs(logsRes.data || [])
+    setClientErrors(errorsRes.data || [])
+  }
+
+  // Lưu nháp phiên bản/changelog mới ở chế độ Test (chưa hiển thị cho người dùng)
+  const handleSaveReleaseDraft = async () => {
+    if (!releaseVersionInput.trim()) return
+    setReleaseSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('system_release').update({
+        latest_version: releaseVersionInput.trim(),
+        changelog: releaseChangelogInput,
+        is_published: false,
+        updated_by: user?.id ?? null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', 1)
+      await logReleaseAction('enable_test', releaseVersionInput.trim(), releaseChangelogInput)
+      await refreshReleaseTab()
+    } finally {
+      setReleaseSaving(false)
+    }
+  }
+
+  // Thoát chế độ Test: khôi phục form về đúng bản đang publish, không ghi đè dữ liệu
+  const handleExitTestMode = async () => {
+    await logReleaseAction('disable_test', systemRelease?.latest_version, 'Thoát chế độ test, hủy bản nháp chưa lưu')
+    setReleaseVersionInput(systemRelease?.latest_version || CURRENT_APP_VERSION)
+    setReleaseChangelogInput(systemRelease?.changelog || '')
+  }
+
+  // Đẩy bản cập nhật cho toàn bộ người dùng: bật is_published để Settings hiện banner
+  const handlePublishRelease = async () => {
+    if (!releaseVersionInput.trim()) return
+    if (!confirm(`Đẩy phiên bản ${releaseVersionInput.trim()} cho TẤT CẢ người dùng?`)) return
+    setReleaseSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('system_release').update({
+        latest_version: releaseVersionInput.trim(),
+        changelog: releaseChangelogInput,
+        is_published: true,
+        updated_by: user?.id ?? null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', 1)
+      await logReleaseAction('publish', releaseVersionInput.trim(), releaseChangelogInput)
+      await refreshReleaseTab()
+    } finally {
+      setReleaseSaving(false)
+    }
   }
 
   const fetchOverviewStats = async () => {
@@ -1315,6 +1386,117 @@ export default function AdminDashboard() {
     </>
   )
 
+  // 🌟 Tab "Cập nhật hệ thống": quản lý phiên bản/changelog, chế độ Test, đẩy update cho
+  // người dùng, xem nhật ký phát hành + lỗi client — dùng chung cho cả 2 giao diện, tự
+  // đổi màu theo newUiEnabled vì đây là 1 hàm duy nhất thay vì lặp lại 2 bản JSX.
+  const renderReleaseTab = () => {
+    const cardStyle = newUiEnabled
+      ? { background: 'var(--surface)', border: '1px solid var(--border)' }
+      : undefined
+    const cardClass = newUiEnabled
+      ? 'rounded-[1.5rem] p-6 lg:p-8'
+      : 'bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm'
+    const headingClass = newUiEnabled
+      ? 'text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2'
+      : 'text-sm font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-widest mb-4 flex items-center gap-2'
+    const headingStyle = newUiEnabled ? { color: 'var(--accent)' } : undefined
+    const labelClass = newUiEnabled
+      ? 'block text-[11px] font-bold mb-1.5 uppercase tracking-wider'
+      : 'block text-[11px] font-bold mb-1.5 text-slate-500 uppercase tracking-wider'
+    const labelStyle = newUiEnabled ? { color: 'var(--text-muted)' } : undefined
+    const inputClass = newUiEnabled
+      ? 'w-full rounded-xl px-4 py-3 text-sm font-bold outline-none'
+      : 'w-full bg-slate-100 dark:bg-[#202020] border-2 border-transparent rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:bg-white dark:focus:bg-[#252525] focus:border-indigo-500 font-bold shadow-inner transition-all'
+    const inputStyle = newUiEnabled ? { background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' } : undefined
+    const rowStyle = newUiEnabled ? { background: 'var(--bg)', border: '1px solid var(--border)' } : undefined
+    const rowClass = newUiEnabled ? 'p-3 rounded-xl' : 'p-3 rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#161616]'
+    const mutedStyle = newUiEnabled ? { color: 'var(--text-muted)' } : undefined
+
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
+        <div className={cardClass} style={cardStyle}>
+          <h2 className={headingClass} style={headingStyle}><Rocket className="w-4 h-4" />Phát hành phiên bản</h2>
+          <p className={`text-xs font-medium mb-5 ${newUiEnabled ? '' : 'text-slate-500'}`} style={mutedStyle}>
+            Đang chạy bản <strong>{CURRENT_APP_VERSION}</strong> (package.json) · Bản đang công bố cho người dùng:{' '}
+            <strong style={newUiEnabled ? { color: 'var(--accent)' } : undefined} className={newUiEnabled ? '' : 'text-indigo-600 dark:text-indigo-400'}>
+              {systemRelease?.is_published ? systemRelease.latest_version : 'Chưa công bố (đang ở chế độ Test)'}
+            </strong>
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className={labelClass} style={labelStyle}>Phiên bản mới (vd: 3.1.0)</label>
+              <input type="text" value={releaseVersionInput} onChange={(e) => setReleaseVersionInput(e.target.value)} className={inputClass} style={inputStyle} placeholder="3.1.0" />
+            </div>
+            <div>
+              <label className={labelClass} style={labelStyle}>Changelog (hiện cho người dùng khi có bản mới)</label>
+              <textarea value={releaseChangelogInput} onChange={(e) => setReleaseChangelogInput(e.target.value)} rows={5} className={inputClass} style={inputStyle} placeholder={'- Sửa lỗi ...\n- Thêm tính năng ...'} />
+            </div>
+
+            {systemRelease && !systemRelease.is_published && (
+              <div className={`text-[11px] font-black uppercase px-3 py-2 rounded-lg flex items-center gap-2 ${newUiEnabled ? '' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`} style={newUiEnabled ? { background: 'rgba(217,119,6,0.12)', color: '#D97706' } : undefined}>
+                <FlaskConical className="w-3.5 h-3.5" /> Đang ở chế độ Test — người dùng chưa thấy bản này
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button onClick={handleSaveReleaseDraft} disabled={releaseSaving || !releaseVersionInput.trim()} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 ${newUiEnabled ? '' : 'bg-slate-800 hover:bg-slate-900 dark:bg-white/10 dark:hover:bg-white/20 text-white'}`} style={newUiEnabled ? { background: 'var(--border)', color: 'var(--text)' } : undefined}>
+                {releaseSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />} Lưu nháp (Test)
+              </button>
+              <button onClick={handleExitTestMode} disabled={releaseSaving} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 border ${newUiEnabled ? '' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'}`} style={newUiEnabled ? { borderColor: 'var(--border)', color: 'var(--text-muted)' } : undefined}>
+                <X className="w-3.5 h-3.5" /> Thoát chế độ Test
+              </button>
+              <button onClick={handlePublishRelease} disabled={releaseSaving || !releaseVersionInput.trim()} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 text-white ${newUiEnabled ? '' : 'bg-indigo-600 hover:bg-indigo-700'}`} style={newUiEnabled ? { background: 'var(--accent)' } : undefined}>
+                {releaseSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />} Đẩy cập nhật cho người dùng
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className={cardClass} style={cardStyle}>
+            <h2 className={headingClass} style={headingStyle}><History className="w-4 h-4" />Nhật ký phát hành</h2>
+            {isFetchingData ? (
+              newUiEnabled ? <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải nhật ký..." fullScreen={false} /> : <div className="text-xs font-bold text-slate-500 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Đang tải nhật ký...</div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                {releaseLogs.length === 0 && <p className="py-6 text-center text-sm font-bold" style={mutedStyle}>Chưa có hoạt động nào.</p>}
+                {releaseLogs.map((log) => (
+                  <div key={log.id} className={`${rowClass} flex items-center justify-between gap-3 text-xs`} style={rowStyle}>
+                    <div>
+                      <span className="font-black uppercase" style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
+                        {log.action === 'publish' ? 'Đẩy cập nhật' : log.action === 'enable_test' ? 'Lưu nháp Test' : log.action === 'disable_test' ? 'Thoát Test' : 'Đổi phiên bản'}
+                      </span>
+                      {log.version && <span className="ml-2 font-bold" style={mutedStyle}>v{log.version}</span>}
+                    </div>
+                    <span className="font-medium shrink-0" style={mutedStyle}>{new Date(log.created_at).toLocaleString('vi-VN')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className={cardClass} style={cardStyle}>
+            <h2 className={headingClass} style={headingStyle}><Bug className="w-4 h-4" />Lỗi phía người dùng ({clientErrors.length})</h2>
+            <p className={`text-xs font-medium mb-4 ${newUiEnabled ? '' : 'text-slate-500'}`} style={mutedStyle}>Lỗi JS ghi nhận tự động từ trình duyệt người dùng — kiểm tra trước khi đẩy bản mới.</p>
+            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+              {clientErrors.length === 0 && <p className="py-6 text-center text-sm font-bold" style={mutedStyle}>Không có lỗi nào được ghi nhận gần đây. 🎉</p>}
+              {clientErrors.map((err) => (
+                <div key={err.id} className={rowClass} style={rowStyle}>
+                  <p className="text-xs font-bold whitespace-pre-wrap break-words" style={newUiEnabled ? { color: '#DC2626' } : { color: '#DC2626' }}>{err.message}</p>
+                  <div className="flex items-center justify-between gap-2 mt-1 flex-wrap">
+                    <span className="text-[10px] font-medium truncate max-w-[220px]" style={mutedStyle}>{err.url} · v{err.app_version || '?'}</span>
+                    <span className="text-[10px] font-medium shrink-0" style={mutedStyle}>{new Date(err.created_at).toLocaleString('vi-VN')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // 🌟 Modal quét cấu trúc PDF & dán chuỗi đáp án nhanh — dùng chung cho cả hai giao diện.
   const renderQuickModals = () => (
     <>
@@ -1524,6 +1706,7 @@ export default function AdminDashboard() {
       { key: 'submissions', label: 'Chấm Điểm', icon: ClipboardList },
       ...(currentUserRole === 'admin' ? [{ key: 'collab' as const, label: 'Thành Viên', icon: Users }] : []),
       { key: 'feedback', label: 'Góp Ý', icon: MessageSquare, badge: feedbackCount },
+      ...(currentUserRole === 'admin' ? [{ key: 'release' as const, label: 'Cập Nhật Hệ Thống', icon: Rocket }] : []),
     ]
 
     return (
@@ -1764,6 +1947,8 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
+
+          {activeTab === 'release' && renderReleaseTab()}
         </div>
 
         {renderQuickModals()}
@@ -1839,6 +2024,9 @@ export default function AdminDashboard() {
             <MessageSquare className="w-4 h-4"/>Góp Ý
             {feedbackCount > 0 && <span className="bg-rose-500 text-white text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">{feedbackCount}</span>}
           </button>
+          {currentUserRole === 'admin' && (
+            <button onClick={() => setActiveTab('release')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'release' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Rocket className="w-4 h-4"/>Cập Nhật Hệ Thống</button>
+          )}
         </div>
 
         {/* 🌟 TAB TỔNG QUAN (OVERVIEW DASHBOARD) */}
@@ -2015,6 +2203,13 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* CẬP NHẬT HỆ THỐNG */}
+        {activeTab === 'release' && (
+          <div className="animate-in fade-in duration-300">
+            {renderReleaseTab()}
           </div>
         )}
 
