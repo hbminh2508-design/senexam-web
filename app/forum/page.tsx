@@ -13,6 +13,7 @@ import {
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 const glassCardStyles = "liquid-panel"
 const CATEGORIES = ['Tất cả', 'Hỏi đáp bài tập', 'Chia sẻ tài liệu', 'Thảo luận chung', 'Góc tâm sự']
@@ -160,11 +161,7 @@ export default function ForumPage() {
 
   if (loading) {
     if (newUiEnabled) {
-      return (
-        <div className="min-h-screen flex items-center justify-center font-sans" style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}>
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
-        </div>
-      )
+      return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải diễn đàn..." />
     }
     return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
   }

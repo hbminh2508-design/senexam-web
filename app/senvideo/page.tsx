@@ -12,6 +12,7 @@ import {
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 // --- CONSTANTS & STYLES ---
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
@@ -146,11 +147,7 @@ export default function SenVideoPage() {
 
   if (loading) {
     if (newUiEnabled) {
-      return (
-        <div className="min-h-screen flex items-center justify-center font-sans" style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}>
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
-        </div>
-      )
+      return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải SenVideo..." />
     }
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-10 h-10 animate-spin text-indigo-500" /></div>
   }

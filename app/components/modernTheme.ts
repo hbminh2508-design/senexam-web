@@ -32,12 +32,17 @@ export function hexToRgba(hex: string, alpha: number): string {
 export function getModernThemeVars(themeColor: string, isDark: boolean): React.CSSProperties {
   const accent = getAccentHex(themeColor, isDark)
   return {
-    ['--bg' as any]: isDark ? '#171614' : '#FAF8F4',
-    ['--surface' as any]: isDark ? '#1E1D1A' : '#FFFFFF',
-    ['--border' as any]: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(30,25,20,0.09)',
+    ['--bg' as any]: isDark ? '#141310' : '#F2EFE9',
+    ['--surface' as any]: isDark ? '#201E1A' : '#FFFFFF',
+    ['--border' as any]: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(30,25,20,0.08)',
     ['--text' as any]: isDark ? '#EDEAE3' : '#231F1B',
     ['--text-muted' as any]: isDark ? '#A6A196' : '#6B6558',
     ['--accent' as any]: accent,
     ['--accent-soft' as any]: hexToRgba(accent, isDark ? 0.16 : 0.1),
+    // Dùng cho các lớp chrome nổi (header/modal/panel/thanh chat) — nền kính mờ thật sự
+    // (backdrop-filter), chỉ áp cho số lượng phần tử nhỏ để tránh tốn hiệu năng.
+    ['--glass-surface' as any]: isDark ? 'rgba(32,30,26,0.72)' : 'rgba(255,255,255,0.72)',
+    ['--glass-blur' as any]: '18px',
+    ['--glass-shadow' as any]: isDark ? '0 8px 32px rgba(0,0,0,0.35)' : '0 8px 28px rgba(35,31,27,0.09)',
   }
 }

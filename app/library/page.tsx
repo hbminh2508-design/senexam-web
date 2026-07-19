@@ -15,6 +15,7 @@ import { glassSearchInputClass, highlightSearchText } from '@/app/components/sea
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -347,12 +348,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   // ============================================================================
   if (loading) {
     if (newUiEnabled) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center font-sans" style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}>
-          <Loader2 className="w-8 h-8 animate-spin mb-3" style={{ color: 'var(--accent)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Đang khởi tạo thư viện...</p>
-        </div>
-      )
+      return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang khởi tạo thư viện..." />
     }
     return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0A0A0A]"><Loader2 className="w-12 h-12 animate-spin text-indigo-500 mb-4" /><p className="font-bold text-slate-500">Đang khởi tạo thư viện...</p></div>
   }

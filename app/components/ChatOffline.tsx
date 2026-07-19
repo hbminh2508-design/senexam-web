@@ -233,7 +233,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
   const modernVars = getModernThemeVars(themeColor, isDark)
 
   const chatContainerBase = newUiEnabled
-    ? "shadow-xl flex flex-col overflow-hidden animate-in fade-in duration-300"
+    ? "ms-glass flex flex-col overflow-hidden animate-in fade-in duration-300"
     : "bg-white/95 dark:bg-[#121212]/95 backdrop-blur-3xl border border-slate-200/60 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden animate-in fade-in duration-300"
 
   const chatSizeClasses = isFullscreen
@@ -247,11 +247,11 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
     >
 
       {isChatOpen && (
-        <div className={`${chatContainerBase} ${chatSizeClasses} pointer-events-auto`} style={newUiEnabled ? { background: 'var(--surface)', border: '1px solid var(--border)' } : undefined}>
+        <div className={`${chatContainerBase} ${chatSizeClasses} pointer-events-auto`} style={newUiEnabled ? { border: '1px solid var(--border)' } : undefined}>
 
           <div
             className={newUiEnabled ? "px-5 py-4 flex items-center justify-between z-10" : `px-5 py-4 flex items-center justify-between shadow-sm z-10 transition-colors duration-500 ${isOnlineMode ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : 'bg-gradient-to-r from-slate-700 to-slate-600 dark:from-slate-800 dark:to-slate-900'}`}
-            style={newUiEnabled ? { background: 'var(--surface)', borderBottom: '1px solid var(--border)' } : undefined}
+            style={newUiEnabled ? { background: 'color-mix(in srgb, var(--glass-surface) 85%, transparent)', borderBottom: '1px solid var(--border)' } : undefined}
           >
             <div className={`flex items-center gap-3 ${newUiEnabled ? '' : 'text-white'}`} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
               <div

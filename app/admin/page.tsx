@@ -1721,7 +1721,7 @@ export default function AdminDashboard() {
         style={{ ...modernVars, background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
       >
         {/* HEADER */}
-        <header className="sticky top-0 z-40 backdrop-blur-xl px-6 h-[72px] flex items-center justify-between" style={{ background: 'color-mix(in srgb, var(--bg) 88%, transparent)', borderBottom: '1px solid var(--border)' }}>
+        <header className="ms-glass sticky top-0 z-40 px-6 h-[72px] flex items-center justify-between" style={{ background: 'color-mix(in srgb, var(--glass-surface) 85%, transparent)', borderBottom: '1px solid var(--border)', boxShadow: 'none' }}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
               <LayoutDashboard className="w-5 h-5"/>

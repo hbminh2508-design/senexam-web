@@ -12,6 +12,7 @@ import {
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 // Apple Liquid Glass CSS Constants
 const glassCardStyles = "liquid-panel relative"
@@ -81,17 +82,7 @@ export default function ExamsLibraryPage() {
 
   if (loading) {
     if (newUiEnabled) {
-      return (
-        <div
-          className="min-h-screen flex items-center justify-center font-sans"
-          style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
-        >
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
-            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Đang tải kho tài liệu SenExam...</p>
-          </div>
-        </div>
-      )
+      return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải kho tài liệu SenExam..." />
     }
     return (
       <div className="app-shell min-h-screen flex items-center justify-center bg-transparent">

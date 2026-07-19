@@ -63,6 +63,20 @@
   scroll-behavior: auto !important;
 }
 
+.ms-glass {
+  background: var(--glass-surface, var(--surface));
+  backdrop-filter: blur(var(--glass-blur, 18px));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px));
+  box-shadow: var(--glass-shadow, none);
+}
+/* Tắt blur trên màn hình nhỏ để giảm tải GPU cho thiết bị yếu — chỉ giữ nền mờ + shadow */
+@media (max-width: 640px) {
+  .ms-glass {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 /* Hoạt ảnh loading dùng chung cho giao diện Modern/Beta trên toàn bộ app:
    3 chấm nổi lên thay nhau (staggered rise), không chỉ phóng to/nhỏ */
 @keyframes modern-loading-bounce {

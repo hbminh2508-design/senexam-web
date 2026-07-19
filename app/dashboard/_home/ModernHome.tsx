@@ -41,8 +41,8 @@ export default function ModernHome({
       } as React.CSSProperties}
     >
       <header
-        className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-40"
-        style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}
+        className="ms-glass h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-40"
+        style={{ background: 'color-mix(in srgb, var(--glass-surface) 85%, transparent)', borderBottom: '1px solid var(--border)', boxShadow: 'none' }}
       >
         <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => router.push('/dashboard')}>
           <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain rounded-lg" />

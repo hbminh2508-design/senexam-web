@@ -167,9 +167,12 @@ export default function DashboardPage() {
   const handleLeaveBeta = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    await supabase.from('profiles').update({ is_beta_tester: false }).eq('id', user.id)
+    // Rời Beta thì cũng tự động quay về Giao diện cũ — Giao diện mới chỉ dành cho thành viên Beta
+    await supabase.from('profiles').update({ is_beta_tester: false, new_ui_enabled: false }).eq('id', user.id)
     setIsBetaTester(false)
+    setNewUiEnabled(false)
     localStorage.setItem('senexam_beta_tester', '0')
+    localStorage.setItem('senexam_new_ui', '0')
     window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
     refreshPublishedVersion(false)
   }
@@ -269,10 +272,17 @@ export default function DashboardPage() {
 
       if (profile) {
         setUserRole(profile.role || 'student')
-        setNewUiEnabled(!!profile.new_ui_enabled)
+        // Giao diện mới chỉ dành cho thành viên Beta — nếu tài khoản cũ từng bật trước khi
+        // có luật này mà chưa tham gia Beta, tự động đưa về Giao diện cũ để đồng bộ đúng luật.
+        const effectiveNewUi = !!profile.new_ui_enabled && !!profile.is_beta_tester
+        setNewUiEnabled(effectiveNewUi)
+        if (profile.new_ui_enabled && !profile.is_beta_tester) {
+          supabase.from('profiles').update({ new_ui_enabled: false }).eq('id', user.id).then(() => {})
+        }
         setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
         setIsBetaTester(!!profile.is_beta_tester)
         localStorage.setItem('senexam_beta_tester', profile.is_beta_tester ? '1' : '0')
+        localStorage.setItem('senexam_new_ui', effectiveNewUi ? '1' : '0')
         refreshPublishedVersion(!!profile.is_beta_tester)
         setFormData({
           fullName: profile.full_name || '', 
@@ -482,6 +492,11 @@ export default function DashboardPage() {
 
   const toggleNewUi = async () => {
     const next = !newUiEnabled
+    // Chỉ người dùng đã tham gia Chương trình Beta mới được bật Giao diện mới
+    if (next && !isBetaTester) {
+      setShowBetaJoinModal(true)
+      return
+    }
     setNewUiEnabled(next)
     setNewUiSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -653,8 +668,8 @@ export default function DashboardPage() {
           style={newUiEnabled ? { ...getModernThemeVars(themeColor, isDark), background: 'rgba(0,0,0,0.45)' } as React.CSSProperties : undefined}
         >
            <div
-             className={newUiEnabled ? 'rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border' : 'bg-white dark:bg-[#1E1E1E] rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border border-slate-100 dark:border-white/5'}
-             style={newUiEnabled ? { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
+             className={newUiEnabled ? 'ms-glass rounded-[2.5rem] w-full max-w-sm p-8 relative border' : 'bg-white dark:bg-[#1E1E1E] rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border border-slate-100 dark:border-white/5'}
+             style={newUiEnabled ? { borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
            >
               <button onClick={() => setShowCodeModal(false)} className="absolute top-5 right-5 p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><X className="w-5 h-5" style={newUiEnabled ? { color: 'var(--text-muted)' } : { color: '#64748b' }}/></button>
 
@@ -746,10 +761,10 @@ export default function DashboardPage() {
           <div
             className={
               newUiEnabled
-                ? 'w-full max-w-md my-4 mr-4 h-[calc(100%-2rem)] rounded-2xl shadow-2xl overflow-y-auto flex flex-col animate-in slide-in-from-right border'
+                ? 'ms-glass w-full max-w-md my-4 mr-4 h-[calc(100%-2rem)] rounded-2xl overflow-y-auto flex flex-col animate-in slide-in-from-right border'
                 : 'w-full max-w-md h-full bg-white dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5'
             }
-            style={newUiEnabled ? { background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
+            style={newUiEnabled ? { borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
           >
             <div
               className={
@@ -757,7 +772,7 @@ export default function DashboardPage() {
                   ? 'p-6 flex justify-between items-center sticky top-0 z-10 backdrop-blur-xl border-b'
                   : 'p-6 flex justify-between items-center sticky top-0 z-10 bg-white/80 dark:bg-[#1E1E1E]/80 backdrop-blur-xl border-b border-slate-100 dark:border-white/5'
               }
-              style={newUiEnabled ? { background: 'color-mix(in srgb, var(--surface) 80%, transparent)', borderColor: 'var(--border)' } : undefined}
+              style={newUiEnabled ? { background: 'color-mix(in srgb, var(--glass-surface) 85%, transparent)', borderColor: 'var(--border)' } : undefined}
             >
               <h2 className={newUiEnabled ? 'text-xl font-black flex items-center gap-2' : 'text-xl font-black text-slate-900 dark:text-white flex items-center gap-2'} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
                 <Settings className={newUiEnabled ? 'w-5 h-5' : 'w-5 h-5 text-indigo-500'} style={newUiEnabled ? { color: 'var(--accent)' } : undefined} /> Cài đặt
@@ -817,13 +832,16 @@ export default function DashboardPage() {
                       <Palette className="w-5 h-5 text-indigo-500" />
                       <div>
                         <p className="font-bold text-slate-900 dark:text-white text-sm">Giao diện mới (Beta)</p>
-                        <p className="text-[11px] font-medium text-slate-500">Nhẹ hơn, tải nhanh hơn. Đang thử nghiệm trước khi ra mắt cho mọi người.</p>
+                        <p className="text-[11px] font-medium text-slate-500">
+                          {isBetaTester ? 'Material Glass 2.0 — nhẹ, đẹp, có thể quay lại giao diện cũ bất cứ lúc nào.' : 'Chỉ dành cho thành viên Beta — tham gia Beta ở mục trên để mở khóa.'}
+                        </p>
                       </div>
                     </div>
                     <button
                       onClick={toggleNewUi}
                       disabled={newUiSaving}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors shrink-0 ${newUiEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-[#333333]'} disabled:opacity-60`}
+                      title={!isBetaTester ? 'Tham gia Beta để mở khóa' : undefined}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors shrink-0 ${newUiEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-[#333333]'} disabled:opacity-60 ${!isBetaTester ? 'opacity-50' : ''}`}
                     >
                       <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${newUiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
