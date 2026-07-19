@@ -3,24 +3,29 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { 
-  ArrowLeft, MessageCircle, Clock, User, 
+import {
+  ArrowLeft, MessageCircle, Clock, User,
   Send, Loader2, Download, FileText, Pin, PinOff, Trash2
 } from 'lucide-react'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 const glassCardStyles = "liquid-panel"
 
 export default function PostDetailPage() {
   const params = useParams()
   const router = useRouter()
-  
+
   const [loading, setLoading] = useState(true)
   const [post, setPost] = useState<any>(null)
   const [comments, setComments] = useState<any[]>([])
   const [currentUserRole, setCurrentUserRole] = useState('student')
-  
+
   const [newComment, setNewComment] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
 
   const fetchData = async () => {
     const postId = params.id as string
@@ -57,9 +62,11 @@ export default function PostDetailPage() {
 
   useEffect(() => {
     fetchData()
-    if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
+    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+    if (dark) {
       document.documentElement.classList.add('dark')
     }
+    setIsDark(dark)
   }, [params.id, router])
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -103,9 +110,164 @@ export default function PostDetailPage() {
     return past.toLocaleDateString('vi-VN')
   }
 
-  if (loading) return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
+  if (loading) {
+    if (newUiEnabled) {
+      return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải bài viết..." />
+    }
+    return <div className="app-shell min-h-screen flex items-center justify-center bg-transparent"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
+  }
 
   const canManage = currentUserRole === 'admin' || currentUserRole === 'collab'
+
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans pb-20"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <button onClick={() => router.push('/forum')} className="flex items-center gap-2 text-sm font-medium mb-6 transition-colors" style={{ color: 'var(--text-muted)' }}>
+            <ArrowLeft className="w-4 h-4" /> Trở về Hội Sĩ Tử
+          </button>
+
+          <div
+            className="rounded-2xl p-6 md:p-10 mb-8"
+            style={{ background: 'var(--surface)', border: post.is_pinned ? '1px solid var(--accent)' : '1px solid var(--border)' }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <span className="px-2.5 py-1 rounded-md text-xs font-medium" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                  {post.category}
+                </span>
+                <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  <Clock className="w-3.5 h-3.5" /> {new Date(post.created_at).toLocaleString('vi-VN')}
+                </span>
+              </div>
+
+              {canManage && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleTogglePin}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                  >
+                    {post.is_pinned ? <><PinOff className="w-3.5 h-3.5" /> Bỏ ghim</> : <><Pin className="w-3.5 h-3.5" /> Ghim lên đầu</>}
+                  </button>
+                  <button
+                    onClick={handleDeletePost}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                    style={{ border: '1px solid var(--border)', color: '#DC2626' }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Xóa bài
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <h1 className="text-2xl md:text-3xl font-semibold mb-6 leading-snug flex items-start gap-3">
+              {post.is_pinned && <Pin className="w-6 h-6 rotate-45 shrink-0 mt-1" style={{ color: 'var(--accent)' }} />}
+              {post.title}
+            </h1>
+
+            <div className="flex items-center gap-3 pb-6 mb-6" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                {post.profiles?.full_name?.charAt(0) || 'U'}
+              </div>
+              <div>
+                <p className="font-medium text-sm flex items-center gap-2">
+                  {post.profiles?.full_name || 'Thành viên ẩn danh'}
+                  {(post.profiles?.role === 'admin' || post.profiles?.role === 'collab') && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>QUẢN TRỊ</span>
+                  )}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{post.profiles?.school || 'Chưa cập nhật trường'}</p>
+              </div>
+            </div>
+
+            <div className="text-base leading-relaxed font-normal whitespace-pre-wrap mb-8">
+              {post.content}
+            </div>
+
+            {post.drive_file_id && (
+              <div className="mt-6 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4" style={{ border: '1px solid var(--border)' }}>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--accent)', color: '#fff' }}>
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm line-clamp-1">{post.file_name}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Dung lượng: {post.file_size}</p>
+                  </div>
+                </div>
+
+                <a
+                  href={`https://drive.google.com/file/d/${post.drive_file_id}/view`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 px-5 py-2.5 rounded-lg font-medium text-sm transition-opacity hover:opacity-90 flex items-center justify-center gap-2"
+                  style={{ background: 'var(--accent)', color: '#fff' }}
+                >
+                  <Download className="w-4 h-4" /> Tải xuống tài liệu
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* COMMENTS SECTION */}
+          <div className="rounded-2xl p-6 md:p-10" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h3 className="text-lg font-semibold flex items-center gap-2 mb-8">
+              <MessageCircle className="w-5 h-5" style={{ color: 'var(--accent)' }} /> Bình luận ({comments.length})
+            </h3>
+
+            <form onSubmit={handleAddComment} className="mb-10 relative">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className="w-full min-h-[120px] rounded-2xl p-4 outline-none resize-y text-sm font-normal bg-transparent"
+                style={{ border: '1px solid var(--border)' }}
+                placeholder="Chia sẻ ý kiến hoặc câu trả lời của bạn..."
+                required
+              />
+              <div className="flex justify-end mt-3">
+                <button type="submit" disabled={isSubmitting || !newComment.trim()} className="px-6 py-2.5 rounded-lg font-medium transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center gap-2" style={{ background: 'var(--accent)', color: '#fff' }}>
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Gửi bình luận
+                </button>
+              </div>
+            </form>
+
+            <div className="space-y-6">
+              {comments.length === 0 ? (
+                <div className="text-center py-8 font-medium" style={{ color: 'var(--text-muted)' }}>Chưa có bình luận nào. Hãy là người đầu tiên lên tiếng!</div>
+              ) : (
+                comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-4">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold shrink-0" style={{ background: 'var(--border)', color: 'var(--text-muted)' }}>
+                      {comment.profiles?.full_name?.charAt(0) || 'U'}
+                    </div>
+                    <div className="flex-1 rounded-2xl p-4 relative" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-medium text-sm flex items-center gap-2">
+                          {comment.profiles?.full_name || 'Ẩn danh'}
+                          {(comment.profiles?.role === 'admin' || comment.profiles?.role === 'collab') && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>QUẢN TRỊ</span>
+                          )}
+                        </p>
+                        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{timeAgo(comment.created_at)}</span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap font-normal">
+                        {comment.content}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell min-h-screen bg-transparent text-slate-900 dark:text-slate-100 relative font-sans overflow-x-hidden pb-20">

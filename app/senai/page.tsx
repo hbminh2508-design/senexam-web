@@ -1,12 +1,15 @@
 'use client'
 
+import type React from 'react'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { 
-  ArrowLeft, BarChart3, Calculator, TrendingUp, Info, 
+import {
+  ArrowLeft, BarChart3, Calculator, TrendingUp, Info,
   AlertCircle, Bot, User, Moon, Sun, Award, Sparkles, Copy, Check, GraduationCap
 } from 'lucide-react'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
 
 // --- MATERIAL 3 & LIQUID GLASS CONSTANTS ---
 const mdCard = "bg-white/70 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] border border-white/60 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] hover:shadow-xl hover:-translate-y-1 transition-all duration-500 ease-out relative overflow-hidden"
@@ -129,7 +132,8 @@ const subjectsList = Object.keys(STATS_DATA['2025'])
 
 export default function UnifiedKhaoThiPage() {
   const router = useRouter()
-  
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+
   const [activeWorkspace, setActiveWorkspace] = useState<'tinhdiem' | 'phodiem' | 'senai'>('tinhdiem')
   const [userName, setUserName] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(false)
@@ -299,9 +303,392 @@ Dựa trên độ dịch chuyển bách phân vị quốc gia liên năm 2025 - 
     setTimeout(() => setPromptCopied(false), 2000)
   }
 
+  if (newUiEnabled) {
+    return (
+      <div
+        className="min-h-screen font-sans relative pb-20"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        <header className="h-[80px] px-4 sm:px-8 flex items-center justify-between sticky top-0 z-40" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/dashboard')} className="p-3 rounded-full hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+              <ArrowLeft className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>
+            </button>
+            <div className="h-6 w-[1px]" style={{ background: 'var(--border)' }}></div>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2" style={{ color: 'var(--text)' }}>
+                SenKhảoThí
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
+              </h1>
+              <p className="text-[10px] font-medium uppercase tracking-widest mt-0.5" style={{ color: 'var(--text-muted)' }}>Đối soát Phổ điểm tổng hợp</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={toggleTheme} className="p-2.5 rounded-full transition-colors" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+              {isDark ? <Sun className="w-5 h-5" style={{ color: '#D97706' }}/> : <Moon className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>}
+            </button>
+          </div>
+        </header>
+
+        <div className="max-w-[1400px] mx-auto pt-8 px-4 md:px-8 relative z-10">
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-2xl mb-8" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <div className="min-w-0 pl-2">
+              <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2.5" style={{ color: 'var(--text)' }}>
+                {activeWorkspace === 'tinhdiem' && <Calculator className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                {activeWorkspace === 'phodiem' && <BarChart3 className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                {activeWorkspace === 'senai' && <Bot className="w-5 h-5" style={{ color: 'var(--accent)' }}/>}
+                {activeWorkspace === 'tinhdiem' && 'Trạm Tính Điểm Xét Tuyển Đại Học'}
+                {activeWorkspace === 'phodiem' && 'Hệ Thống Phân Tích & Tra Cứu Phổ Điểm'}
+                {activeWorkspace === 'senai' && 'Bộ Công Cụ Tạo Prompt Chọn Trường Chuẩn Ngữ Cảnh SenAI'}
+              </h2>
+              <p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Hỗ trợ đầy đủ dữ liệu khảo thí, kết hợp quy chuẩn nội suy bách phân vị liên năm chính xác.</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 p-1.5 rounded-2xl shrink-0" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+              <button onClick={() => setActiveWorkspace('tinhdiem')} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors" style={activeWorkspace === 'tinhdiem' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>Tính Điểm Đại Học</button>
+              <button onClick={() => setActiveWorkspace('phodiem')} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors" style={activeWorkspace === 'phodiem' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>Tra Cứu Phổ Điểm</button>
+              <button onClick={() => setActiveWorkspace('senai')} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1" style={activeWorkspace === 'senai' ? { background: 'var(--accent)', color: '#fff' } : { color: 'var(--text-muted)' }}><Sparkles className="w-3.5 h-3.5"/> SenAI Chọn Trường</button>
+            </div>
+          </div>
+
+          {/* WORKSPACE 1: TÍNH ĐIỂM */}
+          {activeWorkspace === 'tinhdiem' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 space-y-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <h3 className="font-semibold text-xs uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Cấu hình điểm tổ hợp xét tuyển</h3>
+                    <select value={calcMode} onChange={e => setCalcMode(e.target.value as any)} className="rounded-xl px-4 py-2 text-xs font-semibold outline-none bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }}>
+                      <option value="standard">Phương thức Tiêu chuẩn (Thang 30)</option>
+                      <option value="hust">Phương thức Nhân đôi môn chính (Bách Khoa)</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Môn thứ nhất</label>
+                      <input type="text" value={calcScores.sub1} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCalcScores({...calcScores, sub1: e.target.value}) }} placeholder="Điểm số..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      {calcMode === 'hust' && <button type="button" onClick={()=>setCalcMainSubject('sub1')} className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-semibold uppercase transition-all" style={calcMainSubject==='sub1' ? { background: '#DC2626', color: '#fff', border: '1px solid #DC2626' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Môn chính</button>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Môn thứ hai</label>
+                      <input type="text" value={calcScores.sub2} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCalcScores({...calcScores, sub2: e.target.value}) }} placeholder="Điểm số..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      {calcMode === 'hust' && <button type="button" onClick={()=>setCalcMainSubject('sub2')} className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-semibold uppercase transition-all" style={calcMainSubject==='sub2' ? { background: '#DC2626', color: '#fff', border: '1px solid #DC2626' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Môn chính</button>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Môn thứ ba</label>
+                      <input type="text" value={calcScores.sub3} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCalcScores({...calcScores, sub3: e.target.value}) }} placeholder="Điểm số..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      {calcMode === 'hust' && <button type="button" onClick={()=>setCalcMainSubject('sub3')} className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-semibold uppercase transition-all" style={calcMainSubject==='sub3' ? { background: '#DC2626', color: '#fff', border: '1px solid #DC2626' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Môn chính</button>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Điểm ưu tiên khu vực / đối tượng gốc</label>
+                    <input type="text" value={calcPriorityScore} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setCalcPriorityScore(e.target.value) }} placeholder="Ví dụ: 0.25, 0.5, 0.75..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 text-center min-h-[340px] flex flex-col justify-center space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}><Award className="w-7 h-7"/></div>
+                  <div><h3 className="font-semibold text-lg" style={{ color: 'var(--text)' }}>Bảng điểm quy đổi</h3><p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Kết quả áp dụng thuật toán giảm trừ tuyến tính</p></div>
+
+                  {calcResult ? (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl grid grid-cols-2 gap-2 text-xs font-semibold" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                        <div style={{ borderRight: '1px solid var(--border)' }}><p className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>Điểm trần 3 môn</p><p className="text-xl font-semibold mt-1" style={{ color: 'var(--text)' }}>{formatNum(calcResult.rawScore)}</p></div>
+                        <div><p className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>Điểm UT thực nhận</p><p className="text-xl font-semibold mt-1" style={{ color: '#D97706' }}>{formatNum(calcResult.finalPriority)}</p></div>
+                      </div>
+                      <div className="p-5 rounded-3xl text-white" style={{ background: 'var(--accent)' }}><p className="text-[10px] font-semibold uppercase tracking-widest opacity-80">Điểm xét tuyển chính thức</p><p className="text-5xl font-bold mt-1.5 font-mono">{formatNum(calcResult.totalScore)}</p></div>
+                    </div>
+                  ) : (
+                    <div className="p-6 rounded-2xl text-xs font-medium" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>Vui lòng điền đủ điểm số thành phần để kích hoạt bộ máy tính điểm xét tuyển.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* WORKSPACE 2: TRA CỨU PHỔ ĐIỂM */}
+          {activeWorkspace === 'phodiem' && (
+            <div className="space-y-6">
+              <div className="flex flex-wrap gap-2.5">
+                {subjectsList.map(sub => (
+                  <button
+                    key={sub} onClick={() => setSelectedSubject(sub)}
+                    className="px-5 py-2.5 rounded-full text-xs font-semibold transition-all"
+                    style={selectedSubject === sub ? { background: 'var(--accent)', color: '#fff' } : { background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="lg:col-span-4 space-y-6">
+                  <div className="rounded-2xl p-6 md:p-8 space-y-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+                      <h3 className="font-semibold text-sm uppercase tracking-widest" style={{ color: 'var(--accent)' }}>Khảo sát bách phân vị</h3>
+                      <div className="flex gap-2 p-1 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                        <button onClick={() => setActiveYear('2025')} className="px-3 py-1.5 text-[10px] font-semibold rounded-lg transition-all" style={activeYear === '2025' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>2025</button>
+                        <button onClick={() => setActiveYear('2026')} className="px-3 py-1.5 text-[10px] font-semibold rounded-lg transition-all" style={activeYear === '2026' ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }}>2026</button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Nhập điểm thi đối soát (0 - 10)</label>
+                      <input
+                        type="text" value={userScore}
+                        onChange={(e) => { const val = e.target.value; if (val === '' || /^[0-9.,]*$/.test(val)) setUserScore(val) }}
+                        placeholder="Ví dụ: 7.25 hoặc 8,5..."
+                        className="w-full rounded-xl px-4 py-4 outline-none text-lg text-center tracking-widest font-medium bg-transparent"
+                        style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                      />
+                    </div>
+
+                    {userPercentileInfo ? (
+                      <div className="p-6 rounded-3xl text-center relative overflow-hidden" style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)' }}>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--accent)' }}>Thống kê Real-time</p>
+                        <p className="text-[3.2rem] font-bold leading-none" style={{ color: '#E11D48' }}>Top {(100 - parseFloat(userPercentileInfo.percentile)).toFixed(2).replace('.', ',')}<span className="text-2xl" style={{ color: '#FB7185' }}>%</span></p>
+                        <p className="text-xs font-medium leading-relaxed mt-4" style={{ color: 'var(--text)' }}>Điểm <strong className="mx-1" style={{ color: 'var(--accent)' }}>{userScore}</strong> môn <strong style={{ color: 'var(--accent)' }}>{selectedSubject}</strong> vượt qua <strong style={{ color: 'var(--accent)' }}>{formatNum(userPercentileInfo.percentile)}%</strong> tổng số <strong style={{ color: 'var(--accent)' }}>{userPercentileInfo.totalStudents.toLocaleString('vi-VN')}</strong> thí sinh của năm {activeYear}.</p>
+                      </div>
+                    ) : (
+                      <div className="p-5 rounded-2xl flex items-start gap-3 text-xs font-medium" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                        <Info className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }}/> Điền điểm số để hệ thống nội suy thứ hạng bách phân vị quốc gia.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl p-6 md:p-8 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <h3 className="font-semibold text-sm uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Chỉ số thống kê {activeYear}</h3>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="p-3 rounded-xl" style={{ background: 'var(--bg)' }}><p className="text-[9px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Điểm TB</p><p className="text-base font-semibold mt-1" style={{ color: 'var(--text)' }}>{formatNum(currentData.mean)}</p></div>
+                      <div className="p-3 rounded-xl" style={{ background: 'rgba(5,150,105,0.08)' }}><p className="text-[9px] font-semibold uppercase" style={{ color: '#059669' }}>Điểm 10</p><p className="text-base font-semibold mt-1" style={{ color: '#059669' }}>{currentData.d10.toLocaleString('vi-VN')}</p></div>
+                      <div className="p-3 rounded-xl" style={{ background: 'rgba(225,29,72,0.08)' }}><p className="text-[9px] font-semibold uppercase" style={{ color: '#E11D48' }}>Điểm Liệt</p><p className="text-base font-semibold mt-1" style={{ color: '#E11D48' }}>{currentData.liet.toLocaleString('vi-VN')}</p></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-8 space-y-6">
+                  <div className="rounded-2xl p-6 md:p-8 min-h-[500px] flex flex-col justify-between" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="mb-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold text-lg flex items-center gap-2" style={{ color: 'var(--text)' }}><BarChart3 className="w-5 h-5" style={{ color: 'var(--accent)' }}/> Hình dạng phổ điểm năm {activeYear}</h3>
+                        <p className="text-xs font-medium mt-1" style={{ color: 'var(--text-muted)' }}>Trích xuất chính xác 100% tọa độ phân bổ điểm từ Bộ Giáo dục và Đào tạo.</p>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-[350px] mt-6 flex gap-[1px] sm:gap-1 pl-1 pb-0" style={{ borderBottom: '2px solid var(--border)', borderLeft: '2px solid var(--border)' }}>
+                      {chartData.map((val, i) => {
+                        const rangeStart = (i + 1) * currentData.step
+                        const isUserScore = userPercentileInfo && userPercentileInfo.binIndex === i
+                        const hPercent = Math.max((val / maxChartVal) * 100, 0.5)
+
+                        return (
+                          <div key={i} className="flex-1 h-full flex flex-col justify-end relative group">
+                            <div
+                              style={{ height: `${hPercent}%`, background: isUserScore ? '#E11D48' : 'var(--accent)' }}
+                              className="w-full rounded-t-[2px] transition-all duration-700 ease-out"
+                            ></div>
+
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center text-[10px] font-semibold px-3 py-2 rounded-xl shadow-xl z-50 whitespace-nowrap pointer-events-none" style={{ background: 'var(--text)', color: 'var(--surface)' }}>
+                                <span className="mb-0.5 pb-0.5" style={{ opacity: 0.7, borderBottom: '1px solid currentColor' }}>Mức điểm {formatNum(rangeStart.toFixed(2))}</span>
+                                <span className="text-xs">{val.toLocaleString('vi-VN')} TS</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="flex justify-between text-[11px] font-semibold mt-4 px-2 uppercase tracking-widest relative" style={{ color: 'var(--text-muted)' }}>
+                      <span>0</span>
+                      <span className="absolute left-1/4 -translate-x-1/2">2,5</span>
+                      <span className="absolute left-1/2 -translate-x-1/2">5,0</span>
+                      <span className="absolute left-[75%] -translate-x-1/2">7,5</span>
+                      <span>10</span>
+                    </div>
+                  </div>
+
+                  {aiCrossYearAnalysis && (
+                    <div className="rounded-2xl p-6 md:p-8 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '4px solid #D97706' }}>
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-base flex items-center gap-2" style={{ color: '#D97706' }}><Bot className="w-5 h-5"/> Công cụ đối sánh liên năm SenAI</h3>
+                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium" style={{ color: 'var(--text)' }}>
+                        <div className="p-4 rounded-2xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                          <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Quy đổi tương đương</p>
+                          <p className="text-xs mt-1">Mức điểm <span className="text-sm font-semibold" style={{ color: '#E11D48' }}>{userScore}</span> của năm 2026 tương đương với mức:</p>
+                          <p className="text-3xl font-bold mt-2 font-mono" style={{ color: 'var(--accent)' }}>{formatNum(aiCrossYearAnalysis.equivalentScore)} <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>điểm của năm 2025</span></p>
+                        </div>
+                        <div className="p-4 rounded-2xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                          <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Trạng thái biến động đề</p>
+                          <p className="text-sm font-semibold mt-1" style={{ color: 'var(--text)' }}>{aiCrossYearAnalysis.status}</p>
+                          <div className="text-[11px] font-medium mt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>{aiCrossYearAnalysis.advice}</div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-2xl flex gap-3 text-xs font-medium leading-relaxed" style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+                        <Sparkles className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+                        <div>
+                          <span className="block font-semibold uppercase text-[10px] mb-0.5" style={{ color: 'var(--accent)' }}>Dự báo xác suất đậu nguyện vọng từ SenAI:</span>
+                          Nếu nộp vào nhóm ngành có điểm chuẩn năm ngoái dao động xung quanh ngưỡng {formatNum(aiCrossYearAnalysis.equivalentScore)} điểm, tỷ lệ trúng tuyển của bạn đạt mức tối ưu (Trên 85%). Dùng mức quy đổi bách phân vị này làm mỏ neo định vị trường học chính xác cực kỳ an toàn nhe sếp!
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* WORKSPACE 3: SENAI HƯỚNG DẪN PROMPT CHỌN TRƯỜNG */}
+          {activeWorkspace === 'senai' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-5 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 space-y-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <h3 className="font-semibold text-sm uppercase tracking-widest flex items-center gap-2 mb-4" style={{ color: 'var(--accent)' }}>
+                      <GraduationCap className="w-5 h-5"/> 1. Cấu hình khối thi & Điểm số thành phần
+                    </h3>
+
+                    <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Lựa chọn nhanh khối xét tuyển</label>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
+                      {['A00', 'A01', 'B00', 'C00', 'D01'].map(group => (
+                        <button
+                          key={group} type="button"
+                          onClick={() => handleSenaiGroupChange(group)}
+                          className="py-2 rounded-xl text-xs font-semibold transition-all"
+                          style={senaiGroup === group ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid transparent' }}
+                        >
+                          {group}
+                        </button>
+                      ))}
+                      <button
+                        type="button" onClick={() => setSenaiGroup('custom')}
+                        className="py-2 rounded-xl text-xs font-semibold transition-all"
+                        style={senaiGroup === 'custom' ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid transparent' }}
+                      >
+                        Tự chọn
+                      </button>
+                    </div>
+                  </div>
+
+                  {senaiGroup === 'custom' && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {[0, 1, 2].map(idx => (
+                        <div key={idx}>
+                          <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Môn {idx + 1}</label>
+                          <select
+                            value={senaiSubjects[idx]}
+                            onChange={e => {
+                              const updated = [...senaiSubjects]
+                              updated[idx] = e.target.value
+                              setSenaiSubjects(updated)
+                            }}
+                            className="w-full rounded-xl p-3 text-xs font-medium outline-none bg-transparent"
+                            style={{ border: '1px solid var(--border)', color: 'var(--text)' }}
+                          >
+                            {subjectsList.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>{senaiSubjects[0]}</label>
+                      <input type="text" value={senaiScores.s1} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s1: e.target.value}) }} placeholder="Điểm..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>{senaiSubjects[1]}</label>
+                      <input type="text" value={senaiScores.s2} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s2: e.target.value}) }} placeholder="Điểm..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>{senaiSubjects[2]}</label>
+                      <input type="text" value={senaiScores.s3} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setSenaiScores({...senaiScores, s3: e.target.value}) }} placeholder="Điểm..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
+                    <h3 className="font-semibold text-sm uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--accent)' }}>
+                      <Bot className="w-4 h-4"/> 2. Nguyện vọng mục tiêu & Chỉ tiêu xét tuyển
+                    </h3>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Trường Đại học</label>
+                        <input type="text" value={targetUni} onChange={e => setTargetUni(e.target.value)} placeholder="Ví dụ: UET, Bách Khoa..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Ngành học</label>
+                        <input type="text" value={targetMajor} onChange={e => setTargetMajor(e.target.value)} placeholder="Ví dụ: Công nghệ thông tin..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase tracking-widest mb-2 pl-1" style={{ color: 'var(--text-muted)' }}>Điểm chuẩn năm ngoái (2025)</label>
+                      <input type="text" value={lastYearCutoff} onChange={e => { if(e.target.value===''||/^[0-9.,]*$/.test(e.target.value)) setLastYearCutoff(e.target.value) }} placeholder="Ví dụ: 26.35 hoặc 24,5..." className="w-full rounded-xl px-4 py-3 outline-none text-sm font-medium bg-transparent tracking-widest text-center font-mono" style={{ border: '1px solid var(--border)', color: 'var(--accent)' }} />
+                    </div>
+
+                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg)', border: '1px dashed var(--border)' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest flex items-center gap-1" style={{ color: 'var(--text-muted)' }}><TrendingUp className="w-3 h-3" style={{ color: 'var(--accent)' }}/> Khảo sát biến động cung cầu chỉ tiêu tuyển sinh</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Chỉ tiêu năm ngoái (2025)</label>
+                          <input type="number" value={lastYearQuota} onChange={e => setLastYearQuota(e.target.value)} placeholder="Số chỉ tiêu..." className="w-full rounded-xl p-2.5 text-xs font-medium outline-none bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Chỉ tiêu năm nay (2026)</label>
+                          <input type="number" value={thisYearQuota} onChange={e => setThisYearQuota(e.target.value)} placeholder="Số chỉ tiêu..." className="w-full rounded-xl p-2.5 text-xs font-medium outline-none bg-transparent" style={{ border: '1px solid var(--border)', color: 'var(--text)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 space-y-6">
+                <div className="rounded-2xl p-6 md:p-8 space-y-4" style={{ background: 'var(--surface)', border: '2px solid var(--accent)' }}>
+                  <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <h4 className="font-semibold text-sm uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--text)' }}>
+                      <Sparkles className="w-4 h-4" style={{ color: 'var(--accent)' }} /> Cấu trúc Prompt đối soát chuẩn SenAI
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
+                    </h4>
+                    <button
+                      type="button" onClick={copyToClipboard}
+                      className="px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5"
+                      style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--accent)' }}
+                    >
+                      {promptCopied ? <Check className="w-3.5 h-3.5" style={{ color: '#059669' }}/> : <Copy className="w-3.5 h-3.5"/>}
+                      {promptCopied ? 'Đã copy!' : 'Sao chép Prompt'}
+                    </button>
+                  </div>
+
+                  <div className="p-4 rounded-2xl text-xs font-medium leading-relaxed" style={{ background: 'var(--accent-soft)', color: 'var(--text)' }}>
+                    <Info className="w-4 h-4 inline mr-1 shrink-0 -mt-0.5" style={{ color: 'var(--accent)' }}/>
+                    <strong>Hướng dẫn dành cho Phụ huynh và Học sinh:</strong> Mẫu prompt ngữ cảnh cao bên dưới đã tự động mã hóa điểm số, tổ hợp bách phân vị và biến động chỉ tiêu cung cầu của gia đình. Hãy sao chép đoạn mã này và gửi trực tiếp vào hệ thống AI tích hợp (Gemini API) của bạn để nhận báo cáo phân tích phổ điểm ảo liên năm chuẩn xác nhất!
+                  </div>
+
+                  <div className="p-5 rounded-2xl font-mono text-[11px] leading-relaxed whitespace-pre-wrap select-all relative max-h-[350px] overflow-y-auto custom-scrollbar" style={{ background: isDark ? '#000' : '#1E1E1E', color: '#D4D4D4', border: '1px solid var(--border)' }}>
+                    {senaiGeneratedPromptText}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans relative overflow-x-hidden pb-20 transition-colors duration-500">
-      
+
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-gradient-to-br from-indigo-500/10 to-blue-500/10 dark:from-indigo-900/20 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
       <header className="h-[80px] px-4 sm:px-8 flex items-center justify-between bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl border-b border-slate-200 dark:border-white/5 sticky top-0 z-40 shadow-sm">

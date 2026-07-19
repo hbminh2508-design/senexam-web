@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { Clock, ArrowLeft, Send, AlertCircle, FileQuestion, LayoutList, UploadCloud, BookMarked, Bookmark } from 'lucide-react'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 export default function ExamRoomPage() {
   const params = useParams()
@@ -11,7 +14,9 @@ export default function ExamRoomPage() {
   const [exam, setExam] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  
+  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const [isDark, setIsDark] = useState(false)
+
   // Lưu đáp án thí sinh
   const [answers, setAnswers] = useState<Record<string, any>>({})
   // Lưu trạng thái các câu đánh dấu "Lưu câu / Làm lại sau"
@@ -22,7 +27,7 @@ export default function ExamRoomPage() {
     const fetchExam = async () => {
       const examId = params.id as string
       const { data, error } = await supabase.from('exams').select('*').eq('id', examId).single()
-      
+
       if (error || !data) {
         alert('Không tìm thấy đề thi phù hợp!')
         router.push('/exams')
@@ -33,6 +38,9 @@ export default function ExamRoomPage() {
       setLoading(false)
     }
     fetchExam()
+    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+    if (dark) document.documentElement.classList.add('dark')
+    setIsDark(dark)
   }, [params.id, router])
 
   useEffect(() => {
@@ -159,9 +167,252 @@ export default function ExamRoomPage() {
     }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white font-bold text-xl">Đang tải phòng thi ảo...</div>
+  if (loading) {
+    if (newUiEnabled) {
+      return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải phòng thi ảo..." />
+    }
+    return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white font-bold text-xl">Đang tải phòng thi ảo...</div>
+  }
 
   const pdfUrl = `https://drive.google.com/file/d/${exam?.drive_file_id}/preview`
+
+  if (newUiEnabled) {
+    return (
+      <div
+        className="h-screen w-full flex flex-col overflow-hidden font-sans"
+        data-motion={animationsEnabled ? 'on' : 'off'}
+        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+      >
+        {/* HEADER PHÒNG THI */}
+        <header className="h-16 flex items-center justify-between px-4 md:px-6 shrink-0 z-10" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => router.push('/exams')} className="p-2 rounded-full transition-colors" style={{ border: '1px solid var(--border)' }}>
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="font-semibold text-sm md:text-base line-clamp-1">{exam?.title}</h1>
+              <div className="flex gap-2 mt-0.5">
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{exam?.exam_type}</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium" style={{ background: 'var(--border)', color: 'var(--text-muted)' }}>Thời gian: {exam?.duration} phút</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 md:gap-6">
+            <div
+              className="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-lg md:text-xl"
+              style={timeLeft < 300 ? { color: '#DC2626', border: '2px solid #DC2626', background: 'rgba(220,38,38,0.08)' } : { color: 'var(--accent)', border: '2px solid var(--accent)', background: 'var(--accent-soft)' }}
+            >
+              <Clock className="w-5 h-5" />
+              {formatTime(timeLeft)}
+            </div>
+            <button onClick={handleSubmit} disabled={submitting} className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: 'var(--accent)', color: '#fff' }}>
+              <Send className="w-4 h-4" /> <span className="hidden md:inline">{submitting ? 'Đang nộp bài...' : 'Nộp bài'}</span>
+            </button>
+          </div>
+        </header>
+
+        {/* CHIA ĐÔI MÀN HÌNH */}
+        <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
+
+          {/* BÊN TRÁI: ĐỀ PDF */}
+          <div className="flex-1 h-[35vh] md:h-full relative" style={{ borderBottom: '1px solid var(--border)', background: 'var(--border)' }}>
+            <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay"></iframe>
+          </div>
+
+          {/* BÊN PHẢI: PHIẾU TÔ + STICKY BOARD TRẠNG THÁI CÂU HỎI */}
+          <div className="w-full md:w-[450px] lg:w-[500px] xl:w-[580px] h-[65vh] md:h-full overflow-y-auto shrink-0 flex flex-col" style={{ background: 'var(--surface)' }}>
+
+            {/* 🌟 BẢNG THEO DÕI TRẠNG THÁI CÂU HỎI - ĐÍNH TRÊN CAO MỌI LÚC (STICKY TOP BOARD) */}
+            <div className="sticky top-0 p-4 z-20 shrink-0 max-h-[220px] overflow-y-auto custom-scrollbar" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: 'var(--text-muted)' }}>
+                <LayoutList className="w-4 h-4" style={{ color: 'var(--accent)' }} /> Bản đồ tiến độ câu hỏi (Click để di chuyển nhanh)
+              </div>
+              <div className="space-y-3">
+                {exam?.exam_structure?.map((section: any) => (
+                  <div key={section.id} className="space-y-1">
+                    <p className="text-[11px] font-medium truncate" style={{ color: 'var(--text-muted)' }}>● {section.name}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                        const key = `${section.id}-${qIdx}`
+                        const isAnswered = answers[key] !== undefined && answers[key] !== '' && (typeof answers[key] === 'object' ? answers[key]?.text || answers[key]?.file : true)
+                        const isSaved = savedQuestions[key]
+
+                        return (
+                          <button
+                            key={qIdx}
+                            type="button"
+                            onClick={() => {
+                              const element = document.getElementById(`question-row-${key}`)
+                              if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            }}
+                            className="w-7 h-7 text-xs font-semibold rounded-lg flex items-center justify-center transition-all"
+                            style={
+                              isSaved
+                                ? { background: '#D97706', color: '#fff', border: '1px solid #D97706' }
+                                : isAnswered
+                                  ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' }
+                                  : { background: 'var(--bg)', color: 'var(--text-muted)', border: '1px solid var(--border)' }
+                            }
+                          >
+                            {qIdx + 1}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CHI TIẾT DANH SÁCH CÂU HỎI ĐỂ TÔ ĐÁP ÁN */}
+            <div className="flex-1 p-6 space-y-8 overflow-y-auto">
+              {exam?.exam_structure?.map((section: any) => (
+                <div key={section.id} className="p-5 rounded-2xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+
+                  <div className="flex justify-between items-start mb-5 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <h3 className="font-semibold flex items-center gap-2 text-base" style={{ color: 'var(--accent)' }}>
+                      <FileQuestion className="w-5 h-5" /> {section.name}
+                    </h3>
+                    {section.subject && (
+                      <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-medium" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                        Môn: {section.subject}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-6">
+                    {Array.from({ length: section.questionCount }).map((_, qIdx) => {
+                      const questionNum = qIdx + 1
+                      const answerKey = `${section.id}-${qIdx}`
+                      const currentAns = answers[answerKey]
+                      const isSaved = savedQuestions[answerKey]
+
+                      return (
+                        <div
+                          key={qIdx}
+                          id={`question-row-${answerKey}`}
+                          className="flex flex-col gap-2 p-3 rounded-xl transition-colors"
+                          style={isSaved ? { background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.35)' } : undefined}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-sm" style={{ color: 'var(--text-muted)' }}>Câu số {questionNum}:</span>
+
+                            {/* 🌟 NÚT LƯU CÂU / LÀM LẠI SAU ĐỘNG */}
+                            <button
+                              type="button"
+                              onClick={() => toggleSaveQuestion(section.id, qIdx)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+                              style={isSaved ? { background: '#D97706', color: '#fff', border: '1px solid #D97706' } : { background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                            >
+                              <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-white' : ''}`} />
+                              {isSaved ? 'Đã lưu câu' : 'Lưu câu'}
+                            </button>
+                          </div>
+
+                          {/* INPUT RENDER THEO DẠNG CÂU HỎI */}
+                          <div className="mt-1">
+                            {section.type === 'single_choice' && (
+                              <div className="flex gap-2 flex-wrap">
+                                {Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => {
+                                  const label = String.fromCharCode(65 + oIdx)
+                                  const isSelected = currentAns === label
+                                  return (
+                                    <button
+                                      key={label}
+                                      type="button"
+                                      onClick={() => handleAnswerSelect(section.id, qIdx, label)}
+                                      className="w-9 h-9 rounded-full text-sm font-semibold flex items-center justify-center transition-all"
+                                      style={isSelected ? { background: 'var(--accent)', color: '#fff', border: '2px solid var(--accent)' } : { background: 'var(--surface)', color: 'var(--text)', border: '2px solid var(--border)' }}
+                                    >{label}</button>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {section.type === 'multiple_choice' && (
+                              <div className="flex gap-2 flex-wrap">
+                                {Array.from({ length: section.optionsCount || 4 }).map((_, oIdx) => {
+                                  const label = String.fromCharCode(65 + oIdx)
+                                  const ansArray = currentAns || []
+                                  const isSelected = ansArray.includes(label)
+                                  return (
+                                    <button
+                                      key={label}
+                                      type="button"
+                                      onClick={() => {
+                                        const newArray = isSelected ? ansArray.filter((a: string) => a !== label) : [...ansArray, label]
+                                        handleAnswerSelect(section.id, qIdx, newArray)
+                                      }}
+                                      className="w-9 h-9 rounded-md text-sm font-semibold flex items-center justify-center transition-all"
+                                      style={isSelected ? { background: 'var(--accent)', color: '#fff', border: '2px solid var(--accent)' } : { background: 'var(--surface)', color: 'var(--text)', border: '2px solid var(--border)' }}
+                                    >{label}</button>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {section.type === 'true_false' && (
+                              <div className="flex gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAnswerSelect(section.id, qIdx, 'Đ')}
+                                  className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                                  style={currentAns === 'Đ' ? { background: '#059669', color: '#fff', border: '2px solid #059669' } : { background: 'var(--surface)', color: 'var(--text)', border: '2px solid var(--border)' }}
+                                >Đúng</button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAnswerSelect(section.id, qIdx, 'S')}
+                                  className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                                  style={currentAns === 'S' ? { background: '#DC2626', color: '#fff', border: '2px solid #DC2626' } : { background: 'var(--surface)', color: 'var(--text)', border: '2px solid var(--border)' }}
+                                >Sai</button>
+                              </div>
+                            )}
+
+                            {section.type === 'short_answer' && (
+                              <input
+                                type="text"
+                                placeholder="Nhập chuỗi ký tự / số đáp án đúng..."
+                                value={currentAns || ''}
+                                onChange={(e) => handleAnswerSelect(section.id, qIdx, e.target.value)}
+                                className="w-full rounded-lg px-4 py-2 text-sm font-medium outline-none bg-transparent"
+                                style={{ border: '1px solid var(--border)' }}
+                              />
+                            )}
+
+                            {section.type === 'essay' && (
+                              <div className="w-full space-y-3">
+                                <textarea
+                                  placeholder="Nhập nội dung lập luận tự luận..."
+                                  value={currentAns?.text || ''}
+                                  onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, text: e.target.value })}
+                                  className="w-full min-h-[140px] resize-y rounded-xl px-4 py-3 text-sm font-normal outline-none bg-transparent"
+                                  style={{ border: '1px solid var(--border)' }}
+                                />
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl" style={{ background: 'var(--accent-soft)', border: '1px solid var(--border)' }}>
+                                  <UploadCloud className="w-6 h-6 shrink-0" style={{ color: 'var(--accent)' }} />
+                                  <div className="flex-1">
+                                    <p className="text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: 'var(--accent)' }}>Đính kèm ảnh chụp/file scan bài làm tự luận</p>
+                                    <input type="file" accept=".pdf, image/*" onChange={(e) => handleAnswerSelect(section.id, qIdx, { ...currentAns, file: e.target.files?.[0] })} className="text-xs w-full" style={{ color: 'var(--text-muted)' }} />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell h-screen w-full flex flex-col bg-transparent overflow-hidden text-slate-900 dark:text-slate-100">
