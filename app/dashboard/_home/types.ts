@@ -34,4 +34,5 @@ export type HomeProps = {
   themeColor: string
   density: 'comfortable' | 'compact'
   animationsEnabled: boolean
+  isBetaTester: boolean
 }

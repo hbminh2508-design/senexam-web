@@ -24,7 +24,7 @@ export default function ModernHome({
   router, userRole, formData, isDark, toggleTheme, unreadCount,
   setShowNotifications, setShowProfile, showFeatureMenu, setShowFeatureMenu,
   FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
-  overlayActive, themeColor, density, animationsEnabled,
+  overlayActive, themeColor, density, animationsEnabled, isBetaTester,
 }: HomeProps) {
   const bestScore = studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : null
   const isCompact = density === 'compact'
@@ -46,7 +46,10 @@ export default function ModernHome({
       >
         <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => router.push('/dashboard')}>
           <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain rounded-lg" />
-          <span className="hidden md:inline text-[15px] font-semibold tracking-tight">SenExam</span>
+          <span className="hidden md:inline text-[15px] font-semibold tracking-tight flex items-center gap-1.5">
+            SenExam
+            {isBetaTester && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>BETA</span>}
+          </span>
         </div>
 
         <div className="flex-1 min-w-0 max-w-xl mx-3 sm:mx-6 relative">

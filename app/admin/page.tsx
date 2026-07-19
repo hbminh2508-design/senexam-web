@@ -275,54 +275,56 @@ export default function AdminDashboard() {
       supabase.from('client_error_log').select('*').order('created_at', { ascending: false }).limit(30),
     ])
     setSystemRelease(release)
-    setReleaseVersionInput(release?.latest_version || CURRENT_APP_VERSION)
-    setReleaseChangelogInput(release?.changelog || '')
+    // Ưu tiên nạp nháp từ kênh Beta (nơi tính năng mới thường được thử trước) — nếu Beta
+    // chưa có gì khác biệt thì lấy từ kênh Chính thức.
+    setReleaseVersionInput(release?.beta_version || release?.stable_version || CURRENT_APP_VERSION)
+    setReleaseChangelogInput(release?.beta_changelog || release?.stable_changelog || '')
     setReleaseLogs(logsRes.data || [])
     setClientErrors(errorsRes.data || [])
   }
 
-  // Lưu nháp phiên bản/changelog mới ở chế độ Test (chưa hiển thị cho người dùng)
-  const handleSaveReleaseDraft = async () => {
+  // Khôi phục form nháp về đúng bản Chính thức đang chạy, bỏ các thay đổi chưa đẩy
+  const handleResetDraft = () => {
+    setReleaseVersionInput(systemRelease?.stable_version || CURRENT_APP_VERSION)
+    setReleaseChangelogInput(systemRelease?.stable_changelog || '')
+  }
+
+  // Đẩy bản nháp cho riêng nhóm người dùng đã tham gia Beta — giữ lại để admin xem trước
+  // trước khi quyết định có đẩy chính thức hay không.
+  const handlePublishToBeta = async () => {
     if (!releaseVersionInput.trim()) return
     setReleaseSaving(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('system_release').update({
-        latest_version: releaseVersionInput.trim(),
-        changelog: releaseChangelogInput,
-        is_published: false,
+        beta_version: releaseVersionInput.trim(),
+        beta_changelog: releaseChangelogInput,
+        beta_published: true,
         updated_by: user?.id ?? null,
         updated_at: new Date().toISOString(),
       }).eq('id', 1)
-      await logReleaseAction('enable_test', releaseVersionInput.trim(), releaseChangelogInput)
+      await logReleaseAction('publish_beta', releaseVersionInput.trim(), releaseChangelogInput)
       await refreshReleaseTab()
     } finally {
       setReleaseSaving(false)
     }
   }
 
-  // Thoát chế độ Test: khôi phục form về đúng bản đang publish, không ghi đè dữ liệu
-  const handleExitTestMode = async () => {
-    await logReleaseAction('disable_test', systemRelease?.latest_version, 'Thoát chế độ test, hủy bản nháp chưa lưu')
-    setReleaseVersionInput(systemRelease?.latest_version || CURRENT_APP_VERSION)
-    setReleaseChangelogInput(systemRelease?.changelog || '')
-  }
-
-  // Đẩy bản cập nhật cho toàn bộ người dùng: bật is_published để Settings hiện banner
-  const handlePublishRelease = async () => {
+  // Đẩy bản cập nhật cho TẤT CẢ người dùng (kênh Chính thức)
+  const handlePublishToStable = async () => {
     if (!releaseVersionInput.trim()) return
-    if (!confirm(`Đẩy phiên bản ${releaseVersionInput.trim()} cho TẤT CẢ người dùng?`)) return
+    if (!confirm(`Đẩy phiên bản ${releaseVersionInput.trim()} CHÍNH THỨC cho tất cả người dùng?`)) return
     setReleaseSaving(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('system_release').update({
-        latest_version: releaseVersionInput.trim(),
-        changelog: releaseChangelogInput,
-        is_published: true,
+        stable_version: releaseVersionInput.trim(),
+        stable_changelog: releaseChangelogInput,
+        stable_published: true,
         updated_by: user?.id ?? null,
         updated_at: new Date().toISOString(),
       }).eq('id', 1)
-      await logReleaseAction('publish', releaseVersionInput.trim(), releaseChangelogInput)
+      await logReleaseAction('publish_stable', releaseVersionInput.trim(), releaseChangelogInput)
       await refreshReleaseTab()
     } finally {
       setReleaseSaving(false)
@@ -1416,16 +1418,21 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
         <div className={cardClass} style={cardStyle}>
           <h2 className={headingClass} style={headingStyle}><Rocket className="w-4 h-4" />Phát hành phiên bản</h2>
-          <p className={`text-xs font-medium mb-5 ${newUiEnabled ? '' : 'text-slate-500'}`} style={mutedStyle}>
-            Đang chạy bản <strong>{CURRENT_APP_VERSION}</strong> (package.json) · Bản đang công bố cho người dùng:{' '}
-            <strong style={newUiEnabled ? { color: 'var(--accent)' } : undefined} className={newUiEnabled ? '' : 'text-indigo-600 dark:text-indigo-400'}>
-              {systemRelease?.is_published ? systemRelease.latest_version : 'Chưa công bố (đang ở chế độ Test)'}
-            </strong>
+          <p className={`text-xs font-medium mb-2 ${newUiEnabled ? '' : 'text-slate-500'}`} style={mutedStyle}>
+            Đang chạy bản <strong>{CURRENT_APP_VERSION}</strong> (package.json)
           </p>
+          <div className="flex flex-wrap gap-2 mb-5">
+            <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-lg ${newUiEnabled ? '' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`} style={newUiEnabled ? { background: 'rgba(5,150,105,0.12)', color: '#059669' } : undefined}>
+              Chính thức: {systemRelease?.stable_published ? `v${systemRelease.stable_version}` : 'chưa đẩy'}
+            </span>
+            <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-lg ${newUiEnabled ? '' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'}`} style={newUiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}>
+              Beta: {systemRelease?.beta_published ? `v${systemRelease.beta_version}` : 'chưa đẩy'}
+            </span>
+          </div>
 
           <div className="space-y-4">
             <div>
-              <label className={labelClass} style={labelStyle}>Phiên bản mới (vd: 3.1.0)</label>
+              <label className={labelClass} style={labelStyle}>Phiên bản nháp (vd: 3.1.0)</label>
               <input type="text" value={releaseVersionInput} onChange={(e) => setReleaseVersionInput(e.target.value)} className={inputClass} style={inputStyle} placeholder="3.1.0" />
             </div>
             <div>
@@ -1433,21 +1440,19 @@ export default function AdminDashboard() {
               <textarea value={releaseChangelogInput} onChange={(e) => setReleaseChangelogInput(e.target.value)} rows={5} className={inputClass} style={inputStyle} placeholder={'- Sửa lỗi ...\n- Thêm tính năng ...'} />
             </div>
 
-            {systemRelease && !systemRelease.is_published && (
-              <div className={`text-[11px] font-black uppercase px-3 py-2 rounded-lg flex items-center gap-2 ${newUiEnabled ? '' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`} style={newUiEnabled ? { background: 'rgba(217,119,6,0.12)', color: '#D97706' } : undefined}>
-                <FlaskConical className="w-3.5 h-3.5" /> Đang ở chế độ Test — người dùng chưa thấy bản này
-              </div>
-            )}
+            <div className={`text-[11px] font-black uppercase px-3 py-2 rounded-lg flex items-center gap-2 ${newUiEnabled ? '' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`} style={newUiEnabled ? { background: 'rgba(217,119,6,0.12)', color: '#D97706' } : undefined}>
+              <FlaskConical className="w-3.5 h-3.5" /> Nháp chỉ admin thấy — chọn kênh bên dưới khi sẵn sàng đẩy
+            </div>
 
             <div className="flex flex-wrap gap-2 pt-1">
-              <button onClick={handleSaveReleaseDraft} disabled={releaseSaving || !releaseVersionInput.trim()} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 ${newUiEnabled ? '' : 'bg-slate-800 hover:bg-slate-900 dark:bg-white/10 dark:hover:bg-white/20 text-white'}`} style={newUiEnabled ? { background: 'var(--border)', color: 'var(--text)' } : undefined}>
-                {releaseSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />} Lưu nháp (Test)
-              </button>
-              <button onClick={handleExitTestMode} disabled={releaseSaving} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 border ${newUiEnabled ? '' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'}`} style={newUiEnabled ? { borderColor: 'var(--border)', color: 'var(--text-muted)' } : undefined}>
+              <button onClick={handleResetDraft} disabled={releaseSaving} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 border ${newUiEnabled ? '' : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5'}`} style={newUiEnabled ? { borderColor: 'var(--border)', color: 'var(--text-muted)' } : undefined}>
                 <X className="w-3.5 h-3.5" /> Thoát chế độ Test
               </button>
-              <button onClick={handlePublishRelease} disabled={releaseSaving || !releaseVersionInput.trim()} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 text-white ${newUiEnabled ? '' : 'bg-indigo-600 hover:bg-indigo-700'}`} style={newUiEnabled ? { background: 'var(--accent)' } : undefined}>
-                {releaseSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />} Đẩy cập nhật cho người dùng
+              <button onClick={handlePublishToBeta} disabled={releaseSaving || !releaseVersionInput.trim()} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 text-white ${newUiEnabled ? '' : 'bg-slate-800 hover:bg-slate-900 dark:bg-white/10 dark:hover:bg-white/20'}`} style={newUiEnabled ? { background: 'var(--border)', color: 'var(--text)' } : undefined}>
+                {releaseSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />} Đẩy cho Beta
+              </button>
+              <button onClick={handlePublishToStable} disabled={releaseSaving || !releaseVersionInput.trim()} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all disabled:opacity-50 text-white ${newUiEnabled ? '' : 'bg-indigo-600 hover:bg-indigo-700'}`} style={newUiEnabled ? { background: 'var(--accent)' } : undefined}>
+                {releaseSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />} Đẩy Chính thức
               </button>
             </div>
           </div>
@@ -1465,7 +1470,7 @@ export default function AdminDashboard() {
                   <div key={log.id} className={`${rowClass} flex items-center justify-between gap-3 text-xs`} style={rowStyle}>
                     <div>
                       <span className="font-black uppercase" style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
-                        {log.action === 'publish' ? 'Đẩy cập nhật' : log.action === 'enable_test' ? 'Lưu nháp Test' : log.action === 'disable_test' ? 'Thoát Test' : 'Đổi phiên bản'}
+                        {log.action === 'publish_stable' ? 'Đẩy Chính thức' : log.action === 'publish_beta' ? 'Đẩy Beta' : log.action === 'disable_test' ? 'Thoát Test' : 'Đổi phiên bản'}
                       </span>
                       {log.version && <span className="ml-2 font-bold" style={mutedStyle}>v{log.version}</span>}
                     </div>

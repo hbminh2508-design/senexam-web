@@ -15,7 +15,7 @@ import {
 import { AnnouncementRenderer } from './_home/Announcement'
 import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
 import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
-import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION } from '@/lib/systemRelease'
+import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion } from '@/lib/systemRelease'
 import type { Feature } from './_home/types'
 import pkg from '@/package.json'
 
@@ -127,20 +127,80 @@ export default function DashboardPage() {
   const [uiDensity, setUiDensity] = useState<'comfortable' | 'compact'>('comfortable')
   const [animationsEnabled, setAnimationsEnabled] = useState(true)
 
-  // -- Kiểm tra cập nhật phiên bản mới do Admin đẩy ra --
+  // -- Chương trình Beta: tham gia bằng cách trả lời đúng 2 câu hỏi --
+  const [isBetaTester, setIsBetaTester] = useState(false)
+  const [showBetaJoinModal, setShowBetaJoinModal] = useState(false)
+  const [betaAnswer1, setBetaAnswer1] = useState('')
+  const [betaAnswer2, setBetaAnswer2] = useState('')
+  const [betaJoinError, setBetaJoinError] = useState('')
+  const [betaJoinSaving, setBetaJoinSaving] = useState(false)
+
+  const normalizeAnswer = (s: string) => s.trim().toLowerCase().normalize('NFC')
+
+  const handleSubmitBetaJoin = async () => {
+    setBetaJoinError('')
+    const correct1 = normalizeAnswer(betaAnswer1) === normalizeAnswer('Hoàng Bình Minh')
+    const correct2 = normalizeAnswer(betaAnswer2) === '2007'
+    if (!correct1 || !correct2) {
+      setBetaJoinError('Câu trả lời chưa đúng, bạn thử lại nhé.')
+      return
+    }
+    setBetaJoinSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { error } = await supabase.from('profiles').update({ is_beta_tester: true }).eq('id', user.id)
+      if (error) throw error
+      setIsBetaTester(true)
+      localStorage.setItem('senexam_beta_tester', '1')
+      window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
+      setShowBetaJoinModal(false)
+      setBetaAnswer1('')
+      setBetaAnswer2('')
+    } catch {
+      setBetaJoinError('Có lỗi xảy ra, vui lòng thử lại.')
+    } finally {
+      setBetaJoinSaving(false)
+    }
+  }
+
+  const handleLeaveBeta = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('profiles').update({ is_beta_tester: false }).eq('id', user.id)
+    setIsBetaTester(false)
+    localStorage.setItem('senexam_beta_tester', '0')
+    window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
+  }
+
+  // -- Kiểm tra cập nhật phiên bản mới do Admin đẩy ra (theo đúng kênh Beta/Chính thức) --
   const [updateCheckState, setUpdateCheckState] = useState<'idle' | 'checking' | 'up_to_date' | 'available'>('idle')
   const [latestReleaseInfo, setLatestReleaseInfo] = useState<{ version: string; changelog: string } | null>(null)
 
   const handleCheckForUpdate = async () => {
     setUpdateCheckState('checking')
     const release = await fetchSystemRelease()
-    if (release && release.is_published && isNewerVersion(CURRENT_APP_VERSION, release.latest_version)) {
-      setLatestReleaseInfo({ version: release.latest_version, changelog: release.changelog })
+    const channelVersion = isBetaTester ? release?.beta_version : release?.stable_version
+    const channelChangelog = isBetaTester ? release?.beta_changelog : release?.stable_changelog
+    const channelPublished = isBetaTester ? release?.beta_published : release?.stable_published
+    const acked = getAckedVersion()
+
+    if (
+      release && channelPublished && channelVersion &&
+      isNewerVersion(CURRENT_APP_VERSION, channelVersion) &&
+      channelVersion !== acked
+    ) {
+      setLatestReleaseInfo({ version: channelVersion, changelog: channelChangelog || '' })
       setUpdateCheckState('available')
     } else {
       setLatestReleaseInfo(null)
       setUpdateCheckState('up_to_date')
     }
+  }
+
+  const handleApplyUpdate = () => {
+    if (latestReleaseInfo) ackVersion(latestReleaseInfo.version)
+    window.location.reload()
   }
 
   // ----------------------------------------------------------------------------
@@ -194,6 +254,8 @@ export default function DashboardPage() {
         setUserRole(profile.role || 'student')
         setNewUiEnabled(!!profile.new_ui_enabled)
         setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
+        setIsBetaTester(!!profile.is_beta_tester)
+        localStorage.setItem('senexam_beta_tester', profile.is_beta_tester ? '1' : '0')
         setFormData({
           fullName: profile.full_name || '', 
           dob: profile.dob || '', 
@@ -558,6 +620,7 @@ export default function DashboardPage() {
         themeColor={themeColor}
         density={uiDensity}
         animationsEnabled={animationsEnabled}
+        isBetaTester={isBetaTester}
       />
 
 
@@ -616,6 +679,43 @@ export default function DashboardPage() {
                 {codeLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Mở khóa phòng thi'}
               </button>
            </div>
+        </div>
+      )}
+
+      {/* 1.5. Modal tham gia Chương trình Beta — trả lời 2 câu hỏi để mở khóa */}
+      {showBetaJoinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#1E1E1E] rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border border-slate-100 dark:border-white/5">
+            <button onClick={() => { setShowBetaJoinModal(false); setBetaJoinError(''); }} className="absolute top-5 right-5 p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] transition-colors"><X className="w-5 h-5 text-slate-500"/></button>
+
+            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-[1.2rem] flex items-center justify-center mb-6 border border-indigo-100 dark:border-indigo-500/20 shadow-inner">
+              <Rocket className="w-8 h-8 text-indigo-600 dark:text-indigo-400"/>
+            </div>
+
+            <h3 className="text-2xl font-black mb-2 text-slate-900 dark:text-white">Tham gia Beta</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 font-medium leading-relaxed">Trả lời đúng 2 câu hỏi nhỏ để mở khóa chương trình thử nghiệm.</p>
+
+            <div className="space-y-4 mb-2">
+              <div>
+                <label className="block text-xs font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Người tạo ra trang web này là ai?</label>
+                <input type="text" value={betaAnswer1} onChange={(e) => setBetaAnswer1(e.target.value)} className="w-full bg-slate-50 dark:bg-[#121212] border-transparent focus:bg-white dark:focus:bg-[#121212] border-2 focus:border-indigo-500 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none transition-all shadow-inner" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold mb-1.5 text-slate-500 uppercase tracking-wider">Người tạo ra web này sinh năm bao nhiêu?</label>
+                <input type="text" value={betaAnswer2} onChange={(e) => setBetaAnswer2(e.target.value)} className="w-full bg-slate-50 dark:bg-[#121212] border-transparent focus:bg-white dark:focus:bg-[#121212] border-2 focus:border-indigo-500 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white outline-none transition-all shadow-inner" />
+              </div>
+            </div>
+
+            {betaJoinError && <p className="text-xs font-bold text-rose-500 mb-4">{betaJoinError}</p>}
+
+            <button
+              onClick={handleSubmitBetaJoin}
+              disabled={betaJoinSaving || !betaAnswer1.trim() || !betaAnswer2.trim()}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl w-full py-4 font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base mt-2"
+            >
+              {betaJoinSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Xác nhận tham gia'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -762,6 +862,29 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-3">
+                <h3 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 ml-2">Chương trình Beta</h3>
+                <div className="bg-slate-50 dark:bg-[#121212] rounded-3xl border border-slate-100 dark:border-transparent overflow-hidden p-4.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <Rocket className="w-5 h-5 text-indigo-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
+                          Người dùng Beta
+                          {isBetaTester && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 tracking-widest">BETA</span>}
+                        </p>
+                        <p className="text-[11px] font-medium text-slate-500">Nhận bản cập nhật thử nghiệm sớm hơn, có tick BETA cạnh tên ứng dụng.</p>
+                      </div>
+                    </div>
+                    {isBetaTester ? (
+                      <button onClick={handleLeaveBeta} className="shrink-0 text-xs font-bold text-rose-500 hover:text-rose-600 px-3 py-2 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors">Rời Beta</button>
+                    ) : (
+                      <button onClick={() => setShowBetaJoinModal(true)} className="shrink-0 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 rounded-xl transition-colors">Tham gia Beta</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
                 <h3 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 ml-2">Tài khoản & Bảo mật</h3>
                 
                 <div className="bg-slate-50 dark:bg-[#121212] rounded-3xl border border-slate-100 dark:border-transparent overflow-hidden">
@@ -852,7 +975,7 @@ export default function DashboardPage() {
                       </p>
                     )}
                     <button
-                      onClick={() => window.location.reload()}
+                      onClick={handleApplyUpdate}
                       className={newUiEnabled ? 'w-full rounded-xl py-2.5 font-black text-xs flex items-center justify-center gap-2 text-white' : 'w-full rounded-xl py-2.5 font-black text-xs flex items-center justify-center gap-2 text-white bg-emerald-600 hover:bg-emerald-700'}
                       style={newUiEnabled ? { background: 'var(--accent)' } : undefined}
                     >

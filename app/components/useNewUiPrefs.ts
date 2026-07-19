@@ -12,13 +12,14 @@ export const UI_PREFS_CHANGED_EVENT = 'senexam-ui-prefs-changed'
 
 function readPrefs() {
   if (typeof window === 'undefined') {
-    return { newUiEnabled: false, themeColor: 'terracotta', density: 'comfortable' as UiDensity, animationsEnabled: true }
+    return { newUiEnabled: false, themeColor: 'terracotta', density: 'comfortable' as UiDensity, animationsEnabled: true, isBetaTester: false }
   }
   return {
     newUiEnabled: localStorage.getItem('senexam_new_ui') === '1',
     themeColor: localStorage.getItem('senexam_theme_color') || 'terracotta',
     density: (localStorage.getItem('senexam_density') === 'compact' ? 'compact' : 'comfortable') as UiDensity,
     animationsEnabled: localStorage.getItem('senexam_animations') !== '0',
+    isBetaTester: localStorage.getItem('senexam_beta_tester') === '1',
   }
 }
 
