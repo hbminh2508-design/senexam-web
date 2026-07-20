@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { AnnouncementRenderer } from './Announcement'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import type { HomeProps } from './types'
 
 const FEATURE_COLOR_MAP: Record<string, string> = {
@@ -110,8 +111,8 @@ export default function ModernHome({
             {unreadCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }}></span>}
           </button>
 
-          <button onClick={toggleTheme} className="p-2.5 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors">
-            {isDark ? <Sun className="w-4.5 h-4.5"/> : <Moon className="w-4.5 h-4.5"/>}
+          <button onClick={toggleTheme} className="p-2.5 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors active:scale-90">
+            <CrossfadeIcon show={isDark} className="w-4.5 h-4.5" first={<Sun className="w-4.5 h-4.5"/>} second={<Moon className="w-4.5 h-4.5"/>} />
           </button>
 
           <button

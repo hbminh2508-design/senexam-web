@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
+import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import {
   UploadCloud, FileText, Users, LogOut, PlusCircle,
   Trash2, Layers, X, ClipboardList,
@@ -1737,7 +1738,7 @@ export default function AdminDashboard() {
               <Home className="w-4 h-4"/> <span className="hidden sm:inline">Về trang chủ</span>
             </button>
             <button onClick={toggleTheme} className="p-2.5 rounded-full transition-opacity hover:opacity-80" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}>
-              {isDark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+              <CrossfadeIcon show={isDark} className="w-4 h-4" first={<Sun className="w-4 h-4"/>} second={<Moon className="w-4 h-4"/>} />
             </button>
             <div className="relative">
               <button onClick={() => setShowNotificationBox(!showNotificationBox)} className="p-2.5 rounded-full relative transition-opacity hover:opacity-80" style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}>
@@ -1986,7 +1987,7 @@ export default function AdminDashboard() {
           </button>
 
           <button onClick={toggleTheme} className="p-3 rounded-full bg-slate-100 dark:bg-[#202020] text-slate-700 dark:text-slate-300 hover:scale-105 transition-transform border border-slate-200/50 dark:border-white/5">
-            {isDark ? <Sun className="w-4 h-4 text-amber-400"/> : <Moon className="w-4 h-4 text-indigo-600"/>}
+            <CrossfadeIcon show={isDark} className="w-4 h-4" first={<Sun className="w-4 h-4 text-amber-400"/>} second={<Moon className="w-4 h-4 text-indigo-600"/>} />
           </button>
           
           <div className="relative">

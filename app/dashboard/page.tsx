@@ -13,26 +13,20 @@ import {
 } from 'lucide-react'
 
 import { AnnouncementRenderer } from './_home/Announcement'
+import ModernLoading from '@/app/components/ModernLoading'
+import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
 import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
 import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion } from '@/lib/systemRelease'
 import type { Feature } from './_home/types'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
-const LegacyHome = dynamic(() => import('./_home/LegacyHome'), {
-  loading: () => <HomeLoading />,
-})
-const ModernHome = dynamic(() => import('./_home/ModernHome'), {
-  loading: () => <HomeLoading />,
-})
-
-function HomeLoading() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-    </div>
-  )
-}
+// `loading` is intentionally omitted here: both chunks are warmed up manually
+// (see the prefetch effect below) well before `isDataLoading` clears, so this
+// fallback would otherwise flash a second, visually different loading screen
+// right after the one below resolves.
+const LegacyHome = dynamic(() => import('./_home/LegacyHome'))
+const ModernHome = dynamic(() => import('./_home/ModernHome'))
 
 // ============================================================================
 // 1. KHAI BÁO CÁC HẰNG SỐ HỆ THỐNG
@@ -87,9 +81,7 @@ export default function DashboardPage() {
   // -- Data States --
   const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
   const [studentHistoryList, setStudentHistoryList] = useState<any[]>([])
-  const [notifications, setNotifications] = useState<SysNotification[]>([
-    { id: '1', title: 'SenExam V2.0', message: 'Hệ thống Material Design 3 đã được cập nhật thành công.', type: 'success', time: 'Vừa xong', read: false }
-  ])
+  const [notifications, setNotifications] = useState<SysNotification[]>([])
 
   // -- Modal Exam Code States --
   const [showCodeModal, setShowCodeModal] = useState(false)
@@ -243,6 +235,19 @@ export default function DashboardPage() {
   // ĐẾM THÔNG BÁO CHƯA ĐỌC
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
 
+  // Khi mở hộp Thông báo, đánh dấu đã đọc toàn bộ và ghi lại vào localStorage
+  // (chưa có bảng lưu trạng thái đọc theo từng người dùng trên Supabase nên dùng localStorage)
+  useEffect(() => {
+    if (!showNotifications) return
+    setNotifications(prev => {
+      if (!prev.some(n => !n.read)) return prev
+      const prevRead: string[] = JSON.parse(localStorage.getItem('senexam_read_notifications') || '[]')
+      const merged = Array.from(new Set([...prevRead, ...prev.map(n => n.id)]))
+      localStorage.setItem('senexam_read_notifications', JSON.stringify(merged))
+      return prev.map(n => ({ ...n, read: true }))
+    })
+  }, [showNotifications])
+
   // Đồng bộ cờ Giao diện mới + màu chủ đề + mật độ/animation ra localStorage để các trang khác đọc nhanh
   useEffect(() => {
     localStorage.setItem('senexam_new_ui', newUiEnabled ? '1' : '0')
@@ -255,6 +260,16 @@ export default function DashboardPage() {
   // ============================================================================
   // INITIALIZATION & EFFECTS
   // ============================================================================
+
+  // Warm up both Home chunks in parallel with the profile/data fetch below, so
+  // whichever one ends up rendered (newUiEnabled resolves partway through that
+  // fetch) is already cached by the time isDataLoading clears — otherwise
+  // next/dynamic's own loading fallback flashes a second loading screen right
+  // after this one.
+  useEffect(() => {
+    import('./_home/LegacyHome')
+    import('./_home/ModernHome')
+  }, [])
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -314,20 +329,29 @@ export default function DashboardPage() {
         setShowOnboarding(true)
       }
 
-      // Fetch Thông báo (Announcements)
+      // Fetch Thông báo (Announcements) do Admin phát — banner chính chỉ lấy cái mới nhất,
+      // còn hộp Thông báo (góc phải) hiển thị toàn bộ các thông báo đang hoạt động
       const nowISO = new Date().toISOString()
-      const { data: notifData } = await supabase
+      const { data: notifRows } = await supabase
         .from('announcements')
-        .select('content')
+        .select('id, content, created_at')
         .eq('is_active', true)
         .or(`start_time.is.null,start_time.lte.${nowISO}`)
         .or(`end_time.is.null,end_time.gte.${nowISO}`)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
 
-      if (notifData) {
-        setActiveAnnouncement(notifData.content)
+      if (notifRows && notifRows.length > 0) {
+        setActiveAnnouncement(notifRows[0].content)
+        const readIds: string[] = JSON.parse(localStorage.getItem('senexam_read_notifications') || '[]')
+        const readSet = new Set(readIds)
+        setNotifications(notifRows.map(row => ({
+          id: row.id,
+          title: 'Thông báo từ SenExam',
+          message: row.content,
+          type: 'info' as const,
+          time: new Date(row.created_at).toLocaleString('vi-VN'),
+          read: readSet.has(row.id),
+        })))
       }
 
       setIsDataLoading(false)
@@ -610,22 +634,12 @@ export default function DashboardPage() {
   // ============================================================================
 
   if (isDataLoading) {
-    if (newUiEnabled) {
-      return (
-        <div
-          className="min-h-screen flex flex-col items-center justify-center font-sans"
-          style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
-        >
-          <Loader2 className="w-8 h-8 animate-spin mb-4" style={{ color: 'var(--accent)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Đang tải không gian SenExam...</p>
-        </div>
-      )
-    }
+    // Always the same shared screen regardless of newUiEnabled: that flag
+    // only settles partway through the fetch above, so branching this gate
+    // on it made the loading screen visibly switch style mid-load (legacy →
+    // modern) for Beta users — the "duplicated loading screen" bug.
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] flex flex-col items-center justify-center">
-        <Loader2 className="w-12 h-12 animate-spin text-indigo-600 dark:text-indigo-400 mb-6" />
-        <p className="font-extrabold text-slate-500 tracking-widest uppercase text-sm animate-pulse">Đang tải không gian SenExam...</p>
-      </div>
+      <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải không gian SenExam..." />
     )
   }
 
@@ -799,7 +813,7 @@ export default function DashboardPage() {
                 <div className="bg-slate-50 dark:bg-[#121212] rounded-3xl border border-slate-100 dark:border-transparent overflow-hidden">
                   <div className="flex items-center justify-between p-4.5 border-b border-slate-200 dark:border-white/5">
                     <div className="flex items-center gap-4">
-                      {isDark ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-orange-500" />}
+                      <CrossfadeIcon show={isDark} first={<Moon className="w-5 h-5 text-indigo-500" />} second={<Sun className="w-5 h-5 text-orange-500" />} />
                       <div><p className="font-bold text-slate-900 dark:text-white text-sm">Chế độ tối (Dark Mode)</p></div>
                     </div>
                     <button onClick={toggleTheme} className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isDark ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-[#333333]'}`}><span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${isDark ? 'translate-x-6' : 'translate-x-1'}`} /></button>
@@ -1181,23 +1195,46 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 4. Slide-over Notifications */}
+      {/* 4. Slide-over Notifications — danh sách thông báo do Admin phát, đồng bộ 1 style xuyên suốt Chính thức/Beta */}
       {showNotifications && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/20 dark:bg-black/50 backdrop-blur-sm transition-all duration-300">
-          <div className="w-full max-w-sm h-full bg-slate-50 dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5">
-            <div className="p-6 flex justify-between items-center sticky top-0 z-10 bg-white/80 dark:bg-[#1E1E1E]/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/5">
-              <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2"><Bell className="w-5 h-5 text-indigo-500 fill-indigo-500" /> Thông Báo</h2>
-              <button onClick={() => setShowNotifications(false)} className="p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-[#2A2A2A] transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+        <div
+          className="fixed inset-0 z-50 flex justify-end backdrop-blur-sm transition-all duration-300"
+          style={newUiEnabled ? { ...getModernThemeVars(themeColor, isDark), background: 'rgba(0,0,0,0.35)' } as React.CSSProperties : { background: 'rgba(15,23,42,0.2)' }}
+        >
+          <div
+            className={newUiEnabled ? 'w-full max-w-sm h-full overflow-y-auto flex flex-col animate-in slide-in-from-right border-l' : 'w-full max-w-sm h-full bg-slate-50 dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5'}
+            style={newUiEnabled ? { background: 'var(--surface)', borderColor: 'var(--border)' } : undefined}
+          >
+            <div
+              className={newUiEnabled ? 'p-6 flex justify-between items-center sticky top-0 z-10 backdrop-blur-xl border-b' : 'p-6 flex justify-between items-center sticky top-0 z-10 bg-white/80 dark:bg-[#1E1E1E]/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/5'}
+              style={newUiEnabled ? { background: 'color-mix(in srgb, var(--surface) 85%, transparent)', borderColor: 'var(--border)' } : undefined}
+            >
+              <h2 className={newUiEnabled ? 'text-xl font-black flex items-center gap-2' : 'text-xl font-black text-slate-900 dark:text-white flex items-center gap-2'} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
+                <Bell className={newUiEnabled ? 'w-5 h-5' : 'w-5 h-5 text-indigo-500 fill-indigo-500'} style={newUiEnabled ? { color: 'var(--accent)' } : undefined} /> Thông Báo
+              </h2>
+              <button onClick={() => setShowNotifications(false)} className="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                <X className="w-5 h-5" style={newUiEnabled ? { color: 'var(--text-muted)' } : { color: '#64748b' }} />
+              </button>
             </div>
 
             <div className="p-4 flex-grow space-y-4">
-              {activeAnnouncement ? (
-                <div className="bg-white dark:bg-[#252525] p-5 rounded-3xl border border-slate-200 dark:border-transparent shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
-                  <AnnouncementRenderer text={activeAnnouncement} />
-                </div>
+              {notifications.length > 0 ? (
+                notifications.map(n => (
+                  <div
+                    key={n.id}
+                    className={newUiEnabled ? 'p-5 rounded-3xl relative overflow-hidden border' : 'bg-white dark:bg-[#252525] p-5 rounded-3xl border border-slate-200 dark:border-transparent shadow-sm relative overflow-hidden'}
+                    style={newUiEnabled ? { background: 'var(--bg)', borderColor: 'var(--border)' } : undefined}
+                  >
+                    <div className="absolute top-0 left-0 w-1.5 h-full" style={{ background: newUiEnabled ? 'var(--accent)' : '#3b82f6' }} />
+                    {!n.read && (
+                      <span className="absolute top-4 right-4 w-2 h-2 rounded-full" style={{ background: newUiEnabled ? 'var(--accent)' : '#3b82f6' }} />
+                    )}
+                    <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: newUiEnabled ? 'var(--text-muted)' : '#94a3b8' }}>{n.time}</p>
+                    <AnnouncementRenderer text={n.message} />
+                  </div>
+                ))
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                <div className="h-full flex flex-col items-center justify-center" style={{ color: newUiEnabled ? 'var(--text-muted)' : '#94a3b8' }}>
                   <Bell className="w-12 h-12 mb-4 opacity-20" />
                   <p className="font-bold text-sm">Hộp thư trống.</p>
                 </div>

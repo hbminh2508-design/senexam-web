@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 
 // --- MATERIAL 3 & LIQUID GLASS CONSTANTS ---
 const mdCard = "bg-white/70 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-[1.5] rounded-[2.5rem] border border-white/60 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.15)] hover:shadow-xl hover:-translate-y-1 transition-all duration-500 ease-out relative overflow-hidden"
@@ -326,7 +327,7 @@ Dựa trên độ dịch chuyển bách phân vị quốc gia liên năm 2025 - 
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <button onClick={toggleTheme} className="p-2.5 rounded-full transition-colors" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
-              {isDark ? <Sun className="w-5 h-5" style={{ color: '#D97706' }}/> : <Moon className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>}
+              <CrossfadeIcon show={isDark} first={<Sun className="w-5 h-5" style={{ color: '#D97706' }}/>} second={<Moon className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>} />
             </button>
           </div>
         </header>
@@ -704,7 +705,7 @@ Dựa trên độ dịch chuyển bách phân vị quốc gia liên năm 2025 - 
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button onClick={toggleTheme} className="p-2.5 bg-slate-100 dark:bg-[#202020] rounded-full hover:bg-slate-200 dark:hover:bg-[#2A2A2A] transition-colors shadow-sm">
-            {isDark ? <Sun className="w-5 h-5 text-amber-500"/> : <Moon className="w-5 h-5"/>}
+            <CrossfadeIcon show={isDark} first={<Sun className="w-5 h-5 text-amber-500"/>} second={<Moon className="w-5 h-5"/>} />
           </button>
         </div>
       </header>

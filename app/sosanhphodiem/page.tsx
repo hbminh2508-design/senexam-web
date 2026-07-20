@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 
 // 🌟 THƯ VIỆN RENDER VĂN BẢN THÂN THIỆN (CHUYỂN ĐỔI CHỮ THÔ THÀNH GIAO DIỆN ĐẸP)
+import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -521,7 +522,7 @@ export default function UnifiedKhaoThiPage() {
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <button onClick={toggleTheme} className="p-2.5 rounded-full transition-colors" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
-              {isDark ? <Sun className="w-5 h-5" style={{ color: 'var(--accent)' }}/> : <Moon className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>}
+              <CrossfadeIcon show={isDark} first={<Sun className="w-5 h-5" style={{ color: 'var(--accent)' }}/>} second={<Moon className="w-5 h-5" style={{ color: 'var(--text-muted)' }}/>} />
             </button>
           </div>
         </header>
@@ -1063,7 +1064,7 @@ export default function UnifiedKhaoThiPage() {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button onClick={toggleTheme} className="p-2.5 bg-slate-100 dark:bg-[#202020] rounded-full hover:bg-slate-200 dark:hover:bg-[#2A2A2A] transition-colors shadow-sm">
-            {isDark ? <Sun className="w-5 h-5 text-amber-500"/> : <Moon className="w-5 h-5"/>}
+            <CrossfadeIcon show={isDark} first={<Sun className="w-5 h-5 text-amber-500"/>} second={<Moon className="w-5 h-5"/>} />
           </button>
         </div>
       </header>

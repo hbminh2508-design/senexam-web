@@ -8,6 +8,7 @@ import {
   FileText,
 } from 'lucide-react'
 import { AnnouncementRenderer } from './Announcement'
+import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import type { HomeProps } from './types'
 
 const FEATURE_COLOR_MAP: Record<string, string> = {
@@ -116,7 +117,7 @@ export default function LegacyHome({
             onClick={toggleTheme}
             className="p-2.5 sm:p-3 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] text-slate-600 dark:text-slate-300 transition-colors active:scale-95"
           >
-            {isDark ? <Sun className="w-5 h-5 text-amber-400"/> : <Moon className="w-5 h-5"/>}
+            <CrossfadeIcon show={isDark} first={<Sun className="w-5 h-5 text-amber-400"/>} second={<Moon className="w-5 h-5"/>} />
           </button>
 
           <button
