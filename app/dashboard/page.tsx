@@ -183,6 +183,9 @@ export default function DashboardPage() {
     if (!release) return
     const channelVersion = betaTester && release.beta_published ? release.beta_version : (release.stable_published ? release.stable_version : null)
     setPublishedVersion(channelVersion)
+    // Số phiên bản hiển thị luôn là bản admin vừa công bố, không cần người dùng bấm "Cập nhật" —
+    // tự ghi nhận đã acked luôn để banner "Có bản cập nhật" không hiện lên khi thật ra chẳng có gì để cập nhật.
+    if (channelVersion) ackVersion(channelVersion)
   }
 
   // -- Kiểm tra cập nhật phiên bản mới do Admin đẩy ra (theo đúng kênh Beta/Chính thức) --

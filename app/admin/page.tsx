@@ -11,7 +11,7 @@ import {
   KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard,
   Sparkles, Bell, AlertCircle, Loader2, FileInput, Sun, Moon, Clipboard,
   Bot, Send, Code, Play, CheckCircle2, Database, Shuffle, Home, Image as ImageIcon,
-  MessageSquare, Rocket, History, Bug, FlaskConical
+  MessageSquare, Rocket, History, Bug, FlaskConical, Crown
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
@@ -76,7 +76,7 @@ export default function AdminDashboard() {
   const [isDark, setIsDark] = useState(false)
   
   // 🌟 TABS QUẢN TRỊ
-  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab' | 'feedback' | 'release'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab' | 'feedback' | 'release' | 'vip'>('overview')
 
   // 🌟 GIAO DIỆN MỚI (BETA) - đọc cờ bật/tắt + màu chủ đề từ localStorage
   const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
@@ -90,6 +90,15 @@ export default function AdminDashboard() {
   const [releaseSaving, setReleaseSaving] = useState(false)
   const [releaseLogs, setReleaseLogs] = useState<any[]>([])
   const [clientErrors, setClientErrors] = useState<any[]>([])
+
+  // 🌟 TAB "QUẢN LÝ VIP": cấp VIP theo số ngày hoặc tặng SenCash cho một người dùng cụ thể
+  const [vipManageSearch, setVipManageSearch] = useState('')
+  const [vipManageSelectedUserId, setVipManageSelectedUserId] = useState<string | null>(null)
+  const [vipManageDays, setVipManageDays] = useState('30')
+  const [vipManageSencashAmount, setVipManageSencashAmount] = useState('100')
+  const [vipManageNote, setVipManageNote] = useState('')
+  const [vipManageSaving, setVipManageSaving] = useState(false)
+  const [vipManageMsg, setVipManageMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
   // 🌟 THỐNG KÊ TỔNG QUAN
   const [overviewStats, setOverviewStats] = useState<{ examCount: number; userCount: number; submissionCount: number; pendingGradeCount: number } | null>(null)
@@ -236,7 +245,7 @@ export default function AdminDashboard() {
       if (activeTab === 'manage') {
         const { data } = await supabase.from('exams').select('*').order('created_at', { ascending: false })
         setExamsList(data || [])
-      } else if (activeTab === 'collab') {
+      } else if (activeTab === 'collab' || activeTab === 'vip') {
         const { data } = await supabase.from('profiles').select('*').order('full_name')
         setUsersList(data || [])
       } else if (activeTab === 'submissions') {
@@ -1699,6 +1708,130 @@ export default function AdminDashboard() {
     )
   }
 
+  // 🌟 Tab "Quản lý VIP": cấp VIP theo số ngày hoặc tặng SenCash cho 1 người dùng cụ thể —
+  // dùng chung usersList đã fetch ở tab 'collab'/'vip', tự đổi màu theo newUiEnabled như renderReleaseTab.
+  const renderVipManageTab = () => {
+    const cardStyle = newUiEnabled ? { background: 'var(--surface)', border: '1px solid var(--border)' } : undefined
+    const cardClass = newUiEnabled
+      ? 'rounded-[1.5rem] p-6 lg:p-8'
+      : 'bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 lg:p-8 shadow-sm'
+    const mutedClass = newUiEnabled ? '' : 'text-slate-500'
+    const mutedStyle = newUiEnabled ? { color: 'var(--text-muted)' } : undefined
+    const inputClass = newUiEnabled
+      ? 'w-full px-3 py-2.5 rounded-xl text-sm'
+      : 'w-full px-3 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-[#101010] border border-slate-200 dark:border-white/10'
+    const inputStyle = newUiEnabled ? { background: 'var(--bg)', border: '1px solid var(--border)' } : undefined
+
+    const filteredUsers = usersList.filter(u => !vipManageSearch.trim() || (u.full_name || '').toLowerCase().includes(vipManageSearch.trim().toLowerCase()))
+    const selectedUser = usersList.find(u => u.id === vipManageSelectedUserId) || null
+
+    const callAdminApi = async (path: string, body: any) => {
+      setVipManageSaving(true); setVipManageMsg(null)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) { setVipManageMsg({ type: 'error', text: 'Phiên đăng nhập đã hết hạn' }); return }
+        const res = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        })
+        const json = await res.json()
+        if (!res.ok) { setVipManageMsg({ type: 'error', text: json.error || 'Có lỗi xảy ra' }); return }
+        setVipManageMsg({ type: 'success', text: 'Thao tác thành công!' })
+        const { data } = await supabase.from('profiles').select('*').order('full_name')
+        setUsersList(data || [])
+      } catch (e: any) {
+        setVipManageMsg({ type: 'error', text: e?.message || 'Có lỗi xảy ra' })
+      } finally {
+        setVipManageSaving(false)
+      }
+    }
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={cardClass} style={cardStyle}>
+          <h3 className="text-sm font-black uppercase tracking-widest mb-4">Chọn người dùng</h3>
+          <input
+            type="text"
+            placeholder="Tìm theo tên..."
+            value={vipManageSearch}
+            onChange={e => setVipManageSearch(e.target.value)}
+            className={`${inputClass} mb-3`}
+            style={inputStyle}
+          />
+          <div className="max-h-80 overflow-y-auto space-y-1.5">
+            {filteredUsers.map(u => (
+              <button
+                key={u.id}
+                onClick={() => setVipManageSelectedUserId(u.id)}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors ${vipManageSelectedUserId === u.id ? 'ring-2 ring-amber-500' : ''}`}
+                style={vipManageSelectedUserId === u.id ? { background: 'rgba(245,158,11,0.1)' } : cardStyle}
+              >
+                <span className="font-bold">{u.full_name || 'Chưa cập nhật'}</span>
+                <span className={`block text-[11px] mt-0.5 ${mutedClass}`} style={mutedStyle}>
+                  VIP: {u.vip_expires_at && new Date(u.vip_expires_at).getTime() > Date.now() ? new Date(u.vip_expires_at).toLocaleDateString('vi-VN') : 'Không có'} · SenCash: {u.sencash_balance || 0}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={cardClass} style={cardStyle}>
+          {!selectedUser ? (
+            <p className={`text-sm ${mutedClass}`} style={mutedStyle}>Chọn 1 người dùng ở cột bên trái để cấp VIP hoặc tặng SenCash.</p>
+          ) : (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-black mb-1">{selectedUser.full_name || 'Chưa cập nhật'}</h3>
+                <p className={`text-xs ${mutedClass}`} style={mutedStyle}>
+                  VIP hiện tại: {selectedUser.vip_expires_at && new Date(selectedUser.vip_expires_at).getTime() > Date.now() ? new Date(selectedUser.vip_expires_at).toLocaleString('vi-VN') : 'Không có'} · SenCash: {selectedUser.sencash_balance || 0}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Cấp VIP (số ngày)</label>
+                <div className="flex gap-2">
+                  <input type="number" min={1} value={vipManageDays} onChange={e => setVipManageDays(e.target.value)} className={inputClass} style={inputStyle} />
+                  <button
+                    disabled={vipManageSaving}
+                    onClick={() => callAdminApi('/api/admin/grant-vip', { userId: selectedUser.id, days: parseInt(vipManageDays, 10), note: vipManageNote })}
+                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shrink-0 disabled:opacity-60"
+                  >
+                    Cấp VIP
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Tặng SenCash</label>
+                <div className="flex gap-2">
+                  <input type="number" min={1} value={vipManageSencashAmount} onChange={e => setVipManageSencashAmount(e.target.value)} className={inputClass} style={inputStyle} />
+                  <button
+                    disabled={vipManageSaving}
+                    onClick={() => callAdminApi('/api/admin/gift-sencash', { userId: selectedUser.id, amount: parseInt(vipManageSencashAmount, 10), note: vipManageNote })}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shrink-0 disabled:opacity-60"
+                  >
+                    Tặng SenCash
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Ghi chú (tuỳ chọn)</label>
+                <input type="text" value={vipManageNote} onChange={e => setVipManageNote(e.target.value)} className={inputClass} style={inputStyle} placeholder="Lý do cấp/tặng..." />
+              </div>
+
+              {vipManageMsg && (
+                <p className={`text-sm font-bold ${vipManageMsg.type === 'success' ? 'text-emerald-500' : 'text-rose-500'}`}>{vipManageMsg.text}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   // 🌟 GIAO DIỆN MỚI (BETA) — reskin phẳng, chuyên nghiệp, dùng biến CSS --bg/--surface/--border/--text/--accent.
   // Giữ nguyên toàn bộ handler/state/Supabase call; chỉ đổi lớp vỏ hiển thị.
   if (newUiEnabled) {
@@ -1713,6 +1846,7 @@ export default function AdminDashboard() {
       ...(currentUserRole === 'admin' ? [{ key: 'collab' as const, label: 'Thành Viên', icon: Users }] : []),
       { key: 'feedback', label: 'Góp Ý', icon: MessageSquare, badge: feedbackCount },
       ...(currentUserRole === 'admin' ? [{ key: 'release' as const, label: 'Cập Nhật Hệ Thống', icon: Rocket }] : []),
+      ...(currentUserRole === 'admin' ? [{ key: 'vip' as const, label: 'Quản Lý VIP', icon: Crown }] : []),
     ]
 
     return (
@@ -1955,6 +2089,7 @@ export default function AdminDashboard() {
           )}
 
           {activeTab === 'release' && renderReleaseTab()}
+          {activeTab === 'vip' && renderVipManageTab()}
         </div>
 
         {renderQuickModals()}
@@ -2032,6 +2167,9 @@ export default function AdminDashboard() {
           </button>
           {currentUserRole === 'admin' && (
             <button onClick={() => setActiveTab('release')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'release' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Rocket className="w-4 h-4"/>Cập Nhật Hệ Thống</button>
+          )}
+          {currentUserRole === 'admin' && (
+            <button onClick={() => setActiveTab('vip')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'vip' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Crown className="w-4 h-4"/>Quản Lý VIP</button>
           )}
         </div>
 
@@ -2216,6 +2354,13 @@ export default function AdminDashboard() {
         {activeTab === 'release' && (
           <div className="animate-in fade-in duration-300">
             {renderReleaseTab()}
+          </div>
+        )}
+
+        {/* QUẢN LÝ VIP */}
+        {activeTab === 'vip' && (
+          <div className="animate-in fade-in duration-300">
+            {renderVipManageTab()}
           </div>
         )}
 

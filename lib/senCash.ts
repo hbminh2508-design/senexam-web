@@ -37,7 +37,7 @@ export type SenCashTransaction = {
   id: string
   user_id: string
   delta: number
-  reason: 'topup' | 'vip_redeem' | 'vip_download_spend'
+  reason: 'topup' | 'vip_redeem' | 'vip_download_spend' | 'senai_tier_purchase' | 'admin_gift'
   reference: string | null
   created_at: string
 }

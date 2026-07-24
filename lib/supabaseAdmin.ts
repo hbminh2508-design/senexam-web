@@ -38,3 +38,13 @@ export async function getUserFromRequest(request: Request): Promise<{ id: string
   if (error || !data?.user) return null
   return { id: data.user.id }
 }
+
+// Xác thực + xác minh caller có role 'admin' (dùng cho các route quản trị cấp VIP/tặng SenCash) —
+// trả về null nếu chưa đăng nhập hoặc không phải admin, để route trả 401/403 tương ứng.
+export async function requireAdmin(request: Request): Promise<{ id: string } | null> {
+  const user = await getUserFromRequest(request)
+  if (!user) return null
+  const { data: profile } = await getSupabaseAdmin().from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (profile?.role !== 'admin') return null
+  return user
+}

@@ -118,7 +118,7 @@ export default function ModernHome({
               </button>
 
               <button
-                onClick={() => router.push('/vip')}
+                onClick={() => router.push('/vi-sen')}
                 className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
                 style={{ border: '1px solid var(--border)' }}
               >

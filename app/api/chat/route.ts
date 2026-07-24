@@ -2,15 +2,42 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin';
+import { getSenAiTier } from '@/lib/senaiTiers';
 
 export async function POST(req: Request) {
   try {
+    // 0. Xác thực người dùng + kiểm tra hạn mức câu hỏi/ngày theo hạng SenAI (free/plus/ultra)
+    const user = await getUserFromRequest(req);
+    if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 });
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: profile } = await supabaseAdmin.from('profiles').select('senai_tier').eq('id', user.id).maybeSingle();
+    const tier = getSenAiTier(profile?.senai_tier || 'free') || getSenAiTier('free')!;
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const { count } = await supabaseAdmin
+      .from('senai_question_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('asked_at', startOfToday.toISOString());
+
+    if ((count || 0) >= tier.dailyLimit) {
+      return NextResponse.json(
+        { error: `Bạn đã dùng hết ${tier.dailyLimit} lượt hỏi SenAI hôm nay. Nâng cấp gói tại /vi-sen để hỏi thêm.` },
+        { status: 429 }
+      );
+    }
+
     // 1. Kiểm tra API Key hệ thống
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.error("Lỗi Server: Không tìm thấy biến môi trường GEMINI_API_KEY");
       return NextResponse.json({ error: 'Chưa cấu hình API Key trên hệ thống Vercel' }, { status: 500 });
     }
+
+    await supabaseAdmin.from('senai_question_log').insert({ user_id: user.id });
 
     // 2. Khởi tạo Google SDK
     const genAI = new GoogleGenerativeAI(apiKey);

@@ -344,7 +344,13 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
         const d = await uploadFileToGoogleDrive(url, f, t)
         
         if (!d?.id) throw new Error('Lỗi Drive')
-        await supabase.from('library_documents').insert({ folder_id: uFolder, title: t, drive_file_id: d.id, created_by: libraryScope==='shared' ? null : currentUserId })
+        await supabase.from('library_documents').insert({
+          folder_id: libraryScope === 'vip' ? null : uFolder,
+          title: t,
+          drive_file_id: d.id,
+          created_by: libraryScope === 'shared' ? null : currentUserId,
+          is_vip_only: libraryScope === 'vip',
+        })
       }
       setUploadStatus({ type: 'success', message: 'Thành công!' }); setDocTitle(''); setDocFiles([]); 
       setTimeout(() => { setShowDocModal(false); setUploadStatus({type:'idle', message:''}) }, 1500); 

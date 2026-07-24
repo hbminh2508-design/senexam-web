@@ -11,6 +11,7 @@ import 'katex/dist/katex.min.css'
 import { supabase } from '@/lib/supabaseClient'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import { SENAI_TIERS, getSenAiTier } from '@/lib/senaiTiers'
 
 const FEEDBACK_PREFIX_RE = /^feedback\s*:\s*(.+)$/i
 
@@ -93,6 +94,17 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
   const [isOnlineMode, setIsOnlineMode] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [isChatLoading, setIsChatLoading] = useState(false)
+  const [senaiTierCode, setSenaiTierCode] = useState('free')
+  const senaiTierLabel = (getSenAiTier(senaiTierCode) || SENAI_TIERS[0]).label
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('senai_tier').eq('id', user.id).maybeSingle().then(({ data }) => {
+        if (data?.senai_tier) setSenaiTierCode(data.senai_tier)
+      })
+    })
+  }, [])
   
   const isBoss = userName && normalizeText(userName).includes('minh')
   
@@ -183,9 +195,13 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       4. Điều hướng: Các module hiện có: Thi thử (/exams), Tính điểm Đại học (/tinhdiem), Phòng học tập trung (/focus), Diễn đàn (/forum).
       5. Phong cách trả lời: Ưu tiên chính xác và hữu ích hơn là làm hài lòng người hỏi. Đi thẳng vào trọng tâm, không dùng ngôn từ sến súa/sáo rỗng, không lạm dụng emoji hay câu cảm thán. Nếu không chắc chắn, nói rõ thay vì bịa. Chủ động gợi ý bước tiếp theo hữu ích khi phù hợp (ví dụ: link tài liệu liên quan, module nên dùng).`
 
+      const { data: { session } } = await supabase.auth.getSession()
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           message: userMessage,
           history: chatMessages,
@@ -262,7 +278,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
               </div>
               <div>
                 <h3 className="font-black text-[15px] leading-tight flex items-center gap-1.5">
-                  SenAI {isOnlineMode ? 'Nâng cao' : 'Cơ bản'}
+                  SenAI {isOnlineMode ? senaiTierLabel : 'Cơ bản'}
                   {isOnlineMode && <Zap className="w-3.5 h-3.5" style={{ color: newUiEnabled ? 'var(--accent)' : '#FDE047' }} fill={newUiEnabled ? 'var(--accent)' : '#FDE047'}/>}
                   <span
                     className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest"
@@ -400,7 +416,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 onClick={() => setIsOnlineMode(!isOnlineMode)}
               >
                 <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${!isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (!isOnlineMode ? { background: 'var(--bg)', color: 'var(--text)' } : { color: 'var(--text-muted)' }) : undefined}>Cơ Bản</div>
-                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${isOnlineMode ? (newUiEnabled ? 'text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}>Nâng Cao</div>
+                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${isOnlineMode ? (newUiEnabled ? 'text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}>{senaiTierLabel}</div>
               </div>
             </div>
           </div>
