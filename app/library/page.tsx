@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { isVipFeatureEnabled } from '@/lib/systemRelease'
 import { 
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, UploadCloud, Loader2, X, ChevronRight, 
   Download, BookOpen, Search, ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, 
@@ -48,6 +49,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const [userRole, setUserRole] = useState('student')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isVip, setIsVip] = useState(false)
+  const [vipFeatureEnabled, setVipFeatureEnabled] = useState(false)
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [libraryScope, setLibraryScope] = useState<LibraryScope>('private')
   const [adminUploaderIds, setAdminUploaderIds] = useState<string[]>([])
@@ -228,7 +230,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
-      const { data: profile } = await supabase.from('profiles').select('role, vip_expires_at').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('role, vip_expires_at, is_beta_tester').eq('id', user.id).single()
+      isVipFeatureEnabled(!!profile?.is_beta_tester).then(setVipFeatureEnabled)
       setCurrentUserId(user.id); setUserRole(profile?.role || 'student')
       setIsVip(!!profile?.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now())
       supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token || null))
@@ -478,13 +481,15 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
               </div>
               <button onClick={() => setIsAiMode(!isAiMode)} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={isAiMode ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { border: '1px solid var(--border)' }}><Sparkles className="w-3.5 h-3.5" /> SenAI</button>
               {isStudentLibrary && libraryScope !== 'vip' && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}>{libraryScope === 'private' ? <Unlock className="w-3.5 h-3.5"/> : <Lock className="w-3.5 h-3.5"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
-              <button
-                onClick={() => syncLibraryScope(libraryScope === 'vip' ? (isStudentLibrary ? 'private' : 'shared') : 'vip')}
-                className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5"
-                style={libraryScope === 'vip' ? { background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: '#fff' } : { border: '1px solid var(--border)' }}
-              >
-                <Crown className="w-3.5 h-3.5"/> Kho VIP
-              </button>
+              {vipFeatureEnabled && (
+                <button
+                  onClick={() => syncLibraryScope(libraryScope === 'vip' ? (isStudentLibrary ? 'private' : 'shared') : 'vip')}
+                  className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                  style={libraryScope === 'vip' ? { background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: '#fff' } : { border: '1px solid var(--border)' }}
+                >
+                  <Crown className="w-3.5 h-3.5"/> Kho VIP
+                </button>
+              )}
               {showAdminControls && (
                 <>
                   <button onClick={() => setSortByName(!sortByName)} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}><ArrowUpDown className="w-3.5 h-3.5" /> {sortByName ? 'A-Z' : 'Ngày'}</button>
@@ -654,12 +659,14 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
 
             {isStudentLibrary && libraryScope !== 'vip' && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={headerBtn}>{libraryScope === 'private' ? <Unlock className="w-4 h-4 text-emerald-500"/> : <Lock className="w-4 h-4 text-cyan-500"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
 
-            <button
-              onClick={() => syncLibraryScope(libraryScope === 'vip' ? (isStudentLibrary ? 'private' : 'shared') : 'vip')}
-              className={libraryScope === 'vip' ? "px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white" : headerBtn}
-            >
-              <Crown className={`w-4 h-4 ${libraryScope === 'vip' ? '' : 'text-amber-500'}`} /> Kho VIP
-            </button>
+            {vipFeatureEnabled && (
+              <button
+                onClick={() => syncLibraryScope(libraryScope === 'vip' ? (isStudentLibrary ? 'private' : 'shared') : 'vip')}
+                className={libraryScope === 'vip' ? "px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white" : headerBtn}
+              >
+                <Crown className={`w-4 h-4 ${libraryScope === 'vip' ? '' : 'text-amber-500'}`} /> Kho VIP
+              </button>
+            )}
 
             {showAdminControls && (
               <>

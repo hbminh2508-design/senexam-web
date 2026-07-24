@@ -22,6 +22,22 @@ export type ReleaseLogAction = 'set_version' | 'enable_test' | 'disable_test' | 
 export const CURRENT_APP_VERSION = pkg.version as string
 const ACK_VERSION_KEY = 'senexam_ack_version'
 
+// Tính năng VIP/SenCash chỉ bật khi phiên bản đã công bố trên kênh của người dùng nằm trong danh sách này —
+// dùng để phát hành dần (staged rollout) qua hệ thống Release có sẵn, không cần thêm cờ cấu hình riêng.
+export const VIP_FEATURE_VERSIONS = ['3.0.10', '3.1.0-public_beta_2']
+
+// Kênh hiệu lực của người dùng: Beta nếu đã tham gia Beta và kênh Beta đã publish, ngược lại Chính thức
+export function getChannelVersion(release: SystemRelease | null, isBetaTester: boolean): string | null {
+  if (!release) return null
+  return isBetaTester && release.beta_published ? release.beta_version : (release.stable_published ? release.stable_version : null)
+}
+
+export async function isVipFeatureEnabled(isBetaTester: boolean): Promise<boolean> {
+  const release = await fetchSystemRelease()
+  const channelVersion = getChannelVersion(release, isBetaTester)
+  return !!channelVersion && VIP_FEATURE_VERSIONS.includes(channelVersion)
+}
+
 export async function fetchSystemRelease(): Promise<SystemRelease | null> {
   const { data, error } = await supabase.from('system_release').select('*').eq('id', 1).single()
   if (error) return null

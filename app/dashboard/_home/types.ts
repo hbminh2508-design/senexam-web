@@ -38,4 +38,5 @@ export type HomeProps = {
   isVip: boolean
   vipExpiresAt: string | null
   senCashBalance: number
+  vipFeatureEnabled: boolean
 }

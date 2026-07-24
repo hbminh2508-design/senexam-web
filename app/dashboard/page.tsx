@@ -17,7 +17,7 @@ import ModernLoading from '@/app/components/ModernLoading'
 import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
 import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
-import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion } from '@/lib/systemRelease'
+import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion, isVipFeatureEnabled } from '@/lib/systemRelease'
 import type { Feature } from './_home/types'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
@@ -71,6 +71,7 @@ export default function DashboardPage() {
   const [isVip, setIsVip] = useState(false)
   const [vipExpiresAt, setVipExpiresAt] = useState<string | null>(null)
   const [senCashBalance, setSenCashBalance] = useState(0)
+  const [vipFeatureEnabled, setVipFeatureEnabled] = useState(false)
   
   // -- UI States --
   const [isDataLoading, setIsDataLoading] = useState(true) 
@@ -293,6 +294,7 @@ export default function DashboardPage() {
         setIsVip(!!profile.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now())
         setVipExpiresAt(profile.vip_expires_at || null)
         setSenCashBalance(profile.sencash_balance || 0)
+        isVipFeatureEnabled(!!profile.is_beta_tester).then(setVipFeatureEnabled)
         // Giao diện mới chỉ dành cho thành viên Beta — nếu tài khoản cũ từng bật trước khi
         // có luật này mà chưa tham gia Beta, tự động đưa về Giao diện cũ để đồng bộ đúng luật.
         const effectiveNewUi = !!profile.new_ui_enabled && !!profile.is_beta_tester
@@ -634,7 +636,7 @@ export default function DashboardPage() {
     { key: 'forum', label: 'Cộng Đồng', desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.', icon: MessageSquare, color: 'sky', onSelect: () => router.push('/forum') },
     { key: 'score', label: 'Tính điểm ĐH', desc: 'Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.', icon: Calculator, color: 'rose', onSelect: () => router.push('/tinhdiem') },
     { key: 'trial', label: 'Tính năng thử nghiệm', desc: 'AI tự đọc PDF và tạo đề tương tác để luyện tập.', icon: Wand2, color: 'amber', onSelect: () => router.push('/tinhnangthunghiem') },
-  ] as const
+  ].filter(f => f.key !== 'vip' || vipFeatureEnabled)
 
   // ============================================================================
   // RENDER UI CHÍNH
@@ -678,6 +680,7 @@ export default function DashboardPage() {
         isVip={isVip}
         vipExpiresAt={vipExpiresAt}
         senCashBalance={senCashBalance}
+        vipFeatureEnabled={vipFeatureEnabled}
       />
 
 
