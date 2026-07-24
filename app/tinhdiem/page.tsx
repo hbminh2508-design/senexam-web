@@ -16,6 +16,7 @@ import remarkGfm from 'remark-gfm' // Thêm thư viện hỗ trợ render Bảng
 import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getAccentHex, getModernThemeVars } from '@/app/components/modernTheme'
+import VipAdBanner from '@/app/components/VipAdBanner'
 
 // Các hằng số giao diện chuẩn Material Design 3 + Liquid Glass
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm transition-all duration-300"
@@ -266,6 +267,8 @@ ${calcMode === 'standard'
         </header>
 
         <main className="max-w-[1200px] mx-auto p-4 md:p-8 relative z-10">
+
+          <div className="mb-6"><VipAdBanner compact /></div>
 
           {/* Navigation Tabs (Pill Buttons) */}
           <div className="flex overflow-x-auto gap-3 pb-4 mb-6 custom-scrollbar hide-scroll">
@@ -695,7 +698,9 @@ ${calcMode === 'standard'
       </header>
 
       <main className="max-w-[1200px] mx-auto p-4 md:p-8 relative z-10">
-        
+
+        <div className="mb-6"><VipAdBanner /></div>
+
         {/* Navigation Tabs (Pill Buttons) */}
         <div className="flex overflow-x-auto gap-3 pb-4 mb-6 custom-scrollbar hide-scroll">
           <button onClick={() => setActiveExam('THPTQG')} className={`px-6 py-3.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap shadow-sm border ${activeExam === 'THPTQG' ? 'bg-[var(--accent)] text-white border-transparent' : 'bg-white dark:bg-[#1E1E1E] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#252525]'}`}>

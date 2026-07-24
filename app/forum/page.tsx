@@ -14,6 +14,7 @@ import { glassSearchInputClass, highlightSearchText } from '@/app/components/sea
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+import VipAdBanner from '@/app/components/VipAdBanner'
 
 const glassCardStyles = "liquid-panel"
 const CATEGORIES = ['Tất cả', 'Hỏi đáp bài tập', 'Chia sẻ tài liệu', 'Thảo luận chung', 'Góc tâm sự']
@@ -233,6 +234,8 @@ export default function ForumPage() {
             <ChevronLeft className="w-4 h-4" /> Về trang chủ
           </button>
 
+          <div className="mb-6"><VipAdBanner compact /></div>
+
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">Hội Sĩ Tử <MessageSquare className="w-5 h-5" style={{ color: 'var(--accent)' }}/></h1>
@@ -369,6 +372,8 @@ export default function ForumPage() {
           </div>
           <button onClick={() => setShowCreateModal(true)} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl text-blue-700 dark:text-blue-400 border border-white/50 dark:border-white/10 px-6 py-3.5 rounded-2xl font-black shadow-[0_8px_30px_rgb(0,0,0,0.05)] flex items-center gap-2 hover:bg-white dark:hover:bg-slate-700 transition-all hover:-translate-y-1"><Edit3 className="w-5 h-5"/> Đăng chủ đề mới</button>
         </div>
+
+        <div className="mb-8"><VipAdBanner /></div>
 
         <div className={`${glassCardStyles} rounded-2xl p-4 flex flex-col sm:flex-row gap-4 mb-8 border-t-white/60 border-l-white/60`}>
           <div className="relative flex-1">

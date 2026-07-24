@@ -13,6 +13,7 @@ import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+import VipAdBanner from '@/app/components/VipAdBanner'
 
 // --- CONSTANTS & STYLES ---
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
@@ -174,6 +175,7 @@ export default function SenVideoPage() {
         </header>
 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="mb-6"><VipAdBanner compact /></div>
           {displayVideos.length === 0 ? (
             <div className="rounded-2xl p-16 text-center" style={{ border: '1px dashed var(--border)' }}>
               <Video className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)' }}/>
@@ -297,8 +299,9 @@ export default function SenVideoPage() {
 
       {/* MAIN WORKSPACE */}
       <div className="max-w-[1400px] mx-auto pt-4 md:pt-8 px-4 md:px-8 relative z-10">
+        <div className="mb-6"><VipAdBanner /></div>
         <div className={`${mdCard} p-6 md:p-8 min-h-[70vh]`}>
-          
+
           {displayVideos.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-20 opacity-50">
               <Video className="w-20 h-20 mb-4 text-slate-400"/>

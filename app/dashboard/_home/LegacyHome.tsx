@@ -161,8 +161,6 @@ export default function LegacyHome({
           </div>
         )}
 
-        <VipAdBanner />
-
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 lg:gap-6">
 
           <div className="md:col-span-8 bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-600 dark:from-indigo-800 dark:via-blue-800 dark:to-cyan-900 rounded-[2.5rem] p-8 md:p-12 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all duration-500 flex flex-col justify-between min-h-[360px] group border border-white/20 dark:border-white/5">
@@ -250,6 +248,8 @@ export default function LegacyHome({
             )
           })}
         </div>
+
+        <VipAdBanner />
 
         <div className="bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl rounded-[2.5rem] p-8 border border-slate-200 dark:border-white/5 shadow-sm">
           <div className="flex items-center justify-between mb-8">

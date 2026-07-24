@@ -16,6 +16,7 @@ import 'katex/dist/katex.min.css'
 
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import VipAdBanner from '@/app/components/VipAdBanner'
 
 // ============================================================================
 // CONSTANTS, TYPES & PRESETS
@@ -397,6 +398,7 @@ export default function VirtualLabPage() {
 
         {/* WORKSPACE */}
         <div className="max-w-[1500px] mx-auto pt-6 px-4 md:px-8 relative z-10">
+          <div className="mb-6"><VipAdBanner compact /></div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-[75vh]">
 
             {/* CỘT TRÁI (Visual & Controls) */}
@@ -572,8 +574,9 @@ export default function VirtualLabPage() {
 
       {/* WORKSPACE */}
       <div className="max-w-[1500px] mx-auto pt-6 px-4 md:px-8 relative z-10">
+        <div className="mb-6"><VipAdBanner /></div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-[75vh]">
-          
+
           {/* CỘT TRÁI (Visual & Controls) */}
           <div className={`lg:col-span-7 flex flex-col gap-6 ${isAiMax ? 'hidden' : ''}`}>
             

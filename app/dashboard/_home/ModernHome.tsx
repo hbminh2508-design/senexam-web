@@ -155,8 +155,6 @@ export default function ModernHome({
           </div>
         )}
 
-        <VipAdBanner />
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2 rounded-2xl p-8 flex flex-col justify-between min-h-[260px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div>
@@ -221,6 +219,8 @@ export default function ModernHome({
             )
           })}
         </div>
+
+        <VipAdBanner />
 
         <div className="rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <h3 className="text-sm font-semibold flex items-center gap-2 mb-5">

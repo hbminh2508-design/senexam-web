@@ -17,6 +17,7 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getAccentHex, getModernThemeVars } from '@/app/components/modernTheme'
+import VipAdBanner from '@/app/components/VipAdBanner'
 
 // Khai báo global cho YouTube Iframe API để fix lỗi TypeScript
 declare global {
@@ -457,6 +458,8 @@ export default function FocusRoomPage() {
           </div>
         </header>
 
+        <div className="px-4 lg:px-6 pt-4 shrink-0"><VipAdBanner compact /></div>
+
         {/* MAIN SPLIT LAYOUT */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative custom-scrollbar">
 
@@ -837,9 +840,11 @@ export default function FocusRoomPage() {
         </div>
       </header>
 
+      <div className="px-4 lg:px-6 pt-4 shrink-0"><VipAdBanner compact /></div>
+
       {/* 🌟 MAIN SPLIT LAYOUT (RESPONSIVE) */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative custom-scrollbar">
-        
+
         {/* ========================================================= */}
         {/* PANEL TRÁI: ĐIỀU KHIỂN FOCUS (LƯỚI BENTO) */}
         {/* ========================================================= */}

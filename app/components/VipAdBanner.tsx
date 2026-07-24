@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { Crown, X, Ban, FolderLock, Headset, Sparkles } from 'lucide-react'
 
-const DISMISS_KEY = 'senexam_vip_ad_dismissed_session'
+const DISMISS_KEY = 'senexam_vip_ad_dismissed_at'
+const REAPPEAR_AFTER_MS = 60 * 1000
+const MIN_DISPLAY_SECONDS = 5
 
 const PERKS = [
   { icon: Ban, text: 'Học không bị quảng cáo làm phiền' },
@@ -14,14 +16,21 @@ const PERKS = [
   { icon: Sparkles, text: 'Dùng gói SenAI xịn hơn' },
 ]
 
-// Banner quảng bá VIP — chỉ hiện cho người dùng chưa VIP, tự ẩn nếu đã đăng ký hoặc đã đóng trong phiên này.
+// Banner quảng bá VIP — chỉ hiện cho người dùng chưa VIP. Khi đóng, banner ẩn đi và chỉ tự
+// hiện lại ở lần tải trang (reload) tiếp theo SAU KHI đã qua 1 phút kể từ lúc đóng — đóng rồi
+// reload ngay trong vòng 1 phút vẫn tiếp tục ẩn.
 // Tự fetch trạng thái VIP nên có thể thả vào bất kỳ trang nào mà không cần truyền prop.
 export default function VipAdBanner({ compact }: { compact?: boolean }) {
   const router = useRouter()
   const [visible, setVisible] = useState(false)
+  // Theo quy định quảng cáo tại Việt Nam: phải hiển thị tối thiểu 5 giây trước khi cho phép tắt
+  const [secondsLeft, setSecondsLeft] = useState(MIN_DISPLAY_SECONDS)
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem(DISMISS_KEY)) return
+    if (typeof window !== 'undefined') {
+      const dismissedAt = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10)
+      if (dismissedAt && Date.now() - dismissedAt < REAPPEAR_AFTER_MS) return
+    }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       supabase.from('profiles').select('vip_expires_at').eq('id', user.id).maybeSingle().then(({ data }) => {
@@ -31,8 +40,15 @@ export default function VipAdBanner({ compact }: { compact?: boolean }) {
     })
   }, [])
 
+  useEffect(() => {
+    if (!visible || secondsLeft <= 0) return
+    const timer = setTimeout(() => setSecondsLeft(s => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [visible, secondsLeft])
+
   const handleDismiss = () => {
-    sessionStorage.setItem(DISMISS_KEY, '1')
+    if (secondsLeft > 0) return
+    localStorage.setItem(DISMISS_KEY, String(Date.now()))
     setVisible(false)
   }
 
@@ -40,8 +56,16 @@ export default function VipAdBanner({ compact }: { compact?: boolean }) {
 
   return (
     <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/20 ${compact ? 'p-4' : 'p-5 sm:p-6'}`}>
-      <button onClick={handleDismiss} className="absolute top-3 right-3 p-1 rounded-full hover:bg-white/20 transition-colors">
-        <X className="w-4 h-4" />
+      <button
+        onClick={handleDismiss}
+        disabled={secondsLeft > 0}
+        aria-label={secondsLeft > 0 ? `Đóng quảng cáo sau ${secondsLeft} giây` : 'Đóng quảng cáo'}
+        title={secondsLeft > 0 ? `Có thể tắt sau ${secondsLeft}s` : 'Đóng quảng cáo'}
+        className={`absolute top-3 right-3 flex items-center gap-1.5 h-9 min-w-[36px] px-2.5 rounded-full font-black text-sm transition-colors ${
+          secondsLeft > 0 ? 'bg-black/25 text-white/90 cursor-not-allowed' : 'bg-white/25 hover:bg-white/40 text-white cursor-pointer'
+        }`}
+      >
+        {secondsLeft > 0 ? secondsLeft : <X className="w-5 h-5" strokeWidth={3} />}
       </button>
 
       <div className={`flex ${compact ? 'flex-col gap-3' : 'flex-col sm:flex-row sm:items-center gap-4'}`}>
