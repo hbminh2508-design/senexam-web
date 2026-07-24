@@ -3,20 +3,25 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin';
-import { getSenAiTier } from '@/lib/senaiTiers';
+import { getEffectiveDailyLimit } from '@/lib/senaiTiers';
 import { isVipActive, VIP_SENAI_DAILY_BONUS } from '@/lib/vipMembership';
 
 export async function POST(req: Request) {
   try {
-    // 0. Xác thực người dùng + kiểm tra hạn mức câu hỏi/ngày theo hạng SenAI (free/plus/ultra),
-    // VIP tặng thêm hạn mức tối thiểu VIP_SENAI_DAILY_BONUS/ngày dù chưa mua gói SenAI nào.
+    // 0. Xác thực người dùng + kiểm tra hạn mức câu hỏi/ngày theo hạng SenAI đang có hiệu lực
+    // (free/lite/plus_lite/plus/ultra, đã tính hết hạn), VIP tặng thêm hạn mức tối thiểu
+    // VIP_SENAI_DAILY_BONUS/ngày dù chưa mua gói SenAI nào.
     const user = await getUserFromRequest(req);
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 });
 
     const supabaseAdmin = getSupabaseAdmin();
-    const { data: profile } = await supabaseAdmin.from('profiles').select('senai_tier, vip_expires_at').eq('id', user.id).maybeSingle();
-    const tier = getSenAiTier(profile?.senai_tier || 'free') || getSenAiTier('free')!;
-    const dailyLimit = isVipActive({ vip_expires_at: profile?.vip_expires_at }) ? Math.max(tier.dailyLimit, VIP_SENAI_DAILY_BONUS) : tier.dailyLimit;
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at')
+      .eq('id', user.id)
+      .maybeSingle();
+    const tierDailyLimit = getEffectiveDailyLimit(profile);
+    const dailyLimit = isVipActive({ vip_expires_at: profile?.vip_expires_at }) ? Math.max(tierDailyLimit, VIP_SENAI_DAILY_BONUS) : tierDailyLimit;
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);

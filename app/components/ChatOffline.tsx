@@ -10,6 +10,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { supabase } from '@/lib/supabaseClient'
+import { SENAI_TIER_LABEL, getEffectiveSenaiTier, type SenAiTierCode } from '@/lib/senaiTiers'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 
@@ -96,13 +97,13 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
   const [chatInput, setChatInput] = useState('')
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [senaiTierCode, setSenaiTierCode] = useState('free')
-  const onlineModeLabel = senaiTierCode === 'plus' ? 'SenAI Plus' : senaiTierCode === 'ultra' ? 'SenAI Ultra' : 'SenAI'
+  const onlineModeLabel = SENAI_TIER_LABEL[(senaiTierCode as SenAiTierCode)] || 'SenAI'
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      supabase.from('profiles').select('senai_tier').eq('id', user.id).maybeSingle().then(({ data }) => {
-        if (data?.senai_tier) setSenaiTierCode(data.senai_tier)
+      supabase.from('profiles').select('senai_tier, senai_tier_expires_at, senai_tier_permanent').eq('id', user.id).maybeSingle().then(({ data }) => {
+        setSenaiTierCode(getEffectiveSenaiTier(data))
       })
     })
   }, [])

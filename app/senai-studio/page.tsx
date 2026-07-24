@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { getEffectiveSenaiTier } from '@/lib/senaiTiers'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
@@ -39,9 +40,10 @@ export default function SenAiStudioPage() {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('senai_tier').eq('id', user.id).maybeSingle()
-      setIsUltra(profile?.senai_tier === 'ultra')
-      if (profile?.senai_tier === 'ultra') await refreshSessions()
+      const { data: profile } = await supabase.from('profiles').select('senai_tier, senai_tier_expires_at, senai_tier_permanent').eq('id', user.id).maybeSingle()
+      const ultra = getEffectiveSenaiTier(profile) === 'ultra'
+      setIsUltra(ultra)
+      if (ultra) await refreshSessions()
       setLoading(false)
     }
     init()

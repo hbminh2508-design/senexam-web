@@ -7,11 +7,16 @@ import {
   TOPUP_PRESETS_VND, MIN_TOPUP_VND, isValidTopupAmount, vndToSenCash,
   SenCashTopupOrder, SenCashTransaction, fetchSenCashBalance, fetchMyTransactions,
 } from '@/lib/senCash'
-import { SENAI_TIERS, SenAiTierCode } from '@/lib/senaiTiers'
+import {
+  SENAI_PLANS, SENAI_TIER_LABEL, SENAI_TIER_DAILY_LIMIT, getEffectiveSenaiTier,
+  type SenAiTierCode, type SenAiProfileFields,
+} from '@/lib/senaiTiers'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
 import { ArrowLeft, Coins, Wallet, Loader2, Copy, CheckCircle2, XCircle, Clock, Sparkles, Crown, Check } from 'lucide-react'
+
+const TIER_ORDER: SenAiTierCode[] = ['lite', 'plus_lite', 'plus', 'ultra']
 
 export default function ViSenPage() {
   const router = useRouter()
@@ -21,12 +26,12 @@ export default function ViSenPage() {
 
   const [senCashBalance, setSenCashBalance] = useState(0)
   const [transactions, setTransactions] = useState<SenCashTransaction[]>([])
-  const [senaiTier, setSenaiTier] = useState<SenAiTierCode>('free')
+  const [senaiProfile, setSenaiProfile] = useState<SenAiProfileFields & { senai_trial_used?: boolean }>({})
 
   const [topupAmount, setTopupAmount] = useState(TOPUP_PRESETS_VND[0])
   const [customTopup, setCustomTopup] = useState('')
   const [creating, setCreating] = useState(false)
-  const [purchasingTier, setPurchasingTier] = useState<string | null>(null)
+  const [purchasingPlan, setPurchasingPlan] = useState<string | null>(null)
   const [pendingOrder, setPendingOrder] = useState<SenCashTopupOrder | null>(null)
   const [qrUrl, setQrUrl] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -38,11 +43,11 @@ export default function ViSenPage() {
     const [balance, txs, { data: profile }] = await Promise.all([
       fetchSenCashBalance(userId),
       fetchMyTransactions(userId),
-      supabase.from('profiles').select('senai_tier').eq('id', userId).maybeSingle(),
+      supabase.from('profiles').select('senai_tier, senai_tier_expires_at, senai_tier_permanent, senai_trial_used').eq('id', userId).maybeSingle(),
     ])
     setSenCashBalance(balance)
     setTransactions(txs)
-    setSenaiTier((profile?.senai_tier as SenAiTierCode) || 'free')
+    setSenaiProfile(profile || {})
   }
 
   useEffect(() => {
@@ -107,25 +112,25 @@ export default function ViSenPage() {
     }
   }
 
-  const handlePurchaseTier = async (tierCode: string) => {
-    setPurchasingTier(tierCode); setErrorMsg(''); setInfoMsg('')
+  const handlePurchasePlan = async (planCode: string) => {
+    setPurchasingPlan(planCode); setErrorMsg(''); setInfoMsg('')
     try {
       const token = await getToken()
       if (!token) { router.push('/login'); return }
       const res = await fetch('/api/senai/purchase-tier', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tierCode }),
+        body: JSON.stringify({ planCode }),
       })
       const json = await res.json()
       if (!res.ok) { setErrorMsg(json.error || 'Không mua được gói'); return }
-      setInfoMsg('Đã nâng cấp gói SenAI thành công!')
+      setInfoMsg('Đã cập nhật gói SenAI thành công!')
       const { data: { user } } = await supabase.auth.getUser()
       if (user) await refreshWallet(user.id)
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Có lỗi xảy ra')
     } finally {
-      setPurchasingTier(null)
+      setPurchasingPlan(null)
     }
   }
 
@@ -150,6 +155,8 @@ export default function ViSenPage() {
     if (isModern) return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải Ví Sen..." />
     return <div className="min-h-screen flex items-center justify-center font-bold text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải...</div>
   }
+
+  const effectiveTier = getEffectiveSenaiTier(senaiProfile)
 
   return (
     <div className={wrapperClass} style={wrapperStyle}>
@@ -245,29 +252,49 @@ export default function ViSenPage() {
 
         <div className={`${cardClass} mb-6`} style={cardStyle}>
           <h2 className="font-bold text-sm mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-indigo-500" /> Gói SenAI</h2>
-          <p className={`text-xs mb-4 ${mutedClass}`} style={mutedStyle}>Nâng cấp vĩnh viễn hạn mức câu hỏi/ngày cho trợ lý SenAI (chế độ Nâng cao).</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {SENAI_TIERS.map(tier => {
-              const isCurrent = senaiTier === tier.code
-              const isFree = tier.code === 'free'
+          <p className={`text-xs mb-4 ${mutedClass}`} style={mutedStyle}>
+            Hạng đang dùng: <strong>{SENAI_TIER_LABEL[effectiveTier]}</strong> ({SENAI_TIER_DAILY_LIMIT[effectiveTier]} câu/ngày)
+            {senaiProfile.senai_tier_permanent && effectiveTier !== 'free' ? ' · Vĩnh viễn' : ''}
+            {!senaiProfile.senai_tier_permanent && senaiProfile.senai_tier_expires_at && effectiveTier !== 'free'
+              ? ` · Hết hạn ${new Date(senaiProfile.senai_tier_expires_at).toLocaleDateString('vi-VN')}`
+              : ''}
+          </p>
+
+          <div className="space-y-4">
+            {TIER_ORDER.map(tierCode => {
+              const plans = SENAI_PLANS.filter(p => p.tier === tierCode)
+              const isCurrentTier = effectiveTier === tierCode
               return (
-                <div
-                  key={tier.code}
-                  className={`p-4 rounded-2xl border ${isCurrent ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-500' : 'border-slate-200 dark:border-white/5'}`}
-                  style={!isCurrent ? cardStyle : undefined}
-                >
-                  <p className="font-black text-sm flex items-center gap-1.5">{tier.label} {isCurrent && <Check className="w-3.5 h-3.5 text-indigo-500" />}</p>
-                  <p className={`text-xs mt-1 ${mutedClass}`} style={mutedStyle}>{tier.dailyLimit} câu hỏi/ngày</p>
-                  {!isFree && (
-                    <button
-                      onClick={() => handlePurchaseTier(tier.code)}
-                      disabled={isCurrent || purchasingTier === tier.code || senCashBalance < tier.priceSenCash}
-                      className="w-full mt-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40 flex items-center justify-center gap-1.5"
-                    >
-                      {purchasingTier === tier.code ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Coins className="w-3.5 h-3.5" />}
-                      {isCurrent ? 'Đang dùng' : `${tier.priceSenCash} SC`}
-                    </button>
-                  )}
+                <div key={tierCode} className={`p-4 rounded-2xl border ${isCurrentTier ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-slate-200 dark:border-white/5'}`} style={!isCurrentTier ? cardStyle : undefined}>
+                  <p className="font-black text-sm flex items-center gap-1.5 mb-3">
+                    {SENAI_TIER_LABEL[tierCode]} {isCurrentTier && <Check className="w-3.5 h-3.5 text-indigo-500" />}
+                    <span className={`font-normal text-xs ${mutedClass}`} style={mutedStyle}>· {SENAI_TIER_DAILY_LIMIT[tierCode]} câu/ngày</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {plans.map(plan => {
+                      const isTrialUsed = plan.duration === 'trial_3d' && senaiProfile.senai_trial_used
+                      const isActivePlanState = isCurrentTier && (
+                        (plan.duration === 'permanent' && senaiProfile.senai_tier_permanent) ||
+                        (plan.duration !== 'permanent' && !senaiProfile.senai_tier_permanent)
+                      )
+                      const disabled = purchasingPlan === plan.code || isTrialUsed || senCashBalance < plan.priceSenCash
+                      return (
+                        <button
+                          key={plan.code}
+                          onClick={() => handlePurchasePlan(plan.code)}
+                          disabled={disabled}
+                          title={isTrialUsed ? 'Bạn đã dùng lượt dùng thử này rồi' : undefined}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-40 ${isActivePlanState ? 'bg-indigo-600 text-white' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'}`}
+                        >
+                          {purchasingPlan === plan.code ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Coins className="w-3.5 h-3.5" />}
+                          {plan.duration === 'trial_3d' ? (isTrialUsed ? 'Đã dùng thử' : 'Dùng thử 3 ngày — Miễn phí')
+                            : plan.duration === 'monthly' ? `1 tháng — ${plan.priceSenCash} SC`
+                            : plan.duration === 'yearly' ? `1 năm — ${plan.priceSenCash} SC`
+                            : `Vĩnh viễn — ${plan.priceSenCash} SC`}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}

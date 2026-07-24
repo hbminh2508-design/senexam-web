@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { getEffectiveSenaiTier } from '@/lib/senaiTiers'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,8 +13,12 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
 
     const supabaseAdmin = getSupabaseAdmin()
-    const { data: profile } = await supabaseAdmin.from('profiles').select('senai_tier').eq('id', user.id).maybeSingle()
-    if (profile?.senai_tier !== 'ultra') {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('senai_tier, senai_tier_expires_at, senai_tier_permanent')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (getEffectiveSenaiTier(profile) !== 'ultra') {
       return NextResponse.json({ error: 'SenAI Studio chỉ dành cho thành viên SenAI Ultra' }, { status: 403 })
     }
 
