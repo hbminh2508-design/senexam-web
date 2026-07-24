@@ -9,7 +9,7 @@ import {
   LogOut, User, MessageSquare,
   Settings, X, Sun, Moon, GraduationCap, Loader2, KeyRound,
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator,
-  FlaskConical, PlaySquare, Wand2, Palette, Target, RefreshCw, Rocket, CheckCircle2
+  FlaskConical, PlaySquare, Wand2, Palette, Target, RefreshCw, Rocket, CheckCircle2, Crown
 } from 'lucide-react'
 
 import { AnnouncementRenderer } from './_home/Announcement'
@@ -68,6 +68,7 @@ export default function DashboardPage() {
   // -- User States --
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string>('student')
+  const [isVip, setIsVip] = useState(false)
   
   // -- UI States --
   const [isDataLoading, setIsDataLoading] = useState(true) 
@@ -287,6 +288,7 @@ export default function DashboardPage() {
 
       if (profile) {
         setUserRole(profile.role || 'student')
+        setIsVip(!!profile.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now())
         // Giao diện mới chỉ dành cho thành viên Beta — nếu tài khoản cũ từng bật trước khi
         // có luật này mà chưa tham gia Beta, tự động đưa về Giao diện cũ để đồng bộ đúng luật.
         const effectiveNewUi = !!profile.new_ui_enabled && !!profile.is_beta_tester
@@ -622,6 +624,7 @@ export default function DashboardPage() {
     { key: 'code', label: 'Nhập Code Đề', desc: 'Truy cập nhanh một đề thi bằng mã code.', icon: KeyRound, color: 'slate', onSelect: () => setShowCodeModal(true) },
     { key: 'focus', label: 'Phòng Tập Trung', desc: 'Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.', icon: Music2, color: 'purple', onSelect: () => router.push('/focus') },
     { key: 'library', label: 'Thư Viện Số', desc: 'Hàng ngàn tài liệu, sách và chuyên đề lưu trữ số.', icon: FolderOpen, color: 'cyan', onSelect: () => router.push('/library') },
+    { key: 'vip', label: isVip ? 'Thành viên VIP' : 'Nâng cấp VIP', desc: 'Không quảng cáo, tài liệu riêng, cập nhật sớm hơn.', icon: Crown, color: 'amber', onSelect: () => router.push('/vip') },
     { key: 'senvideo', label: 'SenVideo', desc: 'Xem luồng Stream chất lượng cao không giật lag.', icon: PlaySquare, color: 'indigo', onSelect: () => router.push('/senvideo') },
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
     { key: 'forum', label: 'Cộng Đồng', desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.', icon: MessageSquare, color: 'sky', onSelect: () => router.push('/forum') },

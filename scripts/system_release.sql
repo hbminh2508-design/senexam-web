@@ -95,4 +95,4 @@ create policy client_error_log_select_staff on public.client_error_log
       select 1 from public.profiles p
       where p.id = auth.uid() and p.role in ('admin', 'collab')
     )
-  );
+  ); 

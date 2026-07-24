@@ -7,7 +7,7 @@ import {
   Folder, FileText, ArrowLeft, PlusCircle, Trash2, UploadCloud, Loader2, X, ChevronRight, 
   Download, BookOpen, Search, ListChecks, Scissors, Copy, ClipboardPaste, CheckCircle2, 
   Edit, ArrowUpDown, Maximize2, ExternalLink, Image, Video, Music, Palette, Lock, Unlock, 
-  Eye, EyeOff, Cloud, Library, Home, Sparkles, Bot, Send
+  Eye, EyeOff, Cloud, Library, Home, Sparkles, Bot, Send, Crown
 } from 'lucide-react'
 
 // Imports hệ thống
@@ -47,6 +47,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState('student')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [isVip, setIsVip] = useState(false)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   const [libraryScope, setLibraryScope] = useState<LibraryScope>('private')
   const [adminUploaderIds, setAdminUploaderIds] = useState<string[]>([])
   
@@ -127,6 +129,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const isDocumentUnlocked = (doc: any) => isAdmin || !!unlockedDocumentIds[doc.id]
 
   const requestDocumentAccess = async (doc: any) => {
+    if (doc.is_vip_only && !isVip && !isAdmin) {
+      if (confirm('Tài liệu này chỉ dành cho thành viên VIP. Đến trang nâng cấp VIP?')) router.push('/vip')
+      return false
+    }
     if (isDocumentHidden(doc) && !isAdmin) { alert('Tài liệu này đang ẩn.'); return false }
     if (isDocumentLocked(doc) && !isDocumentUnlocked(doc)) {
       const password = window.prompt('Tài liệu bảo mật. Nhập mật khẩu:')
@@ -217,8 +223,10 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('role, vip_expires_at').eq('id', user.id).single()
       setCurrentUserId(user.id); setUserRole(profile?.role || 'student')
+      setIsVip(!!profile?.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now())
+      supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token || null))
 
       let initScope: LibraryScope = profile?.role === 'student' ? 'private' : 'shared'
       try { const s = localStorage.getItem(LIBRARY_SCOPE_STORAGE_KEY); if (profile?.role === 'student' && (s === 'private' || s === 'shared')) initScope = s as LibraryScope } catch(e) {}
@@ -341,7 +349,15 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   let dFolders = searchFoldersResults || folders.filter(f => f.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
   let dDocs = searchDocsResults || documents.filter(d => d.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()))
   if (sortByName) { dFolders.sort((a,b)=>a.name.localeCompare(b.name)); dDocs.sort((a,b)=>a.title.localeCompare(b.title)) }
-  const pUrls = useMemo(() => previewDoc ? { preview: `/api/drive/stream?fileId=${previewDoc.drive_file_id}`, download: `/api/drive/stream?fileId=${previewDoc.drive_file_id}&download=1`, open: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/view` } : {preview:'', download:'', open:''}, [previewDoc])
+  const pUrls = useMemo(() => {
+    if (!previewDoc) return { preview: '', download: '', open: '' }
+    const vipParams = previewDoc.is_vip_only ? `&documentId=${previewDoc.id}&token=${encodeURIComponent(accessToken || '')}` : ''
+    return {
+      preview: `/api/drive/stream?fileId=${previewDoc.drive_file_id}${vipParams}`,
+      download: `/api/drive/stream?fileId=${previewDoc.drive_file_id}&download=1${vipParams}`,
+      open: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/view`,
+    }
+  }, [previewDoc, accessToken])
 
   // ============================================================================
   // RENDER GIAO DIỆN CHÍNH
@@ -535,7 +551,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
                               {k === 'image' ? <Image className="w-4 h-4"/> : <FileText className="w-4 h-4"/>}
                             </div>
                             <div className={`flex-1 min-w-0 ${isSelectMode ? 'pr-7' : 'pr-1'}`}>
-                              <h3 className="text-xs font-medium line-clamp-2 leading-snug">{highlightSearchText(d.title, deferredSearchQuery)}</h3>
+                              <h3 className="text-xs font-medium line-clamp-2 leading-snug flex items-center gap-1">{d.is_vip_only && <Crown className="w-3 h-3 shrink-0" style={{ color: '#f59e0b' }} />}{highlightSearchText(d.title, deferredSearchQuery)}</h3>
                               <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{new Date(d.created_at).toLocaleDateString('vi-VN')}</p>
                             </div>
                           </div>
@@ -706,7 +722,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
                             {k === 'pdf' ? <FileText className="w-6 h-6"/> : k === 'image' ? <Image className="w-6 h-6"/> : <FileText className="w-6 h-6"/>}
                           </div>
                           <div className={`flex-1 min-w-0 ${isSelectMode ? 'pr-8' : 'pr-2'}`}>
-                            <h3 className="font-black text-[13px] line-clamp-2 leading-snug">{highlightSearchText(d.title, deferredSearchQuery)}</h3>
+                            <h3 className="font-black text-[13px] line-clamp-2 leading-snug flex items-center gap-1">{d.is_vip_only && <Crown className="w-3.5 h-3.5 shrink-0" style={{ color: '#f59e0b' }} />}{highlightSearchText(d.title, deferredSearchQuery)}</h3>
                             <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{new Date(d.created_at).toLocaleDateString('vi-VN')}</p>
                           </div>
                         </div>

@@ -1,7 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { VIP_DAILY_DOWNLOAD_LIMIT } from '@/lib/vipMembership'
 
 export const dynamic = 'force-dynamic'
+
+// Tài liệu đánh dấu is_vip_only chỉ cho thành viên VIP tải, tối đa VIP_DAILY_DOWNLOAD_LIMIT lượt/ngày.
+// Trả về null nếu được phép, hoặc NextResponse lỗi nếu bị chặn.
+async function checkVipDownloadGate(request: NextRequest, documentId: string | null): Promise<NextResponse | null> {
+  if (!documentId) return null
+
+  const supabaseAdmin = getSupabaseAdmin()
+  const { data: doc } = await supabaseAdmin
+    .from('library_documents')
+    .select('id, is_vip_only')
+    .eq('id', documentId)
+    .maybeSingle()
+
+  if (!doc?.is_vip_only) return null
+
+  const user = await getUserFromRequest(request)
+  if (!user) return new NextResponse('Cần đăng nhập để tải tài liệu VIP', { status: 401 })
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('vip_expires_at')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  const isVip = !!profile?.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now()
+  if (!isVip) return new NextResponse('Tài liệu này chỉ dành cho thành viên VIP', { status: 403 })
+
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+
+  const { count } = await supabaseAdmin
+    .from('vip_document_downloads')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('downloaded_at', startOfToday.toISOString())
+
+  if ((count || 0) >= VIP_DAILY_DOWNLOAD_LIMIT) {
+    return new NextResponse(`Bạn đã đạt giới hạn ${VIP_DAILY_DOWNLOAD_LIMIT} lượt tải tài liệu VIP hôm nay`, { status: 429 })
+  }
+
+  await supabaseAdmin.from('vip_document_downloads').insert({ user_id: user.id, document_id: documentId })
+  return null
+}
 
 // Cấu hình OAuth2
 const oauth2Client = new google.auth.OAuth2(
@@ -19,8 +64,12 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const fileId = url.searchParams.get('fileId')
     const download = url.searchParams.get('download') === '1'
+    const documentId = url.searchParams.get('documentId')
 
     if (!fileId) return new NextResponse('Thiếu fileId', { status: 400 })
+
+    const gateError = await checkVipDownloadGate(request, documentId)
+    if (gateError) return gateError
 
     // 1. Lấy Access Token bảo mật
     const { token } = await oauth2Client.getAccessToken()
@@ -84,8 +133,8 @@ export async function GET(request: NextRequest) {
       headers: responseHeaders
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Lỗi Stream xuyên thấu:', error)
-    return new NextResponse(error.message || 'Lỗi hệ thống', { status: 500 })
+    return new NextResponse(error instanceof Error ? error.message : 'Lỗi hệ thống', { status: 500 })
   }
 }
