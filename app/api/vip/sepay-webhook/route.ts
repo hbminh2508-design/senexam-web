@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { getVipPlan, extendVipExpiry } from '@/lib/vipMembership'
+import { applyVipPurchasePerks } from '@/lib/vipSenaiGift'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,7 @@ async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>
     .eq('id', order.id)
 
   await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code }).eq('id', order.user_id)
+  await applyVipPurchasePerks(supabaseAdmin, order.user_id, plan.code)
 
   return { success: true }
 }

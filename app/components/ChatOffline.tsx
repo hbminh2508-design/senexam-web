@@ -97,7 +97,18 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
   const [chatInput, setChatInput] = useState('')
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [senaiTierCode, setSenaiTierCode] = useState('free')
+  const [quota, setQuota] = useState<{ used: number, limit: number } | null>(null)
   const onlineModeLabel = SENAI_TIER_LABEL[(senaiTierCode as SenAiTierCode)] || 'SenAI'
+
+  const refreshQuota = () => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.access_token) return
+      fetch('/api/senai/quota', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        .then(res => res.json())
+        .then(json => { if (json?.limit != null) setQuota({ used: json.used, limit: json.limit }) })
+        .catch(() => {})
+    })
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -106,6 +117,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
         setSenaiTierCode(getEffectiveSenaiTier(data))
       })
     })
+    refreshQuota()
   }, [])
   
   const isBoss = userName && normalizeText(userName).includes('minh')
@@ -221,6 +233,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
       if (response.ok && typeof data?.text === 'string' && data.text.trim()) {
         setChatMessages([...nextHistory, { role: 'model', text: data.text }])
+        refreshQuota()
         return
       }
 
@@ -290,7 +303,9 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                   {isOnlineMode && <Zap className="w-3.5 h-3.5" style={{ color: newUiEnabled ? 'var(--accent)' : '#FDE047' }} fill={newUiEnabled ? 'var(--accent)' : '#FDE047'}/>}
                 </h3>
                 <p className={`text-[11px] font-medium truncate max-w-[160px] sm:max-w-[200px] ${newUiEnabled ? '' : 'text-white/80'}`} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
-                  {isOnlineMode ? 'Hỏi đáp AI & Tìm thư viện' : 'Điều hướng & Giới thiệu Tác giả'}
+                  {isOnlineMode
+                    ? (quota ? `Còn ${Math.max(0, quota.limit - quota.used)}/${quota.limit} câu hôm nay` : 'Hỏi đáp AI & Tìm thư viện')
+                    : 'Điều hướng & Giới thiệu Tác giả'}
                 </p>
               </div>
             </div>

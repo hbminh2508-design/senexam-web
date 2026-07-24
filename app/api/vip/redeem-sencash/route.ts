@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getVipPlan, extendVipExpiry } from '@/lib/vipMembership'
 import { vndToSenCash } from '@/lib/senCash'
+import { applyVipPurchasePerks } from '@/lib/vipSenaiGift'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     const newExpiresAt = extendVipExpiry(profile?.vip_expires_at, plan.durationDays)
 
     await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code }).eq('id', user.id)
+    await applyVipPurchasePerks(supabaseAdmin, user.id, plan.code)
 
     return NextResponse.json({ success: true, vipExpiresAt: newExpiresAt })
   } catch (e) {

@@ -17,6 +17,8 @@ import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
 import { fetchSystemRelease, logReleaseAction, CURRENT_APP_VERSION, type SystemRelease } from '@/lib/systemRelease'
+import { SENAI_TIER_LABEL } from '@/lib/senaiTiers'
+import { describeGiftReward } from '@/lib/giftCodes'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC
 import ReactMarkdown from 'react-markdown'
@@ -99,6 +101,21 @@ export default function AdminDashboard() {
   const [vipManageNote, setVipManageNote] = useState('')
   const [vipManageSaving, setVipManageSaving] = useState(false)
   const [vipManageMsg, setVipManageMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+
+  // 🌟 TẠO MÃ QUÀ TẶNG (VIP ngày / SenCash / gói SenAI) — admin tạo hàng loạt, người dùng tự đổi ở /vi-sen
+  const [giftRewardType, setGiftRewardType] = useState<'vip_days' | 'sencash' | 'senai_tier'>('vip_days')
+  const [giftVipDays, setGiftVipDays] = useState('30')
+  const [giftSencashAmount, setGiftSencashAmount] = useState('100')
+  const [giftSenaiTier, setGiftSenaiTier] = useState<'lite' | 'plus_lite' | 'plus' | 'ultra'>('plus')
+  const [giftSenaiPermanent, setGiftSenaiPermanent] = useState(false)
+  const [giftSenaiDurationDays, setGiftSenaiDurationDays] = useState('30')
+  const [giftCount, setGiftCount] = useState('1')
+  const [giftMaxUses, setGiftMaxUses] = useState('1')
+  const [giftNote, setGiftNote] = useState('')
+  const [giftSaving, setGiftSaving] = useState(false)
+  const [giftMsg, setGiftMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [giftGeneratedCodes, setGiftGeneratedCodes] = useState<string[]>([])
+  const [giftCodesList, setGiftCodesList] = useState<any[]>([])
 
   // 🌟 THỐNG KÊ TỔNG QUAN
   const [overviewStats, setOverviewStats] = useState<{ examCount: number; userCount: number; submissionCount: number; pendingGradeCount: number } | null>(null)
@@ -248,6 +265,14 @@ export default function AdminDashboard() {
       } else if (activeTab === 'collab' || activeTab === 'vip') {
         const { data } = await supabase.from('profiles').select('*').order('full_name')
         setUsersList(data || [])
+        if (activeTab === 'vip') {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.access_token) {
+            const res = await fetch('/api/admin/gift-codes/list', { headers: { Authorization: `Bearer ${session.access_token}` } })
+            const json = await res.json().catch(() => null)
+            if (res.ok) setGiftCodesList(json.codes || [])
+          }
+        }
       } else if (activeTab === 'submissions') {
         await refreshSubmissionsList()
       } else if (activeTab === 'overview') {
@@ -1748,7 +1773,43 @@ export default function AdminDashboard() {
       }
     }
 
+    const handleCreateGiftCodes = async () => {
+      setGiftSaving(true); setGiftMsg(null); setGiftGeneratedCodes([])
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) { setGiftMsg({ type: 'error', text: 'Phiên đăng nhập đã hết hạn' }); return }
+        const res = await fetch('/api/admin/gift-codes/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            rewardType: giftRewardType,
+            count: parseInt(giftCount, 10),
+            maxUses: parseInt(giftMaxUses, 10),
+            note: giftNote,
+            vipDays: giftVipDays,
+            sencashAmount: giftSencashAmount,
+            senaiTier: giftSenaiTier,
+            senaiPermanent: giftSenaiPermanent,
+            senaiDurationDays: giftSenaiDurationDays,
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok) { setGiftMsg({ type: 'error', text: json.error || 'Có lỗi xảy ra' }); return }
+        setGiftGeneratedCodes(json.codes || [])
+        setGiftMsg({ type: 'success', text: `Đã tạo ${json.codes?.length || 0} mã!` })
+        const res2 = await fetch('/api/admin/gift-codes/list', { headers: { Authorization: `Bearer ${token}` } })
+        const json2 = await res2.json().catch(() => null)
+        if (res2.ok) setGiftCodesList(json2.codes || [])
+      } catch (e: any) {
+        setGiftMsg({ type: 'error', text: e?.message || 'Có lỗi xảy ra' })
+      } finally {
+        setGiftSaving(false)
+      }
+    }
+
     return (
+      <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className={cardClass} style={cardStyle}>
           <h3 className="text-sm font-black uppercase tracking-widest mb-4">Chọn người dùng</h3>
@@ -1828,6 +1889,123 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className={cardClass} style={cardStyle}>
+        <h3 className="text-sm font-black uppercase tracking-widest mb-4">Tạo mã quà tặng</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+          {([
+            { key: 'vip_days', label: 'VIP (số ngày)' },
+            { key: 'sencash', label: 'SenCash' },
+            { key: 'senai_tier', label: 'Gói SenAI' },
+          ] as const).map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setGiftRewardType(opt.key)}
+              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-colors ${giftRewardType === opt.key ? 'bg-amber-500 text-white' : ''}`}
+              style={giftRewardType !== opt.key ? inputStyle : undefined}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {giftRewardType === 'vip_days' && (
+          <div className="mb-4">
+            <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Số ngày VIP</label>
+            <input type="number" min={1} value={giftVipDays} onChange={e => setGiftVipDays(e.target.value)} className={inputClass} style={inputStyle} />
+          </div>
+        )}
+
+        {giftRewardType === 'sencash' && (
+          <div className="mb-4">
+            <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Số SenCash</label>
+            <input type="number" min={1} value={giftSencashAmount} onChange={e => setGiftSencashAmount(e.target.value)} className={inputClass} style={inputStyle} />
+          </div>
+        )}
+
+        {giftRewardType === 'senai_tier' && (
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Hạng SenAI</label>
+              <select value={giftSenaiTier} onChange={e => setGiftSenaiTier(e.target.value as any)} className={inputClass} style={inputStyle}>
+                {(['lite', 'plus_lite', 'plus', 'ultra'] as const).map(t => (
+                  <option key={t} value={t}>{SENAI_TIER_LABEL[t]}</option>
+                ))}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-bold">
+              <input type="checkbox" checked={giftSenaiPermanent} onChange={e => setGiftSenaiPermanent(e.target.checked)} /> Vĩnh viễn
+            </label>
+            {!giftSenaiPermanent && (
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Số ngày</label>
+                <input type="number" min={1} value={giftSenaiDurationDays} onChange={e => setGiftSenaiDurationDays(e.target.value)} className={inputClass} style={inputStyle} />
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Số lượng mã</label>
+            <input type="number" min={1} max={200} value={giftCount} onChange={e => setGiftCount(e.target.value)} className={inputClass} style={inputStyle} />
+          </div>
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Lượt dùng/mã</label>
+            <input type="number" min={1} value={giftMaxUses} onChange={e => setGiftMaxUses(e.target.value)} className={inputClass} style={inputStyle} />
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="text-xs font-bold uppercase tracking-wide mb-2 block">Ghi chú (tuỳ chọn)</label>
+          <input type="text" value={giftNote} onChange={e => setGiftNote(e.target.value)} className={inputClass} style={inputStyle} placeholder="VD: Sự kiện khai giảng 2026..." />
+        </div>
+
+        <button
+          disabled={giftSaving}
+          onClick={handleCreateGiftCodes}
+          className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm disabled:opacity-60"
+        >
+          {giftSaving ? 'Đang tạo...' : 'Tạo mã'}
+        </button>
+
+        {giftMsg && (
+          <p className={`text-sm font-bold mt-3 ${giftMsg.type === 'success' ? 'text-emerald-500' : 'text-rose-500'}`}>{giftMsg.text}</p>
+        )}
+
+        {giftGeneratedCodes.length > 0 && (
+          <div className="mt-4 p-3 rounded-xl" style={inputStyle}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-wide">Mã vừa tạo</p>
+              <button
+                onClick={() => navigator.clipboard.writeText(giftGeneratedCodes.join('\n'))}
+                className="text-xs font-bold text-amber-600 hover:text-amber-700"
+              >
+                Copy tất cả
+              </button>
+            </div>
+            <div className="font-mono text-xs space-y-1 max-h-40 overflow-y-auto">
+              {giftGeneratedCodes.map(c => <div key={c}>{c}</div>)}
+            </div>
+          </div>
+        )}
+
+        {giftCodesList.length > 0 && (
+          <div className="mt-6">
+            <p className="text-xs font-bold uppercase tracking-wide mb-2">Mã đã tạo gần đây</p>
+            <div className="max-h-64 overflow-y-auto space-y-1.5">
+              {giftCodesList.map((c: any) => (
+                <div key={c.id} className="flex items-center justify-between text-xs px-3 py-2 rounded-lg" style={inputStyle}>
+                  <span className="font-mono font-bold">{c.code}</span>
+                  <span className={mutedClass} style={mutedStyle}>{describeGiftReward(c, SENAI_TIER_LABEL)}</span>
+                  <span className={mutedClass} style={mutedStyle}>{c.used_count}/{c.max_uses} lượt</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       </div>
     )
   }

@@ -14,7 +14,7 @@ import {
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
-import { ArrowLeft, Coins, Wallet, Loader2, Copy, CheckCircle2, XCircle, Clock, Sparkles, Crown, Check } from 'lucide-react'
+import { ArrowLeft, Coins, Wallet, Loader2, Copy, CheckCircle2, XCircle, Clock, Sparkles, Crown, Check, Ticket, Gift } from 'lucide-react'
 
 const TIER_ORDER: SenAiTierCode[] = ['lite', 'plus_lite', 'plus', 'ultra']
 
@@ -27,6 +27,12 @@ export default function ViSenPage() {
   const [senCashBalance, setSenCashBalance] = useState(0)
   const [transactions, setTransactions] = useState<SenCashTransaction[]>([])
   const [senaiProfile, setSenaiProfile] = useState<SenAiProfileFields & { senai_trial_used?: boolean }>({})
+  const [hasPlusYearlyVoucher, setHasPlusYearlyVoucher] = useState(false)
+  const [quota, setQuota] = useState<{ used: number, limit: number, remaining: number } | null>(null)
+
+  const [redeemCode, setRedeemCode] = useState('')
+  const [redeeming, setRedeeming] = useState(false)
+  const [redeemMsg, setRedeemMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
   const [topupAmount, setTopupAmount] = useState(TOPUP_PRESETS_VND[0])
   const [customTopup, setCustomTopup] = useState('')
@@ -40,21 +46,36 @@ export default function ViSenPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refreshWallet = async (userId: string) => {
-    const [balance, txs, { data: profile }] = await Promise.all([
+    const [balance, txs, { data: profile }, { data: voucher }] = await Promise.all([
       fetchSenCashBalance(userId),
       fetchMyTransactions(userId),
       supabase.from('profiles').select('senai_tier, senai_tier_expires_at, senai_tier_permanent, senai_trial_used').eq('id', userId).maybeSingle(),
+      supabase.from('sencash_vouchers').select('id').eq('user_id', userId).eq('kind', 'senai_plus_yearly_30off').eq('used', false).limit(1).maybeSingle(),
     ])
     setSenCashBalance(balance)
     setTransactions(txs)
     setSenaiProfile(profile || {})
+    setHasPlusYearlyVoucher(!!voucher)
+  }
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token || null
+  }
+
+  const refreshQuota = async () => {
+    const token = await getToken()
+    if (!token) return
+    const res = await fetch('/api/senai/quota', { headers: { Authorization: `Bearer ${token}` } })
+    const json = await res.json().catch(() => null)
+    if (res.ok && json) setQuota({ used: json.used, limit: json.limit, remaining: json.remaining })
   }
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      await refreshWallet(user.id)
+      await Promise.all([refreshWallet(user.id), refreshQuota()])
       setLoading(false)
     }
     init()
@@ -65,11 +86,6 @@ export default function ViSenPage() {
   }, [router])
 
   const stopPolling = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
-
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || null
-  }
 
   const pollTopupStatus = (orderId: string, token: string) => {
     stopPolling()
@@ -124,9 +140,10 @@ export default function ViSenPage() {
       })
       const json = await res.json()
       if (!res.ok) { setErrorMsg(json.error || 'Không mua được gói'); return }
-      setInfoMsg('Đã cập nhật gói SenAI thành công!')
+      setInfoMsg(json.voucherApplied ? `Đã áp dụng voucher giảm 30%! Thanh toán ${json.pricePaid} SC.` : 'Đã cập nhật gói SenAI thành công!')
       const { data: { user } } = await supabase.auth.getUser()
       if (user) await refreshWallet(user.id)
+      await refreshQuota()
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Có lỗi xảy ra')
     } finally {
@@ -139,6 +156,31 @@ export default function ViSenPage() {
     navigator.clipboard.writeText(pendingOrder.order_code)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleRedeemCode = async () => {
+    if (!redeemCode.trim() || redeeming) return
+    setRedeeming(true); setRedeemMsg(null)
+    try {
+      const token = await getToken()
+      if (!token) { router.push('/login'); return }
+      const res = await fetch('/api/gift-codes/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: redeemCode }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setRedeemMsg({ type: 'error', text: json.error || 'Không đổi được mã' }); return }
+      setRedeemMsg({ type: 'success', text: `Đã nhận: ${json.reward}` })
+      setRedeemCode('')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) await refreshWallet(user.id)
+      await refreshQuota()
+    } catch (e) {
+      setRedeemMsg({ type: 'error', text: e instanceof Error ? e.message : 'Có lỗi xảy ra' })
+    } finally {
+      setRedeeming(false)
+    }
   }
 
   const isModern = newUiEnabled
@@ -250,6 +292,24 @@ export default function ViSenPage() {
           </div>
         )}
 
+        {quota && (
+          <div className={`${cardClass} mb-6`} style={cardStyle}>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-bold text-sm flex items-center gap-2"><Ticket className="w-4 h-4 text-indigo-500" /> Hạn mức câu hỏi SenAI hôm nay</h2>
+              <span className="font-black text-sm">{quota.used}/{quota.limit}</span>
+            </div>
+            <div className={`w-full h-2 rounded-full overflow-hidden ${isModern ? '' : 'bg-slate-100 dark:bg-slate-800'}`} style={isModern ? { background: 'var(--bg)' } : undefined}>
+              <div
+                className={`h-full rounded-full transition-all ${quota.remaining === 0 ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                style={{ width: `${Math.min(100, (quota.used / Math.max(1, quota.limit)) * 100)}%` }}
+              />
+            </div>
+            <p className={`text-xs mt-2 ${mutedClass}`} style={mutedStyle}>
+              {quota.remaining > 0 ? `Còn ${quota.remaining} câu hỏi hôm nay` : 'Đã hết lượt hỏi hôm nay, hạn mức làm mới vào 0h ngày mai'}
+            </p>
+          </div>
+        )}
+
         <div className={`${cardClass} mb-6`} style={cardStyle}>
           <h2 className="font-bold text-sm mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-indigo-500" /> Gói SenAI</h2>
           <p className={`text-xs mb-4 ${mutedClass}`} style={mutedStyle}>
@@ -277,17 +337,20 @@ export default function ViSenPage() {
                         (plan.duration === 'permanent' && senaiProfile.senai_tier_permanent) ||
                         (plan.duration !== 'permanent' && !senaiProfile.senai_tier_permanent)
                       )
-                      const disabled = purchasingPlan === plan.code || isTrialUsed || senCashBalance < plan.priceSenCash
+                      const hasVoucher = plan.code === 'plus_yearly' && hasPlusYearlyVoucher
+                      const priceToShow = hasVoucher ? Math.round(plan.priceSenCash * 0.7) : plan.priceSenCash
+                      const disabled = purchasingPlan === plan.code || isTrialUsed || senCashBalance < priceToShow
                       return (
                         <button
                           key={plan.code}
                           onClick={() => handlePurchasePlan(plan.code)}
                           disabled={disabled}
-                          title={isTrialUsed ? 'Bạn đã dùng lượt dùng thử này rồi' : undefined}
-                          className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-40 ${isActivePlanState ? 'bg-indigo-600 text-white' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'}`}
+                          title={isTrialUsed ? 'Bạn đã dùng lượt dùng thử này rồi' : hasVoucher ? 'Áp dụng voucher giảm 30% (tặng khi mua VIP từ 3 tháng trở lên)' : undefined}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-40 ${isActivePlanState ? 'bg-indigo-600 text-white' : hasVoucher ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 ring-1 ring-emerald-400' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'}`}
                         >
                           {purchasingPlan === plan.code ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Coins className="w-3.5 h-3.5" />}
                           {plan.duration === 'trial_3d' ? (isTrialUsed ? 'Đã dùng thử' : 'Dùng thử 3 ngày — Miễn phí')
+                            : hasVoucher ? <>1 năm — <s className="opacity-60">{plan.priceSenCash}</s> {priceToShow} SC (-30%)</>
                             : plan.duration === 'monthly' ? `1 tháng — ${plan.priceSenCash} SC`
                             : plan.duration === 'yearly' ? `1 năm — ${plan.priceSenCash} SC`
                             : `Vĩnh viễn — ${plan.priceSenCash} SC`}
@@ -301,6 +364,31 @@ export default function ViSenPage() {
           </div>
         </div>
 
+        <div className={`${cardClass} mb-6`} style={cardStyle}>
+          <h2 className="font-bold text-sm mb-3 flex items-center gap-2"><Gift className="w-4 h-4 text-emerald-500" /> Đổi mã quà tặng</h2>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={redeemCode}
+              onChange={e => setRedeemCode(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleRedeemCode() }}
+              placeholder="Nhập mã (VD: SEN-XXXX-XXXX)"
+              className={`flex-1 px-3 py-2 rounded-xl text-sm font-mono uppercase ${isModern ? '' : 'bg-slate-50 dark:bg-[#101010] border border-slate-200 dark:border-white/10'}`}
+              style={isModern ? { background: 'var(--bg)', border: '1px solid var(--border)' } : undefined}
+            />
+            <button
+              onClick={handleRedeemCode}
+              disabled={redeeming || !redeemCode.trim()}
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shrink-0 disabled:opacity-60 flex items-center gap-1.5"
+            >
+              {redeeming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Gift className="w-3.5 h-3.5" />} Đổi mã
+            </button>
+          </div>
+          {redeemMsg && (
+            <p className={`text-sm font-bold mt-3 ${redeemMsg.type === 'success' ? 'text-emerald-500' : 'text-rose-500'}`}>{redeemMsg.text}</p>
+          )}
+        </div>
+
         {transactions.length > 0 && (
           <div className={cardClass} style={cardStyle}>
             <p className={`text-[10px] font-bold uppercase tracking-wide mb-2 ${mutedClass}`} style={mutedStyle}>Giao dịch gần đây</p>
@@ -312,6 +400,7 @@ export default function ViSenPage() {
                       : tx.reason === 'vip_redeem' ? 'Đổi VIP'
                       : tx.reason === 'vip_download_spend' ? 'Tải tài liệu VIP'
                       : tx.reason === 'senai_tier_purchase' ? 'Mua gói SenAI'
+                      : tx.reason === 'gift_code' ? 'Đổi mã quà tặng'
                       : 'Admin tặng'} · {new Date(tx.created_at).toLocaleDateString('vi-VN')}
                   </span>
                   <span className={`font-bold ${tx.delta > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{tx.delta > 0 ? '+' : ''}{tx.delta} SC</span>
