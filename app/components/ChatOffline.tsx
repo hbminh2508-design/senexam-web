@@ -187,7 +187,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       - Tên hệ thống: SenExam V3.0 - Nền tảng luyện thi thông minh. Bạn (trợ lý AI) đang chạy dữ liệu SenAI phiên bản 3.1.
       - Tác giả & Nhà phát triển (Creator/Boss): Hoàng Bình Minh (Sinh ngày 25/08/2000), sinh viên xuất sắc của Đại học Công nghệ - ĐHQGHN (UET). Minh đam mê lập trình (Next.js, Python), phát triển robot (AuraServe), thích giải trí với F1, anime (Jujutsu Kaisen, Zelda) và hay uống Matcha Latte, Hibiscus tea.
       - Tên người dùng đang trò chuyện: ${userName || 'Học sinh'}.
-      - Bạn là bản Beta đang được thử nghiệm, đang cải thiện dần theo phản hồi người dùng.
+      - Bạn đang liên tục được cải thiện dần theo phản hồi người dùng.
 
       TÍNH NĂNG MỚI TRONG SENAI 3.1 (nắm rõ để tư vấn người dùng khi được hỏi):
       - Thành viên VIP (/vip): mua qua VietQR (chuyển khoản) hoặc đổi bằng SenCash, các gói: theo ngày, tuần, tháng, 3 tháng, năm. Đặc quyền: không quảng cáo, kho tài liệu riêng "Kho VIP" trong Thư viện số (5 lượt tải free/ngày), cập nhật sớm hơn, và VIP còn tặng hẳn 50 lượt hỏi SenAI/ngày.
@@ -287,10 +287,6 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 <h3 className="font-black text-[15px] leading-tight flex items-center gap-1.5">
                   {isOnlineMode ? onlineModeLabel : 'Trợ lý Sen'}
                   {isOnlineMode && <Zap className="w-3.5 h-3.5" style={{ color: newUiEnabled ? 'var(--accent)' : '#FDE047' }} fill={newUiEnabled ? 'var(--accent)' : '#FDE047'}/>}
-                  <span
-                    className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest"
-                    style={newUiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { background: 'rgba(255,255,255,0.2)' }}
-                  >Beta</span>
                 </h3>
                 <p className={`text-[11px] font-medium truncate max-w-[160px] sm:max-w-[200px] ${newUiEnabled ? '' : 'text-white/80'}`} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                   {isOnlineMode ? 'Hỏi đáp AI & Tìm thư viện' : 'Điều hướng & Giới thiệu Tác giả'}

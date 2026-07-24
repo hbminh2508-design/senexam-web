@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { AnnouncementRenderer } from './Announcement'
 import CrossfadeIcon from '@/app/components/CrossfadeIcon'
+import VipAdBanner from '@/app/components/VipAdBanner'
 import type { HomeProps } from './types'
 
 const FEATURE_COLOR_MAP: Record<string, string> = {
@@ -159,6 +160,8 @@ export default function LegacyHome({
             </div>
           </div>
         )}
+
+        <VipAdBanner />
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 lg:gap-6">
 

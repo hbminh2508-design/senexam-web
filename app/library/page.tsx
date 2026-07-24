@@ -9,6 +9,7 @@ import {
   Edit, ArrowUpDown, Maximize2, ExternalLink, Image, Video, Music, Palette, Lock, Unlock, 
   Eye, EyeOff, Cloud, Library, Home, Sparkles, Bot, Send, Crown
 } from 'lucide-react'
+import VipAdBanner from '@/app/components/VipAdBanner'
 
 // Imports hệ thống
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -463,6 +464,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
         )}
 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="mb-6"><VipAdBanner compact /></div>
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
             <div className="flex-1">
               <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-medium mb-3" style={{ color: 'var(--text-muted)' }}><ArrowLeft className="w-4 h-4" /> Dashboard</button>
@@ -632,7 +634,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
 
       {/* 🌟 KẾT CẤU WORKSPACE CHÍNH */}
       <div className="relative z-10 max-w-[1500px] mx-auto pt-6 px-4 md:px-8">
-        
+
+        <div className="mb-6"><VipAdBanner /></div>
+
         {/* Header Controls */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
           <div className="flex-1">

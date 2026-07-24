@@ -8,6 +8,7 @@ import {
 import { AnnouncementRenderer } from './Announcement'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import CrossfadeIcon from '@/app/components/CrossfadeIcon'
+import VipAdBanner from '@/app/components/VipAdBanner'
 import type { HomeProps } from './types'
 
 const FEATURE_COLOR_MAP: Record<string, string> = {
@@ -153,6 +154,8 @@ export default function ModernHome({
             <div className="flex-1 min-w-0"><AnnouncementRenderer text={activeAnnouncement} /></div>
           </div>
         )}
+
+        <VipAdBanner />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2 rounded-2xl p-8 flex flex-col justify-between min-h-[260px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

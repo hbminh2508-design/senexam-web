@@ -516,7 +516,6 @@ Dựa trên độ dịch chuyển bách phân vị quốc gia liên năm 2025 - 
                     <div className="rounded-2xl p-6 md:p-8 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '4px solid #D97706' }}>
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold text-base flex items-center gap-2" style={{ color: '#D97706' }}><Bot className="w-5 h-5"/> Công cụ đối sánh liên năm SenAI</h3>
-                        <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium" style={{ color: 'var(--text)' }}>
@@ -658,7 +657,6 @@ Dựa trên độ dịch chuyển bách phân vị quốc gia liên năm 2025 - 
                   <div className="flex items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
                     <h4 className="font-semibold text-sm uppercase tracking-widest flex items-center gap-2" style={{ color: 'var(--text)' }}>
                       <Sparkles className="w-4 h-4" style={{ color: 'var(--accent)' }} /> Cấu trúc Prompt đối soát chuẩn SenAI
-                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>Beta</span>
                     </h4>
                     <button
                       type="button" onClick={copyToClipboard}
