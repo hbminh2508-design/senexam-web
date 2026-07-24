@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getVipPlan, generateOrderCode, buildVietQrUrl } from '@/lib/vipMembership'
+import { generateOrderCode, buildVietQrUrl, ORDER_TTL_MINUTES } from '@/lib/vipMembership'
+import { isValidTopupAmount, vndToSenCash } from '@/lib/senCash'
 
 export const dynamic = 'force-dynamic'
-
-const ORDER_TTL_MINUTES = 15
 
 export async function POST(request: Request) {
   try {
     const user = await getUserFromRequest(request)
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
 
-    const { planCode } = await request.json()
-    const plan = getVipPlan(planCode)
-    if (!plan) return NextResponse.json({ error: 'Gói VIP không hợp lệ' }, { status: 400 })
+    const { amountVnd } = await request.json()
+    if (!isValidTopupAmount(amountVnd)) {
+      return NextResponse.json({ error: 'Số tiền nạp phải là bội số của 5.000đ, tối thiểu 5.000đ' }, { status: 400 })
+    }
 
     const bankBin = process.env.VIETQR_BANK_BIN
     const accountNo = process.env.VIETQR_ACCOUNT_NO
@@ -22,16 +22,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Hệ thống thanh toán chưa được cấu hình' }, { status: 503 })
     }
 
-    const orderCode = generateOrderCode('SENVIP')
+    const orderCode = generateOrderCode('SENCASH')
     const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000).toISOString()
+    const sencashAmount = vndToSenCash(amountVnd)
 
     const { data: order, error } = await getSupabaseAdmin()
-      .from('vip_orders')
+      .from('sencash_topup_orders')
       .insert({
         user_id: user.id,
-        plan_code: plan.code,
         order_code: orderCode,
-        amount_vnd: plan.priceVnd,
+        amount_vnd: amountVnd,
+        sencash_amount: sencashAmount,
         status: 'pending',
         expires_at: expiresAt,
       })
@@ -44,12 +45,12 @@ export async function POST(request: Request) {
       bankBin,
       accountNo,
       accountName,
-      amountVnd: plan.priceVnd,
+      amountVnd,
       addInfo: orderCode,
     })
 
     return NextResponse.json({ order, qrUrl })
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Lỗi tạo đơn hàng' }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Lỗi tạo đơn nạp SenCash' }, { status: 500 })
   }
 }

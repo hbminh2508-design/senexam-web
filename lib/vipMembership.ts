@@ -37,12 +37,20 @@ export type VipOrder = {
   paid_at: string | null
 }
 
-const ORDER_TTL_MINUTES = 15
+export const ORDER_TTL_MINUTES = 15
 
-export function generateOrderCode(): string {
-  // Nhúng vào nội dung chuyển khoản (addInfo) — ngắn, dễ đọc qua sao kê ngân hàng
+// Nhúng vào nội dung chuyển khoản (addInfo) — ngắn, dễ đọc qua sao kê ngân hàng.
+// Tiền tố phân biệt loại đơn khi webhook SePay đối soát (SENVIP = mua VIP, SENCASH = nạp ví).
+export function generateOrderCode(prefix: 'SENVIP' | 'SENCASH'): string {
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
-  return `SENVIP${rand}`
+  return `${prefix}${rand}`
+}
+
+// Cộng dồn thời hạn VIP: nếu còn hạn cũ thì cộng tiếp từ đó, nếu đã hết hạn thì tính từ hiện tại
+export function extendVipExpiry(currentIso: string | null | undefined, durationDays: number): string {
+  const currentExpiry = currentIso ? new Date(currentIso).getTime() : 0
+  const base = Math.max(currentExpiry, Date.now())
+  return new Date(base + durationDays * 24 * 60 * 60 * 1000).toISOString()
 }
 
 // URL ảnh QR VietQR — endpoint công khai của VietQR.io, không cần API key để tạo ảnh tĩnh
@@ -53,30 +61,6 @@ export function buildVietQrUrl(opts: { bankBin: string, accountNo: string, accou
     accountName: opts.accountName,
   })
   return `https://img.vietqr.io/image/${opts.bankBin}-${opts.accountNo}-compact2.png?${params.toString()}`
-}
-
-export async function createVipOrder(userId: string, planCode: VipPlanCode) {
-  const plan = getVipPlan(planCode)
-  if (!plan) throw new Error('Gói VIP không hợp lệ')
-
-  const orderCode = generateOrderCode()
-  const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000).toISOString()
-
-  const { data, error } = await supabase
-    .from('vip_orders')
-    .insert({
-      user_id: userId,
-      plan_code: plan.code,
-      order_code: orderCode,
-      amount_vnd: plan.priceVnd,
-      status: 'pending',
-      expires_at: expiresAt,
-    })
-    .select('*')
-    .single()
-
-  if (error) throw error
-  return data as VipOrder
 }
 
 export async function fetchMyOrders(userId: string): Promise<VipOrder[]> {

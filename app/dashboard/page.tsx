@@ -69,6 +69,8 @@ export default function DashboardPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string>('student')
   const [isVip, setIsVip] = useState(false)
+  const [vipExpiresAt, setVipExpiresAt] = useState<string | null>(null)
+  const [senCashBalance, setSenCashBalance] = useState(0)
   
   // -- UI States --
   const [isDataLoading, setIsDataLoading] = useState(true) 
@@ -289,6 +291,8 @@ export default function DashboardPage() {
       if (profile) {
         setUserRole(profile.role || 'student')
         setIsVip(!!profile.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now())
+        setVipExpiresAt(profile.vip_expires_at || null)
+        setSenCashBalance(profile.sencash_balance || 0)
         // Giao diện mới chỉ dành cho thành viên Beta — nếu tài khoản cũ từng bật trước khi
         // có luật này mà chưa tham gia Beta, tự động đưa về Giao diện cũ để đồng bộ đúng luật.
         const effectiveNewUi = !!profile.new_ui_enabled && !!profile.is_beta_tester
@@ -671,6 +675,9 @@ export default function DashboardPage() {
         density={uiDensity}
         animationsEnabled={animationsEnabled}
         isBetaTester={isBetaTester}
+        isVip={isVip}
+        vipExpiresAt={vipExpiresAt}
+        senCashBalance={senCashBalance}
       />
 
 

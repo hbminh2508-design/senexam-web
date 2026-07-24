@@ -35,4 +35,7 @@ export type HomeProps = {
   density: 'comfortable' | 'compact'
   animationsEnabled: boolean
   isBetaTester: boolean
+  isVip: boolean
+  vipExpiresAt: string | null
+  senCashBalance: number
 }

@@ -3,7 +3,7 @@
 import {
   BookOpen, Clock, Trophy, User, ChevronRight, ShieldCheck, AlertCircle,
   LayoutGrid, Sun, Moon, KeyRound, Target, Bell, Lock, ArrowRight,
-  FileText,
+  FileText, Crown, Coins,
 } from 'lucide-react'
 import { AnnouncementRenderer } from './Announcement'
 import { getModernThemeVars } from '@/app/components/modernTheme'
@@ -26,6 +26,7 @@ export default function ModernHome({
   setShowNotifications, setShowProfile, showFeatureMenu, setShowFeatureMenu,
   FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
   overlayActive, themeColor, density, animationsEnabled, isBetaTester,
+  isVip, senCashBalance,
 }: HomeProps) {
   const bestScore = studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : null
   const isCompact = density === 'compact'
@@ -106,6 +107,22 @@ export default function ModernHome({
             </button>
           )}
 
+          <button
+            onClick={() => router.push('/vip')}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-transform active:scale-95"
+            style={isVip ? { background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: '#fff' } : { border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+          >
+            <Crown className="w-3.5 h-3.5"/> {isVip ? 'VIP' : 'Nâng cấp VIP'}
+          </button>
+
+          <button
+            onClick={() => router.push('/vip')}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+            style={{ border: '1px solid var(--border)' }}
+          >
+            <Coins className="w-3.5 h-3.5" style={{ color: 'var(--accent)' }}/> {senCashBalance}
+          </button>
+
           <button onClick={() => setShowNotifications(true)} className="p-2.5 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors relative">
             <Bell className="w-4.5 h-4.5"/>
             {unreadCount > 0 && <span className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }}></span>}
@@ -181,7 +198,7 @@ export default function ModernHome({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {FEATURES.filter(f => ['focus', 'library', 'senvideo', 'lab', 'forum', 'score'].includes(f.key)).map(f => {
+          {FEATURES.filter(f => ['focus', 'library', 'vip', 'senvideo', 'lab', 'forum', 'score'].includes(f.key)).map(f => {
             const Icon = f.icon
             return (
               <button

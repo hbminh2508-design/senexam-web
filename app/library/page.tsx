@@ -35,7 +35,7 @@ const LIBRARY_SCOPE_STORAGE_KEY = 'library_scope_v1'
 const DOCUMENT_UNLOCK_STORAGE_KEY = 'library_document_unlocks_v1'
 const DOCUMENT_SECURITY_PREFIX = '__SENEXAM_SECURITY__:'
 
-type LibraryScope = 'private' | 'shared'
+type LibraryScope = 'private' | 'shared' | 'vip'
 type SelectedItem = { id: string, type: 'folder' | 'document', data: any }
 type DocumentSecurity = { hidden?: boolean, passwordHash?: string, passwordSalt?: string }
 type AiMessage = { role: 'user' | 'model'; text: string; isError?: boolean }
@@ -158,6 +158,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   }
 
   const isItemVisibleInScope = (item: any, itemKind: 'folder' | 'document', scope: LibraryScope, rootFolderId: string | null, userIdOverride?: string | null) => {
+    if (scope === 'vip') return itemKind === 'document' && !!item?.is_vip_only
     if (!isStudentLibrary) return true
     const effectiveUserId = userIdOverride ?? currentUserId
     const ownedByCurrentUser = !!effectiveUserId && item?.created_by === effectiveUserId
@@ -182,14 +183,17 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
     const folderQuery = supabase.from('library_folders').select('*').order('created_at', { ascending: false })
     if (folderId) folderQuery.eq('parent_id', folderId); else folderQuery.is('parent_id', null)
 
+    // Kho VIP hiển thị phẳng toàn bộ tài liệu is_vip_only, không theo cấu trúc thư mục
     const docQuery = supabase.from('library_documents').select('*').order('created_at', { ascending: false })
-    if (folderId) docQuery.eq('folder_id', folderId); else docQuery.is('folder_id', null)
+    if (effectiveScope === 'vip') docQuery.eq('is_vip_only', true)
+    else if (folderId) docQuery.eq('folder_id', folderId); else docQuery.is('folder_id', null)
 
     const [folderRes, docRes] = await Promise.all([folderQuery, docQuery])
     const fdata = folderRes.data || []
     const docsWithSecurity = (docRes.data || []).map((doc: any) => ({ ...doc, _security: getDocumentSecurity(doc) }))
 
     const visibleFolders = fdata.filter(folder => {
+      if (effectiveScope === 'vip') return false
       if (isStudentLibrary) {
         if (effectiveScope === 'private') {
           if (folderId === null) return folder.id === studentUploadFolderId || (effectiveUserId && folder.created_by === effectiveUserId)
@@ -202,6 +206,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
 
     const visibleDocs = docsWithSecurity.filter((doc: any) => {
       if (!(isAdmin || !doc._security?.hidden)) return false
+      if (effectiveScope === 'vip') return true
       if (isStudentLibrary) {
         if (effectiveScope === 'private') return (doc.created_by === effectiveUserId) || (doc.folder_id === studentUploadFolderId)
         return (doc.created_by == null) || adminUploaderIds.includes(doc.created_by)
@@ -455,7 +460,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
             <div className="flex-1">
               <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-medium mb-3" style={{ color: 'var(--text-muted)' }}><ArrowLeft className="w-4 h-4" /> Dashboard</button>
-              <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2 mb-3">{libraryScope === 'private' ? 'SenCloud' : 'SenLib'} <Cloud className="w-5 h-5" style={{ color: 'var(--accent)' }} /></h1>
+              <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2 mb-3">{libraryScope === 'vip' ? 'Kho VIP' : libraryScope === 'private' ? 'SenCloud' : 'SenLib'} {libraryScope === 'vip' ? <Crown className="w-5 h-5 text-amber-500" /> : <Cloud className="w-5 h-5" style={{ color: 'var(--accent)' }} />}</h1>
               <div className="flex items-center flex-wrap gap-1.5 text-sm">
                 {folderPath.map((step, index) => (
                   <div key={index} className="flex items-center gap-1.5" onDragOver={(e) => { e.preventDefault(); setDragOverId(step.id || 'root') }} onDragLeave={() => setDragOverId(null)} onDrop={(e) => handleDrop(e, step.id)}>
@@ -472,7 +477,14 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
                 <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Tìm tài liệu..." className="w-full rounded-lg pl-9 pr-3 py-2 text-sm outline-none bg-transparent" style={{ border: '1px solid var(--border)' }} />
               </div>
               <button onClick={() => setIsAiMode(!isAiMode)} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={isAiMode ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : { border: '1px solid var(--border)' }}><Sparkles className="w-3.5 h-3.5" /> SenAI</button>
-              {isStudentLibrary && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}>{libraryScope === 'private' ? <Unlock className="w-3.5 h-3.5"/> : <Lock className="w-3.5 h-3.5"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
+              {isStudentLibrary && libraryScope !== 'vip' && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}>{libraryScope === 'private' ? <Unlock className="w-3.5 h-3.5"/> : <Lock className="w-3.5 h-3.5"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
+              <button
+                onClick={() => syncLibraryScope(libraryScope === 'vip' ? (isStudentLibrary ? 'private' : 'shared') : 'vip')}
+                className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                style={libraryScope === 'vip' ? { background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: '#fff' } : { border: '1px solid var(--border)' }}
+              >
+                <Crown className="w-3.5 h-3.5"/> Kho VIP
+              </button>
               {showAdminControls && (
                 <>
                   <button onClick={() => setSortByName(!sortByName)} className="px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ border: '1px solid var(--border)' }}><ArrowUpDown className="w-3.5 h-3.5" /> {sortByName ? 'A-Z' : 'Ngày'}</button>
@@ -619,7 +631,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
           <div className="flex-1">
             <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors mb-3"><ArrowLeft className="w-4 h-4" /> Dashboard</button>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight flex items-center gap-3 mb-4 text-slate-900 dark:text-white">{libraryScope === 'private' ? 'SenCloud' : 'SenLib'} <Cloud className="w-8 h-8 text-cyan-500" /></h1>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight flex items-center gap-3 mb-4 text-slate-900 dark:text-white">{libraryScope === 'vip' ? 'Kho VIP' : libraryScope === 'private' ? 'SenCloud' : 'SenLib'} {libraryScope === 'vip' ? <Crown className="w-8 h-8 text-amber-500" /> : <Cloud className="w-8 h-8 text-cyan-500" />}</h1>
             <div className="flex items-center flex-wrap gap-2 text-sm font-bold bg-white/60 dark:bg-[#1A1A1A]/60 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-200/50 dark:border-white/5 w-fit shadow-sm">
               {folderPath.map((step, index) => (
                 <div key={index} className="flex items-center gap-2" onDragOver={(e) => { e.preventDefault(); setDragOverId(step.id || 'root') }} onDragLeave={() => setDragOverId(null)} onDrop={(e) => handleDrop(e, step.id)}>
@@ -640,8 +652,15 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
             {/* Nút SenAI */}
             <button onClick={() => setIsAiMode(!isAiMode)} className={`${headerBtn} ${isAiMode ? 'bg-indigo-100 text-indigo-600 border-indigo-200' : ''}`}><Sparkles className={`w-4 h-4 ${isAiMode ? 'animate-pulse' : 'text-yellow-500'}`} /> SenAI Search</button>
 
-            {isStudentLibrary && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={headerBtn}>{libraryScope === 'private' ? <Unlock className="w-4 h-4 text-emerald-500"/> : <Lock className="w-4 h-4 text-cyan-500"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
-            
+            {isStudentLibrary && libraryScope !== 'vip' && <button onClick={() => syncLibraryScope(libraryScope === 'private' ? 'shared' : 'private')} className={headerBtn}>{libraryScope === 'private' ? <Unlock className="w-4 h-4 text-emerald-500"/> : <Lock className="w-4 h-4 text-cyan-500"/>} {libraryScope === 'private' ? 'SenLib' : 'SenCloud'}</button>}
+
+            <button
+              onClick={() => syncLibraryScope(libraryScope === 'vip' ? (isStudentLibrary ? 'private' : 'shared') : 'vip')}
+              className={libraryScope === 'vip' ? "px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white" : headerBtn}
+            >
+              <Crown className={`w-4 h-4 ${libraryScope === 'vip' ? '' : 'text-amber-500'}`} /> Kho VIP
+            </button>
+
             {showAdminControls && (
               <>
                 <button onClick={() => setSortByName(!sortByName)} className={headerBtn}><ArrowUpDown className="w-4 h-4" /> {sortByName ? 'Xếp A-Z' : 'Xếp Ngày'}</button>

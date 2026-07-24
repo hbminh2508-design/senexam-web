@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { VIP_DAILY_DOWNLOAD_LIMIT } from '@/lib/vipMembership'
+import { SENCASH_COST_PER_VIP_DOWNLOAD } from '@/lib/senCash'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,17 +35,35 @@ async function checkVipDownloadGate(request: NextRequest, documentId: string | n
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
 
+  // Chỉ đếm các lượt tải "free" — lượt đã trả bằng SenCash không tính vào hạn mức ngày
   const { count } = await supabaseAdmin
     .from('vip_document_downloads')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
+    .eq('paid_with_sencash', false)
     .gte('downloaded_at', startOfToday.toISOString())
 
-  if ((count || 0) >= VIP_DAILY_DOWNLOAD_LIMIT) {
-    return new NextResponse(`Bạn đã đạt giới hạn ${VIP_DAILY_DOWNLOAD_LIMIT} lượt tải tài liệu VIP hôm nay`, { status: 429 })
+  if ((count || 0) < VIP_DAILY_DOWNLOAD_LIMIT) {
+    await supabaseAdmin.from('vip_document_downloads').insert({ user_id: user.id, document_id: documentId })
+    return null
   }
 
-  await supabaseAdmin.from('vip_document_downloads').insert({ user_id: user.id, document_id: documentId })
+  // Hết lượt free trong ngày — thử trừ SenCash để mua thêm lượt tải
+  const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
+    p_user_id: user.id,
+    p_delta: -SENCASH_COST_PER_VIP_DOWNLOAD,
+    p_reason: 'vip_download_spend',
+    p_reference: documentId,
+  })
+
+  if (rpcError) {
+    return new NextResponse(
+      `Bạn đã dùng hết ${VIP_DAILY_DOWNLOAD_LIMIT} lượt tải VIP miễn phí hôm nay và không đủ SenCash (cần ${SENCASH_COST_PER_VIP_DOWNLOAD} SenCash). Nạp thêm tại /vip.`,
+      { status: 402 }
+    )
+  }
+
+  await supabaseAdmin.from('vip_document_downloads').insert({ user_id: user.id, document_id: documentId, paid_with_sencash: true })
   return null
 }
 
