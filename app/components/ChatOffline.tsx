@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Loader2, Send, Sparkles, X, Maximize2, Minimize2, Zap, Settings2, MessageSquareHeart } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Bot, Loader2, Send, Sparkles, X, Maximize2, Minimize2, Zap, Settings2, MessageSquareHeart, BrainCircuit } from 'lucide-react'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC (LATEX)
 import ReactMarkdown from 'react-markdown'
@@ -11,7 +12,6 @@ import 'katex/dist/katex.min.css'
 import { supabase } from '@/lib/supabaseClient'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
-import { SENAI_TIERS, getSenAiTier } from '@/lib/senaiTiers'
 
 const FEEDBACK_PREFIX_RE = /^feedback\s*:\s*(.+)$/i
 
@@ -78,10 +78,10 @@ const generateOfflineAIResponse = (input: string, userName: string) => {
   // 4. Lời chào cá nhân hóa
   if (/\b(chao|hello|hi|alo|hey)\b/.test(normalizedInput)) {
     if (isBoss) return `Dạ em chào sếp Minh! 👋 Hôm nay sếp muốn vừa uống Matcha Latte vừa nâng cấp tính năng gì cho hệ thống ạ?`
-    return `Chào ${userName || 'bạn'}! 🌸 Mình là SenAI (Chế độ Cơ bản). Mình biết rất rõ về thư viện và hệ thống của SenExam do anh Hoàng Bình Minh phát triển. Gõ "tìm sách [tên sách]" để thử tính năng nhé!`
+    return `Chào ${userName || 'bạn'}! 🌸 Mình là Trợ lý Sen. Mình biết rất rõ về thư viện và hệ thống của SenExam do anh Hoàng Bình Minh phát triển. Gõ "tìm sách [tên sách]" để thử tính năng nhé!`
   }
 
-  return 'Ở chế độ Cơ bản, mình được tối ưu để tra cứu hệ thống nội bộ. Bạn có thể gõ "tìm sách [tên]" hoặc bật **Chế độ Nâng cao (Gemini)** trên góc phải để nhờ mình giải bài tập phức tạp nhé!'
+  return 'Là Trợ lý Sen, mình được tối ưu để tra cứu hệ thống nội bộ. Bạn có thể gõ "tìm sách [tên]" hoặc bật **SenAI (Gemini)** trên góc phải để nhờ mình giải bài tập phức tạp nhé!'
 }
 
 // ============================================================================
@@ -89,13 +89,14 @@ const generateOfflineAIResponse = (input: string, userName: string) => {
 // ============================================================================
 
 export default function ChatOffline({ userName, avoid, hidden }: { userName: string, avoid?: boolean, hidden?: boolean }) {
+  const router = useRouter()
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isOnlineMode, setIsOnlineMode] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [senaiTierCode, setSenaiTierCode] = useState('free')
-  const senaiTierLabel = (getSenAiTier(senaiTierCode) || SENAI_TIERS[0]).label
+  const onlineModeLabel = senaiTierCode === 'plus' ? 'SenAI Plus' : senaiTierCode === 'ultra' ? 'SenAI Ultra' : 'SenAI'
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -183,16 +184,22 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
     try {
       // 🌟 ĐÓNG GÓI NGỮ CẢNH HỆ THỐNG VÀ TÁC GIẢ ĐỂ AI HIỂU BIẾT HƠN
       const systemContext = `THÔNG TIN CỐT LÕI VỀ HỆ THỐNG (Tuyệt đối tuân thủ):
-      - Tên hệ thống: SenExam V2.0 - Nền tảng luyện thi thông minh.
+      - Tên hệ thống: SenExam V3.0 - Nền tảng luyện thi thông minh. Bạn (trợ lý AI) đang chạy dữ liệu SenAI phiên bản 3.1.
       - Tác giả & Nhà phát triển (Creator/Boss): Hoàng Bình Minh (Sinh ngày 25/08/2000), sinh viên xuất sắc của Đại học Công nghệ - ĐHQGHN (UET). Minh đam mê lập trình (Next.js, Python), phát triển robot (AuraServe), thích giải trí với F1, anime (Jujutsu Kaisen, Zelda) và hay uống Matcha Latte, Hibiscus tea.
       - Tên người dùng đang trò chuyện: ${userName || 'Học sinh'}.
       - Bạn là bản Beta đang được thử nghiệm, đang cải thiện dần theo phản hồi người dùng.
+
+      TÍNH NĂNG MỚI TRONG SENAI 3.1 (nắm rõ để tư vấn người dùng khi được hỏi):
+      - Thành viên VIP (/vip): mua qua VietQR (chuyển khoản) hoặc đổi bằng SenCash, các gói: theo ngày, tuần, tháng, 3 tháng, năm. Đặc quyền: không quảng cáo, kho tài liệu riêng "Kho VIP" trong Thư viện số (5 lượt tải free/ngày), cập nhật sớm hơn, và VIP còn tặng hẳn 50 lượt hỏi SenAI/ngày.
+      - Ví Sen (/vi-sen): quản lý SenCash (đồng tiền ảo quy đổi 500đ = 1 SenCash), nạp qua VietQR, dùng để đổi VIP hoặc mua gói SenAI.
+      - Gói SenAI: Cơ bản (10 câu/ngày, miễn phí), SenAI Plus (50 câu/ngày, 100 SenCash), SenAI Ultra (100 câu/ngày, 159 SenCash). Gói Ultra còn mở khoá "SenAI Studio" — một ứng dụng trò chuyện AI riêng biệt (lưu lịch sử chat theo từng cuộc trò chuyện, gửi được hình ảnh/tài liệu để AI phân tích, không giới hạn số câu hỏi, và có chế độ Deep Think suy nghĩ sâu hơn cho câu trả lời chính xác hơn).
+      - Nếu học sinh hỏi về nâng cấp/mua gói/VIP/SenCash, hãy hướng dẫn họ vào đúng trang tương ứng ở trên.
 
       QUY TẮC GIAO TIẾP VÀ HÀNH VI:
       1. Kính trọng Tác giả: Nếu người dùng có tên là "Minh" hoặc "Hoàng Bình Minh" (hoặc tự nhận là tác giả), hãy nhận diện đây là người tạo ra hệ thống và giữ thái độ tôn trọng, nhưng không cần tâng bốc quá đà.
       2. Ký hiệu Toán học / Vật Lí: Tuyệt đối tuân thủ tiêu chuẩn Việt Nam: Phải sử dụng dấu chấm "." cho phép nhân và dấu phẩy "," cho dấu thập phân (Ví dụ: 9,8 . 10). LUÔN BỌC CÔNG THỨC TOÁN HỌC TRONG DẤU $ HOẶC $$.
       3. Liên kết Thư viện: Nếu người dùng nhờ tìm kiếm sách/đề thi, hãy trả lời bằng đường dẫn định dạng: /library?search=<từ_khóa> (Ví dụ: /library?search=toán+12).
-      4. Điều hướng: Các module hiện có: Thi thử (/exams), Tính điểm Đại học (/tinhdiem), Phòng học tập trung (/focus), Diễn đàn (/forum).
+      4. Điều hướng: Các module hiện có: Thi thử (/exams), Tính điểm Đại học (/tinhdiem), Phòng học tập trung (/focus), Diễn đàn (/forum), VIP (/vip), Ví Sen (/vi-sen).
       5. Phong cách trả lời: Ưu tiên chính xác và hữu ích hơn là làm hài lòng người hỏi. Đi thẳng vào trọng tâm, không dùng ngôn từ sến súa/sáo rỗng, không lạm dụng emoji hay câu cảm thán. Nếu không chắc chắn, nói rõ thay vì bịa. Chủ động gợi ý bước tiếp theo hữu ích khi phù hợp (ví dụ: link tài liệu liên quan, module nên dùng).`
 
       const { data: { session } } = await supabase.auth.getSession()
@@ -233,7 +240,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       setChatMessages([...nextHistory, { role: 'model', text: `Mình chưa lấy được phản hồi: ${errorText || 'Lỗi không xác định.'}` }])
     
     } catch {
-      setChatMessages([...nextHistory, { role: 'model', text: 'Mạng bị đứt kết nối. Hãy thử chuyển sang chế độ "Cơ bản" để mình giúp tra cứu nhé!' }])
+      setChatMessages([...nextHistory, { role: 'model', text: 'Mạng bị đứt kết nối. Hãy thử chuyển sang "Trợ lý Sen" để mình giúp tra cứu nhé!' }])
     } finally {
       setIsChatLoading(false)
     }
@@ -278,7 +285,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
               </div>
               <div>
                 <h3 className="font-black text-[15px] leading-tight flex items-center gap-1.5">
-                  SenAI {isOnlineMode ? senaiTierLabel : 'Cơ bản'}
+                  {isOnlineMode ? onlineModeLabel : 'Trợ lý Sen'}
                   {isOnlineMode && <Zap className="w-3.5 h-3.5" style={{ color: newUiEnabled ? 'var(--accent)' : '#FDE047' }} fill={newUiEnabled ? 'var(--accent)' : '#FDE047'}/>}
                   <span
                     className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest"
@@ -301,6 +308,15 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${!isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white text-slate-800 shadow-sm') : (newUiEnabled ? '' : 'text-white/70')}`} style={newUiEnabled ? (!isOnlineMode ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}><Bot className="w-3.5 h-3.5"/></div>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white text-indigo-600 shadow-sm') : (newUiEnabled ? '' : 'text-white/70')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}><Sparkles className="w-3.5 h-3.5"/></div>
               </div>
+
+              <button
+                onClick={() => router.push('/senai-studio')}
+                title="Mở SenAI Studio"
+                className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"}
+                style={newUiEnabled ? { color: senaiTierCode === 'ultra' ? '#f59e0b' : 'var(--text-muted)' } : undefined}
+              >
+                <BrainCircuit className="w-4 h-4" style={!newUiEnabled && senaiTierCode === 'ultra' ? { color: '#FDE047' } : undefined} />
+              </button>
 
               <button onClick={() => setIsFullscreen(!isFullscreen)} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -415,8 +431,8 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 style={newUiEnabled ? { border: '1px solid var(--border)' } : undefined}
                 onClick={() => setIsOnlineMode(!isOnlineMode)}
               >
-                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${!isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (!isOnlineMode ? { background: 'var(--bg)', color: 'var(--text)' } : { color: 'var(--text-muted)' }) : undefined}>Cơ Bản</div>
-                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${isOnlineMode ? (newUiEnabled ? 'text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}>{senaiTierLabel}</div>
+                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${!isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (!isOnlineMode ? { background: 'var(--bg)', color: 'var(--text)' } : { color: 'var(--text-muted)' }) : undefined}>Trợ Lý Sen</div>
+                <div className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all ${isOnlineMode ? (newUiEnabled ? 'text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : (newUiEnabled ? '' : 'text-slate-400')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}>{onlineModeLabel}</div>
               </div>
             </div>
           </div>

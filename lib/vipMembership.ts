@@ -87,3 +87,6 @@ export function isVipActive(profile: { vip_expires_at?: string | null } | null |
 }
 
 export const VIP_DAILY_DOWNLOAD_LIMIT = 5
+
+// VIP tặng thêm hạn mức câu hỏi SenAI/ngày (tương đương gói Plus), cộng dồn theo kiểu lấy max với gói SenAI đã mua
+export const VIP_SENAI_DAILY_BONUS = 50

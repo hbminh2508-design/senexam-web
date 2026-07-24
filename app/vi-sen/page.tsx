@@ -8,7 +8,6 @@ import {
   SenCashTopupOrder, SenCashTransaction, fetchSenCashBalance, fetchMyTransactions,
 } from '@/lib/senCash'
 import { SENAI_TIERS, SenAiTierCode } from '@/lib/senaiTiers'
-import { isVipFeatureEnabled } from '@/lib/systemRelease'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
@@ -50,9 +49,6 @@ export default function ViSenPage() {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('is_beta_tester').eq('id', user.id).maybeSingle()
-      const enabled = await isVipFeatureEnabled(!!profile?.is_beta_tester)
-      if (!enabled) { router.push('/dashboard'); return }
       await refreshWallet(user.id)
       setLoading(false)
     }
