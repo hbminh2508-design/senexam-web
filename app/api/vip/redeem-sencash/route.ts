@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getVipPlan, extendVipExpiry } from '@/lib/vipMembership'
+import { getPlanByGroup, extendVipExpiry, type PlanGroup, type VipPlanCode } from '@/lib/vipMembership'
 import { vndToSenCash } from '@/lib/senCash'
-import { applyVipPurchasePerks } from '@/lib/vipSenaiGift'
+import { applyVipPurchasePerks, applyPremiumPurchasePerks } from '@/lib/vipSenaiGift'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,9 +11,10 @@ export async function POST(request: Request) {
     const user = await getUserFromRequest(request)
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
 
-    const { planCode } = await request.json()
-    const plan = getVipPlan(planCode)
-    if (!plan) return NextResponse.json({ error: 'Gói VIP không hợp lệ' }, { status: 400 })
+    const { planCode, planGroup } = await request.json()
+    const group: PlanGroup = planGroup === 'premium' || planGroup === 'lite' ? planGroup : 'vip'
+    const plan = getPlanByGroup(group, planCode)
+    if (!plan) return NextResponse.json({ error: 'Gói không hợp lệ' }, { status: 400 })
 
     const cost = vndToSenCash(plan.priceVnd)
     const supabaseAdmin = getSupabaseAdmin()
@@ -35,8 +36,9 @@ export async function POST(request: Request) {
     const { data: profile } = await supabaseAdmin.from('profiles').select('vip_expires_at').eq('id', user.id).maybeSingle()
     const newExpiresAt = extendVipExpiry(profile?.vip_expires_at, plan.durationDays)
 
-    await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code, plan_tier: 'vip' }).eq('id', user.id)
-    await applyVipPurchasePerks(supabaseAdmin, user.id, plan.code)
+    await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code, plan_tier: group }).eq('id', user.id)
+    if (group === 'vip') await applyVipPurchasePerks(supabaseAdmin, user.id, plan.code as VipPlanCode)
+    else if (group === 'premium') await applyPremiumPurchasePerks(supabaseAdmin, user.id, plan.code as VipPlanCode)
 
     return NextResponse.json({ success: true, vipExpiresAt: newExpiresAt })
   } catch (e) {

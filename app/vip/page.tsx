@@ -146,7 +146,7 @@ export default function VipPage() {
       const res = await fetch('/api/vip/redeem-sencash', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planCode: plan.code }),
+        body: JSON.stringify({ planCode: plan.code, planGroup: activeGroup }),
       })
       const json = await res.json()
       if (!res.ok) { setErrorMsg(json.error || 'Không đổi được VIP'); return }
@@ -268,9 +268,7 @@ export default function VipPage() {
                 >
                   <p className={`text-xs font-bold uppercase tracking-wide ${mutedClass}`} style={mutedStyle}>{plan.name}</p>
                   <p className="text-lg font-black mt-1">{plan.priceVnd.toLocaleString('vi-VN')}đ</p>
-                  {activeGroup === 'vip' && (
-                    <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${mutedClass}`} style={mutedStyle}><Coins className="w-3 h-3" /> hoặc {vndToSenCash(plan.priceVnd)} SC</p>
-                  )}
+                  <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${mutedClass}`} style={mutedStyle}><Coins className="w-3 h-3" /> hoặc {vndToSenCash(plan.priceVnd)} SC</p>
                 </button>
               ))}
             </div>
@@ -285,17 +283,15 @@ export default function VipPage() {
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <GroupIcon className="w-4 h-4" />}
                 Chuyển khoản {selectedPlan.priceVnd.toLocaleString('vi-VN')}đ
               </button>
-              {activeGroup === 'vip' && (
-                <button
-                  onClick={() => handleRedeemWithSenCash(selectedPlan)}
-                  disabled={redeemingPlan === selectedPlan.code || senCashBalance < vndToSenCash(selectedPlan.priceVnd)}
-                  className="flex-1 py-3.5 rounded-2xl font-black text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-40 border-2"
-                  style={{ borderColor: meta.accent, color: meta.accent }}
-                >
-                  {redeemingPlan === selectedPlan.code ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
-                  Đổi {vndToSenCash(selectedPlan.priceVnd)} SenCash
-                </button>
-              )}
+              <button
+                onClick={() => handleRedeemWithSenCash(selectedPlan)}
+                disabled={redeemingPlan === selectedPlan.code || senCashBalance < vndToSenCash(selectedPlan.priceVnd)}
+                className="flex-1 py-3.5 rounded-2xl font-black text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-40 border-2"
+                style={{ borderColor: meta.accent, color: meta.accent }}
+              >
+                {redeemingPlan === selectedPlan.code ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
+                Đổi {vndToSenCash(selectedPlan.priceVnd)} SenCash
+              </button>
             </div>
           </>
         ) : (
