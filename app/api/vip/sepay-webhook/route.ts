@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
-import { getVipPlan, extendVipExpiry } from '@/lib/vipMembership'
-import { applyVipPurchasePerks } from '@/lib/vipSenaiGift'
+import { getPlanByGroup, extendVipExpiry, type PlanGroup, type VipPlanCode } from '@/lib/vipMembership'
+import { applyVipPurchasePerks, applyPremiumPurchasePerks } from '@/lib/vipSenaiGift'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +16,7 @@ type SepayPayload = {
   id?: number | string
 }
 
-const ORDER_CODE_RE = /(SENVIP|SENCASH)[A-Z0-9]{6}/
+const ORDER_CODE_RE = /(SENVIP|SENCASH|SENPREM|SENLITE)[A-Z0-9]{6}/
 
 async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>, orderCode: string, payload: SepayPayload) {
   const { data: order, error: fetchErr } = await supabaseAdmin
@@ -32,7 +32,9 @@ async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>
   const amount = payload.transferAmount || 0
   if (amount < order.amount_vnd) return { ignored: 'amount_mismatch' }
 
-  const plan = getVipPlan(order.plan_code)
+  // plan_group mới thêm — đơn tạo trước khi có cột này coi như 'vip' để tương thích ngược
+  const planGroup: PlanGroup = (order.plan_group as PlanGroup) || 'vip'
+  const plan = getPlanByGroup(planGroup, order.plan_code)
   if (!plan) throw new Error('Unknown plan on order')
 
   const { data: profile } = await supabaseAdmin.from('profiles').select('vip_expires_at').eq('id', order.user_id).maybeSingle()
@@ -48,8 +50,12 @@ async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>
     })
     .eq('id', order.id)
 
-  await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code }).eq('id', order.user_id)
-  await applyVipPurchasePerks(supabaseAdmin, order.user_id, plan.code)
+  // Hạng gói mới nhất "thắng" và áp dụng cho toàn bộ thời hạn còn lại (kể cả thời hạn cộng dồn từ
+  // gói cũ) — giống hệt cách vip_plan_code đã hoạt động từ trước, chỉ mở rộng thêm chiều plan_tier.
+  await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code, plan_tier: planGroup }).eq('id', order.user_id)
+
+  if (planGroup === 'vip') await applyVipPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode)
+  else if (planGroup === 'premium') await applyPremiumPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode)
 
   return { success: true }
 }

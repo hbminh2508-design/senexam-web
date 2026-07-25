@@ -9,11 +9,12 @@ export async function POST(request: Request) {
     const admin = await requireAdmin(request)
     if (!admin) return NextResponse.json({ error: 'Không có quyền truy cập' }, { status: 403 })
 
-    const { userId, days, note } = await request.json()
+    const { userId, days, note, planTier } = await request.json()
     const daysNum = parseInt(days, 10)
     if (!userId || !Number.isFinite(daysNum) || daysNum <= 0) {
       return NextResponse.json({ error: 'Thiếu userId hoặc số ngày không hợp lệ' }, { status: 400 })
     }
+    const tier: 'lite' | 'vip' | 'premium' = planTier === 'lite' || planTier === 'premium' ? planTier : 'vip'
 
     const supabaseAdmin = getSupabaseAdmin()
     const { data: profile, error: fetchErr } = await supabaseAdmin.from('profiles').select('vip_expires_at').eq('id', userId).maybeSingle()
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
     if (!profile) return NextResponse.json({ error: 'Không tìm thấy người dùng' }, { status: 404 })
 
     const newExpiresAt = extendVipExpiry(profile.vip_expires_at, daysNum)
-    await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt }).eq('id', userId)
+    await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, plan_tier: tier }).eq('id', userId)
 
     await supabaseAdmin.from('admin_grants_log').insert({
       admin_id: admin.id,

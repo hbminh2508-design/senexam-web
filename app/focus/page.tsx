@@ -18,6 +18,7 @@ import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getAccentHex, getModernThemeVars } from '@/app/components/modernTheme'
 import VipAdBanner from '@/app/components/VipAdBanner'
+import AdBanner from '@/components/AdBanner'
 
 // Khai báo global cho YouTube Iframe API để fix lỗi TypeScript
 declare global {
@@ -459,6 +460,7 @@ export default function FocusRoomPage() {
         </header>
 
         <div className="px-4 lg:px-6 pt-4 shrink-0"><VipAdBanner compact /></div>
+        <div className="px-4 lg:px-6 pt-4 shrink-0"><AdBanner dataAdSlot="0000000002" /></div>
 
         {/* MAIN SPLIT LAYOUT */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative custom-scrollbar">
@@ -841,6 +843,7 @@ export default function FocusRoomPage() {
       </header>
 
       <div className="px-4 lg:px-6 pt-4 shrink-0"><VipAdBanner compact /></div>
+        <div className="px-4 lg:px-6 pt-4 shrink-0"><AdBanner dataAdSlot="0000000002" /></div>
 
       {/* 🌟 MAIN SPLIT LAYOUT (RESPONSIVE) */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden relative custom-scrollbar">

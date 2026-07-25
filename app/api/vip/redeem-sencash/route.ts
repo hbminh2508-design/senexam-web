@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     const { data: profile } = await supabaseAdmin.from('profiles').select('vip_expires_at').eq('id', user.id).maybeSingle()
     const newExpiresAt = extendVipExpiry(profile?.vip_expires_at, plan.durationDays)
 
-    await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code }).eq('id', user.id)
+    await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code, plan_tier: 'vip' }).eq('id', user.id)
     await applyVipPurchasePerks(supabaseAdmin, user.id, plan.code)
 
     return NextResponse.json({ success: true, vipExpiresAt: newExpiresAt })

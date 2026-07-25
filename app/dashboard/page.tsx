@@ -18,6 +18,7 @@ import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
 import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
 import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion } from '@/lib/systemRelease'
+import { getEffectivePlanTier, type PlanTier } from '@/lib/vipMembership'
 import type { Feature } from './_home/types'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
@@ -69,6 +70,7 @@ export default function DashboardPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string>('student')
   const [isVip, setIsVip] = useState(false)
+  const [planTier, setPlanTier] = useState<PlanTier | null>(null)
   const [vipExpiresAt, setVipExpiresAt] = useState<string | null>(null)
   const [senCashBalance, setSenCashBalance] = useState(0)
   
@@ -162,12 +164,10 @@ export default function DashboardPage() {
   const handleLeaveBeta = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    // Rời Beta thì cũng tự động quay về Giao diện cũ — Giao diện mới chỉ dành cho thành viên Beta
-    await supabase.from('profiles').update({ is_beta_tester: false, new_ui_enabled: false }).eq('id', user.id)
+    // Chỉ rời kênh cập nhật thử nghiệm — Giao diện Mới/Mặc định là lựa chọn độc lập, không đổi theo
+    await supabase.from('profiles').update({ is_beta_tester: false }).eq('id', user.id)
     setIsBetaTester(false)
-    setNewUiEnabled(false)
     localStorage.setItem('senexam_beta_tester', '0')
-    localStorage.setItem('senexam_new_ui', '0')
     window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
     refreshPublishedVersion(false)
   }
@@ -295,14 +295,12 @@ export default function DashboardPage() {
         setUserRole(profile.role || 'student')
         setIsVip(!!profile.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now())
         setVipExpiresAt(profile.vip_expires_at || null)
+        setPlanTier(getEffectivePlanTier(profile))
         setSenCashBalance(profile.sencash_balance || 0)
-        // Giao diện mới chỉ dành cho thành viên Beta — nếu tài khoản cũ từng bật trước khi
-        // có luật này mà chưa tham gia Beta, tự động đưa về Giao diện cũ để đồng bộ đúng luật.
-        const effectiveNewUi = !!profile.new_ui_enabled && !!profile.is_beta_tester
+        // Giao diện Mới giờ là bản chính thức cho mọi tài khoản, không còn cần tham gia Beta —
+        // chỉ những ai đã tự tay chọn về Mặc định (new_ui_enabled = false) mới thấy giao diện cũ.
+        const effectiveNewUi = profile.new_ui_enabled !== false
         setNewUiEnabled(effectiveNewUi)
-        if (profile.new_ui_enabled && !profile.is_beta_tester) {
-          supabase.from('profiles').update({ new_ui_enabled: false }).eq('id', user.id).then(() => {})
-        }
         setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
         setIsBetaTester(!!profile.is_beta_tester)
         localStorage.setItem('senexam_beta_tester', profile.is_beta_tester ? '1' : '0')
@@ -523,20 +521,18 @@ export default function DashboardPage() {
     localStorage.setItem('senexam_notifications', next ? '1' : '0')
   }
 
-  const toggleNewUi = async () => {
-    const next = !newUiEnabled
-    // Chỉ người dùng đã tham gia Chương trình Beta mới được bật Giao diện mới
-    if (next && !isBetaTester) {
-      setShowBetaJoinModal(true)
-      return
-    }
-    setNewUiEnabled(next)
+  // Giao diện Mới (trước đây gọi là "Beta") giờ là giao diện chính thức, mở cho mọi tài khoản —
+  // không còn cần tham gia Chương trình Beta để bật. Chọn trực tiếp giữa 2 lựa chọn (Mặc định/Mới)
+  // thay vì bật/tắt, khớp với bộ chọn 2 hình tròn trong Cài đặt.
+  const setUiVersion = async (useModern: boolean) => {
+    if (useModern === newUiEnabled) return
+    setNewUiEnabled(useModern)
     setNewUiSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const { error } = await supabase.from('profiles').update({ new_ui_enabled: next }).eq('id', user.id)
+      const { error } = await supabase.from('profiles').update({ new_ui_enabled: useModern }).eq('id', user.id)
       if (error) {
-        setNewUiEnabled(!next)
+        setNewUiEnabled(!useModern)
         alert('Không thể lưu cài đặt giao diện: ' + error.message)
       }
     }
@@ -679,6 +675,7 @@ export default function DashboardPage() {
         animationsEnabled={animationsEnabled}
         isBetaTester={isBetaTester}
         isVip={isVip}
+        isPremium={planTier === 'premium'}
         vipExpiresAt={vipExpiresAt}
         senCashBalance={senCashBalance}
       />
@@ -854,24 +851,24 @@ export default function DashboardPage() {
                 <h3 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 ml-2">Thử nghiệm</h3>
 
                 <div className="bg-slate-50 dark:bg-[#121212] rounded-3xl border border-slate-100 dark:border-transparent overflow-hidden">
-                  <div className="flex items-center justify-between p-4.5">
-                    <div className="flex items-center gap-4">
+                  <div className="p-4.5">
+                    <div className="flex items-center gap-4 mb-4">
                       <Palette className="w-5 h-5 text-indigo-500" />
                       <div>
-                        <p className="font-bold text-slate-900 dark:text-white text-sm">Giao diện mới (Beta)</p>
-                        <p className="text-[11px] font-medium text-slate-500">
-                          {isBetaTester ? 'Material Glass 2.0 — nhẹ, đẹp, có thể quay lại giao diện cũ bất cứ lúc nào.' : 'Chỉ dành cho thành viên Beta — tham gia Beta ở mục trên để mở khóa.'}
-                        </p>
+                        <p className="font-bold text-slate-900 dark:text-white text-sm">Giao diện</p>
+                        <p className="text-[11px] font-medium text-slate-500">Giao diện Mới là bản chính thức — có thể đổi lại bản Mặc định bất cứ lúc nào.</p>
                       </div>
                     </div>
-                    <button
-                      onClick={toggleNewUi}
-                      disabled={newUiSaving}
-                      title={!isBetaTester ? 'Tham gia Beta để mở khóa' : undefined}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors shrink-0 ${newUiEnabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-[#333333]'} disabled:opacity-60 ${!isBetaTester ? 'opacity-50' : ''}`}
-                    >
-                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${newUiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
+                    <div className="flex items-center gap-7 pl-1">
+                      <button onClick={() => setUiVersion(false)} disabled={newUiSaving} className="flex flex-col items-center gap-2 disabled:opacity-60">
+                        <span className={`w-10 h-10 rounded-full bg-sky-500 transition-all ${!newUiEnabled ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-offset-[#121212] dark:ring-white scale-110' : 'hover:scale-105 opacity-60'}`} />
+                        <span className={`text-[11px] font-bold ${!newUiEnabled ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>Mặc định</span>
+                      </button>
+                      <button onClick={() => setUiVersion(true)} disabled={newUiSaving} className="flex flex-col items-center gap-2 disabled:opacity-60">
+                        <span className={`w-10 h-10 rounded-full bg-orange-500 transition-all ${newUiEnabled ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-offset-[#121212] dark:ring-white scale-110' : 'hover:scale-105 opacity-60'}`} />
+                        <span className={`text-[11px] font-bold ${newUiEnabled ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>Mới</span>
+                      </button>
+                    </div>
                   </div>
 
                   {newUiEnabled && (

@@ -3,12 +3,45 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
-import { VIP_PLANS, VipPlan, VipOrder, isVipActive } from '@/lib/vipMembership'
+import {
+  VIP_PLANS, PREMIUM_PLANS, LITE_PLANS,
+  getPlanByGroup, isVipActive, getEffectivePlanTier,
+  type PlanGroup, type VipOrder,
+} from '@/lib/vipMembership'
 import { vndToSenCash, fetchSenCashBalance } from '@/lib/senCash'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
-import { ArrowLeft, Crown, Check, Loader2, Copy, CheckCircle2, XCircle, Clock, Coins, Wallet, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Crown, Gem, Zap, Check, Loader2, Copy, CheckCircle2, XCircle, Clock, Coins, Wallet, ChevronRight } from 'lucide-react'
+
+type PlanOption = { code: string; name: string; priceVnd: number; durationDays: number }
+
+const GROUP_META: Record<PlanGroup, { label: string; icon: typeof Crown; accent: string; plans: PlanOption[] }> = {
+  lite: { label: 'Lite', icon: Zap, accent: '#0284C7', plans: LITE_PLANS },
+  vip: { label: 'VIP', icon: Crown, accent: '#D97706', plans: VIP_PLANS },
+  premium: { label: 'Premium', icon: Gem, accent: '#7C3AED', plans: PREMIUM_PLANS },
+}
+
+const GROUP_PERKS: Record<PlanGroup, string[]> = {
+  lite: [
+    'Mở khoá xem kho tài liệu VIP (tải thêm cần trả bằng SenCash, không có lượt miễn phí/ngày)',
+    'Không có gói SenAI tặng kèm, không cộng thêm câu hỏi SenAI/ngày',
+    'Quảng cáo vẫn hiển thị, nhưng đóng lại thì sang ngày mới mới thấy lại',
+    'Giá rẻ nhất — chỉ từ 1.000đ',
+  ],
+  vip: [
+    'Không quảng cáo',
+    'Kho tài liệu VIP, 5 lượt tải miễn phí/ngày',
+    'Tặng thêm hạn mức 50 câu hỏi SenAI/ngày',
+    'Mua từ 1 tháng tặng gói SenAI Lite, mua theo năm tặng SenAI Plus Lite',
+  ],
+  premium: [
+    'Trọn vẹn mọi đặc quyền VIP',
+    'Đổi giao diện chữ "SenExam" sang phong cách Premium độc quyền',
+    'Mua từ 3 tháng tặng thẳng hạng SenAI Plus',
+    'Mua theo năm tặng thẳng hạng SenAI Ultra',
+  ],
+}
 
 export default function VipPage() {
   const router = useRouter()
@@ -17,9 +50,11 @@ export default function VipPage() {
   const [loading, setLoading] = useState(true)
 
   const [vipExpiresAt, setVipExpiresAt] = useState<string | null>(null)
+  const [currentTier, setCurrentTier] = useState<PlanGroup | null>(null)
   const [senCashBalance, setSenCashBalance] = useState(0)
 
-  const [selectedPlan, setSelectedPlan] = useState<VipPlan>(VIP_PLANS[2])
+  const [activeGroup, setActiveGroup] = useState<PlanGroup>('vip')
+  const [selectedPlan, setSelectedPlan] = useState<PlanOption>(VIP_PLANS[2])
   const [creating, setCreating] = useState(false)
   const [redeemingPlan, setRedeemingPlan] = useState<string | null>(null)
   const [order, setOrder] = useState<VipOrder | null>(null)
@@ -30,8 +65,9 @@ export default function VipPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refreshStatus = async (userId: string) => {
-    const { data: profile } = await supabase.from('profiles').select('vip_expires_at').eq('id', userId).single()
+    const { data: profile } = await supabase.from('profiles').select('vip_expires_at, plan_tier').eq('id', userId).single()
     setVipExpiresAt(profile?.vip_expires_at || null)
+    setCurrentTier(getEffectivePlanTier(profile))
     setSenCashBalance(await fetchSenCashBalance(userId))
   }
 
@@ -48,6 +84,13 @@ export default function VipPage() {
     setIsDark(dark)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [router])
+
+  const switchGroup = (group: PlanGroup) => {
+    setActiveGroup(group)
+    const plans = GROUP_META[group].plans
+    setSelectedPlan(plans[Math.min(2, plans.length - 1)])
+    setErrorMsg(''); setInfoMsg('')
+  }
 
   const stopPolling = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
 
@@ -73,7 +116,7 @@ export default function VipPage() {
     }, 3000)
   }
 
-  const handleBuyVip = async () => {
+  const handleBuy = async () => {
     setCreating(true); setErrorMsg('')
     try {
       const token = await getToken()
@@ -81,7 +124,7 @@ export default function VipPage() {
       const res = await fetch('/api/vip/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planCode: selectedPlan.code }),
+        body: JSON.stringify({ planGroup: activeGroup, planCode: selectedPlan.code }),
       })
       const json = await res.json()
       if (!res.ok) { setErrorMsg(json.error || 'Không tạo được đơn hàng'); return }
@@ -95,7 +138,7 @@ export default function VipPage() {
     }
   }
 
-  const handleRedeemWithSenCash = async (plan: VipPlan) => {
+  const handleRedeemWithSenCash = async (plan: PlanOption) => {
     setRedeemingPlan(plan.code); setErrorMsg(''); setInfoMsg('')
     try {
       const token = await getToken()
@@ -124,8 +167,10 @@ export default function VipPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const currentlyVip = isVipActive({ vip_expires_at: vipExpiresAt })
+  const currentlyActive = isVipActive({ vip_expires_at: vipExpiresAt })
   const isModern = newUiEnabled
+  const meta = GROUP_META[activeGroup]
+  const GroupIcon = meta.icon
 
   const wrapperStyle = isModern ? { ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties : undefined
   const wrapperClass = isModern ? 'min-h-screen font-sans pb-16' : 'min-h-screen bg-slate-50 dark:bg-[#0d0d0d] text-slate-900 dark:text-slate-100 pb-16'
@@ -137,7 +182,7 @@ export default function VipPage() {
   const backBtnStyle = isModern ? { border: '1px solid var(--border)' } : undefined
 
   if (loading) {
-    if (isModern) return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải VIP..." />
+    if (isModern) return <ModernLoading themeColor={themeColor} isDark={isDark} label="Đang tải các gói thành viên..." />
     return <div className="min-h-screen flex items-center justify-center font-bold text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải...</div>
   }
 
@@ -150,17 +195,17 @@ export default function VipPage() {
           </button>
           <div>
             <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
-              <Crown className="w-6 h-6 text-amber-500" /> Thành viên VIP
+              <Crown className="w-6 h-6 text-amber-500" /> Gói thành viên
             </h1>
-            <p className={`text-sm mt-1 ${mutedClass}`} style={mutedStyle}>Nâng cấp để mở khoá kho tài liệu VIP và các đặc quyền độc quyền.</p>
+            <p className={`text-sm mt-1 ${mutedClass}`} style={mutedStyle}>Chọn gói Lite, VIP hoặc Premium — mở khoá kho tài liệu và đặc quyền SenAI.</p>
           </div>
         </div>
 
-        {currentlyVip && (
-          <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center gap-3 shadow-lg shadow-amber-500/20">
-            <Crown className="w-5 h-5 shrink-0" />
+        {currentlyActive && (
+          <div className="mb-6 p-4 rounded-2xl text-white flex items-center gap-3 shadow-lg" style={{ background: `linear-gradient(to right, ${GROUP_META[currentTier || 'vip'].accent}, ${GROUP_META[currentTier || 'vip'].accent}cc)` }}>
+            <GroupIcon className="w-5 h-5 shrink-0" />
             <p className="text-sm font-bold">
-              Bạn đang là thành viên VIP, hết hạn lúc {new Date(vipExpiresAt!).toLocaleString('vi-VN')}.
+              Bạn đang là thành viên {GROUP_META[currentTier || 'vip'].label}, hết hạn lúc {new Date(vipExpiresAt!).toLocaleString('vi-VN')}.
             </p>
           </div>
         )}
@@ -170,11 +215,38 @@ export default function VipPage() {
           <span className={`flex items-center gap-1 text-xs font-bold ${mutedClass}`} style={mutedStyle}>Quản lý ví, nạp SenCash, mua gói SenAI <ChevronRight className="w-3.5 h-3.5" /></span>
         </button>
 
+        {/* Bộ chọn nhóm gói */}
+        <div className="grid grid-cols-3 gap-2 mb-6">
+          {(Object.keys(GROUP_META) as PlanGroup[]).map(group => {
+            const m = GROUP_META[group]
+            const Icon = m.icon
+            const active = activeGroup === group
+            return (
+              <button
+                key={group}
+                onClick={() => switchGroup(group)}
+                className="p-3.5 rounded-2xl border-2 flex flex-col items-center gap-1.5 transition-all"
+                style={{
+                  borderColor: active ? m.accent : 'transparent',
+                  background: active ? `${m.accent}1a` : (isModern ? 'var(--surface)' : undefined),
+                  ...(active ? {} : cardStyle),
+                }}
+              >
+                <Icon className="w-5 h-5" style={{ color: m.accent }} />
+                <span className="text-sm font-black" style={{ color: active ? m.accent : undefined }}>{m.label}</span>
+                {currentTier === group && currentlyActive && (
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md text-white" style={{ background: m.accent }}>Đang dùng</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
         <div className={`${cardClass} mb-6`} style={cardStyle}>
-          <h2 className={`font-bold text-sm mb-3 ${mutedClass}`} style={mutedStyle}>Đặc quyền VIP</h2>
+          <h2 className="font-bold text-sm mb-3 flex items-center gap-2" style={{ color: meta.accent }}><GroupIcon className="w-4 h-4" /> Đặc quyền gói {meta.label}</h2>
           <ul className={`space-y-2 text-sm ${mutedClass}`} style={mutedStyle}>
-            {['Không quảng cáo', 'Kho tài liệu riêng dành cho VIP, 5 lượt tải free/ngày', 'Nhận bản cập nhật sớm hơn', 'Tính năng độc quyền trong tương lai'].map(f => (
-              <li key={f} className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0" /> {f}</li>
+            {GROUP_PERKS[activeGroup].map(f => (
+              <li key={f} className="flex items-start gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" /> {f}</li>
             ))}
           </ul>
         </div>
@@ -184,38 +256,46 @@ export default function VipPage() {
 
         {!order || order.status === 'expired' || order.status === 'cancelled' ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-              {VIP_PLANS.map(plan => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              {meta.plans.map(plan => (
                 <button
                   key={plan.code}
                   onClick={() => setSelectedPlan(plan)}
-                  className={`p-4 rounded-2xl border text-left transition-all ${selectedPlan.code === plan.code ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 ring-2 ring-amber-500' : 'border-slate-200 dark:border-white/5 hover:border-amber-300'}`}
-                  style={selectedPlan.code !== plan.code ? cardStyle : undefined}
+                  className="p-4 rounded-2xl border text-left transition-all"
+                  style={selectedPlan.code === plan.code
+                    ? { borderColor: meta.accent, background: `${meta.accent}14`, boxShadow: `0 0 0 2px ${meta.accent}` }
+                    : cardStyle}
                 >
                   <p className={`text-xs font-bold uppercase tracking-wide ${mutedClass}`} style={mutedStyle}>{plan.name}</p>
                   <p className="text-lg font-black mt-1">{plan.priceVnd.toLocaleString('vi-VN')}đ</p>
-                  <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${mutedClass}`} style={mutedStyle}><Coins className="w-3 h-3" /> hoặc {vndToSenCash(plan.priceVnd)} SC</p>
+                  {activeGroup === 'vip' && (
+                    <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${mutedClass}`} style={mutedStyle}><Coins className="w-3 h-3" /> hoặc {vndToSenCash(plan.priceVnd)} SC</p>
+                  )}
                 </button>
               ))}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                onClick={handleBuyVip}
+                onClick={handleBuy}
                 disabled={creating}
-                className="flex-1 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm shadow-lg shadow-amber-500/30 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                className="flex-1 py-3.5 rounded-2xl text-white font-black text-sm shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                style={{ background: meta.accent, boxShadow: `0 10px 25px ${meta.accent}4d` }}
               >
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Crown className="w-4 h-4" />}
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <GroupIcon className="w-4 h-4" />}
                 Chuyển khoản {selectedPlan.priceVnd.toLocaleString('vi-VN')}đ
               </button>
-              <button
-                onClick={() => handleRedeemWithSenCash(selectedPlan)}
-                disabled={redeemingPlan === selectedPlan.code || senCashBalance < vndToSenCash(selectedPlan.priceVnd)}
-                className="flex-1 py-3.5 rounded-2xl font-black text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-40 border-2 border-amber-500 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-              >
-                {redeemingPlan === selectedPlan.code ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
-                Đổi {vndToSenCash(selectedPlan.priceVnd)} SenCash
-              </button>
+              {activeGroup === 'vip' && (
+                <button
+                  onClick={() => handleRedeemWithSenCash(selectedPlan)}
+                  disabled={redeemingPlan === selectedPlan.code || senCashBalance < vndToSenCash(selectedPlan.priceVnd)}
+                  className="flex-1 py-3.5 rounded-2xl font-black text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-40 border-2"
+                  style={{ borderColor: meta.accent, color: meta.accent }}
+                >
+                  {redeemingPlan === selectedPlan.code ? <Loader2 className="w-4 h-4 animate-spin" /> : <Coins className="w-4 h-4" />}
+                  Đổi {vndToSenCash(selectedPlan.priceVnd)} SenCash
+                </button>
+              )}
             </div>
           </>
         ) : (
@@ -224,7 +304,7 @@ export default function VipPage() {
               <>
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
                 <p className="font-black text-lg mb-1">Thanh toán thành công!</p>
-                <p className={`text-sm ${mutedClass}`} style={mutedStyle}>Tài khoản của bạn đã được nâng cấp VIP.</p>
+                <p className={`text-sm ${mutedClass}`} style={mutedStyle}>Tài khoản của bạn đã được nâng cấp {meta.label}.</p>
               </>
             ) : (
               <>

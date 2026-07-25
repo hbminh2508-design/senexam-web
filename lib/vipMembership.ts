@@ -23,12 +23,46 @@ export function getVipPlan(code: string): VipPlan | undefined {
   return VIP_PLANS.find(p => p.code === code)
 }
 
+// Gói Premium — cùng các mốc thời hạn với VIP nhưng giá gấp 3, đổi lại logo/chữ SenExam sang
+// phong cách Premium và được tặng hạng SenAI cao hơn khi mua từ 3 tháng trở lên (xem vipSenaiGift.ts).
+export const PREMIUM_PLANS: VipPlan[] = VIP_PLANS.map(p => ({ ...p, priceVnd: p.priceVnd * 3 }))
+
+export function getPremiumPlan(code: string): VipPlan | undefined {
+  return PREMIUM_PLANS.find(p => p.code === code)
+}
+
+// Gói Lite — rẻ hơn, không có đặc quyền SenAI/tải VIP, quảng cáo vẫn hiển thị (chỉ giãn tần suất
+// hiện lại sau khi đóng — xem AdBanner.tsx). Mốc thời hạn khác VIP nên khai báo mã riêng.
+export type LitePlanCode = 'trial3d' | 'monthly' | 'quarterly' | 'yearly'
+
+export const LITE_PLANS: { code: LitePlanCode; name: string; priceVnd: number; durationDays: number }[] = [
+  { code: 'trial3d', name: '3 ngày', priceVnd: 1_000, durationDays: 3 },
+  { code: 'monthly', name: '1 tháng', priceVnd: 7_000, durationDays: 30 },
+  { code: 'quarterly', name: '3 tháng', priceVnd: 19_000, durationDays: 90 },
+  { code: 'yearly', name: '1 năm', priceVnd: 69_000, durationDays: 365 },
+]
+
+export function getLitePlan(code: string): (typeof LITE_PLANS)[number] | undefined {
+  return LITE_PLANS.find(p => p.code === code)
+}
+
+// Nhóm gói — 'vip' giữ nguyên mã cũ (daily/weekly/monthly/quarterly/yearly) để tương thích ngược,
+// 'premium' dùng chung mã đó (giá x3), 'lite' có mã thời hạn riêng.
+export type PlanGroup = 'lite' | 'vip' | 'premium'
+
+export function getPlanByGroup(group: PlanGroup, code: string): VipPlan | (typeof LITE_PLANS)[number] | undefined {
+  if (group === 'vip') return getVipPlan(code)
+  if (group === 'premium') return getPremiumPlan(code)
+  return getLitePlan(code)
+}
+
 export type VipOrderStatus = 'pending' | 'paid' | 'expired' | 'cancelled'
 
 export type VipOrder = {
   id: string
   user_id: string
-  plan_code: VipPlanCode
+  plan_group?: PlanGroup
+  plan_code: string
   order_code: string
   amount_vnd: number
   status: VipOrderStatus
@@ -40,8 +74,9 @@ export type VipOrder = {
 export const ORDER_TTL_MINUTES = 15
 
 // Nhúng vào nội dung chuyển khoản (addInfo) — ngắn, dễ đọc qua sao kê ngân hàng.
-// Tiền tố phân biệt loại đơn khi webhook SePay đối soát (SENVIP = mua VIP, SENCASH = nạp ví).
-export function generateOrderCode(prefix: 'SENVIP' | 'SENCASH'): string {
+// Tiền tố phân biệt loại đơn khi webhook SePay đối soát (SENVIP = mua VIP, SENCASH = nạp ví,
+// SENPREM = mua Premium, SENLITE = mua Lite).
+export function generateOrderCode(prefix: 'SENVIP' | 'SENCASH' | 'SENPREM' | 'SENLITE'): string {
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
   return `${prefix}${rand}`
 }
@@ -90,3 +125,29 @@ export const VIP_DAILY_DOWNLOAD_LIMIT = 5
 
 // VIP tặng thêm hạn mức câu hỏi SenAI/ngày (tương đương gói Plus), cộng dồn theo kiểu lấy max với gói SenAI đã mua
 export const VIP_SENAI_DAILY_BONUS = 50
+
+// Hạng gói hiện có hiệu lực (đọc từ profiles.plan_tier + vip_expires_at). Cột plan_tier mới thêm
+// nên hồ sơ VIP tạo trước đó chưa có giá trị — coi như 'vip' để không phá vỡ hành vi cũ.
+export type PlanTier = 'lite' | 'vip' | 'premium'
+
+export function getEffectivePlanTier(
+  profile: { vip_expires_at?: string | null; plan_tier?: string | null } | null | undefined
+): PlanTier | null {
+  if (!isVipActive(profile)) return null
+  const tier = profile?.plan_tier
+  return tier === 'lite' || tier === 'premium' ? tier : 'vip'
+}
+
+// Lite không có đặc quyền SenAI/tải VIP; Premium ở mức sàn ngang VIP cho các gói ngắn (dưới 3 tháng)
+// — gói từ 3 tháng trở lên còn được NÂNG HẲN lên hạng SenAI Plus/Ultra thật, xem vipSenaiGift.ts.
+export const SENAI_DAILY_BONUS_BY_TIER: Record<PlanTier, number> = {
+  lite: 0,
+  vip: VIP_SENAI_DAILY_BONUS,
+  premium: VIP_SENAI_DAILY_BONUS,
+}
+
+export const DOWNLOAD_LIMIT_BY_TIER: Record<PlanTier, number> = {
+  lite: 0,
+  vip: VIP_DAILY_DOWNLOAD_LIMIT,
+  premium: VIP_DAILY_DOWNLOAD_LIMIT,
+}

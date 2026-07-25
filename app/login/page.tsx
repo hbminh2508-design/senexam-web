@@ -6,11 +6,62 @@ import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import {
   Mail, Lock, ArrowRight, Loader2, Zap, GraduationCap,
-  Eye, EyeOff, CheckCircle2, AlertCircle, Bot, Sparkles
+  Eye, EyeOff, CheckCircle2, AlertCircle,
 } from 'lucide-react'
 
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, hexToRgba } from '@/app/components/modernTheme'
+
+// Linh vật SenAI vẽ tay bằng SVG, dùng làm nền lớn cho trang đăng nhập thay cho robot nhỏ nảy
+// nảy trước đây — cùng một nhân vật, chỉ đổi vai trò từ "mascot cạnh form" sang "nền trang trí".
+// Tô màu hoàn toàn bằng CSS var(--accent)/var(--bg) nên tự đổi theo màu chủ đề người dùng chọn.
+function RobotBackdrop({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 520 640"
+      className={className}
+      aria-hidden="true"
+      style={{ overflow: 'visible' }}
+    >
+      {/* Vầng sáng sau lưng */}
+      <ellipse cx="260" cy="360" rx="230" ry="260" fill="var(--accent)" opacity="0.12" />
+
+      {/* Ăng-ten */}
+      <circle cx="260" cy="30" r="14" fill="var(--accent)" opacity="0.9" className="modern-loading-dot" />
+      <rect x="253" y="40" width="14" height="54" rx="7" fill="var(--accent)" opacity="0.85" />
+
+      {/* Đầu */}
+      <rect x="140" y="90" width="240" height="190" rx="56" fill="var(--accent)" opacity="0.85" />
+      {/* Mặt kính */}
+      <rect x="172" y="132" width="176" height="96" rx="34" fill="var(--bg)" opacity="0.9" />
+      {/* Mắt */}
+      <rect x="206" y="158" width="26" height="42" rx="13" fill="var(--accent)" />
+      <rect x="288" y="158" width="26" height="42" rx="13" fill="var(--accent)" />
+
+      {/* Cổ */}
+      <rect x="235" y="278" width="50" height="38" fill="var(--accent)" opacity="0.85" />
+
+      {/* Vai */}
+      <circle cx="112" cy="352" r="36" fill="var(--accent)" opacity="0.8" />
+      <circle cx="408" cy="352" r="36" fill="var(--accent)" opacity="0.8" />
+
+      {/* Tay */}
+      <rect x="42" y="340" width="66" height="190" rx="33" fill="var(--accent)" opacity="0.75" transform="rotate(-9 75 435)" />
+      <rect x="412" y="340" width="66" height="190" rx="33" fill="var(--accent)" opacity="0.75" transform="rotate(9 445 435)" />
+
+      {/* Thân */}
+      <rect x="108" y="316" width="304" height="270" rx="72" fill="var(--accent)" opacity="0.85" />
+      {/* Lõi năng lượng ở ngực */}
+      <circle cx="260" cy="432" r="56" fill="var(--bg)" opacity="0.9" />
+      <circle cx="260" cy="432" r="34" fill="var(--accent)" opacity="0.5" />
+      <circle cx="260" cy="432" r="14" fill="var(--accent)" />
+
+      {/* Chân — cắt ở mép dưới khung để có cảm giác robot đứng vươn lên từ đáy trang */}
+      <rect x="164" y="560" width="72" height="90" rx="30" fill="var(--accent)" opacity="0.85" />
+      <rect x="284" y="560" width="72" height="90" rx="30" fill="var(--accent)" opacity="0.85" />
+    </svg>
+  )
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -76,68 +127,33 @@ export default function LoginPage() {
       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[100px] bounce-float pointer-events-none" style={{ backgroundColor: hexToRgba(accent, isDark ? 0.16 : 0.22) }} />
       <div className="fixed bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full blur-[120px] bounce-float-delayed pointer-events-none" style={{ backgroundColor: hexToRgba(accent, isDark ? 0.1 : 0.14) }} />
 
-      <div className="relative z-10 w-full max-w-[1100px] flex flex-col lg:flex-row items-center justify-between gap-12 lg:gap-8">
+      {/* Linh vật SenAI khổ lớn làm nền — neo bên phải, chỉ hiện từ màn hình rộng để không đè lên form trên di động */}
+      <RobotBackdrop className="hidden lg:block fixed bottom-0 right-[2%] w-[420px] xl:w-[480px] h-auto pointer-events-none select-none animate-in fade-in zoom-in-95 duration-1000" />
 
-        {/* ========================================================= */}
-        {/* CỘT TRÁI: BRANDING & LINH VẬT SENAI */}
-        {/* ========================================================= */}
-        <div className="flex-1 w-full text-center lg:text-left space-y-6 animate-in fade-in slide-in-from-left-8 duration-700 pt-8 lg:pt-0">
+      <div className="relative z-10 w-full max-w-[560px] flex flex-col items-center gap-8">
 
+        {/* Thương hiệu — đặt phía trên form, giao thoa giữa chữ đậm phong cách cũ và tông màu chủ đề mới */}
+        <div className="text-center space-y-3 animate-in fade-in slide-in-from-top-4 duration-700">
           <div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest border mx-auto lg:mx-0 ms-glass"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-widest border ms-glass"
             style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
           >
             <Zap className="w-3.5 h-3.5" style={{ color: accent }} /> Nền tảng luyện thi AI 2026
           </div>
-
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter drop-shadow-sm leading-tight" style={{ color: 'var(--text)' }}>
+          <h1 className="text-4xl sm:text-5xl font-black tracking-tighter drop-shadow-sm leading-tight" style={{ color: 'var(--text)' }}>
             SenExam<span style={{ color: accent }}>.ME</span>
           </h1>
-
-          <p className="text-base sm:text-lg font-medium max-w-md mx-auto lg:mx-0 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm sm:text-base font-medium max-w-sm mx-auto leading-relaxed" style={{ color: 'var(--text-muted)' }}>
             Hệ thống đánh giá năng lực và khảo thí thông minh. Hành trang toàn diện chinh phục THPTQG, HSA & TSA.
           </p>
-
-          <div className="hidden sm:flex flex-wrap items-center justify-center lg:justify-start gap-4 text-sm font-bold pt-2" style={{ color: 'var(--text-muted)' }}>
+          <div className="hidden sm:flex flex-wrap items-center justify-center gap-4 text-sm font-bold pt-1" style={{ color: 'var(--text-muted)' }}>
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ms-glass"><CheckCircle2 className="w-4 h-4" style={{ color: accent }} /> Ngân hàng đề chuẩn</span>
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg ms-glass"><CheckCircle2 className="w-4 h-4" style={{ color: accent }} /> Chấm điểm tức thì</span>
           </div>
-
-          {/* Linh vật SenAI */}
-          <div className="hidden lg:flex items-end gap-5 mt-12 animate-in zoom-in fade-in duration-1000 delay-300">
-            <div className="relative shrink-0 bounce-float" >
-              <div
-                className="w-24 h-24 rounded-[2rem] flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.15)] border relative z-10"
-                style={{ backgroundColor: accent, borderColor: 'var(--border)' }}
-              >
-                <Bot className="w-12 h-12 text-white drop-shadow-md" />
-              </div>
-              <div
-                className="absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-2 z-20"
-                style={{ backgroundColor: '#FBBF24', borderColor: 'var(--bg)' }}
-              >
-                <Sparkles className="w-4 h-4 text-yellow-900" />
-              </div>
-              <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-16 h-3 bg-black/10 dark:bg-white/5 blur-sm rounded-[100%]"></div>
-            </div>
-
-            <div
-              className="relative px-5 py-4 rounded-2xl rounded-bl-none border shadow-xl mb-4 ms-glass"
-              style={{ borderColor: 'var(--border)' }}
-            >
-              <p className="text-sm font-black leading-snug max-w-[220px]" style={{ color: 'var(--text)' }}>
-                {isLogin
-                  ? 'Chào sĩ tử! Nạp năng lượng và bắt đầu luyện đề ngày hôm nay thôi! 🚀'
-                  : 'Tạo tài khoản để mình làm gia sư AI cá nhân hóa lộ trình cho bạn nhé! 🎯'}
-              </p>
-            </div>
-          </div>
         </div>
 
-        {/* ========================================================= */}
-        {/* CỘT PHẢI: FORM ĐĂNG NHẬP / ĐĂNG KÝ */}
-        {/* ========================================================= */}
-        <div className="w-full max-w-md lg:max-w-[420px] animate-in fade-in slide-in-from-right-8 duration-700 delay-150 relative z-20">
+        {/* Form đăng nhập / đăng ký */}
+        <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150 relative z-20">
           <div className="ms-glass rounded-[2.5rem] p-8 sm:p-10 relative border" style={{ borderColor: 'var(--border)' }}>
             <div className="mb-8 text-center">
               <div

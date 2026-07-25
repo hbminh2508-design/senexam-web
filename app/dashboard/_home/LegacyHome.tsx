@@ -27,7 +27,7 @@ export default function LegacyHome({
   router, userRole, formData, isDark, toggleTheme, unreadCount,
   setShowNotifications, setShowProfile, showFeatureMenu, setShowFeatureMenu,
   FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
-  overlayActive, isBetaTester, isVip, senCashBalance,
+  overlayActive, isBetaTester, isVip, isPremium, senCashBalance,
 }: HomeProps) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0A] text-slate-900 dark:text-slate-100 font-sans transition-colors duration-500 selection:bg-indigo-200 dark:selection:bg-indigo-900 overflow-x-hidden pb-10">
@@ -45,8 +45,15 @@ export default function LegacyHome({
             <img src="/logo.png" alt="Logo" className="w-full h-full object-contain drop-shadow-sm scale-110" />
           </div>
           <div className="hidden md:block">
-            <h1 className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white leading-none flex items-center gap-2">
-              SenExam
+            <h1 className="text-2xl font-black tracking-tighter leading-none flex items-center gap-2">
+              {isPremium ? (
+                <span
+                  className="bg-clip-text text-transparent"
+                  style={{ backgroundImage: 'linear-gradient(90deg, #F5D48A, #C99A3B, #F5D48A)' }}
+                >
+                  SenExam <span className="italic">Premium</span>
+                </span>
+              ) : <span className="text-slate-900 dark:text-white">SenExam</span>}
               {isBetaTester && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 tracking-widest">BETA</span>}
             </h1>
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1 block">Hệ thống V2.0</span>

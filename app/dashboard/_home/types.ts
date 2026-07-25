@@ -36,6 +36,7 @@ export type HomeProps = {
   animationsEnabled: boolean
   isBetaTester: boolean
   isVip: boolean
+  isPremium: boolean
   vipExpiresAt: string | null
   senCashBalance: number
 }

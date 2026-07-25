@@ -27,7 +27,7 @@ export default function ModernHome({
   setShowNotifications, setShowProfile, showFeatureMenu, setShowFeatureMenu,
   FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
   overlayActive, themeColor, density, animationsEnabled, isBetaTester,
-  isVip, senCashBalance,
+  isVip, isPremium, senCashBalance,
 }: HomeProps) {
   const bestScore = studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : null
   const isCompact = density === 'compact'
@@ -50,7 +50,14 @@ export default function ModernHome({
         <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => router.push('/dashboard')}>
           <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain rounded-lg" />
           <span className="hidden md:inline text-[15px] font-semibold tracking-tight flex items-center gap-1.5">
-            SenExam
+            {isPremium ? (
+              <span
+                className="font-black bg-clip-text text-transparent"
+                style={{ backgroundImage: 'linear-gradient(90deg, #F5D48A, #C99A3B, #F5D48A)' }}
+              >
+                SenExam <span className="italic">Premium</span>
+              </span>
+            ) : 'SenExam'}
             {isBetaTester && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>BETA</span>}
           </span>
         </div>

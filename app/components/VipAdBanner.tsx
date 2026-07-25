@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { getEffectivePlanTier } from '@/lib/vipMembership'
 import { Crown, X, Ban, FolderLock, Headset, Sparkles } from 'lucide-react'
 
 const DISMISS_KEY = 'senexam_vip_ad_dismissed_at'
@@ -33,9 +34,10 @@ export default function VipAdBanner({ compact }: { compact?: boolean }) {
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      supabase.from('profiles').select('vip_expires_at').eq('id', user.id).maybeSingle().then(({ data }) => {
-        const isVip = !!data?.vip_expires_at && new Date(data.vip_expires_at).getTime() > Date.now()
-        if (!isVip) setVisible(true)
+      supabase.from('profiles').select('vip_expires_at, plan_tier').eq('id', user.id).maybeSingle().then(({ data }) => {
+        // Lite vẫn thấy banner mời lên VIP/Premium — chỉ VIP/Premium (đã ở mức bằng hoặc cao hơn) mới ẩn
+        const tier = getEffectivePlanTier(data)
+        if (tier !== 'vip' && tier !== 'premium') setVisible(true)
       })
     })
   }, [])

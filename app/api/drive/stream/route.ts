@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { VIP_DAILY_DOWNLOAD_LIMIT } from '@/lib/vipMembership'
+import { getEffectivePlanTier, DOWNLOAD_LIMIT_BY_TIER } from '@/lib/vipMembership'
 import { SENCASH_COST_PER_VIP_DOWNLOAD } from '@/lib/senCash'
 
 export const dynamic = 'force-dynamic'
 
-// Tài liệu đánh dấu is_vip_only chỉ cho thành viên VIP tải, tối đa VIP_DAILY_DOWNLOAD_LIMIT lượt/ngày.
+// Tài liệu đánh dấu is_vip_only chỉ cho thành viên có gói trả phí đang active tải, hạn mức
+// miễn phí/ngày tuỳ theo gói (xem DOWNLOAD_LIMIT_BY_TIER — Lite không có lượt free).
 // Trả về null nếu được phép, hoặc NextResponse lỗi nếu bị chặn.
 async function checkVipDownloadGate(request: NextRequest, documentId: string | null): Promise<NextResponse | null> {
   if (!documentId) return null
@@ -25,12 +26,15 @@ async function checkVipDownloadGate(request: NextRequest, documentId: string | n
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('vip_expires_at')
+    .select('vip_expires_at, plan_tier')
     .eq('id', user.id)
     .maybeSingle()
 
-  const isVip = !!profile?.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now()
-  if (!isVip) return new NextResponse('Tài liệu này chỉ dành cho thành viên VIP', { status: 403 })
+  const planTier = getEffectivePlanTier(profile)
+  if (!planTier) return new NextResponse('Tài liệu này chỉ dành cho thành viên VIP', { status: 403 })
+
+  // Gói Lite không có hạn mức tải miễn phí (0/ngày) — rơi thẳng xuống nhánh trả bằng SenCash bên dưới
+  const dailyFreeLimit = DOWNLOAD_LIMIT_BY_TIER[planTier]
 
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
@@ -43,12 +47,12 @@ async function checkVipDownloadGate(request: NextRequest, documentId: string | n
     .eq('paid_with_sencash', false)
     .gte('downloaded_at', startOfToday.toISOString())
 
-  if ((count || 0) < VIP_DAILY_DOWNLOAD_LIMIT) {
+  if ((count || 0) < dailyFreeLimit) {
     await supabaseAdmin.from('vip_document_downloads').insert({ user_id: user.id, document_id: documentId })
     return null
   }
 
-  // Hết lượt free trong ngày — thử trừ SenCash để mua thêm lượt tải
+  // Hết lượt free trong ngày (hoặc gói không có lượt free) — thử trừ SenCash để mua thêm lượt tải
   const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
     p_user_id: user.id,
     p_delta: -SENCASH_COST_PER_VIP_DOWNLOAD,
@@ -57,8 +61,9 @@ async function checkVipDownloadGate(request: NextRequest, documentId: string | n
   })
 
   if (rpcError) {
+    const freeLimitMsg = dailyFreeLimit > 0 ? `Bạn đã dùng hết ${dailyFreeLimit} lượt tải VIP miễn phí hôm nay và không` : 'Gói của bạn không có lượt tải VIP miễn phí và không'
     return new NextResponse(
-      `Bạn đã dùng hết ${VIP_DAILY_DOWNLOAD_LIMIT} lượt tải VIP miễn phí hôm nay và không đủ SenCash (cần ${SENCASH_COST_PER_VIP_DOWNLOAD} SenCash). Nạp thêm tại /vip.`,
+      `${freeLimitMsg} đủ SenCash (cần ${SENCASH_COST_PER_VIP_DOWNLOAD} SenCash). Nạp thêm tại /vip.`,
       { status: 402 }
     )
   }
