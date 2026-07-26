@@ -3,8 +3,9 @@ import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getSenAiPlan } from '@/lib/senaiTiers'
 import { extendVipExpiry, getEffectivePlanTier } from '@/lib/vipMembership'
 import {
-  canAccessExclusiveStore, isMonthlyFlashSaleDay, isBlackFridayDate,
-  MONTHLY_FLASH_SALE_DISCOUNT_PERCENT, BLACK_FRIDAY_DEALS, applyDiscount,
+  canAccessExclusiveStore, isBlackFridayDate,
+  MONTHLY_FLASH_SALE_DISCOUNT_PERCENT, MONTHLY_FLASH_SALE_QUOTA, getClaimMonthKey,
+  BLACK_FRIDAY_DEALS, applyDiscount,
   type BlackFridayDealCode,
 } from '@/lib/exclusiveStore'
 
@@ -32,17 +33,28 @@ export async function POST(request: Request) {
     let plan: ReturnType<typeof getSenAiPlan>
     let finalPrice: number
     let claimDealCode: BlackFridayDealCode | null = null
+    let claimMonthKey: string | null = null
 
     if (dealType === 'monthly_flash') {
-      if (!isMonthlyFlashSaleDay()) {
-        return NextResponse.json({ error: 'Ưu đãi này chỉ áp dụng vào ngày sale hàng tháng (1/1, 2/2, 3/3, ...)' }, { status: 400 })
-      }
       plan = getSenAiPlan(planCode)
       if (!plan || (plan.tier !== 'plus' && plan.tier !== 'ultra') || plan.duration === 'trial_3d') {
         return NextResponse.json({ error: 'Gói không hợp lệ cho ưu đãi này' }, { status: 400 })
       }
+
+      const monthKey = getClaimMonthKey()
+      const quota = MONTHLY_FLASH_SALE_QUOTA[planTier as 'vip' | 'premium']
+      const { count } = await supabaseAdmin
+        .from('exclusive_flash_purchases')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('claim_month', monthKey)
+      if ((count || 0) >= quota) {
+        return NextResponse.json({ error: `Bạn đã dùng hết ${quota} lượt mua giá sale hàng tháng (tối đa ${quota} lần/tháng)` }, { status: 400 })
+      }
+
       const discountPercent = MONTHLY_FLASH_SALE_DISCOUNT_PERCENT[planTier as 'vip' | 'premium']
       finalPrice = applyDiscount(plan.priceSenCash, discountPercent)
+      claimMonthKey = monthKey
     } else if (dealType === 'black_friday') {
       if (!isBlackFridayDate()) {
         return NextResponse.json({ error: 'Ưu đãi Black Friday chỉ áp dụng đúng ngày Black Friday' }, { status: 400 })
@@ -93,6 +105,12 @@ export async function POST(request: Request) {
     if (claimDealCode) {
       await supabaseAdmin.from('exclusive_deal_claims').insert({
         user_id: user.id, deal_code: claimDealCode, claim_year: new Date().getFullYear(),
+      })
+    }
+
+    if (claimMonthKey) {
+      await supabaseAdmin.from('exclusive_flash_purchases').insert({
+        user_id: user.id, claim_month: claimMonthKey, senai_plan_code: plan.code,
       })
     }
 

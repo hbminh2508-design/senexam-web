@@ -48,7 +48,7 @@ export default function LegacyHome({
             <h1 className="text-2xl font-black tracking-tighter leading-none flex items-center gap-2">
               {isPremium ? (
                 <span
-                  className="italic bg-clip-text text-transparent"
+                  className="bg-clip-text text-transparent"
                   style={{ backgroundImage: 'linear-gradient(90deg, #F5D48A, #C99A3B, #F5D48A)' }}
                 >
                   Premium

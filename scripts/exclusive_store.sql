@@ -25,3 +25,27 @@ create policy "exclusive_deal_claims_select_own_or_staff" on public.exclusive_de
 
 -- Không có policy insert cho client: route /api/exclusive-store/purchase ghi bằng service role key
 -- sau khi đã kiểm tra còn suất, tránh học sinh tự insert để giành suất mà không thanh toán.
+
+-- Sale hàng tháng — mua được MỌI NGÀY trong tháng (không còn giới hạn theo 1 ngày cố định), nhưng
+-- giới hạn số LẦN mua/tháng theo hạng (VIP 1 lần, Premium 2 lần) — xem MONTHLY_FLASH_SALE_QUOTA
+-- trong lib/exclusiveStore.ts. claim_month lưu dạng 'YYYY-MM' để đếm theo tháng dương lịch hiện tại.
+create table if not exists public.exclusive_flash_purchases (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  claim_month text not null,
+  senai_plan_code text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists exclusive_flash_purchases_user_month_idx on public.exclusive_flash_purchases(user_id, claim_month);
+
+alter table public.exclusive_flash_purchases enable row level security;
+
+drop policy if exists "exclusive_flash_purchases_select_own_or_staff" on public.exclusive_flash_purchases;
+create policy "exclusive_flash_purchases_select_own_or_staff" on public.exclusive_flash_purchases
+  for select using (
+    user_id = auth.uid()
+    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role in ('admin', 'collab'))
+  );
+
+-- Không có policy insert cho client — cùng lý do với exclusive_deal_claims ở trên.

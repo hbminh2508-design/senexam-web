@@ -123,7 +123,8 @@ export function isVipActive(profile: { vip_expires_at?: string | null } | null |
 
 export const VIP_DAILY_DOWNLOAD_LIMIT = 5
 
-// VIP tặng thêm hạn mức câu hỏi SenAI/ngày (tương đương gói Plus), cộng dồn theo kiểu lấy max với gói SenAI đã mua
+// VIP tặng thêm hạn mức câu hỏi SenAI/ngày, CỘNG THẲNG vào hạn mức của gói SenAI đang có (không phải
+// lấy max) — vd. có SenAI Ultra (200) + VIP thì tổng là 250/ngày, không bị VIP "nuốt" mất phần Ultra.
 export const VIP_SENAI_DAILY_BONUS = 50
 
 // Hạng gói hiện có hiệu lực (đọc từ profiles.plan_tier + vip_expires_at). Cột plan_tier mới thêm
@@ -150,4 +151,14 @@ export const DOWNLOAD_LIMIT_BY_TIER: Record<PlanTier, number> = {
   lite: 0,
   vip: VIP_DAILY_DOWNLOAD_LIMIT,
   premium: VIP_DAILY_DOWNLOAD_LIMIT,
+}
+
+// Tổng hạn mức câu hỏi SenAI/ngày thực tế: hạn mức của gói SenAI đang có CỘNG THẲNG với phần
+// VIP/Premium tặng thêm (nếu có) — dùng chung cho mọi nơi cần hiển thị/kiểm tra quota để tránh
+// mỗi chỗ tự tính một kiểu (từng có chỗ lấy max khiến Ultra + VIP bị tính sai còn thấp hơn cả Ultra).
+export function getTotalSenaiDailyLimit(
+  tierDailyLimit: number,
+  planTier: PlanTier | null
+): number {
+  return tierDailyLimit + (planTier ? SENAI_DAILY_BONUS_BY_TIER[planTier] : 0)
 }

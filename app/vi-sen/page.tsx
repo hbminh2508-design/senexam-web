@@ -313,7 +313,7 @@ export default function ViSenPage() {
         <div className={`${cardClass} mb-6`} style={cardStyle}>
           <h2 className="font-bold text-sm mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-indigo-500" /> Gói SenAI</h2>
           <p className={`text-xs mb-4 ${mutedClass}`} style={mutedStyle}>
-            Hạng đang dùng: <strong>{SENAI_TIER_LABEL[effectiveTier]}</strong> ({SENAI_TIER_DAILY_LIMIT[effectiveTier]} câu/ngày)
+            Hạng đang dùng: <strong>{SENAI_TIER_LABEL[effectiveTier]}</strong> ({quota?.limit ?? SENAI_TIER_DAILY_LIMIT[effectiveTier]} câu/ngày)
             {senaiProfile.senai_tier_permanent && effectiveTier !== 'free' ? ' · Vĩnh viễn' : ''}
             {!senaiProfile.senai_tier_permanent && senaiProfile.senai_tier_expires_at && effectiveTier !== 'free'
               ? ` · Hết hạn ${new Date(senaiProfile.senai_tier_expires_at).toLocaleDateString('vi-VN')}`

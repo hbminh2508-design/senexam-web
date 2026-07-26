@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getEffectiveDailyLimit, getEffectiveSenaiTier } from '@/lib/senaiTiers'
-import { getEffectivePlanTier, SENAI_DAILY_BONUS_BY_TIER } from '@/lib/vipMembership'
+import { getEffectivePlanTier, getTotalSenaiDailyLimit } from '@/lib/vipMembership'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const tierDailyLimit = getEffectiveDailyLimit(profile)
   const planTier = getEffectivePlanTier(profile)
-  const limit = planTier ? Math.max(tierDailyLimit, SENAI_DAILY_BONUS_BY_TIER[planTier]) : tierDailyLimit
+  const limit = getTotalSenaiDailyLimit(tierDailyLimit, planTier)
 
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)

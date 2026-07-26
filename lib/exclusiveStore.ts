@@ -1,18 +1,25 @@
 import type { PlanTier } from '@/lib/vipMembership'
 
 // Cửa hàng cao cấp (/exclusive-store) — chỉ VIP/Premium mới vào được. Bán gói SenAI Plus/Ultra
-// với giá ưu đãi vào 2 dịp: "ngày sale hàng tháng" (giảm cố định theo hạng) và "Black Friday"
-// (giảm sốc, giới hạn số suất, mỗi năm 1 lần).
+// với giá ưu đãi vào 2 dịp: "sale hàng tháng" (mua được mọi ngày, giới hạn số lần/tháng theo hạng)
+// và "Black Friday" (giảm sốc, giới hạn số suất, mỗi năm 1 lần).
 
-// Ngày sale hàng tháng: ngày trong tháng trùng số thứ tự tháng — 1/1, 2/2, 3/3, ... 12/12
-export function isMonthlyFlashSaleDay(date: Date = new Date()): boolean {
-  return date.getDate() === date.getMonth() + 1
+// Giảm giá sale hàng tháng theo hạng thành viên đang có — mua được bất kỳ ngày nào trong tháng
+export const MONTHLY_FLASH_SALE_DISCOUNT_PERCENT: Record<'vip' | 'premium', number> = {
+  vip: 10,
+  premium: 15,
 }
 
-// Giảm giá cố định áp dụng vào ngày sale hàng tháng, theo hạng thành viên đang có
-export const MONTHLY_FLASH_SALE_DISCOUNT_PERCENT: Record<'vip' | 'premium', number> = {
-  vip: 20,
-  premium: 30,
+// Số lần được mua giá sale hàng tháng/tháng theo hạng — VIP 1 lần, Premium 2 lần (đếm theo
+// exclusive_flash_purchases, mỗi lần mua trừ 1 suất bất kể chọn gói nào trong ELIGIBLE_PLANS).
+export const MONTHLY_FLASH_SALE_QUOTA: Record<'vip' | 'premium', number> = {
+  vip: 1,
+  premium: 2,
+}
+
+// Khoá tháng hiện tại dạng 'YYYY-MM' — dùng để đếm số lần đã mua sale hàng tháng trong tháng này
+export function getClaimMonthKey(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 // Black Friday truyền thống = thứ Sáu ngay sau thứ Năm thứ 4 của tháng 11 (theo quy ước quốc tế)

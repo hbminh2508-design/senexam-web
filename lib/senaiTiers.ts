@@ -11,12 +11,13 @@ export type SenAiPlan = {
 }
 
 // Hạn mức câu hỏi/ngày theo hạng — dùng để tính quota trong /api/chat và gate SenAI Studio (chỉ ultra)
+// Ultra 200 = 100 gốc + 100 phúc lợi cộng thêm dành riêng cho hạng Ultra.
 export const SENAI_TIER_DAILY_LIMIT: Record<SenAiTierCode, number> = {
   free: 10,
   lite: 20,
   plus_lite: 35,
   plus: 50,
-  ultra: 100,
+  ultra: 200,
 }
 
 export const SENAI_TIER_LABEL: Record<SenAiTierCode, string> = {

@@ -26,20 +26,22 @@ const GROUP_PERKS: Record<PlanGroup, string[]> = {
   lite: [
     'Mở khoá xem kho tài liệu VIP (tải thêm cần trả bằng SenCash, không có lượt miễn phí/ngày)',
     'Không có gói SenAI tặng kèm, không cộng thêm câu hỏi SenAI/ngày',
+    'Không vào được Cửa hàng cao cấp (giá sale SenAI hàng tháng)',
     'Quảng cáo vẫn hiển thị, nhưng đóng lại thì sang ngày mới mới thấy lại',
     'Giá rẻ nhất — chỉ từ 1.000đ',
   ],
   vip: [
     'Không quảng cáo',
     'Kho tài liệu VIP, 5 lượt tải miễn phí/ngày',
-    'Tặng thêm hạn mức 50 câu hỏi SenAI/ngày',
+    'Cộng thêm 50 câu hỏi SenAI/ngày (cộng thẳng vào hạn mức gói SenAI đang có, không thay thế)',
     'Mua từ 1 tháng tặng gói SenAI Lite, mua theo năm tặng SenAI Plus Lite',
+    'Vào Cửa hàng cao cấp: mua gói SenAI Plus/Ultra giảm 10%, 1 lần/tháng (mua ngày nào cũng được)',
   ],
   premium: [
     'Trọn vẹn mọi đặc quyền VIP',
     'Logo đổi thành "Premium" mạ vàng độc quyền trên Dashboard',
-    'Mua từ 3 tháng tặng thẳng hạng SenAI Plus',
-    'Mua theo năm tặng thẳng hạng SenAI Ultra',
+    'Mua từ 3 tháng tặng thẳng hạng SenAI Plus, mua theo năm tặng thẳng hạng SenAI Ultra (200 câu/ngày, cộng thêm 50 từ Premium = 250 câu/ngày)',
+    'Cửa hàng cao cấp giá tốt hơn VIP: giảm 15% gói SenAI Plus/Ultra, 2 lần/tháng',
   ],
 }
 

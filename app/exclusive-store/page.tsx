@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { getEffectivePlanTier, type PlanTier } from '@/lib/vipMembership'
 import { SENAI_PLANS, SENAI_TIER_LABEL, type SenAiPlan } from '@/lib/senaiTiers'
 import {
-  canAccessExclusiveStore, isMonthlyFlashSaleDay, isBlackFridayDate,
-  MONTHLY_FLASH_SALE_DISCOUNT_PERCENT, BLACK_FRIDAY_DEALS, applyDiscount,
+  canAccessExclusiveStore,
+  BLACK_FRIDAY_DEALS, applyDiscount,
   type BlackFridayDealCode,
 } from '@/lib/exclusiveStore'
 import { fetchSenCashBalance } from '@/lib/senCash'
@@ -26,13 +26,28 @@ export default function ExclusiveStorePage() {
 
   const [planTier, setPlanTier] = useState<PlanTier | null>(null)
   const [senCashBalance, setSenCashBalance] = useState(0)
-  const [isFlashSaleDay, setIsFlashSaleDay] = useState(false)
+  const [monthlyFlash, setMonthlyFlash] = useState<{ used: number, quota: number, remaining: number, discountPercent: number } | null>(null)
   const [isBlackFriday, setIsBlackFriday] = useState(false)
   const [claimed, setClaimed] = useState<Record<string, number>>({})
 
   const [buyingCode, setBuyingCode] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [infoMsg, setInfoMsg] = useState('')
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token || null
+  }
+
+  const fetchStatus = async (token: string) => {
+    const res = await fetch('/api/exclusive-store/status', { headers: { Authorization: `Bearer ${token}` } })
+    const json = await res.json()
+    if (res.ok) {
+      setIsBlackFriday(json.isBlackFriday)
+      setClaimed(json.claimed || {})
+      setMonthlyFlash(json.monthlyFlash)
+    }
+  }
 
   useEffect(() => {
     const init = async () => {
@@ -47,13 +62,8 @@ export default function ExclusiveStorePage() {
       setPlanTier(getEffectivePlanTier(profile))
       setSenCashBalance(await fetchSenCashBalance(user.id))
 
-      const res = await fetch('/api/exclusive-store/status')
-      const json = await res.json()
-      if (res.ok) {
-        setIsFlashSaleDay(json.isFlashSaleDay)
-        setIsBlackFriday(json.isBlackFriday)
-        setClaimed(json.claimed || {})
-      }
+      const token = await getToken()
+      if (token) await fetchStatus(token)
       setLoading(false)
     }
     init()
@@ -62,17 +72,11 @@ export default function ExclusiveStorePage() {
     setIsDark(dark)
   }, [router])
 
-  const getToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token || null
-  }
-
   const refreshAfterPurchase = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) setSenCashBalance(await fetchSenCashBalance(user.id))
-    const res = await fetch('/api/exclusive-store/status')
-    const json = await res.json()
-    if (res.ok) setClaimed(json.claimed || {})
+    const token = await getToken()
+    if (token) await fetchStatus(token)
   }
 
   const buyFlashSale = async (plan: SenAiPlan) => {
@@ -147,7 +151,8 @@ export default function ExclusiveStorePage() {
     )
   }
 
-  const discountPercent = MONTHLY_FLASH_SALE_DISCOUNT_PERCENT[planTier as 'vip' | 'premium']
+  const discountPercent = monthlyFlash?.discountPercent ?? 0
+  const canBuyFlashSale = (monthlyFlash?.remaining ?? 0) > 0
 
   return (
     <div className={wrapperClass} style={wrapperStyle}>
@@ -171,32 +176,35 @@ export default function ExclusiveStorePage() {
         {errorMsg && <p className="text-sm text-rose-500 font-bold mb-4">{errorMsg}</p>}
         {infoMsg && <p className="text-sm text-emerald-500 font-bold mb-4">{infoMsg}</p>}
 
-        {/* Ngày sale hàng tháng */}
+        {/* Sale hàng tháng */}
         <div className={`${cardClass} mb-6`} style={cardStyle}>
           <div className="flex items-center gap-2 mb-1">
             <Sparkles className="w-5 h-5 text-amber-500" />
-            <h2 className="font-black text-sm">Ngày sale hàng tháng — giảm {discountPercent}%</h2>
+            <h2 className="font-black text-sm">Sale hàng tháng — giảm {discountPercent}%</h2>
           </div>
           <p className={`text-xs mb-4 ${mutedClass}`} style={mutedStyle}>
-            {isFlashSaleDay
-              ? `Hôm nay là ngày sale! Giá dưới đây đã áp dụng ưu đãi ${discountPercent}% dành cho ${planTier === 'premium' ? 'Premium' : 'VIP'}.`
-              : 'Áp dụng vào các ngày 1/1, 2/2, 3/3 ... 12/12 hàng năm. Quay lại đúng ngày để nhận giá ưu đãi.'}
+            Mua được bất kỳ ngày nào trong tháng — chọn 1 gói bất kỳ bên dưới mỗi lần mua.{' '}
+            {monthlyFlash && (
+              canBuyFlashSale
+                ? `Còn ${monthlyFlash.remaining}/${monthlyFlash.quota} lượt mua giá sale trong tháng này.`
+                : `Đã dùng hết ${monthlyFlash.quota} lượt mua giá sale trong tháng này, quay lại tháng sau nhé.`
+            )}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {ELIGIBLE_PLANS.map(plan => {
-              const finalPrice = isFlashSaleDay ? applyDiscount(plan.priceSenCash, discountPercent) : plan.priceSenCash
+              const finalPrice = applyDiscount(plan.priceSenCash, discountPercent)
               return (
                 <div key={plan.code} className="p-4 rounded-2xl border flex items-center justify-between gap-3" style={cardStyle}>
                   <div className="min-w-0">
                     <p className="text-xs font-bold uppercase tracking-wide truncate" style={mutedStyle}>{plan.label}</p>
                     <p className="text-base font-black mt-0.5 flex items-center gap-2">
-                      {isFlashSaleDay && <span className={`line-through text-xs font-bold ${mutedClass}`} style={mutedStyle}>{plan.priceSenCash} SC</span>}
+                      <span className={`line-through text-xs font-bold ${mutedClass}`} style={mutedStyle}>{plan.priceSenCash} SC</span>
                       {finalPrice} SC
                     </p>
                   </div>
                   <button
                     onClick={() => buyFlashSale(plan)}
-                    disabled={!isFlashSaleDay || buyingCode === plan.code}
+                    disabled={!canBuyFlashSale || buyingCode === plan.code}
                     className="shrink-0 px-4 py-2.5 rounded-xl font-black text-xs text-white disabled:opacity-40 flex items-center gap-1.5"
                     style={{ background: isModern ? 'var(--accent)' : '#7C3AED' }}
                   >

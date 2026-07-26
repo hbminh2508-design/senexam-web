@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin';
 import { getEffectiveDailyLimit } from '@/lib/senaiTiers';
-import { getEffectivePlanTier, SENAI_DAILY_BONUS_BY_TIER } from '@/lib/vipMembership';
+import { getEffectivePlanTier, getTotalSenaiDailyLimit } from '@/lib/vipMembership';
 
 export async function POST(req: Request) {
   try {
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       .maybeSingle();
     const tierDailyLimit = getEffectiveDailyLimit(profile);
     const planTier = getEffectivePlanTier(profile);
-    const dailyLimit = planTier ? Math.max(tierDailyLimit, SENAI_DAILY_BONUS_BY_TIER[planTier]) : tierDailyLimit;
+    const dailyLimit = getTotalSenaiDailyLimit(tierDailyLimit, planTier);
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);

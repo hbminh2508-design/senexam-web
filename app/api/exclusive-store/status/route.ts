@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
-import { isMonthlyFlashSaleDay, isBlackFridayDate, BLACK_FRIDAY_DEALS } from '@/lib/exclusiveStore'
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { getEffectivePlanTier } from '@/lib/vipMembership'
+import {
+  isBlackFridayDate, BLACK_FRIDAY_DEALS,
+  MONTHLY_FLASH_SALE_DISCOUNT_PERCENT, MONTHLY_FLASH_SALE_QUOTA, getClaimMonthKey,
+  canAccessExclusiveStore,
+} from '@/lib/exclusiveStore'
 
 export const dynamic = 'force-dynamic'
 
-// Trạng thái công khai (không có thông tin nhạy cảm) — số suất Black Friday đã có người nhận
-// trong năm nay, dùng service role key để đọc đúng số thật bất kể ai gọi (bỏ qua RLS chỉ-xem-của-mình).
-export async function GET() {
+// Số suất Black Friday là công khai (đọc bằng service role để bỏ qua RLS chỉ-xem-của-mình), nhưng
+// số lượt sale hàng tháng đã dùng là riêng theo từng người nên route này cần xác thực user.
+export async function GET(request: Request) {
+  const user = await getUserFromRequest(request)
+  if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+
   const supabaseAdmin = getSupabaseAdmin()
   const claimYear = new Date().getFullYear()
   const dealCodes = Object.keys(BLACK_FRIDAY_DEALS)
@@ -21,9 +29,33 @@ export async function GET() {
     claimed[code] = count || 0
   }
 
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('vip_expires_at, plan_tier')
+    .eq('id', user.id)
+    .maybeSingle()
+  const planTier = getEffectivePlanTier(profile)
+
+  let monthlyFlash = null
+  if (canAccessExclusiveStore(planTier)) {
+    const monthKey = getClaimMonthKey()
+    const { count } = await supabaseAdmin
+      .from('exclusive_flash_purchases')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('claim_month', monthKey)
+    const quota = MONTHLY_FLASH_SALE_QUOTA[planTier as 'vip' | 'premium']
+    monthlyFlash = {
+      used: count || 0,
+      quota,
+      remaining: Math.max(0, quota - (count || 0)),
+      discountPercent: MONTHLY_FLASH_SALE_DISCOUNT_PERCENT[planTier as 'vip' | 'premium'],
+    }
+  }
+
   return NextResponse.json({
-    isFlashSaleDay: isMonthlyFlashSaleDay(),
     isBlackFriday: isBlackFridayDate(),
     claimed,
+    monthlyFlash,
   })
 }
