@@ -37,7 +37,7 @@ const GROUP_PERKS: Record<PlanGroup, string[]> = {
   ],
   premium: [
     'Trọn vẹn mọi đặc quyền VIP',
-    'Đổi giao diện chữ "SenExam" sang phong cách Premium độc quyền',
+    'Logo đổi thành "Premium" mạ vàng độc quyền trên Dashboard',
     'Mua từ 3 tháng tặng thẳng hạng SenAI Plus',
     'Mua theo năm tặng thẳng hạng SenAI Ultra',
   ],
@@ -214,6 +214,13 @@ export default function VipPage() {
           <span className="flex items-center gap-2 font-bold text-sm"><Wallet className="w-4 h-4 text-amber-500" /> Ví Sen — {senCashBalance} SC</span>
           <span className={`flex items-center gap-1 text-xs font-bold ${mutedClass}`} style={mutedStyle}>Quản lý ví, nạp SenCash, mua gói SenAI <ChevronRight className="w-3.5 h-3.5" /></span>
         </button>
+
+        {(currentTier === 'vip' || currentTier === 'premium') && currentlyActive && (
+          <button onClick={() => router.push('/exclusive-store')} className={`${cardClass} mb-6 w-full flex items-center justify-between transition-colors hover:border-violet-300`} style={cardStyle}>
+            <span className="flex items-center gap-2 font-bold text-sm"><Gem className="w-4 h-4 text-violet-500" /> Cửa hàng cao cấp</span>
+            <span className={`flex items-center gap-1 text-xs font-bold ${mutedClass}`} style={mutedStyle}>Ưu đãi SenAI Plus/Ultra giá rẻ hơn tới 30% <ChevronRight className="w-3.5 h-3.5" /></span>
+          </button>
+        )}
 
         {/* Bộ chọn nhóm gói */}
         <div className="grid grid-cols-3 gap-2 mb-6">

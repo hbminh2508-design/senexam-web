@@ -48,10 +48,10 @@ export default function LegacyHome({
             <h1 className="text-2xl font-black tracking-tighter leading-none flex items-center gap-2">
               {isPremium ? (
                 <span
-                  className="bg-clip-text text-transparent"
+                  className="italic bg-clip-text text-transparent"
                   style={{ backgroundImage: 'linear-gradient(90deg, #F5D48A, #C99A3B, #F5D48A)' }}
                 >
-                  SenExam <span className="italic">Premium</span>
+                  Premium
                 </span>
               ) : <span className="text-slate-900 dark:text-white">SenExam</span>}
               {isBetaTester && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 tracking-widest">BETA</span>}

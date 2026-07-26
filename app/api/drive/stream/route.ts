@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getEffectivePlanTier, DOWNLOAD_LIMIT_BY_TIER } from '@/lib/vipMembership'
+import { getEffectiveSenaiTier, SENAI_ULTRA_DAILY_DOWNLOAD_BONUS } from '@/lib/senaiTiers'
 import { SENCASH_COST_PER_VIP_DOWNLOAD } from '@/lib/senCash'
 
 export const dynamic = 'force-dynamic'
@@ -26,15 +27,18 @@ async function checkVipDownloadGate(request: NextRequest, documentId: string | n
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('vip_expires_at, plan_tier')
+    .select('vip_expires_at, plan_tier, senai_tier, senai_tier_expires_at, senai_tier_permanent')
     .eq('id', user.id)
     .maybeSingle()
 
   const planTier = getEffectivePlanTier(profile)
-  if (!planTier) return new NextResponse('Tài liệu này chỉ dành cho thành viên VIP', { status: 403 })
+  // SenAI Ultra tự mở khoá quyền tải tài liệu VIP kể cả khi chưa mua gói membership nào
+  const isSenaiUltra = getEffectiveSenaiTier(profile) === 'ultra'
+  if (!planTier && !isSenaiUltra) return new NextResponse('Tài liệu này chỉ dành cho thành viên VIP hoặc SenAI Ultra', { status: 403 })
 
-  // Gói Lite không có hạn mức tải miễn phí (0/ngày) — rơi thẳng xuống nhánh trả bằng SenCash bên dưới
-  const dailyFreeLimit = DOWNLOAD_LIMIT_BY_TIER[planTier]
+  // Gói Lite không có hạn mức tải miễn phí (0/ngày); SenAI Ultra tặng thẳng 50 lượt/ngày, lấy max
+  // với hạn mức theo gói membership (không cộng dồn hai nguồn)
+  const dailyFreeLimit = Math.max(planTier ? DOWNLOAD_LIMIT_BY_TIER[planTier] : 0, isSenaiUltra ? SENAI_ULTRA_DAILY_DOWNLOAD_BONUS : 0)
 
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)

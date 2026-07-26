@@ -1,5 +1,5 @@
 export type SenAiTierCode = 'free' | 'lite' | 'plus_lite' | 'plus' | 'ultra'
-export type SenAiPlanDuration = 'trial_3d' | 'monthly' | 'yearly' | 'permanent'
+export type SenAiPlanDuration = 'trial_3d' | 'monthly' | 'quarterly' | 'yearly' | 'permanent'
 
 export type SenAiPlan = {
   code: string
@@ -37,8 +37,14 @@ export const SENAI_PLANS: SenAiPlan[] = [
   { code: 'plus_yearly', tier: 'plus', duration: 'yearly', durationDays: 365, label: 'SenAI Plus — 1 năm', priceSenCash: 1_000 },
   { code: 'plus_permanent', tier: 'plus', duration: 'permanent', durationDays: null, label: 'SenAI Plus — Vĩnh viễn', priceSenCash: 2_999 },
   { code: 'ultra_monthly', tier: 'ultra', duration: 'monthly', durationDays: 30, label: 'SenAI Ultra — 1 tháng', priceSenCash: 159 },
+  // Gói 3 tháng — thêm để làm giá gốc cho ưu đãi Black Friday tại Cửa hàng cao cấp (xem lib/exclusiveStore.ts)
+  { code: 'ultra_quarterly', tier: 'ultra', duration: 'quarterly', durationDays: 90, label: 'SenAI Ultra — 3 tháng', priceSenCash: 449 },
   { code: 'ultra_yearly', tier: 'ultra', duration: 'yearly', durationDays: 365, label: 'SenAI Ultra — 1 năm', priceSenCash: 1_590 },
 ]
+
+// SenAI Ultra tặng thẳng hạn mức tải tài liệu VIP/ngày cao hơn cả VIP thường — dùng trong
+// /api/drive/stream để mở khoá quyền tải ngay cả khi chưa có gói membership VIP/Premium nào.
+export const SENAI_ULTRA_DAILY_DOWNLOAD_BONUS = 50
 
 export function getSenAiPlan(code: string): SenAiPlan | undefined {
   return SENAI_PLANS.find(p => p.code === code)

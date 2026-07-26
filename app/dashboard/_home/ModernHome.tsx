@@ -52,10 +52,10 @@ export default function ModernHome({
           <span className="hidden md:inline text-[15px] font-semibold tracking-tight flex items-center gap-1.5">
             {isPremium ? (
               <span
-                className="font-black bg-clip-text text-transparent"
+                className="font-black italic bg-clip-text text-transparent"
                 style={{ backgroundImage: 'linear-gradient(90deg, #F5D48A, #C99A3B, #F5D48A)' }}
               >
-                SenExam <span className="italic">Premium</span>
+                Premium
               </span>
             ) : 'SenExam'}
             {isBetaTester && <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md tracking-widest" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>BETA</span>}
