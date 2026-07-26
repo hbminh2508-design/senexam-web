@@ -54,8 +54,8 @@ async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>
   // gói cũ) — giống hệt cách vip_plan_code đã hoạt động từ trước, chỉ mở rộng thêm chiều plan_tier.
   await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code, plan_tier: planGroup }).eq('id', order.user_id)
 
-  if (planGroup === 'vip') await applyVipPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode)
-  else if (planGroup === 'premium') await applyPremiumPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode)
+  if (planGroup === 'vip') await applyVipPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode, newExpiresAt)
+  else if (planGroup === 'premium') await applyPremiumPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode, newExpiresAt)
 
   return { success: true }
 }
