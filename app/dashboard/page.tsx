@@ -297,9 +297,8 @@ export default function DashboardPage() {
         setVipExpiresAt(profile.vip_expires_at || null)
         setPlanTier(getEffectivePlanTier(profile))
         setSenCashBalance(profile.sencash_balance || 0)
-        // Giao diện Mới giờ là bản chính thức cho mọi tài khoản, không còn cần tham gia Beta —
-        // chỉ những ai đã tự tay chọn về Mặc định (new_ui_enabled = false) mới thấy giao diện cũ.
-        const effectiveNewUi = profile.new_ui_enabled !== false
+        // Mặc định dùng giao diện cũ; giao diện mới chỉ bật khi người dùng đã chủ động chọn.
+        const effectiveNewUi = profile.new_ui_enabled === true
         setNewUiEnabled(effectiveNewUi)
         setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
         setIsBetaTester(!!profile.is_beta_tester)
@@ -521,11 +520,13 @@ export default function DashboardPage() {
     localStorage.setItem('senexam_notifications', next ? '1' : '0')
   }
 
-  // Giao diện Mới (trước đây gọi là "Beta") giờ là giao diện chính thức, mở cho mọi tài khoản —
-  // không còn cần tham gia Chương trình Beta để bật. Chọn trực tiếp giữa 2 lựa chọn (Mặc định/Mới)
-  // thay vì bật/tắt, khớp với bộ chọn 2 hình tròn trong Cài đặt.
+  // Giao diện Mới là luồng Beta: chỉ tài khoản Beta mới được bật trong phần Cài đặt.
   const setUiVersion = async (useModern: boolean) => {
     if (useModern === newUiEnabled) return
+    if (useModern && !isBetaTester) {
+      alert('Giao diện Mới hiện chỉ mở cho tài khoản Beta.')
+      return
+    }
     setNewUiEnabled(useModern)
     setNewUiSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -626,7 +627,14 @@ export default function DashboardPage() {
     { key: 'exams', label: 'Vào thi ngay', desc: 'Kho đề thi thử bám sát cấu trúc mới nhất.', icon: Target, color: 'indigo', onSelect: () => router.push('/exams') },
     { key: 'code', label: 'Nhập Code Đề', desc: 'Truy cập nhanh một đề thi bằng mã code.', icon: KeyRound, color: 'slate', onSelect: () => setShowCodeModal(true) },
     { key: 'focus', label: 'Phòng Tập Trung', desc: 'Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.', icon: Music2, color: 'purple', onSelect: () => router.push('/focus') },
-    { key: 'library', label: 'Thư Viện Số', desc: 'Hàng ngàn tài liệu, sách và chuyên đề lưu trữ số.', icon: FolderOpen, color: 'cyan', onSelect: () => router.push('/library') },
+    {
+      key: 'library',
+      label: 'Thư Viện Số',
+      desc: 'Hàng ngàn tài liệu, sách và chuyên đề lưu trữ số.',
+      icon: FolderOpen,
+      color: 'cyan',
+      onSelect: () => router.push(isBetaTester && newUiEnabled ? '/lib-new' : '/library'),
+    },
     { key: 'vip', label: isVip ? 'Thành viên VIP' : 'Nâng cấp VIP', desc: 'Không quảng cáo, tài liệu riêng, cập nhật sớm hơn.', icon: Crown, color: 'amber', onSelect: () => router.push('/vip') },
     { key: 'senvideo', label: 'SenVideo', desc: 'Xem luồng Stream chất lượng cao không giật lag.', icon: PlaySquare, color: 'indigo', onSelect: () => router.push('/senvideo') },
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
@@ -856,7 +864,7 @@ export default function DashboardPage() {
                       <Palette className="w-5 h-5 text-indigo-500" />
                       <div>
                         <p className="font-bold text-slate-900 dark:text-white text-sm">Giao diện</p>
-                        <p className="text-[11px] font-medium text-slate-500">Giao diện Mới là bản chính thức — có thể đổi lại bản Mặc định bất cứ lúc nào.</p>
+                        <p className="text-[11px] font-medium text-slate-500">Mặc định là giao diện cũ. Giao diện Mới chỉ khả dụng cho tài khoản Beta.</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-7 pl-1">
