@@ -206,7 +206,7 @@ export default function ModernHome({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {FEATURES.filter(f => ['focus', 'library', 'senvideo', 'lab', 'forum', 'score'].includes(f.key)).map(f => {
+          {FEATURES.filter(f => ['focus', 'library', 'senvideo', 'lab', 'forum', 'mes', 'score'].includes(f.key)).map(f => {
             const Icon = f.icon
             return (
               <button

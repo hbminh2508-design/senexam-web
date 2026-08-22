@@ -633,12 +633,26 @@ export default function DashboardPage() {
       desc: 'Hàng ngàn tài liệu, sách và chuyên đề lưu trữ số.',
       icon: FolderOpen,
       color: 'cyan',
-      onSelect: () => router.push(isBetaTester && newUiEnabled ? '/lib-new' : '/library'),
+      onSelect: () => router.push(isBetaTester ? '/lib-new' : '/library'),
     },
     { key: 'vip', label: isVip ? 'Thành viên VIP' : 'Nâng cấp VIP', desc: 'Không quảng cáo, tài liệu riêng, cập nhật sớm hơn.', icon: Crown, color: 'amber', onSelect: () => router.push('/vip') },
     { key: 'senvideo', label: 'SenVideo', desc: 'Xem luồng Stream chất lượng cao không giật lag.', icon: PlaySquare, color: 'indigo', onSelect: () => router.push('/senvideo') },
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
     { key: 'forum', label: 'Cộng Đồng', desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.', icon: MessageSquare, color: 'sky', onSelect: () => router.push('/forum') },
+    {
+      key: 'mes',
+      label: 'Sen Messages',
+      desc: 'Beta: phòng chat chung toàn hệ thống, tin nhắn tự xóa sau 1 phút.',
+      icon: MessageSquare,
+      color: 'emerald',
+      onSelect: () => {
+        if (!isBetaTester) {
+          alert('Sen Messages hiện chỉ mở cho tài khoản Beta.')
+          return
+        }
+        router.push('/mes')
+      },
+    },
     { key: 'score', label: 'Tính điểm ĐH', desc: 'Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.', icon: Calculator, color: 'rose', onSelect: () => router.push('/tinhdiem') },
     { key: 'trial', label: 'Tính năng thử nghiệm', desc: 'AI tự đọc PDF và tạo đề tương tác để luyện tập.', icon: Wand2, color: 'amber', onSelect: () => router.push('/tinhnangthunghiem') },
   ]
