@@ -47,10 +47,10 @@ export default function SenMessagesPage() {
 
   const listRef = useRef<HTMLDivElement>(null)
 
-  const authHeaders = async () => {
+  const authHeaders = async (): Promise<Record<string, string> | undefined> => {
     const { data } = await supabase.auth.getSession()
     const token = data.session?.access_token
-    if (!token) return {}
+    if (!token) return undefined
     return { Authorization: `Bearer ${token}` }
   }
 
