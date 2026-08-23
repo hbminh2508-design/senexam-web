@@ -83,6 +83,12 @@ const oauth2Client = new google.auth.OAuth2(
   'https://developers.google.com/oauthplayground'
 )
 
+const sanitizeDownloadName = (value: string | null, fallback: string) => {
+  const normalized = (value || fallback).normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  const safe = normalized.replace(/[^a-zA-Z0-9._ -]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^[-.]+|[-.]+$/g, '')
+  return `senexam-${safe || fallback}`
+}
+
 oauth2Client.setCredentials({
   refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
 })
@@ -93,6 +99,7 @@ export async function GET(request: NextRequest) {
     const fileId = url.searchParams.get('fileId')
     const download = url.searchParams.get('download') === '1'
     const documentId = url.searchParams.get('documentId')
+    const requestedFileName = url.searchParams.get('fileName')
 
     if (!fileId) return new NextResponse('Thiếu fileId', { status: 400 })
 
@@ -151,7 +158,7 @@ export async function GET(request: NextRequest) {
 
     responseHeaders.set(
       'Content-Disposition',
-      `${download ? 'attachment' : 'inline'}; filename="senexam_file_${fileId}.${ext}"`
+      `${download ? 'attachment' : 'inline'}; filename="${sanitizeDownloadName(requestedFileName, `${fileId}.${ext}`)}"`
     )
 
     // 5. Trả thẳng luồng Web Stream cho Client

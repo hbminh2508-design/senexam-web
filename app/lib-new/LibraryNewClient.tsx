@@ -95,6 +95,28 @@ const isHiddenDocument = (doc: DocRow) => {
 
 const getFileKind = (t: string) => t.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? 'image' : t.match(/\.pdf$/i) ? 'pdf' : 'other'
 
+const normalizeSearchText = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+
+const searchScore = (value: string, query: string) => {
+  const text = normalizeSearchText(value)
+  const normalizedQuery = normalizeSearchText(query)
+  if (!normalizedQuery) return 0
+  if (text === normalizedQuery) return 1000
+  if (text.startsWith(normalizedQuery)) return 800
+  if (text.includes(normalizedQuery)) return 600
+
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean)
+  const matched = tokens.filter((token) => text.split(/\s+/).some((word) => word.startsWith(token))).length
+  return matched === tokens.length ? 400 + matched : matched * 50
+}
+
+const matchesSearch = (value: string, query: string) => searchScore(value, query) > 0
+
 export default function LibraryNewClient({ slugSegments }: { slugSegments: string[] }) {
   const router = useRouter()
   const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
@@ -488,16 +510,20 @@ export default function LibraryNewClient({ slugSegments }: { slugSegments: strin
   }
 
   const displayFolders = useMemo(() => {
-    const q = deferredSearchQuery.trim().toLowerCase()
-    const arr = !q ? folders : folders.filter((f) => f.name.toLowerCase().includes(q))
-    if (sortByName) arr.sort((a, b) => a.name.localeCompare(b.name))
+    const q = deferredSearchQuery.trim()
+    const arr = !q ? [...folders] : folders.filter((f) => matchesSearch(f.name, q))
+    arr.sort((a, b) => sortByName
+      ? a.name.localeCompare(b.name, 'vi')
+      : searchScore(b.name, q) - searchScore(a.name, q))
     return arr
   }, [folders, deferredSearchQuery, sortByName])
 
   const displayDocs = useMemo(() => {
-    const q = deferredSearchQuery.trim().toLowerCase()
-    const arr = !q ? documents : documents.filter((d) => d.title.toLowerCase().includes(q))
-    if (sortByName) arr.sort((a, b) => a.title.localeCompare(b.title))
+    const q = deferredSearchQuery.trim()
+    const arr = !q ? [...documents] : documents.filter((d) => matchesSearch(d.title, q))
+    arr.sort((a, b) => sortByName
+      ? a.title.localeCompare(b.title, 'vi')
+      : searchScore(b.title, q) - searchScore(a.title, q))
     return arr
   }, [documents, deferredSearchQuery, sortByName])
 
@@ -506,7 +532,7 @@ export default function LibraryNewClient({ slugSegments }: { slugSegments: strin
     const vipParams = previewDoc.is_vip_only ? `&documentId=${previewDoc.id}&token=${encodeURIComponent(accessToken || '')}` : ''
     return {
       preview: `/api/drive/stream?fileId=${previewDoc.drive_file_id}${vipParams}`,
-      download: `/api/drive/stream?fileId=${previewDoc.drive_file_id}&download=1${vipParams}`,
+      download: `/api/drive/stream?fileId=${previewDoc.drive_file_id}&download=1&fileName=${encodeURIComponent(previewDoc.title)}${vipParams}`,
       open: `https://drive.google.com/file/d/${previewDoc.drive_file_id}/view`,
     }
   }, [previewDoc, accessToken])

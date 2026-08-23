@@ -520,13 +520,9 @@ export default function DashboardPage() {
     localStorage.setItem('senexam_notifications', next ? '1' : '0')
   }
 
-  // Giao diện Mới là luồng Beta: chỉ tài khoản Beta mới được bật trong phần Cài đặt.
+  // Giao diện Mới là lựa chọn độc lập; các tính năng Beta vẫn tự kiểm tra quyền riêng.
   const setUiVersion = async (useModern: boolean) => {
     if (useModern === newUiEnabled) return
-    if (useModern && !isBetaTester) {
-      alert('Giao diện Mới hiện chỉ mở cho tài khoản Beta.')
-      return
-    }
     setNewUiEnabled(useModern)
     setNewUiSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -639,20 +635,6 @@ export default function DashboardPage() {
     { key: 'senvideo', label: 'SenVideo', desc: 'Xem luồng Stream chất lượng cao không giật lag.', icon: PlaySquare, color: 'indigo', onSelect: () => router.push('/senvideo') },
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
     { key: 'forum', label: 'Cộng Đồng', desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.', icon: MessageSquare, color: 'sky', onSelect: () => router.push('/forum') },
-    {
-      key: 'mes',
-      label: 'Sen Messages',
-      desc: 'Beta: phòng chat chung toàn hệ thống, tin nhắn tự xóa sau 1 phút.',
-      icon: MessageSquare,
-      color: 'emerald',
-      onSelect: () => {
-        if (!isBetaTester) {
-          alert('Sen Messages hiện chỉ mở cho tài khoản Beta.')
-          return
-        }
-        router.push('/mes')
-      },
-    },
     { key: 'score', label: 'Tính điểm ĐH', desc: 'Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.', icon: Calculator, color: 'rose', onSelect: () => router.push('/tinhdiem') },
     { key: 'trial', label: 'Tính năng thử nghiệm', desc: 'AI tự đọc PDF và tạo đề tương tác để luyện tập.', icon: Wand2, color: 'amber', onSelect: () => router.push('/tinhnangthunghiem') },
   ]
@@ -878,7 +860,7 @@ export default function DashboardPage() {
                       <Palette className="w-5 h-5 text-indigo-500" />
                       <div>
                         <p className="font-bold text-slate-900 dark:text-white text-sm">Giao diện</p>
-                        <p className="text-[11px] font-medium text-slate-500">Mặc định là giao diện cũ. Giao diện Mới chỉ khả dụng cho tài khoản Beta.</p>
+                        <p className="text-[11px] font-medium text-slate-500">Mặc định là giao diện cũ; giao diện Mới có thể bật cho mọi tài khoản.</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-7 pl-1">

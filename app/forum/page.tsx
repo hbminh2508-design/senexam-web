@@ -39,6 +39,7 @@ export default function ForumPage() {
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+  const [isBetaTester, setIsBetaTester] = useState(false)
 
   const fetchPosts = async () => {
     // Sắp xếp ưu tiên bài được ghim (is_pinned) lên trước, sau đó mới tới thời gian mới nhất
@@ -62,8 +63,9 @@ export default function ForumPage() {
     const initData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+        const { data: profile } = await supabase.from('profiles').select('role, is_beta_tester').eq('id', user.id).single()
         setCurrentUserRole(profile?.role || 'student')
+        setIsBetaTester(!!profile?.is_beta_tester)
       }
       await fetchPosts()
     }
@@ -241,9 +243,12 @@ export default function ForumPage() {
               <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">Hội Sĩ Tử <MessageSquare className="w-5 h-5" style={{ color: 'var(--accent)' }}/></h1>
               <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Giải đáp thắc mắc, chia sẻ tài liệu và thảo luận đề thi.</p>
             </div>
-            <button onClick={() => setShowCreateModal(true)} className="px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2" style={{ background: 'var(--accent)', color: '#fff' }}>
-              <Edit3 className="w-4 h-4"/> Đăng chủ đề mới
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {isBetaTester && <button onClick={() => router.push('/mes')} className="px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2" style={{ background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--border)' }}><MessageCircle className="w-4 h-4"/> Sen Messages <span className="text-[9px] uppercase tracking-wider">Beta</span></button>}
+              <button onClick={() => setShowCreateModal(true)} className="px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2" style={{ background: 'var(--accent)', color: '#fff' }}>
+                <Edit3 className="w-4 h-4"/> Đăng chủ đề mới
+              </button>
+            </div>
           </div>
 
           <div className="rounded-xl p-3 flex flex-col sm:flex-row gap-3 mb-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -370,7 +375,10 @@ export default function ForumPage() {
             <h1 className="text-4xl font-extrabold tracking-tight drop-shadow-sm flex items-center gap-3">Hội Sĩ Tử <MessageSquare className="w-8 h-8 text-blue-600 dark:text-blue-400 drop-shadow-md" /></h1>
             <p className="text-slate-600 dark:text-slate-300 font-medium mt-2 bg-white/40 dark:bg-slate-900/40 w-fit px-4 py-1.5 rounded-full backdrop-blur-md border border-white/30 dark:border-slate-700/50">Nơi giải đáp thắc mắc, chia sẻ tài liệu và thảo luận đề thi toàn quốc.</p>
           </div>
-          <button onClick={() => setShowCreateModal(true)} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl text-blue-700 dark:text-blue-400 border border-white/50 dark:border-white/10 px-6 py-3.5 rounded-2xl font-black shadow-[0_8px_30px_rgb(0,0,0,0.05)] flex items-center gap-2 hover:bg-white dark:hover:bg-slate-700 transition-all hover:-translate-y-1"><Edit3 className="w-5 h-5"/> Đăng chủ đề mới</button>
+          <div className="flex flex-wrap gap-2">
+            {isBetaTester && <button onClick={() => router.push('/mes')} className="bg-blue-50/80 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-5 py-3.5 rounded-2xl font-black shadow-sm flex items-center gap-2 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all"><MessageCircle className="w-5 h-5"/> Sen Messages <span className="text-[9px] uppercase tracking-wider">Beta</span></button>}
+            <button onClick={() => setShowCreateModal(true)} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl text-blue-700 dark:text-blue-400 border border-white/50 dark:border-white/10 px-6 py-3.5 rounded-2xl font-black shadow-[0_8px_30px_rgb(0,0,0,0.05)] flex items-center gap-2 hover:bg-white dark:hover:bg-slate-700 transition-all hover:-translate-y-1"><Edit3 className="w-5 h-5"/> Đăng chủ đề mới</button>
+          </div>
         </div>
 
         <div className="mb-8"><VipAdBanner /></div>

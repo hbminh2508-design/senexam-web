@@ -83,8 +83,12 @@ export default function LoginPage() {
     setIsDark(dark)
   }, [])
 
-  const vars = getModernThemeVars(themeColor, isDark)
-  const accent = (vars as any)['--accent'] as string
+  const vars = {
+    ...getModernThemeVars(themeColor, isDark),
+    '--accent': isDark ? '#60a5fa' : '#2563eb',
+    '--accent-soft': isDark ? 'rgba(37, 99, 235, 0.2)' : '#eff6ff',
+  }
+  const accent = vars['--accent']
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()

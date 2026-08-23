@@ -233,7 +233,7 @@ export default function LegacyHome({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 lg:gap-6">
-          {FEATURES.filter(f => ['focus', 'library', 'senvideo', 'lab', 'forum', 'mes', 'score'].includes(f.key)).map(f => {
+          {FEATURES.filter(f => ['focus', 'library', 'senvideo', 'lab', 'forum', 'score'].includes(f.key)).map(f => {
             const Icon = f.icon
             const colorClass = FEATURE_COLOR_MAP[f.color] ?? FEATURE_COLOR_MAP.indigo
             return (
