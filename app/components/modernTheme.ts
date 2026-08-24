@@ -39,10 +39,32 @@ export function getModernThemeVars(themeColor: string, isDark: boolean): React.C
     ['--text-muted' as any]: isDark ? '#A6A196' : '#6B6558',
     ['--accent' as any]: accent,
     ['--accent-soft' as any]: hexToRgba(accent, isDark ? 0.16 : 0.1),
-    // Dùng cho các lớp chrome nổi (header/modal/panel/thanh chat) — nền kính mờ thật sự
-    // (backdrop-filter), chỉ áp cho số lượng phần tử nhỏ để tránh tốn hiệu năng.
     ['--glass-surface' as any]: isDark ? 'rgba(32,30,26,0.72)' : 'rgba(255,255,255,0.72)',
     ['--glass-blur' as any]: '18px',
     ['--glass-shadow' as any]: isDark ? '0 8px 32px rgba(0,0,0,0.35)' : '0 8px 28px rgba(35,31,27,0.09)',
   }
 }
+
+export function getGlassThemeVars(themeColor: string, isDark: boolean): React.CSSProperties {
+  const accent = getAccentHex(themeColor, isDark)
+  return {
+    ['--bg' as any]: isDark ? '#080C14' : '#F0F4FD',
+    ['--surface' as any]: isDark ? 'rgba(15, 23, 42, 0.65)' : 'rgba(255, 255, 255, 0.68)',
+    ['--surface-elevated' as any]: isDark ? 'rgba(30, 41, 59, 0.75)' : 'rgba(255, 255, 255, 0.85)',
+    ['--border' as any]: isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.7)',
+    ['--border-refract' as any]: isDark
+      ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(56, 189, 248, 0.2) 100%)'
+      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.4) 50%, rgba(99, 102, 241, 0.3) 100%)',
+    ['--text' as any]: isDark ? '#F8FAFC' : '#0F172A',
+    ['--text-muted' as any]: isDark ? '#94A3B8' : '#475569',
+    ['--accent' as any]: accent,
+    ['--accent-soft' as any]: hexToRgba(accent, isDark ? 0.22 : 0.14),
+    ['--glass-surface' as any]: isDark ? 'rgba(15, 23, 42, 0.62)' : 'rgba(255, 255, 255, 0.65)',
+    ['--glass-blur' as any]: '24px',
+    ['--glass-shadow' as any]: isDark
+      ? '0 20px 50px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.15)'
+      : '0 20px 45px rgba(30, 58, 138, 0.08), inset 0 1px 2px rgba(255, 255, 255, 0.8)',
+  }
+}
+
+

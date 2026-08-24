@@ -274,6 +274,178 @@
   .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(100, 116, 139, 0.5);
   }
+  /* ========================================================= */
+  /* 🌟 LIQUID GLASS & REALISTIC REFRACTION STYLES (THEME 3) */
+  /* ========================================================= */
+  .glass-refract-card {
+    position: relative;
+    background: var(--glass-surface, rgba(255, 255, 255, 0.65));
+    backdrop-filter: blur(28px) saturate(1.8);
+    -webkit-backdrop-filter: blur(28px) saturate(1.8);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.5));
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06), inset 0 1px 1px 0 rgba(255, 255, 255, 0.7);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .dark .glass-refract-card {
+    background: var(--glass-surface, rgba(15, 23, 42, 0.65));
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+  }
+
+  .glass-refract-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 26px 60px rgba(0, 0, 0, 0.12), inset 0 1px 2px 0 rgba(255, 255, 255, 0.9);
+  }
+
+  .dark .glass-refract-card:hover {
+    box-shadow: 0 26px 60px rgba(0, 0, 0, 0.6), inset 0 1px 2px 0 rgba(255, 255, 255, 0.25);
+  }
+
+  /* Kính có vệt khúc xạ ánh sáng (Chromatic / Prismatic Reflection Highlight) */
+  .glass-specular-edge {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .glass-specular-edge::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(
+      115deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.03) 40%,
+      rgba(255, 255, 255, 0.25) 50%,
+      rgba(255, 255, 255, 0.03) 60%,
+      transparent 100%
+    );
+    transform: translateX(-100%);
+    pointer-events: none;
+    transition: transform 0.8s ease;
+  }
+
+  .glass-specular-edge:hover::before {
+    transform: translateX(100%);
+  }
+
+  /* Viền khúc xạ đa sắc ngũ sắc mờ (Prismatic Chromatic Border) */
+  .glass-prismatic-border {
+    position: relative;
+  }
+
+  .glass-prismatic-border::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.8) 0%,
+      rgba(56, 189, 248, 0.4) 30%,
+      rgba(168, 85, 247, 0.4) 70%,
+      rgba(255, 255, 255, 0.2) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  .dark .glass-prismatic-border::after {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.3) 0%,
+      rgba(56, 189, 248, 0.25) 30%,
+      rgba(168, 85, 247, 0.25) 70%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
+  }
+
+  /* Floating Topbar Glass */
+  .glass-floating-bar {
+    background: var(--glass-surface, rgba(255, 255, 255, 0.7));
+    backdrop-filter: blur(28px) saturate(1.9);
+    -webkit-backdrop-filter: blur(28px) saturate(1.9);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 12px 35px rgba(0, 0, 0, 0.06),
+      0 1px 3px rgba(0, 0, 0, 0.03),
+      inset 0 1px 1.5px rgba(255, 255, 255, 0.9);
+  }
+
+  .dark .glass-floating-bar {
+    background: var(--glass-surface, rgba(15, 23, 42, 0.7));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 16px 40px rgba(0, 0, 0, 0.45),
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      inset 0 1px 1.5px rgba(255, 255, 255, 0.18);
+  }
+
+  /* Aurora Background Orbs for Glass Mode */
+  .glass-aurora-orb-1 {
+    position: fixed;
+    top: -10%;
+    left: 10%;
+    width: 600px;
+    height: 600px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(99, 102, 241, 0.08) 50%, transparent 70%);
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+    animation: aurora-drift 20s ease-in-out infinite alternate;
+  }
+
+  .glass-aurora-orb-2 {
+    position: fixed;
+    top: 35%;
+    right: -5%;
+    width: 650px;
+    height: 650px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(236, 72, 153, 0.18) 0%, rgba(168, 85, 247, 0.1) 50%, transparent 70%);
+    filter: blur(90px);
+    pointer-events: none;
+    z-index: 0;
+    animation: aurora-drift-2 25s ease-in-out infinite alternate;
+  }
+
+  .glass-aurora-orb-3 {
+    position: fixed;
+    bottom: -10%;
+    left: 30%;
+    width: 550px;
+    height: 550px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.16) 0%, rgba(56, 189, 248, 0.08) 50%, transparent 70%);
+    filter: blur(85px);
+    pointer-events: none;
+    z-index: 0;
+    animation: aurora-drift 18s ease-in-out infinite alternate;
+  }
+
+  @keyframes aurora-drift {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    100% {
+      transform: translate3d(40px, 30px, 0) scale(1.1);
+    }
+  }
+
+  @keyframes aurora-drift-2 {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    100% {
+      transform: translate3d(-50px, -40px, 0) scale(1.15);
+    }
+  }
 }
 
 @keyframes float-bounce {

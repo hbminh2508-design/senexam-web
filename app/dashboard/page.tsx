@@ -15,19 +15,21 @@ import {
 import { AnnouncementRenderer } from './_home/Announcement'
 import ModernLoading from '@/app/components/ModernLoading'
 import CrossfadeIcon from '@/app/components/CrossfadeIcon'
-import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars } from '@/app/components/modernTheme'
-import { UI_PREFS_CHANGED_EVENT } from '@/app/components/useNewUiPrefs'
+import { THEME_COLORS, DEFAULT_THEME_COLOR, getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
+import { UI_PREFS_CHANGED_EVENT, type UiMode } from '@/app/components/useNewUiPrefs'
 import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion } from '@/lib/systemRelease'
 import { getEffectivePlanTier, type PlanTier } from '@/lib/vipMembership'
 import type { Feature } from './_home/types'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
-// `loading` is intentionally omitted here: both chunks are warmed up manually
+// `loading` is intentionally omitted here: all chunks are warmed up manually
 // (see the prefetch effect below) well before `isDataLoading` clears, so this
 // fallback would otherwise flash a second, visually different loading screen
 // right after the one below resolves.
 const LegacyHome = dynamic(() => import('./_home/LegacyHome'))
 const ModernHome = dynamic(() => import('./_home/ModernHome'))
+const GlassHome = dynamic(() => import('./_home/GlassHome'))
+
 
 // ============================================================================
 // 1. KHAI BÁO CÁC HẰNG SỐ HỆ THỐNG
@@ -115,13 +117,16 @@ export default function DashboardPage() {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
 
-  // -- Giao diện mới (Beta) — cờ bật thử nghiệm, lưu theo tài khoản trên Supabase --
-  const [newUiEnabled, setNewUiEnabled] = useState(false)
+  // -- Giao diện (Mặc định / Hiện đại / Kính khúc xạ) --
+  const [uiMode, setUiMode] = useState<UiMode>('legacy')
+  const newUiEnabled = uiMode !== 'legacy'
+  const isGlass = uiMode === 'glass'
   const [newUiSaving, setNewUiSaving] = useState(false)
   const [themeColor, setThemeColor] = useState<string>(DEFAULT_THEME_COLOR)
   const [themeColorSaving, setThemeColorSaving] = useState(false)
   const [uiDensity, setUiDensity] = useState<'comfortable' | 'compact'>('comfortable')
   const [animationsEnabled, setAnimationsEnabled] = useState(true)
+
 
   // -- Chương trình Beta: tham gia bằng cách trả lời đúng 2 câu hỏi --
   const [isBetaTester, setIsBetaTester] = useState(false)
@@ -254,27 +259,29 @@ export default function DashboardPage() {
     })
   }, [showNotifications])
 
-  // Đồng bộ cờ Giao diện mới + màu chủ đề + mật độ/animation ra localStorage để các trang khác đọc nhanh
+  // Đồng bộ cờ Giao diện + màu chủ đề + mật độ/animation ra localStorage để các trang khác đọc nhanh
   useEffect(() => {
+    localStorage.setItem('senexam_ui_mode', uiMode)
     localStorage.setItem('senexam_new_ui', newUiEnabled ? '1' : '0')
     localStorage.setItem('senexam_theme_color', themeColor)
     localStorage.setItem('senexam_density', uiDensity)
     localStorage.setItem('senexam_animations', animationsEnabled ? '1' : '0')
     window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
-  }, [newUiEnabled, themeColor, uiDensity, animationsEnabled])
+  }, [uiMode, newUiEnabled, themeColor, uiDensity, animationsEnabled])
 
   // ============================================================================
   // INITIALIZATION & EFFECTS
   // ============================================================================
 
-  // Warm up both Home chunks in parallel with the profile/data fetch below, so
-  // whichever one ends up rendered (newUiEnabled resolves partway through that
+  // Warm up all 3 Home chunks in parallel with the profile/data fetch below, so
+  // whichever one ends up rendered (uiMode resolves partway through that
   // fetch) is already cached by the time isDataLoading clears — otherwise
   // next/dynamic's own loading fallback flashes a second loading screen right
   // after this one.
   useEffect(() => {
     import('./_home/LegacyHome')
     import('./_home/ModernHome')
+    import('./_home/GlassHome')
   }, [])
 
   useEffect(() => {
@@ -297,13 +304,20 @@ export default function DashboardPage() {
         setVipExpiresAt(profile.vip_expires_at || null)
         setPlanTier(getEffectivePlanTier(profile))
         setSenCashBalance(profile.sencash_balance || 0)
-        // Mặc định dùng giao diện cũ; giao diện mới chỉ bật khi người dùng đã chủ động chọn.
-        const effectiveNewUi = profile.new_ui_enabled === true
-        setNewUiEnabled(effectiveNewUi)
+        
+        const rawUiMode = localStorage.getItem('senexam_ui_mode')
+        let effectiveUiMode: UiMode = 'legacy'
+        if (rawUiMode === 'glass' || rawUiMode === 'modern' || rawUiMode === 'legacy') {
+          effectiveUiMode = rawUiMode
+        } else if (profile.new_ui_enabled === true) {
+          effectiveUiMode = 'modern'
+        }
+        setUiMode(effectiveUiMode)
         setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
         setIsBetaTester(!!profile.is_beta_tester)
         localStorage.setItem('senexam_beta_tester', profile.is_beta_tester ? '1' : '0')
-        localStorage.setItem('senexam_new_ui', effectiveNewUi ? '1' : '0')
+        localStorage.setItem('senexam_ui_mode', effectiveUiMode)
+        localStorage.setItem('senexam_new_ui', effectiveUiMode !== 'legacy' ? '1' : '0')
         refreshPublishedVersion(!!profile.is_beta_tester)
         setFormData({
           fullName: profile.full_name || '', 
@@ -317,6 +331,7 @@ export default function DashboardPage() {
           hsaOption: profile.hsa_option || '', 
           hsaScienceSubjects: profile.hsa_science_subjects || []
         })
+
 
         // Bật Onboarding nếu thiếu thông tin cơ bản
         if (!profile.full_name || !profile.target_exams || profile.target_exams.length === 0) { 
@@ -520,21 +535,25 @@ export default function DashboardPage() {
     localStorage.setItem('senexam_notifications', next ? '1' : '0')
   }
 
-  // Giao diện Mới là lựa chọn độc lập; các tính năng Beta vẫn tự kiểm tra quyền riêng.
-  const setUiVersion = async (useModern: boolean) => {
-    if (useModern === newUiEnabled) return
-    setNewUiEnabled(useModern)
+  // Chuyển đổi giữa 3 giao diện: Mặc định / Hiện đại / Kính khúc xạ
+  const setUiVersionMode = async (mode: UiMode) => {
+    if (mode === uiMode) return
+    const prev = uiMode
+    setUiMode(mode)
     setNewUiSaving(true)
+    localStorage.setItem('senexam_ui_mode', mode)
+    localStorage.setItem('senexam_new_ui', mode !== 'legacy' ? '1' : '0')
+    window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const { error } = await supabase.from('profiles').update({ new_ui_enabled: useModern }).eq('id', user.id)
+      const { error } = await supabase.from('profiles').update({ new_ui_enabled: mode !== 'legacy' }).eq('id', user.id)
       if (error) {
-        setNewUiEnabled(!useModern)
-        alert('Không thể lưu cài đặt giao diện: ' + error.message)
+        console.warn('Could not sync ui mode to Supabase profile:', error.message)
       }
     }
     setNewUiSaving(false)
   }
+
 
   const changeThemeColor = async (colorKey: string) => {
     const prev = themeColor
@@ -654,7 +673,10 @@ export default function DashboardPage() {
   }
 
   const overlayActive = showOnboarding || showProfile || showCodeModal || showNotifications || showCalculatorModal
-  const HomeComponent = newUiEnabled ? ModernHome : LegacyHome
+  const HomeComponent = uiMode === 'glass' ? GlassHome : uiMode === 'modern' ? ModernHome : LegacyHome
+  const activeOverlayThemeVars = isGlass
+    ? getGlassThemeVars(themeColor, isDark)
+    : getModernThemeVars(themeColor, isDark)
 
   return (
     <>
@@ -693,10 +715,10 @@ export default function DashboardPage() {
       {showCodeModal && (
         <div
           className={newUiEnabled ? 'fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200' : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-200'}
-          style={newUiEnabled ? { ...getModernThemeVars(themeColor, isDark), background: 'rgba(0,0,0,0.45)' } as React.CSSProperties : undefined}
+          style={newUiEnabled ? { ...activeOverlayThemeVars, background: 'rgba(0,0,0,0.45)' } as React.CSSProperties : undefined}
         >
            <div
-             className={newUiEnabled ? 'ms-glass rounded-[2.5rem] w-full max-w-sm p-8 relative border' : 'bg-white dark:bg-[#1E1E1E] rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border border-slate-100 dark:border-white/5'}
+             className={isGlass ? 'glass-refract-card rounded-[2.5rem] w-full max-w-sm p-8 relative border border-white/70 dark:border-white/15' : newUiEnabled ? 'ms-glass rounded-[2.5rem] w-full max-w-sm p-8 relative border' : 'bg-white dark:bg-[#1E1E1E] rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative border border-slate-100 dark:border-white/5'}
              style={newUiEnabled ? { borderColor: 'var(--border)', color: 'var(--text)' } : undefined}
            >
               <button onClick={() => setShowCodeModal(false)} className="absolute top-5 right-5 p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><X className="w-5 h-5" style={newUiEnabled ? { color: 'var(--text-muted)' } : { color: '#64748b' }}/></button>
@@ -734,7 +756,7 @@ export default function DashboardPage() {
               <button
                 onClick={handleJoinHiddenExam}
                 disabled={codeLoading || !examCode}
-                className={newUiEnabled ? 'rounded-2xl w-full py-4 font-black transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base' : 'bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl w-full py-4 font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base'}
+                className={newUiEnabled ? 'rounded-2xl w-full py-4 font-black transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base shadow-md' : 'bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl w-full py-4 font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 text-base'}
                 style={newUiEnabled ? { background: 'var(--accent)', color: '#fff' } : undefined}
               >
                 {codeLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Mở khóa phòng thi'}
@@ -742,6 +764,7 @@ export default function DashboardPage() {
            </div>
         </div>
       )}
+
 
       {/* 1.5. Modal tham gia Chương trình Beta — trả lời 2 câu hỏi để mở khóa */}
       {showBetaJoinModal && (
@@ -783,12 +806,14 @@ export default function DashboardPage() {
       {/* 2. Slide-over Profile / Cài đặt hệ thống */}
       {showProfile && (
         <div
-          className={`fixed inset-0 z-50 flex justify-end bg-slate-900/30 dark:bg-black/50 backdrop-blur-sm transition-all duration-300`}
-          style={newUiEnabled ? getModernThemeVars(themeColor, isDark) : undefined}
+          className={`fixed inset-0 z-50 flex justify-end bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm transition-all duration-300`}
+          style={newUiEnabled ? activeOverlayThemeVars : undefined}
         >
           <div
             className={
-              newUiEnabled
+              isGlass
+                ? 'glass-refract-card w-full max-w-md my-3 mr-3 h-[calc(100%-1.5rem)] rounded-[2.5rem] overflow-y-auto flex flex-col animate-in slide-in-from-right border border-white/70 dark:border-white/15 shadow-2xl custom-scrollbar'
+                : newUiEnabled
                 ? 'ms-glass w-full max-w-md my-4 mr-4 h-[calc(100%-2rem)] rounded-2xl overflow-y-auto flex flex-col animate-in slide-in-from-right border'
                 : 'w-full max-w-md h-full bg-white dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5'
             }
@@ -805,7 +830,7 @@ export default function DashboardPage() {
               <h2 className={newUiEnabled ? 'text-xl font-black flex items-center gap-2' : 'text-xl font-black text-slate-900 dark:text-white flex items-center gap-2'} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
                 <Settings className={newUiEnabled ? 'w-5 h-5' : 'w-5 h-5 text-indigo-500'} style={newUiEnabled ? { color: 'var(--accent)' } : undefined} /> Cài đặt
               </h2>
-              <button onClick={() => setShowProfile(false)} className="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-[#2A2A2A] transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+              <button onClick={() => setShowProfile(false)} className="p-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
 
             <div className="p-6 space-y-8 flex-grow">
@@ -852,28 +877,63 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-3">
-                <h3 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 ml-2">Thử nghiệm</h3>
+                <h3 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 ml-2">Phong cách Giao diện</h3>
 
                 <div className="bg-slate-50 dark:bg-[#121212] rounded-3xl border border-slate-100 dark:border-transparent overflow-hidden">
                   <div className="p-4.5">
                     <div className="flex items-center gap-4 mb-4">
                       <Palette className="w-5 h-5 text-indigo-500" />
                       <div>
-                        <p className="font-bold text-slate-900 dark:text-white text-sm">Giao diện</p>
-                        <p className="text-[11px] font-medium text-slate-500">Mặc định là giao diện cũ; giao diện Mới có thể bật cho mọi tài khoản.</p>
+                        <p className="font-bold text-slate-900 dark:text-white text-sm">Chế độ giao diện</p>
+                        <p className="text-[11px] font-medium text-slate-500">Tùy chọn trải nghiệm giữa Mặc định, Hiện đại và Kính khúc xạ.</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-7 pl-1">
-                      <button onClick={() => setUiVersion(false)} disabled={newUiSaving} className="flex flex-col items-center gap-2 disabled:opacity-60">
-                        <span className={`w-10 h-10 rounded-full bg-sky-500 transition-all ${!newUiEnabled ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-offset-[#121212] dark:ring-white scale-110' : 'hover:scale-105 opacity-60'}`} />
-                        <span className={`text-[11px] font-bold ${!newUiEnabled ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>Mặc định</span>
+                    
+                    {/* 3 Nút chọn Giao diện */}
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <button
+                        onClick={() => setUiVersionMode('legacy')}
+                        disabled={newUiSaving}
+                        className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${
+                          uiMode === 'legacy'
+                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 font-extrabold shadow-sm'
+                            : 'border-transparent bg-white dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold opacity-75'
+                        }`}
+                      >
+                        <span className="w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center text-white text-[10px] font-black">1</span>
+                        <span className="text-xs">Mặc định</span>
                       </button>
-                      <button onClick={() => setUiVersion(true)} disabled={newUiSaving} className="flex flex-col items-center gap-2 disabled:opacity-60">
-                        <span className={`w-10 h-10 rounded-full bg-orange-500 transition-all ${newUiEnabled ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-offset-[#121212] dark:ring-white scale-110' : 'hover:scale-105 opacity-60'}`} />
-                        <span className={`text-[11px] font-bold ${newUiEnabled ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>Mới</span>
+
+                      <button
+                        onClick={() => setUiVersionMode('modern')}
+                        disabled={newUiSaving}
+                        className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${
+                          uiMode === 'modern'
+                            ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 font-extrabold shadow-sm'
+                            : 'border-transparent bg-white dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold opacity-75'
+                        }`}
+                      >
+                        <span className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-white text-[10px] font-black">2</span>
+                        <span className="text-xs">Hiện đại</span>
+                      </button>
+
+                      <button
+                        onClick={() => setUiVersionMode('glass')}
+                        disabled={newUiSaving}
+                        className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all relative overflow-hidden ${
+                          uiMode === 'glass'
+                            ? 'border-indigo-500 bg-gradient-to-br from-indigo-500/15 via-sky-500/10 to-purple-500/15 text-indigo-700 dark:text-indigo-300 font-extrabold shadow-md'
+                            : 'border-transparent bg-white dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold opacity-75'
+                        }`}
+                      >
+                        <span className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-600 via-sky-400 to-emerald-400 flex items-center justify-center text-white text-[10px] font-black">
+                          ✨
+                        </span>
+                        <span className="text-xs">Kính Khúc Xạ</span>
                       </button>
                     </div>
                   </div>
+
 
                   {newUiEnabled && (
                     <div className="p-4.5 pt-0 space-y-5">
@@ -1213,16 +1273,23 @@ export default function DashboardPage() {
       {showNotifications && (
         <div
           className="fixed inset-0 z-50 flex justify-end backdrop-blur-sm transition-all duration-300"
-          style={newUiEnabled ? { ...getModernThemeVars(themeColor, isDark), background: 'rgba(0,0,0,0.35)' } as React.CSSProperties : { background: 'rgba(15,23,42,0.2)' }}
+          style={newUiEnabled ? { ...activeOverlayThemeVars, background: 'rgba(0,0,0,0.35)' } as React.CSSProperties : { background: 'rgba(15,23,42,0.2)' }}
         >
           <div
-            className={newUiEnabled ? 'w-full max-w-sm h-full overflow-y-auto flex flex-col animate-in slide-in-from-right border-l' : 'w-full max-w-sm h-full bg-slate-50 dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5'}
+            className={
+              isGlass
+                ? 'glass-refract-card w-full max-w-sm h-full overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-white/60 dark:border-white/15'
+                : newUiEnabled
+                ? 'w-full max-w-sm h-full overflow-y-auto flex flex-col animate-in slide-in-from-right border-l'
+                : 'w-full max-w-sm h-full bg-slate-50 dark:bg-[#1E1E1E] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] overflow-y-auto flex flex-col animate-in slide-in-from-right border-l border-slate-200 dark:border-white/5'
+            }
             style={newUiEnabled ? { background: 'var(--surface)', borderColor: 'var(--border)' } : undefined}
           >
             <div
               className={newUiEnabled ? 'p-6 flex justify-between items-center sticky top-0 z-10 backdrop-blur-xl border-b' : 'p-6 flex justify-between items-center sticky top-0 z-10 bg-white/80 dark:bg-[#1E1E1E]/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/5'}
               style={newUiEnabled ? { background: 'color-mix(in srgb, var(--surface) 85%, transparent)', borderColor: 'var(--border)' } : undefined}
             >
+
               <h2 className={newUiEnabled ? 'text-xl font-black flex items-center gap-2' : 'text-xl font-black text-slate-900 dark:text-white flex items-center gap-2'} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
                 <Bell className={newUiEnabled ? 'w-5 h-5' : 'w-5 h-5 text-indigo-500 fill-indigo-500'} style={newUiEnabled ? { color: 'var(--accent)' } : undefined} /> Thông Báo
               </h2>
