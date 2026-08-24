@@ -46,14 +46,18 @@ export default function SenAiStudioPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  const [isBeta, setIsBeta] = useState(false)
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('senai_tier, senai_tier_expires_at, senai_tier_permanent').eq('id', user.id).maybeSingle()
+      const { data: profile } = await supabase.from('profiles').select('senai_tier, senai_tier_expires_at, senai_tier_permanent, is_beta_tester').eq('id', user.id).maybeSingle()
+      const isBetaUser = !!profile?.is_beta_tester
       const ultra = getEffectiveSenaiTier(profile) === 'ultra'
+      setIsBeta(isBetaUser)
       setIsUltra(ultra)
-      if (ultra) await refreshSessions()
+      if (isBetaUser && ultra) await refreshSessions()
       setLoading(false)
     }
     init()
@@ -61,6 +65,7 @@ export default function SenAiStudioPage() {
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
   }, [router])
+
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -169,6 +174,30 @@ export default function SenAiStudioPage() {
     return <div className="min-h-screen flex items-center justify-center font-bold text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Đang tải...</div>
   }
 
+  if (!isBeta) {
+    return (
+      <div className={wrapperClass} style={wrapperStyle}>
+        <div className="max-w-md mx-auto px-4 py-20 text-center">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-gradient-to-tr from-indigo-600 via-sky-500 to-emerald-400 p-[2px] shadow-xl">
+            <div className="w-full h-full bg-white dark:bg-slate-900 rounded-[22px] flex items-center justify-center">
+              <Sparkles className="w-10 h-10 text-indigo-500 animate-pulse" />
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-wider mb-3">
+            Tính Năng Beta Độc Quyền
+          </div>
+          <h1 className="text-2xl font-black mb-2">SenAI Studio (Beta)</h1>
+          <p className={`text-sm mb-6 ${mutedClass}`} style={mutedStyle}>
+            SenAI Studio hiện đang trong giai đoạn thử nghiệm giới hạn dành cho các thành viên <strong>SenExam Beta Tester</strong>. Bạn vui lòng tham gia Beta tại Dashboard để kích hoạt tính năng nhé!
+          </p>
+          <button onClick={() => router.push('/dashboard')} className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-lg shadow-indigo-500/25 active:scale-95 transition-all">
+            Quay về Dashboard & Tham gia Beta
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (!isUltra) {
     return (
       <div className={wrapperClass} style={wrapperStyle}>
@@ -192,6 +221,7 @@ export default function SenAiStudioPage() {
       </div>
     )
   }
+
 
   return (
     <div className={wrapperClass} style={wrapperStyle}>

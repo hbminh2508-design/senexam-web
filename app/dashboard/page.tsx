@@ -305,20 +305,30 @@ export default function DashboardPage() {
         setPlanTier(getEffectivePlanTier(profile))
         setSenCashBalance(profile.sencash_balance || 0)
         
+        const isUserBeta = !!profile.is_beta_tester
+        setIsBetaTester(isUserBeta)
+        localStorage.setItem('senexam_beta_tester', isUserBeta ? '1' : '0')
+        
         const rawUiMode = localStorage.getItem('senexam_ui_mode')
         let effectiveUiMode: UiMode = 'legacy'
-        if (rawUiMode === 'glass' || rawUiMode === 'modern' || rawUiMode === 'legacy') {
-          effectiveUiMode = rawUiMode
+        if (profile.ui_mode === 'glass' || profile.ui_mode === 'modern' || profile.ui_mode === 'legacy') {
+          effectiveUiMode = profile.ui_mode as UiMode
+        } else if (rawUiMode === 'glass' || rawUiMode === 'modern' || rawUiMode === 'legacy') {
+          effectiveUiMode = rawUiMode as UiMode
         } else if (profile.new_ui_enabled === true) {
           effectiveUiMode = 'modern'
         }
+
+        // Giao diện Kính khúc xạ chỉ áp dụng cho thành viên Beta
+        if (effectiveUiMode === 'glass' && !isUserBeta) {
+          effectiveUiMode = 'modern'
+        }
+
         setUiMode(effectiveUiMode)
         setThemeColor(profile.theme_color || DEFAULT_THEME_COLOR)
-        setIsBetaTester(!!profile.is_beta_tester)
-        localStorage.setItem('senexam_beta_tester', profile.is_beta_tester ? '1' : '0')
         localStorage.setItem('senexam_ui_mode', effectiveUiMode)
         localStorage.setItem('senexam_new_ui', effectiveUiMode !== 'legacy' ? '1' : '0')
-        refreshPublishedVersion(!!profile.is_beta_tester)
+        refreshPublishedVersion(isUserBeta)
         setFormData({
           fullName: profile.full_name || '', 
           dob: profile.dob || '', 
@@ -331,6 +341,7 @@ export default function DashboardPage() {
           hsaOption: profile.hsa_option || '', 
           hsaScienceSubjects: profile.hsa_science_subjects || []
         })
+
 
 
         // Bật Onboarding nếu thiếu thông tin cơ bản
@@ -537,6 +548,12 @@ export default function DashboardPage() {
 
   // Chuyển đổi giữa 3 giao diện: Mặc định / Hiện đại / Kính khúc xạ
   const setUiVersionMode = async (mode: UiMode) => {
+    if (mode === 'glass' && !isBetaTester) {
+      setShowProfile(false)
+      setShowBetaJoinModal(true)
+      alert('Giao diện Kính Khúc Xạ (Liquid Glass) hiện là tính năng độc quyền dành cho thành viên Thử nghiệm Beta. Bạn vui lòng trả lời 2 câu hỏi để tham gia chương trình Beta nhé!')
+      return
+    }
     if (mode === uiMode) return
     const prev = uiMode
     setUiMode(mode)
@@ -546,13 +563,17 @@ export default function DashboardPage() {
     window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const { error } = await supabase.from('profiles').update({ new_ui_enabled: mode !== 'legacy' }).eq('id', user.id)
+      const { error } = await supabase
+        .from('profiles')
+        .update({ ui_mode: mode, new_ui_enabled: mode !== 'legacy' })
+        .eq('id', user.id)
       if (error) {
         console.warn('Could not sync ui mode to Supabase profile:', error.message)
       }
     }
     setNewUiSaving(false)
   }
+
 
 
   const changeThemeColor = async (colorKey: string) => {

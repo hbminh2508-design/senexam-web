@@ -12,7 +12,7 @@ import 'katex/dist/katex.min.css'
 import { supabase } from '@/lib/supabaseClient'
 import { SENAI_TIER_LABEL, getEffectiveSenaiTier, type SenAiTierCode } from '@/lib/senaiTiers'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 
 const FEEDBACK_PREFIX_RE = /^feedback\s*:\s*(.+)$/i
 
@@ -20,6 +20,7 @@ type ChatMessage = {
   role: 'user' | 'model'
   text: string
 }
+
 
 // Hàm chuẩn hóa tiếng Việt không dấu để AI Offline dễ bắt từ khóa
 const normalizeText = (value: string) => {
@@ -267,32 +268,38 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
   if (hidden) return null
 
-  const modernVars = getModernThemeVars(themeColor, isDark)
+  const { isGlass, newUiEnabled, themeColor, isBetaTester } = useNewUiPrefs()
 
-  const chatContainerBase = newUiEnabled
+  const activeVars = isGlass
+    ? getGlassThemeVars(themeColor, isDark)
+    : getModernThemeVars(themeColor, isDark)
+
+  const chatContainerBase = isGlass
+    ? "glass-refract-card flex flex-col overflow-hidden animate-in fade-in duration-300 border border-white/70 dark:border-white/15 shadow-2xl backdrop-blur-3xl"
+    : newUiEnabled
     ? "ms-glass flex flex-col overflow-hidden animate-in fade-in duration-300"
     : "bg-white/95 dark:bg-[#121212]/95 backdrop-blur-3xl border border-slate-200/60 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden animate-in fade-in duration-300"
 
   const chatSizeClasses = isFullscreen
-    ? "fixed inset-4 sm:inset-6 md:inset-10 lg:inset-x-32 lg:inset-y-12 z-[150] rounded-[2rem]"
-    : `mb-4 w-[360px] sm:w-[420px] h-[600px] max-h-[80vh] rounded-3xl z-[100] ${avoid ? 'lg:mr-[28rem]' : ''}`
+    ? "fixed inset-4 sm:inset-6 md:inset-10 lg:inset-x-32 lg:inset-y-12 z-[150] rounded-[2.5rem]"
+    : `mb-4 w-[360px] sm:w-[420px] h-[600px] max-h-[80vh] rounded-[2rem] z-[100] ${avoid ? 'lg:mr-[28rem]' : ''}`
 
   return (
     <div
       className={`fixed bottom-6 right-6 z-[100] flex flex-col items-end ${isFullscreen ? 'w-full h-full pointer-events-none' : ''}`}
-      style={newUiEnabled ? (modernVars as React.CSSProperties) : undefined}
+      style={newUiEnabled ? (activeVars as React.CSSProperties) : undefined}
     >
 
       {isChatOpen && (
         <div className={`${chatContainerBase} ${chatSizeClasses} pointer-events-auto`} style={newUiEnabled ? { border: '1px solid var(--border)' } : undefined}>
 
           <div
-            className={newUiEnabled ? "px-5 py-4 flex items-center justify-between z-10" : `px-5 py-4 flex items-center justify-between shadow-sm z-10 transition-colors duration-500 ${isOnlineMode ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : 'bg-gradient-to-r from-slate-700 to-slate-600 dark:from-slate-800 dark:to-slate-900'}`}
-            style={newUiEnabled ? { background: 'color-mix(in srgb, var(--glass-surface) 85%, transparent)', borderBottom: '1px solid var(--border)' } : undefined}
+            className={newUiEnabled ? "px-5 py-4 flex items-center justify-between z-10 backdrop-blur-xl border-b" : `px-5 py-4 flex items-center justify-between shadow-sm z-10 transition-colors duration-500 ${isOnlineMode ? 'bg-gradient-to-r from-indigo-600 to-blue-600' : 'bg-gradient-to-r from-slate-700 to-slate-600 dark:from-slate-800 dark:to-slate-900'}`}
+            style={newUiEnabled ? { background: 'color-mix(in srgb, var(--glass-surface) 85%, transparent)', borderColor: 'var(--border)' } : undefined}
           >
             <div className={`flex items-center gap-3 ${newUiEnabled ? '' : 'text-white'}`} style={newUiEnabled ? { color: 'var(--text)' } : undefined}>
               <div
-                className={newUiEnabled ? "w-10 h-10 rounded-2xl flex items-center justify-center" : "w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-inner"}
+                className={newUiEnabled ? "w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm" : "w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-inner"}
                 style={newUiEnabled ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
               >
                 {isOnlineMode ? <Sparkles className="w-5 h-5" style={newUiEnabled ? undefined : { color: '#FDE047' }} /> : <Bot className="w-5 h-5" />}
@@ -321,14 +328,16 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${isOnlineMode ? (newUiEnabled ? 'shadow-sm' : 'bg-white text-indigo-600 shadow-sm') : (newUiEnabled ? '' : 'text-white/70')}`} style={newUiEnabled ? (isOnlineMode ? { background: 'var(--surface)', color: 'var(--accent)' } : { color: 'var(--text-muted)' }) : undefined}><Sparkles className="w-3.5 h-3.5"/></div>
               </div>
 
-              <button
-                onClick={() => router.push('/senai-studio')}
-                title="Mở SenAI Studio"
-                className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"}
-                style={newUiEnabled ? { color: senaiTierCode === 'ultra' ? '#f59e0b' : 'var(--text-muted)' } : undefined}
-              >
-                <BrainCircuit className="w-4 h-4" style={!newUiEnabled && senaiTierCode === 'ultra' ? { color: '#FDE047' } : undefined} />
-              </button>
+              {isBetaTester && (
+                <button
+                  onClick={() => router.push('/senai-studio')}
+                  title="Mở SenAI Studio"
+                  className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"}
+                  style={newUiEnabled ? { color: senaiTierCode === 'ultra' ? '#f59e0b' : 'var(--text-muted)' } : undefined}
+                >
+                  <BrainCircuit className="w-4 h-4" style={!newUiEnabled && senaiTierCode === 'ultra' ? { color: '#FDE047' } : undefined} />
+                </button>
+              )}
 
               <button onClick={() => setIsFullscreen(!isFullscreen)} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -353,8 +362,14 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 )}
 
                 <div
-                  className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14.5px] font-medium leading-relaxed shadow-sm overflow-x-auto ${newUiEnabled ? (msg.role === 'user' ? 'text-white rounded-br-sm' : 'rounded-bl-sm') : (msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm')}`}
-                  style={newUiEnabled ? (msg.role === 'user' ? { background: 'var(--accent)' } : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }) : undefined}
+                  className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14.5px] font-medium leading-relaxed shadow-sm overflow-x-auto ${
+                    isGlass
+                      ? (msg.role === 'user' ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white rounded-br-sm shadow-md' : 'glass-refract-card rounded-bl-sm border border-white/60 dark:border-white/10')
+                      : newUiEnabled
+                      ? (msg.role === 'user' ? 'text-white rounded-br-sm' : 'rounded-bl-sm')
+                      : (msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm')
+                  }`}
+                  style={!isGlass && newUiEnabled ? (msg.role === 'user' ? { background: 'var(--accent)' } : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }) : undefined}
                 >
                   {/* 🌟 SỬ DỤNG BỘ RENDER MARKDOWN TẠI ĐÂY */}
                   <ReactMarkdown
@@ -456,13 +471,15 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
         className={`pointer-events-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] text-white font-black transition-all duration-300 hover:scale-105 active:scale-95 z-[100] border border-white/20
           ${isChatOpen
             ? 'bg-slate-800 hover:bg-slate-700 shadow-none'
-            : newUiEnabled
+            : isGlass
+              ? 'glass-floating-bar bg-gradient-to-r from-indigo-600 via-sky-600 to-emerald-600 hover:opacity-95 shadow-xl border-white/40 dark:border-white/20'
+              : newUiEnabled
               ? ''
               : isOnlineMode
                 ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'
                 : 'bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600'
           }`}
-        style={!isChatOpen && newUiEnabled ? { background: 'var(--accent)' } : undefined}
+        style={!isChatOpen && newUiEnabled && !isGlass ? { background: 'var(--accent)' } : undefined}
       >
         {isChatOpen ? <X className="w-6 h-6" /> : (
           <>
@@ -474,4 +491,5 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
     </div>
   )
+
 }
