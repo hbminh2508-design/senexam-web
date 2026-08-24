@@ -12,7 +12,7 @@ import {
 
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
 import VipAdBanner from '@/app/components/VipAdBanner'
 
@@ -37,9 +37,9 @@ export default function ForumPage() {
   const [uploadStatus, setUploadStatus] = useState('')
 
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
-  const [isBetaTester, setIsBetaTester] = useState(false)
+
 
   const fetchPosts = async () => {
     // Sắp xếp ưu tiên bài được ghim (is_pinned) lên trước, sau đó mới tới thời gian mới nhất
@@ -176,7 +176,8 @@ export default function ForumPage() {
       <div
         className="min-h-screen font-sans pb-16"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+
       >
         {showCreateModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">

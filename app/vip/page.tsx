@@ -10,8 +10,9 @@ import {
 } from '@/lib/vipMembership'
 import { vndToSenCash, fetchSenCashBalance } from '@/lib/senCash'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+
 import { ArrowLeft, Crown, Gem, Zap, Check, Loader2, Copy, CheckCircle2, XCircle, Clock, Coins, Wallet, ChevronRight } from 'lucide-react'
 
 type PlanOption = { code: string; name: string; priceVnd: number; durationDays: number }
@@ -47,8 +48,9 @@ const GROUP_PERKS: Record<PlanGroup, string[]> = {
 
 export default function VipPage() {
   const router = useRouter()
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+
   const [loading, setLoading] = useState(true)
 
   const [vipExpiresAt, setVipExpiresAt] = useState<string | null>(null)
@@ -174,7 +176,8 @@ export default function VipPage() {
   const meta = GROUP_META[activeGroup]
   const GroupIcon = meta.icon
 
-  const wrapperStyle = isModern ? { ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties : undefined
+  const wrapperStyle = isModern ? { ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties : undefined
+
   const wrapperClass = isModern ? 'min-h-screen font-sans pb-16' : 'min-h-screen bg-slate-50 dark:bg-[#0d0d0d] text-slate-900 dark:text-slate-100 pb-16'
   const cardClass = isModern ? 'rounded-2xl p-5' : 'rounded-2xl p-5 bg-white dark:bg-[#161616] border border-slate-200 dark:border-white/5'
   const cardStyle = isModern ? { background: 'var(--surface)', border: '1px solid var(--border)' } : undefined

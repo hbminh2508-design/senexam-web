@@ -364,13 +364,14 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 <div
                   className={`max-w-[85%] px-5 py-3.5 rounded-[1.5rem] text-[14.5px] font-medium leading-relaxed shadow-sm overflow-x-auto ${
                     isGlass
-                      ? (msg.role === 'user' ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white rounded-br-sm shadow-md' : 'glass-refract-card rounded-bl-sm border border-white/60 dark:border-white/10')
+                      ? (msg.role === 'user' ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white rounded-br-sm shadow-md' : 'glass-refract-card rounded-bl-sm border border-white/60 dark:border-white/10 text-slate-900 dark:text-slate-100')
                       : newUiEnabled
-                      ? (msg.role === 'user' ? 'text-white rounded-br-sm' : 'rounded-bl-sm')
+                      ? (msg.role === 'user' ? 'text-white rounded-br-sm' : 'rounded-bl-sm text-slate-900 dark:text-slate-100')
                       : (msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white dark:bg-[#1E1E1E] border border-slate-200/60 dark:border-white/5 text-slate-800 dark:text-slate-200 rounded-bl-sm')
                   }`}
                   style={!isGlass && newUiEnabled ? (msg.role === 'user' ? { background: 'var(--accent)' } : { background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }) : undefined}
                 >
+
                   {/* 🌟 SỬ DỤNG BỘ RENDER MARKDOWN TẠI ĐÂY */}
                   <ReactMarkdown
                     remarkPlugins={[remarkMath]}

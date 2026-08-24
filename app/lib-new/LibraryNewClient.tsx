@@ -35,8 +35,9 @@ import 'katex/dist/katex.min.css'
 
 import { supabase } from '@/lib/supabaseClient'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+
 import { highlightSearchText } from '@/app/components/searchUtils'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 
@@ -119,7 +120,8 @@ const matchesSearch = (value: string, query: string) => searchScore(value, query
 
 export default function LibraryNewClient({ slugSegments }: { slugSegments: string[] }) {
   const router = useRouter()
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
+
 
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
@@ -560,7 +562,8 @@ export default function LibraryNewClient({ slugSegments }: { slugSegments: strin
     <div
       className="min-h-screen font-sans pb-24"
       data-motion={animationsEnabled ? 'on' : 'off'}
-      style={newUiEnabled ? ({ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties) : undefined}
+      style={newUiEnabled ? ({ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties) : undefined}
+
     >
       {previewDoc && (
         <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">

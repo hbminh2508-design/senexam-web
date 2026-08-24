@@ -10,8 +10,9 @@ import {
   Award
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+
 
 // ============================================================================
 // STYLE
@@ -138,8 +139,9 @@ const isQuestionCorrect = (studentAns: AnswerValue, correctAns: AnswerValue, typ
 
 export default function TrialFeaturePage() {
   const router = useRouter()
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+
 
   const [mode, setMode] = useState<'create' | 'list' | 'take' | 'result'>('create')
   const [loadingUser, setLoadingUser] = useState(true)
@@ -314,7 +316,8 @@ export default function TrialFeaturePage() {
       <div
         className="min-h-screen font-sans relative pb-16"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+
       >
         {/* HEADER */}
         <header className="h-[80px] px-4 sm:px-6 lg:px-10 flex items-center justify-between sticky top-0 z-40" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>

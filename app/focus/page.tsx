@@ -16,8 +16,9 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getAccentHex, getModernThemeVars } from '@/app/components/modernTheme'
+import { getAccentHex, getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import VipAdBanner from '@/app/components/VipAdBanner'
+
 import AdBanner from '@/components/AdBanner'
 
 // Khai báo global cho YouTube Iframe API để fix lỗi TypeScript
@@ -96,8 +97,9 @@ const mdCard = "bg-white/5 dark:bg-[#1A1A1A]/60 backdrop-blur-2xl backdrop-satur
 // ============================================================================
 export default function FocusRoomPage() {
   const router = useRouter()
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(true)
+
   const accentColor = newUiEnabled ? getAccentHex(themeColor, true) : '#22d3ee'
   const cardClass = newUiEnabled
     ? "bg-white/[0.04] border border-white/10 shadow-none rounded-2xl overflow-hidden transition-colors"
@@ -425,7 +427,8 @@ export default function FocusRoomPage() {
       <div
         className="h-screen w-full flex flex-col font-sans overflow-hidden"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: modernBgColor, color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: modernBgColor, color: 'var(--text)' } as React.CSSProperties}
+
       >
         {isDragging && <div className="fixed inset-0 z-[9999] cursor-col-resize" />}
 

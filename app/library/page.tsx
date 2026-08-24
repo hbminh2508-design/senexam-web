@@ -16,8 +16,9 @@ import AdBanner from '@/components/AdBanner'
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -98,8 +99,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
   const [searchExamsResults, setSearchExamsResults] = useState<any[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+
 
   const previewRef = useRef<HTMLDivElement | null>(null)
   const searchDebounceRef = useRef<number | null>(null)
@@ -387,7 +389,8 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
       <div
         className="min-h-screen font-sans pb-24"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+
       >
         {previewDoc && (
           <div className="fixed inset-0 z-[999] bg-black/70 flex items-center justify-center p-3 md:p-6">

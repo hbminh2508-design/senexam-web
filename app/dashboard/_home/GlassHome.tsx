@@ -30,6 +30,7 @@ export default function GlassHome({
   const [historySearch, setHistorySearch] = useState('')
   const [analyticsExamFilter, setAnalyticsExamFilter] = useState<'ALL' | 'THPT' | 'HSA' | 'TSA'>('ALL')
   const [carouselIndex, setCarouselIndex] = useState(0)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
 
   // Đồng hồ giờ online thời gian thực của Server (UTC+7 / Giờ Việt Nam)
   useEffect(() => {
@@ -49,6 +50,20 @@ export default function GlassHome({
     const timer = setInterval(updateTime, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Đóng dropdown tài khoản khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setShowAccountDropdown(false)
+      }
+    }
+    if (showAccountDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showAccountDropdown])
+
 
   const bestScore = studentHistoryList.length > 0
     ? Math.max(...studentHistoryList.map(s => s.score || 0))
@@ -318,7 +333,7 @@ export default function GlassHome({
             </button>
 
             {/* Nút Tài khoản Avatar */}
-            <div className="relative ml-1">
+            <div className="relative ml-1" ref={accountMenuRef}>
               <button
                 onClick={() => setShowAccountDropdown(v => !v)}
                 className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 via-sky-500 to-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all relative ring-2 ring-white/50 dark:ring-white/10"
@@ -326,104 +341,100 @@ export default function GlassHome({
               >
                 {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
               </button>
+
+              {/* Account Dropdown Menu hiển thị chuẩn xác ngay dưới Avatar */}
+              {showAccountDropdown && (
+                <div className="absolute right-0 top-full mt-3 w-80 max-w-[calc(100vw-2rem)] glass-refract-card rounded-[2.2rem] p-4 shadow-2xl z-[150] animate-in fade-in zoom-in-95 duration-150 border border-white/80 dark:border-white/15 backdrop-blur-3xl">
+                  {/* User Header */}
+                  <div className="p-4 bg-gradient-to-br from-indigo-500/15 via-sky-500/10 to-transparent rounded-2xl mb-3 border border-indigo-500/20 shadow-inner">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-sky-500 to-emerald-500 text-white font-black text-lg flex items-center justify-center shrink-0 shadow-md ring-2 ring-white/50 dark:ring-white/15">
+                        {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-6 h-6" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-black text-sm text-slate-900 dark:text-white truncate">
+                          {formData.fullName || 'Thí sinh SenExam'}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                          {formData.school || formData.province || 'Học viên'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Coins className="w-4 h-4 text-amber-500" /> {senCashBalance} SenCash
+                      </span>
+                      {isVip ? (
+                        <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Crown className="w-3.5 h-3.5" /> VIP Member
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
+                          className="font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          Nâng VIP
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mục Admin (Nếu là admin hoặc collab) */}
+                  {isAdminOrCollab && (
+                    <div className="mb-2">
+                      <button
+                        onClick={() => { setShowAccountDropdown(false); router.push('/admin') }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs transition-colors border border-indigo-500/20"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span className="flex-1 text-left">Bảng Điều Khiển Quản Trị</span>
+                        <ExternalLink className="w-3.5 h-3.5 opacity-60" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Menu Options */}
+                  <div className="space-y-1 text-xs font-bold text-slate-700 dark:text-slate-200">
+                    <button
+                      onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+                    >
+                      <Settings className="w-4 h-4 text-slate-500" />
+                      <span className="flex-1">Cài đặt hệ thống & Giao diện</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+                    >
+                      <Lock className="w-4 h-4 text-slate-500" />
+                      <span className="flex-1">Đổi mật khẩu & Bảo mật</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+                    >
+                      <Crown className="w-4 h-4 text-amber-500" />
+                      <span className="flex-1">Quyền lợi thành viên VIP</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setShowAccountDropdown(false); router.push('/vi-sen') }}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+                    >
+                      <Coins className="w-4 h-4 text-amber-500" />
+                      <span className="flex-1">Ví SenCash & Lịch sử</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
       </div>
 
-      {/* ========================================================= */}
-      {/* 🌟 ACCOUNT DROPDOWN MENU (CỐ ĐỊNH VỊ TRÍ CHUẨN KHÔNG BỊ CẮT) */}
-      {/* ========================================================= */}
-      {showAccountDropdown && (
-        <>
-          <div
-            className="fixed inset-0 z-[95] bg-black/20 dark:bg-black/40 backdrop-blur-xs"
-            onClick={() => setShowAccountDropdown(false)}
-          />
-          <div className="fixed top-20 right-4 sm:right-8 lg:right-16 w-80 max-w-[calc(100vw-2rem)] glass-refract-card rounded-[2.2rem] p-4 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-150 border border-white/80 dark:border-white/15 backdrop-blur-3xl">
-            {/* User Header */}
-            <div className="p-4 bg-gradient-to-br from-indigo-500/15 via-sky-500/10 to-transparent rounded-2xl mb-3 border border-indigo-500/20 shadow-inner">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-sky-500 to-emerald-500 text-white font-black text-lg flex items-center justify-center shrink-0 shadow-md ring-2 ring-white/50 dark:ring-white/15">
-                  {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-6 h-6" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-black text-sm text-slate-900 dark:text-white truncate">
-                    {formData.fullName || 'Thí sinh SenExam'}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
-                    {formData.school || formData.province || 'Học viên'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Coins className="w-4 h-4 text-amber-500" /> {senCashBalance} SenCash
-                </span>
-                {isVip ? (
-                  <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <Crown className="w-3.5 h-3.5" /> VIP Member
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
-                    className="font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline"
-                  >
-                    Nâng VIP
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Mục Admin (Nếu là admin hoặc collab) */}
-            {isAdminOrCollab && (
-              <div className="mb-2">
-                <button
-                  onClick={() => { setShowAccountDropdown(false); router.push('/admin') }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs transition-colors border border-indigo-500/20"
-                >
-                  <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span className="flex-1 text-left">Bảng Điều Khiển Quản Trị</span>
-                  <ExternalLink className="w-3.5 h-3.5 opacity-60" />
-                </button>
-              </div>
-            )}
-
-            {/* Menu Options */}
-            <div className="space-y-1 text-xs font-bold text-slate-700 dark:text-slate-200">
-              <button
-                onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-              >
-                <Settings className="w-4 h-4 text-slate-500" />
-                <span className="flex-1">Cài đặt hệ thống & Giao diện</span>
-              </button>
-
-              <button
-                onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-              >
-                <Lock className="w-4 h-4 text-slate-500" />
-                <span className="flex-1">Đổi mật khẩu & Bảo mật</span>
-              </button>
-
-              <button
-                onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-              >
-                <Crown className="w-4 h-4 text-amber-500" />
-                <span className="flex-1">Quyền lợi thành viên VIP</span>
-              </button>
-
-              <button
-                onClick={() => { setShowAccountDropdown(false); router.push('/vi-sen') }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-              >
-                <Coins className="w-4 h-4 text-amber-500" />
-                <span className="flex-1">Ví SenCash & Lịch sử</span>
-              </button>
-            </div>
           </div>
         </>
       )}

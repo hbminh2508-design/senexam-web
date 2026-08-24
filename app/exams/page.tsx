@@ -11,7 +11,7 @@ import {
 
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
 
 // Apple Liquid Glass CSS Constants
@@ -23,8 +23,9 @@ export default function ExamsLibraryPage() {
   const [loading, setLoading] = useState(true)
   const [exams, setExams] = useState<any[]>([])
   const [userSubmissions, setUserSubmissions] = useState<any[]>([])
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+
 
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearchQuery = useDeferredValue(searchQuery)
@@ -99,7 +100,8 @@ export default function ExamsLibraryPage() {
       <div
         className="min-h-screen font-sans pb-16"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <button onClick={() => router.push('/dashboard')} className="flex items-center gap-2 text-sm font-medium mb-4 transition-colors" style={{ color: 'var(--text-muted)' }}>

@@ -15,8 +15,9 @@ import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import VipAdBanner from '@/app/components/VipAdBanner'
+
 
 // ============================================================================
 // CONSTANTS, TYPES & PRESETS
@@ -52,8 +53,9 @@ const initEdges = (preset: 'K' | 'RC'): Edge[] => [
 
 export default function VirtualLabPage() {
   const router = useRouter()
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+
   const [activeExp, setActiveExp] = useState<ExpType>('pendulum')
   const [showSidebar, setShowSidebar] = useState(false)
   
@@ -345,7 +347,8 @@ export default function VirtualLabPage() {
       <div
         className="min-h-screen font-sans relative pb-10"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+
       >
         {/* SIDEBAR: NGĂN KÉO CHỌN THÍ NGHIỆM */}
         {showSidebar && (

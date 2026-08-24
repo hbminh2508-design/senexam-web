@@ -15,7 +15,7 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm' // Thêm thư viện hỗ trợ render Bảng (Table)
 import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getAccentHex, getModernThemeVars } from '@/app/components/modernTheme'
+import { getAccentHex, getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import VipAdBanner from '@/app/components/VipAdBanner'
 
 // Các hằng số giao diện chuẩn Material Design 3 + Liquid Glass
@@ -46,8 +46,9 @@ type ChatMessage = {
 export default function ScoreCalculatorPage() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(false)
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const accentColor = newUiEnabled ? getAccentHex(themeColor, isDark) : (isDark ? '#818CF8' : '#4F46E5')
+
 
   // Navigation Tabs
   const [activeExam, setActiveExam] = useState<'THPTQG' | 'HSA' | 'TSA'>('THPTQG')
@@ -246,7 +247,8 @@ ${calcMode === 'standard'
       <div
         className="min-h-screen font-sans relative pb-10"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+
       >
         {/* Header App Bar */}
         <header className="h-[72px] px-6 lg:px-10 flex items-center justify-between sticky top-0 z-40" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>

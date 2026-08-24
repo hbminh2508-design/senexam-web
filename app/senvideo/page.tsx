@@ -11,7 +11,7 @@ import {
 // Tái sử dụng API Upload Drive
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars } from '@/app/components/modernTheme'
+import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
 import VipAdBanner from '@/app/components/VipAdBanner'
 
@@ -38,8 +38,9 @@ export default function SenVideoPage() {
   const [activeVideo, setActiveVideo] = useState<any | null>(null)
   const [showVlcInfo, setShowVlcInfo] = useState(false)
   const [copied, setCopied] = useState(false)
-  const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+
 
   // ==========================================================================
   // KHỞI TẠO VÀ LẤY DỮ LIỆU TỪ SUPABASE
@@ -158,7 +159,8 @@ export default function SenVideoPage() {
       <div
         className="min-h-screen font-sans pb-16"
         data-motion={animationsEnabled ? 'on' : 'off'}
-        style={{ ...getModernThemeVars(themeColor, isDark), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+        style={{ ...(isGlass ? getGlassThemeVars(themeColor, isDark) : getModernThemeVars(themeColor, isDark)), background: 'var(--bg)', color: 'var(--text)' } as React.CSSProperties}
+
       >
         <header className="h-16 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40" style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center gap-3">
