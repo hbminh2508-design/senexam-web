@@ -5,9 +5,10 @@ import {
   BookOpen, Clock, Trophy, User, ChevronRight, ChevronLeft, ShieldCheck, AlertCircle,
   LayoutGrid, Sun, Moon, KeyRound, Target, Bell, Sparkles, Lock, ArrowRight,
   FileText, Crown, Coins, Settings, ExternalLink,
-  FlaskConical, Music2, FolderOpen, Calculator,
-  Flame, Search, X, CheckCircle2
+  Flame, Search, X, CheckCircle2, TrendingUp, BarChart3, Award, LineChart,
+  Video, MessageSquare
 } from 'lucide-react'
+
 import { AnnouncementRenderer } from './Announcement'
 import { getGlassThemeVars } from '@/app/components/modernTheme'
 import CrossfadeIcon from '@/app/components/CrossfadeIcon'
@@ -24,9 +25,11 @@ export default function GlassHome({
   const [serverTime, setServerTime] = useState<string>('')
   const [showAccountDropdown, setShowAccountDropdown] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false)
+  const [showAllFeaturesGrid, setShowAllFeaturesGrid] = useState(false)
   const [historySearch, setHistorySearch] = useState('')
+  const [analyticsExamFilter, setAnalyticsExamFilter] = useState<'ALL' | 'THPT' | 'HSA' | 'TSA'>('ALL')
   const [carouselIndex, setCarouselIndex] = useState(0)
-  const accountMenuRef = useRef<HTMLDivElement>(null)
 
   // Đồng hồ giờ online thời gian thực của Server (UTC+7 / Giờ Việt Nam)
   useEffect(() => {
@@ -46,19 +49,6 @@ export default function GlassHome({
     const timer = setInterval(updateTime, 1000)
     return () => clearInterval(timer)
   }, [])
-
-  // Đóng dropdown tài khoản khi click ra ngoài
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
-        setShowAccountDropdown(false)
-      }
-    }
-    if (showAccountDropdown) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showAccountDropdown])
 
   const bestScore = studentHistoryList.length > 0
     ? Math.max(...studentHistoryList.map(s => s.score || 0))
@@ -99,6 +89,53 @@ export default function GlassHome({
       s.exams?.exam_type?.toLowerCase().includes(q)
     )
   }, [studentHistoryList, historySearch])
+
+  // Dữ liệu cho Modal Phân Tích Đồ Thị & Chuyển Biến Điểm Số
+  const analyticsData = useMemo(() => {
+    let list = [...studentHistoryList].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    
+    if (analyticsExamFilter !== 'ALL') {
+      list = list.filter(item => {
+        const type = (item.exams?.exam_type || '').toUpperCase()
+        const title = (item.exams?.title || '').toUpperCase()
+        if (analyticsExamFilter === 'THPT') return type.includes('THPT') || title.includes('THPT')
+        if (analyticsExamFilter === 'HSA') return type.includes('HSA') || title.includes('HSA') || type.includes('ĐGNL') || title.includes('ĐGNL')
+        if (analyticsExamFilter === 'TSA') return type.includes('TSA') || title.includes('TSA') || type.includes('ĐGTD') || title.includes('ĐGTD')
+        return true
+      })
+    }
+
+    const scores = list.map(item => item.score || 0)
+    const count = scores.length
+    const highest = count > 0 ? Math.max(...scores) : 0
+    const lowest = count > 0 ? Math.min(...scores) : 0
+    const avg = count > 0 ? (scores.reduce((a, b) => a + b, 0) / count).toFixed(1) : '0'
+
+    // Nhóm theo loại bài thi / môn học để xếp hạng phong độ
+    const groupMap: Record<string, { count: number, maxScore: number, totalScore: number }> = {}
+    studentHistoryList.forEach(item => {
+      const key = item.exams?.exam_type || item.exams?.title?.split(' ')[0] || 'Kỳ thi thử'
+      if (!groupMap[key]) groupMap[key] = { count: 0, maxScore: 0, totalScore: 0 }
+      groupMap[key].count += 1
+      groupMap[key].maxScore = Math.max(groupMap[key].maxScore, item.score || 0)
+      groupMap[key].totalScore += (item.score || 0)
+    })
+
+    const subjectRankings = Object.entries(groupMap).map(([name, data]) => {
+      const avgScore = (data.totalScore / data.count).toFixed(1)
+      let tier = 'Cần nỗ lực'
+      let tierColor = 'text-slate-400 bg-slate-500/10'
+      const numAvg = parseFloat(avgScore)
+      if (numAvg >= 9.0) { tier = 'Hạng Kim Cương'; tierColor = 'text-cyan-600 dark:text-cyan-400 bg-cyan-500/15 border-cyan-500/30' }
+      else if (numAvg >= 8.0) { tier = 'Hạng Vàng'; tierColor = 'text-amber-600 dark:text-amber-400 bg-amber-500/15 border-amber-500/30' }
+      else if (numAvg >= 6.5) { tier = 'Hạng Bạc'; tierColor = 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/15 border-indigo-500/30' }
+      else { tier = 'Hạng Đồng'; tierColor = 'text-orange-600 dark:text-orange-400 bg-orange-500/15 border-orange-500/30' }
+
+      return { name, count: data.count, maxScore: data.maxScore, avgScore, tier, tierColor }
+    })
+
+    return { list, scores, count, highest, lowest, avg, subjectRankings }
+  }, [studentHistoryList, analyticsExamFilter])
 
   return (
     <div
@@ -167,16 +204,28 @@ export default function GlassHome({
           {/* Ở GIỮA: Thanh tiếp cận nhanh các tính năng (Quick Access Pills) */}
           <div className="hidden lg:flex items-center gap-1.5 bg-black/[0.03] dark:bg-white/[0.04] p-1 rounded-full border border-black/[0.04] dark:border-white/[0.06]">
             <button
+              onClick={() => router.push(isBetaTester ? '/lib-new' : '/library')}
+              className="px-3 py-1.5 rounded-full text-xs font-bold hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-cyan-500" /> Thư viện
+            </button>
+            <button
+              onClick={() => router.push('/senvideo')}
+              className="px-3 py-1.5 rounded-full text-xs font-bold hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
+            >
+              <Video className="w-3.5 h-3.5 text-indigo-500" /> SenVideo
+            </button>
+            <button
+              onClick={() => router.push('/forum')}
+              className="px-3 py-1.5 rounded-full text-xs font-bold hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-sky-500" /> Cộng đồng
+            </button>
+            <button
               onClick={() => router.push('/exams')}
               className="px-3 py-1.5 rounded-full text-xs font-bold hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
             >
-              <Target className="w-3.5 h-3.5 text-indigo-500" /> Vào thi
-            </button>
-            <button
-              onClick={() => setShowCodeModal(true)}
-              className="px-3 py-1.5 rounded-full text-xs font-bold hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-sky-500" /> Nhập Code
+              <Target className="w-3.5 h-3.5 text-emerald-500" /> Vào thi
             </button>
             {isBetaTester && (
               <button
@@ -186,18 +235,6 @@ export default function GlassHome({
                 <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" /> SenAI Studio
               </button>
             )}
-            <button
-              onClick={() => router.push(isBetaTester ? '/lib-new' : '/library')}
-              className="px-3 py-1.5 rounded-full text-xs font-bold hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-emerald-500" /> Thư viện
-            </button>
-            <button
-              onClick={() => router.push('/focus')}
-              className="px-3 py-1.5 rounded-full text-xs font-bold hover:bg-white dark:hover:bg-slate-800 transition-all flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
-            >
-              <Music2 className="w-3.5 h-3.5 text-pink-500" /> Focus Chill
-            </button>
             <button
               onClick={() => setShowFeatureMenu(v => !v)}
               className="px-2.5 py-1.5 rounded-full text-xs font-bold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 transition-all flex items-center gap-1"
@@ -280,8 +317,8 @@ export default function GlassHome({
               <Settings className="w-4 h-4" />
             </button>
 
-            {/* Nút Tài khoản Dropdown (Gom cài đặt nâng cao và Admin) */}
-            <div className="relative ml-1" ref={accountMenuRef}>
+            {/* Nút Tài khoản Avatar */}
+            <div className="relative ml-1">
               <button
                 onClick={() => setShowAccountDropdown(v => !v)}
                 className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 via-sky-500 to-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 active:scale-95 transition-all relative ring-2 ring-white/50 dark:ring-white/10"
@@ -289,99 +326,107 @@ export default function GlassHome({
               >
                 {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
               </button>
-
-              {/* Account Dropdown Menu - Cố định vị trí chuẩn dưới avatar */}
-              {showAccountDropdown && (
-                <div className="absolute right-0 top-full mt-3 w-80 glass-refract-card rounded-[2rem] p-4 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-150 border border-white/80 dark:border-white/15 backdrop-blur-2xl">
-                  {/* User Header */}
-                  <div className="p-3.5 bg-gradient-to-br from-indigo-500/10 via-sky-500/5 to-transparent rounded-2xl mb-2.5 border border-indigo-500/15">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-black text-lg flex items-center justify-center shrink-0 shadow-md">
-                        {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-6 h-6" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-black text-sm text-slate-900 dark:text-white truncate">
-                          {formData.fullName || 'Thí sinh SenExam'}
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
-                          {formData.school || formData.province || 'Học viên'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-2.5 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                        <Coins className="w-4 h-4 text-amber-500" /> {senCashBalance} SenCash
-                      </span>
-                      {isVip ? (
-                        <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          <Crown className="w-3.5 h-3.5" /> VIP Member
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
-                          className="font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline"
-                        >
-                          Nâng VIP
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Mục Admin (Nếu là admin hoặc collab) */}
-                  {isAdminOrCollab && (
-                    <div className="mb-2">
-                      <button
-                        onClick={() => { setShowAccountDropdown(false); router.push('/admin') }}
-                        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs transition-colors border border-indigo-500/20"
-                      >
-                        <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        <span className="flex-1 text-left">Bảng Điều Khiển Quản Trị</span>
-                        <ExternalLink className="w-3.5 h-3.5 opacity-60" />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Menu Options */}
-                  <div className="space-y-1 text-xs font-bold text-slate-700 dark:text-slate-200">
-                    <button
-                      onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-                    >
-                      <Settings className="w-4 h-4 text-slate-500" />
-                      <span className="flex-1">Cài đặt hệ thống & Giao diện</span>
-                    </button>
-
-                    <button
-                      onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-                    >
-                      <Lock className="w-4 h-4 text-slate-500" />
-                      <span className="flex-1">Đổi mật khẩu & Bảo mật</span>
-                    </button>
-
-                    <button
-                      onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-                    >
-                      <Crown className="w-4 h-4 text-amber-500" />
-                      <span className="flex-1">Quyền lợi thành viên VIP</span>
-                    </button>
-
-                    <button
-                      onClick={() => { setShowAccountDropdown(false); router.push('/vi-sen') }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
-                    >
-                      <Coins className="w-4 h-4 text-amber-500" />
-                      <span className="flex-1">Ví SenCash & Lịch sử</span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </header>
       </div>
+
+      {/* ========================================================= */}
+      {/* 🌟 ACCOUNT DROPDOWN MENU (CỐ ĐỊNH VỊ TRÍ CHUẨN KHÔNG BỊ CẮT) */}
+      {/* ========================================================= */}
+      {showAccountDropdown && (
+        <>
+          <div
+            className="fixed inset-0 z-[95] bg-black/20 dark:bg-black/40 backdrop-blur-xs"
+            onClick={() => setShowAccountDropdown(false)}
+          />
+          <div className="fixed top-20 right-4 sm:right-8 lg:right-16 w-80 max-w-[calc(100vw-2rem)] glass-refract-card rounded-[2.2rem] p-4 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-150 border border-white/80 dark:border-white/15 backdrop-blur-3xl">
+            {/* User Header */}
+            <div className="p-4 bg-gradient-to-br from-indigo-500/15 via-sky-500/10 to-transparent rounded-2xl mb-3 border border-indigo-500/20 shadow-inner">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-sky-500 to-emerald-500 text-white font-black text-lg flex items-center justify-center shrink-0 shadow-md ring-2 ring-white/50 dark:ring-white/15">
+                  {formData.fullName ? formData.fullName.charAt(0).toUpperCase() : <User className="w-6 h-6" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-black text-sm text-slate-900 dark:text-white truncate">
+                    {formData.fullName || 'Thí sinh SenExam'}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                    {formData.school || formData.province || 'Học viên'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-amber-500" /> {senCashBalance} SenCash
+                </span>
+                {isVip ? (
+                  <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <Crown className="w-3.5 h-3.5" /> VIP Member
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
+                    className="font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    Nâng VIP
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Mục Admin (Nếu là admin hoặc collab) */}
+            {isAdminOrCollab && (
+              <div className="mb-2">
+                <button
+                  onClick={() => { setShowAccountDropdown(false); router.push('/admin') }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs transition-colors border border-indigo-500/20"
+                >
+                  <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="flex-1 text-left">Bảng Điều Khiển Quản Trị</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-60" />
+                </button>
+              </div>
+            )}
+
+            {/* Menu Options */}
+            <div className="space-y-1 text-xs font-bold text-slate-700 dark:text-slate-200">
+              <button
+                onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+              >
+                <Settings className="w-4 h-4 text-slate-500" />
+                <span className="flex-1">Cài đặt hệ thống & Giao diện</span>
+              </button>
+
+              <button
+                onClick={() => { setShowAccountDropdown(false); setShowProfile(true) }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+              >
+                <Lock className="w-4 h-4 text-slate-500" />
+                <span className="flex-1">Đổi mật khẩu & Bảo mật</span>
+              </button>
+
+              <button
+                onClick={() => { setShowAccountDropdown(false); router.push('/vip') }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+              >
+                <Crown className="w-4 h-4 text-amber-500" />
+                <span className="flex-1">Quyền lợi thành viên VIP</span>
+              </button>
+
+              <button
+                onClick={() => { setShowAccountDropdown(false); router.push('/vi-sen') }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-left"
+              >
+                <Coins className="w-4 h-4 text-amber-500" />
+                <span className="flex-1">Ví SenCash & Lịch sử</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Popover Tất cả tính năng (Feature Menu Modal/Drawer) */}
       {showFeatureMenu && (
@@ -526,24 +571,33 @@ export default function GlassHome({
           {/* CỤC 2 & 3: Thống Kê Điểm Kỷ Lục + Nút Lịch Sử Bài Làm (5 cột trên Desktop) */}
           <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-5">
             
-            {/* CỤC 2: Card Điểm cao nhất đạt được */}
-            <div className="glass-refract-card rounded-[2.2rem] p-6 relative overflow-hidden flex flex-col justify-between border border-white/70 dark:border-white/15 shadow-md">
+            {/* CỤC 2: Card Điểm cao nhất đạt được (TÍCH HỢP XEM ĐỒ THỊ CHUYỂN BIẾN ĐIỂM SỐ & XẾP HẠNG THỂ LOẠI) */}
+            <div
+              onClick={() => setShowAnalyticsModal(true)}
+              className="glass-refract-card glass-specular-edge rounded-[2.2rem] p-6 relative overflow-hidden flex flex-col justify-between border border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] to-orange-500/[0.04] cursor-pointer group hover:scale-[1.02] active:scale-95 transition-all shadow-md"
+              title="Bấm để xem đồ thị chuyển biến điểm số và phân tích kỳ thi"
+            >
               <div className="flex items-center justify-between mb-2">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-400 text-white flex items-center justify-center shadow-md">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-400 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
                   <Trophy className="w-6 h-6" />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                  KỶ LỤC
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 flex items-center gap-1">
+                  KỶ LỤC <LineChart className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                 </span>
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Điểm số cao nhất đạt được</p>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-                    {bestScore !== null ? bestScore : '--'}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400">
-                    {bestScore !== null && bestScore > 10 ? 'điểm tổng' : '/ 10 điểm'}
+                <div className="flex items-baseline justify-between mt-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+                      {bestScore !== null ? bestScore : '--'}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">
+                      {bestScore !== null && bestScore > 10 ? 'điểm tổng' : '/ 10 điểm'}
+                    </span>
+                  </div>
+                  <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 group-hover:underline">
+                    Xem đồ thị <TrendingUp className="w-3.5 h-3.5" />
                   </span>
                 </div>
               </div>
@@ -553,6 +607,7 @@ export default function GlassHome({
             <div
               onClick={() => setShowHistoryModal(true)}
               className="glass-refract-card glass-specular-edge rounded-[2.2rem] p-6 relative overflow-hidden flex flex-col justify-between border border-sky-500/30 bg-gradient-to-br from-sky-500/[0.08] to-indigo-500/[0.04] cursor-pointer group hover:scale-[1.02] active:scale-95 transition-all shadow-md"
+              title="Bấm để xem danh sách lịch sử các bài thi đã hoàn thành"
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-500 to-purple-500 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
@@ -583,6 +638,7 @@ export default function GlassHome({
 
         {/* ========================================================= */}
         {/* 🌟 TÍNH NĂNG TRỌNG TÂM DẠNG CAROUSEL / SLIDER (3 THẺ / LƯỢT) */}
+        {/* Trang 1 ưu tiên: Thư Viện Số, SenVideo, Cộng Đồng */}
         {/* ========================================================= */}
         <div>
           <div className="flex items-center justify-between mb-4 px-1">
@@ -612,12 +668,17 @@ export default function GlassHome({
                 </button>
               </div>
 
-              {/* Nút Xem tất cả */}
+              {/* Nút Xem tất cả (Mở rộng toàn bộ tính năng xuống dưới) */}
               <button
-                onClick={() => setShowFeatureMenu(true)}
-                className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 px-3 py-1.5 rounded-full bg-indigo-500/10 hover:bg-indigo-500/15 transition-all"
+                onClick={() => setShowAllFeaturesGrid(v => !v)}
+                className={`text-xs font-extrabold flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
+                  showAllFeaturesGrid
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'bg-indigo-500/10 hover:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
+                }`}
               >
-                Tất cả ({FEATURES.length})
+                <LayoutGrid className="w-3.5 h-3.5" />
+                {showAllFeaturesGrid ? 'Thu gọn' : `Tất cả (${FEATURES.length})`}
               </button>
             </div>
           </div>
@@ -653,12 +714,284 @@ export default function GlassHome({
               )
             })}
           </div>
+
+          {/* ========================================================= */}
+          {/* 🌟 DANH MỤC MỞ RỘNG TẤT CẢ TÍNH NĂNG KHI BẤM "TẤT CẢ" */}
+          {/* ========================================================= */}
+          {showAllFeaturesGrid && (
+            <div className="mt-6 p-6 rounded-[2.5rem] glass-refract-card border border-indigo-500/20 bg-indigo-500/[0.03] animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center justify-between mb-5 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+                    <LayoutGrid className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black tracking-tight text-slate-900 dark:text-white">
+                      Toàn Bộ Hệ Sinh Thái Tính Năng SenExam
+                    </h4>
+                    <p className="text-xs text-slate-500 font-medium">10 tính năng trọng tâm được tối ưu hóa cho kỳ thi 2026</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowAllFeaturesGrid(false)}
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center gap-1"
+                >
+                  ✕ Đóng
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                {FEATURES.map((f, idx) => {
+                  const Icon = f.icon
+                  return (
+                    <button
+                      key={`all-${f.key}-${idx}`}
+                      onClick={() => f.onSelect()}
+                      className="glass-specular-edge flex flex-col p-4 rounded-2xl bg-white/50 dark:bg-white/[0.03] hover:bg-white dark:hover:bg-white/[0.08] border border-white/70 dark:border-white/10 transition-all text-left group hover:scale-[1.02] shadow-xs"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/15 via-sky-500/10 to-purple-500/15 flex items-center justify-center shrink-0 mb-3 group-hover:scale-110 transition-transform">
+                        <Icon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <div className="font-extrabold text-sm text-slate-900 dark:text-white mb-1 flex items-center justify-between">
+                        <span className="truncate">{f.label}</span>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium line-clamp-2 leading-relaxed">
+                        {f.desc}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Banner VIP Quảng cáo */}
         <VipAdBanner />
 
       </main>
+
+      {/* ========================================================= */}
+      {/* 🌟 MODAL PHÂN TÍCH ĐỒ THỊ CHUYỂN BIẾN ĐIỂM SỐ & XẾP HẠNG */}
+      {/* ========================================================= */}
+      {showAnalyticsModal && (
+        <>
+          <div
+            className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
+            onClick={() => setShowAnalyticsModal(false)}
+          />
+          <div className="fixed inset-4 sm:inset-8 md:inset-x-16 md:inset-y-8 z-[120] flex items-center justify-center animate-in zoom-in-95 duration-200 pointer-events-none">
+            <div className="glass-refract-card w-full max-w-5xl max-h-full rounded-[2.5rem] p-6 sm:p-8 flex flex-col border border-white/80 dark:border-white/15 shadow-2xl pointer-events-auto overflow-hidden">
+              
+              {/* Header Modal */}
+              <div className="flex items-center justify-between mb-5 pb-4 border-b border-black/[0.06] dark:border-white/[0.08] shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-indigo-600 text-white flex items-center justify-center shadow-md">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                      Đồ Thị Chuyển Biến Điểm Số & Xếp Hạng
+                      <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                        BETA ANALYTICS
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Phân tích trực quan phong độ thi cử và xu hướng điểm số qua các kỳ thi
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowAnalyticsModal(false)}
+                  className="w-10 h-10 rounded-full bg-black/[0.05] dark:bg-white/[0.08] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] flex items-center justify-center transition-colors text-sm font-black"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Bộ lọc kỳ thi */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5 shrink-0">
+                <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.08]">
+                  <button
+                    onClick={() => setAnalyticsExamFilter('ALL')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                      analyticsExamFilter === 'ALL'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    Tất cả kỳ thi
+                  </button>
+                  <button
+                    onClick={() => setAnalyticsExamFilter('THPT')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                      analyticsExamFilter === 'THPT'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    THPT Quốc Gia
+                  </button>
+                  <button
+                    onClick={() => setAnalyticsExamFilter('HSA')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                      analyticsExamFilter === 'HSA'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    ĐGNL (HSA)
+                  </button>
+                  <button
+                    onClick={() => setAnalyticsExamFilter('TSA')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                      analyticsExamFilter === 'TSA'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    ĐGTD (TSA)
+                  </button>
+                </div>
+
+                {/* 3 Thống kê cốt lõi */}
+                <div className="flex items-center gap-3 text-xs font-bold">
+                  <div className="px-3.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    Điểm cao nhất: <strong>{analyticsData.highest}</strong>
+                  </div>
+                  <div className="px-3.5 py-1.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                    Điểm trung bình: <strong>{analyticsData.avg}</strong>
+                  </div>
+                  <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Đã làm: <strong>{analyticsData.count} bài</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto space-y-6 pr-1 custom-scrollbar">
+                
+                {/* 1. Đồ thị SVG Trực Quan Chuyển Biến Điểm Số */}
+                <div className="p-6 rounded-3xl bg-white/40 dark:bg-white/[0.03] border border-white/60 dark:border-white/10 shadow-inner">
+                  <h4 className="font-black text-sm text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                    <LineChart className="w-4 h-4 text-indigo-500" />
+                    Biểu Đồ Xu Hướng Điểm Số Theo Thời Gian
+                  </h4>
+
+                  {analyticsData.scores.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 text-xs font-bold">
+                      Chưa có dữ liệu bài làm nào trong danh mục này.
+                    </div>
+                  ) : (
+                    <div className="relative pt-4">
+                      {/* SVG Line Chart */}
+                      <svg className="w-full h-44 overflow-visible" viewBox="0 0 500 120" preserveAspectRatio="none">
+                        <defs>
+                          <linearGradient id="scoreAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#6366F1" stopOpacity="0.45" />
+                            <stop offset="100%" stopColor="#38BDF8" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+
+                        {/* Đường lưới kẻ ngang */}
+                        <line x1="0" y1="20" x2="500" y2="20" stroke="currentColor" strokeOpacity="0.08" strokeDasharray="4 4" />
+                        <line x1="0" y1="60" x2="500" y2="60" stroke="currentColor" strokeOpacity="0.08" strokeDasharray="4 4" />
+                        <line x1="0" y1="100" x2="500" y2="100" stroke="currentColor" strokeOpacity="0.08" strokeDasharray="4 4" />
+
+                        {(() => {
+                          const maxVal = Math.max(...analyticsData.scores, 10)
+                          const minVal = 0
+                          const pts = analyticsData.scores.map((score, i) => {
+                            const x = analyticsData.scores.length === 1 ? 250 : (i / (analyticsData.scores.length - 1)) * 480 + 10
+                            const y = 105 - ((score - minVal) / (maxVal - minVal || 1)) * 85
+                            return { x, y, score }
+                          })
+
+                          const pathData = pts.reduce((acc, pt, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '')
+                          const areaData = `${pathData} L ${pts[pts.length - 1].x} 115 L ${pts[0].x} 115 Z`
+
+                          return (
+                            <>
+                              {/* Vùng đổ màu Gradient dưới đường biểu đồ */}
+                              <path d={areaData} fill="url(#scoreAreaGradient)" />
+
+                              {/* Đường nối các điểm mốc */}
+                              <path d={pathData} fill="none" stroke="#6366F1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+                              {/* Các điểm mốc tròn */}
+                              {pts.map((pt, idx) => (
+                                <g key={idx} className="group cursor-pointer">
+                                  <circle cx={pt.x} cy={pt.y} r="5" fill="#38BDF8" stroke="#FFFFFF" strokeWidth="2" className="transition-transform group-hover:scale-150" />
+                                  {/* Hiển thị điểm số mốc */}
+                                  <text x={pt.x} y={pt.y - 10} textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor" opacity="0.85">
+                                    {pt.score}
+                                  </text>
+                                </g>
+                              ))}
+                            </>
+                          )
+                        })()}
+                      </svg>
+
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mt-2 px-2">
+                        <span>Bài thi đầu tiên</span>
+                        <span>← Tiến trình nỗ lực theo thời gian →</span>
+                        <span>Bài thi mới nhất</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Bảng Xếp Hạng & Đánh Giá Phong Độ Từng Thể Loại Môn */}
+                <div>
+                  <h4 className="font-black text-sm text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-500" />
+                    Xếp Hạng & Đánh Giá Phong Độ Theo Thể Loại
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {analyticsData.subjectRankings.length === 0 ? (
+                      <div className="col-span-2 text-center py-8 text-slate-400 text-xs font-bold">
+                        Chưa có lịch sử để xếp hạng môn thi.
+                      </div>
+                    ) : (
+                      analyticsData.subjectRankings.map((sub, idx) => (
+                        <div
+                          key={idx}
+                          className="p-4 rounded-2xl bg-white/40 dark:bg-white/[0.03] border border-white/60 dark:border-white/10 flex items-center justify-between"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <h5 className="font-black text-sm text-slate-900 dark:text-white truncate">
+                              {sub.name}
+                            </h5>
+                            <div className="text-xs text-slate-500 font-medium mt-0.5">
+                              Đã nộp: <strong>{sub.count} bài</strong> • Điểm TB: <strong>{sub.avgScore}</strong>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className={`text-xs font-black px-3 py-1 rounded-xl border ${sub.tierColor}`}>
+                              {sub.tier}
+                            </span>
+                            <div className="text-[11px] text-slate-400 font-bold mt-1">
+                              Max: {sub.maxScore}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ========================================================= */}
       {/* 🌟 MODAL LỊCH SỬ BÀI LÀM (TÍCH HỢP TỪ NÚT SỐ ĐỀ ĐÃ GIẢI) */}

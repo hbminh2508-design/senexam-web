@@ -468,28 +468,26 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
       <button
         onClick={handleToggleChat}
-        className={`pointer-events-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] text-white font-black transition-all duration-300 hover:scale-105 active:scale-95 z-[100] border border-white/20
+        className={`pointer-events-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-full text-white font-black transition-all duration-300 hover:scale-105 active:scale-95 z-[100] border border-white/30 shadow-[0_10px_35px_rgba(79,70,229,0.45)]
           ${isChatOpen
-            ? 'bg-slate-800 hover:bg-slate-700 shadow-none'
+            ? 'bg-slate-800 hover:bg-slate-700 shadow-none text-white'
             : isGlass
-              ? 'glass-floating-bar bg-gradient-to-r from-indigo-600 via-sky-600 to-emerald-600 hover:opacity-95 shadow-xl border-white/40 dark:border-white/20'
+              ? 'bg-gradient-to-r from-indigo-600 via-sky-600 to-emerald-600 text-white backdrop-blur-xl border-white/40 shadow-[0_12px_40px_rgba(56,189,248,0.35)]'
               : newUiEnabled
-              ? ''
+              ? 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white'
               : isOnlineMode
-                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500'
-                : 'bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600'
+                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white'
+                : 'bg-gradient-to-r from-slate-700 to-slate-800 text-white'
           }`}
-        style={!isChatOpen && newUiEnabled && !isGlass ? { background: 'var(--accent)' } : undefined}
       >
-        {isChatOpen ? <X className="w-6 h-6" /> : (
+        {isChatOpen ? <X className="w-6 h-6 text-white" /> : (
           <>
-            {isOnlineMode ? <Sparkles className="w-5 h-5 text-yellow-300 fill-yellow-300 animate-pulse" /> : <Bot className="w-5 h-5"/>}
-            SenAI
+            {isOnlineMode ? <Sparkles className="w-5 h-5 text-amber-300 fill-amber-300 animate-pulse" /> : <Bot className="w-5 h-5 text-white"/>}
+            <span className="text-white font-black tracking-wide drop-shadow-sm">SenAI</span>
           </>
         )}
       </button>
 
     </div>
   )
-
 }

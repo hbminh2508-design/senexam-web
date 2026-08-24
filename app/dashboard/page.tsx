@@ -658,11 +658,8 @@ export default function DashboardPage() {
     }
   }
 
-  // Danh sách "Tất cả tính năng" — thêm tính năng mới ở đây, không cần thêm ô mới ngoài màn hình chính
+  // Danh sách "Tất cả tính năng" — Trang 1 ưu tiên: Thư Viện Số, SenVideo, Cộng Đồng
   const FEATURES = [
-    { key: 'exams', label: 'Vào thi ngay', desc: 'Kho đề thi thử bám sát cấu trúc mới nhất.', icon: Target, color: 'indigo', onSelect: () => router.push('/exams') },
-    { key: 'code', label: 'Nhập Code Đề', desc: 'Truy cập nhanh một đề thi bằng mã code.', icon: KeyRound, color: 'slate', onSelect: () => setShowCodeModal(true) },
-    { key: 'focus', label: 'Phòng Tập Trung', desc: 'Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.', icon: Music2, color: 'purple', onSelect: () => router.push('/focus') },
     {
       key: 'library',
       label: 'Thư Viện Số',
@@ -671,13 +668,31 @@ export default function DashboardPage() {
       color: 'cyan',
       onSelect: () => router.push(isBetaTester ? '/lib-new' : '/library'),
     },
-    { key: 'vip', label: isVip ? 'Thành viên VIP' : 'Nâng cấp VIP', desc: 'Không quảng cáo, tài liệu riêng, cập nhật sớm hơn.', icon: Crown, color: 'amber', onSelect: () => router.push('/vip') },
-    { key: 'senvideo', label: 'SenVideo', desc: 'Xem luồng Stream chất lượng cao không giật lag.', icon: PlaySquare, color: 'indigo', onSelect: () => router.push('/senvideo') },
+    {
+      key: 'senvideo',
+      label: 'SenVideo',
+      desc: 'Xem luồng Stream bài giảng và giải đề không giật lag.',
+      icon: PlaySquare,
+      color: 'indigo',
+      onSelect: () => router.push('/senvideo'),
+    },
+    {
+      key: 'forum',
+      label: 'Cộng Đồng',
+      desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.',
+      icon: MessageSquare,
+      color: 'sky',
+      onSelect: () => router.push('/forum'),
+    },
+    { key: 'exams', label: 'Vào thi ngay', desc: 'Kho đề thi thử bám sát cấu trúc mới nhất.', icon: Target, color: 'indigo', onSelect: () => router.push('/exams') },
+    { key: 'focus', label: 'Phòng Tập Trung', desc: 'Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.', icon: Music2, color: 'purple', onSelect: () => router.push('/focus') },
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
-    { key: 'forum', label: 'Cộng Đồng', desc: 'Thảo luận ẩn danh, giao lưu phương pháp học tập.', icon: MessageSquare, color: 'sky', onSelect: () => router.push('/forum') },
     { key: 'score', label: 'Tính điểm ĐH', desc: 'Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.', icon: Calculator, color: 'rose', onSelect: () => router.push('/tinhdiem') },
+    { key: 'code', label: 'Nhập Code Đề', desc: 'Truy cập nhanh một đề thi bằng mã code.', icon: KeyRound, color: 'slate', onSelect: () => setShowCodeModal(true) },
     { key: 'trial', label: 'Tính năng thử nghiệm', desc: 'AI tự đọc PDF và tạo đề tương tác để luyện tập.', icon: Wand2, color: 'amber', onSelect: () => router.push('/tinhnangthunghiem') },
+    { key: 'vip', label: isVip ? 'Thành viên VIP' : 'Nâng cấp VIP', desc: 'Không quảng cáo, tài liệu riêng, cập nhật sớm hơn.', icon: Crown, color: 'amber', onSelect: () => router.push('/vip') },
   ]
+
 
   // ============================================================================
   // RENDER UI CHÍNH
