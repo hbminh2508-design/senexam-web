@@ -4,10 +4,10 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import {
   BookOpen, Clock, Trophy, User, ChevronRight, ChevronLeft, ShieldCheck, AlertCircle,
   LayoutGrid, Sun, Moon, KeyRound, Target, Bell, Sparkles, Lock, ArrowRight,
-  FileText, Crown, Coins, Settings, ExternalLink,
-  Flame, Search, X, CheckCircle2, TrendingUp, BarChart3, Award, LineChart,
-  Video, MessageSquare
+  FileText, Crown, Coins, Settings, ExternalLink, FolderOpen, Video, MessageSquare,
+  Flame, Search, X, CheckCircle2, TrendingUp, BarChart3, Award, LineChart
 } from 'lucide-react'
+
 
 import { AnnouncementRenderer } from './Announcement'
 import { getGlassThemeVars } from '@/app/components/modernTheme'
