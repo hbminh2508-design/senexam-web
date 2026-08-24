@@ -133,8 +133,9 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
   ])
   
   const chatScrollRef = useRef<HTMLDivElement>(null)
-  const { newUiEnabled, themeColor } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, isBetaTester } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
+
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark')
@@ -268,11 +269,10 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
   if (hidden) return null
 
-  const { isGlass, newUiEnabled, themeColor, isBetaTester } = useNewUiPrefs()
-
   const activeVars = isGlass
     ? getGlassThemeVars(themeColor, isDark)
     : getModernThemeVars(themeColor, isDark)
+
 
   const chatContainerBase = isGlass
     ? "glass-refract-card flex flex-col overflow-hidden animate-in fade-in duration-300 border border-white/70 dark:border-white/15 shadow-2xl backdrop-blur-3xl"
