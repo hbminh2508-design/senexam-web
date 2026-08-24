@@ -18,8 +18,10 @@ export type HomeProps = {
     province: string
     school: string
     targetExams: string[]
+    targetSubjects?: string[]
   }
   isDark: boolean
+
   toggleTheme: () => void
   unreadCount: number
   setShowNotifications: (v: boolean) => void
