@@ -13,7 +13,7 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import {
   ArrowLeft, Sparkles, Send, Loader2, Plus, Trash2, Paperclip, X, BrainCircuit, Crown, MessageSquare,
-  Menu, Copy, Check, Lightbulb, Compass, HelpCircle, BookMarked, Atom
+  Menu, Copy, Check, Lightbulb, Compass, BookMarked, Atom
 } from 'lucide-react'
 
 type Session = { id: string, title: string, updated_at: string }
@@ -240,10 +240,10 @@ export default function SenAiStudioPage() {
               <p className="text-xs text-slate-400 px-2 py-4 text-center">Chưa có phiên chat nào.</p>
             ) : (
               sessions.map(s => (
-                <button
+                <div
                   key={s.id}
                   onClick={() => openSession(s.id)}
-                  className={`w-full text-left px-3.5 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 group transition-all ${
+                  className={`w-full text-left px-3.5 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-2 group transition-all cursor-pointer ${
                     activeSessionId === s.id
                       ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 ring-1 ring-indigo-500/30'
                       : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300'
@@ -253,12 +253,15 @@ export default function SenAiStudioPage() {
                     <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" />
                     <span className="truncate">{s.title || 'Đoạn hội thoại mới'}</span>
                   </span>
-                  <Trash2
-                    className="w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-600 transition-opacity"
+                  <button
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); handleDeleteSession(s.id) }}
                     title="Xoá cuộc trò chuyện"
-                  />
-                </button>
+                    className="p-1 opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-600 transition-opacity rounded-lg"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                  </button>
+                </div>
               ))
             )}
           </div>
@@ -380,6 +383,7 @@ export default function SenAiStudioPage() {
 
                     {msg.role === 'model' && (
                       <button
+                        type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.content)}
                         className="mt-2 text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
                         title="Sao chép nội dung"
@@ -426,7 +430,14 @@ export default function SenAiStudioPage() {
                   {pendingFiles.map((f, i) => (
                     <span key={i} className="text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20">
                       📎 {f.name}
-                      <X className="w-3.5 h-3.5 cursor-pointer hover:text-rose-500" onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} />
+                      <button
+                        type="button"
+                        onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        className="hover:text-rose-500 p-0.5"
+                        title="Xoá file"
+                      >
+                        <X className="w-3.5 h-3.5 cursor-pointer" />
+                      </button>
                     </span>
                   ))}
                 </div>
@@ -482,4 +493,3 @@ export default function SenAiStudioPage() {
     </div>
   )
 }
-
