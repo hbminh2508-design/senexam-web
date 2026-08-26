@@ -120,7 +120,7 @@ const matchesSearch = (value: string, query: string) => searchScore(value, query
 
 export default function LibraryNewClient({ slugSegments }: { slugSegments: string[] }) {
   const router = useRouter()
-  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled, isBetaTester } = useNewUiPrefs()
+  const { uiMode, isGlass, newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
 
 
   const [loading, setLoading] = useState(true)

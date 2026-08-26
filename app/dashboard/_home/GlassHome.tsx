@@ -435,10 +435,6 @@ export default function GlassHome({
         </header>
       </div>
 
-          </div>
-        </>
-      )}
-
       {/* Popover Tất cả tính năng (Feature Menu Modal/Drawer) */}
       {showFeatureMenu && (
         <>
