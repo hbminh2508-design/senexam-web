@@ -14,6 +14,7 @@ import {
   Zap,
   CheckCircle2,
   Lock,
+  Rocket,
 } from 'lucide-react'
 
 // Mốc thời gian dừng hoạt động giao diện cũ: 31/08/2026 00:00:00 GMT+7 (1788118800000 ms)
