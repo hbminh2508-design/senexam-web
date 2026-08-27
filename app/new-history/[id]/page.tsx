@@ -32,6 +32,7 @@ import {
   Image as ImageIcon,
   Paperclip,
   Trash2,
+  FileQuestion,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
