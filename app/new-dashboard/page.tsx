@@ -175,6 +175,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: Crown,
   },
   {
+    key: 'teacher',
+    title: 'Cổng Giảng Viên',
+    description: 'Soạn đề thi, quản lý ngân hàng câu hỏi và theo dõi điểm số lớp học.',
+    href: '/new-teacher',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#0284C7]',
+    badge: 'Teacher',
+    icon: School,
+  },
+  {
     key: 'codes',
     title: 'Đổi Mã Quà Tặng',
     description: 'Nhập mã Gift Code 16 chữ số để nhận quà SenCash và ngày VIP.',
@@ -211,35 +220,35 @@ export default function NewDashboardPage() {
   const [bootTs] = useState<number>(() => Date.now())
 
   // User profile state
-  const [userEmail, setUserEmail] = useState('')
-  const [userId, setUserId] = useState('')
-  const [fullName, setFullName] = useState('Bạn')
+  const [fullName, setFullName] = useState('')
   const [school, setSchool] = useState('')
   const [province, setProvince] = useState('')
   const [targetExams, setTargetExams] = useState<string[]>([])
-  const [senCash, setSenCash] = useState(0)
-  const [userRole, setUserRole] = useState('student')
-  const [linkedGoogle, setLinkedGoogle] = useState(false)
+  const [senCash, setSenCash] = useState<number>(0)
+  const [userRole, setUserRole] = useState<string>('student')
+  const [userEmail, setUserEmail] = useState<string>('')
+  const [userId, setUserId] = useState<string>('')
 
-  // Settings state
-  const [savingSettings, setSavingSettings] = useState(false)
+  // Google link state
+  const [linkedGoogle, setLinkedGoogle] = useState(false)
   const [googleLinkingLoading, setGoogleLinkingLoading] = useState(false)
   const [showGoogleGuide, setShowGoogleGuide] = useState(false)
+
+  // Quick settings modal state
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword, setNewPassword] = useState('')
-  const [showPasswordText, setShowPasswordText] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const deferredQuery = useDeferredValue(query)
 
   useEffect(() => {
     let disposed = false
+    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
+    if (dark) document.documentElement.classList.add('dark')
+    setIsDark(dark)
 
     const init = async () => {
-      const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
-      if (dark) document.documentElement.classList.add('dark')
-      if (!disposed) setIsDark(dark)
-
       const { data: auth } = await supabase.auth.getUser()
       const user = auth.user
       if (!user) {
@@ -247,18 +256,15 @@ export default function NewDashboardPage() {
         return
       }
 
-      await ensureStudentProfile(user.id)
-
-      // Kiểm tra xem đã liên kết Google chưa
-      const identities = user.identities || []
-      const hasGoogle = identities.some((i: any) => i.provider === 'google') || user.app_metadata?.providers?.includes('google')
       if (!disposed) {
         setUserEmail(user.email || '')
         setUserId(user.id)
-        setLinkedGoogle(!!hasGoogle)
+        const isGoogle = user.app_metadata?.provider === 'google' || user.identities?.some((id) => id.provider === 'google')
+        setLinkedGoogle(!!isGoogle)
       }
 
-      const nowIso = new Date().toISOString()
+      await ensureStudentProfile(user.id)
+
       const [profileRes, submissionsRes, announcementsRes] = await Promise.all([
         supabase
           .from('profiles')
@@ -271,10 +277,8 @@ export default function NewDashboardPage() {
           .eq('user_id', user.id),
         supabase
           .from('announcements')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .or(`start_time.is.null,start_time.lte.${nowIso}`)
-          .or(`end_time.is.null,end_time.gte.${nowIso}`),
+          .select('id')
+          .order('created_at', { ascending: false }),
       ])
 
       const profile = profileRes.data
@@ -287,18 +291,20 @@ export default function NewDashboardPage() {
         setProvince(profile?.province || '')
         setTargetExams(Array.isArray(profile?.target_exams) ? profile.target_exams : [])
         setSenCash(profile?.sencash_balance || 0)
-        setUserRole(profile?.role || 'student')
+        const role = profile?.role || 'student'
+        setUserRole(role)
         setVipUntil(profile?.vip_expires_at || null)
         setSubmissionCount(submissionsRes.count || 0)
-        setActiveAnnouncements(announcementsRes.count || 0)
+        
+        // Tính thông báo chưa đọc của riêng user này
+        const readIds: string[] = JSON.parse(localStorage.getItem(`sen_read_announcements_${user.id}`) || '[]')
+        const unreadCount = (announcementsRes.data || []).filter((a) => !readIds.includes(a.id)).length
+        setActiveAnnouncements(unreadCount)
+
         const examsLen = Array.isArray(profile?.target_exams) ? profile.target_exams.length : 0
         setStreakDays(Math.max(2, Math.min(28, (submissionsRes.count || 0) + examsLen * 3)))
         setLoading(false)
       }
-
-      QUICK_ACTIONS.forEach((item) => {
-        router.prefetch(item.href)
-      })
     }
 
     init()
@@ -309,9 +315,20 @@ export default function NewDashboardPage() {
   }, [router, hookBeta])
 
   const filteredActions = useMemo(() => {
+    // Ẩn nút Admin & Teacher nếu user không có quyền
+    const allowedActions = QUICK_ACTIONS.filter((item) => {
+      if (item.key === 'admin') {
+        return userRole === 'admin' || userRole === 'collab'
+      }
+      if (item.key === 'teacher') {
+        return userRole === 'teacher' || userRole === 'admin' || userRole === 'collab'
+      }
+      return true
+    })
+
     const normalized = deferredQuery.trim().toLowerCase()
-    if (!normalized) return QUICK_ACTIONS
-    return QUICK_ACTIONS.filter((item) => {
+    if (!normalized) return allowedActions
+    return allowedActions.filter((item) => {
       const hay = `${item.title} ${item.description}`.toLowerCase()
       return hay.includes(normalized)
     })
@@ -507,13 +524,19 @@ export default function NewDashboardPage() {
                 <BadgeCheck className="h-7 w-7 text-amber-600 dark:text-amber-400 opacity-80" />
               </div>
             </Link>
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-teal-500/10 dark:bg-teal-500/15 p-4 transition hover:scale-[1.01]">
-              <p className="text-xs font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">Thông báo mới</p>
+            <Link
+              href="/new-announcement"
+              className="rounded-2xl border border-black/10 dark:border-white/10 bg-teal-500/10 dark:bg-teal-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">Thông báo mới</p>
+                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 group-hover:underline">Xem bản tin →</span>
+              </div>
               <div className="mt-2 flex items-center justify-between">
                 <strong className="text-3xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>{activeAnnouncements}</strong>
                 <Star className="h-7 w-7 text-teal-600 dark:text-teal-400 opacity-80" />
               </div>
-            </div>
+            </Link>
             <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-indigo-500/10 dark:bg-indigo-500/15 p-4 transition hover:scale-[1.01]">
               <p className="text-xs font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">Chỉ số tập trung (Focus)</p>
               <div className="mt-2 flex items-center justify-between">
