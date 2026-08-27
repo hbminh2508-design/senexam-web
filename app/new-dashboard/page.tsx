@@ -163,7 +163,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'vip',
     title: 'Gói nâng cấp VIP',
     description: 'Mở khoá trọn vẹn đặc quyền AI, đề độc quyền và hỗ trợ 24/7.',
-    href: '/vip',
+    href: '/new-vip',
     tone: 'from-[#FBBF24] via-[#F59E0B] to-[#D97706]',
     badge: 'Ưu đãi',
     icon: Crown,
@@ -583,10 +583,6 @@ export default function NewDashboardPage() {
             </div>
           </div>
 
-          {/* CỘT PHẢI: Tab Thông Tin Cá Nhân, Cài Đặt Web & Liên Kết Google */}
-          <aside className="space-y-5">
-            
-            {/* Card 1: Thông tin cá nhân */}
           {/* CỘT PHẢI: Tab Thông Tin Cá Nhân, Ví Sen, Sen VIP, Cài Đặt & Liên Kết Google */}
           <aside className="space-y-5">
             
@@ -638,7 +634,7 @@ export default function NewDashboardPage() {
               {/* 2 Nút Hành Động Lớn: Ví Sen & Sen VIP */}
               <div className="mt-4 grid grid-cols-2 gap-2.5 pt-3 border-t border-black/10 dark:border-white/10">
                 <Link
-                  href="/vip"
+                  href="/new-sencash"
                   className="flex flex-col justify-between rounded-2xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-3 transition hover:scale-[1.02] group"
                 >
                   <div className="flex items-center justify-between text-amber-700 dark:text-amber-300">
@@ -656,7 +652,7 @@ export default function NewDashboardPage() {
                 </Link>
 
                 <Link
-                  href="/vip"
+                  href="/new-vip"
                   className="flex flex-col justify-between rounded-2xl border border-rose-500/20 bg-rose-500/10 dark:bg-rose-500/15 p-3 transition hover:scale-[1.02] group"
                 >
                   <div className="flex items-center justify-between text-rose-700 dark:text-rose-300">
