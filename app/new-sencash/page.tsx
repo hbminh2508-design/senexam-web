@@ -20,6 +20,7 @@ import {
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import {
   ArrowLeft,
+  Coins,
   CreditCard,
   Crown,
   Wallet,

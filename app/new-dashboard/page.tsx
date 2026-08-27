@@ -43,14 +43,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
-import {
-  getModernThemeVars,
-  getGlassThemeVars,
-  THEME_COLORS,
-  DEFAULT_THEME_COLOR,
-  type ThemeColorKey,
-} from '@/app/components/modernTheme'
-import { useNewUiPrefs, UI_PREFS_CHANGED_EVENT, type UiMode } from '@/app/components/useNewUiPrefs'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
@@ -174,7 +168,7 @@ const clampPercent = (value: number) => Math.max(0, Math.min(100, value))
 
 export default function NewDashboardPage() {
   const router = useRouter()
-  const { uiMode: prefUiMode, isGlass: prefIsGlass, themeColor: prefThemeColor, isBetaTester: hookBeta } = useNewUiPrefs()
+  const { isBetaTester: hookBeta } = useNewUiPrefs()
 
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
@@ -264,8 +258,6 @@ export default function NewDashboardPage() {
         setTargetExams(Array.isArray(profile?.target_exams) ? profile.target_exams : [])
         setSenCash(profile?.sencash_balance || 0)
         setUserRole(profile?.role || 'student')
-        setCurrentThemeColor(profile?.theme_color || prefThemeColor || 'terracotta')
-        setCurrentUiMode((profile?.ui_mode as UiMode) || prefUiMode || 'modern')
         setVipUntil(profile?.vip_expires_at || null)
         setSubmissionCount(submissionsRes.count || 0)
         setActiveAnnouncements(announcementsRes.count || 0)
@@ -284,7 +276,7 @@ export default function NewDashboardPage() {
     return () => {
       disposed = true
     }
-  }, [router, prefThemeColor, prefUiMode, hookBeta])
+  }, [router, hookBeta])
 
   const filteredActions = useMemo(() => {
     const normalized = deferredQuery.trim().toLowerCase()
