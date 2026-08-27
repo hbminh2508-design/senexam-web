@@ -27,7 +27,7 @@ import {
   HelpCircle,
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
-import { getModernThemeVars, hexToRgba } from '@/app/components/modernTheme'
+import { getModernThemeVars, hexToRgba, getAccentHex } from '@/app/components/modernTheme'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newsign-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newsign-body' })
@@ -216,7 +216,7 @@ export default function NewSignPage() {
   }
 
   const vars = getModernThemeVars(themeColor, isDark)
-  const accent = vars['--accent'] as string || '#2563eb'
+  const accent = getAccentHex(themeColor, isDark)
 
   return (
     <div
