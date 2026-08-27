@@ -58,8 +58,7 @@ export default function NewVideoPage() {
         .from('library_documents')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(1000)
-
+      if (data) {
         const vids = data.filter((d) => {
           const title = (d.title || '').trim().toLowerCase()
           const isMediaExt = /\.(mp4|mkv|mov|avi|webm|flv|wmv|m4v|3gp|mp3|wav|ogg|m4a|aac|flac)$/i.test(title)
