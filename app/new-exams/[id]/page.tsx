@@ -159,14 +159,31 @@ export default function NewExamRoomPage() {
     setBookmarked((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
-  // Tính toán số câu hỏi & tiến độ
+  // Chỉ lấy các phần có số lượng câu hỏi > 0
+  const activeSections = useMemo(() => {
+    if (!exam?.exam_structure || !Array.isArray(exam.exam_structure)) return []
+    return exam.exam_structure.filter((s: any) => s && (s.questionCount || 0) > 0)
+  }, [exam])
+
+  // Offset câu hỏi toàn cục theo từng phần
+  const computedOffsets = useMemo(() => {
+    const offsets: Record<string, number> = {}
+    let running = 0
+    activeSections.forEach((section: any) => {
+      offsets[section.id] = running
+      running += section.questionCount || 0
+    })
+    return offsets
+  }, [activeSections])
+
+  // Tính toán danh sách phẳng các câu hỏi để hiển thị Question Map Palette
   const questionMeta = useMemo(() => {
-    if (!exam?.exam_structure) return { totalCount: 0, flatList: [] }
-    const flatList: { key: string; sectionId: string; qIdx: number; label: string; type: string }[] = []
+    const flatList: { key: string; sectionId: string; qIdx: number; label: string; globalNum: number }[] = []
     let totalCount = 0
 
-    exam.exam_structure.forEach((section: any, sIdx: number) => {
+    activeSections.forEach((section: any) => {
       const count = section.questionCount || 0
+      const offset = computedOffsets[section.id] || 0
       for (let i = 0; i < count; i++) {
         totalCount += 1
         const key = `${section.id}-${i}`
@@ -174,14 +191,14 @@ export default function NewExamRoomPage() {
           key,
           sectionId: section.id,
           qIdx: i,
-          label: `Câu ${totalCount}`,
-          type: section.type,
+          globalNum: offset + i + 1,
+          label: `Câu ${offset + i + 1}`,
         })
       }
     })
 
     return { totalCount, flatList }
-  }, [exam])
+  }, [activeSections, computedOffsets])
 
   const answeredCount = useMemo(() => {
     return Object.keys(answers).filter((k) => {
@@ -192,7 +209,7 @@ export default function NewExamRoomPage() {
     }).length
   }, [answers])
 
-  // Xử lý nộp bài
+  // Xử lý nộp bài & chấm điểm
   const handleSubmitExam = async () => {
     setShowSubmitModal(false)
     setSubmitting(true)
@@ -206,9 +223,9 @@ export default function NewExamRoomPage() {
       let hasEssay = false
       const detailedScores: Record<string, number> = {}
 
-      exam.exam_structure.forEach((section: any) => {
+      activeSections.forEach((section: any) => {
         const perQuestionPoints = section.scoringMode === 'auto_divide'
-          ? (section.sectionTotalPoints || 0) / (section.questionCount || 1)
+          ? ((section.sectionTotalPoints || 0) / (section.questionCount || 1))
           : 0
 
         Array.from({ length: section.questionCount || 0 }).forEach((_, qIdx) => {
@@ -216,11 +233,11 @@ export default function NewExamRoomPage() {
           const qPoint = section.scoringMode === 'custom' ? (section.customPoints?.[qIdx] || 0) : perQuestionPoints
           let earned = 0
 
-          let currentType = section.type
-          if (section.type === 'mixed' && section.mixedRanges) {
+          let currentType = section.type || 'single_choice'
+          if (section.type === 'mixed' && section.mixedRanges && Array.isArray(section.mixedRanges)) {
             const range = section.mixedRanges.find((r: any) => qIdx + 1 >= r.start && qIdx + 1 <= r.end)
-            if (range) currentType = range.type
-            else currentType = 'short_answer'
+            if (range) currentType = range.type || 'single_choice'
+            else currentType = 'single_choice'
           }
 
           if (currentType === 'essay') {
@@ -233,7 +250,9 @@ export default function NewExamRoomPage() {
               let correctSubCount = 0
               if (studentAns && typeof studentAns === 'object' && correctAns && typeof correctAns === 'object') {
                 ;['a', 'b', 'c', 'd'].forEach((sub) => {
-                  if (studentAns[sub] === correctAns[sub]) correctSubCount++
+                  const sVal = studentAns[sub] === 'Đ' || studentAns[sub] === 'T' ? 'T' : studentAns[sub] === 'S' || studentAns[sub] === 'F' ? 'F' : studentAns[sub]
+                  const cVal = correctAns[sub] === 'Đ' || correctAns[sub] === 'T' ? 'T' : correctAns[sub] === 'S' || correctAns[sub] === 'F' ? 'F' : correctAns[sub]
+                  if (sVal && cVal && sVal === cVal) correctSubCount++
                 })
               }
               if (correctSubCount === 1) earned = qPoint * 0.1
@@ -486,7 +505,7 @@ export default function NewExamRoomPage() {
             </div>
 
             <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-              {questionMeta.flatList.map((item, idx) => {
+              {questionMeta.flatList.map((item) => {
                 const ans = answers[item.key]
                 const isAnswered = ans !== undefined && ans !== null && ans !== '' && (typeof ans !== 'object' || Object.keys(ans).length > 0)
                 const isMarked = bookmarked[item.key]
@@ -503,7 +522,7 @@ export default function NewExamRoomPage() {
                         : 'bg-black/5 dark:bg-white/10 text-[#4B5563] dark:text-slate-300 hover:bg-black/10'
                     }`}
                   >
-                    {idx + 1}
+                    {item.globalNum}
                   </a>
                 )
               })}
@@ -512,158 +531,189 @@ export default function NewExamRoomPage() {
 
           {/* Question List Section */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-            {exam.exam_structure?.map((section: any, sIdx: number) => (
-              <div key={section.id || sIdx} className="space-y-4">
-                
-                {/* Section Header */}
-                <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-3 text-indigo-900 dark:text-indigo-200">
-                  <h3 className="font-black text-sm" style={{ fontFamily: 'var(--font-newroom-heading)' }}>
-                    {section.title || `Phần ${sIdx + 1}`}
-                  </h3>
-                  {section.description && (
-                    <p className="text-xs mt-0.5 opacity-80">{section.description}</p>
-                  )}
-                </div>
+            {activeSections.map((section: any, sIdx: number) => {
+              const offset = computedOffsets[section.id] || 0
 
-                {/* Section Questions */}
-                <div className="space-y-4">
-                  {Array.from({ length: section.questionCount || 0 }).map((_, qIdx) => {
-                    const key = `${section.id}-${qIdx}`
-                    const isMarked = bookmarked[key]
-                    const currentAns = answers[key]
+              return (
+                <div key={section.id || sIdx} className="space-y-4">
+                  
+                  {/* Section Header */}
+                  <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-3 text-indigo-900 dark:text-indigo-200">
+                    <h3 className="font-black text-sm" style={{ fontFamily: 'var(--font-newroom-heading)' }}>
+                      {section.name || section.title || `Phần ${sIdx + 1}`}
+                    </h3>
+                    {section.description && (
+                      <p className="text-xs mt-0.5 opacity-80">{section.description}</p>
+                    )}
+                  </div>
 
-                    return (
-                      <div
-                        key={key}
-                        id={`q-${key}`}
-                        className={`rounded-2xl border p-4 transition-all duration-200 ${
-                          isMarked
-                            ? 'border-amber-500/50 bg-amber-500/5 dark:bg-amber-500/10'
-                            : 'border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-800/90 shadow-sm'
-                        }`}
-                      >
-                        {/* Question Header */}
-                        <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5">
-                          <div className="flex items-center gap-2">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#111827] dark:bg-white text-white dark:text-slate-900 text-xs font-black">
-                              {qIdx + 1}
-                            </span>
-                            <span className="text-xs font-bold text-[#6B7280] dark:text-slate-400">
-                              Câu hỏi {qIdx + 1}
-                            </span>
+                  {/* Section Questions */}
+                  <div className="space-y-4">
+                    {Array.from({ length: section.questionCount || 0 }).map((_, qIdx) => {
+                      const key = `${section.id}-${qIdx}`
+                      const globalNum = offset + qIdx + 1
+                      const isMarked = bookmarked[key]
+                      const currentAns = answers[key]
+
+                      let currentType = section.type || 'single_choice'
+                      let currentOptionsCount = section.optionsCount || 4
+
+                      if (section.type === 'mixed' && section.mixedRanges && Array.isArray(section.mixedRanges)) {
+                        const range = section.mixedRanges.find((r: any) => qIdx + 1 >= r.start && qIdx + 1 <= r.end)
+                        if (range) {
+                          currentType = range.type || 'single_choice'
+                          currentOptionsCount = range.optionsCount || 4
+                        } else {
+                          currentType = 'single_choice'
+                        }
+                      }
+
+                      const options = Array.from({ length: currentOptionsCount }, (_, oIdx) => String.fromCharCode(65 + oIdx))
+
+                      return (
+                        <div
+                          key={key}
+                          id={`q-${key}`}
+                          className={`rounded-2xl border p-4 transition-all duration-200 ${
+                            isMarked
+                              ? 'border-amber-500/50 bg-amber-500/5 dark:bg-amber-500/10'
+                              : 'border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-800/90 shadow-sm'
+                          }`}
+                        >
+                          {/* Question Header */}
+                          <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#111827] dark:bg-white text-white dark:text-slate-900 text-xs font-black">
+                                {globalNum}
+                              </span>
+                              <span className="text-xs font-bold text-[#6B7280] dark:text-slate-400">
+                                Câu hỏi {globalNum}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleBookmark(key)}
+                              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition ${
+                                isMarked
+                                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                  : 'bg-black/5 dark:bg-white/10 text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
+                              }`}
+                            >
+                              <Bookmark className="h-3 w-3" />
+                              {isMarked ? 'Đã đánh dấu' : 'Đánh dấu'}
+                            </button>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleBookmark(key)}
-                            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition ${
-                              isMarked
-                                ? 'bg-amber-500 text-slate-950 shadow-sm'
-                                : 'bg-black/5 dark:bg-white/10 text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
-                            }`}
-                          >
-                            <Bookmark className="h-3 w-3" />
-                            {isMarked ? 'Đã đánh dấu' : 'Đánh dấu'}
-                          </button>
-                        </div>
+                          {/* Question Answer Inputs by Type */}
+                          <div className="mt-3.5">
+                            
+                            {/* 1. Trắc nghiệm đơn hoặc nhiều lựa chọn */}
+                            {(currentType === 'single_choice' || currentType === 'multiple_choice' || !currentType) && (
+                              <div className="flex flex-wrap gap-2">
+                                {options.map((opt) => {
+                                  const isSelected = currentType === 'multiple_choice'
+                                    ? Array.isArray(currentAns) && currentAns.includes(opt)
+                                    : currentAns === opt
 
-                        {/* Question Answer Inputs by Type */}
-                        <div className="mt-3.5">
-                          
-                          {/* 1. Trắc nghiệm 4 lựa chọn (Single Choice) */}
-                          {(!section.type || section.type === 'single_choice' || section.type === 'multiple_choice') && (
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                              {['A', 'B', 'C', 'D'].map((opt) => {
-                                const selected = currentAns === opt
-                                return (
-                                  <button
-                                    key={opt}
-                                    type="button"
-                                    onClick={() => handleAnswer(key, opt)}
-                                    className={`flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 text-xs font-black transition-all ${
-                                      selected
-                                        ? 'bg-indigo-600 text-white shadow-md scale-102'
-                                        : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700/60 hover:bg-black/5'
-                                    }`}
-                                  >
-                                    <span>{opt}</span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      onClick={() => {
+                                        if (currentType === 'multiple_choice') {
+                                          const prevArr = Array.isArray(currentAns) ? currentAns : []
+                                          const nextArr = prevArr.includes(opt) ? prevArr.filter((x: string) => x !== opt) : [...prevArr, opt].sort()
+                                          handleAnswer(key, nextArr)
+                                        } else {
+                                          handleAnswer(key, opt)
+                                        }
+                                      }}
+                                      className={`h-10 min-w-10 px-4 rounded-xl text-xs font-black transition-all ${
+                                        isSelected
+                                          ? 'bg-indigo-600 text-white shadow-md scale-105'
+                                          : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700/60 hover:bg-black/5 dark:hover:bg-white/5'
+                                      }`}
+                                    >
+                                      {opt}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
 
-                          {/* 2. Trắc nghiệm Đúng / Sai 4 ý (True / False) */}
-                          {section.type === 'true_false' && (
-                            <div className="space-y-2">
-                              {['a', 'b', 'c', 'd'].map((sub) => {
-                                const val = currentAns?.[sub]
-                                return (
-                                  <div
-                                    key={sub}
-                                    className="flex items-center justify-between rounded-xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] p-2.5"
-                                  >
-                                    <span className="text-xs font-bold uppercase tracking-wider">
-                                      Ý {sub})
-                                    </span>
-                                    <div className="flex items-center gap-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleAnswer(key, { ...currentAns, [sub]: 'T' })}
-                                        className={`rounded-lg px-3 py-1 text-xs font-black transition ${
-                                          val === 'T'
-                                            ? 'bg-emerald-600 text-white shadow-sm'
-                                            : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700'
-                                        }`}
-                                      >
-                                        Đúng
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleAnswer(key, { ...currentAns, [sub]: 'F' })}
-                                        className={`rounded-lg px-3 py-1 text-xs font-black transition ${
-                                          val === 'F'
-                                            ? 'bg-rose-600 text-white shadow-sm'
-                                            : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700'
-                                        }`}
-                                      >
-                                        Sai
-                                      </button>
+                            {/* 2. Trắc nghiệm Đúng / Sai 4 ý */}
+                            {currentType === 'true_false' && (
+                              <div className="space-y-2">
+                                {['a', 'b', 'c', 'd'].map((sub) => {
+                                  const val = currentAns?.[sub]
+                                  return (
+                                    <div
+                                      key={sub}
+                                      className="flex items-center justify-between rounded-xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] p-2.5"
+                                    >
+                                      <span className="text-xs font-bold uppercase tracking-wider">
+                                        Ý {sub})
+                                      </span>
+                                      <div className="flex items-center gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAnswer(key, { ...currentAns, [sub]: 'Đ' })}
+                                          className={`rounded-lg px-3 py-1 text-xs font-black transition ${
+                                            val === 'Đ' || val === 'T'
+                                              ? 'bg-emerald-600 text-white shadow-sm'
+                                              : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700'
+                                          }`}
+                                        >
+                                          Đúng
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAnswer(key, { ...currentAns, [sub]: 'S' })}
+                                          className={`rounded-lg px-3 py-1 text-xs font-black transition ${
+                                            val === 'S' || val === 'F'
+                                              ? 'bg-rose-600 text-white shadow-sm'
+                                              : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700'
+                                          }`}
+                                        >
+                                          Sai
+                                        </button>
+                                      </div>
                                     </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
+                                  )
+                                })}
+                              </div>
+                            )}
 
-                          {/* 3. Điền số / Trả lời ngắn */}
-                          {section.type === 'short_answer' && (
-                            <input
-                              type="text"
-                              placeholder="Nhập kết quả điền số hoặc biểu thức..."
-                              value={currentAns || ''}
-                              onChange={(e) => handleAnswer(key, e.target.value)}
-                              className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3.5 text-xs font-black outline-none focus:border-indigo-500"
-                            />
-                          )}
+                            {/* 3. Điền số / Trả lời ngắn */}
+                            {currentType === 'short_answer' && (
+                              <input
+                                type="text"
+                                placeholder="Nhập kết quả điền số hoặc biểu thức..."
+                                value={currentAns || ''}
+                                onChange={(e) => handleAnswer(key, e.target.value)}
+                                className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3.5 text-xs font-black outline-none focus:border-indigo-500"
+                              />
+                            )}
 
-                          {/* 4. Tự luận */}
-                          {section.type === 'essay' && (
-                            <textarea
-                              rows={3}
-                              placeholder="Gõ lời giải tóm tắt..."
-                              value={currentAns?.text || currentAns || ''}
-                              onChange={(e) => handleAnswer(key, e.target.value)}
-                              className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-medium outline-none focus:border-indigo-500"
-                            />
-                          )}
+                            {/* 4. Tự luận */}
+                            {currentType === 'essay' && (
+                              <textarea
+                                rows={3}
+                                placeholder="Gõ lời giải tóm tắt..."
+                                value={currentAns?.text || currentAns || ''}
+                                onChange={(e) => handleAnswer(key, e.target.value)}
+                                className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-medium outline-none focus:border-indigo-500"
+                              />
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

@@ -95,26 +95,7 @@ export default function NewHistoryPage() {
 
       const { data, error } = await supabase
         .from('submissions')
-        .select(`
-          id,
-          exam_id,
-          user_id,
-          score,
-          time_spent,
-          is_graded,
-          feedback,
-          created_at,
-          exams (
-            id,
-            title,
-            exam_type,
-            subject,
-            duration,
-            pdf_url,
-            solution_pdf_url,
-            allow_review
-          )
-        `)
+        .select('*, exams(*)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
 
@@ -655,7 +636,9 @@ export default function NewHistoryPage() {
             filteredSubmissions.map((sub) => {
               const examTitle = sub.exams?.title || 'Đề thi luyện tập'
               const examType = sub.exams?.exam_type || 'Tổng hợp'
-              const pdfUrl = sub.exams?.pdf_url
+              const pdfUrl = sub.exams?.drive_file_id
+                ? `https://drive.google.com/file/d/${sub.exams.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`
+                : sub.exams?.pdf_url
               const scoreBadge = formatScoreBadge(sub.score)
               const dateStr = new Date(sub.created_at).toLocaleString('vi-VN', {
                 hour: '2-digit',

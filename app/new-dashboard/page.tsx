@@ -92,7 +92,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'library',
     title: 'Thư viện thông minh',
     description: 'Kho tài liệu chuyên sâu được sắp xếp theo môn và mục tiêu thi cử.',
-    href: '/library',
+    href: '/new-library',
     tone: 'from-[#95D5B2] via-[#52B788] to-[#2D6A4F]',
     icon: BookOpen,
   },
