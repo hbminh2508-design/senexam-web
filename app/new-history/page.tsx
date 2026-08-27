@@ -53,6 +53,7 @@ type SubmissionItem = {
     duration?: number
     pdf_url?: string | null
     solution_pdf_url?: string | null
+    drive_file_id?: string | null
     allow_review?: boolean
   } | null
 }
