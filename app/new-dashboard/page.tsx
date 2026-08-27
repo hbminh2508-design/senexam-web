@@ -237,6 +237,7 @@ export default function NewDashboardPage() {
   // Quick settings modal state
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword, setNewPassword] = useState('')
+  const [showPasswordText, setShowPasswordText] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
