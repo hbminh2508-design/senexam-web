@@ -101,7 +101,7 @@ export default function NewAdminPage() {
   const [examSearch, setExamSearch] = useState('')
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null)
 
-  // CREATE EXAM (PRO BUILDER FROM OLD ADMIN)
+  // CREATE EXAM (PRO MULTI-SECTION BUILDER FROM OLD ADMIN)
   const [examTitle, setExamTitle] = useState('')
   const [examTypeVal, setExamTypeVal] = useState('THPTQG')
   const [examDuration, setExamDuration] = useState('50')
@@ -109,9 +109,46 @@ export default function NewAdminPage() {
   const [examIsHidden, setExamIsHidden] = useState(false)
   const [examCustomCode, setExamCustomCode] = useState('')
   const [examBlock, setExamBlock] = useState('A00')
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>(['Toán học'])
+  const [maxAttempts, setMaxAttempts] = useState('1')
+  const [gradingMethod, setGradingMethod] = useState('highest')
+  const [requireProctoring, setRequireProctoring] = useState(false)
   const [examPdfFile, setExamPdfFile] = useState<File | null>(null)
-  const [examQCount, setExamQCount] = useState('50')
   const [creatingExam, setCreatingExam] = useState(false)
+
+  // MULTI-SECTIONS STATE
+  const [examSections, setExamSections] = useState<any[]>([
+    {
+      id: 'sec_1',
+      name: 'Phần I: Câu trắc nghiệm nhiều phương án lựa chọn (A, B, C, D)',
+      type: 'single_choice',
+      questionCount: 18,
+      optionsCount: 4,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 4.5,
+      correctAnswers: {},
+    },
+    {
+      id: 'sec_2',
+      name: 'Phần II: Câu trắc nghiệm Đúng / Sai (Mỗi câu gồm 4 ý a, b, c, d)',
+      type: 'true_false',
+      questionCount: 4,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 4.0,
+      correctAnswers: {},
+    },
+    {
+      id: 'sec_3',
+      name: 'Phần III: Câu trắc nghiệm Trả lời ngắn / Điền số',
+      type: 'short_answer',
+      questionCount: 6,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 1.5,
+      correctAnswers: {},
+    },
+  ])
+  const [quickAnswersModalSecId, setQuickAnswersModalSecId] = useState<string | null>(null)
+  const [quickAnswersText, setQuickAnswersText] = useState('')
 
   // ANNOUNCEMENTS MANAGER
   const [announcementsList, setAnnouncementsList] = useState<any[]>([])
@@ -273,11 +310,160 @@ export default function NewAdminPage() {
     setTimeout(() => setCopiedCodeId(null), 2000)
   }
 
+  // PRESET & MULTI-SECTION HANDLERS
+  const handleLoadPresetTHPT2026 = () => {
+    setExamSections([
+      {
+        id: 'sec_1',
+        name: 'Phần I: Câu trắc nghiệm nhiều phương án lựa chọn (A, B, C, D)',
+        type: 'single_choice',
+        questionCount: 18,
+        optionsCount: 4,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 4.5,
+        correctAnswers: {},
+      },
+      {
+        id: 'sec_2',
+        name: 'Phần II: Câu trắc nghiệm Đúng / Sai (Mỗi câu gồm 4 ý a, b, c, d)',
+        type: 'true_false',
+        questionCount: 4,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 4.0,
+        correctAnswers: {},
+      },
+      {
+        id: 'sec_3',
+        name: 'Phần III: Câu trắc nghiệm Trả lời ngắn / Điền số',
+        type: 'short_answer',
+        questionCount: 6,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 1.5,
+        correctAnswers: {},
+      },
+    ])
+  }
+
+  const handleLoadPresetHSA = () => {
+    setExamSections([
+      {
+        id: 'sec_1',
+        name: 'Phần I: Định lượng & Toán học',
+        type: 'single_choice',
+        questionCount: 35,
+        optionsCount: 4,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 7.0,
+        correctAnswers: {},
+      },
+      {
+        id: 'sec_2',
+        name: 'Phần II: Điền đáp án ngắn',
+        type: 'short_answer',
+        questionCount: 15,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 3.0,
+        correctAnswers: {},
+      },
+    ])
+  }
+
+  const handleAddSection = () => {
+    const newSec = {
+      id: 'sec_' + Date.now(),
+      name: `Phần ${examSections.length + 1}: Trắc nghiệm`,
+      type: 'single_choice',
+      questionCount: 10,
+      optionsCount: 4,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 2.0,
+      correctAnswers: {},
+    }
+    setExamSections([...examSections, newSec])
+  }
+
+  const handleRemoveSection = (id: string) => {
+    setExamSections(examSections.filter((s) => s.id !== id))
+  }
+
+  const handleUpdateSection = (id: string, patch: any) => {
+    setExamSections(examSections.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+  }
+
+  const handleAnswerChange = (sectionId: string, qIndex: number, val: any) => {
+    setExamSections(
+      examSections.map((s) => {
+        if (s.id === sectionId) {
+          const updated = { ...(s.correctAnswers || {}), [qIndex]: val }
+          return { ...s, correctAnswers: updated }
+        }
+        return s
+      })
+    )
+  }
+
+  const handleApplyQuickAnswers = (sectionId: string, text: string) => {
+    const sec = examSections.find((s) => s.id === sectionId)
+    if (!sec) return
+
+    const answers: Record<number, any> = { ...(sec.correctAnswers || {}) }
+
+    if (sec.type === 'single_choice') {
+      const matches = Array.from(text.matchAll(/(\d+)[\s.:)]*([A-D])/gi))
+      if (matches.length > 0) {
+        matches.forEach((m) => {
+          const qNum = parseInt(m[1]) - 1
+          if (qNum >= 0 && qNum < sec.questionCount) {
+            answers[qNum] = m[2].toUpperCase()
+          }
+        })
+      } else {
+        const letters = text.replace(/[^a-dA-D]/g, '').toUpperCase().split('')
+        letters.forEach((l, idx) => {
+          if (idx < sec.questionCount) answers[idx] = l
+        })
+      }
+    } else if (sec.type === 'true_false') {
+      const lines = text.split('\n')
+      lines.forEach((line) => {
+        const m = line.match(/(\d+)[\s.:)]*([ĐDSđds\-\/]+)/i)
+        if (m) {
+          const qNum = parseInt(m[1]) - 1
+          const raw = m[2].replace(/[^ĐDSđds]/gi, '').toUpperCase()
+          const tfObj: any = {}
+          ;['a', 'b', 'c', 'd'].forEach((sub, subIdx) => {
+            const ch = raw[subIdx]
+            tfObj[sub] = ch === 'Đ' || ch === 'D' ? 'D' : 'S'
+          })
+          if (qNum >= 0 && qNum < sec.questionCount) answers[qNum] = tfObj
+        }
+      })
+    } else if (sec.type === 'short_answer') {
+      const matches = Array.from(text.matchAll(/(\d+)[\s.:)]*([-\d.,]+)/g))
+      matches.forEach((m) => {
+        const qNum = parseInt(m[1]) - 1
+        if (qNum >= 0 && qNum < sec.questionCount) {
+          answers[qNum] = m[2].trim()
+        }
+      })
+    }
+
+    handleUpdateSection(sectionId, { correctAnswers: answers })
+    setQuickAnswersModalSecId(null)
+    setQuickAnswersText('')
+    alert(`Đã nạp nhanh đáp án cho ${Object.keys(answers).length} câu hỏi!`)
+  }
+
   // TẠO ĐỀ THI ĐẦY ĐỦ TỪ ADMIN CŨ
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!examTitle.trim() || !examPdfFile) {
       alert('Vui lòng nhập tên đề thi và đính kèm file PDF đề thi!')
+      return
+    }
+
+    if (examSections.length === 0) {
+      alert('Vui lòng tạo ít nhất 1 phần thi cho đề thi!')
       return
     }
 
@@ -293,18 +479,7 @@ export default function NewAdminPage() {
         ? examCustomCode.trim().toUpperCase() || Math.random().toString(36).substring(2, 8).toUpperCase()
         : null
 
-      // 3. Cấu trúc câu hỏi ma trận 2026
-      const qCount = parseInt(examQCount) || 50
-      const examStructure = [
-        {
-          id: 'sec_1',
-          name: 'Phần I: Câu trắc nghiệm nhiều phương án lựa chọn',
-          type: 'single_choice',
-          questionCount: qCount,
-          optionsCount: 4,
-          correctAnswers: Array.from({ length: qCount }, () => 'A'),
-        },
-      ]
+      const totalQs = examSections.reduce((sum, s) => sum + (parseInt(s.questionCount) || 0), 0)
 
       const { data: newExam, error: examErr } = await supabase
         .from('exams')
@@ -313,10 +488,14 @@ export default function NewAdminPage() {
           exam_type: examTypeVal,
           duration: parseInt(examDuration) || 50,
           drive_file_id: driveFileId,
-          exam_structure: examStructure,
+          exam_structure: examSections,
           allow_review: examAllowReview,
           is_hidden: examIsHidden,
           access_code: accessCode,
+          subjects: selectedSubjects,
+          max_attempts: parseInt(maxAttempts) || 1,
+          grading_method: gradingMethod,
+          require_proctoring: requireProctoring,
           created_by: currentUserId,
         })
         .select('*')
@@ -330,7 +509,7 @@ export default function NewAdminPage() {
       setExamIsHidden(false)
       setExamCustomCode('')
       setActiveTab('exams')
-      alert(`Đã xuất bản đề thi thành công! ${accessCode ? `Mã code mở đề: ${accessCode}` : 'Đề công khai.'}`)
+      alert(`Đã xuất bản đề thi thành công! (${totalQs} câu hỏi). ${accessCode ? `Mã code mở đề: ${accessCode}` : 'Đề công khai.'}`)
     } catch (err: any) {
       alert(`Lỗi xuất bản đề thi: ${err.message}`)
     } finally {
@@ -822,119 +1001,377 @@ export default function NewAdminPage() {
           </div>
         )}
 
-        {/* TAB 3: PRO EXAM BUILDER (TÁCH RIÊNG THEO ADMIN CŨ) */}
+        {/* TAB 3: PRO MULTI-SECTION EXAM BUILDER (CHUẨN MA TRẬN 2026 & ADMIN CŨ) */}
         {activeTab === 'create_exam' && (
-          <div className="mt-6 max-w-3xl mx-auto rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-8 shadow-2xl backdrop-blur-2xl space-y-6">
-            <div className="flex items-center gap-3 pb-4 border-b border-black/10 dark:border-white/10">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-600">
-                <FileCode className="h-6 w-6" />
+          <div className="mt-6 max-w-4xl mx-auto rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-2xl backdrop-blur-2xl space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10 flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-600">
+                  <FileCode className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black" style={{ fontFamily: 'var(--font-newadm-heading)' }}>
+                    Soạn Đề Thi Chuyên Nghiệp (Multi-Section Pro Builder)
+                  </h3>
+                  <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                    Cấu hình đa phần thi (Trắc nghiệm, Đúng/Sai, Điền số), nạp đáp án nhanh & tải PDF lên Google Drive.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-black" style={{ fontFamily: 'var(--font-newadm-heading)' }}>
-                  Soạn Đề Thi Mới & Đính Kèm File PDF (Admin Builder)
-                </h3>
-                <p className="text-xs text-[#6B7280] dark:text-slate-400">
-                  Tải file đề thi PDF lên Google Drive và cấu hình mã code ẩn cho đề thi riêng tư.
-                </p>
+
+              {/* Nút nạp nhanh mẫu đề thi */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadPresetTHPT2026}
+                  className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 transition hover:bg-indigo-500/20"
+                >
+                  🎯 Mẫu THPT 2026
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadPresetHSA}
+                  className="rounded-xl border border-teal-500/30 bg-teal-500/10 px-3 py-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 transition hover:bg-teal-500/20"
+                >
+                  ⚡ Mẫu HSA
+                </button>
               </div>
             </div>
 
-            <form onSubmit={handleCreateExam} className="space-y-4 text-xs font-bold">
-              <div>
-                <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Tên đề thi</label>
-                <input
-                  type="text"
-                  placeholder="Đề khảo sát chất lượng Toán THPT Quốc Gia 2026..."
-                  value={examTitle}
-                  onChange={(e) => setExamTitle(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-4 text-sm outline-none focus:border-indigo-500 shadow-inner"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <form onSubmit={handleCreateExam} className="space-y-5 text-xs font-bold">
+              {/* THÔNG TIN CHUNG */}
+              <div className="space-y-4">
                 <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Loại kỳ thi</label>
-                  <select
-                    value={examTypeVal}
-                    onChange={(e) => setExamTypeVal(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
-                  >
-                    {EXAM_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Thời gian (phút)</label>
+                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Tên tiêu đề đề thi (*)</label>
                   <input
-                    type="number"
-                    value={examDuration}
-                    onChange={(e) => setExamDuration(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
+                    type="text"
+                    placeholder="Đề khảo sát chất lượng Toán THPT Quốc Gia 2026..."
+                    value={examTitle}
+                    onChange={(e) => setExamTitle(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-4 text-sm outline-none focus:border-indigo-500 shadow-inner"
                   />
                 </div>
-                <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Số câu hỏi</label>
-                  <input
-                    type="number"
-                    value={examQCount}
-                    onChange={(e) => setExamQCount(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
-                  />
-                </div>
-              </div>
 
-              {/* Tùy chọn Đề Ẩn / Mã Code Bí Mật */}
-              <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs font-black">Đặt mã khóa bí mật cho đề thi (Đề thi riêng tư)</span>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[#6B7280] dark:text-slate-400 block mb-1">Loại kỳ thi</label>
+                    <select
+                      value={examTypeVal}
+                      onChange={(e) => setExamTypeVal(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
+                    >
+                      {EXAM_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={examIsHidden}
-                    onChange={(e) => setExamIsHidden(e.target.checked)}
-                    className="h-4 w-4 accent-indigo-600 cursor-pointer"
-                  />
-                </div>
-
-                {examIsHidden && (
-                  <div className="pt-2 animate-in fade-in">
-                    <label className="text-[#6B7280] dark:text-slate-400 block mb-1">
-                      Mã Code mở đề (bỏ trống để tự sinh mã 6 ký tự ngẫu nhiên):
-                    </label>
+                  <div>
+                    <label className="text-[#6B7280] dark:text-slate-400 block mb-1">Thời gian (phút)</label>
                     <input
-                      type="text"
-                      placeholder="VD: TOAN12, HSA2026..."
-                      value={examCustomCode}
-                      onChange={(e) => setExamCustomCode(e.target.value.toUpperCase())}
-                      className="h-10 w-full font-mono font-bold uppercase rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
+                      type="number"
+                      value={examDuration}
+                      onChange={(e) => setExamDuration(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
                     />
                   </div>
-                )}
+                  <div>
+                    <label className="text-[#6B7280] dark:text-slate-400 block mb-1">Số lượt thi</label>
+                    <input
+                      type="number"
+                      value={maxAttempts}
+                      onChange={(e) => setMaxAttempts(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[#6B7280] dark:text-slate-400 block mb-1">Tính điểm</label>
+                    <select
+                      value={gradingMethod}
+                      onChange={(e) => setGradingMethod(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
+                    >
+                      <option value="highest">Điểm cao nhất</option>
+                      <option value="latest">Lần nộp cuối</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Upload PDF */}
+                <div>
+                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Tệp PDF đề thi gốc (*)</label>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setExamPdfFile(e.target.files?.[0] || null)}
+                    className="w-full text-xs file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-slate-800 dark:file:text-indigo-400"
+                  />
+                </div>
+
+                {/* Tùy chọn Đề Ẩn / Mã Code Bí Mật & Giám sát */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="h-4 w-4 text-amber-500" />
+                        <span className="text-xs font-black">Đề thi ẩn (Cấp mã Access Code)</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={examIsHidden}
+                        onChange={(e) => setExamIsHidden(e.target.checked)}
+                        className="h-4 w-4 accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                    {examIsHidden && (
+                      <input
+                        type="text"
+                        placeholder="Mã mở đề (VD: TOAN12, HSA2026...)"
+                        value={examCustomCode}
+                        onChange={(e) => setExamCustomCode(e.target.value.toUpperCase())}
+                        className="h-9 w-full font-mono font-bold uppercase rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
+                      />
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-rose-500" />
+                      <div>
+                        <p className="text-xs font-black">Bật giám sát chống gian lận</p>
+                        <span className="text-[10px] text-[#6B7280] font-normal">Cảnh báo & đếm số lần thoát tab</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={requireProctoring}
+                      onChange={(e) => setRequireProctoring(e.target.checked)}
+                      className="h-4 w-4 accent-rose-600 cursor-pointer"
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Upload PDF */}
-              <div>
-                <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Tệp PDF đề thi</label>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setExamPdfFile(e.target.files?.[0] || null)}
-                  className="w-full text-xs"
-                />
+              {/* DANH SÁCH CÁC PHẦN THI (SECTIONS) */}
+              <div className="pt-4 border-t border-black/10 dark:border-white/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                    Cấu Trúc Các Phần Thi ({examSections.length} phần)
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleAddSection}
+                    className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-xs font-bold shadow-sm transition"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Thêm Phần Thi
+                  </button>
+                </div>
+
+                {examSections.map((sec, secIdx) => (
+                  <div
+                    key={sec.id}
+                    className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-4 sm:p-5 space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white text-xs font-black">
+                          {secIdx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={sec.name}
+                          onChange={(e) => handleUpdateSection(sec.id, { name: e.target.value })}
+                          className="h-9 flex-1 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 text-xs font-bold outline-none"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQuickAnswersModalSecId(sec.id)}
+                          className="rounded-xl border border-teal-500/30 bg-teal-500/10 px-2.5 py-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 hover:bg-teal-500/20"
+                        >
+                          ⚡ Nhập nhanh đáp án
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSection(sec.id)}
+                          className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-500/10"
+                          title="Xóa phần thi"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[#6B7280] block mb-1">Loại câu hỏi</label>
+                        <select
+                          value={sec.type}
+                          onChange={(e) => handleUpdateSection(sec.id, { type: e.target.value, correctAnswers: {} })}
+                          className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-2.5 outline-none"
+                        >
+                          <option value="single_choice">Trắc nghiệm nhiều lựa chọn (A, B, C, D)</option>
+                          <option value="true_false">Trắc nghiệm Đúng / Sai (a, b, c, d)</option>
+                          <option value="short_answer">Trả lời ngắn / Điền số</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[#6B7280] block mb-1">Số câu hỏi</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={sec.questionCount}
+                          onChange={(e) => handleUpdateSection(sec.id, { questionCount: parseInt(e.target.value) || 1 })}
+                          className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-2.5 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[#6B7280] block mb-1">Tổng điểm phần thi</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={sec.sectionTotalPoints}
+                          onChange={(e) => handleUpdateSection(sec.id, { sectionTotalPoints: parseFloat(e.target.value) || 1 })}
+                          className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-2.5 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* MA TRẬN ĐÁP ÁN TRỰC QUAN */}
+                    <div className="pt-2">
+                      <span className="text-[11px] font-bold text-[#6B7280] block mb-2">
+                        Bảng Đáp Án Chi Tiết ({sec.questionCount} câu):
+                      </span>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-2 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-black/5 dark:border-white/5 custom-scrollbar">
+                        {Array.from({ length: sec.questionCount }).map((_, qIdx) => {
+                          const currentAns = sec.correctAnswers?.[qIdx]
+
+                          if (sec.type === 'single_choice') {
+                            return (
+                              <div key={qIdx} className="p-2 rounded-lg border border-black/5 dark:border-white/5 bg-white dark:bg-slate-800 flex items-center justify-between">
+                                <span className="font-bold text-[11px] text-[#6B7280]">C{qIdx + 1}:</span>
+                                <div className="flex gap-1">
+                                  {['A', 'B', 'C', 'D'].map((opt) => (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      onClick={() => handleAnswerChange(sec.id, qIdx, opt)}
+                                      className={`h-6 w-6 rounded text-[10px] font-black transition ${
+                                        currentAns === opt
+                                          ? 'bg-indigo-600 text-white'
+                                          : 'bg-black/5 dark:bg-white/5 hover:bg-black/10'
+                                      }`}
+                                    >
+                                      {opt}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          if (sec.type === 'true_false') {
+                            const tf = currentAns || {}
+                            return (
+                              <div key={qIdx} className="p-2 rounded-lg border border-black/5 dark:border-white/5 bg-white dark:bg-slate-800 space-y-1">
+                                <span className="font-bold text-[11px] text-[#6B7280]">Câu {qIdx + 1}:</span>
+                                <div className="grid grid-cols-2 gap-1 text-[9px]">
+                                  {['a', 'b', 'c', 'd'].map((sub) => (
+                                    <button
+                                      key={sub}
+                                      type="button"
+                                      onClick={() => {
+                                        const cur = tf[sub] === 'D' ? 'S' : 'D'
+                                        handleAnswerChange(sec.id, qIdx, { ...tf, [sub]: cur })
+                                      }}
+                                      className={`px-1 py-0.5 rounded font-black ${
+                                        tf[sub] === 'D'
+                                          ? 'bg-emerald-600 text-white'
+                                          : tf[sub] === 'S'
+                                          ? 'bg-rose-600 text-white'
+                                          : 'bg-black/5 dark:bg-white/5'
+                                      }`}
+                                    >
+                                      {sub}: {tf[sub] || '-'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div key={qIdx} className="p-2 rounded-lg border border-black/5 dark:border-white/5 bg-white dark:bg-slate-800 space-y-1">
+                              <span className="font-bold text-[11px] text-[#6B7280]">C{qIdx + 1}:</span>
+                              <input
+                                type="text"
+                                placeholder="Đáp án"
+                                value={currentAns || ''}
+                                onChange={(e) => handleAnswerChange(sec.id, qIdx, e.target.value)}
+                                className="h-6 w-full rounded border border-black/10 dark:border-white/10 px-1 text-[11px] font-mono outline-none"
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <button
                 type="submit"
                 disabled={creatingExam}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-4 text-xs font-black uppercase tracking-wider shadow-xl transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
               >
-                {creatingExam ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                Xuất Bản Đề Thi Lên Hệ Thống
+                {creatingExam ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
+                Xuất Bản Toàn Bộ Đề Thi Lên Hệ Thống
               </button>
             </form>
+          </div>
+        )}
+
+        {/* MODAL NHẬP ĐÁP ÁN NHANH BẰNG TEXT */}
+        {quickAnswersModalSecId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in">
+            <div className="relative w-full max-w-md rounded-[28px] border border-white/20 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
+              <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newadm-heading)' }}>
+                ⚡ Nhập Chuỗi Đáp Án Nhanh
+              </h3>
+              <p className="text-xs text-[#6B7280]">
+                Dán chuỗi đáp án (VD: <code>1A 2B 3C 4D...</code> hoặc <code>1Đ-S-Đ-S 2S-Đ-Đ-S...</code> hoặc dán chuỗi chữ cái <code>ABCDADCB...</code>):
+              </p>
+
+              <textarea
+                rows={5}
+                value={quickAnswersText}
+                onChange={(e) => setQuickAnswersText(e.target.value)}
+                placeholder="Dán chuỗi đáp án vào đây..."
+                className="w-full font-mono text-xs rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 outline-none focus:border-indigo-500"
+              />
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuickAnswersModalSecId(null)}
+                  className="flex-1 rounded-xl border border-black/10 dark:border-white/10 py-2.5 text-xs font-bold hover:bg-black/5"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyQuickAnswers(quickAnswersModalSecId, quickAnswersText)}
+                  className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 text-xs font-black uppercase tracking-wider shadow transition"
+                >
+                  Nạp Đáp Án
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
