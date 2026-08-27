@@ -13,6 +13,7 @@ import { AnnouncementRenderer } from './Announcement'
 import { getGlassThemeVars } from '@/app/components/modernTheme'
 import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import VipAdBanner from '@/app/components/VipAdBanner'
+import MigrateToNewUiBanner from '@/app/components/MigrateToNewUiBanner'
 import type { HomeProps } from './types'
 
 export default function GlassHome({
@@ -777,6 +778,9 @@ export default function GlassHome({
 
         {/* Banner VIP Quảng cáo */}
         <VipAdBanner />
+
+        {/* NÚT XÁC NHẬN CHUYỂN SANG NEW DASHBOARD Ở CUỐI TRANG */}
+        <MigrateToNewUiBanner />
 
       </main>
 

@@ -10,6 +10,7 @@ import {
 import { AnnouncementRenderer } from './Announcement'
 import CrossfadeIcon from '@/app/components/CrossfadeIcon'
 import VipAdBanner from '@/app/components/VipAdBanner'
+import MigrateToNewUiBanner from '@/app/components/MigrateToNewUiBanner'
 import type { HomeProps } from './types'
 
 const FEATURE_COLOR_MAP: Record<string, string> = {
@@ -322,6 +323,9 @@ export default function LegacyHome({
             )}
           </div>
         </div>
+
+        {/* NÚT XÁC NHẬN CHUYỂN SANG NEW DASHBOARD Ở CUỐI TRANG */}
+        <MigrateToNewUiBanner />
 
       </main>
     </div>
