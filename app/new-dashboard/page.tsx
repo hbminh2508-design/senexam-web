@@ -51,6 +51,7 @@ import {
   type ThemeColorKey,
 } from '@/app/components/modernTheme'
 import { useNewUiPrefs, UI_PREFS_CHANGED_EVENT, type UiMode } from '@/app/components/useNewUiPrefs'
+import { linkWithGoogle } from '@/lib/authHelper'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
@@ -358,14 +359,7 @@ export default function NewDashboardPage() {
         alert('Tài khoản của bạn đã được liên kết với Google!')
         return
       }
-      // Gọi OAuth liên kết của Supabase
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined,
-        },
-      })
-      if (error) throw error
+      await linkWithGoogle('/new-dashboard')
     } catch (err: any) {
       alert(`Không thể liên kết Google: ${err.message || 'Vui lòng cấu hình Google Provider trên Supabase.'}`)
     } finally {

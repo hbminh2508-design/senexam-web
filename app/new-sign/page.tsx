@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, hexToRgba, getAccentHex } from '@/app/components/modernTheme'
+import { signInWithGoogle } from '@/lib/authHelper'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newsign-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newsign-body' })
@@ -62,6 +63,17 @@ export default function NewSignPage() {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
+
+    // Đọc lỗi từ query params nếu có (ví dụ khi callback OAuth trả về lỗi)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const err = params.get('error_description') || params.get('error')
+      if (err) {
+        setErrorMsg(err.includes('bad_oauth_state') || err.includes('OAuth state')
+          ? 'Phiên đăng nhập Google đã hết hạn hoặc bị gián đoạn. Vui lòng nhấn nút Google bên dưới để thử lại.'
+          : decodeURIComponent(err))
+      }
+    }
   }, [])
 
   // Đếm ngược gửi lại email
@@ -89,18 +101,7 @@ export default function NewSignPage() {
     setGoogleLoading(true)
     setErrorMsg('')
     try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      })
-      if (error) throw error
+      await signInWithGoogle('/new-dashboard')
     } catch (err: any) {
       setErrorMsg(
         err.message?.includes('provider is not enabled')
