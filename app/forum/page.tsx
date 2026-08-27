@@ -65,7 +65,7 @@ export default function ForumPage() {
       if (user) {
         const { data: profile } = await supabase.from('profiles').select('role, is_beta_tester').eq('id', user.id).single()
         setCurrentUserRole(profile?.role || 'student')
-        setIsBetaTester(!!profile?.is_beta_tester)
+
       }
       await fetchPosts()
     }
