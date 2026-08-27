@@ -435,13 +435,24 @@ export default function NewSenAiStudioPage() {
                 <button
                   type="button"
                   onClick={() => setDeepThink(!deepThink)}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1 text-[11px] font-bold border transition ${
+                  className={`group relative inline-flex items-center gap-2 rounded-2xl px-3.5 py-1.5 text-xs font-black transition-all ${
                     deepThink
-                      ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
-                      : 'border-black/10 dark:border-white/10 text-[#6B7280] dark:text-slate-400'
+                      ? 'bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 text-white shadow-lg shadow-purple-500/25 border border-purple-400/40 scale-[1.02]'
+                      : 'border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-[#4B5563] dark:text-slate-400 hover:border-purple-500/40'
                   }`}
                 >
-                  <BrainCircuit className="h-3.5 w-3.5" /> Tư duy sâu (Deep Think)
+                  <div className="relative flex items-center justify-center">
+                    {deepThink && (
+                      <span className="absolute -inset-1 rounded-full bg-fuchsia-400 opacity-75 blur-xs animate-ping" />
+                    )}
+                    <BrainCircuit className={`h-4 w-4 ${deepThink ? 'text-amber-300 animate-pulse' : 'text-purple-500'}`} />
+                  </div>
+                  <span>Deep Think 3.7</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                    deepThink ? 'bg-black/30 text-amber-200 border border-white/20' : 'bg-black/10 dark:bg-white/10 text-[#6B7280]'
+                  }`}>
+                    {deepThink ? 'Bật (gemini-flash-3.7)' : 'Tắt'}
+                  </span>
                 </button>
               </div>
 

@@ -56,33 +56,32 @@ interface LabExperiment {
 }
 
 const EXPERIMENTS: LabExperiment[] = [
-  { id: 'pendulum', title: 'Con lắc đơn', category: 'Cơ học', icon: CircleDot, desc: 'Mô phỏng dao động điều hòa của con lắc đơn.' },
-  { id: 'horizontal', title: 'Ném ngang', category: 'Cơ học', icon: ArrowLeft, desc: 'Quỹ đạo chuyển động ném ngang từ độ cao h.' },
-  { id: 'projectile', title: 'Ném xiên', category: 'Cơ học', icon: Target, desc: 'Tầm xa và độ cao cực đại của vật ném xiên góc alpha.' },
-  { id: 'interference', title: 'Giao thoa sóng Y-âng', category: 'Quang học', icon: Waves, desc: 'Khoảng vân và vân sáng/tối trong giao thoa ánh sáng.' },
-  { id: 'dispersion', title: 'Tán sắc qua lăng kính', category: 'Quang học', icon: Rainbow, desc: 'Khúc xạ và phân tách dải màu ánh sáng trắng.' },
+  { id: 'pendulum', title: 'Con lắc đơn', category: 'Cơ học', icon: CircleDot, desc: 'Dao động điều hòa và bảo toàn cơ năng của con lắc đơn.' },
+  { id: 'horizontal', title: 'Ném ngang', category: 'Cơ học', icon: ArrowLeft, desc: 'Quỹ đạo Parabol và vector vận tốc của chuyển động ném ngang.' },
+  { id: 'projectile', title: 'Ném xiên', category: 'Cơ học', icon: Target, desc: 'Tầm xa và tầm cao cực đại của vật ném xiên góc alpha.' },
+  { id: 'interference', title: 'Giao thoa sóng Y-âng', category: 'Quang học', icon: Waves, desc: 'Khoảng vân và hệ vân sáng/tối trong giao thoa ánh sáng đơn sắc.' },
+  { id: 'dispersion', title: 'Tán sắc qua lăng kính', category: 'Quang học', icon: Rainbow, desc: 'Sự khúc xạ và phân tách chùm sáng trắng thành 7 sắc cầu vồng.' },
   { id: 'refraction', title: 'Khúc xạ & Phản xạ toàn phần', category: 'Quang học', icon: Compass, desc: 'Định luật Snell và góc giới hạn phản xạ toàn phần.' },
-  { id: 'lens', title: 'Thấu kính mỏng', category: 'Quang học', icon: Layers, desc: 'Dựng ảnh qua thấu kính hội tụ và phân kỳ.' },
-  { id: 'rlc', title: 'Mạch xoay chiều R-L-C', category: 'Điện học', icon: Zap, desc: 'Hiện tượng cộng hưởng điện và độ lệch pha u/i.' },
-  { id: 'titration', title: 'Chuẩn độ Axit - Bazơ (pH)', category: 'Hóa học', icon: FlaskConical, desc: 'Đường cong chuẩn độ HCl bằng NaOH và chỉ thị màu.' },
-  { id: 'equipotential', title: 'Điện trường & Đẳng thế', category: 'Điện học', icon: Magnet, desc: 'Đường sức điện trường giữa 2 điện tích điểm.' },
+  { id: 'lens', title: 'Thấu kính mỏng', category: 'Quang học', icon: Layers, desc: 'Dựng 3 tia sáng đặc biệt tạo ảnh qua thấu kính hội tụ/phân kỳ.' },
+  { id: 'rlc', title: 'Mạch xoay chiều R-L-C', category: 'Điện học', icon: Zap, desc: 'Giản đồ Fresnel, độ lệch pha u/i và cộng hưởng điện.' },
+  { id: 'titration', title: 'Chuẩn độ Axit - Bazơ (pH)', category: 'Hóa học', icon: FlaskConical, desc: 'Đường cong chuẩn độ HCl bằng NaOH và đổi màu phenolphtalein.' },
+  { id: 'equipotential', title: 'Điện trường & Đẳng thế', category: 'Điện học', icon: Magnet, desc: 'Đường sức điện trường và mặt đẳng thế giữa 2 điện tích điểm.' },
 ]
 
 export default function NewLabsPage() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(false)
   const [activeExp, setActiveExp] = useState<ExpType>('pendulum')
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(true)
   const [time, setTime] = useState(0)
 
   // Simulation Parameters
   const [params, setParams] = useState({
     l: 1.0, // chiều dài (m)
     g: 9.8, // gia tốc trọng trường
-    m: 0.5, // khối lượng (kg)
-    v0: 15, // vận tốc ban đầu (m/s)
+    v0: 16, // vận tốc ban đầu (m/s)
     angle: 45, // góc ném (độ)
-    h: 10, // độ cao ném (m)
+    h: 12, // độ cao ném (m)
     lambda: 0.55, // bước sóng (micromet)
     a: 1.0, // khoảng cách 2 khe (mm)
     D: 2.0, // khoảng cách tới màn (m)
@@ -91,19 +90,19 @@ export default function NewLabsPage() {
     iAngle: 45, // góc tới
     focal: 100, // tiêu cự thấu kính (mm)
     dObject: 180, // khoảng cách vật (mm)
-    R: 50, // điện trở (Ohm)
+    R: 40, // điện trở (Ohm)
     L: 0.2, // độ tự cảm (H)
     C: 50, // điện dung (microFarad)
     freq: 50, // tần số (Hz)
     vAcid: 25, // thể tích axit (mL)
     cAcid: 0.1, // nồng độ axit (M)
-    vBase: 0, // thể tích bazo đã thêm (mL)
+    vBase: 0, // thể tích bazo đã nhỏ vào (mL)
   })
 
   // AI assistant states
   const [aiQuery, setAiQuery] = useState('')
   const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([
-    { role: 'model', text: 'Chào bạn! Bấm **Bắt đầu** để chạy mô phỏng thí nghiệm. Bạn có thể thay đổi các thông số ở thanh bên dưới và hỏi mình bất kỳ hiện tượng vật lý / hóa học nào nhé! 🚀' },
+    { role: 'model', text: 'Chào bạn! Bấm **Bắt đầu** để chạy mô phỏng. Bạn có thể kéo các thanh trượt bên dưới để thay đổi thông số và quan sát hiện tượng real-time nhé! 🚀' },
   ])
   const [isAiLoading, setIsAiLoading] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -114,12 +113,13 @@ export default function NewLabsPage() {
     setIsDark(dark)
   }, [])
 
-  // Animation Loop
+  // Animation Loop (60fps)
   useEffect(() => {
     let req: number
     let last = performance.now()
     const loop = (now: number) => {
-      setTime((t) => t + (now - last) / 1000)
+      const delta = (now - last) / 1000
+      setTime((t) => t + delta)
       last = now
       req = requestAnimationFrame(loop)
     }
@@ -127,13 +127,12 @@ export default function NewLabsPage() {
     return () => cancelAnimationFrame(req)
   }, [isPlaying])
 
-  // Reset on exp switch
+  // Reset when experiment switches
   useEffect(() => {
-    setIsPlaying(false)
     setTime(0)
     const exp = EXPERIMENTS.find((e) => e.id === activeExp)
     setAiMessages([
-      { role: 'model', text: `Đã chuyển sang thí nghiệm: **${exp?.title}**. Bạn hãy điều chỉnh các thông số và bấm **Bắt đầu** để quan sát hiện tượng nhé!` },
+      { role: 'model', text: `Đã chuyển sang thí nghiệm: **${exp?.title}** (${exp?.category}). Bạn hãy điều chỉnh các thông số và đặt câu hỏi cho SenAI nhé!` },
     ])
   }, [activeExp])
 
@@ -164,94 +163,245 @@ export default function NewLabsPage() {
       ctx.stroke()
     }
 
-    // RENDER THE CURRENT EXPERIMENT
+    // 1. CON LẮC ĐƠN
     if (activeExp === 'pendulum') {
       const originX = width / 2
-      const originY = 60
-      const lengthPx = 180 * params.l
+      const originY = 50
+      const lengthPx = 170 * params.l
       const omega = Math.sqrt(params.g / params.l)
       const currentAngle = (Math.PI / 6) * Math.cos(omega * time)
 
       const bobX = originX + lengthPx * Math.sin(currentAngle)
       const bobY = originY + lengthPx * Math.cos(currentAngle)
 
-      // Dây treo
-      ctx.beginPath()
-      ctx.moveTo(originX, originY)
-      ctx.lineTo(bobX, bobY)
-      ctx.strokeStyle = isDark ? '#94A3B8' : '#475569'
-      ctx.lineWidth = 2.5
-      ctx.stroke()
+      // Giá treo
+      ctx.fillStyle = isDark ? '#475569' : '#94A3B8'
+      ctx.fillRect(originX - 40, originY - 8, 80, 8)
 
       // Trục treo
       ctx.fillStyle = '#6366F1'
       ctx.beginPath()
-      ctx.arc(originX, originY, 6, 0, Math.PI * 2)
+      ctx.arc(originX, originY, 5, 0, Math.PI * 2)
       ctx.fill()
 
-      // Quả cầu con lắc
-      const grad = ctx.createRadialGradient(bobX - 4, bobY - 4, 2, bobX, bobY, 18)
-      grad.addColorStop(0, '#F59E0B')
+      // Dây treo
+      ctx.strokeStyle = isDark ? '#CBD5E1' : '#475569'
+      ctx.lineWidth = 2.5
+      ctx.beginPath()
+      ctx.moveTo(originX, originY)
+      ctx.lineTo(bobX, bobY)
+      ctx.stroke()
+
+      // Quả cầu con lắc kim loại
+      const grad = ctx.createRadialGradient(bobX - 5, bobY - 5, 2, bobX, bobY, 18)
+      grad.addColorStop(0, '#FBBF24')
       grad.addColorStop(1, '#D97706')
       ctx.fillStyle = grad
       ctx.beginPath()
       ctx.arc(bobX, bobY, 18, 0, Math.PI * 2)
       ctx.fill()
-    } else if (activeExp === 'horizontal' || activeExp === 'projectile') {
-      const isProj = activeExp === 'projectile'
-      const rad = isProj ? (params.angle * Math.PI) / 180 : 0
-      const vx = params.v0 * Math.cos(rad)
-      const vy0 = isProj ? -params.v0 * Math.sin(rad) : 0
-      const startX = 60
-      const startY = isProj ? height - 60 : 80
 
-      // Vẽ mặt đất
-      ctx.strokeStyle = isDark ? '#475569' : '#CBD5E1'
+      // Bảng thông số góc & chu kỳ
+      const T = (2 * Math.PI * Math.sqrt(params.l / params.g)).toFixed(2)
+      const deg = ((currentAngle * 180) / Math.PI).toFixed(1)
+      ctx.fillStyle = isDark ? '#E2E8F0' : '#1E293B'
+      ctx.font = 'bold 12px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText(`Chu kỳ T: ${T} s`, 30, 40)
+      ctx.fillText(`Góc lệch α: ${deg}°`, 30, 60)
+      ctx.fillText(`Tần số góc ω: ${omega.toFixed(2)} rad/s`, 30, 80)
+    }
+
+    // 2. NÉM NGANG
+    else if (activeExp === 'horizontal') {
+      const startX = 60
+      const startY = 80
+      const vx = params.v0
+      const groundY = height - 50
+
+      // Bệ phóng cao
+      ctx.fillStyle = isDark ? '#334155' : '#CBD5E1'
+      ctx.fillRect(startX - 30, startY, 30, groundY - startY)
+
+      // Mặt đất
+      ctx.strokeStyle = isDark ? '#64748B' : '#94A3B8'
       ctx.lineWidth = 3
       ctx.beginPath()
-      ctx.moveTo(30, height - 50)
-      ctx.lineTo(width - 30, height - 50)
+      ctx.moveTo(20, groundY)
+      ctx.lineTo(width - 20, groundY)
       ctx.stroke()
 
-      // Quỹ đạo Parabol
+      // Đường Parabol quỹ đạo
       ctx.strokeStyle = 'rgba(99, 102, 241, 0.4)'
       ctx.lineWidth = 2
       ctx.setLineDash([4, 4])
       ctx.beginPath()
       for (let t = 0; t <= 10; t += 0.05) {
-        const px = startX + vx * t * 12
-        const py = startY + (vy0 * t + 0.5 * params.g * t * t) * 12
-        if (py > height - 50) break
+        const px = startX + vx * t * 14
+        const py = startY + 0.5 * params.g * t * t * 14
+        if (py > groundY) break
         if (t === 0) ctx.moveTo(px, py)
         else ctx.lineTo(px, py)
       }
       ctx.stroke()
       ctx.setLineDash([])
 
-      // Vật thể chuyển động
-      const tCurrent = time % 4
-      const curX = startX + vx * tCurrent * 12
-      const curY = startY + (vy0 * tCurrent + 0.5 * params.g * tCurrent * tCurrent) * 12
-      if (curY <= height - 50 && curX < width - 40) {
+      // Vật thể bay
+      const tFlight = Math.sqrt((2 * (groundY - startY)) / (params.g * 14))
+      const tCur = time % (tFlight + 1.5)
+      if (tCur <= tFlight) {
+        const curX = startX + vx * tCur * 14
+        const curY = startY + 0.5 * params.g * tCur * tCur * 14
+
+        // Vector vận tốc
+        const vy = params.g * tCur
+        ctx.strokeStyle = '#10B981'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(curX, curY)
+        ctx.lineTo(curX + vx * 2, curY + vy * 2)
+        ctx.stroke()
+
         ctx.fillStyle = '#EF4444'
         ctx.beginPath()
-        ctx.arc(curX, curY, 10, 0, Math.PI * 2)
+        ctx.arc(curX, curY, 9, 0, Math.PI * 2)
         ctx.fill()
       }
-    } else if (activeExp === 'interference') {
-      // Vân giao thoa Y-âng
-      const screenX = width - 120
-      const iVal = (params.lambda * params.D) / params.a // Khoảng vân i (mm)
+    }
 
-      for (let y = 30; y < height - 30; y += 2) {
-        const distFromCenter = y - height / 2
-        const intensity = Math.pow(Math.cos((Math.PI * distFromCenter) / (iVal * 10)), 2)
-        ctx.fillStyle = `rgba(99, 102, 241, ${intensity})`
-        ctx.fillRect(screenX, y, 60, 2)
+    // 3. NÉM XIÊN
+    else if (activeExp === 'projectile') {
+      const startX = 60
+      const startY = height - 60
+      const rad = (params.angle * Math.PI) / 180
+      const vx = params.v0 * Math.cos(rad)
+      const vy0 = -params.v0 * Math.sin(rad)
+      const groundY = height - 50
+
+      // Mặt đất
+      ctx.strokeStyle = isDark ? '#64748B' : '#94A3B8'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(20, groundY)
+      ctx.lineTo(width - 20, groundY)
+      ctx.stroke()
+
+      // Quỹ đạo Parabol
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)'
+      ctx.lineWidth = 2
+      ctx.setLineDash([4, 4])
+      ctx.beginPath()
+      for (let t = 0; t <= 10; t += 0.05) {
+        const px = startX + vx * t * 14
+        const py = startY + (vy0 * t + 0.5 * params.g * t * t) * 14
+        if (py > groundY) break
+        if (t === 0) ctx.moveTo(px, py)
+        else ctx.lineTo(px, py)
       }
-    } else if (activeExp === 'refraction') {
-      // Khúc xạ ánh sáng
+      ctx.stroke()
+      ctx.setLineDash([])
+
+      // Vật thể bay
+      const totalFlight = (2 * params.v0 * Math.sin(rad)) / params.g
+      const tCur = time % (totalFlight + 1.5)
+      if (tCur <= totalFlight) {
+        const curX = startX + vx * tCur * 14
+        const curY = startY + (vy0 * tCur + 0.5 * params.g * tCur * tCur) * 14
+        ctx.fillStyle = '#F59E0B'
+        ctx.beginPath()
+        ctx.arc(curX, curY, 9, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      // Thông số tầm xa & tầm cao cực đại
+      const L = ((params.v0 * params.v0 * Math.sin(2 * rad)) / params.g).toFixed(1)
+      const H = ((Math.pow(params.v0 * Math.sin(rad), 2)) / (2 * params.g)).toFixed(1)
+      ctx.fillStyle = isDark ? '#E2E8F0' : '#1E293B'
+      ctx.font = 'bold 12px sans-serif'
+      ctx.fillText(`Tầm xa L: ${L} m`, 30, 40)
+      ctx.fillText(`Tầm cao cực đại H: ${H} m`, 30, 60)
+    }
+
+    // 4. GIAO THOA SÓNG Y-ÂNG
+    else if (activeExp === 'interference') {
+      const screenX = width - 130
+      const iVal = (params.lambda * params.D) / params.a // khoảng vân i (mm)
+
+      // Vẽ chùm tia từ 2 khe S1, S2
+      const slitY1 = height / 2 - 25
+      const slitY2 = height / 2 + 25
+
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.25)'
+      ctx.lineWidth = 1.5
+      for (let y = 40; y < height - 40; y += 15) {
+        ctx.beginPath()
+        ctx.moveTo(100, slitY1)
+        ctx.lineTo(screenX, y)
+        ctx.moveTo(100, slitY2)
+        ctx.lineTo(screenX, y)
+        ctx.stroke()
+      }
+
+      // Màn quan sát và dải vân sáng tối
+      for (let y = 30; y < height - 30; y += 2) {
+        const dist = y - height / 2
+        const phase = (Math.PI * dist) / (iVal * 12)
+        const intensity = Math.pow(Math.cos(phase), 2)
+        ctx.fillStyle = `rgba(99, 102, 241, ${intensity})`
+        ctx.fillRect(screenX, y, 50, 2)
+      }
+
+      ctx.fillStyle = isDark ? '#E2E8F0' : '#1E293B'
+      ctx.font = 'bold 12px sans-serif'
+      ctx.fillText(`Khoảng vân i: ${iVal.toFixed(2)} mm`, 30, 40)
+      ctx.fillText(`Bước sóng λ: ${params.lambda} µm`, 30, 60)
+      ctx.fillText(`Khoảng cách khe a: ${params.a} mm, D: ${params.D} m`, 30, 80)
+    }
+
+    // 5. TÁN SẮC QUA LĂNG KÍNH
+    else if (activeExp === 'dispersion') {
+      const cx = width / 2 - 30
+      const cy = height / 2
+
+      // Lăng kính tam giác thủy tinh
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.25)'
+      ctx.strokeStyle = '#60A5FA'
+      ctx.lineWidth = 2.5
+      ctx.beginPath()
+      ctx.moveTo(cx, cy - 90)
+      ctx.lineTo(cx + 80, cy + 70)
+      ctx.lineTo(cx - 80, cy + 70)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+
+      // Tia sáng trắng tới
+      ctx.strokeStyle = '#FFFFFF'
+      ctx.lineWidth = 3.5
+      ctx.beginPath()
+      ctx.moveTo(60, cy + 20)
+      ctx.lineTo(cx - 40, cy)
+      ctx.stroke()
+
+      // 7 màu tán sắc (Đỏ -> Tím)
+      const colors = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#6366F1', '#A855F7']
+      colors.forEach((col, idx) => {
+        const delta = (idx - 3) * 6
+        ctx.strokeStyle = col
+        ctx.lineWidth = 2.5
+        ctx.beginPath()
+        ctx.moveTo(cx - 40, cy)
+        ctx.lineTo(cx + 40, cy - 10 + delta * 0.5)
+        ctx.lineTo(width - 60, cy - 30 + delta * 3)
+        ctx.stroke()
+      })
+    }
+
+    // 6. KHÚC XẠ & PHẢN XẠ TOÀN PHẦN
+    else if (activeExp === 'refraction') {
       const centerY = height / 2
+
+      // Môi trường 2
       ctx.fillStyle = isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(56, 189, 248, 0.2)'
       ctx.fillRect(0, centerY, width, height / 2)
 
@@ -259,16 +409,16 @@ export default function NewLabsPage() {
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.5)'
       ctx.setLineDash([4, 4])
       ctx.beginPath()
-      ctx.moveTo(width / 2, 40)
-      ctx.lineTo(width / 2, height - 40)
+      ctx.moveTo(width / 2, 30)
+      ctx.lineTo(width / 2, height - 30)
       ctx.stroke()
       ctx.setLineDash([])
 
-      // Tia tới
       const iRad = (params.iAngle * Math.PI) / 180
       const inX = width / 2 - 160 * Math.sin(iRad)
       const inY = centerY - 160 * Math.cos(iRad)
 
+      // Tia tới
       ctx.strokeStyle = '#F59E0B'
       ctx.lineWidth = 3
       ctx.beginPath()
@@ -276,7 +426,6 @@ export default function NewLabsPage() {
       ctx.lineTo(width / 2, centerY)
       ctx.stroke()
 
-      // Tia khúc xạ (ĐL Snell: n1 * sin(i) = n2 * sin(r))
       const sinR = (params.n1 / params.n2) * Math.sin(iRad)
       if (sinR <= 1) {
         const rRad = Math.asin(sinR)
@@ -297,14 +446,178 @@ export default function NewLabsPage() {
         ctx.lineTo(refX, refY)
         ctx.stroke()
       }
-    } else {
-      // Default placeholder graphical representation for other labs
-      ctx.fillStyle = '#6366F1'
-      ctx.font = 'bold 14px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText(`Mô phỏng đồ họa đang hoạt động: ${EXPERIMENTS.find((e) => e.id === activeExp)?.title}`, width / 2, height / 2)
     }
-  }, [activeExp, params, time, isPlaying, isDark])
+
+    // 7. THẤU KÍNH MỎNG
+    else if (activeExp === 'lens') {
+      const cx = width / 2
+      const cy = height / 2
+      const f = params.focal * 0.7
+      const d = params.dObject * 0.7
+
+      // Trục chính
+      ctx.strokeStyle = isDark ? '#64748B' : '#94A3B8'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(40, cy)
+      ctx.lineTo(width - 40, cy)
+      ctx.stroke()
+
+      // Thấu kính hội tụ
+      ctx.strokeStyle = '#6366F1'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(cx, cy - 120)
+      ctx.lineTo(cx, cy + 120)
+      ctx.stroke()
+
+      // Tiêu điểm F và F'
+      ctx.fillStyle = '#EF4444'
+      ctx.beginPath()
+      ctx.arc(cx - f, cy, 4, 0, Math.PI * 2)
+      ctx.arc(cx + f, cy, 4, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Ngọn nến vật sáng AB
+      const hObj = 45
+      ctx.strokeStyle = '#F59E0B'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(cx - d, cy)
+      ctx.lineTo(cx - d, cy - hObj)
+      ctx.stroke()
+
+      // 3 tia sáng đặc biệt
+      // Tia 1: song song trục chính -> qua F'
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(cx - d, cy - hObj)
+      ctx.lineTo(cx, cy - hObj)
+      ctx.lineTo(cx + f * 2, cy + hObj)
+      ctx.stroke()
+
+      // Tia 2: qua quang tâm O
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)'
+      ctx.beginPath()
+      ctx.moveTo(cx - d, cy - hObj)
+      ctx.lineTo(cx + f * 2, cy + hObj)
+      ctx.stroke()
+    }
+
+    // 8. MẠCH XOAY CHIỀU R-L-C
+    else if (activeExp === 'rlc') {
+      const omega = 2 * Math.PI * params.freq
+      const ZL = omega * params.L
+      const ZC = 1 / (omega * (params.C * 1e-6))
+      const Z = Math.sqrt(params.R * params.R + Math.pow(ZL - ZC, 2))
+      const phi = Math.atan((ZL - ZC) / params.R)
+
+      // Vẽ đồ thị sóng u(t) và i(t)
+      ctx.lineWidth = 2.5
+      // Điện áp u(t) - Đỏ
+      ctx.strokeStyle = '#EF4444'
+      ctx.beginPath()
+      for (let x = 60; x < width - 60; x += 2) {
+        const tVal = (x - 60) * 0.0003 + time * 0.5
+        const y = height / 2 - Math.sin(omega * tVal) * 55
+        if (x === 60) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+
+      // Dòng điện i(t) - Xanh lá
+      ctx.strokeStyle = '#10B981'
+      ctx.beginPath()
+      for (let x = 60; x < width - 60; x += 2) {
+        const tVal = (x - 60) * 0.0003 + time * 0.5
+        const y = height / 2 - Math.sin(omega * tVal - phi) * 40
+        if (x === 60) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+
+      ctx.fillStyle = isDark ? '#E2E8F0' : '#1E293B'
+      ctx.font = 'bold 12px sans-serif'
+      ctx.fillText(`Tổng trở Z: ${Z.toFixed(1)} Ω (ZL: ${ZL.toFixed(1)}Ω, ZC: ${ZC.toFixed(1)}Ω)`, 30, 40)
+      ctx.fillText(`Độ lệch pha φ: ${((phi * 180) / Math.PI).toFixed(1)}°`, 30, 60)
+      if (Math.abs(ZL - ZC) < 10) {
+        ctx.fillStyle = '#F59E0B'
+        ctx.fillText(`⚡ ĐANG CỘNG HƯỞNG ĐIỆN (ZL ≈ ZC)!`, 30, 85)
+      }
+    }
+
+    // 9. CHUẨN ĐỘ AXIT - BAZƠ (pH)
+    else if (activeExp === 'titration') {
+      const vNaOH = (time * 2) % 50
+      const isPink = vNaOH >= 25
+
+      // Bình tam giác Erlenmeyer
+      const bx = width / 2
+      const by = height / 2 + 50
+      ctx.fillStyle = isPink ? 'rgba(244, 114, 182, 0.7)' : 'rgba(226, 232, 240, 0.4)'
+      ctx.strokeStyle = '#94A3B8'
+      ctx.lineWidth = 3
+      ctx.beginPath()
+      ctx.moveTo(bx - 30, by - 60)
+      ctx.lineTo(bx - 70, by + 60)
+      ctx.lineTo(bx + 70, by + 60)
+      ctx.lineTo(bx + 30, by - 60)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+
+      // Đường chuẩn độ pH
+      const pH = vNaOH < 25 ? (1 + (vNaOH / 25) * 3).toFixed(1) : (7 + ((vNaOH - 25) / 25) * 6).toFixed(1)
+      ctx.fillStyle = isDark ? '#E2E8F0' : '#1E293B'
+      ctx.font = 'bold 14px sans-serif'
+      ctx.fillText(`Thể tích NaOH đã nhỏ: ${vNaOH.toFixed(1)} mL`, 40, 50)
+      ctx.fillText(`pH dung dịch: ${pH}`, 40, 75)
+      ctx.fillText(`Chỉ thị Phenolphtalein: ${isPink ? 'HỒNG ĐẬM (Môi trường kiềm)' : 'KHÔNG MÀU (Axit)'}`, 40, 100)
+    }
+
+    // 10. ĐIỆN TRƯỜNG & ĐẲNG THẾ
+    else if (activeExp === 'equipotential') {
+      const q1x = width / 2 - 100
+      const q2x = width / 2 + 100
+      const qy = height / 2
+
+      // Mặt đẳng thế (Vòng tròn)
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.25)'
+      ctx.lineWidth = 1.5
+      ;[30, 50, 75, 110].forEach((r) => {
+        ctx.beginPath()
+        ctx.arc(q1x, qy, r, 0, Math.PI * 2)
+        ctx.arc(q2x, qy, r, 0, Math.PI * 2)
+        ctx.stroke()
+      })
+
+      // Đường sức điện trường
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(q1x, qy)
+      ctx.lineTo(q2x, qy)
+      ctx.stroke()
+
+      // Điện tích + và -
+      ctx.fillStyle = '#EF4444'
+      ctx.beginPath()
+      ctx.arc(q1x, qy, 14, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#FFFFFF'
+      ctx.font = 'bold 16px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('+', q1x, qy + 5)
+
+      ctx.fillStyle = '#3B82F6'
+      ctx.beginPath()
+      ctx.arc(q2x, qy, 14, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#FFFFFF'
+      ctx.fillText('-', q2x, qy + 5)
+    }
+  }, [activeExp, params, time, isDark])
 
   const toggleDarkMode = () => {
     const next = !isDark
@@ -331,6 +644,7 @@ export default function NewLabsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: `Tôi đang làm thí nghiệm ảo môn "${activeExp}" với các thông số: ${JSON.stringify(params)}. Câu hỏi của tôi: "${q}". Hãy giải thích chi tiết bản chất vật lý / hóa học của hiện tượng này.`,
+          deepThink: true,
         }),
       })
       const data = await res.json()
@@ -368,7 +682,7 @@ export default function NewLabsPage() {
                 Phòng Thí Nghiệm Ảo (SenLabs)
               </h2>
               <span className="text-[10px] text-[#6B7280] dark:text-slate-400 font-bold uppercase tracking-wider">
-                Mô phỏng tương tác Vật lý - Hóa học - Quang học 3D
+                Mô phỏng tương tác Vật lý - Hóa học 60FPS
               </span>
             </div>
           </div>

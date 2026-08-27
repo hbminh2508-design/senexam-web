@@ -778,7 +778,7 @@ export default function NewHistoryPage() {
                         
                         {/* Nút Xem bài làm & Lời giải */}
                         <Link
-                          href={`/new-submissions/${sub.id}`}
+                          href={`/new-history/${sub.id}`}
                           className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 px-3 py-2 text-xs font-bold shadow-sm transition"
                         >
                           <FileText className="h-3.5 w-3.5" /> Lời giải
