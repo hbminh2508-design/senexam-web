@@ -68,6 +68,7 @@ export default function NewHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedType, setSelectedType] = useState('Tất cả')
   const [chartExamFilter, setChartExamFilter] = useState('Tất cả')
+  const [chartZoom, setChartZoom] = useState(1)
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest')
 
   // Tooltip state for score chart
@@ -125,7 +126,6 @@ export default function NewHistoryPage() {
 
   // Dữ liệu đồ thị chuyển biến điểm số qua các lần thi
   const chartData = useMemo(() => {
-    // Sắp xếp theo thứ tự thời gian tăng dần để vẽ đường xu hướng
     let list = [...submissions].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 
     if (chartExamFilter !== 'Tất cả') {
@@ -141,12 +141,19 @@ export default function NewHistoryPage() {
 
     const gradedItems = list.filter((s) => s.score !== null && s.score !== undefined)
     const count = gradedItems.length
-    if (count === 0) return { count: 0, points: [], avg: '0', max: '0', min: '0', trend: 0 }
+    if (count === 0) return { count: 0, points: [], avg: '0', max: '0', min: '0', trend: 0, maxScoreRange: 10, gridSteps: [0, 2.5, 5, 7.5, 10], svgWidth: 650, svgHeight: 200 }
 
     const scores = gradedItems.map((s) => s.score || 0)
-    const max = Math.max(...scores)
+    const rawMax = Math.max(...scores)
     const min = Math.min(...scores)
     const avg = (scores.reduce((a, b) => a + b, 0) / count).toFixed(1)
+
+    // Thang điểm tối đa thích ứng
+    const maxScoreVal = Math.max(10, rawMax)
+    const maxScoreRange = maxScoreVal <= 10 ? 10 : maxScoreVal <= 100 ? 100 : maxScoreVal <= 150 ? 150 : Math.ceil(maxScoreVal / 50) * 50
+    const gridSteps = maxScoreRange === 10
+      ? [0, 2.5, 5, 7.5, 10]
+      : [0, Math.round(maxScoreRange * 0.25), Math.round(maxScoreRange * 0.5), Math.round(maxScoreRange * 0.75), maxScoreRange]
 
     // Tính trend so sánh 3 bài gần nhất so với các bài trước
     const recentScores = scores.slice(-3)
@@ -155,21 +162,23 @@ export default function NewHistoryPage() {
     const initialAvg = initialScores.reduce((a, b) => a + b, 0) / initialScores.length
     const trend = parseFloat((recentAvg - initialAvg).toFixed(1))
 
-    // Tạo tọa độ SVG (width = 600, height = 180)
-    const svgWidth = 600
-    const svgHeight = 180
-    const paddingX = 40
-    const paddingY = 25
+    // Tạo tọa độ SVG thích ứng với Zoom
+    const baseWidth = Math.max(650, count * 55)
+    const svgWidth = baseWidth * chartZoom
+    const svgHeight = 200
+    const paddingX = 50
+    const paddingY = 30
 
     const points = gradedItems.map((item, idx) => {
       const x = count === 1 ? svgWidth / 2 : paddingX + (idx / (count - 1)) * (svgWidth - paddingX * 2)
-      const score = item.score || 0
-      // Scale 0 -> 10 to SVG height
-      const y = svgHeight - paddingY - (score / 10) * (svgHeight - paddingY * 2)
+      const rawScore = item.score || 0
+      const clampedRatio = Math.max(0, Math.min(1, rawScore / maxScoreRange))
+      const y = svgHeight - paddingY - clampedRatio * (svgHeight - paddingY * 2)
+
       return {
         x,
         y,
-        score,
+        score: rawScore,
         date: new Date(item.created_at).toLocaleDateString('vi-VN'),
         title: item.exams?.title || 'Đề thi tự luyện',
       }
@@ -183,8 +192,21 @@ export default function NewHistoryPage() {
       ? `${pathString} L ${points[points.length - 1].x} ${svgHeight - paddingY} L ${points[0].x} ${svgHeight - paddingY} Z`
       : ''
 
-    return { count, points, avg, max: max.toFixed(1), min: min.toFixed(1), trend, pathString, areaPath }
-  }, [submissions, chartExamFilter])
+    return {
+      count,
+      points,
+      avg,
+      max: rawMax.toFixed(1),
+      min: min.toFixed(1),
+      trend,
+      maxScoreRange,
+      gridSteps,
+      svgWidth,
+      svgHeight,
+      pathString,
+      areaPath,
+    }
+  }, [submissions, chartExamFilter, chartZoom])
 
   // Xếp hạng phong độ theo từng thể loại / môn thi
   const subjectRankings = useMemo(() => {
@@ -374,7 +396,7 @@ export default function NewHistoryPage() {
               <BarChart3 className="h-5 w-5 opacity-80" />
             </div>
             <p className="mt-2 text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-newhist-heading)' }}>
-              {stats.avg} <span className="text-xs font-semibold text-[#6B7280]">/ 10</span>
+              {stats.avg} <span className="text-xs font-semibold text-[#6B7280]">{parseFloat(stats.avg) <= 10 ? '/ 10' : 'đ'}</span>
             </p>
           </div>
 
@@ -384,7 +406,7 @@ export default function NewHistoryPage() {
               <Award className="h-5 w-5 opacity-80" />
             </div>
             <p className="mt-2 text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-newhist-heading)' }}>
-              {stats.max} <span className="text-xs font-semibold text-[#6B7280]">/ 10</span>
+              {stats.max} <span className="text-xs font-semibold text-[#6B7280]">{parseFloat(stats.max) <= 10 ? '/ 10' : 'đ'}</span>
             </p>
           </div>
 
@@ -415,22 +437,55 @@ export default function NewHistoryPage() {
               </p>
             </div>
 
-            {/* Filter Buttons for Graph */}
-            <div className="flex items-center gap-1.5 overflow-x-auto">
-              {['Tất cả', 'THPTQG', 'HSA', 'TSA'].map((tab) => (
+            {/* Filter Buttons & Zoom Controls */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {/* Category Filter */}
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {['Tất cả', 'THPTQG', 'HSA', 'TSA'].map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setChartExamFilter(tab)}
+                    className={`rounded-xl px-2.5 py-1 text-xs font-bold transition whitespace-nowrap ${
+                      chartExamFilter === tab
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'border border-black/10 dark:border-white/10 bg-white/60 dark:bg-slate-800/60 hover:bg-black/5'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl">
                 <button
-                  key={tab}
                   type="button"
-                  onClick={() => setChartExamFilter(tab)}
-                  className={`rounded-xl px-3 py-1 text-xs font-bold transition whitespace-nowrap ${
-                    chartExamFilter === tab
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'border border-black/10 dark:border-white/10 bg-white/60 dark:bg-slate-800/60 hover:bg-black/5'
-                  }`}
+                  onClick={() => setChartZoom((z) => Math.max(1, z - 0.5))}
+                  className="h-7 w-7 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 shadow-sm hover:scale-105 transition"
+                  title="Thu nhỏ biểu đồ"
                 >
-                  {tab}
+                  -
                 </button>
-              ))}
+                <span className="text-[10px] font-bold px-1.5 min-w-8 text-center">{Math.round(chartZoom * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setChartZoom((z) => Math.min(3, z + 0.5))}
+                  className="h-7 w-7 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 shadow-sm hover:scale-105 transition"
+                  title="Phóng to biểu đồ"
+                >
+                  +
+                </button>
+                {chartZoom !== 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setChartZoom(1)}
+                    className="px-2 h-7 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-800 shadow-sm hover:scale-105 transition"
+                  >
+                    Đặt lại
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -439,9 +494,9 @@ export default function NewHistoryPage() {
               Chưa có dữ liệu bài thi cho danh mục {chartExamFilter}.
             </div>
           ) : (
-            <div className="relative">
+            <div className="space-y-2">
               {/* Insight Badges */}
-              <div className="flex flex-wrap items-center gap-3 mb-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs">
                 <span className="rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 font-bold">
                   Đỉnh cao: {chartData.max}đ
                 </span>
@@ -456,74 +511,100 @@ export default function NewHistoryPage() {
                     Xu hướng: {chartData.trend > 0 ? `+${chartData.trend}` : chartData.trend}đ
                   </span>
                 )}
+                <span className="text-[11px] text-[#6B7280] dark:text-slate-400 ml-auto italic">
+                  💡 Bạn có thể cuộn ngang hoặc bấm + để phóng to đồ thị
+                </span>
               </div>
 
-              {/* Interactive SVG Chart */}
-              <div className="relative w-full overflow-hidden rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] p-2">
-                <svg viewBox="0 0 600 180" className="w-full h-44 overflow-visible">
-                  <defs>
-                    <linearGradient id="scoreAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#6366F1" stopOpacity="0.4" />
-                      <stop offset="100%" stopColor="#6366F1" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
+              {/* Scrollable & Zoomable SVG Chart Container */}
+              <div className="relative w-full overflow-x-auto custom-scrollbar rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] p-3 border border-black/5 dark:border-white/5">
+                <div style={{ width: `${chartData.svgWidth}px`, minWidth: '100%' }}>
+                  <svg
+                    viewBox={`0 0 ${chartData.svgWidth} ${chartData.svgHeight}`}
+                    className="w-full h-48 overflow-visible"
+                    style={{ width: `${chartData.svgWidth}px` }}
+                  >
+                    <defs>
+                      <linearGradient id="scoreAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366F1" stopOpacity="0.4" />
+                        <stop offset="100%" stopColor="#6366F1" stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
 
-                  {/* Horizontal Grid lines */}
-                  {[0, 2.5, 5, 7.5, 10].map((val) => {
-                    const y = 180 - 25 - (val / 10) * (180 - 50)
-                    return (
-                      <g key={val}>
-                        <line x1="40" y1={y} x2="560" y2={y} stroke="currentColor" strokeOpacity="0.08" strokeDasharray="3 3" />
-                        <text x="32" y={y + 3} textAnchor="end" fill="currentColor" opacity="0.4" fontSize="9" fontWeight="bold">
-                          {val}
-                        </text>
-                      </g>
-                    )
-                  })}
+                    {/* Horizontal Grid lines based on dynamic gridSteps */}
+                    {chartData.gridSteps.map((val) => {
+                      const ratio = val / chartData.maxScoreRange
+                      const y = chartData.svgHeight - 30 - ratio * (chartData.svgHeight - 60)
+                      return (
+                        <g key={val}>
+                          <line
+                            x1="50"
+                            y1={y}
+                            x2={chartData.svgWidth - 50}
+                            y2={y}
+                            stroke="currentColor"
+                            strokeOpacity="0.08"
+                            strokeDasharray="3 3"
+                          />
+                          <text
+                            x="42"
+                            y={y + 3}
+                            textAnchor="end"
+                            fill="currentColor"
+                            opacity="0.5"
+                            fontSize="10"
+                            fontWeight="bold"
+                          >
+                            {val}
+                          </text>
+                        </g>
+                      )
+                    })}
 
-                  {/* Area fill */}
-                  {chartData.areaPath && (
-                    <path d={chartData.areaPath} fill="url(#scoreAreaGrad)" />
-                  )}
+                    {/* Area fill */}
+                    {chartData.areaPath && (
+                      <path d={chartData.areaPath} fill="url(#scoreAreaGrad)" />
+                    )}
 
-                  {/* Line stroke */}
-                  {chartData.pathString && (
-                    <path
-                      d={chartData.pathString}
-                      fill="none"
-                      stroke="#6366F1"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  )}
+                    {/* Line stroke */}
+                    {chartData.pathString && (
+                      <path
+                        d={chartData.pathString}
+                        fill="none"
+                        stroke="#6366F1"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
 
-                  {/* Interactive Nodes */}
-                  {chartData.points.map((p, idx) => (
-                    <circle
-                      key={idx}
-                      cx={p.x}
-                      cy={p.y}
-                      r="5.5"
-                      fill="#fff"
-                      stroke="#4F46E5"
-                      strokeWidth="3"
-                      className="cursor-pointer transition-transform hover:scale-150"
-                      onMouseEnter={() => setHoveredPoint(p)}
-                      onMouseLeave={() => setHoveredPoint(null)}
-                    />
-                  ))}
-                </svg>
+                    {/* Interactive Nodes */}
+                    {chartData.points.map((p, idx) => (
+                      <circle
+                        key={idx}
+                        cx={p.x}
+                        cy={p.y}
+                        r="6"
+                        fill="#fff"
+                        stroke="#4F46E5"
+                        strokeWidth="3.5"
+                        className="cursor-pointer transition-all hover:scale-125"
+                        onMouseEnter={() => setHoveredPoint(p)}
+                        onMouseLeave={() => setHoveredPoint(null)}
+                      />
+                    ))}
+                  </svg>
+                </div>
 
-                {/* Hover Tooltip */}
+                {/* Hover Tooltip Fixed & Stable */}
                 {hoveredPoint && (
                   <div
-                    className="pointer-events-none absolute z-20 rounded-xl bg-slate-900 text-white p-2.5 text-xs shadow-xl border border-white/20 -translate-x-1/2 -translate-y-full"
-                    style={{ left: `${(hoveredPoint.x / 600) * 100}%`, top: `${(hoveredPoint.y / 180) * 100}%` }}
+                    className="pointer-events-none absolute z-30 rounded-xl bg-slate-900/95 text-white p-3 text-xs shadow-2xl border border-white/20 -translate-x-1/2 -translate-y-full -mt-2 backdrop-blur-md transition-all"
+                    style={{ left: `${hoveredPoint.x}px`, top: `${hoveredPoint.y}px` }}
                   >
-                    <p className="font-bold truncate max-w-[180px]">{hoveredPoint.title}</p>
-                    <p className="text-[11px] text-amber-400 font-black">Điểm: {hoveredPoint.score}/10</p>
-                    <p className="text-[10px] text-slate-400">{hoveredPoint.date}</p>
+                    <p className="font-bold truncate max-w-[200px] text-amber-300">{hoveredPoint.title}</p>
+                    <p className="text-xs font-black text-white mt-0.5">Điểm đạt: {hoveredPoint.score}đ</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{hoveredPoint.date}</p>
                   </div>
                 )}
               </div>
@@ -697,7 +778,7 @@ export default function NewHistoryPage() {
                         
                         {/* Nút Xem bài làm & Lời giải */}
                         <Link
-                          href={`/submissions/${sub.id}/review`}
+                          href={`/new-submissions/${sub.id}`}
                           className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 px-3 py-2 text-xs font-bold shadow-sm transition"
                         >
                           <FileText className="h-3.5 w-3.5" /> Lời giải

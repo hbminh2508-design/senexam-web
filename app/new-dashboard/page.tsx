@@ -40,6 +40,7 @@ import {
   User,
   Video,
   Zap,
+  FileCheck,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
@@ -83,10 +84,19 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'senai',
     title: 'SenAI Studio',
     description: 'Xưởng AI cá nhân hoá để tạo đề, chấm bài và giải thích chi tiết.',
-    href: '/senai-studio',
+    href: '/new-senai-studio',
     tone: 'from-[#3DA9FC] via-[#00C2A8] to-[#5EEAD4]',
     badge: 'AI 2.0',
     icon: Sparkles,
+  },
+  {
+    key: 'submissions',
+    title: 'Quản lý bài thi',
+    description: 'Tra cứu, đối chiếu đáp án chi tiết và xem lại các bài thi đã làm.',
+    href: '/new-submissions',
+    tone: 'from-[#6366F1] via-[#8B5CF6] to-[#EC4899]',
+    badge: 'Mới',
+    icon: FileCheck,
   },
   {
     key: 'library',
@@ -141,7 +151,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'tinhdiem',
     title: 'Tính điểm thi',
     description: 'Công cụ tính điểm tốt nghiệp THPT, TSA và HSA chính xác nhất.',
-    href: '/tinhdiem',
+    href: '/new-mark-calculate',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     icon: TrendingUp,
   },
@@ -149,7 +159,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'phongthinghiem',
     title: 'Phòng thí nghiệm ảo',
     description: 'Trực quan hoá các định luật Lý - Hoá - Sinh qua mô phỏng tương tác.',
-    href: '/phongthinghiem',
+    href: '/new-labs',
     tone: 'from-[#A78BFA] via-[#8B5CF6] to-[#7C3AED]',
     icon: FlaskConical,
   },

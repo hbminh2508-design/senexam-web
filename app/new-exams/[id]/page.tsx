@@ -384,10 +384,17 @@ export default function NewExamRoomPage() {
           <div className="mt-8 flex gap-3">
             <button
               type="button"
-              onClick={() => setHasStarted(true)}
+              onClick={() => {
+                setHasStarted(true)
+                try {
+                  const docEl = document.documentElement as any
+                  if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {})
+                  else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {})
+                } catch (e) {}
+              }}
               className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition hover:scale-[1.01] active:scale-[0.99]"
             >
-              Bắt đầu tính giờ làm bài <ChevronRight className="h-4 w-4" />
+              Bắt đầu tính giờ làm bài (Toàn màn hình) <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -437,6 +444,24 @@ export default function NewExamRoomPage() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const doc = document as any
+              if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+                if (doc.exitFullscreen) doc.exitFullscreen().catch(() => {})
+                else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen().catch(() => {})
+              } else {
+                const docEl = document.documentElement as any
+                if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {})
+                else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {})
+              }
+            }}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+            title="Bật/Tắt Toàn màn hình"
+          >
+            <Maximize2 className="h-4 w-4 text-indigo-500" />
+          </button>
           <button
             type="button"
             onClick={toggleDarkMode}
@@ -778,7 +803,7 @@ export default function NewExamRoomPage() {
 
             <div className="space-y-2 pt-2">
               <Link
-                href={`/submissions/${submittedResult.submissionId}/review`}
+                href={`/new-submissions/${submittedResult.submissionId}`}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white py-3 text-xs font-black uppercase tracking-wider shadow transition"
               >
                 <Eye className="h-4 w-4" /> Xem Lời Giải & Chi Tiết
