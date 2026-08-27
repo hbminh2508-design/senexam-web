@@ -67,8 +67,8 @@ export async function POST(req: Request) {
     if (!apiKey) return NextResponse.json({ error: 'Chưa cấu hình API Key trên hệ thống' }, { status: 500 })
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    // Deep Think dùng model riêng gemini-3.5-flash-lite, còn lại dùng model chuẩn của SenAI
-    const model = genAI.getGenerativeModel({ model: deepThink ? 'gemini-3.5-flash-lite' : 'gemini-3.1-flash-lite' })
+    // Deep Think dùng gemini-3.7-flash, còn lại dùng gemini-3.5-flash-lite
+    const model = genAI.getGenerativeModel({ model: deepThink ? 'gemini-3.7-flash' : 'gemini-3.5-flash-lite' })
 
     const baseInstruction = `Bạn là SenAI Studio — phiên bản đầy đủ tính năng của trợ lý SenAI (SenExam, dữ liệu SenAI 3.1), dành riêng cho thành viên Ultra. Trả lời chính xác, chi tiết, có thể phân tích hình ảnh/tài liệu người dùng gửi kèm. Dùng dấu chấm "." cho phép nhân và dấu phẩy "," cho thập phân, luôn bọc công thức trong $ hoặc $$.`
     const deepThinkInstruction = deepThink

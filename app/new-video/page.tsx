@@ -60,10 +60,12 @@ export default function NewVideoPage() {
         .order('created_at', { ascending: false })
         .limit(1000)
 
-      if (data) {
         const vids = data.filter((d) => {
-          const isVidTitle = d.title && d.title.match(/\.(mp4|mkv|mov|avi|webm)$/i)
-          return isVidTitle || d.mime_type?.includes('video') || d.drive_file_id
+          const title = (d.title || '').trim().toLowerCase()
+          const isMediaExt = /\.(mp4|mkv|mov|avi|webm|flv|wmv|m4v|3gp|mp3|wav|ogg|m4a|aac|flac)$/i.test(title)
+          const isMediaMime = d.mime_type && (d.mime_type.startsWith('video/') || d.mime_type.startsWith('audio/'))
+          // Chỉ nhận diện các file video / audio, loại trừ hoàn toàn các file PDF, docs, sheets, images
+          return isMediaExt || isMediaMime
         })
         setVideos(vids)
         if (vids.length > 0) {

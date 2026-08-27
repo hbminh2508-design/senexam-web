@@ -34,28 +34,27 @@ Quy tắc trả lời:
 - Trình bày mạch lạc, dễ hiểu, từng bước rõ ràng, giải thích vì sao đáp án đúng là chính xác và vì sao các phương án khác bị loại trừ.
 - Nếu là chế độ Deep Think, hãy suy luận logic nhiều bước sâu sắc và toàn diện.`
 
-    const modelName = deepThink ? 'gemini-flash-3.7' : 'gemini-2.5-flash'
+    const modelName = deepThink ? 'gemini-3.7-flash' : 'gemini-3.5-flash-lite'
 
     let reply = ''
 
     // Thử gọi qua GoogleGenerativeAI SDK
     try {
       const genAI = new GoogleGenerativeAI(apiKey)
-      // Sử dụng model được yêu cầu hoặc fallback an toàn
       let model = genAI.getGenerativeModel({ model: modelName })
       
       const fullPrompt = `${baseSystemPrompt}\n\n${deepThink ? '[Chế độ Deep Think 3.7 - Tư duy chuyên sâu]:\n' : ''}${message}`
       const result = await model.generateContent(fullPrompt)
       reply = result.response.text()
     } catch (sdkError: any) {
-      console.warn('Lỗi gọi model đầu tiên, thử fallback sang gemini-2.5-flash / gemini-1.5-flash:', sdkError?.message)
+      console.warn('Lỗi gọi model đầu tiên, thử fallback:', sdkError?.message)
       try {
         const genAI = new GoogleGenerativeAI(apiKey)
-        const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+        const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
         const fallbackResult = await fallbackModel.generateContent(`${baseSystemPrompt}\n\n${message}`)
         reply = fallbackResult.response.text()
       } catch (fallbackError: any) {
-        // Thử qua GoogleGenAI SDK mới
+        // Thử qua GoogleGenAI SDK
         try {
           const ai = new GoogleGenAI({ apiKey })
           const res = await ai.models.generateContent({
