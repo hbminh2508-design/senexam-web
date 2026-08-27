@@ -10,6 +10,7 @@ import {
   VIP_PLANS,
   PREMIUM_PLANS,
   LITE_PLANS,
+  getPlanByGroup,
   isVipActive,
   getEffectivePlanTier,
   type PlanGroup,
@@ -519,7 +520,7 @@ export default function NewVipPage() {
                 <div className="rounded-2xl bg-black/5 dark:bg-white/5 p-3 space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-[#6B7280] dark:text-slate-400">Gói nâng cấp:</span>
-                    <strong className="font-bold">{order.plan_name}</strong>
+                    <strong className="font-bold">{selectedPlan?.name || getPlanByGroup(order.plan_group || activeGroup, order.plan_code)?.name || 'Gói Thành Viên'}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#6B7280] dark:text-slate-400">Số tiền:</span>
