@@ -68,13 +68,22 @@ type QuickAction = {
 
 const QUICK_ACTIONS: QuickAction[] = [
   {
-    key: 'exam-room',
-    title: 'Phòng thi thử',
-    description: 'Vào thi ngay với bộ đề bám sát ma trận và chấm điểm thông minh.',
-    href: '/exams',
+    key: 'new-exams',
+    title: 'Kho đề thi mới',
+    description: 'Khám phá ngân hàng đề thi bám sát ma trận 2026 và làm bài trực tuyến.',
+    href: '/new-exams',
     tone: 'from-[#FFD166] via-[#F9A03F] to-[#EF476F]',
-    badge: 'Phổ biến',
+    badge: 'Mới',
     icon: Rocket,
+  },
+  {
+    key: 'new-history',
+    title: 'Lịch sử bài thi',
+    description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết và tải đề thi PDF.',
+    href: '/new-history',
+    tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
+    badge: 'Hồ sơ',
+    icon: BadgeCheck,
   },
   {
     key: 'senai',
@@ -189,8 +198,6 @@ export default function NewDashboardPage() {
   const [linkedGoogle, setLinkedGoogle] = useState(false)
 
   // Settings state
-  const [currentUiMode, setCurrentUiMode] = useState<UiMode>('modern')
-  const [currentThemeColor, setCurrentThemeColor] = useState<string>(DEFAULT_THEME_COLOR)
   const [savingSettings, setSavingSettings] = useState(false)
   const [googleLinkingLoading, setGoogleLinkingLoading] = useState(false)
   const [showGoogleGuide, setShowGoogleGuide] = useState(false)
@@ -320,37 +327,6 @@ export default function NewDashboardPage() {
     }
   }
 
-  // Đổi giao diện
-  const handleSelectUiMode = async (mode: UiMode) => {
-    if (mode === 'glass' && !isBetaTester) {
-      alert('Giao diện Kính khúc xạ chỉ khả dụng cho thành viên tham gia thử nghiệm Beta.')
-      return
-    }
-    setCurrentUiMode(mode)
-    localStorage.setItem('senexam_ui_mode', mode)
-    localStorage.setItem('senexam_new_ui', mode !== 'legacy' ? '1' : '0')
-    window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
-
-    if (userId) {
-      setSavingSettings(true)
-      await supabase.from('profiles').update({ ui_mode: mode }).eq('id', userId)
-      setSavingSettings(false)
-    }
-  }
-
-  // Đổi màu chủ đề
-  const handleSelectThemeColor = async (color: ThemeColorKey) => {
-    setCurrentThemeColor(color)
-    localStorage.setItem('senexam_theme_color', color)
-    window.dispatchEvent(new Event(UI_PREFS_CHANGED_EVENT))
-
-    if (userId) {
-      setSavingSettings(true)
-      await supabase.from('profiles').update({ theme_color: color }).eq('id', userId)
-      setSavingSettings(false)
-    }
-  }
-
   // Liên kết tài khoản Google
   const handleLinkGoogle = async () => {
     setGoogleLinkingLoading(true)
@@ -438,9 +414,7 @@ export default function NewDashboardPage() {
     )
   }
 
-  const themeVars = currentUiMode === 'glass'
-    ? getGlassThemeVars(currentThemeColor, isDark)
-    : getModernThemeVars(currentThemeColor, isDark)
+  const themeVars = getModernThemeVars('indigo', isDark)
 
   return (
     <main
@@ -498,13 +472,19 @@ export default function NewDashboardPage() {
 
           {/* 3 Metric Cards */}
           <div className="relative mt-6 grid gap-3.5 sm:grid-cols-3">
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-amber-500/10 dark:bg-amber-500/15 p-4 transition hover:scale-[1.01]">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Đề thi đã hoàn thành</p>
+            <Link
+              href="/new-history"
+              className="rounded-2xl border border-black/10 dark:border-white/10 bg-amber-500/10 dark:bg-amber-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Đề thi đã hoàn thành</p>
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">Xem lịch sử →</span>
+              </div>
               <div className="mt-2 flex items-center justify-between">
                 <strong className="text-3xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>{submissionCount}</strong>
                 <BadgeCheck className="h-7 w-7 text-amber-600 dark:text-amber-400 opacity-80" />
               </div>
-            </div>
+            </Link>
             <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-teal-500/10 dark:bg-teal-500/15 p-4 transition hover:scale-[1.01]">
               <p className="text-xs font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">Thông báo mới</p>
               <div className="mt-2 flex items-center justify-between">
@@ -607,6 +587,10 @@ export default function NewDashboardPage() {
           <aside className="space-y-5">
             
             {/* Card 1: Thông tin cá nhân */}
+          {/* CỘT PHẢI: Tab Thông Tin Cá Nhân, Ví Sen, Sen VIP, Cài Đặt & Liên Kết Google */}
+          <aside className="space-y-5">
+            
+            {/* Card 1: Thông tin cá nhân & Ví Sen / VIP */}
             <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl">
               <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
                 <div className="flex items-center gap-3">
@@ -617,7 +601,7 @@ export default function NewDashboardPage() {
                     <h3 className="font-black text-lg leading-tight" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                       {fullName}
                     </h3>
-                    <p className="text-xs text-[#6B7280] dark:text-slate-400 truncate max-w-[180px]">{userEmail}</p>
+                    <p className="text-xs text-[#6B7280] dark:text-slate-400 truncate max-w-[170px]">{userEmail}</p>
                   </div>
                 </div>
                 <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -625,7 +609,8 @@ export default function NewDashboardPage() {
                 </span>
               </div>
 
-              <div className="mt-4 space-y-2.5 text-xs text-[#4B5563] dark:text-slate-300">
+              {/* Thông tin trường lớp */}
+              <div className="mt-3.5 space-y-2 text-xs text-[#4B5563] dark:text-slate-300">
                 {school && (
                   <div className="flex items-center gap-2">
                     <School className="h-4 w-4 text-indigo-500 shrink-0" />
@@ -638,30 +623,78 @@ export default function NewDashboardPage() {
                     <span>Tỉnh/Thành: <strong>{province}</strong></span>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-amber-500 shrink-0" />
-                  <span>Số dư SenCash: <strong className="text-amber-600 dark:text-amber-400">{senCash.toLocaleString('vi-VN')} SC</strong></span>
-                </div>
                 {targetExams.length > 0 && (
-                  <div className="pt-1">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] dark:text-slate-400 mb-1">Mục tiêu thi:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {targetExams.map((ex) => (
-                        <span key={ex} className="rounded-lg bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[11px] font-bold">
-                          {ex}
-                        </span>
-                      ))}
-                    </div>
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[11px] font-bold text-[#6B7280] dark:text-slate-400">Mục tiêu:</span>
+                    {targetExams.map((ex) => (
+                      <span key={ex} className="rounded-lg bg-black/5 dark:bg-white/10 px-2 py-0.5 text-[10px] font-bold">
+                        {ex}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
+
+              {/* 2 Nút Hành Động Lớn: Ví Sen & Sen VIP */}
+              <div className="mt-4 grid grid-cols-2 gap-2.5 pt-3 border-t border-black/10 dark:border-white/10">
+                <Link
+                  href="/vip"
+                  className="flex flex-col justify-between rounded-2xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-3 transition hover:scale-[1.02] group"
+                >
+                  <div className="flex items-center justify-between text-amber-700 dark:text-amber-300">
+                    <CreditCard className="h-4 w-4 text-amber-500" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Ví Sen</span>
+                  </div>
+                  <div className="mt-2">
+                    <strong className="text-base font-black text-amber-900 dark:text-amber-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                      {senCash.toLocaleString('vi-VN')} SC
+                    </strong>
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">
+                      Nạp thêm +
+                    </span>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/vip"
+                  className="flex flex-col justify-between rounded-2xl border border-rose-500/20 bg-rose-500/10 dark:bg-rose-500/15 p-3 transition hover:scale-[1.02] group"
+                >
+                  <div className="flex items-center justify-between text-rose-700 dark:text-rose-300">
+                    <Crown className="h-4 w-4 text-rose-500" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Sen VIP</span>
+                  </div>
+                  <div className="mt-2">
+                    <strong className="text-base font-black text-rose-900 dark:text-rose-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                      {vipUntil ? 'Thành viên VIP' : 'Gói Miễn phí'}
+                    </strong>
+                    <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 group-hover:underline">
+                      {vipUntil ? 'Gia hạn gói' : 'Nâng cấp ngay'}
+                    </span>
+                  </div>
+                </Link>
+              </div>
+
+              {/* Lối tắt: Lịch sử làm bài & Kho đề thi mới */}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Link
+                  href="/new-history"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-2 text-xs font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
+                >
+                  <BadgeCheck className="h-3.5 w-3.5 text-teal-500" /> Lịch sử bài thi
+                </Link>
+                <Link
+                  href="/new-exams"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-2 text-xs font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
+                >
+                  <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề mới
+                </Link>
+              </div>
             </div>
 
-            {/* Card 2: Liên kết tài khoản Google & Hướng dẫn */}
+            {/* Card 2: Liên kết tài khoản Google */}
             <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {/* Google SVG Logo */}
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -675,10 +708,10 @@ export default function NewDashboardPage() {
                 </span>
               </div>
 
-              <p className="mt-2 text-xs text-[#4B5563] dark:text-slate-300">
+              <p className="mt-2 text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed">
                 {linkedGoogle
-                  ? 'Tài khoản của bạn đã được liên kết với Google. Bạn có thể đăng nhập 1-chạm bất cứ lúc nào.'
-                  : 'Liên kết Google để đăng nhập nhanh chóng chỉ với 1 click và bảo vệ tài khoản.'}
+                  ? 'Tài khoản của bạn đã được kết nối an toàn với Google. Bạn có thể đăng nhập 1-chạm bất cứ lúc nào.'
+                  : 'Liên kết với Google giúp bạn đăng nhập nhanh chóng chỉ với 1 click, không lo quên mật khẩu.'}
               </p>
 
               <div className="mt-3 flex items-center gap-2">
@@ -688,95 +721,48 @@ export default function NewDashboardPage() {
                   disabled={googleLinkingLoading || linkedGoogle}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-800 border border-black/15 dark:border-white/15 px-3 py-2 text-xs font-bold text-[#1A1A1A] dark:text-white shadow-sm transition hover:bg-black/5 disabled:opacity-50"
                 >
-                  {googleLinkingLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : linkedGoogle ? 'Đã liên kết thành công' : 'Liên kết với Google'}
+                  {googleLinkingLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : linkedGoogle ? 'Đã liên kết thành công' : 'Liên kết tài khoản Google'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowGoogleGuide(!showGoogleGuide)}
-                  title="Xem hướng dẫn cấu hình Supabase"
+                  title="Xem thông tin bảo mật & lợi ích"
                   className="rounded-xl border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10"
                 >
                   <HelpCircle className="h-4 w-4" />
                 </button>
               </div>
 
-              {/* Hướng Dẫn Bật Google Auth Trên Supabase */}
+              {/* Hướng Dẫn & Thông Tin Dành Cho Học Sinh */}
               {showGoogleGuide && (
                 <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3.5 text-xs text-[#4B5563] dark:text-slate-300 space-y-2 animate-in fade-in zoom-in-95">
                   <p className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-amber-500" /> Hướng dẫn bật Google Auth (Supabase):
+                    <Sparkles className="h-4 w-4 text-amber-500" /> Lợi ích khi liên kết Google:
                   </p>
-                  <ol className="list-decimal pl-4 space-y-1 text-[11px] leading-relaxed">
-                    <li>Vào <strong>Google Cloud Console</strong> → Tạo OAuth Client ID (Web Application).</li>
-                    <li>Thêm Authorized Redirect URI: <code className="rounded bg-black/5 dark:bg-white/10 px-1 font-mono">https://&lt;ref&gt;.supabase.co/auth/v1/callback</code>.</li>
-                    <li>Vào <strong>Supabase Dashboard</strong> → Authentication → Providers → Google.</li>
-                    <li>Bật <strong>Enable Google</strong> và dán <strong>Client ID</strong> + <strong>Client Secret</strong> rồi bấm Lưu.</li>
-                  </ol>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                    <li>Đăng nhập tức thì 1-chạm không cần nhập mật khẩu.</li>
+                    <li>Bảo mật tài khoản 2 lớp chuẩn Google Security.</li>
+                    <li>Tự động đồng bộ tiến độ học tập và bài thi trên mọi thiết bị.</li>
+                  </ul>
                 </div>
               )}
             </div>
 
-            {/* Card 3: Cài đặt hệ thống & Giao diện */}
+            {/* Card 3: Cài đặt hệ thống & Tiện ích Web */}
             <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm flex items-center gap-2">
-                  <Settings className="h-4 w-4 text-amber-500" /> Cài đặt giao diện & Hệ thống
+                  <Settings className="h-4 w-4 text-amber-500" /> Cài đặt & Tiện ích Web
                 </h3>
                 {savingSettings && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500" />}
               </div>
 
-              {/* Phong cách giao diện */}
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] dark:text-slate-400 mb-2">
-                  Phong cách giao diện:
-                </p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectUiMode('legacy')}
-                    className={`rounded-xl border px-2 py-1.5 text-xs font-bold transition ${currentUiMode === 'legacy' ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5'}`}
-                  >
-                    Mặc định
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectUiMode('modern')}
-                    className={`rounded-xl border px-2 py-1.5 text-xs font-bold transition ${currentUiMode === 'modern' ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5'}`}
-                  >
-                    Hiện đại
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectUiMode('glass')}
-                    className={`rounded-xl border px-2 py-1.5 text-xs font-bold transition ${currentUiMode === 'glass' ? 'border-cyan-500 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400' : 'border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5'}`}
-                  >
-                    Kính Beta 💎
-                  </button>
+              {/* Chế độ Sáng / Tối */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold">Chế độ hiển thị:</p>
+                  <p className="text-[11px] text-[#6B7280] dark:text-slate-400">Tuỳ chỉnh giao diện sáng hoặc tối</p>
                 </div>
-              </div>
-
-              {/* Màu chủ đề */}
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] dark:text-slate-400 mb-2 flex items-center gap-1">
-                  <Palette className="h-3.5 w-3.5" /> Màu chủ đề:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {THEME_COLORS.map((tc) => (
-                    <button
-                      key={tc.key}
-                      type="button"
-                      onClick={() => handleSelectThemeColor(tc.key)}
-                      title={tc.label}
-                      className={`h-7 w-7 rounded-full border-2 transition-transform ${currentThemeColor === tc.key ? 'scale-110 ring-2 ring-black/30 dark:ring-white/40' : 'hover:scale-105'}`}
-                      style={{ backgroundColor: isDark ? tc.dark : tc.light, borderColor: 'white' }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Dark Mode Switch */}
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-xs font-bold">Chế độ hiển thị:</span>
                 <button
                   type="button"
                   onClick={toggleDarkMode}
