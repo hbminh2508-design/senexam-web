@@ -19,6 +19,7 @@ import ModernLoading from '@/app/components/ModernLoading'
 import { fetchSystemRelease, logReleaseAction, CURRENT_APP_VERSION, type SystemRelease } from '@/lib/systemRelease'
 import { SENAI_TIER_LABEL } from '@/lib/senaiTiers'
 import { describeGiftReward } from '@/lib/giftCodes'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 // 🌟 THƯ VIỆN RENDER MARKDOWN & CÔNG THỨC TOÁN HỌC
 import ReactMarkdown from 'react-markdown'
@@ -2545,6 +2546,9 @@ export default function AdminDashboard() {
       </div>
 
       {renderQuickModals()}
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
 
     </div>
   )

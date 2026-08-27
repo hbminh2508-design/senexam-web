@@ -6,7 +6,7 @@
 -- Hướng dẫn: Dán toàn bộ nội dung file này vào Supabase -> SQL Editor -> Run
 -- ==============================================================================
 
--- 1. BẢNG PROFILES: Bổ sung các cột thông tin học tập, phân quyền & ví SenCash
+-- 1. BẢNG PROFILES: Bổ sung các cột thông tin học tập, phân quyền, ví SenCash & chuyển đổi New UI
 ALTER TABLE public.profiles 
   ADD COLUMN IF NOT EXISTS role text DEFAULT 'student',
   ADD COLUMN IF NOT EXISTS sencash_balance integer DEFAULT 0,
@@ -18,7 +18,17 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS grade text DEFAULT '12',
   ADD COLUMN IF NOT EXISTS target_score text DEFAULT '27',
   ADD COLUMN IF NOT EXISTS is_beta_tester boolean DEFAULT true,
+  ADD COLUMN IF NOT EXISTS migrated_to_new_ui boolean DEFAULT false,
   ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+-- BẢNG UI_MIGRATION_OPT_INS: Ghi nhận danh sách người dùng xác nhận chuyển sang giao diện mới
+CREATE TABLE IF NOT EXISTS public.ui_migration_opt_ins (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  migrated_at timestamptz DEFAULT now(),
+  source_path text DEFAULT '/dashboard',
+  CONSTRAINT uq_user_ui_migration UNIQUE (user_id)
+);
 
 -- 2. BẢNG EXAMS: Bổ sung các cột đề thi ẩn, mã code bí mật & quyền xem đáp án
 ALTER TABLE public.exams
@@ -205,6 +215,14 @@ ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ui_migration_opt_ins ENABLE ROW LEVEL SECURITY;
+
+-- 12.0. UI Migration Opt-ins
+DROP POLICY IF EXISTS "Users can insert own migration" ON public.ui_migration_opt_ins;
+CREATE POLICY "Users can insert own migration" ON public.ui_migration_opt_ins FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can read own migration" ON public.ui_migration_opt_ins;
+CREATE POLICY "Users can read own migration" ON public.ui_migration_opt_ins FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
 -- 12.1. Gift Codes
 DROP POLICY IF EXISTS "Public read active gift_codes" ON public.gift_codes;

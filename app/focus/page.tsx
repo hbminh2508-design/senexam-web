@@ -18,6 +18,7 @@ import 'katex/dist/katex.min.css'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getAccentHex, getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import VipAdBanner from '@/app/components/VipAdBanner'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 import AdBanner from '@/components/AdBanner'
 
@@ -1192,6 +1193,9 @@ export default function FocusRoomPage() {
         </div>
 
       </div>
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
     </div>
   )
 }

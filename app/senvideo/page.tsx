@@ -14,6 +14,7 @@ import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
 import VipAdBanner from '@/app/components/VipAdBanner'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 // --- CONSTANTS & STYLES ---
 const mdCard = "bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-2xl backdrop-saturate-[1.5] rounded-[2rem] border border-slate-200 dark:border-white/5 shadow-sm"
@@ -428,6 +429,9 @@ export default function SenVideoPage() {
           </div>
         </div>
       )}
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
 
     </div>
   )

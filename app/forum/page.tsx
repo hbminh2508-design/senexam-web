@@ -15,6 +15,7 @@ import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
 import VipAdBanner from '@/app/components/VipAdBanner'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 const glassCardStyles = "liquid-panel"
 const CATEGORIES = ['Tất cả', 'Hỏi đáp bài tập', 'Chia sẻ tài liệu', 'Thảo luận chung', 'Góc tâm sự']
@@ -476,6 +477,9 @@ export default function ForumPage() {
         </div>
 
       </div>
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 type Message = {
   id: string
@@ -290,6 +291,9 @@ export default function SenMessagesPage() {
           </form>
         </div>
       </div>
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
     </div>
   )
 }

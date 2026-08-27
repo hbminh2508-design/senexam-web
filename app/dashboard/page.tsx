@@ -20,6 +20,7 @@ import { UI_PREFS_CHANGED_EVENT, type UiMode } from '@/app/components/useNewUiPr
 import { fetchSystemRelease, isNewerVersion, CURRENT_APP_VERSION, getAckedVersion, ackVersion } from '@/lib/systemRelease'
 import { getEffectivePlanTier, type PlanTier } from '@/lib/vipMembership'
 import type { Feature } from './_home/types'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 const ChatOffline = dynamic(() => import('@/app/components/ChatOffline'), { ssr: false })
 // `loading` is intentionally omitted here: all chunks are warmed up manually
@@ -1367,6 +1368,9 @@ export default function DashboardPage() {
         avoid={showProfile || showOnboarding || showCalculatorModal} 
         hidden={!isAiEnabled}
       />
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
 
     </>
   )

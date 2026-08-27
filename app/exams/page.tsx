@@ -13,6 +13,7 @@ import { glassSearchInputClass, highlightSearchText } from '@/app/components/sea
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 // Apple Liquid Glass CSS Constants
 const glassCardStyles = "liquid-panel relative"
@@ -317,6 +318,9 @@ export default function ExamsLibraryPage() {
           </div>
         )}
       </div>
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
     </div>
   )
 }

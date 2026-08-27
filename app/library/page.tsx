@@ -18,6 +18,7 @@ import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getGlassThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
+import LegacyUiSunsetModal from '@/app/components/LegacyUiSunsetModal'
 
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
@@ -770,6 +771,9 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
           )}
         </div>
       </div>
+
+      {/* THÔNG BÁO DỪNG HOẠT ĐỘNG GIAO DIỆN CŨ VÀO 31/08/2026 */}
+      <LegacyUiSunsetModal />
     </div>
   )
 }
