@@ -27,11 +27,11 @@ import {
   Send,
   Maximize2,
   Minimize2,
-  FileQuestion,
-  Check,
-  X,
   AlertTriangle,
   BrainCircuit,
+  Image as ImageIcon,
+  Paperclip,
+  Trash2,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
@@ -54,6 +54,9 @@ export default function NewHistorySubmissionReviewPage() {
   // AI Explain State per question
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null)
   const [aiExplains, setAiExplains] = useState<Record<string, string>>({})
+  const [showAiInput, setShowAiInput] = useState<Record<string, boolean>>({})
+  const [questionInputs, setQuestionInputs] = useState<Record<string, string>>({})
+  const [questionImages, setQuestionImages] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -102,16 +105,47 @@ export default function NewHistorySubmissionReviewPage() {
     }
   }
 
-  // Yêu cầu SenAI giải thích chi tiết câu hỏi (với model gemini-flash-3.7 & Deep Think)
+  // Xử lý upload ảnh câu hỏi
+  const handleImageUpload = (key: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Vui lòng chọn ảnh dung lượng dưới 10MB.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setQuestionImages((prev) => ({ ...prev, [key]: reader.result as string }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Yêu cầu SenAI giải thích chi tiết câu hỏi (Model: gemini-3.5-flash-lite)
   const handleAskAiExplain = async (key: string, questionLabel: string, studentAns: any, correctAns: any) => {
+    const userPrompt = (questionInputs[key] || '').trim()
+    const userImg = questionImages[key] || ''
+
+    if (!userPrompt && !userImg) {
+      alert('Vui lòng nhập nội dung câu hỏi hoặc tải lên hình ảnh đề bài để SenAI phân tích.')
+      return
+    }
+
     setAiLoadingKey(key)
     try {
+      const fullMessage = `Hãy giải thích chi tiết phương pháp giải cho ${questionLabel} trong bài thi "${submission.exams?.title || 'Đề thi'}".
+Nội dung câu hỏi: "${userPrompt || '(Xem hình ảnh đính kèm)'}".
+Đáp án đúng: "${typeof correctAns === 'object' ? JSON.stringify(correctAns) : correctAns}".
+Lựa chọn của học sinh: "${typeof studentAns === 'object' ? JSON.stringify(studentAns) : (studentAns || 'Chưa làm')}".
+Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTeX ($...$ hoặc $$...$$) và chỉ ra phương pháp giải tối ưu nhất.`
+
       const res = await fetch('/api/senai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `Hãy giải thích chi tiết phương pháp giải cho ${questionLabel} trong bài thi "${submission.exams?.title}". Đáp án đúng là "${JSON.stringify(correctAns)}". Học sinh đã chọn "${JSON.stringify(studentAns)}". Hãy giải thích từng bước rõ ràng, ngắn gọn và chỉ ra vì sao đáp án đúng là như vậy.`,
-          deepThink: true,
+          message: fullMessage,
+          image: userImg,
+          model: 'gemini-3.5-flash-lite',
+          deepThink: false,
         }),
       })
 
@@ -320,35 +354,94 @@ export default function NewHistorySubmissionReviewPage() {
                         </div>
 
                         {/* AI Explanation Box */}
-                        <div className="pt-1">
+                        <div className="pt-2 border-t border-black/5 dark:border-white/5 space-y-2.5">
                           {aiExplains[key] ? (
-                            <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-3.5 text-xs leading-relaxed space-y-2">
-                              <span className="font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                                <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Giải thích chi tiết từ SenAI (Deep Think 3.7):
-                              </span>
+                            <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 text-xs leading-relaxed space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 text-xs">
+                                  <Sparkles className="h-4 w-4 text-amber-500" /> Giải thích chi tiết từ SenAI (Gemini 3.5 Flash Lite):
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAiInput((prev) => ({ ...prev, [key]: !prev[key] }))}
+                                  className="text-[10px] text-[#6B7280] dark:text-slate-400 font-bold hover:underline"
+                                >
+                                  {showAiInput[key] ? 'Đóng ô hỏi' : 'Hỏi lại câu này'}
+                                </button>
+                              </div>
                               <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
                                 <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                                   {aiExplains[key]}
                                 </ReactMarkdown>
                               </div>
                             </div>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={aiLoadingKey === key}
-                              onClick={() => handleAskAiExplain(key, `Câu hỏi ${globalNum}`, studentAns, correctAns)}
-                              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
-                            >
-                              {aiLoadingKey === key ? (
-                                <>
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> SenAI 3.7 đang suy nghĩ sâu (Deep Think)...
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="h-3.5 w-3.5" /> Hỏi SenAI giải thích câu này
-                                </>
-                              )}
-                            </button>
+                          ) : null}
+
+                          {(!aiExplains[key] || showAiInput[key]) && (
+                            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" /> Nhờ SenAI (Gemini 3.5 Flash Lite) giải câu {globalNum}:
+                                </span>
+                              </div>
+
+                              <textarea
+                                rows={2}
+                                value={questionInputs[key] || ''}
+                                onChange={(e) => setQuestionInputs({ ...questionInputs, [key]: e.target.value })}
+                                placeholder="Dán hoặc gõ nội dung đề bài câu này để SenAI giải thích..."
+                                className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2.5 text-xs outline-none focus:border-indigo-500"
+                              />
+
+                              {/* Image upload / Preview */}
+                              {questionImages[key] ? (
+                                <div className="relative inline-block">
+                                  <img
+                                    src={questionImages[key]}
+                                    alt="Đề bài"
+                                    className="max-h-28 rounded-xl border border-black/10 dark:border-white/10 object-contain"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setQuestionImages({ ...questionImages, [key]: '' })}
+                                    className="absolute -right-2 -top-2 rounded-full bg-rose-600 p-1 text-white shadow-md transition hover:scale-110"
+                                    title="Xóa ảnh"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ) : null}
+
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                <label className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold cursor-pointer hover:bg-black/5 transition">
+                                  <ImageIcon className="h-3.5 w-3.5 text-indigo-500" />
+                                  <span>{questionImages[key] ? 'Đổi ảnh đề bài' : 'Tải ảnh chụp đề bài'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => handleImageUpload(key, e)}
+                                  />
+                                </label>
+
+                                <button
+                                  type="button"
+                                  disabled={aiLoadingKey === key || (!questionInputs[key]?.trim() && !questionImages[key])}
+                                  onClick={() => handleAskAiExplain(key, `Câu hỏi ${globalNum}`, studentAns, correctAns)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-40"
+                                >
+                                  {aiLoadingKey === key ? (
+                                    <>
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> SenAI đang giải thích...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send className="h-3.5 w-3.5" /> Hỏi Lời Giải (Flash Lite)
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>

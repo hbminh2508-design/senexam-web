@@ -145,12 +145,13 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: Gauge,
   },
   {
-    key: 'quizzle',
-    title: 'Quizzle Zone',
-    description: 'Mini-quiz ôn tập tốc độ cao, củng cố phản xạ kiến thức mỗi ngày.',
-    href: '/quizzle',
-    tone: 'from-[#F4A261] via-[#E76F51] to-[#E63946]',
-    icon: PlaySquare,
+    key: 'beta',
+    title: 'Kênh Thử Nghiệm Beta',
+    description: 'Trải nghiệm sớm các tính năng tương lai 2026, xem roadmap cập nhật và quản lý tham gia.',
+    href: '/new-beta',
+    tone: 'from-[#EC4899] via-[#8B5CF6] to-[#6366F1]',
+    badge: 'Beta',
+    icon: Sparkles,
   },
   {
     key: 'tinhdiem',
@@ -583,20 +584,6 @@ export default function NewDashboardPage() {
                   Không tìm thấy tính năng phù hợp. Vui lòng thử từ khoá khác ngắn gọn hơn.
                 </div>
               ) : null}
-            </div>
-
-            {/* Sub-banner: Lối tắt về Dashboard Tiêu chuẩn */}
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-4">
-              <div className="flex items-center gap-3">
-                <Layers className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm font-bold">Bạn muốn quay lại giao diện truyền thống?</span>
-              </div>
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-black/15 dark:border-white/20 bg-white dark:bg-slate-800 px-3.5 py-1.5 text-xs font-bold transition hover:bg-black/5"
-              >
-                Mở Dashboard cũ <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
             </div>
           </div>
 

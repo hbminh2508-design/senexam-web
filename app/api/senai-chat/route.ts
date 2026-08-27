@@ -8,10 +8,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null)
     const message = body?.message || body?.prompt || ''
+    const imageBase64 = body?.image || body?.imageData || ''
     const deepThink = !!body?.deepThink
+    const requestedModel = body?.model
 
-    if (!message.trim()) {
-      return NextResponse.json({ error: 'Nội dung câu hỏi không được để trống' }, { status: 400 })
+    if (!message.trim() && !imageBase64) {
+      return NextResponse.json({ error: 'Nội dung câu hỏi hoặc hình ảnh không được để trống' }, { status: 400 })
     }
 
     const apiKey = process.env.GEMINI_API_KEY
@@ -26,7 +28,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const baseSystemPrompt = `Bạn là SenAI 3.7 — Trợ lý AI giáo dục & luyện thi thông minh của nền tảng SenExam.
+    const baseSystemPrompt = `Bạn là SenAI — Trợ lý AI giáo dục & luyện thi thông minh của nền tảng SenExam.
 Nhiệm vụ của bạn là giải đáp bài tập, giải thích chi tiết đáp án câu hỏi trắc nghiệm/tự luận, cung cấp phương pháp làm bài và lời khuyên ôn thi.
 Quy tắc trả lời:
 - Luôn sử dụng ký hiệu LaTeX bọc trong dấu $ hoặc $$ cho mọi công thức Toán, Lý, Hóa.
@@ -34,32 +36,46 @@ Quy tắc trả lời:
 - Trình bày mạch lạc, dễ hiểu, từng bước rõ ràng, giải thích vì sao đáp án đúng là chính xác và vì sao các phương án khác bị loại trừ.
 - Nếu là chế độ Deep Think, hãy suy luận logic nhiều bước sâu sắc và toàn diện.`
 
-    const modelName = deepThink ? 'gemini-3.7-flash' : 'gemini-3.5-flash-lite'
+    const modelName = requestedModel || (deepThink ? 'gemini-3.7-flash' : 'gemini-3.5-flash-lite')
 
     let reply = ''
+
+    // Xử lý ảnh nếu có
+    const contentParts: any[] = []
+    const promptText = `${baseSystemPrompt}\n\n${deepThink ? '[Chế độ Deep Think - Tư duy chuyên sâu]:\n' : ''}${message || 'Hãy giải thích và giải chi tiết bài tập trong hình ảnh này.'}`
+    contentParts.push(promptText)
+
+    if (imageBase64) {
+      const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9.+_-]+);base64,(.+)$/)
+      if (mimeMatch) {
+        contentParts.push({
+          inlineData: {
+            mimeType: mimeMatch[1],
+            data: mimeMatch[2],
+          },
+        })
+      }
+    }
 
     // Thử gọi qua GoogleGenerativeAI SDK
     try {
       const genAI = new GoogleGenerativeAI(apiKey)
       let model = genAI.getGenerativeModel({ model: modelName })
-      
-      const fullPrompt = `${baseSystemPrompt}\n\n${deepThink ? '[Chế độ Deep Think 3.7 - Tư duy chuyên sâu]:\n' : ''}${message}`
-      const result = await model.generateContent(fullPrompt)
+      const result = await model.generateContent(contentParts)
       reply = result.response.text()
     } catch (sdkError: any) {
       console.warn('Lỗi gọi model đầu tiên, thử fallback:', sdkError?.message)
       try {
         const genAI = new GoogleGenerativeAI(apiKey)
         const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
-        const fallbackResult = await fallbackModel.generateContent(`${baseSystemPrompt}\n\n${message}`)
+        const fallbackResult = await fallbackModel.generateContent(contentParts)
         reply = fallbackResult.response.text()
       } catch (fallbackError: any) {
-        // Thử qua GoogleGenAI SDK
         try {
           const ai = new GoogleGenAI({ apiKey })
           const res = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `${baseSystemPrompt}\n\n${message}`,
+            contents: promptText,
           })
           reply = res.text ?? ''
         } catch (e: any) {

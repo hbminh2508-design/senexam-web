@@ -118,6 +118,11 @@ CREATE TABLE IF NOT EXISTS public.feedback (
   created_at timestamptz DEFAULT now()
 );
 
+ALTER TABLE public.feedback
+  ADD COLUMN IF NOT EXISTS category text DEFAULT 'feature',
+  ADD COLUMN IF NOT EXISTS user_email text DEFAULT '',
+  ADD COLUMN IF NOT EXISTS user_name text DEFAULT '';
+
 -- 9. BẢNG USER_SCHEDULES: Quản lý thời khóa biểu, lịch học & lịch thi (new-schedule)
 CREATE TABLE IF NOT EXISTS public.user_schedules (
   id text PRIMARY KEY,

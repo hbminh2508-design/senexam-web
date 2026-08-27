@@ -223,17 +223,31 @@ export default function NewProfilePage() {
     setFeedbackMsg(null)
 
     try {
-      const { data, error } = await supabase
+      const insertObj: any = {
+        user_id: user.id,
+        user_email: user.email,
+        user_name: fullName || user.email,
+        content: `[${feedbackCategory.toUpperCase()}] ${feedbackContent.trim()}`,
+      }
+
+      let { data, error } = await supabase
         .from('feedback')
         .insert({
-          user_id: user.id,
-          user_email: user.email,
-          user_name: fullName || user.email,
-          content: feedbackContent.trim(),
+          ...insertObj,
           category: feedbackCategory,
         })
         .select('*')
-        .single()
+        .maybeSingle()
+
+      if (error && error.message?.includes('category')) {
+        const fallbackRes = await supabase
+          .from('feedback')
+          .insert(insertObj)
+          .select('*')
+          .maybeSingle()
+        data = fallbackRes.data
+        error = fallbackRes.error
+      }
 
       if (error) throw error
 
