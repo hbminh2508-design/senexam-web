@@ -195,7 +195,7 @@ END;
 $$;
 
 -- ==============================================================================
--- 🔒 12. ROW LEVEL SECURITY (RLS) POLICIES
+-- 🔒 12. ROW LEVEL SECURITY (RLS) POLICIES (IDEMPOTENT)
 -- ==============================================================================
 ALTER TABLE public.gift_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.gift_code_redemptions ENABLE ROW LEVEL SECURITY;
@@ -207,32 +207,57 @@ ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 
 -- 12.1. Gift Codes
+DROP POLICY IF EXISTS "Public read active gift_codes" ON public.gift_codes;
 CREATE POLICY "Public read active gift_codes" ON public.gift_codes FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Users can insert redemptions" ON public.gift_code_redemptions;
 CREATE POLICY "Users can insert redemptions" ON public.gift_code_redemptions FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can read own redemptions" ON public.gift_code_redemptions;
 CREATE POLICY "Users can read own redemptions" ON public.gift_code_redemptions FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
 -- 12.2. SenCash Transactions
+DROP POLICY IF EXISTS "Users can read own sencash_transactions" ON public.sencash_transactions;
 CREATE POLICY "Users can read own sencash_transactions" ON public.sencash_transactions FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
 -- 12.3. Announcements
+DROP POLICY IF EXISTS "Public read active announcements" ON public.announcements;
 CREATE POLICY "Public read active announcements" ON public.announcements FOR SELECT TO authenticated, anon USING (true);
+
+DROP POLICY IF EXISTS "Admin manage announcements" ON public.announcements;
 CREATE POLICY "Admin manage announcements" ON public.announcements FOR ALL TO authenticated USING (true);
 
 -- 12.4. Feedback
+DROP POLICY IF EXISTS "Users can insert feedback" ON public.feedback;
 CREATE POLICY "Users can insert feedback" ON public.feedback FOR INSERT TO authenticated, anon WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin can read feedback" ON public.feedback;
 CREATE POLICY "Admin can read feedback" ON public.feedback FOR SELECT TO authenticated USING (true);
 
 -- 12.5. User Schedules
+DROP POLICY IF EXISTS "Users can manage own schedules" ON public.user_schedules;
 CREATE POLICY "Users can manage own schedules" ON public.user_schedules FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- 12.6. Posts & Comments (Sen Media)
+DROP POLICY IF EXISTS "Public read posts" ON public.posts;
 CREATE POLICY "Public read posts" ON public.posts FOR SELECT TO authenticated, anon USING (true);
+
+DROP POLICY IF EXISTS "Users can insert posts" ON public.posts;
 CREATE POLICY "Users can insert posts" ON public.posts FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own posts" ON public.posts;
 CREATE POLICY "Users can update own posts" ON public.posts FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own posts" ON public.posts;
 CREATE POLICY "Users can delete own posts" ON public.posts FOR DELETE TO authenticated USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Public read comments" ON public.comments;
 CREATE POLICY "Public read comments" ON public.comments FOR SELECT TO authenticated, anon USING (true);
+
+DROP POLICY IF EXISTS "Users can insert comments" ON public.comments;
 CREATE POLICY "Users can insert comments" ON public.comments FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own comments" ON public.comments;
 CREATE POLICY "Users can delete own comments" ON public.comments FOR DELETE TO authenticated USING (auth.uid() = user_id);
 
 -- ==============================================================================
