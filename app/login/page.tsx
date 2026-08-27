@@ -107,7 +107,7 @@ export default function LoginPage() {
     setGoogleLoading(true)
     setErrorMsg('')
     try {
-      await signInWithGoogle('/dashboard')
+      await signInWithGoogle('/new-dashboard')
     } catch (error: any) {
       setErrorMsg(error.message || 'Đăng nhập Google thất bại.')
       setGoogleLoading(false)
@@ -126,7 +126,7 @@ export default function LoginPage() {
         if (error) throw error
         const { data: { user } } = await supabase.auth.getUser()
         if (user) await ensureStudentProfile(user.id)
-        router.push('/dashboard')
+        router.push('/new-dashboard')
       } else {
         // Xử lý đăng ký
         const { error } = await supabase.auth.signUp({ email, password })
@@ -136,7 +136,7 @@ export default function LoginPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) await ensureStudentProfile(user.id)
 
-        router.push('/dashboard')
+        router.push('/new-dashboard')
       }
     } catch (error: any) {
       setErrorMsg(error.message === 'Invalid login credentials' ? 'Email hoặc mật khẩu không chính xác.' : error.message)

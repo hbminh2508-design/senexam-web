@@ -425,38 +425,6 @@ export default function NewDashboardPage() {
     )
   }
 
-  if (!isBetaTester) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-[radial-gradient(circle_at_15%_20%,#FFE29A_0%,transparent_35%),radial-gradient(circle_at_85%_15%,#BEE3FF_0%,transparent_30%),#FFF9EF] dark:bg-[radial-gradient(circle_at_15%_20%,#1e293b_0%,transparent_35%),radial-gradient(circle_at_85%_15%,#0f172a_0%,transparent_30%),#080c14] p-5">
-        <div className="w-full max-w-xl rounded-[28px] border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 p-8 shadow-[0_20px_50px_rgba(26,26,26,0.12)] backdrop-blur-xl">
-          <div className="mb-5 inline-flex rounded-full bg-amber-500/10 dark:bg-amber-500/20 p-3 text-amber-600 dark:text-amber-400">
-            <Lock className="h-6 w-6" />
-          </div>
-          <h1 className={`${headingFont.className} text-3xl font-black leading-tight text-[#1A1A1A] dark:text-white`}>
-            Giao diện New Dashboard dành cho thành viên Beta
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-[#4B5563] dark:text-slate-300">
-            Tài khoản của bạn hiện chưa được cấp quyền truy cập kênh Beta. Bạn có thể sử dụng bảng điều khiển tiêu chuẩn hoặc tham gia chương trình thử nghiệm để trải nghiệm các tính năng mới nhất.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#111827] dark:bg-white dark:text-slate-900 px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
-            >
-              Về Dashboard tiêu chuẩn <ArrowRight className="h-4 w-4" />
-            </button>
-            <Link
-              href="/tinhnangthunghiem"
-              className="rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-5 py-2.5 text-sm font-bold text-[#111827] dark:text-white transition hover:bg-black/5"
-            >
-              Đăng ký tham gia Beta
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const themeVars = getModernThemeVars('indigo', isDark)
 
   return (

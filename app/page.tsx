@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
 export default function RootPage() {
-  // Tự động đá người dùng sang trang dashboard ngay khi vừa tải trang gốc
-  redirect('/dashboard')
+  // Tự động chuyển hướng người dùng sang trang New Dashboard 2.0
+  redirect('/new-dashboard')
 }
