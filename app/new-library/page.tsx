@@ -176,11 +176,56 @@ export default function NewLibraryPage() {
       const { data: sessionData } = await supabase.auth.getSession()
       setAccessToken(sessionData.session?.access_token || null)
 
-      await fetchContents(null, role, vip)
+      // Kiểm tra xem URL có param folder không
+      const params = new URLSearchParams(window.location.search)
+      const folderParam = params.get('folder')
+      
+      let initialFolderId: string | null = null
+      const initialBreadcrumbs: Breadcrumb[] = [{ id: null, name: 'Thư viện số' }]
+
+      if (folderParam) {
+        try {
+          const { data: targetFolder } = await supabase
+            .from('library_folders')
+            .select('*')
+            .eq('id', folderParam)
+            .single()
+
+          if (targetFolder) {
+            initialFolderId = targetFolder.id
+            if (targetFolder.parent_id) {
+              const { data: parentFolder } = await supabase
+                .from('library_folders')
+                .select('*')
+                .eq('id', targetFolder.parent_id)
+                .single()
+              if (parentFolder) {
+                initialBreadcrumbs.push({ id: parentFolder.id, name: parentFolder.name })
+              }
+            }
+            initialBreadcrumbs.push({ id: targetFolder.id, name: targetFolder.name })
+          }
+        } catch (e) {
+          console.error('Error loading initial folder from url:', e)
+        }
+      }
+
+      setCurrentFolderId(initialFolderId)
+      setBreadcrumbs(initialBreadcrumbs)
+      await fetchContents(initialFolderId, role, vip)
     }
 
     init()
-  }, [router])
+
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search)
+      const fId = params.get('folder')
+      setCurrentFolderId(fId)
+      fetchContents(fId, userRole, isVip)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [router, isVip, userRole])
 
   const toggleDarkMode = () => {
     const next = !isDark
@@ -194,17 +239,25 @@ export default function NewLibraryPage() {
     }
   }
 
-  // Chuyển vào thư mục con
+  // Chuyển vào thư mục con (Cập nhật URL)
   const handleOpenFolder = (folder: FolderItem) => {
     setCurrentFolderId(folder.id)
-    setBreadcrumbs((prev) => [...prev, { id: folder.id, name: folder.name }])
+    const nextCrumbs = [...breadcrumbs, { id: folder.id, name: folder.name }]
+    setBreadcrumbs(nextCrumbs)
+    window.history.pushState(null, '', `/new-library?folder=${folder.id}`)
     fetchContents(folder.id, userRole, isVip)
   }
 
-  // Điều hướng breadcrumb
+  // Điều hướng breadcrumb (Cập nhật URL)
   const handleNavigateBreadcrumb = (crumb: Breadcrumb, index: number) => {
     setCurrentFolderId(crumb.id)
-    setBreadcrumbs((prev) => prev.slice(0, index + 1))
+    const nextCrumbs = breadcrumbs.slice(0, index + 1)
+    setBreadcrumbs(nextCrumbs)
+    if (crumb.id) {
+      window.history.pushState(null, '', `/new-library?folder=${crumb.id}`)
+    } else {
+      window.history.pushState(null, '', `/new-library`)
+    }
     fetchContents(crumb.id, userRole, isVip)
   }
 

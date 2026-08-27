@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useDeferredValue } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -34,12 +34,15 @@ import {
   Award,
   Bot,
   Zap,
+  Trash2,
+  RefreshCw,
+  Paperclip,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newmedia-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newmedia-body' })
 
-type MediaTab = 'forum' | 'chat' | 'senai_helper'
+type MediaTab = 'forum' | 'chat'
 
 const SUBJECT_TAGS = ['Tất cả', 'Toán học', 'Vật lí', 'Hóa học', 'Sinh học', 'Ngữ văn', 'Tiếng Anh', 'HSA', 'TSA', 'Tài liệu']
 
@@ -47,56 +50,17 @@ export default function NewMediaPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [userProfile, setUserProfile] = useState<any>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null)
 
   const [activeTab, setActiveTab] = useState<MediaTab>('forum')
   const [selectedTag, setSelectedTag] = useState('Tất cả')
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearch = useDeferredValue(searchQuery)
 
-  // FORUM POSTS STATE
-  const [posts, setPosts] = useState<any[]>([
-    {
-      id: 'p1',
-      author: 'Nguyễn Minh Trí (THPT Chuyên KHTN)',
-      avatar: 'M',
-      time: '15 phút trước',
-      subject: 'Toán học',
-      title: 'Hỏi cách tìm cực trị hàm hợp $f(x^3 - 3x)$ trong đề khảo sát HSA 2026',
-      content: 'Chào các bạn, mình đang gặp khó ở câu vận dụng cao về cực trị hàm số liên quan đến phép biến đổi $f(u)$. Có bạn nào có công thức tính nhanh đạo hàm cấp 1 hoặc bảng biến thiên mẫu không ạ?',
-      likes: 24,
-      isLiked: false,
-      comments: [
-        { id: 'c1', author: 'Lê Hoàng', text: 'Bạn đạo hàm $u\'(x) \\cdot f\'(u) = 0$ rồi vẽ bảng ghép trục nhé, 1 phút là ra!', time: '10 phút trước' },
-      ],
-    },
-    {
-      id: 'p2',
-      author: 'Trần Thu Hà',
-      avatar: 'H',
-      time: '1 giờ trước',
-      subject: 'Hóa học',
-      title: 'Chia sẻ sơ đồ tư duy toàn bộ lý thuyết Este - Lipit - Peptit trọng tâm',
-      content: 'Mình vừa tổng hợp lại toàn bộ lý thuyết và các phản ứng đặc trưng thường gặp trong đề thi tốt nghiệp THPT 2026. Chúc cả nhà ôn thi thật tốt nhé!',
-      likes: 58,
-      isLiked: true,
-      comments: [
-        { id: 'c2', author: 'Phạm Nam', text: 'Cảm ơn bạn nhiều, tài liệu rất chi tiết!', time: '45 phút trước' },
-      ],
-    },
-    {
-      id: 'p3',
-      author: 'Vũ Đức Duy',
-      avatar: 'D',
-      time: '3 giờ trước',
-      subject: 'TSA',
-      title: 'Kinh nghiệm phân bổ thời gian phần Tư duy Khoa học giải quyết vấn đề TSA',
-      content: 'Kỳ thi TSA năm nay đòi hỏi phản xạ đọc biểu đồ và dữ liệu rất nhanh. Mọi người nên dành 25 phút đầu cho đọc hiểu và 35 phút cho khoa học.',
-      likes: 42,
-      isLiked: false,
-      comments: [],
-    },
-  ])
+  // REAL FORUM POSTS FROM SUPABASE
+  const [posts, setPosts] = useState<any[]>([])
+  const [postsLoading, setPostsLoading] = useState(false)
 
   // CREATE NEW POST MODAL STATE
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -105,17 +69,65 @@ export default function NewMediaPage() {
   const [newPostSubject, setNewPostSubject] = useState('Toán học')
   const [creatingPost, setCreatingPost] = useState(false)
 
-  // COMMENT INPUT STATE
+  // COMMENTS PER POST
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
+  const [activePostComments, setActivePostComments] = useState<Record<string, any[]>>({})
+  const [expandedCommentPostIds, setExpandedCommentPostIds] = useState<string[]>([])
 
-  // DIRECT CHAT MESSAGES STATE (REAL-TIME ROOM)
-  const [chatMessages, setChatMessages] = useState<any[]>([
-    { id: 'm1', sender: 'Nguyễn Văn An', text: 'Chào mọi người! Tối nay có ai luyện đề Toán THPT trên SenExam không?', time: '17:15', isMe: false },
-    { id: 'm2', sender: 'Trần Mai', text: 'Có mình nè! Mình đang làm đề HSA số 02 trên kho đề mới.', time: '17:18', isMe: false },
-    { id: 'm3', sender: 'Admin SenExam', text: '🔥 Đã mở cổng đổi Gift Code sự kiện và bảng tin thông báo mới tại Sen Media nhé các sĩ tử!', time: '17:20', isMe: false, isAdmin: true },
-  ])
+  // REAL CHAT MESSAGES FROM API
+  const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatInput, setChatInput] = useState('')
+  const [sendingChat, setSendingChat] = useState(false)
   const chatScrollRef = useRef<HTMLDivElement>(null)
+
+  const authHeaders = async (): Promise<Record<string, string> | undefined> => {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return undefined
+    return { Authorization: `Bearer ${token}` }
+  }
+
+  // 1. FETCH REAL FORUM POSTS
+  const fetchForumPosts = async () => {
+    setPostsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles:user_id (id, full_name, school, role),
+          comments (id, content, created_at, user_id, profiles:user_id(full_name))
+        `)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (!error && data) {
+        setPosts(data)
+      }
+    } catch (e) {
+      console.error('Error loading forum posts:', e)
+    } finally {
+      setPostsLoading(false)
+    }
+  }
+
+  // 2. FETCH REAL CHAT MESSAGES
+  const fetchChatMessages = async () => {
+    try {
+      const headers = await authHeaders()
+      const res = await fetch('/api/sen-messages?limit=50', {
+        method: 'GET',
+        headers: headers ? { ...headers, 'Content-Type': 'application/json' } : undefined,
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setChatMessages(data.messages || [])
+      }
+    } catch (e) {
+      console.error('Error fetching chat messages:', e)
+    }
+  }
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -130,16 +142,27 @@ export default function NewMediaPage() {
         return
       }
 
-      setCurrentUser(user)
+      setCurrentUserId(user.id)
       await ensureStudentProfile(user.id)
 
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      setUserProfile(p)
+      setCurrentUserProfile(p)
+
+      await Promise.all([fetchForumPosts(), fetchChatMessages()])
       setLoading(false)
     }
 
     init()
-  }, [router])
+
+    // Poll for new chat messages every 5 seconds when in chat tab
+    const chatInterval = setInterval(() => {
+      if (activeTab === 'chat') {
+        fetchChatMessages()
+      }
+    }, 5000)
+
+    return () => clearInterval(chatInterval)
+  }, [router, activeTab])
 
   useEffect(() => {
     if (activeTab === 'chat' && chatScrollRef.current) {
@@ -159,89 +182,119 @@ export default function NewMediaPage() {
     }
   }
 
-  // THÍCH BÀI VIẾT
-  const handleLikePost = (postId: string) => {
-    setPosts(
-      posts.map((p) => {
-        if (p.id === postId) {
-          const isLiked = !p.isLiked
-          return { ...p, isLiked, likes: isLiked ? p.likes + 1 : p.likes - 1 }
-        }
-        return p
-      })
-    )
-  }
-
-  // TẠO BÀI VIẾT DIỄN ĐÀN MỚI
-  const handleCreatePost = (e: React.FormEvent) => {
+  // TẠO BÀI VIẾT DIỄN ĐÀN THẬT LƯU VÀO SUPABASE
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newPostTitle.trim() || !newPostContent.trim()) return
+    if (!newPostTitle.trim() || !newPostContent.trim() || !currentUserId) return
 
     setCreatingPost(true)
-    const newPost = {
-      id: 'p_' + Date.now(),
-      author: userProfile?.full_name || currentUser?.email || 'Bạn',
-      avatar: (userProfile?.full_name || 'B').charAt(0).toUpperCase(),
-      time: 'Vừa xong',
-      subject: newPostSubject,
-      title: newPostTitle.trim(),
-      content: newPostContent.trim(),
-      likes: 0,
-      isLiked: false,
-      comments: [],
-    }
+    try {
+      const { data, error } = await supabase
+        .from('posts')
+        .insert({
+          user_id: currentUserId,
+          title: newPostTitle.trim(),
+          content: newPostContent.trim(),
+          category: newPostSubject,
+          likes_count: 0,
+          is_pinned: false,
+        })
+        .select(`
+          *,
+          profiles:user_id (id, full_name, school, role),
+          comments (id, content, created_at, user_id, profiles:user_id(full_name))
+        `)
+        .single()
 
-    setPosts([newPost, ...posts])
-    setNewPostTitle('')
-    setNewPostContent('')
-    setShowCreateModal(false)
-    setCreatingPost(false)
+      if (error) throw error
+
+      if (data) {
+        setPosts([data, ...posts])
+      }
+      setNewPostTitle('')
+      setNewPostContent('')
+      setShowCreateModal(false)
+    } catch (err: any) {
+      alert(`Lỗi đăng bài: ${err.message}`)
+    } finally {
+      setCreatingPost(false)
+    }
   }
 
-  // BÌNH LUẬN DƯỚI BÀI VIẾT
-  const handleAddComment = (postId: string) => {
+  // BÌNH LUẬN THẬT LƯU VÀO SUPABASE
+  const handleAddComment = async (postId: string) => {
     const text = (commentInputs[postId] || '').trim()
-    if (!text) return
+    if (!text || !currentUserId) return
 
-    setPosts(
-      posts.map((p) => {
-        if (p.id === postId) {
-          const newComment = {
-            id: 'c_' + Date.now(),
-            author: userProfile?.full_name || currentUser?.email || 'Bạn',
-            text: text,
-            time: 'Vừa xong',
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .insert({
+          post_id: postId,
+          user_id: currentUserId,
+          content: text,
+        })
+        .select('id, content, created_at, user_id, profiles:user_id(full_name)')
+        .single()
+
+      if (error) throw error
+
+      // Cập nhật danh sách bài viết
+      setPosts(
+        posts.map((p) => {
+          if (p.id === postId) {
+            const currentC = Array.isArray(p.comments) ? p.comments : []
+            return { ...p, comments: [...currentC, data] }
           }
-          return { ...p, comments: [...p.comments, newComment] }
-        }
-        return p
-      })
-    )
+          return p
+        })
+      )
 
-    setCommentInputs({ ...commentInputs, [postId]: '' })
+      setCommentInputs({ ...commentInputs, [postId]: '' })
+    } catch (err: any) {
+      alert(`Lỗi gửi bình luận: ${err.message}`)
+    }
   }
 
-  // GỬI TIN NHẮN TRÒ CHUYỆN TRỰC TIẾP
-  const handleSendChatMessage = (e: React.FormEvent) => {
+  // THÍCH BÀI VIẾT THẬT
+  const handleLikePost = async (post: any) => {
+    const newLikes = (post.likes_count || 0) + 1
+    await supabase.from('posts').update({ likes_count: newLikes }).eq('id', post.id)
+    setPosts(posts.map((p) => (p.id === post.id ? { ...p, likes_count: newLikes } : p)))
+  }
+
+  // GỬI TIN NHẮN TRÒ CHUYỆN THẬT
+  const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!chatInput.trim()) return
+    if (!chatInput.trim() || sendingChat) return
 
-    const newMsg = {
-      id: 'm_' + Date.now(),
-      sender: userProfile?.full_name || 'Tôi',
-      text: chatInput.trim(),
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      isMe: true,
+    setSendingChat(true)
+    try {
+      const headers = await authHeaders()
+      const formData = new FormData()
+      formData.append('message', chatInput.trim())
+
+      const res = await fetch('/api/sen-messages', {
+        method: 'POST',
+        headers: headers ? { ...headers } : undefined,
+        body: formData,
+      })
+
+      if (res.ok) {
+        setChatInput('')
+        await fetchChatMessages()
+      }
+    } catch (err) {
+      console.error('Error sending message:', err)
+    } finally {
+      setSendingChat(false)
     }
-
-    setChatMessages([...chatMessages, newMsg])
-    setChatInput('')
   }
 
   const filteredPosts = posts.filter((p) => {
-    const matchTag = selectedTag === 'Tất cả' || p.subject === selectedTag
-    const q = searchQuery.toLowerCase().trim()
-    const matchQ = !q || p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q)
+    const matchTag = selectedTag === 'Tất cả' || p.category === selectedTag
+    const q = deferredSearch.toLowerCase().trim()
+    const matchQ = !q || (p.title || '').toLowerCase().includes(q) || (p.content || '').toLowerCase().includes(q)
     return matchTag && matchQ
   })
 
@@ -252,7 +305,7 @@ export default function NewMediaPage() {
       <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
         <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
           <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-          <span className="font-bold text-sm">Đang kết nối không gian Sen Media...</span>
+          <span className="font-bold text-sm">Đang tải trung tâm Sen Media...</span>
         </div>
       </div>
     )
@@ -286,11 +339,11 @@ export default function NewMediaPage() {
                   <Sparkles className="inline h-3 w-3 mr-1" /> Sen Media 2.0
                 </span>
                 <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 text-[10px] font-bold">
-                  Online
+                  Trực Tuyến
                 </span>
               </div>
               <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newmedia-heading)' }}>
-                Cộng Đồng Sĩ Tử & Trò Chuyện Trực Tuyến
+                Cộng Đồng Sĩ Tử & Trò Chuyện Trực Tiếp
               </h1>
             </div>
           </div>
@@ -317,7 +370,7 @@ export default function NewMediaPage() {
                 : 'border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 hover:bg-black/5'
             }`}
           >
-            <MessageSquare className="h-4 w-4 text-indigo-500" /> Diễn Đàn & Hỏi Đáp Sĩ Tử
+            <MessageSquare className="h-4 w-4 text-indigo-500" /> Diễn Đàn & Hỏi Đáp Sĩ Tử ({posts.length})
           </button>
           <button
             type="button"
@@ -370,115 +423,147 @@ export default function NewMediaPage() {
 
             {/* FORUM POSTS FEED */}
             <div className="lg:col-span-3 space-y-4">
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm bài viết, câu hỏi, tài liệu ôn thi..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-11 w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 pl-10 pr-4 text-xs font-semibold outline-none focus:border-indigo-500 shadow-sm"
-                />
+              {/* Search Bar & Refresh */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm câu hỏi, bài tập, thảo luận..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-11 w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 pl-10 pr-4 text-xs font-semibold outline-none focus:border-indigo-500 shadow-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchForumPosts}
+                  disabled={postsLoading}
+                  className="h-11 w-11 flex items-center justify-center rounded-2xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 shadow-sm transition hover:scale-105"
+                  title="Làm mới bài viết"
+                >
+                  <RefreshCw className={`h-4 w-4 text-indigo-500 ${postsLoading ? 'animate-spin' : ''}`} />
+                </button>
               </div>
 
               {/* Posts List */}
               <div className="space-y-4">
-                {filteredPosts.length === 0 ? (
+                {postsLoading && posts.length === 0 ? (
+                  <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-12 text-center text-[#6B7280]">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mx-auto mb-2" />
+                    <p className="text-xs font-bold">Đang tải các bài viết từ cộng đồng...</p>
+                  </div>
+                ) : filteredPosts.length === 0 ? (
                   <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-12 text-center text-[#6B7280] space-y-2">
                     <MessageSquare className="h-10 w-10 mx-auto opacity-40" />
-                    <p className="text-xs font-bold">Chưa có bài viết nào trong chủ đề này. Hãy là người đầu tiên đặt câu hỏi!</p>
+                    <p className="text-xs font-bold">Chưa có bài viết nào trong danh mục này. Hãy là người đầu tiên đặt câu hỏi!</p>
                   </div>
                 ) : (
-                  filteredPosts.map((post) => (
-                    <div
-                      key={post.id}
-                      className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 p-6 shadow-sm backdrop-blur-xl space-y-3 transition hover:shadow-md"
-                    >
-                      {/* Post Header */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-black text-sm shadow-sm">
-                            {post.avatar}
+                  filteredPosts.map((post) => {
+                    const authorName = post.profiles?.full_name || 'Thí sinh SenExam'
+                    const authorSchool = post.profiles?.school || ''
+                    const commentsCount = Array.isArray(post.comments) ? post.comments.length : 0
+
+                    return (
+                      <div
+                        key={post.id}
+                        className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 p-6 shadow-sm backdrop-blur-xl space-y-3 transition hover:shadow-md"
+                      >
+                        {/* Post Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-black text-sm shadow-sm">
+                              {authorName.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="text-xs font-black text-slate-900 dark:text-white">{authorName}</h4>
+                                {post.profiles?.role === 'admin' && (
+                                  <span className="rounded-full bg-rose-500/15 text-rose-600 px-1.5 py-0.2 text-[9px] font-black uppercase">
+                                    Admin
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-[#6B7280] dark:text-slate-400">
+                                {authorSchool ? `${authorSchool} • ` : ''}
+                                {new Date(post.created_at).toLocaleDateString('vi-VN')}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-xs font-black text-slate-900 dark:text-white">{post.author}</h4>
-                            <span className="text-[10px] text-[#6B7280] dark:text-slate-400">{post.time}</span>
-                          </div>
-                        </div>
 
-                        <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-3 py-0.5 text-[10px] font-black border border-indigo-500/20">
-                          {post.subject}
-                        </span>
-                      </div>
-
-                      {/* Post Content */}
-                      <div>
-                        <h3 className="text-base font-black leading-snug" style={{ fontFamily: 'var(--font-newmedia-heading)' }}>
-                          {post.title}
-                        </h3>
-                        <p className="mt-1 text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                          {post.content}
-                        </p>
-                      </div>
-
-                      {/* Post Action Footer */}
-                      <div className="pt-2 flex items-center justify-between border-t border-black/5 dark:border-white/5 text-xs">
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handleLikePost(post.id)}
-                            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold transition ${
-                              post.isLiked
-                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                                : 'hover:bg-black/5 text-[#6B7280]'
-                            }`}
-                          >
-                            <Heart className={`h-4 w-4 ${post.isLiked ? 'fill-current' : ''}`} />
-                            <span>{post.likes}</span>
-                          </button>
-
-                          <span className="inline-flex items-center gap-1 text-[#6B7280] font-bold">
-                            <MessageCircle className="h-4 w-4" /> {post.comments.length} thảo luận
+                          <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-3 py-0.5 text-[10px] font-black border border-indigo-500/20">
+                            {post.category || 'Thảo luận'}
                           </span>
                         </div>
-                      </div>
 
-                      {/* Comments Section */}
-                      <div className="pt-3 border-t border-black/5 dark:border-white/5 space-y-2.5">
-                        {post.comments.map((cmt: any) => (
-                          <div key={cmt.id} className="rounded-xl bg-black/[0.02] dark:bg-white/[0.02] p-3 text-xs space-y-1">
-                            <div className="flex items-center justify-between">
-                              <strong className="text-slate-900 dark:text-white">{cmt.author}</strong>
-                              <span className="text-[10px] text-[#6B7280]">{cmt.time}</span>
-                            </div>
-                            <p className="text-[#4B5563] dark:text-slate-300 font-medium">{cmt.text}</p>
+                        {/* Post Content */}
+                        <div>
+                          <h3 className="text-base font-black leading-snug" style={{ fontFamily: 'var(--font-newmedia-heading)' }}>
+                            {post.title}
+                          </h3>
+                          <p className="mt-1 text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium whitespace-pre-line">
+                            {post.content}
+                          </p>
+                        </div>
+
+                        {/* Post Action Footer */}
+                        <div className="pt-2 flex items-center justify-between border-t border-black/5 dark:border-white/5 text-xs">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleLikePost(post)}
+                              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-bold transition hover:bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                            >
+                              <Heart className="h-4 w-4 fill-current" />
+                              <span>{post.likes_count || 0}</span>
+                            </button>
+
+                            <span className="inline-flex items-center gap-1 text-[#6B7280] font-bold">
+                              <MessageCircle className="h-4 w-4" /> {commentsCount} câu trả lời
+                            </span>
                           </div>
-                        ))}
+                        </div>
 
-                        {/* Add Comment Input */}
-                        <div className="flex items-center gap-2 pt-1">
-                          <input
-                            type="text"
-                            placeholder="Viết câu trả lời hoặc lời giải của bạn..."
-                            value={commentInputs[post.id] || ''}
-                            onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleAddComment(post.id)
-                            }}
-                            className="h-9 flex-1 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 text-xs outline-none focus:border-indigo-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleAddComment(post.id)}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition"
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                          </button>
+                        {/* Comments Section */}
+                        <div className="pt-3 border-t border-black/5 dark:border-white/5 space-y-2.5">
+                          {Array.isArray(post.comments) && post.comments.map((cmt: any) => (
+                            <div key={cmt.id} className="rounded-xl bg-black/[0.02] dark:bg-white/[0.02] p-3 text-xs space-y-1">
+                              <div className="flex items-center justify-between">
+                                <strong className="text-slate-900 dark:text-white">
+                                  {cmt.profiles?.full_name || 'Thí sinh'}
+                                </strong>
+                                <span className="text-[10px] text-[#6B7280]">
+                                  {new Date(cmt.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="text-[#4B5563] dark:text-slate-300 font-medium">{cmt.content}</p>
+                            </div>
+                          ))}
+
+                          {/* Add Comment Input */}
+                          <div className="flex items-center gap-2 pt-1">
+                            <input
+                              type="text"
+                              placeholder="Viết câu trả lời hoặc lời giải của bạn..."
+                              value={commentInputs[post.id] || ''}
+                              onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleAddComment(post.id)
+                              }}
+                              className="h-9 flex-1 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 text-xs outline-none focus:border-indigo-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleAddComment(post.id)}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </div>
@@ -503,45 +588,73 @@ export default function NewMediaPage() {
                   </span>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={fetchChatMessages}
+                className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-[#6B7280]"
+                title="Làm mới tin nhắn"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
             </div>
 
             {/* Chat Messages Log */}
             <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              {chatMessages.map((msg) => (
-                <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-                  <span className="text-[10px] text-[#6B7280] dark:text-slate-400 px-1 mb-0.5">
-                    {msg.sender} • {msg.time}
-                  </span>
-                  <div
-                    className={`max-w-md rounded-2xl p-3 text-xs font-semibold shadow-sm ${
-                      msg.isAdmin
-                        ? 'bg-gradient-to-r from-amber-500 to-rose-500 text-white font-bold'
-                        : msg.isMe
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-black/5 dark:bg-white/10 text-slate-900 dark:text-slate-100'
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
+              {chatMessages.length === 0 ? (
+                <div className="text-center py-20 text-[#6B7280] text-xs">
+                  Chưa có tin nhắn nào. Hãy là người đầu tiên gửi tin nhắn!
                 </div>
-              ))}
+              ) : (
+                chatMessages.map((msg) => {
+                  const isMe = msg.user_id === currentUserId
+                  return (
+                    <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                      <span className="text-[10px] text-[#6B7280] dark:text-slate-400 px-1 mb-0.5">
+                        {msg.user_name || 'Thí sinh'} • {new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <div
+                        className={`max-w-md rounded-2xl p-3 text-xs font-semibold shadow-sm ${
+                          isMe
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-black/5 dark:bg-white/10 text-slate-900 dark:text-slate-100'
+                        }`}
+                      >
+                        {msg.message}
+                        {msg.attachment_url && (
+                          <div className="mt-2 pt-2 border-t border-white/20">
+                            <a
+                              href={msg.attachment_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline text-[11px] block truncate font-bold"
+                            >
+                              📎 {msg.attachment_name || 'Tệp đính kèm'}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
 
             {/* Chat Input Bar */}
             <form onSubmit={handleSendChatMessage} className="pt-3 border-t border-black/10 dark:border-white/10 flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Nhập tin nhắn trò chuyện với bạn bè sĩ tử..."
+                placeholder="Nhập tin nhắn trao đổi với bạn bè sĩ tử..."
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 className="h-12 flex-1 rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-4 text-xs sm:text-sm font-semibold outline-none focus:border-cyan-500 shadow-inner"
               />
               <button
                 type="submit"
-                disabled={!chatInput.trim()}
+                disabled={!chatInput.trim() || sendingChat}
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 shadow-md transition hover:scale-105 active:scale-95 disabled:opacity-40"
               >
-                <Send className="h-4 w-4" />
+                {sendingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
             </form>
           </div>
@@ -605,7 +718,7 @@ export default function NewMediaPage() {
                   disabled={creatingPost || !newPostTitle.trim()}
                   className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-50"
                 >
-                  Đăng Bài Ngay
+                  {creatingPost ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Đăng Bài Ngay'}
                 </button>
               </div>
             </form>

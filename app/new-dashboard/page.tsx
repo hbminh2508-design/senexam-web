@@ -8,6 +8,7 @@ import {
   ArrowRight,
   BadgeCheck,
   BookOpen,
+  Calendar,
   Compass,
   CreditCard,
   Crown,
@@ -125,6 +126,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#818CF8] via-[#6366F1] to-[#38BDF8]',
     badge: 'Media',
     icon: MessageSquare,
+  },
+  {
+    key: 'schedule',
+    title: 'Lịch Học & Lịch Thi',
+    description: 'Quản lý thời khóa biểu, lịch thi thử, cài đặt nhắc nhở và lặp lại thông minh.',
+    href: '/new-schedule',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
+    badge: 'Mới',
+    icon: Calendar,
   },
   {
     key: 'focus',
