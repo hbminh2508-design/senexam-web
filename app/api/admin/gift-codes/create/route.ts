@@ -15,9 +15,10 @@ export async function POST(request: Request) {
     const {
       rewardType, count, note, maxUses, expiresAt,
       vipDays, sencashAmount, senaiTier, senaiDurationDays, senaiPermanent,
+      customCode, code,
     } = body
 
-    const codeCount = parseInt(count, 10)
+    const codeCount = parseInt(count, 10) || 1
     if (!Number.isFinite(codeCount) || codeCount < 1 || codeCount > MAX_BATCH_SIZE) {
       return NextResponse.json({ error: `Số lượng mã phải từ 1 đến ${MAX_BATCH_SIZE}` }, { status: 400 })
     }
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
       max_uses: Math.max(1, parseInt(maxUses, 10) || 1),
       expires_at: expiresAt || null,
       created_by: admin.id,
+      active: true,
+      used_count: 0,
     }
 
     if (rewardType === 'vip_days') {
@@ -54,15 +57,19 @@ export async function POST(request: Request) {
     }
 
     const supabaseAdmin = getSupabaseAdmin()
-    const codes: string[] = []
     const batchId = crypto.randomUUID()
-    const rows = Array.from({ length: codeCount }, () => ({ ...row, batch_id: batchId, code: generateGiftCode() }))
+    const custom = (customCode || code || '').trim()
 
-    const { data: inserted, error } = await supabaseAdmin.from('gift_codes').insert(rows).select('code')
+    const rows = Array.from({ length: codeCount }, (_, idx) => ({
+      ...row,
+      batch_id: batchId,
+      code: codeCount === 1 && custom ? custom : generateGiftCode(),
+    }))
+
+    const { data: inserted, error } = await supabaseAdmin.from('gift_codes').insert(rows).select('*')
     if (error) throw error
-    codes.push(...(inserted || []).map(r => r.code))
 
-    return NextResponse.json({ success: true, codes })
+    return NextResponse.json({ success: true, codes: inserted || [] })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Lỗi tạo mã quà tặng' }, { status: 500 })
   }

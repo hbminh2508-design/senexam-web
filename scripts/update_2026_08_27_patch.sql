@@ -49,3 +49,18 @@ DROP POLICY IF EXISTS "Users can read own migration" ON public.ui_migration_opt_
 CREATE POLICY "Users can read own migration" ON public.ui_migration_opt_ins 
   FOR SELECT TO authenticated 
   USING (auth.uid() = user_id);
+
+-- 4.3. Chính sách cho bảng Gift Codes (Tạo và Đổi mã quà tặng)
+ALTER TABLE public.gift_codes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read active gift_codes" ON public.gift_codes;
+CREATE POLICY "Public read active gift_codes" ON public.gift_codes 
+  FOR SELECT TO authenticated, anon 
+  USING (true);
+
+DROP POLICY IF EXISTS "Admin full access gift_codes" ON public.gift_codes;
+CREATE POLICY "Admin full access gift_codes" ON public.gift_codes 
+  FOR ALL TO authenticated 
+  USING (true) 
+  WITH CHECK (true);
+

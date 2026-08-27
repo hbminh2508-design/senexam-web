@@ -614,33 +614,40 @@ export default function NewAdminPage() {
       const maxUses = parseInt(codeMaxUses) || 1
       const expiresDays = parseInt(codeExpiresDays) || 30
       const expiresAt = new Date(Date.now() + expiresDays * 86400 * 1000).toISOString()
+      const customCode = count === 1 && codeCustomInput.trim() ? normalizeGiftCode(codeCustomInput) : ''
 
-      const newCodesToInsert = []
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
 
-      for (let i = 0; i < count; i++) {
-        const generated = count === 1 && codeCustomInput.trim() ? normalizeGiftCode(codeCustomInput) : generateGiftCode()
-
-        newCodesToInsert.push({
-          code: generated,
-          reward_type: codeType,
-          reward_sencash_amount: codeType === 'sencash' ? parseInt(codeAmount) || 100 : null,
-          reward_vip_days: codeType === 'vip_days' ? parseInt(codeVipDays) || 30 : null,
-          reward_senai_tier: codeType === 'senai_tier' ? 'ultra' : null,
-          reward_senai_duration_days: codeType === 'senai_tier' ? 30 : null,
-          max_uses: maxUses,
-          used_count: 0,
-          active: true,
-          expires_at: expiresAt,
+      const res = await fetch('/api/admin/gift-codes/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          rewardType: codeType,
+          count,
+          maxUses,
+          expiresAt,
+          customCode,
           note: `Admin Giveaway (${new Date().toLocaleDateString('vi-VN')})`,
-        })
+          sencashAmount: codeType === 'sencash' ? parseInt(codeAmount) || 100 : undefined,
+          vipDays: codeType === 'vip_days' ? parseInt(codeVipDays) || 30 : undefined,
+          senaiTier: 'ultra',
+          senaiDurationDays: 30,
+        }),
+      })
+
+      const resData = await res.json()
+      if (!res.ok || resData.error) {
+        throw new Error(resData.error || 'Lỗi từ máy chủ khi tạo mã')
       }
 
-      const { data, error } = await supabase.from('gift_codes').insert(newCodesToInsert).select('*')
-      if (error) throw error
-
-      setGiftCodes([...(data || []), ...giftCodes])
+      const createdList = Array.isArray(resData.codes) ? resData.codes : []
+      setGiftCodes([...createdList, ...giftCodes])
       setCodeCustomInput('')
-      alert(`Đã tạo thành công ${newCodesToInsert.length} mã quà tặng 16 ký tự!`)
+      alert(`Đã tạo thành công ${createdList.length || count} mã quà tặng!`)
     } catch (err: any) {
       alert(`Lỗi tạo mã: ${err.message}`)
     } finally {
