@@ -44,6 +44,7 @@ import {
   FileCheck,
   Gift,
   ShieldCheck,
+  Gem,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
@@ -170,6 +171,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: FlaskConical,
   },
   {
+    key: 'exclusive_store',
+    title: 'Cửa Hàng Độc Quyền',
+    description: 'Ưu đãi Flash Sale giảm 30% nâng cấp SenAI Plus/Ultra dành riêng cho VIP & SenCash.',
+    href: '/new-exclusive-store',
+    tone: 'from-[#EC4899] via-[#D946EF] to-[#8B5CF6]',
+    badge: 'Hot Deal',
+    icon: Gem,
+  },
+  {
     key: 'vip',
     title: 'Gói nâng cấp VIP',
     description: 'Mở khoá trọn vẹn đặc quyền AI, đề độc quyền và hỗ trợ 24/7.',
@@ -287,10 +297,13 @@ export default function NewDashboardPage() {
       ])
 
       const profile = profileRes.data
-      const beta = !!profile?.is_beta_tester || hookBeta
+      const beta = profile ? profile.is_beta_tester === true : (localStorage.getItem('senexam_beta_tester') === '1')
 
       if (!disposed) {
         setIsBetaTester(beta)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('senexam_beta_tester', beta ? '1' : '0')
+        }
         setFullName(profile?.full_name?.trim() || user.user_metadata?.full_name || 'Bạn')
         setSchool(profile?.school || '')
         setProvince(profile?.province || '')

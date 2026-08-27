@@ -49,13 +49,26 @@ export async function POST(request: Request) {
       const newExpiresAt = extendVipExpiry(profile?.vip_expires_at, giftCode.reward_vip_days)
       await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt }).eq('id', user.id)
     } else if (giftCode.reward_type === 'sencash') {
-      const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
-        p_user_id: user.id,
-        p_delta: giftCode.reward_sencash_amount,
-        p_reason: 'gift_code',
-        p_reference: giftCode.code,
-      })
-      if (rpcError) throw rpcError
+      try {
+        const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
+          p_user_id: user.id,
+          p_delta: giftCode.reward_sencash_amount,
+          p_reason: 'gift_code',
+          p_reference: giftCode.code,
+        })
+        if (rpcError) throw rpcError
+      } catch (rpcErr) {
+        // Fallback: trực tiếp cập nhật profiles & thêm log giao dịch
+        const { data: prof } = await supabaseAdmin.from('profiles').select('sencash_balance').eq('id', user.id).maybeSingle()
+        const newBalance = Math.max(0, (prof?.sencash_balance || 0) + (giftCode.reward_sencash_amount || 0))
+        await supabaseAdmin.from('profiles').update({ sencash_balance: newBalance }).eq('id', user.id)
+        await supabaseAdmin.from('sencash_transactions').insert({
+          user_id: user.id,
+          amount: giftCode.reward_sencash_amount,
+          transaction_type: 'gift',
+          description: `Đổi mã quà tặng: ${giftCode.code}`,
+        })
+      }
     } else if (giftCode.reward_type === 'senai_tier') {
       const { data: profile } = await supabaseAdmin
         .from('profiles')

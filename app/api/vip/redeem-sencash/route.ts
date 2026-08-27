@@ -19,18 +19,38 @@ export async function POST(request: Request) {
     const cost = vndToSenCash(plan.priceVnd)
     const supabaseAdmin = getSupabaseAdmin()
 
-    const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
-      p_user_id: user.id,
-      p_delta: -cost,
-      p_reason: 'vip_redeem',
-      p_reference: plan.code,
-    })
+    let balanceDeducted = false
+    try {
+      const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
+        p_user_id: user.id,
+        p_delta: -cost,
+        p_reason: 'vip_redeem',
+        p_reference: plan.code,
+      })
 
-    if (rpcError) {
-      if (rpcError.message.includes('không đủ')) {
+      if (rpcError) throw rpcError
+      balanceDeducted = true
+    } catch (rpcErr: any) {
+      if (rpcErr?.message?.includes('không đủ')) {
         return NextResponse.json({ error: 'Số dư SenCash không đủ để đổi gói này' }, { status: 400 })
       }
-      throw rpcError
+
+      // Fallback: Kiểm tra và trừ SenCash trực tiếp
+      const { data: prof } = await supabaseAdmin.from('profiles').select('sencash_balance').eq('id', user.id).maybeSingle()
+      const currentBalance = prof?.sencash_balance || 0
+      if (currentBalance < cost) {
+        return NextResponse.json({ error: `Số dư SenCash không đủ (${currentBalance} SC < ${cost} SC)` }, { status: 400 })
+      }
+
+      const newBalance = currentBalance - cost
+      await supabaseAdmin.from('profiles').update({ sencash_balance: newBalance }).eq('id', user.id)
+      await supabaseAdmin.from('sencash_transactions').insert({
+        user_id: user.id,
+        amount: -cost,
+        transaction_type: 'vip_purchase',
+        description: `Đổi ${cost} SC lấy gói VIP: ${plan.name}`,
+      })
+      balanceDeducted = true
     }
 
     const { data: profile } = await supabaseAdmin.from('profiles').select('vip_expires_at').eq('id', user.id).maybeSingle()

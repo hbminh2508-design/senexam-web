@@ -66,7 +66,7 @@ export default function NewLibraryPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
-  const [userRole, setUserRole] = useState<'student' | 'admin' | 'collab'>('student')
+  const [userRole, setUserRole] = useState<'student' | 'admin' | 'collab' | 'teacher'>('student')
   const [isVip, setIsVip] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [accessToken, setAccessToken] = useState<string | null>(null)
@@ -102,7 +102,7 @@ export default function NewLibraryPage() {
   const [renameTarget, setRenameTarget] = useState<{ id: string; type: 'folder' | 'doc'; name: string } | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
-  const canManage = userRole === 'admin' || userRole === 'collab'
+  const canManage = userRole === 'admin' || userRole === 'collab' || userRole === 'teacher'
 
   const fetchContents = async (folderId: string | null, role: string, vipStatus: boolean) => {
     setLoading(true)

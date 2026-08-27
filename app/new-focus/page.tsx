@@ -46,6 +46,20 @@ const AMBIENT_SOUNDS = [
   { id: 'lofi', name: 'Lofi Cafe', icon: Coffee, src: 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg' },
 ]
 
+const YOUTUBE_TRACKS = [
+  { title: 'Lofi Girl - Chill Beats to Relax/Study', id: 'jfKfPfyJRdk' },
+  { title: 'Study & Relax Piano Music (Chillhop)', id: '2OEL4P1Rz04' },
+  { title: 'Late Night Coding & Focus Mix', id: 'HkZ8BitJhvc' },
+  { title: 'Aesthetic Rainy Window Ambient', id: '7NOSDKb0HlU' },
+]
+
+const BACKGROUND_THEMES = [
+  { id: 'aurora', name: 'Aurora Dreams', gradient: 'radial-gradient(circle at 10% 10%, rgba(56, 189, 248, 0.25), transparent 40%), radial-gradient(circle at 90% 90%, rgba(168, 85, 247, 0.25), transparent 40%), #0A1128' },
+  { id: 'midnight', name: 'Midnight Deep', gradient: 'radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.18), transparent 50%), #050816' },
+  { id: 'forest', name: 'Rừng Thông Zen', gradient: 'radial-gradient(circle at 80% 20%, rgba(52, 211, 153, 0.2), transparent 45%), #022C22' },
+  { id: 'sunset', name: 'Hoàng Hôn Ấm', gradient: 'radial-gradient(circle at 20% 80%, rgba(249, 115, 22, 0.25), transparent 45%), #290B0B' },
+]
+
 export default function NewFocusPage() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(false)
@@ -63,6 +77,8 @@ export default function NewFocusPage() {
     { id: '1', text: 'Ôn tập 20 câu trắc nghiệm Toán giải tích', done: false },
     { id: '2', text: 'Đọc lại lý thuyết Este - Lipit', done: true },
   ])
+  // YouTube Lofi
+  const [selectedYoutubeId, setSelectedYoutubeId] = useState('jfKfPfyJRdk')
   const [newTaskText, setNewTaskText] = useState('')
 
   useEffect(() => {
@@ -375,6 +391,47 @@ export default function NewFocusPage() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                ))}
+              </div>
+            </div>
+
+            {/* LO-FI YOUTUBE STREAM PLAYER WIDGET */}
+            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Music className="h-5 w-5 text-indigo-500" />
+                  <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newfocus-heading)' }}>
+                    Nhạc Lo-Fi Học Tập (YouTube)
+                  </h3>
+                </div>
+              </div>
+
+              {/* YouTube Iframe Player */}
+              <div className="relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 aspect-video bg-black shadow-inner">
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${selectedYoutubeId}?autoplay=1&mute=0&controls=1&loop=1&playlist=${selectedYoutubeId}`}
+                  title="YouTube Lo-Fi Live"
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+
+              {/* Quick Track Switcher */}
+              <div className="grid grid-cols-2 gap-2">
+                {YOUTUBE_TRACKS.map((trk) => (
+                  <button
+                    key={trk.id}
+                    type="button"
+                    onClick={() => setSelectedYoutubeId(trk.id)}
+                    className={`rounded-xl border p-2.5 text-left text-[11px] font-bold transition line-clamp-1 ${
+                      selectedYoutubeId === trk.id
+                        ? 'border-indigo-600 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                        : 'border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10'
+                    }`}
+                  >
+                    🎵 {trk.title}
+                  </button>
                 ))}
               </div>
             </div>

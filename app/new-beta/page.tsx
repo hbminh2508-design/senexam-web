@@ -50,6 +50,15 @@ export default function NewBetaPage() {
   const [sendingFeedback, setSendingFeedback] = useState(false)
   const [feedbackSuccess, setFeedbackSuccess] = useState(false)
 
+  // OTP Email Verification Modal State
+  const [showOtpModal, setShowOtpModal] = useState(false)
+  const [otpInput, setOtpInput] = useState('')
+  const [sendingOtp, setSendingOtp] = useState(false)
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const [otpError, setOtpError] = useState<string | null>(null)
+  const [otpSentEmail, setOtpSentEmail] = useState<string>('')
+  const [otpHintCode, setOtpHintCode] = useState<string | null>(null)
+
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
@@ -72,8 +81,9 @@ export default function NewBetaPage() {
         .eq('id', user.id)
         .single()
 
-      const isBeta = !!profile?.is_beta_tester || localStorage.getItem('sen_beta_user') === 'true'
+      const isBeta = profile ? profile.is_beta_tester === true : (localStorage.getItem('senexam_beta_tester') === '1')
       setIsBetaTester(isBeta)
+      localStorage.setItem('senexam_beta_tester', isBeta ? '1' : '0')
       setLoading(false)
     }
 
@@ -92,22 +102,104 @@ export default function NewBetaPage() {
     }
   }
 
-  const handleToggleBeta = async (targetState: boolean) => {
+  // Khởi động luồng gửi mã OTP về email để tham gia Beta
+  const handleStartJoinBeta = async () => {
+    setSendingOtp(true)
+    setOtpError(null)
+    setOtpHintCode(null)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/beta/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Không thể gửi mã xác minh email')
+      }
+
+      setOtpSentEmail(data.email || 'Email của bạn')
+      setOtpHintCode(data.previewCode || null)
+      setShowOtpModal(true)
+      setOtpInput('')
+    } catch (e: any) {
+      alert(`Lỗi gửi mã xác nhận: ${e.message}`)
+    } finally {
+      setSendingOtp(false)
+    }
+  }
+
+  // Xác thực OTP để kích hoạt Beta
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!otpInput.trim()) {
+      setOtpError('Vui lòng nhập đủ 6 chữ số mã xác minh.')
+      return
+    }
+
+    setVerifyingOtp(true)
+    setOtpError(null)
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+
+      const res = await fetch('/api/beta/verify-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ code: otpInput }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Mã xác minh không chính xác')
+      }
+
+      // Kích hoạt Beta thành công
+      setIsBetaTester(true)
+      localStorage.setItem('senexam_beta_tester', '1')
+      localStorage.setItem('sen_beta_user', 'true')
+      window.dispatchEvent(new Event('senexam-ui-prefs-changed'))
+      setShowOtpModal(false)
+      alert('🎉 Chúc mừng bạn đã xác minh email và gia nhập Kênh Thử Nghiệm Beta thành công!')
+    } catch (err: any) {
+      setOtpError(err.message || 'Lỗi xác minh mã')
+    } finally {
+      setVerifyingOtp(false)
+    }
+  }
+
+  // Rời khỏi Kênh Beta
+  const handleLeaveBeta = async () => {
+    if (!confirm('Bạn có chắc chắn muốn rời khỏi Kênh Thử Nghiệm Beta không?')) return
     if (!userId) return
+
     setUpdatingBeta(true)
     try {
       await supabase
         .from('profiles')
         .update({
-          is_beta_tester: targetState,
+          is_beta_tester: false,
           updated_at: new Date().toISOString(),
         })
         .eq('id', userId)
 
-      localStorage.setItem('sen_beta_user', targetState ? 'true' : 'false')
-      setIsBetaTester(targetState)
+      localStorage.setItem('senexam_beta_tester', '0')
+      localStorage.removeItem('sen_beta_user')
+      window.dispatchEvent(new Event('senexam-ui-prefs-changed'))
+      setIsBetaTester(false)
+      alert('Bạn đã rời khỏi Kênh Thử Nghiệm Beta.')
     } catch (e: any) {
-      alert(`Lỗi cập nhật trạng thái Beta: ${e.message}`)
+      alert(`Lỗi: ${e.message}`)
     } finally {
       setUpdatingBeta(false)
     }
@@ -243,7 +335,7 @@ export default function NewBetaPage() {
               {isBetaTester ? (
                 <button
                   type="button"
-                  onClick={() => handleToggleBeta(false)}
+                  onClick={handleLeaveBeta}
                   disabled={updatingBeta}
                   className="rounded-2xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 px-6 py-3.5 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105 active:scale-95 disabled:opacity-50"
                 >
@@ -253,12 +345,12 @@ export default function NewBetaPage() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => handleToggleBeta(true)}
-                  disabled={updatingBeta}
+                  onClick={handleStartJoinBeta}
+                  disabled={sendingOtp}
                   className="rounded-2xl bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:to-indigo-700 text-white px-8 py-4 text-xs font-black uppercase tracking-wider transition shadow-xl hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center gap-2"
                 >
-                  {updatingBeta ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-                  Đăng Ký Tham Gia Beta Ngay
+                  {sendingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                  Đăng Ký Tham Gia Beta (Xác Minh Email)
                 </button>
               )}
             </div>
@@ -432,6 +524,88 @@ export default function NewBetaPage() {
           </form>
         </div>
       </div>
+
+      {/* MODAL XÁC MINH EMAIL THAM GIA BETA */}
+      {showOtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="relative w-full max-w-md rounded-[32px] border border-black/10 dark:border-white/15 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              type="button"
+              onClick={() => setShowOtpModal(false)}
+              className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 text-white shadow-md">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
+                  Xác Minh Email Tham Gia Beta
+                </h3>
+                <p className="text-xs text-[#6B7280] dark:text-slate-400 font-semibold">
+                  Mã 6 chữ số đã gửi đến: <strong className="text-purple-600 dark:text-purple-400">{otpSentEmail}</strong>
+                </p>
+              </div>
+            </div>
+
+            {otpHintCode && (
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-3 text-xs font-bold text-purple-700 dark:text-purple-300">
+                <span>💡 Mã xác minh của bạn: </span>
+                <strong className="tracking-widest font-black text-sm bg-purple-600 text-white px-2 py-0.5 rounded-lg ml-1">
+                  {otpHintCode}
+                </strong>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1.5">
+                  Nhập mã xác minh (6 chữ số):
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otpInput}
+                  onChange={(e) => setOtpInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="123456"
+                  className="w-full text-center text-2xl font-black tracking-widest rounded-2xl border border-black/10 dark:border-white/15 bg-slate-50 dark:bg-slate-800 p-3 outline-none focus:border-purple-500"
+                  autoFocus
+                />
+              </div>
+
+              {otpError && (
+                <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{otpError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleStartJoinBeta}
+                  disabled={sendingOtp}
+                  className="flex-1 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-3 text-xs font-bold transition hover:bg-black/5"
+                >
+                  {sendingOtp ? 'Đang gửi lại...' : 'Gửi lại mã'}
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={verifyingOtp || otpInput.length < 6}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:to-indigo-700 text-white py-3 text-xs font-black uppercase tracking-wider shadow-lg transition disabled:opacity-40 flex items-center justify-center gap-1.5"
+                >
+                  {verifyingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Xác Nhận & Kích Hoạt
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
