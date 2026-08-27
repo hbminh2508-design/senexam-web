@@ -261,6 +261,12 @@ export default function NewSenCashPage() {
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>
             <Link
+              href="/new-codes"
+              className="inline-flex items-center gap-2 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-3.5 py-2.5 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+            >
+              <Gift className="h-4 w-4 text-amber-500" /> Nhập Gift Code
+            </Link>
+            <Link
               href="/new-vip"
               className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-500 text-white px-4 py-2.5 text-xs font-black uppercase tracking-wider shadow-md transition hover:opacity-90"
             >
@@ -301,12 +307,18 @@ export default function NewSenCashPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-4 border-t border-black/10 dark:border-white/10 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-black/10 dark:border-white/10 text-xs">
               <Link
                 href="/new-vip"
                 className="inline-flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400 hover:underline"
               >
                 Đổi gói VIP ngay <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+              <Link
+                href="/new-codes"
+                className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                <Gift className="h-3.5 w-3.5 text-amber-500" /> Nhập mã quà tặng
               </Link>
             </div>
           </div>

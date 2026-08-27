@@ -38,9 +38,10 @@ import {
   Sun,
   TrendingUp,
   User,
-  Video,
   Zap,
   FileCheck,
+  Gift,
+  ShieldCheck,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
@@ -171,6 +172,24 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#FBBF24] via-[#F59E0B] to-[#D97706]',
     badge: 'Ưu đãi',
     icon: Crown,
+  },
+  {
+    key: 'codes',
+    title: 'Đổi Mã Quà Tặng',
+    description: 'Nhập mã Gift Code 16 chữ số để nhận quà SenCash và ngày VIP.',
+    href: '/new-codes',
+    tone: 'from-[#F472B6] via-[#EC4899] to-[#BE185D]',
+    badge: 'Code',
+    icon: Gift,
+  },
+  {
+    key: 'admin',
+    title: 'Quản Trị Tối Cao',
+    description: 'Giám sát phòng thi thời gian thực, giveaway SenCash và quản lý đề.',
+    href: '/new-admin',
+    tone: 'from-[#EF4444] via-[#DC2626] to-[#991B1B]',
+    badge: 'Admin',
+    icon: ShieldCheck,
   },
 ]
 

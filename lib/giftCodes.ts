@@ -24,11 +24,11 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // bỏ ký tự dễ nh�
 
 export function generateGiftCode(): string {
   const part = (len: number) => Array.from({ length: len }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('')
-  return `SEN-${part(4)}-${part(4)}`
+  return `${part(4)}-${part(4)}-${part(4)}-${part(4)}`
 }
 
 export function normalizeGiftCode(raw: string): string {
-  return raw.trim().toUpperCase()
+  return raw.trim().toUpperCase().replace(/\s+/g, '')
 }
 
 // Mô tả ngắn gọn phần thưởng của mã, dùng để hiển thị cho admin lẫn thông báo kết quả đổi mã cho người dùng
