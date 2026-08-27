@@ -38,6 +38,7 @@ import {
   Sun,
   TrendingUp,
   User,
+  Video,
   Zap,
   FileCheck,
   Gift,
@@ -610,20 +611,23 @@ export default function NewDashboardPage() {
             {/* Card 1: Thông tin cá nhân & Ví Sen / VIP */}
             <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl">
               <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-md">
+                <Link href="/new-profile" className="flex items-center gap-3 group transition">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-md transition group-hover:scale-105">
                     <User className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-black text-lg leading-tight" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    <h3 className="font-black text-lg leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                       {fullName}
                     </h3>
                     <p className="text-xs text-[#6B7280] dark:text-slate-400 truncate max-w-[170px]">{userEmail}</p>
                   </div>
-                </div>
-                <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                </Link>
+                <Link
+                  href="/new-profile"
+                  className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition"
+                >
                   {userRole === 'admin' ? 'Quản trị' : userRole === 'teacher' ? 'Giáo viên' : 'Học sinh'}
-                </span>
+                </Link>
               </div>
 
               {/* Thông tin trường lớp */}
@@ -667,7 +671,7 @@ export default function NewDashboardPage() {
                       {senCash.toLocaleString('vi-VN')} SC
                     </strong>
                     <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">
-                      Nạp thêm +
+                      Nạp thêm SenCash →
                     </span>
                   </div>
                 </Link>
@@ -682,28 +686,34 @@ export default function NewDashboardPage() {
                   </div>
                   <div className="mt-2">
                     <strong className="text-base font-black text-rose-900 dark:text-rose-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
-                      {vipUntil ? 'Thành viên VIP' : 'Gói Miễn phí'}
+                      {vipUntil ? 'VIP Active' : 'Chưa kích hoạt'}
                     </strong>
                     <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 group-hover:underline">
-                      {vipUntil ? 'Gia hạn gói' : 'Nâng cấp ngay'}
+                      Nâng cấp VIP ngay →
                     </span>
                   </div>
                 </Link>
               </div>
 
-              {/* Lối tắt: Lịch sử làm bài & Kho đề thi mới */}
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              {/* Lối tắt: Lịch sử làm bài, Kho đề thi mới & Hồ sơ cá nhân */}
+              <div className="mt-3 grid grid-cols-3 gap-2">
                 <Link
                   href="/new-history"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-2 text-xs font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
+                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
                 >
-                  <BadgeCheck className="h-3.5 w-3.5 text-teal-500" /> Lịch sử bài thi
+                  <BadgeCheck className="h-3.5 w-3.5 text-teal-500" /> Lịch sử
                 </Link>
                 <Link
                   href="/new-exams"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-2 text-xs font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
+                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
                 >
-                  <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề mới
+                  <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề
+                </Link>
+                <Link
+                  href="/new-profile"
+                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 py-2 px-1.5 text-[11px] font-bold transition hover:bg-indigo-500/20 text-center"
+                >
+                  <User className="h-3.5 w-3.5" /> Hồ sơ
                 </Link>
               </div>
             </div>
