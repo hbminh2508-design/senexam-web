@@ -116,6 +116,12 @@ export default function NewLabsPage() {
   const [isAiLoading, setIsAiLoading] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // 3D Spatial Rotation & Interaction states
+  const [rotX, setRotX] = useState(0.4)
+  const [rotY, setRotY] = useState(0.6)
+  const isDraggingRef = useRef(false)
+  const lastMousePosRef = useRef({ x: 0, y: 0 })
+
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
