@@ -312,8 +312,8 @@ export default function NewExclusiveStorePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {ELIGIBLE_PLANS.map((plan) => {
-              const basePrice = plan.priceVnd / 1000 // Quy đổi 1000 VNĐ = 1 SC
-              const discounted = Math.round(basePrice * (1 - discountPercent / 100))
+              const basePrice = plan.priceSenCash
+              const discounted = applyDiscount(plan.priceSenCash, discountPercent)
               const isBuying = buyingCode === plan.code
 
               return (
