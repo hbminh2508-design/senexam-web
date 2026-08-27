@@ -247,14 +247,9 @@ export default function NewLibraryPage() {
         })
 
         // 1. Tải lên Google Drive
-        const session = await initGoogleDriveUpload({
-          fileName: file.name,
-          mimeType: file.type || 'application/pdf',
-          fileSize: file.size,
-          folderType: 'documents',
-        })
-
-        const driveFileId = await uploadFileToGoogleDrive(session.uploadUrl, file)
+        const uploadUrl = await initGoogleDriveUpload(file.name, file.type || 'application/pdf')
+        const uploaded = await uploadFileToGoogleDrive(uploadUrl, file, title)
+        const driveFileId = typeof uploaded === 'string' ? uploaded : (uploaded?.id || '')
 
         // 2. Lưu thông tin vào database Supabase
         const { error } = await supabase.from('library_documents').insert({
