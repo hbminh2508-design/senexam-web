@@ -141,7 +141,7 @@ export default function NewExamsPage() {
       if (error || !data) {
         setAccessCodeError('Mã truy cập không hợp lệ hoặc đề thi không tồn tại.')
       } else {
-        router.push(`/exams/${data.id}`)
+        router.push(`/new-exams/${data.id}`)
       }
     } catch (err: any) {
       setAccessCodeError('Không tìm thấy đề thi với mã này.')
@@ -394,7 +394,7 @@ export default function NewExamsPage() {
                       )}
 
                       <Link
-                        href={`/exams/${exam.id}`}
+                        href={`/new-exams/${exam.id}`}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:opacity-90 active:scale-95"
                       >
                         <Rocket className="h-3.5 w-3.5" /> Vào thi
