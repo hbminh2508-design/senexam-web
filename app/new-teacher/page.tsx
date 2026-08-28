@@ -361,10 +361,12 @@ export default function NewTeacherPage() {
 
     setCreatingClass(true)
     try {
+      const generatedClassCode = String(Math.floor(1000 + Math.random() * 9000))
       const newClassObj = {
         name: classNameInput.trim(),
         grade: classGradeInput,
         subject: classSubjectInput,
+        class_code: generatedClassCode,
         teacher_id: userId,
         created_at: new Date().toISOString(),
       }
@@ -387,7 +389,7 @@ export default function NewTeacherPage() {
       localStorage.setItem(`sen_teacher_classes_${userId}`, JSON.stringify(updated))
 
       setClassNameInput('')
-      alert(`🎉 Đã tạo thành công lớp: ${insertedClass.name}!`)
+      alert(`🎉 Đã tạo thành công lớp: ${insertedClass.name} (Mã định danh lớp: #${generatedClassCode})!`)
     } catch (err: any) {
       alert(`Lỗi tạo lớp học: ${err.message}`)
     } finally {
@@ -396,12 +398,21 @@ export default function NewTeacherPage() {
   }
 
   const handleDeleteClass = async (classId: string, className: string) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa lớp "${className}"? Toàn bộ tài liệu, thông báo và mã mời của lớp sẽ bị xóa!`)) {
+    if (!confirm(`Bạn có chắc chắn muốn xóa lớp "${className}"? Toàn bộ dữ liệu lớp, tài liệu và phân phối đề thi sẽ biến mất ngay lập tức cả ở phía học sinh!`)) {
       return
     }
 
     try {
+      // 1. Dọn dẹp toàn bộ dữ liệu phụ thuộc của lớp
+      try { await supabase.from('class_members').delete().eq('class_id', classId) } catch {}
+      try { await supabase.from('class_materials').delete().eq('class_id', classId) } catch {}
+      try { await supabase.from('class_announcements').delete().eq('class_id', classId) } catch {}
+      try { await supabase.from('class_invite_codes').delete().eq('class_id', classId) } catch {}
+      try { await supabase.from('class_exams').delete().eq('class_id', classId) } catch {}
+      
+      // 2. Xóa chính bản ghi lớp
       await supabase.from('classes').delete().eq('id', classId)
+
       const updated = classesList.filter((c) => c.id !== classId)
       setClassesList(updated)
       localStorage.setItem(`sen_teacher_classes_${userId}`, JSON.stringify(updated))
@@ -799,6 +810,15 @@ export default function NewTeacherPage() {
         ? examCustomCode.trim().toUpperCase() || Math.random().toString(36).substring(2, 8).toUpperCase()
         : null
 
+      // Sinh mã 12 số chạy ngầm nếu đề thi được gán riêng cho lớp
+      let generated12DigitExamCode: string | null = null
+      if (assignToClassId) {
+        const assignedCls = classesList.find((c) => c.id === assignToClassId)
+        const class4Digits = (assignedCls?.class_code || String(Math.floor(1000 + Math.random() * 9000))).slice(0, 4)
+        const exam8Digits = String(Math.floor(10000000 + Math.random() * 90000000))
+        generated12DigitExamCode = `${class4Digits}${exam8Digits}`
+      }
+
       const totalQs = examSections.reduce((sum, s) => sum + (parseInt(s.questionCount) || 0), 0)
 
       const { data: newExam, error: examErr } = await supabase
@@ -812,6 +832,7 @@ export default function NewTeacherPage() {
           allow_review: examAllowReview,
           is_hidden: examIsHidden,
           access_code: accessCode,
+          exam_code: generated12DigitExamCode,
           subjects: selectedSubjects,
           max_attempts: parseInt(maxAttempts) || 1,
           grading_method: gradingMethod,
@@ -857,10 +878,21 @@ export default function NewTeacherPage() {
 
     setSavingReassign(true)
     try {
-      // Xóa gán cũ nếu có
+      // 1. Sinh mã định danh 12 số mới cho đề
+      const targetCls = classesList.find((c) => c.id === reassignClassId)
+      const class4Digits = (targetCls?.class_code || String(Math.floor(1000 + Math.random() * 9000))).slice(0, 4)
+      const exam8Digits = String(Math.floor(10000000 + Math.random() * 90000000))
+      const new12DigitExamCode = `${class4Digits}${exam8Digits}`
+
+      // Cập nhật exam_code trên bảng exams
+      try {
+        await supabase.from('exams').update({ exam_code: new12DigitExamCode }).eq('id', reassignExamModal.id)
+      } catch {}
+
+      // 2. Xóa gán cũ nếu có
       await supabase.from('class_exams').delete().eq('exam_id', reassignExamModal.id)
 
-      // Gán mới
+      // 3. Gán mới vào lớp
       await supabase.from('class_exams').insert({
         class_id: reassignClassId,
         exam_id: reassignExamModal.id,
@@ -868,7 +900,7 @@ export default function NewTeacherPage() {
         due_date: reassignDueDate || null,
       })
 
-      // Cập nhật lại examsList
+      // 4. Cập nhật lại examsList
       const { data: updatedExams } = await supabase
         .from('exams')
         .select('*, class_exams(class_id, due_date, classes(name))')

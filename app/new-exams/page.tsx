@@ -84,10 +84,10 @@ export default function NewExamsPage() {
 
       await ensureStudentProfile(user.id)
 
-      // 1. Lấy danh sách đề thi công khai (không bị ẩn và không phải đề riêng của lớp)
+      // 1. Lấy danh sách đề thi công khai từ hệ thống
       const { data: examsData, error: examsError } = await supabase
         .from('exams')
-        .select('*, class_exams(id, class_id)')
+        .select('*')
         .or('is_hidden.eq.false,is_hidden.is.null')
         .order('created_at', { ascending: false })
 
@@ -100,9 +100,13 @@ export default function NewExamsPage() {
       if (examsError) {
         console.error('Error fetching exams:', examsError)
       } else {
-        // Chỉ lấy các đề thi công khai chung của hệ thống (không gán vào lớp học riêng)
+        // Cơ chế phân loại chuẩn:
+        // - Đề riêng cho lớp: Có mã định danh 12 chữ số (4 số đầu là mã lớp + 8 số sau là mã đề) -> Chạy ngầm, không hiện ở kho chung
+        // - Đề mở: Không có mã 12 số này (hoặc exam_code null/không phải 12 ký tự số) -> 100% hiển thị ở Kho đề thi công khai
         const publicExams = (examsData || []).filter((ex: any) => {
-          if (Array.isArray(ex.class_exams) && ex.class_exams.length > 0) return false
+          const code = String(ex.exam_code || ex.access_code || '')
+          const is12DigitClassExam = code.length === 12 && /^\d{12}$/.test(code)
+          if (is12DigitClassExam) return false
           if (ex.is_hidden) return false
           return true
         })

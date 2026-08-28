@@ -84,41 +84,84 @@ export default function NewStudentPage() {
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
       setStudentName(profile?.full_name || user.email || 'Học sinh')
 
-      // 1. Fetch Enrolled Classes
+      // 1. Fetch Enrolled Classes (Đồng bộ trực tiếp từ Database, không lưu rác lớp đã xóa)
+      let validClasses: any[] = []
       let classIds: string[] = []
+
       try {
         const { data: membersData } = await supabase
           .from('class_members')
           .select('*, classes(*)')
           .eq('student_id', user.id)
 
-        if (membersData && membersData.length > 0) {
-          const classes = membersData.map((m: any) => m.classes).filter(Boolean)
-          setEnrolledClasses(classes)
-          classIds = classes.map((c: any) => c.id)
+        if (membersData && Array.isArray(membersData)) {
+          // Chỉ lấy các lớp thực sự còn tồn tại trong DB
+          validClasses = membersData
+            .map((m: any) => m.classes)
+            .filter((c: any) => c && c.id && c.name)
+
+          setEnrolledClasses(validClasses)
+          classIds = validClasses.map((c: any) => c.id)
+          // Làm sạch LocalStorage đồng bộ tuyệt đối với DB
+          localStorage.setItem(`sen_student_classes_${user.id}`, JSON.stringify(validClasses))
         } else {
-          const localEnrolled = JSON.parse(localStorage.getItem(`sen_student_classes_${user.id}`) || '[]')
-          setEnrolledClasses(localEnrolled)
-          classIds = localEnrolled.map((c: any) => c.id)
+          setEnrolledClasses([])
+          localStorage.removeItem(`sen_student_classes_${user.id}`)
         }
       } catch {
-        const localEnrolled = JSON.parse(localStorage.getItem(`sen_student_classes_${user.id}`) || '[]')
-        setEnrolledClasses(localEnrolled)
-        classIds = localEnrolled.map((c: any) => c.id)
+        setEnrolledClasses([])
       }
 
       // 2. Fetch Exams Assigned to Enrolled Classes
       try {
         if (classIds.length > 0) {
+          // Lấy qua bảng class_exams
           const { data: classExamsData } = await supabase
             .from('class_exams')
-            .select('*, exams(*), classes(name, grade, subject)')
+            .select('*, exams(*), classes(name, grade, subject, class_code)')
             .in('class_id', classIds)
             .order('created_at', { ascending: false })
 
-          if (classExamsData) {
-            setClassExamsList(classExamsData)
+          // Đồng thời quét thêm các đề có mã định danh 12 số (4 số đầu là mã lớp)
+          const { data: allExams } = await supabase
+            .from('exams')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+          const classCodeMap = new Map()
+          validClasses.forEach((cls) => {
+            if (cls.class_code) classCodeMap.set(String(cls.class_code), cls)
+          })
+
+          const directMatchedExams: any[] = []
+          if (allExams && allExams.length > 0) {
+            allExams.forEach((ex: any) => {
+              const code = String(ex.exam_code || '')
+              if (code.length === 12 && /^\d{12}$/.test(code)) {
+                const classCode4 = code.slice(0, 4)
+                const matchedCls = classCodeMap.get(classCode4)
+                if (matchedCls) {
+                  const alreadyInList = (classExamsData || []).some((ce: any) => ce.exam_id === ex.id)
+                  if (!alreadyInList) {
+                    directMatchedExams.push({
+                      id: 'dir_' + ex.id,
+                      class_id: matchedCls.id,
+                      exam_id: ex.id,
+                      exams: ex,
+                      classes: matchedCls,
+                      due_date: null,
+                      created_at: ex.created_at,
+                    })
+                  }
+                }
+              }
+            })
           }
+
+          const combined = [...(classExamsData || []), ...directMatchedExams]
+          setClassExamsList(combined)
+        } else {
+          setClassExamsList([])
         }
       } catch {}
 
@@ -132,6 +175,8 @@ export default function NewStudentPage() {
             .order('created_at', { ascending: false })
 
           if (matsData) setClassMaterialsList(matsData)
+        } else {
+          setClassMaterialsList([])
         }
       } catch {}
 
@@ -145,6 +190,8 @@ export default function NewStudentPage() {
             .order('created_at', { ascending: false })
 
           if (annsData) setClassAnnouncementsList(annsData)
+        } else {
+          setClassAnnouncementsList([])
         }
       } catch {}
 
@@ -189,67 +236,52 @@ export default function NewStudentPage() {
     const cleanCode = inviteCodeInput.trim().toUpperCase()
 
     try {
-      let classFound: any = null
-      try {
-        const { data: inviteData, error: inviteErr } = await supabase
-          .from('class_invite_codes')
-          .select('*, classes(*)')
-          .eq('code', cleanCode)
-          .single()
+      const { data: inviteData, error: inviteErr } = await supabase
+        .from('class_invite_codes')
+        .select('*, classes(*)')
+        .eq('code', cleanCode)
+        .single()
 
-        if (!inviteErr && inviteData) {
-          const maxUses = inviteData.max_uses || 40
-          const usedCount = inviteData.used_count || 0
-
-          if (usedCount >= maxUses) {
-            throw new Error(`Mã mời này đã đạt giới hạn tối đa (${usedCount}/${maxUses} học sinh). Vui lòng liên hệ giáo viên bộ môn để được cấp mã mới!`)
-          }
-
-          const { data: existMember } = await supabase
-            .from('class_members')
-            .select('id')
-            .eq('class_id', inviteData.class_id)
-            .eq('student_id', userId)
-            .single()
-
-          if (existMember) {
-            throw new Error('Bạn đã là thành viên của lớp học này rồi!')
-          }
-
-          classFound = inviteData.classes
-
-          const nextUsedCount = usedCount + 1
-          await supabase
-            .from('class_invite_codes')
-            .update({
-              used_count: nextUsedCount,
-              is_used: nextUsedCount >= maxUses,
-              used_at: new Date().toISOString(),
-            })
-            .eq('id', inviteData.id)
-
-          await supabase.from('class_members').insert({
-            class_id: inviteData.class_id,
-            student_id: userId,
-          })
-        }
-      } catch (err: any) {
-        if (err.message?.includes('đạt giới hạn') || err.message?.includes('đã là thành viên')) throw err
+      if (inviteErr || !inviteData || !inviteData.classes) {
+        throw new Error('Mã mời không tồn tại hoặc đã hết hạn. Vui lòng kiểm tra lại mã 20 ký tự do giáo viên cung cấp!')
       }
 
-      if (!classFound) {
-        if (cleanCode.length >= 10) {
-          classFound = {
-            id: 'cls_' + Date.now(),
-            name: `Lớp Học Trực Tuyến (${cleanCode.slice(0, 4)})`,
-            grade: '12',
-            subject: 'Toán học & Luyện thi',
-            teacher_name: 'Giáo viên phụ trách',
-          }
-        } else {
-          throw new Error('Mã mời không hợp lệ. Vui lòng kiểm tra lại mã 20 ký tự do giáo viên cung cấp.')
-        }
+      const maxUses = inviteData.max_uses || 40
+      const usedCount = inviteData.used_count || 0
+
+      if (usedCount >= maxUses) {
+        throw new Error(`Mã mời này đã đạt giới hạn tối đa (${usedCount}/${maxUses} học sinh). Vui lòng liên hệ giáo viên bộ môn để được cấp mã mới!`)
       }
+
+      const { data: existMember } = await supabase
+        .from('class_members')
+        .select('id')
+        .eq('class_id', inviteData.class_id)
+        .eq('student_id', userId)
+        .single()
+
+      if (existMember) {
+        throw new Error('Bạn đã là thành viên của lớp học này rồi!')
+      }
+
+      const classFound = inviteData.classes
+
+      // Tăng số lượt sử dụng
+      const nextUsedCount = usedCount + 1
+      await supabase
+        .from('class_invite_codes')
+        .update({
+          used_count: nextUsedCount,
+          is_used: nextUsedCount >= maxUses,
+          used_at: new Date().toISOString(),
+        })
+        .eq('id', inviteData.id)
+
+      // Thêm thành viên vào lớp
+      await supabase.from('class_members').insert({
+        class_id: inviteData.class_id,
+        student_id: userId,
+      })
 
       const updated = [classFound, ...enrolledClasses.filter((c) => c.id !== classFound.id)]
       setEnrolledClasses(updated)
