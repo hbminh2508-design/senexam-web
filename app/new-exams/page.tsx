@@ -84,10 +84,10 @@ export default function NewExamsPage() {
 
       await ensureStudentProfile(user.id)
 
-      // 1. Lấy danh sách đề thi công khai (không bị ẩn hoặc is_hidden null/false)
+      // 1. Lấy danh sách đề thi công khai (không bị ẩn và không phải đề riêng của lớp)
       const { data: examsData, error: examsError } = await supabase
         .from('exams')
-        .select('*')
+        .select('*, class_exams(id, class_id)')
         .or('is_hidden.eq.false,is_hidden.is.null')
         .order('created_at', { ascending: false })
 
@@ -100,7 +100,13 @@ export default function NewExamsPage() {
       if (examsError) {
         console.error('Error fetching exams:', examsError)
       } else {
-        setExams(examsData || [])
+        // Chỉ lấy các đề thi công khai chung của hệ thống (không gán vào lớp học riêng)
+        const publicExams = (examsData || []).filter((ex: any) => {
+          if (Array.isArray(ex.class_exams) && ex.class_exams.length > 0) return false
+          if (ex.is_hidden) return false
+          return true
+        })
+        setExams(publicExams)
       }
 
       setUserSubmissions(submissionsData || [])

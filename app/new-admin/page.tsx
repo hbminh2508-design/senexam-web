@@ -557,6 +557,33 @@ export default function NewAdminPage() {
     setAnnouncementsList(announcementsList.filter((a) => a.id !== id))
   }
 
+  // ĐÓNG / MỞ XEM LẠI ĐÁP ÁN ĐỀ THI
+  const handleToggleAllowReview = async (examId: string, currentVal: boolean) => {
+    const nextVal = !currentVal
+    try {
+      const { error } = await supabase.from('exams').update({ allow_review: nextVal }).eq('id', examId)
+      if (error) throw error
+      setExamsList(examsList.map((ex) => (ex.id === examId ? { ...ex, allow_review: nextVal } : ex)))
+    } catch (err: any) {
+      alert(`Lỗi cập nhật quyền xem lại đáp án: ${err.message}`)
+    }
+  }
+
+  // XÓA ĐỀ THI
+  const handleDeleteExam = async (examId: string, examTitle: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn XÓA đề thi "${examTitle}"? Hành động này sẽ xóa toàn bộ bài làm và dữ liệu liên quan!`)) {
+      return
+    }
+    try {
+      const { error } = await supabase.from('exams').delete().eq('id', examId)
+      if (error) throw error
+      setExamsList(examsList.filter((ex) => ex.id !== examId))
+      alert(`Đã xóa thành công đề thi "${examTitle}"!`)
+    } catch (err: any) {
+      alert(`Lỗi xóa đề thi: ${err.message}`)
+    }
+  }
+
   // GIVEAWAY SENCASH
   const handleGiveawaySenCash = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -985,19 +1012,37 @@ export default function NewAdminPage() {
                             )}
                           </td>
                           <td className="py-3.5">
-                            <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase ${
-                              exam.allow_review ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                            }`}>
-                              {exam.allow_review ? 'Đang mở' : 'Đã khóa'}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAllowReview(exam.id, !!exam.allow_review)}
+                              className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition hover:scale-105 ${
+                                exam.allow_review
+                                  ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30'
+                                  : 'bg-rose-500/15 text-rose-600 border border-rose-500/30'
+                              }`}
+                              title="Bấm để Đóng / Mở quyền xem lại đáp án"
+                            >
+                              {exam.allow_review ? '🔓 Đang mở' : '🔒 Đã khóa'}
+                            </button>
                           </td>
                           <td className="py-3.5 text-right">
-                            <Link
-                              href={`/new-exams/${exam.id}`}
-                              className="inline-flex items-center gap-1 rounded-xl bg-black/5 dark:bg-white/5 px-3 py-1.5 text-xs font-bold hover:bg-black/10"
-                            >
-                              <Eye className="h-3.5 w-3.5" /> Vào thi
-                            </Link>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Link
+                                href={`/new-exams/${exam.id}`}
+                                className="inline-flex items-center gap-1 rounded-xl bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-xs font-bold hover:bg-black/10"
+                                title="Vào thi thử"
+                              >
+                                <Eye className="h-3.5 w-3.5" /> Vào thi
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteExam(exam.id, exam.title)}
+                                className="p-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition hover:scale-105"
+                                title="Xóa đề thi"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

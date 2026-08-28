@@ -802,12 +802,18 @@ export default function NewExamRoomPage() {
             </div>
 
             <div className="space-y-2 pt-2">
-              <Link
-                href={`/new-submissions/${submittedResult.submissionId}`}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white py-3 text-xs font-black uppercase tracking-wider shadow transition"
-              >
-                <Eye className="h-4 w-4" /> Xem Lời Giải & Chi Tiết
-              </Link>
+              {exam?.allow_review !== false ? (
+                <Link
+                  href={`/new-submissions/${submittedResult.submissionId}`}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white py-3 text-xs font-black uppercase tracking-wider shadow transition"
+                >
+                  <Eye className="h-4 w-4" /> Xem Lời Giải & Chi Tiết
+                </Link>
+              ) : (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-bold text-amber-600 dark:text-amber-400">
+                  🔒 Giáo viên / Quản trị viên đã khóa xem lại đáp án cho đề thi này.
+                </div>
+              )}
               <Link
                 href="/new-history"
                 className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2.5 text-xs font-bold transition hover:bg-black/10"

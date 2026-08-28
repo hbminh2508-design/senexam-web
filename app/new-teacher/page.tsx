@@ -113,6 +113,7 @@ export default function NewTeacherPage() {
   const [materialTitleInput, setMaterialTitleInput] = useState('')
   const [materialDescInput, setMaterialDescInput] = useState('')
   const [materialUrlInput, setMaterialUrlInput] = useState('')
+  const [materialFile, setMaterialFile] = useState<File | null>(null)
   const [materialTypeInput, setMaterialTypeInput] = useState<'exam_review' | 'lecture' | 'solution' | 'slide'>('exam_review')
   const [addingMaterial, setAddingMaterial] = useState(false)
 
@@ -540,20 +541,34 @@ export default function NewTeacherPage() {
       alert('Vui lòng chọn lớp học!')
       return
     }
-    if (!materialTitleInput.trim() || !materialUrlInput.trim()) {
-      alert('Vui lòng nhập tên tài liệu và đường dẫn liên kết tải/xem tài liệu!')
+    if (!materialTitleInput.trim()) {
+      alert('Vui lòng nhập tên tài liệu!')
+      return
+    }
+    if (!materialFile && !materialUrlInput.trim()) {
+      alert('Vui lòng chọn tệp tài liệu để tải lên hoặc dán link tài liệu!')
       return
     }
 
     setAddingMaterial(true)
     try {
+      let finalUrl = materialUrlInput.trim()
+
+      // Tải trực tiếp tệp lên Google Drive nếu có chọn file
+      if (materialFile) {
+        const uploadUrl = await initGoogleDriveUpload(materialFile.name, materialFile.type || 'application/pdf')
+        const uploaded = await uploadFileToGoogleDrive(uploadUrl, materialFile, materialTitleInput.trim())
+        const fileId = typeof uploaded === 'string' ? uploaded : uploaded.id
+        finalUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
+      }
+
       const newMat = {
         id: 'mat_' + Date.now(),
         class_id: selectedClassId,
         teacher_id: userId,
         title: materialTitleInput.trim(),
         description: materialDescInput.trim() || 'Tài liệu học tập do giáo viên cung cấp',
-        file_url: materialUrlInput.trim(),
+        file_url: finalUrl,
         material_type: materialTypeInput,
         created_at: new Date().toISOString(),
       }
@@ -569,7 +584,8 @@ export default function NewTeacherPage() {
       setMaterialTitleInput('')
       setMaterialDescInput('')
       setMaterialUrlInput('')
-      alert('🎉 Đã thêm tài liệu mới vào kho của lớp!')
+      setMaterialFile(null)
+      alert('🎉 Đã tải lên tài liệu mới thành công vào kho của lớp!')
     } catch (err: any) {
       alert(`Lỗi thêm tài liệu: ${err.message}`)
     } finally {
@@ -586,6 +602,31 @@ export default function NewTeacherPage() {
       localStorage.setItem(`sen_class_mats_${selectedClassId}`, JSON.stringify(updated))
     } catch (err: any) {
       alert(`Lỗi: ${err.message}`)
+    }
+  }
+
+  // ĐÓNG / MỞ XEM LẠI ĐÁP ÁN ĐỀ THI
+  const handleToggleAllowReview = async (examId: string, currentVal: boolean) => {
+    const nextVal = !currentVal
+    try {
+      const { error } = await supabase.from('exams').update({ allow_review: nextVal }).eq('id', examId)
+      if (error) throw error
+      setExamsList(examsList.map((ex) => (ex.id === examId ? { ...ex, allow_review: nextVal } : ex)))
+    } catch (err: any) {
+      alert(`Lỗi cập nhật: ${err.message}`)
+    }
+  }
+
+  // XÓA ĐỀ THI
+  const handleDeleteExam = async (examId: string, examTitle: string) => {
+    if (!confirm(`Bạn có chắc muốn XÓA đề thi "${examTitle}"? Hành động này sẽ xóa toàn bộ bài nộp và phân phối lớp liên quan!`)) return
+    try {
+      const { error } = await supabase.from('exams').delete().eq('id', examId)
+      if (error) throw error
+      setExamsList(examsList.filter((ex) => ex.id !== examId))
+      alert(`Đã xóa thành công đề thi "${examTitle}"!`)
+    } catch (err: any) {
+      alert(`Lỗi xóa đề thi: ${err.message}`)
     }
   }
 
@@ -1423,26 +1464,38 @@ export default function NewTeacherPage() {
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <label className="text-[11px] font-bold text-slate-400 block mb-1">Đường link tài liệu (Google Drive / PDF / URL):</label>
+                              <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                                Tải Tệp Tài Liệu Trực Tiếp (PDF, Word, Ảnh, Slide...):
+                              </label>
                               <input
-                                type="url"
-                                placeholder="https://drive.google.com/... hoặc link tải file"
-                                value={materialUrlInput}
-                                onChange={(e) => setMaterialUrlInput(e.target.value)}
-                                required
-                                className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold outline-none focus:border-sky-500"
+                                type="file"
+                                onChange={(e) => setMaterialFile(e.target.files?.[0] || null)}
+                                className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold"
                               />
                             </div>
                             <div>
-                              <label className="text-[11px] font-bold text-slate-400 block mb-1">Mô tả ngắn gọn:</label>
+                              <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                                Hoặc Dán Link Tài Liệu Ngoài (Tùy chọn):
+                              </label>
                               <input
-                                type="text"
-                                placeholder="VD: Đọc kỹ phần bài tập trắc nghiệm trang 5-10"
-                                value={materialDescInput}
-                                onChange={(e) => setMaterialDescInput(e.target.value)}
+                                type="url"
+                                placeholder="https://drive.google.com/... hoặc link trực tuyến"
+                                value={materialUrlInput}
+                                onChange={(e) => setMaterialUrlInput(e.target.value)}
                                 className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold outline-none focus:border-sky-500"
                               />
                             </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-400 block mb-1">Mô tả / Hướng dẫn học tập:</label>
+                            <input
+                              type="text"
+                              placeholder="VD: Đọc kỹ lý thuyết và hoàn thành bài tập áp dụng trang 5-10"
+                              value={materialDescInput}
+                              onChange={(e) => setMaterialDescInput(e.target.value)}
+                              className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold outline-none focus:border-sky-500"
+                            />
                           </div>
 
                           <div className="flex justify-end">
@@ -1803,9 +1856,32 @@ export default function NewTeacherPage() {
                                 </select>
                               )}
                               {sec.type === 'true_false' && (
-                                <span className="font-mono font-bold text-indigo-500">
-                                  {currentAns ? `${currentAns.a || 'Đ'}${currentAns.b || 'S'}${currentAns.c || 'Đ'}${currentAns.d || 'S'}` : 'Đ/S'}
-                                </span>
+                                <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 px-2 py-1 rounded-xl">
+                                  {['a', 'b', 'c', 'd'].map((sub) => {
+                                    const tfObj = currentAns || { a: 'D', b: 'S', c: 'D', d: 'S' }
+                                    const val = tfObj[sub] || 'D'
+                                    return (
+                                      <div key={sub} className="flex items-center gap-0.5">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">{sub}:</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nextVal = val === 'D' ? 'S' : 'D'
+                                            handleAnswerChange(sec.id, qIdx, { ...tfObj, [sub]: nextVal })
+                                          }}
+                                          className={`px-1.5 py-0.5 rounded text-[10px] font-black transition ${
+                                            val === 'D'
+                                              ? 'bg-emerald-500 text-white shadow-sm'
+                                              : 'bg-rose-500 text-white shadow-sm'
+                                          }`}
+                                          title={`Bấm để đổi Đúng / Sai cho ý (${sub})`}
+                                        >
+                                          {val === 'D' ? 'Đ' : 'S'}
+                                        </button>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
                               )}
                               {sec.type === 'short_answer' && (
                                 <input
@@ -1911,6 +1987,20 @@ export default function NewTeacherPage() {
                             ) : (
                               <p className="text-slate-400">📅 Hạn chót: Không giới hạn</p>
                             )}
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAllowReview(ex.id, !!ex.allow_review)}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase transition hover:scale-105 ${
+                                  ex.allow_review
+                                    ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30'
+                                    : 'bg-rose-500/15 text-rose-600 border border-rose-500/30'
+                                }`}
+                                title="Bấm để Đóng / Mở quyền xem lại đáp án"
+                              >
+                                {ex.allow_review ? '🔓 Xem đáp án: BẬT' : '🔒 Xem đáp án: KHÓA'}
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -1927,13 +2017,24 @@ export default function NewTeacherPage() {
                             <Sliders className="h-3.5 w-3.5" /> Gán Lớp / Hạn Chót
                           </button>
 
-                          <Link
-                            href={`/new-exam/${ex.id}`}
-                            className="p-2 rounded-xl bg-white dark:bg-slate-800 border hover:scale-105 transition"
-                            title="Làm thử bài thi"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </Link>
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/new-exams/${ex.id}`}
+                              className="p-2 rounded-xl bg-white dark:bg-slate-800 border hover:scale-105 transition"
+                              title="Làm thử bài thi"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Link>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteExam(ex.id, ex.title)}
+                              className="p-2 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 transition hover:scale-105"
+                              title="Xóa đề thi"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )

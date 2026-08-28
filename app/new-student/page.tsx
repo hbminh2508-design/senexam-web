@@ -544,7 +544,7 @@ export default function NewStudentPage() {
                         )}
 
                         <Link
-                          href={`/new-exam/${ex.id}`}
+                          href={`/new-exams/${ex.id}`}
                           className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105 ${
                             isExpired
                               ? 'bg-slate-200 dark:bg-slate-800 text-slate-500'

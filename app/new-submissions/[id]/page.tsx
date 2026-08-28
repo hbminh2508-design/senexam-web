@@ -82,6 +82,15 @@ export default function NewSubmissionReviewPage() {
         return
       }
 
+      if (data.exams?.allow_review === false) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+        if (profile?.role !== 'admin' && profile?.role !== 'teacher' && data.exams?.created_by !== user.id) {
+          alert('🔒 Giáo viên / Quản trị viên đã tạm khóa quyền xem lại đáp án cho đề thi này!')
+          router.replace('/new-history')
+          return
+        }
+      }
+
       setSubmission(data)
       setLoading(false)
     }
