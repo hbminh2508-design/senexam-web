@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -28,10 +28,18 @@ import {
   ShieldCheck,
   Eye,
   Play,
+  FolderOpen,
+  Megaphone,
+  ExternalLink,
+  Download,
+  AlertTriangle,
+  Layers,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newstu-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newstu-body' })
+
+type StudentViewTab = 'exams' | 'materials' | 'announcements' | 'results'
 
 export default function NewStudentPage() {
   const router = useRouter()
@@ -46,9 +54,15 @@ export default function NewStudentPage() {
   const [joinSuccessMsg, setJoinSuccessMsg] = useState('')
   const [joinErrorMsg, setJoinErrorMsg] = useState('')
 
-  // Student classes and exams
+  // Student classes and selected class
   const [enrolledClasses, setEnrolledClasses] = useState<any[]>([])
+  const [selectedClassId, setSelectedClassId] = useState<string>('all')
+  const [activeTab, setActiveTab] = useState<StudentViewTab>('exams')
+
+  // Class specific data
   const [classExamsList, setClassExamsList] = useState<any[]>([])
+  const [classMaterialsList, setClassMaterialsList] = useState<any[]>([])
+  const [classAnnouncementsList, setClassAnnouncementsList] = useState<any[]>([])
   const [studentSubmissions, setStudentSubmissions] = useState<any[]>([])
 
   useEffect(() => {
@@ -70,7 +84,8 @@ export default function NewStudentPage() {
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
       setStudentName(profile?.full_name || user.email || 'Học sinh')
 
-      // Fetch enrolled classes
+      // 1. Fetch Enrolled Classes
+      let classIds: string[] = []
       try {
         const { data: membersData } = await supabase
           .from('class_members')
@@ -78,27 +93,62 @@ export default function NewStudentPage() {
           .eq('student_id', user.id)
 
         if (membersData && membersData.length > 0) {
-          setEnrolledClasses(membersData.map((m: any) => m.classes).filter(Boolean))
+          const classes = membersData.map((m: any) => m.classes).filter(Boolean)
+          setEnrolledClasses(classes)
+          classIds = classes.map((c: any) => c.id)
         } else {
           const localEnrolled = JSON.parse(localStorage.getItem(`sen_student_classes_${user.id}`) || '[]')
           setEnrolledClasses(localEnrolled)
+          classIds = localEnrolled.map((c: any) => c.id)
         }
       } catch {
         const localEnrolled = JSON.parse(localStorage.getItem(`sen_student_classes_${user.id}`) || '[]')
         setEnrolledClasses(localEnrolled)
+        classIds = localEnrolled.map((c: any) => c.id)
       }
 
-      // Fetch exams assigned to classes
+      // 2. Fetch Exams Assigned to Enrolled Classes
       try {
-        const { data: examsData } = await supabase
-          .from('exams')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(30)
-        setClassExamsList(examsData || [])
+        if (classIds.length > 0) {
+          const { data: classExamsData } = await supabase
+            .from('class_exams')
+            .select('*, exams(*), classes(name, grade, subject)')
+            .in('class_id', classIds)
+            .order('created_at', { ascending: false })
+
+          if (classExamsData) {
+            setClassExamsList(classExamsData)
+          }
+        }
       } catch {}
 
-      // Fetch student submissions
+      // 3. Fetch Materials for Enrolled Classes
+      try {
+        if (classIds.length > 0) {
+          const { data: matsData } = await supabase
+            .from('class_materials')
+            .select('*, classes(name)')
+            .in('class_id', classIds)
+            .order('created_at', { ascending: false })
+
+          if (matsData) setClassMaterialsList(matsData)
+        }
+      } catch {}
+
+      // 4. Fetch Announcements for Enrolled Classes
+      try {
+        if (classIds.length > 0) {
+          const { data: annsData } = await supabase
+            .from('class_announcements')
+            .select('*, classes(name)')
+            .in('class_id', classIds)
+            .order('created_at', { ascending: false })
+
+          if (annsData) setClassAnnouncementsList(annsData)
+        }
+      } catch {}
+
+      // 5. Fetch Student Submissions
       try {
         const { data: subsData } = await supabase
           .from('submissions')
@@ -139,7 +189,6 @@ export default function NewStudentPage() {
     const cleanCode = inviteCodeInput.trim().toUpperCase()
 
     try {
-      // 1. Kiểm tra mã mời trên Supabase
       let classFound: any = null
       try {
         const { data: inviteData, error: inviteErr } = await supabase
@@ -156,7 +205,6 @@ export default function NewStudentPage() {
             throw new Error(`Mã mời này đã đạt giới hạn tối đa (${usedCount}/${maxUses} học sinh). Vui lòng liên hệ giáo viên bộ môn để được cấp mã mới!`)
           }
 
-          // Kiểm tra xem học sinh đã tham gia lớp này chưa
           const { data: existMember } = await supabase
             .from('class_members')
             .select('id')
@@ -170,7 +218,6 @@ export default function NewStudentPage() {
 
           classFound = inviteData.classes
 
-          // Cập nhật số lượng học sinh đã dùng mã
           const nextUsedCount = usedCount + 1
           await supabase
             .from('class_invite_codes')
@@ -181,7 +228,6 @@ export default function NewStudentPage() {
             })
             .eq('id', inviteData.id)
 
-          // Thêm học sinh vào class_members
           await supabase.from('class_members').insert({
             class_id: inviteData.class_id,
             student_id: userId,
@@ -191,7 +237,6 @@ export default function NewStudentPage() {
         if (err.message?.includes('đạt giới hạn') || err.message?.includes('đã là thành viên')) throw err
       }
 
-      // Fallback local mock simulation
       if (!classFound) {
         if (cleanCode.length >= 10) {
           classFound = {
@@ -206,9 +251,9 @@ export default function NewStudentPage() {
         }
       }
 
-      // Cập nhật danh sách lớp
       const updated = [classFound, ...enrolledClasses.filter((c) => c.id !== classFound.id)]
       setEnrolledClasses(updated)
+      setSelectedClassId(classFound.id)
       localStorage.setItem(`sen_student_classes_${userId}`, JSON.stringify(updated))
 
       setJoinSuccessMsg(`🎉 Chúc mừng bạn đã tham gia thành công lớp: ${classFound.name}!`)
@@ -219,6 +264,22 @@ export default function NewStudentPage() {
       setJoiningClass(false)
     }
   }
+
+  // Lọc dữ liệu theo lớp học đang chọn
+  const filteredExams = useMemo(() => {
+    if (selectedClassId === 'all') return classExamsList
+    return classExamsList.filter((item) => item.class_id === selectedClassId)
+  }, [classExamsList, selectedClassId])
+
+  const filteredMaterials = useMemo(() => {
+    if (selectedClassId === 'all') return classMaterialsList
+    return classMaterialsList.filter((item) => item.class_id === selectedClassId)
+  }, [classMaterialsList, selectedClassId])
+
+  const filteredAnnouncements = useMemo(() => {
+    if (selectedClassId === 'all') return classAnnouncementsList
+    return classAnnouncementsList.filter((item) => item.class_id === selectedClassId)
+  }, [classAnnouncementsList, selectedClassId])
 
   const themeVars = getModernThemeVars('indigo', isDark)
 
@@ -264,7 +325,7 @@ export default function NewStudentPage() {
                 </span>
               </div>
               <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
-                Lớp Học Của Tôi & Đề Thi Được Giao
+                Lớp Học Của Tôi, Đề Thi & Kho Tài Liệu
               </h1>
             </div>
           </div>
@@ -334,152 +395,347 @@ export default function NewStudentPage() {
           )}
         </div>
 
-        {/* GRID 2 CỘT: CÁC LỚP HỌC & ĐỀ THI ĐƯỢC GIAO */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* CỘT 1: CÁC LỚP HỌC ĐANG THAM GIA */}
-          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-xl space-y-4">
+        {/* THANH BỘ LỌC LỚP HỌC (CLASS FILTER BAR) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-2xl bg-black/5 dark:bg-white/5 backdrop-blur-xl">
+          <div className="flex items-center gap-2 overflow-x-auto py-1">
+            <button
+              type="button"
+              onClick={() => setSelectedClassId('all')}
+              className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider transition shrink-0 ${
+                selectedClassId === 'all'
+                  ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm'
+                  : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              Tất Cả Lớp ({enrolledClasses.length})
+            </button>
+
+            {enrolledClasses.map((cls) => (
+              <button
+                key={cls.id}
+                type="button"
+                onClick={() => setSelectedClassId(cls.id)}
+                className={`rounded-xl px-4 py-2 text-xs font-bold transition shrink-0 ${
+                  selectedClassId === cls.id
+                    ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 font-black shadow-sm'
+                    : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                🏫 {cls.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* TABS NỘI DUNG: ĐỀ THI LỚP / KHO TÀI LIỆU / THÔNG BÁO / BẢNG ĐIỂM */}
+        <div className="flex flex-wrap gap-2 border-b border-black/10 dark:border-white/10 pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('exams')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'exams'
+                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                : 'text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <FileText className="h-4 w-4" /> Đề Thi & Bài Tập ({filteredExams.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('materials')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'materials'
+                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                : 'text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <FolderOpen className="h-4 w-4" /> Kho Tài Liệu Học Tập ({filteredMaterials.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('announcements')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'announcements'
+                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                : 'text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Megaphone className="h-4 w-4" /> Thông Báo Từ Giáo Viên ({filteredAnnouncements.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('results')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'results'
+                ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                : 'text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Award className="h-4 w-4" /> Kết Quả Của Tôi ({studentSubmissions.length})
+          </button>
+        </div>
+
+        {/* ==========================================
+            TAB 1: ĐỀ THI & BÀI KIỂM TRA ĐƯỢC GIAO
+        ========================================== */}
+        {activeTab === 'exams' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
-              <div className="flex items-center gap-2">
-                <School className="h-5 w-5 text-sky-500" />
-                <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
-                  Lớp Học Đang Tham Gia ({enrolledClasses.length})
-                </h3>
-              </div>
+              <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
+                Danh Sách Đề Thi Của Lớp
+              </h3>
+              <span className="text-xs text-slate-400">
+                {selectedClassId === 'all' ? 'Tất cả các lớp' : 'Lớp đã chọn'}
+              </span>
             </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-              {enrolledClasses.length === 0 ? (
-                <div className="py-12 text-center text-xs text-[#6B7280] dark:text-slate-400 space-y-2">
-                  <p>Bạn chưa tham gia lớp học nào.</p>
-                  <p className="text-[11px]">Hãy xin mã mời từ giáo viên của bạn và nhập vào ô bên trên nhé!</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {filteredExams.length === 0 ? (
+                <div className="col-span-2 py-12 text-center text-xs text-[#6B7280] dark:text-slate-400">
+                  Hiện chưa có đề thi mới nào được giao cho lớp này.
                 </div>
               ) : (
-                enrolledClasses.map((cls) => (
-                  <div
-                    key={cls.id}
-                    className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] space-y-2 transition hover:shadow-md"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-sm font-bold">{cls.name}</h4>
-                        <p className="text-xs text-[#6B7280] dark:text-slate-400 mt-0.5">
-                          Khối {cls.grade} • Môn: {cls.subject}
-                        </p>
+                filteredExams.map((item) => {
+                  const ex = item.exams || item
+                  const dueDate = item.due_date
+                  const isExpired = dueDate ? new Date(dueDate) < new Date() : false
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] space-y-3 flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="rounded-full bg-sky-500/10 text-sky-600 px-2 py-0.5 text-[10px] font-black uppercase">
+                            {ex.exam_type || 'Kiểm tra'}
+                          </span>
+                          {item.classes?.name && (
+                            <span className="rounded-full bg-indigo-500/10 text-indigo-600 px-2 py-0.5 text-[10px] font-bold">
+                              🏫 {item.classes.name}
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="text-sm font-bold line-clamp-2">{ex.title}</h4>
+
+                        <div className="text-xs text-slate-400 space-y-1">
+                          <p>⏱️ Thời gian làm bài: {ex.duration} phút</p>
+                          {dueDate ? (
+                            <p className={isExpired ? 'text-rose-500 font-bold' : 'text-amber-600 dark:text-amber-400 font-semibold'}>
+                              📅 Hạn chót: {new Date(dueDate).toLocaleString('vi-VN')} {isExpired ? '(Đã hết hạn)' : ''}
+                            </p>
+                          ) : (
+                            <p className="text-slate-400">📅 Hạn chót: Không giới hạn</p>
+                          )}
+                        </div>
                       </div>
-                      <span className="rounded-full bg-emerald-500/10 text-emerald-600 px-2.5 py-0.5 text-[10px] font-black uppercase">
-                        Đang học
-                      </span>
+
+                      <div className="pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
+                        {isExpired ? (
+                          <span className="text-xs font-bold text-rose-500 flex items-center gap-1">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Đã quá hạn nộp
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-emerald-600">Đang mở</span>
+                        )}
+
+                        <Link
+                          href={`/new-exam/${ex.id}`}
+                          className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105 ${
+                            isExpired
+                              ? 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                              : 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white'
+                          }`}
+                        >
+                          <Play className="h-3.5 w-3.5 fill-current" /> {isExpired ? 'Xem Lại Đề' : 'Bắt Đầu Làm'}
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
+        )}
 
-          {/* CỘT 2: ĐỀ THI ĐƯỢC GIAO & SẮP DIỄN RA */}
-          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-xl space-y-4">
+        {/* ==========================================
+            TAB 2: KHO TÀI LIỆU HỌC TẬP CỦA LỚP
+        ========================================== */}
+        {activeTab === 'materials' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-indigo-500" />
-                <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
-                  Đề Thi & Bài Kiểm Tra Của Lớp
-                </h3>
-              </div>
+              <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
+                Tài Liệu Học Tập & Bài Giảng Do Giáo Viên Cung Cấp
+              </h3>
             </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-              {classExamsList.length === 0 ? (
+            <div className="space-y-3">
+              {filteredMaterials.length === 0 ? (
                 <div className="py-12 text-center text-xs text-[#6B7280] dark:text-slate-400">
-                  Hiện chưa có đề thi mới nào được giao cho lớp của bạn.
+                  Chưa có tài liệu nào được đăng trong lớp này.
                 </div>
               ) : (
-                classExamsList.slice(0, 10).map((ex) => (
+                filteredMaterials.map((mat) => (
                   <div
-                    key={ex.id}
+                    key={mat.id}
                     className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between gap-3"
                   >
                     <div className="space-y-1">
-                      <span className="rounded-full bg-sky-500/10 text-sky-600 px-2 py-0.5 text-[10px] font-black uppercase">
-                        {ex.exam_type}
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-indigo-500/15 text-indigo-600 px-2 py-0.5 text-[10px] font-black uppercase">
+                          {mat.material_type === 'exam_review'
+                            ? 'Đề cương'
+                            : mat.material_type === 'lecture'
+                            ? 'Bài giảng'
+                            : mat.material_type === 'solution'
+                            ? 'Lời giải'
+                            : 'Slide'}
+                        </span>
+                        {mat.classes?.name && (
+                          <span className="text-[10px] font-bold text-slate-400">🏫 {mat.classes.name}</span>
+                        )}
+                        <h4 className="text-sm font-bold">{mat.title}</h4>
+                      </div>
+                      <p className="text-xs text-slate-400">{mat.description}</p>
+                      <span className="text-[10px] text-slate-400 block">
+                        🕒 Ngày đăng: {new Date(mat.created_at).toLocaleDateString('vi-VN')}
                       </span>
-                      <h4 className="text-xs sm:text-sm font-bold line-clamp-1">{ex.title}</h4>
-                      <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
-                        ⏱️ {ex.duration} phút • Giám sát thi cử
-                      </p>
                     </div>
 
-                    <Link
-                      href={`/new-exam/${ex.id}`}
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                    <a
+                      href={mat.file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow transition hover:scale-105 shrink-0"
                     >
-                      <Play className="h-3.5 w-3.5 fill-current" /> Làm Bài
-                    </Link>
+                      <ExternalLink className="h-3.5 w-3.5" /> Xem / Tải Về
+                    </a>
                   </div>
                 ))
               )}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* LỊCH SỬ KẾT QUẢ & BẢNG ĐIỂM CỦA BẠN */}
-        <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
-            <div className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-amber-500" />
+        {/* ==========================================
+            TAB 3: THÔNG BÁO TỪ GIÁO VIÊN
+        ========================================== */}
+        {activeTab === 'announcements' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
               <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
-                Bảng Điểm Cá Nhân & Bài Đã Hoàn Thành
+                Bảng Tin & Thông Báo Từ Giáo Viên
               </h3>
             </div>
-          </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-black/10 dark:border-white/10 text-slate-400 font-bold uppercase text-[10px]">
-                <tr>
-                  <th className="py-2.5">Đề Thi</th>
-                  <th className="py-2.5">Điểm Số</th>
-                  <th className="py-2.5">Trạng Thái</th>
-                  <th className="py-2.5">Thời Gian Nộp</th>
-                  <th className="py-2.5 text-right">Xem Lại Lời Giải</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5 dark:divide-white/5 font-semibold">
-                {studentSubmissions.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-slate-400">
-                      Bạn chưa nộp bài thi nào. Hãy bắt đầu làm bài kiểm tra đầu tiên nhé!
-                    </td>
-                  </tr>
-                ) : (
-                  studentSubmissions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-black/[0.02]">
-                      <td className="py-3 font-bold text-slate-900 dark:text-white">{sub.exams?.title || 'Bài thi'}</td>
-                      <td className="py-3">
-                        <span className="text-base font-black text-sky-600 dark:text-sky-400">
-                          {typeof sub.score === 'number' ? sub.score.toFixed(2) : '--'}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <span className="text-emerald-600 font-bold">✅ Đã hoàn thành</span>
-                      </td>
-                      <td className="py-3 text-slate-400">
-                        {new Date(sub.submitted_at || sub.created_at).toLocaleString('vi-VN')}
-                      </td>
-                      <td className="py-3 text-right">
-                        <Link
-                          href={`/new-history/${sub.id}`}
-                          className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-bold hover:scale-105 transition"
+            <div className="space-y-3">
+              {filteredAnnouncements.length === 0 ? (
+                <div className="py-12 text-center text-xs text-[#6B7280] dark:text-slate-400">
+                  Chưa có thông báo nào từ giáo viên.
+                </div>
+              ) : (
+                filteredAnnouncements.map((ann) => (
+                  <div
+                    key={ann.id}
+                    className="p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
+                            ann.priority === 'urgent'
+                              ? 'bg-rose-500/15 text-rose-600'
+                              : ann.priority === 'important'
+                              ? 'bg-amber-500/15 text-amber-600'
+                              : 'bg-sky-500/15 text-sky-600'
+                          }`}
                         >
-                          <Eye className="h-3 w-3" /> Chi tiết lời giải
-                        </Link>
+                          {ann.priority === 'urgent' ? '🚨 Khẩn cấp' : ann.priority === 'important' ? '⭐ Quan trọng' : 'Thông báo'}
+                        </span>
+                        <h4 className="text-sm font-bold">{ann.title}</h4>
+                      </div>
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(ann.created_at).toLocaleString('vi-VN')}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                      {ann.content}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            TAB 4: KẾT QUẢ & BẢNG ĐIỂM CÁ NHÂN
+        ========================================== */}
+        {activeTab === 'results' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
+              <div className="flex items-center gap-2">
+                <Award className="h-5 w-5 text-amber-500" />
+                <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
+                  Bảng Điểm Cá Nhân & Bài Đã Hoàn Thành
+                </h3>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-black/10 dark:border-white/10 text-slate-400 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="py-2.5">Đề Thi</th>
+                    <th className="py-2.5">Điểm Số</th>
+                    <th className="py-2.5">Trạng Thái</th>
+                    <th className="py-2.5">Thời Gian Nộp</th>
+                    <th className="py-2.5 text-right">Xem Lời Giải</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-white/5 font-semibold">
+                  {studentSubmissions.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-400">
+                        Bạn chưa nộp bài thi nào. Hãy bắt đầu làm bài kiểm tra đầu tiên nhé!
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    studentSubmissions.map((sub) => (
+                      <tr key={sub.id} className="hover:bg-black/[0.02]">
+                        <td className="py-3 font-bold text-slate-900 dark:text-white">{sub.exams?.title || 'Bài thi'}</td>
+                        <td className="py-3">
+                          <span className="text-base font-black text-sky-600 dark:text-sky-400">
+                            {typeof sub.score === 'number' ? sub.score.toFixed(2) : '--'}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <span className="text-emerald-600 font-bold">✅ Đã hoàn thành</span>
+                        </td>
+                        <td className="py-3 text-slate-400">
+                          {new Date(sub.submitted_at || sub.created_at).toLocaleString('vi-VN')}
+                        </td>
+                        <td className="py-3 text-right">
+                          <Link
+                            href={`/new-history/${sub.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-bold hover:scale-105 transition"
+                          >
+                            <Eye className="h-3 w-3" /> Chi tiết
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </main>
   )
