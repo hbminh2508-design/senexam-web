@@ -68,7 +68,7 @@ const EXAM_BLOCKS = [
 ]
 
 type TeacherTab = 'classes' | 'exams' | 'create' | 'proctor' | 'results'
-type ClassSubTab = 'invite_codes' | 'announcements' | 'materials'
+type ClassSubTab = 'invite_codes' | 'students' | 'announcements' | 'materials'
 
 export default function NewTeacherPage() {
   const router = useRouter()
@@ -94,6 +94,7 @@ export default function NewTeacherPage() {
   const [classSubjectInput, setClassSubjectInput] = useState('Toán học')
   const [creatingClass, setCreatingClass] = useState(false)
   const [inviteCodesList, setInviteCodesList] = useState<any[]>([])
+  const [classMembersList, setClassMembersList] = useState<any[]>([])
   const [generatingCodes, setGeneratingCodes] = useState(false)
   const [maxStudentsLimitInput, setMaxStudentsLimitInput] = useState('40')
 
@@ -327,10 +328,39 @@ export default function NewTeacherPage() {
         const localMats = JSON.parse(localStorage.getItem(`sen_class_mats_${selectedClassId}`) || '[]')
         setClassMaterials(localMats)
       }
+
+      // 4. Fetch Actual Class Members (Học sinh thực tế đã tham gia lớp)
+      try {
+        const { data: members } = await supabase
+          .from('class_members')
+          .select('*, profiles:student_id(full_name, email, avatar_url)')
+          .eq('class_id', selectedClassId)
+          .order('joined_at', { ascending: false })
+
+        if (members) {
+          setClassMembersList(members)
+        } else {
+          setClassMembersList([])
+        }
+      } catch {
+        setClassMembersList([])
+      }
     }
 
     fetchClassDetails()
   }, [selectedClassId, userId])
+
+  const handleRemoveStudent = async (memberId: string, studentName: string) => {
+    if (!confirm(`Bạn có chắc muốn xóa học sinh "${studentName}" khỏi lớp học này?`)) return
+    try {
+      await supabase.from('class_members').delete().eq('id', memberId)
+      const updated = classMembersList.filter((m) => m.id !== memberId)
+      setClassMembersList(updated)
+      alert(`Đã xóa học sinh "${studentName}" khỏi lớp học thành công!`)
+    } catch (err: any) {
+      alert(`Lỗi: ${err.message}`)
+    }
+  }
 
   const toggleDarkMode = () => {
     const next = !isDark
@@ -1218,8 +1248,8 @@ export default function NewTeacherPage() {
                       </button>
                     </div>
 
-                    {/* Sub Tabs: Mã Mời / Tin Nhắn & Thông Báo / Kho Tài Liệu */}
-                    <div className="flex gap-2 border-b border-black/10 dark:border-white/10 pb-2">
+                    {/* Sub Tabs: Mã Mời / Danh Sách Học Sinh / Tin Nhắn & Thông Báo / Kho Tài Liệu */}
+                    <div className="flex flex-wrap gap-2 border-b border-black/10 dark:border-white/10 pb-2">
                       <button
                         type="button"
                         onClick={() => setClassSubTab('invite_codes')}
@@ -1230,6 +1260,18 @@ export default function NewTeacherPage() {
                         }`}
                       >
                         <KeyRound className="h-3.5 w-3.5" /> Mã Mời 20 Ký Tự
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setClassSubTab('students')}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition ${
+                          classSubTab === 'students'
+                            ? 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                            : 'text-[#6B7280] hover:text-black dark:hover:text-white'
+                        }`}
+                      >
+                        <GraduationCap className="h-3.5 w-3.5" /> Danh Sách Học Sinh ({classMembersList.length})
                       </button>
 
                       <button
@@ -1301,7 +1343,8 @@ export default function NewTeacherPage() {
                             inviteCodesList.map((codeItem) => {
                               const isCopied = copiedCodeId === codeItem.id
                               const maxU = codeItem.max_uses || 40
-                              const usedC = codeItem.used_count || 0
+                              // Tính đúng số lượng học sinh thực tế đã vào lớp
+                              const usedC = Math.max(codeItem.used_count || 0, classMembersList.length)
                               const isFull = usedC >= maxU
                               const percent = Math.min(100, Math.round((usedC / maxU) * 100))
 
@@ -1359,6 +1402,51 @@ export default function NewTeacherPage() {
                             })
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* SUB-TAB 2: DANH SÁCH HỌC SINH CỦA LỚP */}
+                    {classSubTab === 'students' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-black/10 dark:border-white/10">
+                          <h4 className="text-sm font-bold">Danh Sách Học Sinh ({classMembersList.length} Học Sinh)</h4>
+                          <span className="text-xs text-slate-400">Tự động cập nhật khi học sinh nhập mã mời</span>
+                        </div>
+
+                        {classMembersList.length === 0 ? (
+                          <div className="py-8 text-center text-xs text-[#6B7280] dark:text-slate-400">
+                            Chưa có học sinh nào trong lớp. Hãy gửi mã mời 20 ký tự ở tab <strong>"Mã Mời 20 Ký Tự"</strong> cho học sinh tham gia nhé!
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-black/5 dark:divide-white/5">
+                            {classMembersList.map((mem, idx) => (
+                              <div key={mem.id} className="py-3 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-500/10 text-sky-600 font-bold text-xs">
+                                    {idx + 1}
+                                  </span>
+                                  <div>
+                                    <h5 className="font-bold text-xs text-slate-900 dark:text-white">
+                                      {mem.profiles?.full_name || 'Học sinh'}
+                                    </h5>
+                                    <p className="text-[11px] text-slate-400">
+                                      {mem.profiles?.email || mem.student_id} • Tham gia lúc {new Date(mem.joined_at || mem.created_at || Date.now()).toLocaleDateString('vi-VN')}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStudent(mem.id, mem.profiles?.full_name || 'Học sinh')}
+                                  className="p-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 text-xs font-bold transition hover:scale-105"
+                                  title="Xóa học sinh này khỏi lớp"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
