@@ -34,12 +34,21 @@ import {
   BookOpen,
   ChevronRight,
   ShieldCheck,
+  GraduationCap,
+  Layers,
+  FileCheck,
+  AlertTriangle,
+  Radio,
+  Sliders,
+  Send,
+  UserCheck,
+  RefreshCw,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newteacher-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newteacher-body' })
 
-const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL', 'Kiểm tra 1 tiết', 'Học kỳ']
+const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL', 'Kiểm tra 1 tiết', 'Học kỳ', 'Thi thử THPTQG 2026']
 const EXAM_BLOCKS = [
   { code: 'A00', name: 'Toán, Vật lí, Hóa học' },
   { code: 'A01', name: 'Toán, Vật lí, Tiếng Anh' },
@@ -50,6 +59,8 @@ const EXAM_BLOCKS = [
   { code: 'TSA', name: 'Đánh giá tư duy (TSA)' },
 ]
 
+type TeacherTab = 'classes' | 'exams' | 'create' | 'proctor' | 'results'
+
 export default function NewTeacherPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -58,25 +69,83 @@ export default function NewTeacherPage() {
   const [userId, setUserId] = useState('')
   const [teacherName, setTeacherName] = useState('')
 
-  const [activeTab, setActiveTab] = useState<'exams' | 'create' | 'results'>('exams')
+  const [activeTab, setActiveTab] = useState<TeacherTab>('classes')
   const [examsList, setExamsList] = useState<any[]>([])
   const [examSearch, setExamSearch] = useState('')
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null)
+  const [copiedAllBatch, setCopiedAllBatch] = useState(false)
 
-  // CREATE EXAM STATE
-  const [title, setTitle] = useState('')
-  const [examType, setExamType] = useState('THPTQG')
-  const [duration, setDuration] = useState('50')
-  const [allowReview, setAllowReview] = useState(true)
-  const [isHiddenExam, setIsHiddenExam] = useState(false)
-  const [customAccessCode, setCustomAccessCode] = useState('')
-  const [pdfFile, setPdfFile] = useState<File | null>(null)
-  const [selectedBlock, setSelectedBlock] = useState('A00')
-  const [questionCount, setQuestionCount] = useState('50')
+  // ==========================================
+  // 1. CLASSROOMS & INVITE CODES STATE
+  // ==========================================
+  const [classesList, setClassesList] = useState<any[]>([])
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null)
+  const [classNameInput, setClassNameInput] = useState('')
+  const [classGradeInput, setClassGradeInput] = useState('12')
+  const [classSubjectInput, setClassSubjectInput] = useState('Toán học')
+  const [creatingClass, setCreatingClass] = useState(false)
+  const [inviteCodesList, setInviteCodesList] = useState<any[]>([])
+  const [generatingCodes, setGeneratingCodes] = useState(false)
+
+  // ==========================================
+  // 2. PRO MULTI-SECTION EXAM BUILDER STATE
+  // ==========================================
+  const [examTitle, setExamTitle] = useState('')
+  const [examTypeVal, setExamTypeVal] = useState('THPTQG')
+  const [examDuration, setExamDuration] = useState('50')
+  const [examAllowReview, setExamAllowReview] = useState(true)
+  const [examIsHidden, setExamIsHidden] = useState(false)
+  const [examCustomCode, setExamCustomCode] = useState('')
+  const [examBlock, setExamBlock] = useState('A00')
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>(['Toán học'])
+  const [maxAttempts, setMaxAttempts] = useState('1')
+  const [gradingMethod, setGradingMethod] = useState('highest')
+  const [requireProctoring, setRequireProctoring] = useState(true)
+  const [examPdfFile, setExamPdfFile] = useState<File | null>(null)
+  const [assignToClassId, setAssignToClassId] = useState<string>('')
   const [creatingExam, setCreatingExam] = useState(false)
 
-  // STUDENT RESULTS STATE
+  // Multi-sections state
+  const [examSections, setExamSections] = useState<any[]>([
+    {
+      id: 'sec_1',
+      name: 'Phần I: Câu trắc nghiệm nhiều phương án lựa chọn (A, B, C, D)',
+      type: 'single_choice',
+      questionCount: 18,
+      optionsCount: 4,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 4.5,
+      correctAnswers: {},
+    },
+    {
+      id: 'sec_2',
+      name: 'Phần II: Câu trắc nghiệm Đúng / Sai (Mỗi câu gồm 4 ý a, b, c, d)',
+      type: 'true_false',
+      questionCount: 4,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 4.0,
+      correctAnswers: {},
+    },
+    {
+      id: 'sec_3',
+      name: 'Phần III: Câu trắc nghiệm Trả lời ngắn / Điền số',
+      type: 'short_answer',
+      questionCount: 6,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 1.5,
+      correctAnswers: {},
+    },
+  ])
+  const [quickAnswersModalSecId, setQuickAnswersModalSecId] = useState<string | null>(null)
+  const [quickAnswersText, setQuickAnswersText] = useState('')
+
+  // ==========================================
+  // 3. STUDENT RESULTS & PROCTORING STATE
+  // ==========================================
   const [submissionsList, setSubmissionsList] = useState<any[]>([])
+  const [filterClassResult, setFilterClassResult] = useState<string>('all')
+  const [proctorLogs, setProctorLogs] = useState<any[]>([])
+  const [liveExamineesCount, setLiveExamineesCount] = useState<number>(0)
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -100,32 +169,84 @@ export default function NewTeacherPage() {
       setTeacherName(profile?.full_name || user.email || 'Giảng viên')
 
       if (role !== 'teacher' && role !== 'admin' && role !== 'collab') {
-        alert('Cổng Giảng Viên chỉ dành riêng cho tài khoản được cấp quyền Teacher / Admin.')
+        alert('Cổng Giảng Viên chỉ dành cho tài khoản có quyền Teacher hoặc Admin!')
         router.replace('/new-dashboard')
         return
       }
 
-      // Fetch exams created by this teacher (or all exams if admin)
-      let query = supabase.from('exams').select('*').order('created_at', { ascending: false })
-      if (role === 'teacher') {
-        query = query.eq('created_by', user.id)
+      // 1. Fetch Classes for this teacher
+      try {
+        const { data: classesData } = await supabase
+          .from('classes')
+          .select('*')
+          .eq(role === 'teacher' ? 'teacher_id' : 'teacher_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (classesData && classesData.length > 0) {
+          setClassesList(classesData)
+          setSelectedClassId(classesData[0].id)
+        } else {
+          // Fallback mock class for immediate preview
+          const localClasses = JSON.parse(localStorage.getItem(`sen_teacher_classes_${user.id}`) || '[]')
+          if (localClasses.length > 0) {
+            setClassesList(localClasses)
+            setSelectedClassId(localClasses[0].id)
+          }
+        }
+      } catch {
+        const localClasses = JSON.parse(localStorage.getItem(`sen_teacher_classes_${user.id}`) || '[]')
+        setClassesList(localClasses)
+        if (localClasses.length > 0) setSelectedClassId(localClasses[0].id)
       }
-      const { data: examsData } = await query.limit(100)
+
+      // 2. Fetch Exams created by this teacher
+      let examQuery = supabase.from('exams').select('*').order('created_at', { ascending: false })
+      if (role === 'teacher') {
+        examQuery = examQuery.eq('created_by', user.id)
+      }
+      const { data: examsData } = await examQuery.limit(100)
       setExamsList(examsData || [])
 
-      // Fetch submissions for teacher exams
+      // 3. Fetch Submissions
       const { data: subsData } = await supabase
         .from('submissions')
-        .select('*, exams(title), profiles(full_name, email)')
+        .select('*, exams(title, created_by), profiles(full_name, email)')
         .order('submitted_at', { ascending: false })
         .limit(100)
 
       setSubmissionsList(subsData || [])
+      setLiveExamineesCount(Math.max(1, (subsData || []).filter((s) => !s.is_completed).length))
+
       setLoading(false)
     }
 
     init()
   }, [router])
+
+  // Load invite codes when selectedClassId changes
+  useEffect(() => {
+    if (!selectedClassId || !userId) return
+    const fetchCodes = async () => {
+      try {
+        const { data } = await supabase
+          .from('class_invite_codes')
+          .select('*')
+          .eq('class_id', selectedClassId)
+          .order('created_at', { ascending: false })
+
+        if (data && data.length > 0) {
+          setInviteCodesList(data)
+        } else {
+          const localCodes = JSON.parse(localStorage.getItem(`sen_class_codes_${selectedClassId}`) || '[]')
+          setInviteCodesList(localCodes)
+        }
+      } catch {
+        const localCodes = JSON.parse(localStorage.getItem(`sen_class_codes_${selectedClassId}`) || '[]')
+        setInviteCodesList(localCodes)
+      }
+    }
+    fetchCodes()
+  }, [selectedClassId, userId])
 
   const toggleDarkMode = () => {
     const next = !isDark
@@ -139,56 +260,312 @@ export default function NewTeacherPage() {
     }
   }
 
-  const handleCopyAccessCode = (id: string, codeStr: string) => {
-    navigator.clipboard.writeText(codeStr)
+  // ==========================================
+  // HANDLERS: CLASSROOMS & 20 INVITE CODES
+  // ==========================================
+  const handleCreateClass = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!classNameInput.trim()) {
+      alert('Vui lòng nhập tên lớp học!')
+      return
+    }
+
+    // Giới hạn 10 lớp học cho giáo viên
+    if (classesList.length >= 10 && userRole !== 'admin') {
+      alert('Hạng giáo viên miễn phí tạo được tối đa 10 lớp học. Vui lòng liên hệ Admin để mở rộng thêm!')
+      return
+    }
+
+    setCreatingClass(true)
+    try {
+      const newClassObj = {
+        name: classNameInput.trim(),
+        grade: classGradeInput,
+        subject: classSubjectInput,
+        teacher_id: userId,
+        created_at: new Date().toISOString(),
+      }
+
+      let insertedClass: any = null
+      try {
+        const { data, error } = await supabase.from('classes').insert(newClassObj).select('*').single()
+        if (error) throw error
+        insertedClass = data
+      } catch {
+        insertedClass = {
+          id: 'cls_' + Date.now(),
+          ...newClassObj,
+        }
+      }
+
+      const updated = [insertedClass, ...classesList]
+      setClassesList(updated)
+      setSelectedClassId(insertedClass.id)
+      localStorage.setItem(`sen_teacher_classes_${userId}`, JSON.stringify(updated))
+
+      setClassNameInput('')
+      alert(`🎉 Đã tạo thành công lớp: ${insertedClass.name}!`)
+    } catch (err: any) {
+      alert(`Lỗi tạo lớp học: ${err.message}`)
+    } finally {
+      setCreatingClass(false)
+    }
+  }
+
+  // TẠO 20 MÃ MỜI NGẪU NHIÊN CHO LỚP HỌC
+  const handleGenerate20InviteCodes = async () => {
+    if (!selectedClassId) {
+      alert('Vui lòng chọn một lớp học trước!')
+      return
+    }
+
+    setGeneratingCodes(true)
+    try {
+      const currentClass = classesList.find((c) => c.id === selectedClassId)
+      const classNamePrefix = (currentClass?.name || 'CLS').substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, 'X')
+      
+      const new20Codes = Array.from({ length: 20 }, (_, idx) => {
+        const randStr1 = Math.random().toString(36).substring(2, 6).toUpperCase()
+        const randStr2 = Math.random().toString(36).substring(2, 6).toUpperCase()
+        return {
+          id: 'inv_' + Date.now() + '_' + idx,
+          class_id: selectedClassId,
+          teacher_id: userId,
+          code: `SEN-${classNamePrefix}-${randStr1}-${randStr2}`,
+          is_used: false,
+          used_by: null,
+          created_at: new Date().toISOString(),
+        }
+      })
+
+      try {
+        await supabase.from('class_invite_codes').insert(new20Codes)
+      } catch {
+        // Fallback local persistence
+      }
+
+      const updatedCodes = [...new20Codes, ...inviteCodesList]
+      setInviteCodesList(updatedCodes)
+      localStorage.setItem(`sen_class_codes_${selectedClassId}`, JSON.stringify(updatedCodes))
+
+      alert(`Đã tạo thành công 20 mã mời ngẫu nhiên cho lớp ${currentClass?.name || ''}!`)
+    } catch (err: any) {
+      alert(`Lỗi tạo mã mời: ${err.message}`)
+    } finally {
+      setGeneratingCodes(false)
+    }
+  }
+
+  const handleCopyAllCodes = () => {
+    const text = inviteCodesList
+      .filter((c) => !c.is_used)
+      .map((c, i) => `${i + 1}. ${c.code}`)
+      .join('\n')
+
+    if (!text) {
+      alert('Chưa có mã mời nào khả dụng!')
+      return
+    }
+
+    navigator.clipboard.writeText(text)
+    setCopiedAllBatch(true)
+    setTimeout(() => setCopiedAllBatch(false), 2500)
+  }
+
+  const handleCopySingleCode = (id: string, code: string) => {
+    navigator.clipboard.writeText(code)
     setCopiedCodeId(id)
     setTimeout(() => setCopiedCodeId(null), 2000)
   }
 
-  // TẠO ĐỀ THI MỚI VÀ UPLOAD PDF LÊN GOOGLE DRIVE
-  const handleCreateExam = async (e: React.FormEvent) => {
+  // ==========================================
+  // HANDLERS: PRO EXAM BUILDER
+  // ==========================================
+  const handleLoadPresetTHPT2026 = () => {
+    setExamSections([
+      {
+        id: 'sec_1',
+        name: 'Phần I: Câu trắc nghiệm nhiều phương án lựa chọn (A, B, C, D)',
+        type: 'single_choice',
+        questionCount: 18,
+        optionsCount: 4,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 4.5,
+        correctAnswers: {},
+      },
+      {
+        id: 'sec_2',
+        name: 'Phần II: Câu trắc nghiệm Đúng / Sai (Mỗi câu gồm 4 ý a, b, c, d)',
+        type: 'true_false',
+        questionCount: 4,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 4.0,
+        correctAnswers: {},
+      },
+      {
+        id: 'sec_3',
+        name: 'Phần III: Câu trắc nghiệm Trả lời ngắn / Điền số',
+        type: 'short_answer',
+        questionCount: 6,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 1.5,
+        correctAnswers: {},
+      },
+    ])
+  }
+
+  const handleLoadPresetHSA = () => {
+    setExamSections([
+      {
+        id: 'sec_1',
+        name: 'Phần I: Định lượng & Tư duy Toán học',
+        type: 'single_choice',
+        questionCount: 35,
+        optionsCount: 4,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 7.0,
+        correctAnswers: {},
+      },
+      {
+        id: 'sec_2',
+        name: 'Phần II: Điền đáp án ngắn',
+        type: 'short_answer',
+        questionCount: 15,
+        scoringMode: 'auto_divide',
+        sectionTotalPoints: 3.0,
+        correctAnswers: {},
+      },
+    ])
+  }
+
+  const handleAddSection = () => {
+    const newSec = {
+      id: 'sec_' + Date.now(),
+      name: `Phần ${examSections.length + 1}: Trắc nghiệm`,
+      type: 'single_choice',
+      questionCount: 10,
+      optionsCount: 4,
+      scoringMode: 'auto_divide',
+      sectionTotalPoints: 2.0,
+      correctAnswers: {},
+    }
+    setExamSections([...examSections, newSec])
+  }
+
+  const handleRemoveSection = (id: string) => {
+    setExamSections(examSections.filter((s) => s.id !== id))
+  }
+
+  const handleUpdateSection = (id: string, patch: any) => {
+    setExamSections(examSections.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+  }
+
+  const handleAnswerChange = (sectionId: string, qIndex: number, val: any) => {
+    setExamSections(
+      examSections.map((s) => {
+        if (s.id === sectionId) {
+          const updated = { ...(s.correctAnswers || {}), [qIndex]: val }
+          return { ...s, correctAnswers: updated }
+        }
+        return s
+      })
+    )
+  }
+
+  const handleApplyQuickAnswers = (sectionId: string, text: string) => {
+    const sec = examSections.find((s) => s.id === sectionId)
+    if (!sec) return
+
+    const answers: Record<number, any> = { ...(sec.correctAnswers || {}) }
+
+    if (sec.type === 'single_choice') {
+      const matches = Array.from(text.matchAll(/(\d+)[\s.:)]*([A-D])/gi))
+      if (matches.length > 0) {
+        matches.forEach((m) => {
+          const qNum = parseInt(m[1]) - 1
+          if (qNum >= 0 && qNum < sec.questionCount) {
+            answers[qNum] = m[2].toUpperCase()
+          }
+        })
+      } else {
+        const letters = text.replace(/[^a-dA-D]/g, '').toUpperCase().split('')
+        letters.forEach((l, idx) => {
+          if (idx < sec.questionCount) answers[idx] = l
+        })
+      }
+    } else if (sec.type === 'true_false') {
+      const lines = text.split('\n')
+      lines.forEach((line) => {
+        const m = line.match(/(\d+)[\s.:)]*([ĐDSđds\-\/]+)/i)
+        if (m) {
+          const qNum = parseInt(m[1]) - 1
+          const raw = m[2].replace(/[^ĐDSđds]/gi, '').toUpperCase()
+          const tfObj: any = {}
+          ;['a', 'b', 'c', 'd'].forEach((sub, subIdx) => {
+            const ch = raw[subIdx]
+            tfObj[sub] = ch === 'Đ' || ch === 'D' ? 'D' : 'S'
+          })
+          if (qNum >= 0 && qNum < sec.questionCount) answers[qNum] = tfObj
+        }
+      })
+    } else if (sec.type === 'short_answer') {
+      const matches = Array.from(text.matchAll(/(\d+)[\s.:)]*([-\d.,]+)/g))
+      matches.forEach((m) => {
+        const qNum = parseInt(m[1]) - 1
+        if (qNum >= 0 && qNum < sec.questionCount) {
+          answers[qNum] = m[2].trim()
+        }
+      })
+    }
+
+    handleUpdateSection(sectionId, { correctAnswers: answers })
+    setQuickAnswersModalSecId(null)
+    setQuickAnswersText('')
+    alert(`Đã nạp nhanh đáp án cho ${Object.keys(answers).length} câu hỏi!`)
+  }
+
+  // TẠO VÀ XUẤT BẢN ĐỀ THI LỚP HỌC
+  const handleCreateProExam = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || !pdfFile) {
-      alert('Vui lòng nhập tên đề thi và đính kèm file PDF đề thi!')
+    if (!examTitle.trim() || !examPdfFile) {
+      alert('Vui lòng nhập tên đề thi và tải file PDF đề thi!')
+      return
+    }
+
+    if (examSections.length === 0) {
+      alert('Vui lòng tạo ít nhất 1 phần thi cho đề thi!')
       return
     }
 
     setCreatingExam(true)
     try {
-      // 1. Upload tệp PDF lên Google Drive
-      const uploadUrl = await initGoogleDriveUpload(pdfFile.name, 'application/pdf')
-      const uploaded = await uploadFileToGoogleDrive(uploadUrl, pdfFile, title)
+      // 1. Upload Google Drive
+      const uploadUrl = await initGoogleDriveUpload(examPdfFile.name, 'application/pdf')
+      const uploaded = await uploadFileToGoogleDrive(uploadUrl, examPdfFile, examTitle)
       const driveFileId = typeof uploaded === 'string' ? uploaded : uploaded.id
 
       // 2. Sinh mã code ẩn nếu chọn đề ẩn
-      const accessCode = isHiddenExam
-        ? customAccessCode.trim().toUpperCase() || Math.random().toString(36).substring(2, 8).toUpperCase()
+      const accessCode = examIsHidden
+        ? examCustomCode.trim().toUpperCase() || Math.random().toString(36).substring(2, 8).toUpperCase()
         : null
 
-      // 3. Cấu trúc đề thi mặc định
-      const qCount = parseInt(questionCount) || 50
-      const examStructure = [
-        {
-          id: 'sec_1',
-          name: 'Phần I: Câu trắc nghiệm nhiều phương án lựa chọn',
-          type: 'single_choice',
-          questionCount: qCount,
-          optionsCount: 4,
-          correctAnswers: Array.from({ length: qCount }, () => 'A'),
-        },
-      ]
+      const totalQs = examSections.reduce((sum, s) => sum + (parseInt(s.questionCount) || 0), 0)
 
       const { data: newExam, error: examErr } = await supabase
         .from('exams')
         .insert({
-          title: title.trim(),
-          exam_type: examType,
-          duration: parseInt(duration) || 50,
+          title: examTitle.trim(),
+          exam_type: examTypeVal,
+          duration: parseInt(examDuration) || 50,
           drive_file_id: driveFileId,
-          exam_structure: examStructure,
-          allow_review: allowReview,
-          is_hidden: isHiddenExam,
+          exam_structure: examSections,
+          allow_review: examAllowReview,
+          is_hidden: examIsHidden,
           access_code: accessCode,
+          subjects: selectedSubjects,
+          max_attempts: parseInt(maxAttempts) || 1,
+          grading_method: gradingMethod,
+          require_proctoring: requireProctoring,
           created_by: userId,
         })
         .select('*')
@@ -196,15 +573,24 @@ export default function NewTeacherPage() {
 
       if (examErr) throw examErr
 
+      // Gán đề vào lớp học nếu chọn
+      if (assignToClassId && newExam) {
+        try {
+          await supabase.from('class_exams').insert({
+            class_id: assignToClassId,
+            exam_id: newExam.id,
+            title: newExam.title,
+          })
+        } catch {}
+      }
+
       setExamsList([newExam, ...examsList])
-      setTitle('')
-      setPdfFile(null)
-      setIsHiddenExam(false)
-      setCustomAccessCode('')
+      setExamTitle('')
+      setExamPdfFile(null)
+      setExamIsHidden(false)
+      setExamCustomCode('')
       setActiveTab('exams')
-      alert(
-        `Đã xuất bản đề thi thành công! ${accessCode ? `Mã code mở đề bí mật: ${accessCode}` : 'Đề thi đã được mở công khai.'}`
-      )
+      alert(`🎉 Đã xuất bản đề thi thành công (${totalQs} câu hỏi)! ${accessCode ? `Mã code mở đề: ${accessCode}` : 'Đề đã sẵn sàng cho học sinh làm.'}`)
     } catch (err: any) {
       alert(`Lỗi xuất bản đề thi: ${err.message}`)
     } finally {
@@ -212,27 +598,14 @@ export default function NewTeacherPage() {
     }
   }
 
-  // Bật/tắt allow_review của đề thi
-  const handleToggleReview = async (examId: string, currentVal: boolean) => {
-    const nextVal = !currentVal
-    await supabase.from('exams').update({ allow_review: nextVal }).eq('id', examId)
-    setExamsList(examsList.map((e) => (e.id === examId ? { ...e, allow_review: nextVal } : e)))
-  }
-
-  const filteredExams = useMemo(() => {
-    const q = examSearch.toLowerCase().trim()
-    if (!q) return examsList
-    return examsList.filter((e) => (e.title || '').toLowerCase().includes(q) || (e.access_code || '').toLowerCase().includes(q))
-  }, [examsList, examSearch])
-
   const themeVars = getModernThemeVars('indigo', isDark)
 
   if (loading) {
     return (
       <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
         <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
-          <span className="font-bold text-sm">Đang xác thực quyền Giảng viên...</span>
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+          <span className="font-bold text-sm">Đang tải Cổng Giảng Viên 2.0...</span>
         </div>
       </div>
     )
@@ -240,16 +613,15 @@ export default function NewTeacherPage() {
 
   return (
     <main
-      className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-[#1A1A1A] dark:text-slate-100 font-sans transition-colors duration-300`}
+      className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-[#1A1A1A] dark:text-slate-100 font-sans transition-colors duration-300 pb-20`}
       style={{
         ...themeVars,
         background: isDark
-          ? 'radial-gradient(circle at 10% 10%, rgba(56, 189, 248, 0.12), transparent 30%), radial-gradient(circle at 90% 20%, rgba(168, 85, 247, 0.12), transparent 30%), #080C14'
-          : 'radial-gradient(circle at 10% 10%, rgba(255, 187, 120, 0.35), transparent 30%), radial-gradient(circle at 90% 20%, rgba(94, 234, 212, 0.3), transparent 30%), #F4F7FB',
+          ? 'radial-gradient(circle at 10% 10%, rgba(14, 165, 233, 0.15), transparent 30%), radial-gradient(circle at 90% 20%, rgba(99, 102, 241, 0.15), transparent 30%), #080C14'
+          : 'radial-gradient(circle at 10% 10%, rgba(224, 242, 254, 0.6), transparent 30%), radial-gradient(circle at 90% 20%, rgba(224, 231, 255, 0.6), transparent 30%), #F4F7FB',
       }}
     >
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
         {/* HEADER */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
@@ -262,15 +634,15 @@ export default function NewTeacherPage() {
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-black text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 uppercase tracking-wider">
-                  <School className="inline h-3.5 w-3.5 mr-1" /> Cổng Giảng Viên 2.0
+                <span className="rounded-full bg-gradient-to-r from-sky-500/20 to-indigo-500/20 px-3 py-0.5 text-[11px] font-black text-sky-600 dark:text-sky-400 border border-sky-500/30 uppercase tracking-wider">
+                  <School className="inline h-3.5 w-3.5 mr-1 text-sky-500" /> Cổng Giảng Viên 2.0
                 </span>
                 <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold">
                   {teacherName}
                 </span>
               </div>
               <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
-                Quản Lý & Soạn Đề Thi Lớp Học
+                Quản Lý Lớp Học, Soạn Đề & Giám Sát Thi Cử
               </h1>
             </div>
           </div>
@@ -286,147 +658,719 @@ export default function NewTeacherPage() {
           </div>
         </div>
 
-        {/* NAVIGATION TABS */}
-        <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-2">
+        {/* TABS NAVIGATION */}
+        <div className="flex flex-wrap gap-2 rounded-2xl bg-black/5 dark:bg-white/5 p-1.5 backdrop-blur-xl">
           <button
             type="button"
-            onClick={() => setActiveTab('exams')}
-            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
-              activeTab === 'exams'
-                ? 'bg-[#111827] dark:bg-white text-white dark:text-slate-900 shadow-md'
-                : 'border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 hover:bg-black/5'
+            onClick={() => setActiveTab('classes')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'classes'
+                ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm'
+                : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
             }`}
           >
-            <FileText className="h-4 w-4" /> Danh Sách Đề Thi ({examsList.length})
+            <GraduationCap className="h-4 w-4" /> Lớp Học & 20 Mã Mời ({classesList.length}/10)
           </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('create')}
-            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
               activeTab === 'create'
-                ? 'bg-[#111827] dark:bg-white text-white dark:text-slate-900 shadow-md'
-                : 'border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 hover:bg-black/5'
+                ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm'
+                : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
             }`}
           >
-            <Plus className="h-4 w-4 text-cyan-500" /> Soạn Đề Thi Mới
+            <Plus className="h-4 w-4" /> Soạn Đề Thi Mới (Chuẩn 2026)
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('exams')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'exams'
+                ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm'
+                : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <FileText className="h-4 w-4" /> Đề Thi Đã Tạo ({examsList.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('proctor')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'proctor'
+                ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-sm'
+                : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Radio className="h-4 w-4 text-rose-500 animate-pulse" /> Giám Sát Vi Phạm & Phòng Thi
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('results')}
-            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition ${
               activeTab === 'results'
-                ? 'bg-[#111827] dark:bg-white text-white dark:text-slate-900 shadow-md'
-                : 'border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 hover:bg-black/5'
+                ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm'
+                : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
             }`}
           >
-            <Award className="h-4 w-4 text-amber-500" /> Bảng Điểm Học Sinh ({submissionsList.length})
+            <Award className="h-4 w-4" /> Bảng Điểm Theo Lớp ({submissionsList.length})
           </button>
         </div>
 
-        {/* TAB 1: EXAMS LIST & SECRET ACCESS CODES */}
-        {activeTab === 'exams' && (
-          <div className="mt-6 space-y-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="relative w-full sm:max-w-md">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm đề thi hoặc mã code ẩn..."
-                  value={examSearch}
-                  onChange={(e) => setExamSearch(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 pl-10 pr-3 text-xs font-semibold outline-none focus:border-cyan-500"
-                />
+        {/* ==========================================
+            TAB 1: LỚP HỌC CỦA TÔI & TẠO 20 MÃ MỜI
+        ========================================== */}
+        {activeTab === 'classes' && (
+          <div className="space-y-6">
+            {/* Tạo lớp học mới */}
+            <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                    <GraduationCap className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                      Tạo Lớp Học Mới
+                    </h3>
+                    <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                      Tối đa 10 lớp học cho tài khoản giảng viên miễn phí
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 px-3 py-1 text-xs font-black">
+                  Đã tạo: {classesList.length}/10 Lớp
+                </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('create')}
-                className="inline-flex items-center gap-2 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2.5 text-xs font-black uppercase tracking-wider shadow transition"
-              >
-                <Plus className="h-4 w-4" /> Soạn Đề Thi Mới
-              </button>
+              <form onSubmit={handleCreateClass} className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Tên lớp học:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="VD: Lớp 12A1 Ôn Thi Đại Học 2026..."
+                    value={classNameInput}
+                    onChange={(e) => setClassNameInput(e.target.value)}
+                    required
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Khối lớp:
+                  </label>
+                  <select
+                    value={classGradeInput}
+                    onChange={(e) => setClassGradeInput(e.target.value)}
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  >
+                    <option value="12">Lớp 12 (Luyện Thi THPTQG)</option>
+                    <option value="11">Lớp 11</option>
+                    <option value="10">Lớp 10</option>
+                    <option value="HSA_TSA">Luyện Thi ĐGNL / ĐGTD</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Môn học:
+                  </label>
+                  <select
+                    value={classSubjectInput}
+                    onChange={(e) => setClassSubjectInput(e.target.value)}
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  >
+                    <option value="Toán học">Toán học</option>
+                    <option value="Vật lí">Vật lí</option>
+                    <option value="Hóa học">Hóa học</option>
+                    <option value="Sinh học">Sinh học</option>
+                    <option value="Tiếng Anh">Tiếng Anh</option>
+                    <option value="Ngữ văn">Ngữ văn</option>
+                    <option value="Lịch sử">Lịch sử</option>
+                    <option value="Địa lí">Địa lí</option>
+                    <option value="Tổng hợp ĐGNL">Tổng hợp ĐGNL</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={creatingClass || classesList.length >= 10}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-6 py-3 text-xs font-black uppercase tracking-wider shadow-lg transition hover:scale-105 disabled:opacity-50"
+                  >
+                    {creatingClass ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Tạo Lớp Học Ngay
+                  </button>
+                </div>
+              </form>
             </div>
 
-            {/* Exams Table */}
-            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-xl">
+            {/* Danh sách lớp học & Quản lý mã mời */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Cột 1: Danh sách lớp */}
+              <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-xl space-y-4">
+                <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                  Danh Sách Lớp Của Bạn
+                </h3>
+
+                <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                  {classesList.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-[#6B7280] dark:text-slate-400">
+                      Chưa có lớp học nào. Hãy tạo lớp đầu tiên ở form bên trên!
+                    </div>
+                  ) : (
+                    classesList.map((cls) => (
+                      <div
+                        key={cls.id}
+                        onClick={() => setSelectedClassId(cls.id)}
+                        className={`p-4 rounded-2xl border cursor-pointer transition flex items-center justify-between ${
+                          selectedClassId === cls.id
+                            ? 'border-sky-500 bg-sky-500/10 text-sky-700 dark:text-sky-300 font-black shadow-sm'
+                            : 'border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-black/5'
+                        }`}
+                      >
+                        <div>
+                          <h4 className="text-sm font-bold">{cls.name}</h4>
+                          <p className="text-[11px] text-[#6B7280] dark:text-slate-400 mt-0.5">
+                            Khối {cls.grade} • Môn {cls.subject}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4" />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Cột 2 & 3: Quản lý 20 Mã Mời Tham Gia Lớp */}
+              <div className="lg:col-span-2 rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-black/10 dark:border-white/10">
+                  <div>
+                    <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                      Mã Mời Học Sinh Tham Gia Lớp
+                    </h3>
+                    <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                      Cấp mã mời cho học sinh để tự động tham gia đúng lớp và theo dõi điểm riêng
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleGenerate20InviteCodes}
+                      disabled={generatingCodes || !selectedClassId}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105 disabled:opacity-50"
+                    >
+                      {generatingCodes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      Tạo 20 Mã Mời Ngẫu Nhiên
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyAllCodes}
+                      disabled={inviteCodesList.length === 0}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs font-bold shadow-sm transition hover:scale-105"
+                    >
+                      {copiedAllBatch ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedAllBatch ? 'Đã copy 20 mã!' : 'Copy Toàn Bộ'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bảng danh sách mã mời */}
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {inviteCodesList.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-[#6B7280] dark:text-slate-400">
+                      Chưa có mã mời nào cho lớp này. Nhấn nút <strong>"Tạo 20 Mã Mời Ngẫu Nhiên"</strong> ở trên để phát cho học sinh!
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {inviteCodesList.map((codeItem) => {
+                        const isCopied = copiedCodeId === codeItem.id
+                        return (
+                          <div
+                            key={codeItem.id}
+                            className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs ${
+                              codeItem.is_used
+                                ? 'border-emerald-500/20 bg-emerald-500/5 text-[#6B7280] line-through'
+                                : 'border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]'
+                            }`}
+                          >
+                            <div>
+                              <strong className="font-mono font-bold tracking-wider">{codeItem.code}</strong>
+                              <span className="block text-[10px] text-slate-400">
+                                {codeItem.is_used ? '✅ Đã được học sinh sử dụng' : '⏳ Chưa sử dụng'}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCopySingleCode(codeItem.id, codeItem.code)}
+                              className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 hover:scale-105 transition"
+                              title="Copy mã"
+                            >
+                              {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            TAB 2: SOẠN ĐỀ THI PRO ĐẦY ĐỦ (CHUẨN 2026)
+        ========================================== */}
+        {activeTab === 'create' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
+              <div>
+                <h3 className="text-xl font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                  Soạn Đề Thi Mới Đầy Đủ (Đồng Bộ Quản Trị)
+                </h3>
+                <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                  Hỗ trợ đầy đủ cấu trúc 3 phần THPTQG 2026, ĐGNL HSA/TSA, nạp nhanh đáp án và tải PDF lên Google Drive.
+                </p>
+              </div>
+
+              {/* Nút nạp preset nhanh */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadPresetTHPT2026}
+                  className="rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 px-3 py-1.5 text-xs font-bold transition"
+                >
+                  ⚡ Cấu Trúc Mẫu THPT 2026 (18 Đơn - 4 Đúng/Sai - 6 Điền Số)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadPresetHSA}
+                  className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-3 py-1.5 text-xs font-bold transition"
+                >
+                  ⚡ Mẫu ĐGNL HSA (35 Trắc Nghiệm - 15 Điền Số)
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateProExam} className="space-y-6">
+              {/* Thông tin cơ bản */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Tên tiêu đề đề thi:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="VD: Đề thi thử Toán THPT Quốc Gia 2026 - Lần 1 (Có lời giải chi tiết)..."
+                    value={examTitle}
+                    onChange={(e) => setExamTitle(e.target.value)}
+                    required
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Loại kỳ thi:
+                  </label>
+                  <select
+                    value={examTypeVal}
+                    onChange={(e) => setExamTypeVal(e.target.value)}
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  >
+                    {EXAM_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Thời gian làm bài (Phút):
+                  </label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="180"
+                    value={examDuration}
+                    onChange={(e) => setExamDuration(e.target.value)}
+                    required
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Gán riêng cho lớp học:
+                  </label>
+                  <select
+                    value={assignToClassId}
+                    onChange={(e) => setAssignToClassId(e.target.value)}
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  >
+                    <option value="">-- Toàn bộ học sinh có thể làm --</option>
+                    {classesList.map((cls) => (
+                      <option key={cls.id} value={cls.id}>
+                        {cls.name} (Khối {cls.grade})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#6B7280] dark:text-slate-400 block mb-1">
+                    Tệp PDF Đề Thi (Google Drive):
+                  </label>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setExamPdfFile(e.target.files?.[0] || null)}
+                    required
+                    className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Tùy chọn bảo mật & giám sát */}
+              <div className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold">
+                  <input
+                    type="checkbox"
+                    checked={requireProctoring}
+                    onChange={(e) => setRequireProctoring(e.target.checked)}
+                    className="h-4 w-4 rounded text-sky-600"
+                  />
+                  <span>Bật giám sát gian lận (Tab switch)</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold">
+                  <input
+                    type="checkbox"
+                    checked={examAllowReview}
+                    onChange={(e) => setExamAllowReview(e.target.checked)}
+                    className="h-4 w-4 rounded text-sky-600"
+                  />
+                  <span>Cho phép xem lại lời giải chi tiết</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold">
+                  <input
+                    type="checkbox"
+                    checked={examIsHidden}
+                    onChange={(e) => setExamIsHidden(e.target.checked)}
+                    className="h-4 w-4 rounded text-sky-600"
+                  />
+                  <span>Đặt mã PIN khóa đề bí mật</span>
+                </label>
+              </div>
+
+              {/* CÁC PHẦN THI (MULTI-SECTIONS BUILDER) */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-base font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                    Cấu Trúc Các Phần Thi ({examSections.length} Phần)
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleAddSection}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Thêm phần thi
+                  </button>
+                </div>
+
+                {examSections.map((sec, secIdx) => (
+                  <div
+                    key={sec.id}
+                    className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 p-5 space-y-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white text-xs font-black">
+                          {secIdx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={sec.name}
+                          onChange={(e) => handleUpdateSection(sec.id, { name: e.target.value })}
+                          className="font-bold text-sm bg-transparent border-b border-transparent focus:border-sky-500 outline-none w-72 sm:w-96"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickAnswersModalSecId(sec.id)
+                            setQuickAnswersText('')
+                          }}
+                          className="rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-1 text-xs font-bold transition hover:scale-105"
+                        >
+                          ⚡ Nạp Nhanh Đáp Án
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSection(sec.id)}
+                          className="p-1 text-rose-500 hover:scale-110 transition"
+                          title="Xóa phần này"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 block mb-1">Loại câu hỏi:</label>
+                        <select
+                          value={sec.type}
+                          onChange={(e) => handleUpdateSection(sec.id, { type: e.target.value })}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold"
+                        >
+                          <option value="single_choice">Trắc nghiệm 1 đáp án (A, B, C, D)</option>
+                          <option value="true_false">Trắc nghiệm Đúng / Sai (4 ý a, b, c, d)</option>
+                          <option value="short_answer">Trả lời ngắn / Điền số</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 block mb-1">Số lượng câu hỏi:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={sec.questionCount}
+                          onChange={(e) => handleUpdateSection(sec.id, { questionCount: parseInt(e.target.value) || 1 })}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 block mb-1">Tổng điểm phần này:</label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          min="0.5"
+                          max="10"
+                          value={sec.sectionTotalPoints}
+                          onChange={(e) => handleUpdateSection(sec.id, { sectionTotalPoints: parseFloat(e.target.value) || 1 })}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Vùng xem và chỉnh sửa đáp án */}
+                    <div className="pt-2">
+                      <span className="text-[11px] font-bold text-slate-400 block mb-2">
+                        Bảng đáp án ({Object.keys(sec.correctAnswers || {}).length}/{sec.questionCount} câu đã có đáp án):
+                      </span>
+                      <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto p-2 rounded-xl bg-black/5 dark:bg-white/5">
+                        {Array.from({ length: sec.questionCount }).map((_, qIdx) => {
+                          const currentAns = sec.correctAnswers?.[qIdx]
+                          return (
+                            <div
+                              key={qIdx}
+                              className="flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-2 py-1 text-xs"
+                            >
+                              <span className="font-bold text-slate-400">{qIdx + 1}:</span>
+                              {sec.type === 'single_choice' && (
+                                <select
+                                  value={currentAns || 'A'}
+                                  onChange={(e) => handleAnswerChange(sec.id, qIdx, e.target.value)}
+                                  className="font-black text-sky-600 dark:text-sky-400 bg-transparent outline-none"
+                                >
+                                  {['A', 'B', 'C', 'D'].map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                              {sec.type === 'true_false' && (
+                                <span className="font-mono font-bold text-indigo-500">
+                                  {currentAns ? `${currentAns.a || 'Đ'}${currentAns.b || 'S'}${currentAns.c || 'Đ'}${currentAns.d || 'S'}` : 'Đ/S'}
+                                </span>
+                              )}
+                              {sec.type === 'short_answer' && (
+                                <input
+                                  type="text"
+                                  placeholder="Đáp án"
+                                  value={currentAns || ''}
+                                  onChange={(e) => handleAnswerChange(sec.id, qIdx, e.target.value)}
+                                  className="w-16 font-mono font-bold text-emerald-500 bg-transparent outline-none"
+                                />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={creatingExam}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 hover:from-sky-700 hover:to-purple-700 text-white px-8 py-4 text-xs font-black uppercase tracking-wider shadow-xl transition hover:scale-105 disabled:opacity-50"
+                >
+                  {creatingExam ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Xuất Bản Đề Thi Cho Học Sinh
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ==========================================
+            TAB 3: DANH SÁCH ĐỀ THI ĐÃ TẠO
+        ========================================== */}
+        {activeTab === 'exams' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-black/10 dark:border-white/10">
+              <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                Đề Thi Do Bạn Quản Lý ({examsList.length})
+              </h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm đề thi..."
+                  value={examSearch}
+                  onChange={(e) => setExamSearch(e.target.value)}
+                  className="rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-2 pl-9 pr-3 text-xs font-semibold outline-none focus:border-sky-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {examsList
+                .filter((ex) => ex.title?.toLowerCase().includes(examSearch.toLowerCase()))
+                .map((ex) => (
+                  <div
+                    key={ex.id}
+                    className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 space-y-3 flex flex-col justify-between"
+                  >
+                    <div className="space-y-1.5">
+                      <span className="rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 px-2.5 py-0.5 text-[10px] font-black uppercase">
+                        {ex.exam_type}
+                      </span>
+                      <h4 className="text-sm font-bold line-clamp-2">{ex.title}</h4>
+                      <p className="text-xs text-slate-400">⏱️ {ex.duration} phút làm bài</p>
+                    </div>
+
+                    <div className="pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
+                      {ex.access_code ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCopySingleCode(ex.id, ex.access_code)}
+                          className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 hover:underline"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" /> Mã: {ex.access_code}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-bold text-emerald-600">Đề công khai</span>
+                      )}
+
+                      <Link
+                        href={`/new-exam/${ex.id}`}
+                        className="p-2 rounded-xl bg-white dark:bg-slate-800 border hover:scale-105 transition"
+                        title="Làm thử bài thi"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            TAB 4: GIÁM SÁT VI PHẠM & PHÒNG THI THỜI GIAN THỰC
+        ========================================== */}
+        {activeTab === 'proctor' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-black/10 dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                  <Radio className="h-6 w-6 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                    Giám Sát Phòng Thi Trực Tuyến & Nhật Ký Vi Phạm
+                  </h3>
+                  <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                    Theo dõi số lượng thí sinh đang làm bài và cảnh báo rời tab tự động
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-center">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 block">Đang Làm Bài</span>
+                  <strong className="text-xl font-black text-rose-600">{liveExamineesCount} Học Sinh</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Bảng ghi nhận vi phạm */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                Nhật Ký Vi Phạm Gần Nhất (Rời Màn Hình / Gian Lận):
+              </h4>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-black/10 dark:border-white/10 text-[#6B7280] dark:text-slate-400">
-                      <th className="pb-3 font-bold uppercase">Tên đề thi</th>
-                      <th className="pb-3 font-bold uppercase">Phân loại</th>
-                      <th className="pb-3 font-bold uppercase">Thời gian</th>
-                      <th className="pb-3 font-bold uppercase">Mã Code Ẩn (Bí Mật)</th>
-                      <th className="pb-3 font-bold uppercase">Xem lại lời giải</th>
-                      <th className="pb-3 font-bold uppercase text-right">Phòng thi</th>
+                  <thead className="border-b border-black/10 dark:border-white/10 text-slate-400 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-2.5">Học Sinh</th>
+                      <th className="py-2.5">Đề Thi</th>
+                      <th className="py-2.5">Số Lần Rời Tab</th>
+                      <th className="py-2.5">Trạng Thái</th>
+                      <th className="py-2.5">Thời Gian</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/5 dark:divide-white/5 font-semibold">
-                    {filteredExams.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-[#6B7280] dark:text-slate-400">
-                          Chưa có đề thi nào phù hợp.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredExams.map((exam) => (
-                        <tr key={exam.id} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
-                          <td className="py-3.5 font-bold max-w-xs truncate text-slate-900 dark:text-white">
-                            {exam.title}
-                          </td>
-                          <td className="py-3.5">
-                            <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black text-[10px]">
-                              {exam.exam_type}
+                    {submissionsList
+                      .filter((s) => (s.tab_switches || 0) > 0 || !s.is_completed)
+                      .slice(0, 15)
+                      .map((sub) => (
+                        <tr key={sub.id} className="hover:bg-black/[0.02]">
+                          <td className="py-3">{sub.profiles?.full_name || sub.profiles?.email || 'Thí sinh'}</td>
+                          <td className="py-3 font-bold">{sub.exams?.title || 'Đề kiểm tra'}</td>
+                          <td className="py-3">
+                            <span className="rounded-full bg-rose-500/15 text-rose-600 px-2 py-0.5 font-black">
+                              {sub.tab_switches || 0} lần
                             </span>
                           </td>
-                          <td className="py-3.5 font-mono">{exam.duration} phút</td>
-                          <td className="py-3.5">
-                            {exam.access_code ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="rounded-md bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 font-mono text-xs font-black text-amber-600 dark:text-amber-400">
-                                  {exam.access_code}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyAccessCode(exam.id, exam.access_code)}
-                                  className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 text-[#6B7280]"
-                                  title="Sao chép mã mở đề cho học sinh"
-                                >
-                                  {copiedCodeId === exam.id ? (
-                                    <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                  ) : (
-                                    <Copy className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              </div>
+                          <td className="py-3">
+                            {sub.is_completed ? (
+                              <span className="text-emerald-600 font-bold">Đã nộp bài ({sub.score?.toFixed(1)}đ)</span>
                             ) : (
-                              <span className="text-[11px] text-[#6B7280] font-normal">Công khai (Không khóa)</span>
+                              <span className="text-amber-500 font-bold animate-pulse">⏳ Đang làm bài...</span>
                             )}
                           </td>
-                          <td className="py-3.5">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleReview(exam.id, exam.allow_review)}
-                              className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase transition ${
-                                exam.allow_review
-                                  ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-                                  : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                              }`}
-                            >
-                              {exam.allow_review ? 'Đang mở' : 'Đã khóa'}
-                            </button>
-                          </td>
-                          <td className="py-3.5 text-right">
-                            <Link
-                              href={`/new-exams/${exam.id}`}
-                              className="inline-flex items-center gap-1 rounded-xl bg-black/5 dark:bg-white/5 px-3 py-1.5 text-xs font-bold hover:bg-black/10 dark:hover:bg-white/10"
-                            >
-                              <Eye className="h-3.5 w-3.5" /> Vào thi
-                            </Link>
+                          <td className="py-3 text-slate-400">
+                            {new Date(sub.submitted_at || sub.created_at).toLocaleTimeString('vi-VN')}
                           </td>
                         </tr>
-                      ))
-                    )}
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -434,174 +1378,134 @@ export default function NewTeacherPage() {
           </div>
         )}
 
-        {/* TAB 2: CREATE EXAM FORM */}
-        {activeTab === 'create' && (
-          <div className="mt-6 max-w-3xl mx-auto rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-8 shadow-2xl backdrop-blur-2xl space-y-6">
-            <div className="flex items-center gap-3 pb-4 border-b border-black/10 dark:border-white/10">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/15 text-cyan-600">
-                <UploadCloud className="h-6 w-6" />
-              </div>
+        {/* ==========================================
+            TAB 5: BẢNG ĐIỂM HỌC SINH THEO LỚP
+        ========================================== */}
+        {activeTab === 'results' && (
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-black/10 dark:border-white/10">
               <div>
-                <h3 className="text-xl font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
-                  Soạn Đề Thi Mới & Đính Kèm File PDF
+                <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                  Bảng Điểm Học Sinh Thuộc Lớp Của Bạn
                 </h3>
                 <p className="text-xs text-[#6B7280] dark:text-slate-400">
-                  Tải file đề thi PDF lên máy chủ Google Drive và thiết lập mã code mở đề cho học sinh.
+                  Chỉ hiển thị kết quả của học sinh thuộc các lớp bạn phụ trách
                 </p>
+              </div>
+
+              {/* Lọc theo lớp học */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400">Chọn Lớp:</span>
+                <select
+                  value={filterClassResult}
+                  onChange={(e) => setFilterClassResult(e.target.value)}
+                  className="rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2 text-xs font-bold outline-none"
+                >
+                  <option value="all">-- Toàn Bộ Lớp Của Bạn --</option>
+                  {classesList.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <form onSubmit={handleCreateExam} className="space-y-4 text-xs font-bold">
-              <div>
-                <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Tên tiêu đề đề thi</label>
-                <input
-                  type="text"
-                  placeholder="Đề kiểm tra giữa kỳ 2 môn Toán lớp 12..."
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-4 text-sm outline-none focus:border-cyan-500 shadow-inner"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Loại kỳ thi</label>
-                  <select
-                    value={examType}
-                    onChange={(e) => setExamType(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
-                  >
-                    {EXAM_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Thời gian làm bài (phút)</label>
-                  <input
-                    type="number"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Số lượng câu hỏi</label>
-                  <input
-                    type="number"
-                    value={questionCount}
-                    onChange={(e) => setQuestionCount(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Tùy chọn Đề Ẩn / Mã Code Bí Mật */}
-              <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs font-black">Đặt mã khóa bí mật cho đề thi (Đề thi lớp học)</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={isHiddenExam}
-                    onChange={(e) => setIsHiddenExam(e.target.checked)}
-                    className="h-4 w-4 accent-cyan-600 cursor-pointer"
-                  />
-                </div>
-
-                {isHiddenExam && (
-                  <div className="pt-2 animate-in fade-in">
-                    <label className="text-[#6B7280] dark:text-slate-400 block mb-1">
-                      Mã Code mở đề tùy chỉnh (bỏ trống để hệ thống tự sinh mã 6 ký tự):
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="VD: TOAN12, KTRA2026..."
-                      value={customAccessCode}
-                      onChange={(e) => setCustomAccessCode(e.target.value.toUpperCase())}
-                      className="h-10 w-full font-mono font-bold uppercase rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Upload PDF */}
-              <div>
-                <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Tệp PDF đề thi</label>
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                  className="w-full text-xs file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100 dark:file:bg-slate-800 dark:file:text-cyan-400"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={creatingExam}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition disabled:opacity-50"
-              >
-                {creatingExam ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                Xuất Bản Đề Thi Cho Học Sinh
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* TAB 3: STUDENT RESULTS */}
-        {activeTab === 'results' && (
-          <div className="mt-6 rounded-[28px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-xl space-y-4">
-            <h3 className="text-base font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
-              Kết Quả Nộp Bài Của Học Sinh ({submissionsList.length})
-            </h3>
-
-            <div className="overflow-x-auto max-h-[500px] custom-scrollbar">
+            <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-black/10 dark:border-white/10 text-[#6B7280] dark:text-slate-400">
-                    <th className="pb-3 font-bold uppercase">Học sinh</th>
-                    <th className="pb-3 font-bold uppercase">Đề thi</th>
-                    <th className="pb-3 font-bold uppercase">Điểm số</th>
-                    <th className="pb-3 font-bold uppercase">Thời gian nộp</th>
-                    <th className="pb-3 font-bold uppercase text-right">Xem chi tiết</th>
+                <thead className="border-b border-black/10 dark:border-white/10 text-slate-400 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="py-2.5">Học Sinh</th>
+                    <th className="py-2.5">Đề Thi</th>
+                    <th className="py-2.5">Điểm Số</th>
+                    <th className="py-2.5">Vi Phạm</th>
+                    <th className="py-2.5">Thời Gian Nộp</th>
+                    <th className="py-2.5 text-right">Chi Tiết</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/5 dark:divide-white/5 font-semibold">
-                  {submissionsList.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
-                      <td className="py-3">
-                        <p className="font-bold">{sub.profiles?.full_name || 'Học sinh'}</p>
-                        <span className="text-[11px] text-[#6B7280]">{sub.profiles?.email}</span>
-                      </td>
-                      <td className="py-3 font-bold text-indigo-600 dark:text-indigo-400 max-w-xs truncate">
-                        {sub.exams?.title || 'Đề thi'}
-                      </td>
-                      <td className="py-3 font-mono font-black text-sm text-emerald-600 dark:text-emerald-400">
-                        {sub.score !== null ? `${sub.score} đ` : 'Chưa chấm'}
-                      </td>
-                      <td className="py-3 text-[11px] text-[#6B7280]">
-                        {new Date(sub.submitted_at).toLocaleString('vi-VN')}
-                      </td>
-                      <td className="py-3 text-right">
-                        <Link
-                          href={`/new-history/${sub.id}`}
-                          className="inline-flex items-center gap-1 rounded-xl bg-black/5 dark:bg-white/5 px-2.5 py-1 text-xs font-bold hover:bg-black/10"
-                        >
-                          <Eye className="h-3 w-3" /> Bài làm
-                        </Link>
+                  {submissionsList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                        Chưa có học sinh nào nộp bài thi cho các đề của bạn.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    submissionsList.map((sub) => (
+                      <tr key={sub.id} className="hover:bg-black/[0.02]">
+                        <td className="py-3 font-bold text-slate-900 dark:text-white">
+                          {sub.profiles?.full_name || sub.profiles?.email || 'Học sinh'}
+                        </td>
+                        <td className="py-3">{sub.exams?.title || 'Đề thi lớp'}</td>
+                        <td className="py-3">
+                          <span className="text-base font-black text-sky-600 dark:text-sky-400">
+                            {typeof sub.score === 'number' ? sub.score.toFixed(2) : '--'}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <span className={sub.tab_switches > 0 ? 'text-rose-500 font-bold' : 'text-emerald-500'}>
+                            {sub.tab_switches > 0 ? `⚠️ ${sub.tab_switches} lần` : 'Chuẩn chỉ'}
+                          </span>
+                        </td>
+                        <td className="py-3 text-slate-400">
+                          {new Date(sub.submitted_at || sub.created_at).toLocaleString('vi-VN')}
+                        </td>
+                        <td className="py-3 text-right">
+                          <Link
+                            href={`/new-history/${sub.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-bold hover:scale-105 transition"
+                          >
+                            <Eye className="h-3 w-3" /> Xem bài làm
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
       </div>
+
+      {/* MODAL NẠP NHANH ĐÁP ÁN (QUICK ANSWERS PARSER) */}
+      {quickAnswersModalSecId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="relative w-full max-w-lg rounded-[32px] border border-black/10 dark:border-white/15 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-2xl space-y-4">
+            <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+              Nạp Nhanh Đáp Án Hàng Loạt
+            </h3>
+            <p className="text-xs text-[#6B7280] dark:text-slate-400">
+              Dán chuỗi đáp án từ file Word hoặc Text: (VD: <code>1A 2B 3C 4D...</code> hoặc <code>1.Đ-S-Đ-S</code>)
+            </p>
+
+            <textarea
+              rows={6}
+              value={quickAnswersText}
+              onChange={(e) => setQuickAnswersText(e.target.value)}
+              placeholder="1A 2B 3C 4D 5A 6B 7C 8D 9A 10B 11C 12D..."
+              className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-slate-50 dark:bg-slate-800 p-3 font-mono text-xs font-bold outline-none focus:border-sky-500"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setQuickAnswersModalSecId(null)}
+                className="rounded-xl border border-black/10 dark:border-white/15 px-4 py-2 text-xs font-bold"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyQuickAnswers(quickAnswersModalSecId, quickAnswersText)}
+                className="rounded-xl bg-sky-600 hover:bg-sky-700 text-white px-5 py-2 text-xs font-black uppercase tracking-wider shadow"
+              >
+                Áp Dụng Đáp Án
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

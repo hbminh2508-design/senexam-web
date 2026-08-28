@@ -37,7 +37,7 @@ export default function NewSignPage() {
   const router = useRouter()
   const { themeColor, animationsEnabled } = useNewUiPrefs()
 
-  const [mode, setMode] = useState<'login' | 'signup' | 'magic-link'>('login')
+  const [mode, setMode] = useState<'login' | 'signup' | 'magic-link' | 'forgot'>('login')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
@@ -56,8 +56,8 @@ export default function NewSignPage() {
   const [pendingEmail, setPendingEmail] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
 
-  // Hướng dẫn Supabase Google Provider
-  const [showGoogleGuide, setShowGoogleGuide] = useState(false)
+  // Trợ giúp học sinh
+  const [showStudentHelp, setShowStudentHelp] = useState(false)
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -178,6 +178,14 @@ export default function NewSignPage() {
         })
         if (error) throw error
         setSuccessMsg('Liên kết đăng nhập bảo mật đã được gửi tới email của bạn. Vui lòng kiểm tra hòm thư!')
+      } else if (mode === 'forgot') {
+        // QUÊN MẬT KHẨU
+        const resetRedirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-reset-password` : undefined
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: resetRedirectUrl,
+        })
+        if (error) throw error
+        setSuccessMsg('Liên kết khôi phục mật khẩu đã được gửi đến email của bạn! Vui lòng kiểm tra hộp thư đến hoặc mục Thư rác (Spam) để đặt mật khẩu mới.')
       }
     } catch (err: any) {
       if (err.message === 'Invalid login credentials') {
@@ -254,7 +262,7 @@ export default function NewSignPage() {
         />
       </div>
 
-      {/* Top right quick controls: Dark Mode & Home */}
+      {/* Top right quick controls: Dark Mode */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
         <button
           type="button"
@@ -264,12 +272,6 @@ export default function NewSignPage() {
         >
           {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
         </button>
-        <Link
-          href="/dashboard"
-          className="hidden sm:inline-flex items-center gap-1.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 px-3.5 py-2 text-xs font-bold shadow-sm backdrop-blur-xl transition hover:scale-105"
-        >
-          Dashboard cũ
-        </Link>
       </div>
 
       {/* Main Container */}
@@ -352,8 +354,8 @@ export default function NewSignPage() {
             </div>
           ) : (
             <>
-              {/* Tab Switcher: Đăng Nhập / Đăng Ký / Magic Link */}
-              <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-black/5 dark:bg-white/5 p-1 mb-6">
+              {/* Tab Switcher: Đăng Nhập / Đăng Ký / Quên Mật Khẩu */}
+              <div className="grid grid-cols-3 gap-1 rounded-2xl bg-black/5 dark:bg-white/5 p-1 mb-6">
                 <button
                   type="button"
                   onClick={() => {
@@ -361,7 +363,7 @@ export default function NewSignPage() {
                     setErrorMsg('')
                     setSuccessMsg('')
                   }}
-                  className={`rounded-xl py-2.5 text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                  className={`rounded-xl py-2 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-200 ${
                     mode === 'login'
                       ? 'bg-white dark:bg-slate-800 text-[#1A1A1A] dark:text-white shadow-sm'
                       : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
@@ -376,7 +378,7 @@ export default function NewSignPage() {
                     setErrorMsg('')
                     setSuccessMsg('')
                   }}
-                  className={`rounded-xl py-2.5 text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                  className={`rounded-xl py-2 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-200 ${
                     mode === 'signup'
                       ? 'bg-white dark:bg-slate-800 text-[#1A1A1A] dark:text-white shadow-sm'
                       : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
@@ -384,38 +386,56 @@ export default function NewSignPage() {
                 >
                   Đăng Ký Mới
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('forgot')
+                    setErrorMsg('')
+                    setSuccessMsg('')
+                  }}
+                  className={`rounded-xl py-2 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-200 ${
+                    mode === 'forgot'
+                      ? 'bg-white dark:bg-slate-800 text-[#1A1A1A] dark:text-white shadow-sm'
+                      : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  Quên MK?
+                </button>
               </div>
 
-              {/* NÚT GOOGLE AUTH 1-CHẠM */}
-              <button
-                type="button"
-                onClick={handleGoogleAuth}
-                disabled={googleLoading}
-                className="w-full flex items-center justify-center gap-3 rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-3.5 px-4 text-sm font-bold text-[#1A1A1A] dark:text-white shadow-sm transition hover:scale-[1.01] hover:shadow-md active:scale-[0.99] disabled:opacity-50"
-              >
-                {googleLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    {/* Official Google Icon */}
-                    <svg className="h-5 w-5" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                    </svg>
-                    <span>{mode === 'signup' ? 'Đăng ký nhanh với Google' : 'Tiếp tục với Google'}</span>
-                  </>
-                )}
-              </button>
+              {/* NÚT GOOGLE AUTH 1-CHẠM (Chỉ hiện khi login hoặc signup) */}
+              {mode !== 'forgot' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleGoogleAuth}
+                    disabled={googleLoading}
+                    className="w-full flex items-center justify-center gap-3 rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-3.5 px-4 text-sm font-bold text-[#1A1A1A] dark:text-white shadow-sm transition hover:scale-[1.01] hover:shadow-md active:scale-[0.99] disabled:opacity-50"
+                  >
+                    {googleLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        <svg className="h-5 w-5" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                        </svg>
+                        <span>{mode === 'signup' ? 'Đăng ký nhanh với Google' : 'Tiếp tục với Google'}</span>
+                      </>
+                    )}
+                  </button>
 
-              {/* Đường kẻ phân cách */}
-              <div className="relative my-5 flex items-center justify-center">
-                <div className="w-full border-t border-black/10 dark:border-white/10" />
-                <span className="absolute bg-white/90 dark:bg-slate-900 px-3 text-[11px] font-bold uppercase tracking-wider text-[#6B7280] dark:text-slate-400">
-                  Hoặc bằng Email
-                </span>
-              </div>
+                  {/* Đường kẻ phân cách */}
+                  <div className="relative my-5 flex items-center justify-center">
+                    <div className="w-full border-t border-black/10 dark:border-white/10" />
+                    <span className="absolute bg-white/90 dark:bg-slate-900 px-3 text-[11px] font-bold uppercase tracking-wider text-[#6B7280] dark:text-slate-400">
+                      Hoặc bằng Email
+                    </span>
+                  </div>
+                </>
+              )}
 
               {/* FORM NHẬP LIỆU */}
               <form onSubmit={handleSubmit} className="space-y-3.5">
@@ -439,7 +459,7 @@ export default function NewSignPage() {
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
                   <input
                     type="email"
-                    placeholder="Địa chỉ Email chính xác"
+                    placeholder="Địa chỉ Email của bạn"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -447,26 +467,51 @@ export default function NewSignPage() {
                   />
                 </div>
 
-                {/* Mật khẩu (ẩn khi dùng Magic Link) */}
-                {mode !== 'magic-link' && (
-                  <div className="relative group">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder={mode === 'signup' ? 'Mật khẩu bảo mật (tối thiểu 6 ký tự)' : 'Mật khẩu của bạn'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-11 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                {/* Mật khẩu (ẩn khi dùng Magic Link hoặc Quên MK) */}
+                {mode !== 'magic-link' && mode !== 'forgot' && (
+                  <div className="space-y-1.5">
+                    <div className="relative group">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder={mode === 'signup' ? 'Mật khẩu bảo mật (tối thiểu 6 ký tự)' : 'Mật khẩu của bạn'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-11 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+
+                    {mode === 'login' && (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMode('forgot')
+                            setErrorMsg('')
+                            setSuccessMsg('')
+                          }}
+                          className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline"
+                        >
+                          Quên mật khẩu?
+                        </button>
+                      </div>
+                    )}
                   </div>
+                )}
+
+                {/* Hướng dẫn khi ở mode Quên mật khẩu */}
+                {mode === 'forgot' && (
+                  <p className="text-[11px] text-[#6B7280] dark:text-slate-400 leading-relaxed font-semibold">
+                    Nhập địa chỉ email tài khoản của bạn. SenExam sẽ gửi liên kết bảo mật để bạn thiết lập mật khẩu mới ngay lập tức.
+                  </p>
                 )}
 
                 {/* Thông báo lỗi / thành công */}
@@ -495,7 +540,13 @@ export default function NewSignPage() {
                   ) : (
                     <>
                       <span>
-                        {mode === 'login' ? 'Đăng Nhập Ngay' : mode === 'signup' ? 'Tạo Tài Khoản' : 'Gửi Mã Xác Thực'}
+                        {mode === 'login'
+                          ? 'Đăng Nhập Ngay'
+                          : mode === 'signup'
+                          ? 'Tạo Tài Khoản'
+                          : mode === 'forgot'
+                          ? 'Gửi Link Đặt Lại Mật Khẩu'
+                          : 'Gửi Mã Xác Thực'}
                       </span>
                       <ArrowRight className="h-4 w-4" />
                     </>
@@ -503,7 +554,7 @@ export default function NewSignPage() {
                 </button>
               </form>
 
-              {/* Extra Links: Magic Link / Quên mật khẩu */}
+              {/* Extra Links: Magic Link & Trợ giúp học sinh */}
               <div className="mt-4 flex items-center justify-between text-xs font-bold text-[#6B7280] dark:text-slate-400">
                 <button
                   type="button"
@@ -518,24 +569,33 @@ export default function NewSignPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowGoogleGuide(!showGoogleGuide)}
+                  onClick={() => setShowStudentHelp(!showStudentHelp)}
                   className="flex items-center gap-1 hover:text-black dark:hover:text-white transition"
                 >
-                  <HelpCircle className="h-3.5 w-3.5" /> Trợ giúp
+                  <HelpCircle className="h-3.5 w-3.5 text-amber-500" /> Trợ giúp học sinh
                 </button>
               </div>
 
-              {/* Hướng Dẫn Supabase Google Provider (khi cần) */}
-              {showGoogleGuide && (
-                <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3.5 text-xs text-[#4B5563] dark:text-slate-300 space-y-2 animate-in fade-in zoom-in-95">
-                  <p className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                    <ShieldCheck className="h-4 w-4 text-amber-500" /> Cấu hình Google Auth trên Supabase:
+              {/* TRUNG TÂM TRỢ GIÚP HỌC SINH */}
+              {showStudentHelp && (
+                <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-[#4B5563] dark:text-slate-300 space-y-2.5 animate-in fade-in zoom-in-95">
+                  <p className="font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5 text-sm">
+                    <Sparkles className="h-4 w-4 text-amber-500" /> Hướng Dẫn & Trợ Giúp Học Sinh:
                   </p>
-                  <ol className="list-decimal pl-4 space-y-1 text-[11px] leading-relaxed">
-                    <li>Vào <strong>Google Cloud Console</strong> → Tạo OAuth Client ID.</li>
-                    <li>Điền Redirect URI: <code className="rounded bg-black/5 dark:bg-white/10 px-1 font-mono">https://&lt;ref&gt;.supabase.co/auth/v1/callback</code>.</li>
-                    <li>Vào <strong>Supabase Dashboard</strong> → Auth → Providers → Bật Google.</li>
-                  </ol>
+                  <ul className="space-y-1.5 text-[11px] leading-relaxed">
+                    <li>
+                      👉 <strong>Đăng nhập nhanh:</strong> Nhấn <em>"Tiếp tục với Google"</em> để vào thẳng hệ thống bằng tài khoản trường hoặc Gmail cá nhân mà không cần nhớ mật khẩu.
+                    </li>
+                    <li>
+                      👉 <strong>Quên mật khẩu:</strong> Chọn tab <em>"Quên MK?"</em>, điền email và kiểm tra hộp thư (hoặc mục Spam) để nhận liên kết đổi mật khẩu mới.
+                    </li>
+                    <li>
+                      👉 <strong>Chưa nhận được email xác nhận:</strong> Hãy kiểm tra kỹ mục <em>Thư rác / Spam / Quảng cáo</em> trong hòm thư Gmail của bạn.
+                    </li>
+                    <li>
+                      👉 <strong>Cần hỗ trợ gấp:</strong> Liên hệ giáo viên bộ môn của lớp bạn hoặc gửi phản hồi tại hòm thư hỗ trợ: <strong className="text-amber-700 dark:text-amber-300">support@senexam.me</strong>.
+                    </li>
+                  </ul>
                 </div>
               )}
             </>

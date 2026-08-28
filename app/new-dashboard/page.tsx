@@ -45,6 +45,7 @@ import {
   Gift,
   ShieldCheck,
   Gem,
+  GraduationCap,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
@@ -163,6 +164,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: TrendingUp,
   },
   {
+    key: 'student',
+    title: 'Lớp Học Của Tôi',
+    description: 'Tham gia lớp học bằng mã mời, xem các kỳ thi được giao và bảng điểm lớp.',
+    href: '/new-student',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
+    badge: 'Lớp học',
+    icon: GraduationCap,
+  },
+  {
     key: 'phongthinghiem',
     title: 'Phòng thí nghiệm ảo',
     description: 'Trực quan hoá các định luật Lý - Hoá - Sinh qua mô phỏng tương tác.',
@@ -191,7 +201,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   {
     key: 'teacher',
     title: 'Cổng Giảng Viên',
-    description: 'Soạn đề thi, quản lý ngân hàng câu hỏi và theo dõi điểm số lớp học.',
+    description: 'Soạn đề thi, quản lý lớp học, cấp mã mời và giám sát vi phạm thi cử.',
     href: '/new-teacher',
     tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#0284C7]',
     badge: 'Teacher',
@@ -209,7 +219,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   {
     key: 'admin',
     title: 'Quản Trị Tối Cao',
-    description: 'Giám sát phòng thi thời gian thực, giveaway SenCash và quản lý đề.',
+    description: 'Giám sát hệ thống thời gian thực, giveaway SenCash và quản lý đề toàn trường.',
     href: '/new-admin',
     tone: 'from-[#EF4444] via-[#DC2626] to-[#991B1B]',
     badge: 'Admin',
@@ -350,7 +360,7 @@ export default function NewDashboardPage() {
       const hay = `${item.title} ${item.description}`.toLowerCase()
       return hay.includes(normalized)
     })
-  }, [deferredQuery])
+  }, [deferredQuery, userRole])
 
   const focusScore = useMemo(() => {
     const base = submissionCount * 12 + streakDays * 4
