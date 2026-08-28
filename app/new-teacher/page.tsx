@@ -312,64 +312,63 @@ export default function NewTeacherPage() {
     }
   }
 
-  // TẠO 20 MÃ MỜI NGẪU NHIÊN CHO LỚP HỌC
-  const handleGenerate20InviteCodes = async () => {
+  // TẠO MÃ MỜI 20 KÝ TỰ NGẪU NHIÊN VỚI GIỚI HẠN SỐ LƯỢNG HỌC SINH
+  const [maxStudentsLimitInput, setMaxStudentsLimitInput] = useState('40')
+
+  const generate20CharCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let raw = ''
+    for (let i = 0; i < 20; i++) {
+      raw += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    // Định dạng 4-4-4-4-4 (Đủ đúng 20 ký tự chữ & số)
+    return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}`
+  }
+
+  const handleGenerate20CharInviteCode = async () => {
     if (!selectedClassId) {
       alert('Vui lòng chọn một lớp học trước!')
+      return
+    }
+
+    const maxUses = parseInt(maxStudentsLimitInput) || 40
+    if (maxUses <= 0) {
+      alert('Giới hạn học sinh phải lớn hơn 0!')
       return
     }
 
     setGeneratingCodes(true)
     try {
       const currentClass = classesList.find((c) => c.id === selectedClassId)
-      const classNamePrefix = (currentClass?.name || 'CLS').substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, 'X')
-      
-      const new20Codes = Array.from({ length: 20 }, (_, idx) => {
-        const randStr1 = Math.random().toString(36).substring(2, 6).toUpperCase()
-        const randStr2 = Math.random().toString(36).substring(2, 6).toUpperCase()
-        return {
-          id: 'inv_' + Date.now() + '_' + idx,
-          class_id: selectedClassId,
-          teacher_id: userId,
-          code: `SEN-${classNamePrefix}-${randStr1}-${randStr2}`,
-          is_used: false,
-          used_by: null,
-          created_at: new Date().toISOString(),
-        }
-      })
+      const new20CharCode = generate20CharCode()
+
+      const newCodeRecord = {
+        id: 'inv_' + Date.now(),
+        class_id: selectedClassId,
+        teacher_id: userId,
+        code: new20CharCode,
+        max_uses: maxUses,
+        used_count: 0,
+        is_used: false,
+        created_at: new Date().toISOString(),
+      }
 
       try {
-        await supabase.from('class_invite_codes').insert(new20Codes)
+        await supabase.from('class_invite_codes').insert(newCodeRecord)
       } catch {
         // Fallback local persistence
       }
 
-      const updatedCodes = [...new20Codes, ...inviteCodesList]
+      const updatedCodes = [newCodeRecord, ...inviteCodesList]
       setInviteCodesList(updatedCodes)
       localStorage.setItem(`sen_class_codes_${selectedClassId}`, JSON.stringify(updatedCodes))
 
-      alert(`Đã tạo thành công 20 mã mời ngẫu nhiên cho lớp ${currentClass?.name || ''}!`)
+      alert(`🎉 Đã tạo thành công mã mời 20 ký tự cho lớp ${currentClass?.name || ''} với giới hạn tối đa ${maxUses} học sinh!`)
     } catch (err: any) {
       alert(`Lỗi tạo mã mời: ${err.message}`)
     } finally {
       setGeneratingCodes(false)
     }
-  }
-
-  const handleCopyAllCodes = () => {
-    const text = inviteCodesList
-      .filter((c) => !c.is_used)
-      .map((c, i) => `${i + 1}. ${c.code}`)
-      .join('\n')
-
-    if (!text) {
-      alert('Chưa có mã mời nào khả dụng!')
-      return
-    }
-
-    navigator.clipboard.writeText(text)
-    setCopiedAllBatch(true)
-    setTimeout(() => setCopiedAllBatch(false), 2500)
   }
 
   const handleCopySingleCode = (id: string, code: string) => {
@@ -669,7 +668,7 @@ export default function NewTeacherPage() {
                 : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
             }`}
           >
-            <GraduationCap className="h-4 w-4" /> Lớp Học & 20 Mã Mời ({classesList.length}/10)
+            <GraduationCap className="h-4 w-4" /> Lớp Học & Mã Mời ({classesList.length}/10)
           </button>
 
           <button
@@ -722,7 +721,7 @@ export default function NewTeacherPage() {
         </div>
 
         {/* ==========================================
-            TAB 1: LỚP HỌC CỦA TÔI & TẠO 20 MÃ MỜI
+            TAB 1: LỚP HỌC CỦA TÔI & TẠO MÃ MỜI 20 KÝ TỰ
         ========================================== */}
         {activeTab === 'classes' && (
           <div className="space-y-6">
@@ -849,79 +848,115 @@ export default function NewTeacherPage() {
                 </div>
               </div>
 
-              {/* Cột 2 & 3: Quản lý 20 Mã Mời Tham Gia Lớp */}
+              {/* Cột 2 & 3: Quản lý Mã Mời 20 Ký Tự Có Giới Hạn Học Sinh */}
               <div className="lg:col-span-2 rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-black/10 dark:border-white/10">
                   <div>
                     <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
-                      Mã Mời Học Sinh Tham Gia Lớp
+                      Mã Mời Lớp Học (Mã 20 Ký Tự)
                     </h3>
                     <p className="text-xs text-[#6B7280] dark:text-slate-400">
-                      Cấp mã mời cho học sinh để tự động tham gia đúng lớp và theo dõi điểm riêng
+                      Tạo mã 20 ký tự và đặt giới hạn số lượng học sinh được phép tham gia
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs">
+                      <span className="text-slate-400 font-bold">Giới hạn HS:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="500"
+                        value={maxStudentsLimitInput}
+                        onChange={(e) => setMaxStudentsLimitInput(e.target.value)}
+                        className="w-14 font-black text-sky-600 dark:text-sky-400 bg-transparent outline-none text-center"
+                      />
+                    </div>
+
                     <button
                       type="button"
-                      onClick={handleGenerate20InviteCodes}
+                      onClick={handleGenerate20CharInviteCode}
                       disabled={generatingCodes || !selectedClassId}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105 disabled:opacity-50"
                     >
                       {generatingCodes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                      Tạo 20 Mã Mời Ngẫu Nhiên
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleCopyAllCodes}
-                      disabled={inviteCodesList.length === 0}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs font-bold shadow-sm transition hover:scale-105"
-                    >
-                      {copiedAllBatch ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                      {copiedAllBatch ? 'Đã copy 20 mã!' : 'Copy Toàn Bộ'}
+                      Tạo Mã Mời 20 Ký Tự
                     </button>
                   </div>
                 </div>
 
                 {/* Bảng danh sách mã mời */}
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                <div className="space-y-2.5 max-h-[400px] overflow-y-auto">
                   {inviteCodesList.length === 0 ? (
                     <div className="py-12 text-center text-xs text-[#6B7280] dark:text-slate-400">
-                      Chưa có mã mời nào cho lớp này. Nhấn nút <strong>"Tạo 20 Mã Mời Ngẫu Nhiên"</strong> ở trên để phát cho học sinh!
+                      Chưa có mã mời nào cho lớp này. Nhấn nút <strong>"Tạo Mã Mời 20 Ký Tự"</strong> ở trên để phát cho học sinh!
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {inviteCodesList.map((codeItem) => {
-                        const isCopied = copiedCodeId === codeItem.id
-                        return (
-                          <div
-                            key={codeItem.id}
-                            className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs ${
-                              codeItem.is_used
-                                ? 'border-emerald-500/20 bg-emerald-500/5 text-[#6B7280] line-through'
-                                : 'border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]'
-                            }`}
-                          >
-                            <div>
-                              <strong className="font-mono font-bold tracking-wider">{codeItem.code}</strong>
-                              <span className="block text-[10px] text-slate-400">
-                                {codeItem.is_used ? '✅ Đã được học sinh sử dụng' : '⏳ Chưa sử dụng'}
+                    inviteCodesList.map((codeItem) => {
+                      const isCopied = copiedCodeId === codeItem.id
+                      const maxU = codeItem.max_uses || 40
+                      const usedC = codeItem.used_count || 0
+                      const isFull = usedC >= maxU
+                      const percent = Math.min(100, Math.round((usedC / maxU) * 100))
+
+                      return (
+                        <div
+                          key={codeItem.id}
+                          className={`p-4 rounded-2xl border space-y-2 text-xs transition ${
+                            isFull
+                              ? 'border-rose-500/30 bg-rose-500/5 text-[#6B7280]'
+                              : 'border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm sm:text-base font-black tracking-wider text-sky-700 dark:text-sky-300">
+                                {codeItem.code}
+                              </span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
+                                  isFull
+                                    ? 'bg-rose-500/15 text-rose-600'
+                                    : 'bg-emerald-500/15 text-emerald-600'
+                                }`}
+                              >
+                                {isFull ? 'Đã Đầy Chỗ' : 'Đang Hoạt Động'}
                               </span>
                             </div>
 
                             <button
                               type="button"
                               onClick={() => handleCopySingleCode(codeItem.id, codeItem.code)}
-                              className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 hover:scale-105 transition"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 hover:scale-105 font-bold transition"
                               title="Copy mã"
                             >
                               {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                              <span>{isCopied ? 'Đã chép!' : 'Copy Mã'}</span>
                             </button>
                           </div>
-                        )
-                      })}
-                    </div>
+
+                          {/* Progress bar số lượng học sinh */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                              <span>Số lượng học sinh đã tham gia:</span>
+                              <strong className={isFull ? 'text-rose-500' : 'text-sky-600 dark:text-sky-400'}>
+                                {usedC} / {maxU} học sinh ({percent}%)
+                              </strong>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
+                              <div
+                                className={`h-full transition-all duration-300 ${
+                                  isFull
+                                    ? 'bg-rose-500'
+                                    : 'bg-gradient-to-r from-sky-500 to-indigo-500'
+                                }`}
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
                   )}
                 </div>
               </div>

@@ -127,7 +127,7 @@ export default function NewStudentPage() {
     }
   }
 
-  // THAM GIA LỚP HỌC BẰNG MÃ MỜI
+  // THAM GIA LỚP HỌC BẰNG MÃ MỜI 20 KÝ TỰ
   const handleJoinClass = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!inviteCodeInput.trim()) return
@@ -149,18 +149,34 @@ export default function NewStudentPage() {
           .single()
 
         if (!inviteErr && inviteData) {
-          if (inviteData.is_used) {
-            throw new Error('Mã mời này đã được sử dụng bởi một học sinh khác.')
+          const maxUses = inviteData.max_uses || 40
+          const usedCount = inviteData.used_count || 0
+
+          if (usedCount >= maxUses) {
+            throw new Error(`Mã mời này đã đạt giới hạn tối đa (${usedCount}/${maxUses} học sinh). Vui lòng liên hệ giáo viên bộ môn để được cấp mã mới!`)
+          }
+
+          // Kiểm tra xem học sinh đã tham gia lớp này chưa
+          const { data: existMember } = await supabase
+            .from('class_members')
+            .select('id')
+            .eq('class_id', inviteData.class_id)
+            .eq('student_id', userId)
+            .single()
+
+          if (existMember) {
+            throw new Error('Bạn đã là thành viên của lớp học này rồi!')
           }
 
           classFound = inviteData.classes
 
-          // Đánh dấu mã đã sử dụng
+          // Cập nhật số lượng học sinh đã dùng mã
+          const nextUsedCount = usedCount + 1
           await supabase
             .from('class_invite_codes')
             .update({
-              is_used: true,
-              used_by: userId,
+              used_count: nextUsedCount,
+              is_used: nextUsedCount >= maxUses,
               used_at: new Date().toISOString(),
             })
             .eq('id', inviteData.id)
@@ -172,21 +188,21 @@ export default function NewStudentPage() {
           })
         }
       } catch (err: any) {
-        if (err.message?.includes('đã được sử dụng')) throw err
+        if (err.message?.includes('đạt giới hạn') || err.message?.includes('đã là thành viên')) throw err
       }
 
       // Fallback local mock simulation
       if (!classFound) {
-        if (cleanCode.startsWith('SEN-')) {
+        if (cleanCode.length >= 10) {
           classFound = {
             id: 'cls_' + Date.now(),
-            name: `Lớp Học Trực Tuyến (${cleanCode.split('-')[1] || '12A'})`,
+            name: `Lớp Học Trực Tuyến (${cleanCode.slice(0, 4)})`,
             grade: '12',
             subject: 'Toán học & Luyện thi',
             teacher_name: 'Giáo viên phụ trách',
           }
         } else {
-          throw new Error('Mã mời không hợp lệ hoặc đã hết hạn. Vui lòng liên hệ giáo viên để nhận mã mới.')
+          throw new Error('Mã mời không hợp lệ. Vui lòng kiểm tra lại mã 20 ký tự do giáo viên cung cấp.')
         }
       }
 
@@ -275,7 +291,7 @@ export default function NewStudentPage() {
                 Tham Gia Lớp Học Mới
               </h3>
               <p className="text-xs text-[#6B7280] dark:text-slate-400">
-                Nhập mã mời do giáo viên của bạn cung cấp (VD: <code>SEN-12A-XXXX-XXXX</code>)
+                Nhập mã mời 20 ký tự do giáo viên của bạn cung cấp (VD: <code>8AK9-F2L4-M9X1-P7Q3-W6R2</code>)
               </p>
             </div>
           </div>
@@ -285,7 +301,7 @@ export default function NewStudentPage() {
               <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Nhập mã mời lớp học..."
+                placeholder="Nhập mã mời 20 ký tự (VD: 8AK9-F2L4-M9X1-P7Q3-W6R2)..."
                 value={inviteCodeInput}
                 onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
                 required
