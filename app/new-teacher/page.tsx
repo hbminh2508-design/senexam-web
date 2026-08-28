@@ -389,6 +389,18 @@ export default function NewTeacherPage() {
       return
     }
 
+  const handleCreateClass = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!classNameInput.trim()) {
+      alert('Vui lòng nhập tên lớp học!')
+      return
+    }
+
+    if (classesList.length >= 10 && userRole !== 'admin') {
+      alert('Hạng giáo viên miễn phí tạo được tối đa 10 lớp học. Vui lòng liên hệ Admin để mở rộng thêm!')
+      return
+    }
+
     setCreatingClass(true)
     try {
       const generatedClassCode = String(Math.floor(1000 + Math.random() * 9000))
@@ -398,20 +410,15 @@ export default function NewTeacherPage() {
         subject: classSubjectInput,
         class_code: generatedClassCode,
         teacher_id: userId,
-        created_at: new Date().toISOString(),
       }
 
-      let insertedClass: any = null
-      try {
-        const { data, error } = await supabase.from('classes').insert(newClassObj).select('*').single()
-        if (error) throw error
-        insertedClass = data
-      } catch {
-        insertedClass = {
-          id: 'cls_' + Date.now(),
-          ...newClassObj,
-        }
-      }
+      const { data: insertedClass, error } = await supabase
+        .from('classes')
+        .insert(newClassObj)
+        .select('*')
+        .single()
+
+      if (error) throw error
 
       const updated = [insertedClass, ...classesList]
       setClassesList(updated)
@@ -441,7 +448,8 @@ export default function NewTeacherPage() {
       try { await supabase.from('class_exams').delete().eq('class_id', classId) } catch {}
       
       // 2. Xóa chính bản ghi lớp
-      await supabase.from('classes').delete().eq('id', classId)
+      const { error: delErr } = await supabase.from('classes').delete().eq('id', classId)
+      if (delErr) throw delErr
 
       const updated = classesList.filter((c) => c.id !== classId)
       setClassesList(updated)
@@ -485,21 +493,24 @@ export default function NewTeacherPage() {
       const new20CharCode = generate20CharCode()
 
       const newCodeRecord = {
-        id: 'inv_' + Date.now(),
         class_id: selectedClassId,
         teacher_id: userId,
         code: new20CharCode,
         max_uses: maxUses,
         used_count: 0,
         is_used: false,
-        created_at: new Date().toISOString(),
       }
 
-      try {
-        await supabase.from('class_invite_codes').insert(newCodeRecord)
-      } catch {}
+      const { data: insertedCode, error: codeErr } = await supabase
+        .from('class_invite_codes')
+        .insert(newCodeRecord)
+        .select('*')
+        .single()
 
-      const updatedCodes = [newCodeRecord, ...inviteCodesList]
+      if (codeErr) throw codeErr
+
+      const finalRecord = insertedCode || newCodeRecord
+      const updatedCodes = [finalRecord, ...inviteCodesList]
       setInviteCodesList(updatedCodes)
       localStorage.setItem(`sen_class_codes_${selectedClassId}`, JSON.stringify(updatedCodes))
 
@@ -534,20 +545,23 @@ export default function NewTeacherPage() {
     setSendingAnn(true)
     try {
       const newAnn = {
-        id: 'ann_' + Date.now(),
         class_id: selectedClassId,
         teacher_id: userId,
         title: annTitleInput.trim() || 'Thông Báo Từ Giáo Viên',
         content: annContentInput.trim(),
         priority: annPriorityInput,
-        created_at: new Date().toISOString(),
       }
 
-      try {
-        await supabase.from('class_announcements').insert(newAnn)
-      } catch {}
+      const { data: insertedAnn, error: annErr } = await supabase
+        .from('class_announcements')
+        .insert(newAnn)
+        .select('*')
+        .single()
 
-      const updated = [newAnn, ...classAnnouncements]
+      if (annErr) throw annErr
+
+      const finalAnn = insertedAnn || newAnn
+      const updated = [finalAnn, ...classAnnouncements]
       setClassAnnouncements(updated)
       localStorage.setItem(`sen_class_anns_${selectedClassId}`, JSON.stringify(updated))
 
@@ -604,21 +618,24 @@ export default function NewTeacherPage() {
       }
 
       const newMat = {
-        id: 'mat_' + Date.now(),
         class_id: selectedClassId,
         teacher_id: userId,
         title: materialTitleInput.trim(),
         description: materialDescInput.trim() || 'Tài liệu học tập do giáo viên cung cấp',
         file_url: finalUrl,
         material_type: materialTypeInput,
-        created_at: new Date().toISOString(),
       }
 
-      try {
-        await supabase.from('class_materials').insert(newMat)
-      } catch {}
+      const { data: insertedMat, error: matErr } = await supabase
+        .from('class_materials')
+        .insert(newMat)
+        .select('*')
+        .single()
 
-      const updated = [newMat, ...classMaterials]
+      if (matErr) throw matErr
+
+      const finalMat = insertedMat || newMat
+      const updated = [finalMat, ...classMaterials]
       setClassMaterials(updated)
       localStorage.setItem(`sen_class_mats_${selectedClassId}`, JSON.stringify(updated))
 

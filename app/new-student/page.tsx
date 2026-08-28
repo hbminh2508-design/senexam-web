@@ -237,14 +237,26 @@ export default function NewStudentPage() {
     const cleanCode = inviteCodeInput.trim().toUpperCase()
 
     try {
+      // 1. Tìm mã mời trong bảng class_invite_codes
       const { data: inviteData, error: inviteErr } = await supabase
         .from('class_invite_codes')
-        .select('*, classes(*)')
+        .select('*')
         .eq('code', cleanCode)
         .single()
 
-      if (inviteErr || !inviteData || !inviteData.classes) {
+      if (inviteErr || !inviteData) {
         throw new Error('Mã mời không tồn tại hoặc đã hết hạn. Vui lòng kiểm tra lại mã 20 ký tự do giáo viên cung cấp!')
+      }
+
+      // 2. Tìm lớp học tương ứng từ bảng classes
+      const { data: classFound, error: classErr } = await supabase
+        .from('classes')
+        .select('*')
+        .eq('id', inviteData.class_id)
+        .single()
+
+      if (classErr || !classFound) {
+        throw new Error('Lớp học liên kết với mã mời này không còn tồn tại hoặc đã bị xóa!')
       }
 
       const maxUses = inviteData.max_uses || 40
@@ -254,6 +266,7 @@ export default function NewStudentPage() {
         throw new Error(`Mã mời này đã đạt giới hạn tối đa (${usedCount}/${maxUses} học sinh). Vui lòng liên hệ giáo viên bộ môn để được cấp mã mới!`)
       }
 
+      // 3. Kiểm tra xem học sinh đã là thành viên lớp chưa
       const { data: existMember } = await supabase
         .from('class_members')
         .select('id')
@@ -265,24 +278,28 @@ export default function NewStudentPage() {
         throw new Error('Bạn đã là thành viên của lớp học này rồi!')
       }
 
-      const classFound = inviteData.classes
-
-      // Tăng số lượt sử dụng
+      // 4. Cập nhật số lượt sử dụng mã mời
       const nextUsedCount = usedCount + 1
-      await supabase
-        .from('class_invite_codes')
-        .update({
-          used_count: nextUsedCount,
-          is_used: nextUsedCount >= maxUses,
-          used_at: new Date().toISOString(),
-        })
-        .eq('id', inviteData.id)
+      try {
+        await supabase
+          .from('class_invite_codes')
+          .update({
+            used_count: nextUsedCount,
+            is_used: nextUsedCount >= maxUses,
+            used_at: new Date().toISOString(),
+          })
+          .eq('id', inviteData.id)
+      } catch (e) {
+        console.error('Error updating invite code:', e)
+      }
 
-      // Thêm thành viên vào lớp
-      await supabase.from('class_members').insert({
+      // 5. Thêm học sinh vào bảng class_members
+      const { error: memberInsertErr } = await supabase.from('class_members').insert({
         class_id: inviteData.class_id,
         student_id: userId,
       })
+
+      if (memberInsertErr) throw memberInsertErr
 
       const updated = [classFound, ...enrolledClasses.filter((c) => c.id !== classFound.id)]
       setEnrolledClasses(updated)
