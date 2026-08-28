@@ -34,6 +34,7 @@ import {
   Download,
   AlertTriangle,
   Layers,
+  LogOut,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newstu-heading' })
@@ -95,10 +96,10 @@ export default function NewStudentPage() {
           .eq('student_id', user.id)
 
         if (membersData && Array.isArray(membersData)) {
-          // Chỉ lấy các lớp thực sự còn tồn tại trong DB
+          // Chỉ lấy các lớp thực sự còn tồn tại trong DB, loại bỏ hoàn toàn các lớp mock cũ
           validClasses = membersData
             .map((m: any) => m.classes)
-            .filter((c: any) => c && c.id && c.name)
+            .filter((c: any) => c && c.id && c.name && !String(c.id).startsWith('cls_'))
 
           setEnrolledClasses(validClasses)
           classIds = validClasses.map((c: any) => c.id)
@@ -297,6 +298,29 @@ export default function NewStudentPage() {
     }
   }
 
+  // THOÁT / RỜI KHỎI LỚP HỌC
+  const handleLeaveClass = async (classId: string, className: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn RỜI KHỎI lớp "${className}"? Sau khi rời lớp, bạn sẽ không xem được đề thi và tài liệu riêng của lớp này nữa!`)) {
+      return
+    }
+
+    try {
+      await supabase.from('class_members').delete().eq('class_id', classId).eq('student_id', userId)
+
+      const updated = enrolledClasses.filter((c) => c.id !== classId)
+      setEnrolledClasses(updated)
+      localStorage.setItem(`sen_student_classes_${userId}`, JSON.stringify(updated))
+
+      if (selectedClassId === classId) {
+        setSelectedClassId('all')
+      }
+
+      alert(`🎉 Bạn đã rời khỏi lớp "${className}" thành công!`)
+    } catch (err: any) {
+      alert(`Lỗi rời lớp: ${err.message}`)
+    }
+  }
+
   // Lọc dữ liệu theo lớp học đang chọn
   const filteredExams = useMemo(() => {
     if (selectedClassId === 'all') return classExamsList
@@ -447,17 +471,50 @@ export default function NewStudentPage() {
                 key={cls.id}
                 type="button"
                 onClick={() => setSelectedClassId(cls.id)}
-                className={`rounded-xl px-4 py-2 text-xs font-bold transition shrink-0 ${
+                className={`rounded-xl px-4 py-2 text-xs font-bold transition shrink-0 flex items-center gap-2 ${
                   selectedClassId === cls.id
                     ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 font-black shadow-sm'
                     : 'text-[#6B7280] dark:text-slate-400 hover:text-black dark:hover:text-white'
                 }`}
               >
-                🏫 {cls.name}
+                <span>🏫 {cls.name}</span>
               </button>
             ))}
           </div>
         </div>
+
+        {/* THÔNG TIN LỚP ĐANG CHỌN & NÚT RỜI LỚP */}
+        {selectedClassId !== 'all' && (() => {
+          const curCls = enrolledClasses.find((c) => c.id === selectedClassId)
+          if (!curCls) return null
+          return (
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 backdrop-blur-xl animate-in fade-in">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white font-bold shadow">
+                  🏫
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-indigo-900 dark:text-indigo-200">
+                    {curCls.name} {curCls.class_code ? `(#${curCls.class_code})` : ''}
+                  </h3>
+                  <p className="text-xs text-indigo-700/80 dark:text-indigo-300">
+                    Khối {curCls.grade || '12'} • Bộ môn: {curCls.subject || 'Chung'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleLeaveClass(curCls.id, curCls.name)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 px-3.5 py-2 text-xs font-black uppercase tracking-wider transition hover:scale-105"
+                title="Rời khỏi lớp học này"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Rời Lớp Học
+              </button>
+            </div>
+          )
+        })()}
 
         {/* TABS NỘI DUNG: ĐỀ THI LỚP / KHO TÀI LIỆU / THÔNG BÁO / BẢNG ĐIỂM */}
         <div className="flex flex-wrap gap-2 border-b border-black/10 dark:border-white/10 pb-2">
