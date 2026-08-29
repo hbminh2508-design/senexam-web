@@ -389,18 +389,6 @@ export default function NewTeacherPage() {
       return
     }
 
-  const handleCreateClass = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!classNameInput.trim()) {
-      alert('Vui lòng nhập tên lớp học!')
-      return
-    }
-
-    if (classesList.length >= 10 && userRole !== 'admin') {
-      alert('Hạng giáo viên miễn phí tạo được tối đa 10 lớp học. Vui lòng liên hệ Admin để mở rộng thêm!')
-      return
-    }
-
     setCreatingClass(true)
     try {
       const generatedClassCode = String(Math.floor(1000 + Math.random() * 9000))
