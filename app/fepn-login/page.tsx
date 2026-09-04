@@ -268,9 +268,10 @@ export default function FepnLoginPage() {
     try {
       // 1. Kiểm tra nếu phiên đăng nhập đã có hiệu lực (ví dụ vừa click link trong mail ở tab khác)
       const { data: currentSessionData } = await supabase.auth.getSession()
-      const currentEmail = currentSessionData.session?.user?.email?.toLowerCase()
-      if (currentEmail && currentEmail === pendingEmail.toLowerCase()) {
-        await ensureStudentProfile(currentSessionData.session.user.id)
+      const currentSessionUser = currentSessionData.session?.user
+      const currentEmail = currentSessionUser?.email?.toLowerCase()
+      if (currentSessionUser && currentEmail && currentEmail === pendingEmail.toLowerCase()) {
+        await ensureStudentProfile(currentSessionUser.id)
         setStep('authenticator')
         initAuthenticatorSetup()
         return
@@ -301,15 +302,16 @@ export default function FepnLoginPage() {
       if (!verifyResult) {
         // Kiểm tra lại phiên đăng nhập phòng trường hợp đã kích hoạt ngầm
         const { data: recheckSession } = await supabase.auth.getSession()
-        if (recheckSession.session?.user?.email?.toLowerCase() === pendingEmail.toLowerCase()) {
-          verifyResult = { data: recheckSession.session }
+        const recheckUser = recheckSession.session?.user
+        if (recheckUser && recheckUser.email?.toLowerCase() === pendingEmail.toLowerCase()) {
+          verifyResult = { data: { user: recheckUser, session: recheckSession.session } }
         } else {
           throw lastError || new Error('Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại!')
         }
       }
 
-      const verifiedUser = verifyResult.data?.user
-      if (verifiedUser) {
+      const verifiedUser = verifyResult?.data?.user
+      if (verifiedUser?.id) {
         await ensureStudentProfile(verifiedUser.id)
       }
 
