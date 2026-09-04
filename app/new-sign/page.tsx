@@ -131,14 +131,14 @@ export default function NewSignPage() {
         if (isVnu || isFepn) {
           if (typeof window !== 'undefined') {
             if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
-              return '/dashboard'
+              return '/fepn-dashboard'
             }
             if (window.location.hostname === 'localhost') {
-              return '/tsv-fepn/dashboard'
+              return '/fepn-dashboard'
             }
-            return 'https://tsv.fepn.senexam.me/dashboard'
+            return 'https://tsv.fepn.senexam.me/fepn-dashboard'
           }
-          return '/tsv-fepn/dashboard'
+          return '/fepn-dashboard'
         }
         return '/new-dashboard'
       }

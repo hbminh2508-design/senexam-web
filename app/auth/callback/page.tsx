@@ -48,11 +48,11 @@ function CallbackHandler() {
           if (isVnu || isFepn) {
             if (typeof window !== 'undefined') {
               if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
-                router.replace('/dashboard')
+                router.replace('/fepn-dashboard')
               } else if (window.location.hostname === 'localhost') {
-                router.replace('/tsv-fepn/dashboard')
+                router.replace('/fepn-dashboard')
               } else {
-                window.location.href = 'https://tsv.fepn.senexam.me/dashboard'
+                window.location.href = 'https://tsv.fepn.senexam.me/fepn-dashboard'
               }
               return
             }

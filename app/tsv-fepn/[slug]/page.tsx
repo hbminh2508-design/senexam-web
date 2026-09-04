@@ -186,8 +186,8 @@ export default function FepnSubjectDetailPage() {
     if (!rawSlug) return
     setLoadingSubject(true)
     try {
-      // Tìm môn học bằng mã môn (code) hoặc ID
-      const cleanSlug = rawSlug.trim().toLowerCase()
+      // Tìm môn học bằng mã môn (code) hoặc ID hoặc slug dạng fepn-[code]
+      const cleanSlug = rawSlug.trim().toLowerCase().replace(/^fepn-/, '')
 
       // Lấy tất cả môn học để so khớp linh hoạt
       const { data: allSubjects, error: subErr } = await supabase
@@ -199,7 +199,13 @@ export default function FepnSubjectDetailPage() {
       const matched = (allSubjects || []).find((s: any) => {
         const sCode = (s.code || '').toLowerCase().replace(/[^a-z0-9]/g, '')
         const sId = (s.id || '').toLowerCase()
-        return sCode === cleanSlug || sId === cleanSlug || s.code.toLowerCase() === rawSlug.toLowerCase()
+        return (
+          sCode === cleanSlug ||
+          sId === cleanSlug ||
+          s.code.toLowerCase() === cleanSlug ||
+          s.code.toLowerCase() === rawSlug.toLowerCase() ||
+          `fepn-${sCode}` === rawSlug.toLowerCase()
+        )
       })
 
       if (matched) {
@@ -279,11 +285,7 @@ export default function FepnSubjectDetailPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    if (isSubdomain) {
-      router.push('/login')
-    } else {
-      router.push('/new-sign')
-    }
+    router.push('/fepn-login')
   }
 
   const toggleFullscreen = () => {
@@ -419,7 +421,7 @@ export default function FepnSubjectDetailPage() {
 
   const themeVars = getModernThemeVars('indigo', isDark)
   const isAdmin = userRole === 'admin'
-  const dashboardLink = isSubdomain ? '/dashboard' : '/tsv-fepn/dashboard'
+  const dashboardLink = '/fepn-dashboard'
 
   // Loading state
   if (authLoading || loadingSubject) {

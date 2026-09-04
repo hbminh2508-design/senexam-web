@@ -5,39 +5,58 @@ export function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const url = request.nextUrl.clone()
 
-  // Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
+  const pathname = url.pathname
+
+  // Bỏ qua các file tĩnh và API
+  if (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/auth') ||
+    pathname.includes('.')
+  ) {
+    return NextResponse.next()
+  }
+
+  // 1. Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
+  if (pathname.startsWith('/fepn-')) {
+    // fepn-login và fepn-dashboard là các trang độc lập có sẵn thư mục
+    if (pathname === '/fepn-login' || pathname === '/fepn-dashboard') {
+      return NextResponse.next()
+    }
+    // fepn-[mã môn học]: rewrite ngầm sang /tsv-fepn/[slug] để giữ nguyên URL fepn-[mã môn học] trên thanh địa chỉ
+    url.pathname = `/tsv-fepn/${pathname.slice(1)}`
+    return NextResponse.rewrite(url)
+  }
+
+  // 2. Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
   const isFepnSubdomain =
     hostname.startsWith('tsv.fepn.') ||
     hostname.startsWith('fepn.')
 
   if (isFepnSubdomain) {
-    const pathname = url.pathname
-
-    // 1. Trang chủ subdomain -> Chuyển vào Dashboard FEPN
+    // 2.1 Trang chủ subdomain -> Chuyển vào FEPN Dashboard
     if (pathname === '/' || pathname === '/dashboard') {
-      url.pathname = '/tsv-fepn/dashboard'
+      url.pathname = '/fepn-dashboard'
       return NextResponse.rewrite(url)
     }
 
-    // 2. Trang đăng nhập -> Chuyển vào trang đăng nhập hệ thống
+    // 2.2 Trang login -> Chuyển vào FEPN Login
     if (pathname === '/login') {
-      url.pathname = '/new-sign'
+      url.pathname = '/fepn-login'
       return NextResponse.rewrite(url)
     }
 
-    // 3. Nếu là các đường dẫn hệ thống nội bộ đã định nghĩa sẵn
+    // 2.3 Các đường dẫn hệ thống đã có
     if (
       pathname.startsWith('/tsv-fepn') ||
-      pathname.startsWith('/api') ||
-      pathname.startsWith('/new-sign') ||
-      pathname.startsWith('/auth')
+      pathname.startsWith('/new-sign')
     ) {
       return NextResponse.next()
     }
 
-    // 4. Nếu là đường dẫn môn học dạng tsv.fepn.senexam.me/[ten-mon-hoc]
-    const slug = pathname.slice(1) // Bỏ dấu gạch chéo đầu
-    if (slug && !slug.includes('.')) {
+    // 2.4 Nếu là đường dẫn môn học dạng tsv.fepn.senexam.me/[mã môn]
+    const slug = pathname.slice(1) // Bỏ dấu /
+    if (slug) {
       url.pathname = `/tsv-fepn/${slug}`
       return NextResponse.rewrite(url)
     }
