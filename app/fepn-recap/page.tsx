@@ -24,7 +24,156 @@ import {
   CheckCircle2,
   X,
   Loader2,
+  ExternalLink,
 } from 'lucide-react'
+
+// Helper: Format Google Drive & other image URLs for direct embedding
+export function formatImageUrl(url?: string): string {
+  if (!url) return ''
+  const trimmed = url.trim()
+
+  // 1. Data URLs & Blob URLs are returned as-is
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed
+  }
+
+  // 2. Google Drive URLs
+  if (trimmed.includes('drive.google.com')) {
+    const match =
+      trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+      trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+      trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (match && match[1]) {
+      const fileId = match[1]
+      return `https://drive.google.com/thumbnail?id=${fileId}&sz=w2000`
+    }
+  }
+
+  return trimmed
+}
+
+// Helper: Client-side Image Compressor to avoid upload limits and ensure 100% display reliability
+export function compressImageFile(file: File, maxWidth = 1600, quality = 0.85): Promise<string> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/') || file.type.includes('svg')) {
+      const reader = new FileReader()
+      reader.onload = () => resolve((reader.result as string) || '')
+      reader.onerror = () => resolve('')
+      reader.readAsDataURL(file)
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new window.Image()
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          let { width, height } = img
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width)
+            width = maxWidth
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve((e.target?.result as string) || '')
+            return
+          }
+          ctx.drawImage(img, 0, 0, width, height)
+          const dataUrl = canvas.toDataURL('image/jpeg', quality)
+          resolve(dataUrl)
+        } catch {
+          resolve((e.target?.result as string) || '')
+        }
+      }
+      img.onerror = () => resolve((e.target?.result as string) || '')
+      img.src = (e.target?.result as string) || ''
+    }
+    reader.onerror = () => resolve('')
+    reader.readAsDataURL(file)
+  })
+}
+
+// Component: Safe Image with automatic Google Drive fallback and error suppression
+function SafeImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string
+  alt: string
+  className?: string
+}) {
+  const [currentSrc, setCurrentSrc] = useState(() => formatImageUrl(src))
+  const [hasError, setHasError] = useState(false)
+  const [retryStage, setRetryStage] = useState(0)
+
+  useEffect(() => {
+    setCurrentSrc(formatImageUrl(src))
+    setHasError(false)
+    setRetryStage(0)
+  }, [src])
+
+  const handleError = () => {
+    if (src.includes('drive.google.com') && retryStage === 0) {
+      const match =
+        src.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+        src.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+        src.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+      if (match && match[1]) {
+        setRetryStage(1)
+        setCurrentSrc(`https://lh3.googleusercontent.com/d/${match[1]}`)
+        return
+      }
+    } else if (src.includes('drive.google.com') && retryStage === 1) {
+      const match =
+        src.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+        src.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+        src.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+      if (match && match[1]) {
+        setRetryStage(2)
+        setCurrentSrc(`https://drive.google.com/uc?export=view&id=${match[1]}`)
+        return
+      }
+    }
+
+    setHasError(true)
+  }
+
+  if (hasError || !currentSrc) {
+    return (
+      <div className="flex flex-col items-center justify-center p-6 bg-slate-100 rounded-xl text-slate-400 border border-slate-200">
+        <ImageIcon className="h-8 w-8 text-slate-300 mb-1" />
+        <span className="text-xs font-semibold text-slate-600">{alt}</span>
+        {src.includes('drive.google.com') && (
+          <a
+            href={src}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 text-[11px] text-sky-600 hover:underline inline-flex items-center gap-1 font-bold"
+          >
+            <span>Mở ảnh Google Drive</span>
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      className={className}
+      onError={handleError}
+      loading="lazy"
+    />
+  )
+}
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
@@ -269,7 +418,7 @@ export default function FepnRecapPage() {
     insertSyntax(`{VideoDangBai${nextIndex}}`)
   }
 
-  // Upload multiple images at once and generate {AnhDangBai1}, {AnhDangBai2}, ...
+  // Upload multiple images at once and generate {AnhDangBai1}, {AnhDangBai2}, ... AT THE VERY BOTTOM
   const handleBatchImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
@@ -298,49 +447,29 @@ export default function FepnRecapPage() {
         const tag = `{AnhDangBai${currentIndex}}`
         newTags.push(tag)
 
-        let finalUrl = ''
-
-        // 1. Try Supabase Storage
-        const cleanName = `recap_${Date.now()}_${currentIndex}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-        const { data: storageData, error: storageErr } = await supabase.storage.from('materials').upload(cleanName, file)
-        if (!storageErr && storageData) {
-          const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(cleanName)
-          if (publicUrlData?.publicUrl) {
-            finalUrl = publicUrlData.publicUrl
-          }
-        }
-
-        // 2. Fallback to Google Drive
-        if (!finalUrl) {
-          try {
-            const uploadUrl = await initGoogleDriveUpload(file.name, file.type || 'application/octet-stream')
-            const uploaded: any = await uploadFileToGoogleDrive(uploadUrl, file, file.name)
-            const fileId = typeof uploaded === 'string' ? uploaded : uploaded?.id
-            finalUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
-          } catch (gdErr) {
-            console.warn('Google Drive upload fallback failed:', gdErr)
-          }
-        }
-
-        // 3. Fallback to Data URL for images under 3MB
-        if (!finalUrl && file.type.startsWith('image/')) {
-          finalUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = reject
-            reader.readAsDataURL(file)
-          })
-        }
-
-        if (finalUrl) {
-          newMediaMap[tag] = finalUrl
+        // Nén ảnh client-side thành Data URL sắc nét, dung lượng tối ưu, tải tức thì không bao giờ lỗi
+        const dataUrl = await compressImageFile(file)
+        if (dataUrl) {
+          newMediaMap[tag] = dataUrl
         }
       }
 
+      // Tự động gán ảnh đầu tiên làm {AnhTieuDe} nếu chưa có ảnh tiêu đề
+      if (!modalMediaItems['{AnhTieuDe}'] && !modalCoverImage && files.length > 0 && newMediaMap[newTags[0]]) {
+        newMediaMap['{AnhTieuDe}'] = newMediaMap[newTags[0]]
+        setModalCoverImage(newMediaMap[newTags[0]])
+      }
+
       setModalMediaItems((prev) => ({ ...prev, ...newMediaMap }))
-      const tagsText = newTags.join('\n\n')
-      setModalContent((prev) => (prev ? prev + '\n\n' + tagsText : tagsText))
-      alert(`🎉 Đã tải lên thành công ${files.length} ảnh (${newTags.join(', ')})!`)
+
+      // Tự động chèn các mã {AnhDangBaiSo} Ở DƯỚI CÙNG của nội dung bài viết
+      const tagsBlock = newTags.join('\n\n')
+      setModalContent((prev) => {
+        const trimmed = prev.trimEnd()
+        return trimmed ? `${trimmed}\n\n${tagsBlock}\n` : `${tagsBlock}\n`
+      })
+
+      alert(`🎉 Đã tải lên thành công ${files.length} ảnh! Các mã ${newTags.join(', ')} đã được thêm vào DƯỚI CÙNG của bài viết.`)
     } catch (err: any) {
       alert('Lỗi tải nhiều ảnh: ' + err.message)
     } finally {
@@ -355,40 +484,23 @@ export default function FepnRecapPage() {
     try {
       let finalUrl = ''
 
-      // 1. Try Supabase Storage
-      const cleanName = `recap_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-      const { data: storageData, error: storageErr } = await supabase.storage.from('materials').upload(cleanName, file)
-      if (!storageErr && storageData) {
-        const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(cleanName)
-        if (publicUrlData?.publicUrl) {
-          finalUrl = publicUrlData.publicUrl
-        }
-      }
-
-      // 2. Fallback to Google Drive if storage failed
-      if (!finalUrl) {
+      // Nếu là ảnh: Nén trực tiếp thành Data URL chất lượng cao - 100% hiển thị không bao giờ bị lỗi
+      if (file.type.startsWith('image/')) {
+        finalUrl = await compressImageFile(file)
+      } else {
+        // Nếu là video: Tải lên Google Drive
         try {
           const uploadUrl = await initGoogleDriveUpload(file.name, file.type || 'application/octet-stream')
           const uploaded: any = await uploadFileToGoogleDrive(uploadUrl, file, file.name)
           const fileId = typeof uploaded === 'string' ? uploaded : uploaded?.id
           finalUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
         } catch (gdErr) {
-          console.warn('Google Drive upload fallback failed:', gdErr)
+          console.warn('Lỗi tải video lên Google Drive:', gdErr)
         }
       }
 
-      // 3. Fallback to Data URL for images under 3MB
-      if (!finalUrl && file.type.startsWith('image/')) {
-        finalUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result as string)
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
-      }
-
       if (!finalUrl) {
-        throw new Error('Không thể tải file lên. Vui lòng nhập trực tiếp link ảnh/video.')
+        throw new Error('Không thể xử lý tệp. Vui lòng thử lại hoặc dán trực tiếp link.')
       }
 
       setModalMediaItems((prev) => ({ ...prev, [tag]: finalUrl }))
@@ -396,7 +508,7 @@ export default function FepnRecapPage() {
         setModalCoverImage(finalUrl)
       }
     } catch (err: any) {
-      alert('Lỗi tải file: ' + err.message)
+      alert('Lỗi tải tệp: ' + err.message)
     } finally {
       setUploadingSlot(null)
     }
@@ -511,23 +623,77 @@ export default function FepnRecapPage() {
     }
   }
 
-  // Format inline bold: #Bold:[text] -> <strong>
-  const renderInlineFormatting = (text: string) => {
-    const parts: (string | React.ReactNode)[] = []
-    let lastIdx = 0
-    const boldRegex = /#Bold:\[(.*?)\]/g
-    let match
+  // Format inline bold (#Bold:[text]), Markdown links ([label](url)), and clickable raw URLs (http://, https://, www.)
+  const renderInlineFormatting = (text: string): React.ReactNode => {
+    if (!text) return text
 
-    while ((match = boldRegex.exec(text)) !== null) {
+    // Tokenizer regex matching #Bold:[...], [label](url), and raw URLs
+    const tokenRegex = /(#Bold:\[[\s\S]*?\]|\[[^\]]+\]\((?:https?:\/\/|\/)[^\s)]+\)|https?:\/\/[^\s<)]+|www\.[^\s<)]+)/g
+    const parts: React.ReactNode[] = []
+    let lastIdx = 0
+    let match: RegExpExecArray | null
+
+    while ((match = tokenRegex.exec(text)) !== null) {
       if (match.index > lastIdx) {
         parts.push(text.substring(lastIdx, match.index))
       }
-      parts.push(
-        <strong key={`bold-${match.index}`} className="font-extrabold text-slate-900">
-          {match[1]}
-        </strong>
-      )
-      lastIdx = boldRegex.lastIndex
+
+      const token = match[0]
+      const keyIndex = match.index
+
+      if (token.startsWith('#Bold:[')) {
+        const boldInner = token.slice(7, -1)
+        parts.push(
+          <strong key={`bold-${keyIndex}`} className="font-extrabold text-slate-900">
+            {renderInlineFormatting(boldInner)}
+          </strong>
+        )
+      } else if (token.startsWith('[') && token.includes('](')) {
+        const mdMatch = token.match(/^\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)$/)
+        if (mdMatch) {
+          const [, label, url] = mdMatch
+          const href = url.startsWith('www.') ? `https://${url}` : url
+          parts.push(
+            <a
+              key={`mdlink-${keyIndex}`}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sky-600 hover:text-sky-800 underline underline-offset-2 font-bold inline-flex items-center gap-0.5 transition break-all"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span>{label}</span>
+              <ExternalLink className="h-3 w-3 inline-block shrink-0 opacity-70" />
+            </a>
+          )
+        } else {
+          parts.push(token)
+        }
+      } else {
+        // Raw URL
+        const cleanUrl = token.replace(/[.,;:!?)\]]+$/, '')
+        const trailing = token.slice(cleanUrl.length)
+        const href = cleanUrl.startsWith('www.') ? `https://${cleanUrl}` : cleanUrl
+
+        parts.push(
+          <a
+            key={`link-${keyIndex}`}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-600 hover:text-sky-800 underline underline-offset-2 font-bold inline-flex items-center gap-0.5 transition break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span>{cleanUrl}</span>
+            <ExternalLink className="h-3 w-3 inline-block shrink-0 opacity-70" />
+          </a>
+        )
+        if (trailing) {
+          parts.push(trailing)
+        }
+      }
+
+      lastIdx = tokenRegex.lastIndex
     }
 
     if (lastIdx < text.length) {
@@ -653,7 +819,7 @@ export default function FepnRecapPage() {
             <figure key={`media-${i}`} className="my-7 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-md">
               {mediaUrl ? (
                 <div className="relative w-full h-auto max-h-[600px] overflow-hidden bg-slate-50 flex items-center justify-center">
-                  <img
+                  <SafeImage
                     src={mediaUrl}
                     alt={imgLabel}
                     className="w-full h-auto object-contain max-h-[600px] transition duration-300 hover:scale-[1.01]"
@@ -721,54 +887,78 @@ export default function FepnRecapPage() {
     return renderedNodes
   }
 
-  // Render Video Helper
+  // Render Video Helper - Smooth buffering & hardware-accelerated playback
   const renderVideoEmbed = (url: string) => {
+    const formattedUrl = url.trim()
+
     // 1. YouTube
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    if (formattedUrl.includes('youtube.com') || formattedUrl.includes('youtu.be')) {
       let videoId = ''
-      if (url.includes('v=')) {
-        videoId = url.split('v=')[1]?.split('&')[0] || ''
-      } else if (url.includes('youtu.be/')) {
-        videoId = url.split('youtu.be/')[1]?.split('?')[0] || ''
-      } else if (url.includes('embed/')) {
+      if (formattedUrl.includes('v=')) {
+        videoId = formattedUrl.split('v=')[1]?.split('&')[0] || ''
+      } else if (formattedUrl.includes('youtu.be/')) {
+        videoId = formattedUrl.split('youtu.be/')[1]?.split('?')[0] || ''
+      } else if (formattedUrl.includes('embed/')) {
         return (
-          <div className="relative aspect-video w-full">
-            <iframe src={url} className="absolute inset-0 h-full w-full" allowFullScreen allow="autoplay; encrypted-media" />
+          <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-lg">
+            <iframe
+              src={formattedUrl}
+              className="absolute inset-0 h-full w-full border-0"
+              allowFullScreen
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            />
           </div>
         )
       }
       if (videoId) {
         return (
-          <div className="relative aspect-video w-full">
+          <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-lg">
             <iframe
-              src={`https://www.youtube.com/embed/${videoId}?rel=0`}
-              className="absolute inset-0 h-full w-full"
+              src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&playsinline=1`}
+              className="absolute inset-0 h-full w-full border-0"
               allowFullScreen
-              allow="autoplay; encrypted-media"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             />
           </div>
         )
       }
     }
 
-    // 2. Google Drive
-    if (url.includes('drive.google.com')) {
-      const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
+    // 2. Google Drive Video
+    if (formattedUrl.includes('drive.google.com')) {
+      const match =
+        formattedUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+        formattedUrl.match(/\/d\/([a-zA-Z0-9_-]+)/) ||
+        formattedUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/)
       if (match && match[1]) {
         return (
-          <div className="relative aspect-video w-full">
+          <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-lg">
             <iframe
               src={`https://drive.google.com/file/d/${match[1]}/preview`}
-              className="absolute inset-0 h-full w-full"
+              className="absolute inset-0 h-full w-full border-0"
               allowFullScreen
+              loading="lazy"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
             />
           </div>
         )
       }
     }
 
-    // 3. HTML5 Video player (MP4, WebM)
-    return <video controls className="w-full max-h-[550px] bg-black" src={url} />
+    // 3. Direct HTML5 Video player (MP4, WebM) with hardware acceleration & smooth buffering
+    return (
+      <div className="relative w-full rounded-2xl overflow-hidden bg-black shadow-lg">
+        <video
+          controls
+          preload="metadata"
+          playsInline
+          className="w-full max-h-[580px] bg-black object-contain"
+          src={formattedUrl}
+        />
+      </div>
+    )
   }
 
   // Loading Screen
@@ -1032,7 +1222,7 @@ export default function FepnRecapPage() {
                     {/* Mini Thumbnail ({AnhTieuDe}) */}
                     <div className="relative h-16 w-20 sm:h-20 sm:w-24 shrink-0 overflow-hidden rounded-lg bg-slate-100 border border-slate-200">
                       {post.cover_image ? (
-                        <img
+                        <SafeImage
                           src={post.cover_image}
                           alt={post.title}
                           className="h-full w-full object-cover group-hover:scale-105 transition duration-300"
@@ -1147,7 +1337,7 @@ export default function FepnRecapPage() {
               {/* Cover Hero Image ({AnhTieuDe}) */}
               {selectedPost.cover_image && (
                 <div className="relative w-full max-h-[480px] overflow-hidden rounded-2xl mb-8 border border-slate-200 shadow-md bg-slate-100 flex items-center justify-center">
-                  <img
+                  <SafeImage
                     src={selectedPost.cover_image}
                     alt={selectedPost.title}
                     className="w-full h-auto max-h-[480px] object-cover"
@@ -1416,6 +1606,13 @@ export default function FepnRecapPage() {
                           </div>
 
                           <div className="flex items-center gap-2 w-full sm:w-auto">
+                            {/* Mini Preview */}
+                            {currentUrl && !isVideo && (
+                              <div className="relative h-8 w-11 shrink-0 overflow-hidden rounded-md border border-slate-300 bg-slate-100 shadow-2xs">
+                                <SafeImage src={currentUrl} alt={slotLabel} className="h-full w-full object-cover" />
+                              </div>
+                            )}
+
                             {/* File Upload Button */}
                             <label className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 text-xs font-bold text-sky-700 cursor-pointer transition">
                               {isUploading ? (
