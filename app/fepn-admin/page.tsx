@@ -71,11 +71,12 @@ export interface FepnMaterial {
 
 export interface FepnUser {
   id: string
-  email: string
+  email?: string
   full_name?: string
-  role: string
+  role?: string
   created_at?: string
   admin_key_issued_at?: string
+  [key: string]: any
 }
 
 export default function FepnAdminDashboardPage() {
@@ -131,44 +132,73 @@ export default function FepnAdminDashboardPage() {
   // ========================================================
   // 1. AUTHENTICATION & ROLE CHECK
   // ========================================================
-  useEffect(() => {
-    async function checkFepnAdmin() {
-      setAuthLoading(true)
+  const checkFepnAdmin = async () => {
+    setAuthLoading(true)
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      let currentUser = userData?.user ?? null
+      if (!currentUser) {
+        const { data: sessionData } = await supabase.auth.getSession()
+        currentUser = sessionData?.session?.user ?? null
+      }
+
+      if (!currentUser) {
+        setAuthStatus('unauthenticated')
+        setAuthLoading(false)
+        return
+      }
+
+      setUser(currentUser)
+
+      // Query user role in profiles (only select 'role' to avoid schema error on non-existent columns)
+      let role = ''
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session?.user) {
-          setAuthStatus('unauthenticated')
-          setAuthLoading(false)
-          return
-        }
-
-        const currentUser = session.user
-        setUser(currentUser)
-
-        // Query user role in profiles
-        const { data: profile } = await supabase
+        const { data: profile, error } = await supabase
           .from('profiles')
-          .select('role, email')
+          .select('role')
           .eq('id', currentUser.id)
           .maybeSingle()
 
-        const role = profile?.role || ''
-        const isUserAdmin = role === 'admin'
-
-        setIsAdmin(isUserAdmin)
-        if (isUserAdmin) {
-          setAuthStatus('authenticated')
-        } else {
-          setAuthStatus('unauthorized')
+        if (!error && profile?.role) {
+          role = profile.role
         }
       } catch (err) {
-        console.error('Error checking FEPN admin:', err)
-        setAuthStatus('unauthenticated')
-      } finally {
-        setAuthLoading(false)
+        console.warn('Could not read role from profiles:', err)
       }
-    }
 
+      const userEmail = currentUser.email?.toLowerCase() || ''
+      const userRoleLower = role.toLowerCase().trim()
+      const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
+
+      const isUserAdmin =
+        userRoleLower === 'admin' ||
+        userRoleLower === 'collab' ||
+        metaRole === 'admin' ||
+        metaRole === 'collab' ||
+        userEmail === 'hoangbinhminh2508@gmail.com'
+
+      // Auto-heal admin role in profiles for the creator/owner or meta-admin if missing
+      if (isUserAdmin && userRoleLower !== 'admin' && userRoleLower !== 'collab') {
+        try {
+          await supabase.from('profiles').upsert({ id: currentUser.id, role: 'admin' }, { onConflict: 'id' })
+        } catch {}
+      }
+
+      setIsAdmin(isUserAdmin)
+      if (isUserAdmin) {
+        setAuthStatus('authenticated')
+      } else {
+        setAuthStatus('unauthorized')
+      }
+    } catch (err) {
+      console.error('Error checking FEPN admin:', err)
+      setAuthStatus('unauthenticated')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  useEffect(() => {
     checkFepnAdmin()
   }, [])
 
@@ -201,9 +231,8 @@ export default function FepnAdminDashboardPage() {
       // 4. Profiles (for Deep Vault User Role Management)
       const { data: usersData } = await supabase
         .from('profiles')
-        .select('id, email, full_name, role, created_at, admin_key_issued_at')
-        .order('created_at', { ascending: false })
-        .limit(50)
+        .select('*')
+        .limit(100)
       setUserList(usersData || [])
     } catch (err) {
       console.error('Error fetching FEPN admin data:', err)
@@ -431,21 +460,37 @@ export default function FepnAdminDashboardPage() {
             <h2 className="text-xl font-black text-slate-900 mb-2">
               {authStatus === 'unauthorized' ? 'Từ chối truy cập (403)' : 'Yêu cầu đăng nhập'}
             </h2>
-            <p className="text-sm text-slate-600 mb-6">
+            <p className="text-sm text-slate-600 mb-4">
               {authStatus === 'unauthorized'
                 ? 'Trang này chỉ dành riêng cho Quản trị viên Khoa Vật lý kỹ thuật & Công nghệ Nano.'
                 : 'Bạn cần đăng nhập bằng tài khoản Quản trị viên để truy cập bảng điều khiển FEPN Admin.'}
             </p>
-            <div className="flex flex-col gap-2">
+
+            {user?.email && (
+              <div className="mb-6 rounded-xl bg-slate-100 p-3 text-xs text-slate-700">
+                <span className="text-slate-500 font-medium">Tài khoản hiện tại:</span>{' '}
+                <strong className="text-sky-700 font-bold">{user.email}</strong>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => checkFepnAdmin()}
+                className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Thử lại xác thực quyền Admin
+              </button>
               <Link
                 href="/fepn-login"
-                className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-md"
+                className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition"
               >
                 Đăng nhập tài khoản khác
               </Link>
               <Link
                 href="/fepn-dashboard"
-                className="w-full py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition"
+                className="w-full py-2.5 text-slate-500 hover:text-slate-700 text-xs font-semibold transition"
               >
                 Quay về FEPN Dashboard
               </Link>

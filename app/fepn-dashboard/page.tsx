@@ -117,7 +117,8 @@ export default function FepnDashboardMainPage() {
 
         const email = currentUser.email?.toLowerCase() || ''
         const isVnu = email.endsWith('@vnu.edu.vn')
-        const isAdmin = role === 'admin'
+        const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
+        const isAdmin = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
 
         if (isVnu || isAdmin) {
           setAuthStatus('authorized')
