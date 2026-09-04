@@ -204,7 +204,7 @@ export default function FepnLoginPage() {
         setOtpType('magiclink' as any)
         setStep('otp')
         setResendCooldown(60)
-        setSuccessMsg(`Mã OTP xác thực đăng nhập 6 số đã được gửi về hòm thư ${fullEmail}.`)
+        setSuccessMsg(`Mã OTP xác thực đăng nhập đã được gửi về hòm thư ${fullEmail}.`)
       } else {
         // ĐĂNG KÝ: Tạo tài khoản mới
         if (!fullName.trim()) {
@@ -237,7 +237,7 @@ export default function FepnLoginPage() {
         setOtpType('signup')
         setStep('otp')
         setResendCooldown(60)
-        setSuccessMsg(`Mã OTP kích hoạt tài khoản 6 số đã được gửi về hòm thư ${fullEmail}.`)
+        setSuccessMsg(`Mã OTP kích hoạt tài khoản đã được gửi về hòm thư ${fullEmail}.`)
       }
     } catch (err: any) {
       if (err.message === 'Invalid login credentials') {
@@ -260,7 +260,7 @@ export default function FepnLoginPage() {
 
     const cleanOtp = otpCode.trim()
     if (!cleanOtp || cleanOtp.length < 6) {
-      setErrorMsg('Vui lòng nhập đủ 6 chữ số mã OTP.')
+      setErrorMsg('Vui lòng nhập đầy đủ mã OTP (từ 6 đến 8 chữ số).')
       return
     }
 
@@ -691,7 +691,7 @@ export default function FepnLoginPage() {
               </div>
               <div>
                 <p className="font-bold text-slate-800">
-                  Mã OTP 6 số đã được gửi tới:
+                  Mã OTP đã được gửi tới:
                 </p>
                 <p className="font-mono font-black text-sky-700 text-sm mt-0.5">
                   {pendingEmail}
@@ -704,16 +704,16 @@ export default function FepnLoginPage() {
 
             <div>
               <label className="font-bold text-slate-700 block text-center mb-1">
-                Nhập mã OTP (6 chữ số):
+                Nhập mã OTP (8 chữ số):
               </label>
               <input
                 type="text"
-                maxLength={6}
+                maxLength={8}
                 autoFocus
-                placeholder="••••••"
+                placeholder="••••••••"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                className="w-full text-center tracking-[0.6em] font-mono text-xl font-black py-3 rounded-2xl border border-slate-300 bg-slate-50 outline-none focus:border-sky-500 focus:bg-white transition"
+                className="w-full text-center tracking-[0.3em] sm:tracking-[0.4em] font-mono text-lg sm:text-xl font-black py-3 rounded-2xl border border-slate-300 bg-slate-50 outline-none focus:border-sky-500 focus:bg-white transition"
                 required
               />
             </div>
