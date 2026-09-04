@@ -74,6 +74,7 @@ export default function FepnRecapPage() {
   const [modalCoverImage, setModalCoverImage] = useState('')
   const [savingPost, setSavingPost] = useState(false)
   const [uploadingSlot, setUploadingSlot] = useState<string | null>(null)
+  const [batchUploading, setBatchUploading] = useState(false)
 
   // Force Light Mode
   useEffect(() => {
@@ -216,10 +217,10 @@ export default function FepnRecapPage() {
   }, [posts, selectedYear, searchQuery])
 
   // Detect media tags in modalContent dynamically
-  // Matches {AnhTieuDe}, {AnhDangBai}, {VideoDangBai}, or indexed e.g. {AnhDangBai_1}, {VideoDangBai_2}
+  // Matches {AnhTieuDe}, {AnhDangBai}, {AnhDangBai1}, {AnhDangBai2}, {VideoDangBai}, {VideoDangBai1}, etc.
   const detectedMediaTags = useMemo(() => {
     const tags: string[] = []
-    const regex = /\{(AnhTieuDe|AnhDangBai|VideoDangBai)(?:_[\w\d]+)?\}/g
+    const regex = /\{(AnhTieuDe|AnhDangBai\d*|VideoDangBai\d*)\}/g
     let match
     while ((match = regex.exec(modalContent)) !== null) {
       if (!tags.includes(match[0])) {
@@ -232,6 +233,120 @@ export default function FepnRecapPage() {
   // Insert syntax into modalContent at end
   const insertSyntax = (textToInsert: string) => {
     setModalContent((prev) => prev + (prev.endsWith('\n') || !prev ? '' : '\n') + textToInsert + '\n')
+  }
+
+  // Insert next indexed {AnhDangBai + Số} tag (VD: {AnhDangBai1}, {AnhDangBai2}...)
+  const handleInsertNextImageTag = () => {
+    const matches = modalContent.match(/\{AnhDangBai(\d+)\}/g) || []
+    let nextIndex = 1
+    if (matches.length > 0) {
+      const numbers = matches
+        .map((m) => parseInt(m.replace(/[^0-9]/g, ''), 10))
+        .filter((n) => !isNaN(n))
+      if (numbers.length > 0) {
+        nextIndex = Math.max(...numbers) + 1
+      }
+    } else if (modalContent.includes('{AnhDangBai}')) {
+      nextIndex = 2
+    }
+    insertSyntax(`{AnhDangBai${nextIndex}}`)
+  }
+
+  // Insert next indexed {VideoDangBai + Số} tag (VD: {VideoDangBai1}, {VideoDangBai2}...)
+  const handleInsertNextVideoTag = () => {
+    const matches = modalContent.match(/\{VideoDangBai(\d+)\}/g) || []
+    let nextIndex = 1
+    if (matches.length > 0) {
+      const numbers = matches
+        .map((m) => parseInt(m.replace(/[^0-9]/g, ''), 10))
+        .filter((n) => !isNaN(n))
+      if (numbers.length > 0) {
+        nextIndex = Math.max(...numbers) + 1
+      }
+    } else if (modalContent.includes('{VideoDangBai}')) {
+      nextIndex = 2
+    }
+    insertSyntax(`{VideoDangBai${nextIndex}}`)
+  }
+
+  // Upload multiple images at once and generate {AnhDangBai1}, {AnhDangBai2}, ...
+  const handleBatchImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setBatchUploading(true)
+    try {
+      const matches = modalContent.match(/\{AnhDangBai(\d+)\}/g) || []
+      let nextIndex = 1
+      if (matches.length > 0) {
+        const numbers = matches
+          .map((m) => parseInt(m.replace(/[^0-9]/g, ''), 10))
+          .filter((n) => !isNaN(n))
+        if (numbers.length > 0) {
+          nextIndex = Math.max(...numbers) + 1
+        }
+      } else if (modalContent.includes('{AnhDangBai}')) {
+        nextIndex = 2
+      }
+
+      const newTags: string[] = []
+      const newMediaMap: Record<string, string> = {}
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const currentIndex = nextIndex + i
+        const tag = `{AnhDangBai${currentIndex}}`
+        newTags.push(tag)
+
+        let finalUrl = ''
+
+        // 1. Try Supabase Storage
+        const cleanName = `recap_${Date.now()}_${currentIndex}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+        const { data: storageData, error: storageErr } = await supabase.storage.from('materials').upload(cleanName, file)
+        if (!storageErr && storageData) {
+          const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(cleanName)
+          if (publicUrlData?.publicUrl) {
+            finalUrl = publicUrlData.publicUrl
+          }
+        }
+
+        // 2. Fallback to Google Drive
+        if (!finalUrl) {
+          try {
+            const uploadUrl = await initGoogleDriveUpload(file.name, file.type || 'application/octet-stream')
+            const uploaded: any = await uploadFileToGoogleDrive(uploadUrl, file, file.name)
+            const fileId = typeof uploaded === 'string' ? uploaded : uploaded?.id
+            finalUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
+          } catch (gdErr) {
+            console.warn('Google Drive upload fallback failed:', gdErr)
+          }
+        }
+
+        // 3. Fallback to Data URL for images under 3MB
+        if (!finalUrl && file.type.startsWith('image/')) {
+          finalUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+        }
+
+        if (finalUrl) {
+          newMediaMap[tag] = finalUrl
+        }
+      }
+
+      setModalMediaItems((prev) => ({ ...prev, ...newMediaMap }))
+      const tagsText = newTags.join('\n\n')
+      setModalContent((prev) => (prev ? prev + '\n\n' + tagsText : tagsText))
+      alert(`🎉 Đã tải lên thành công ${files.length} ảnh (${newTags.join(', ')})!`)
+    } catch (err: any) {
+      alert('Lỗi tải nhiều ảnh: ' + err.message)
+    } finally {
+      setBatchUploading(false)
+      e.target.value = ''
+    }
   }
 
   // Upload or set media for a tag
@@ -300,7 +415,7 @@ export default function FepnRecapPage() {
         '{AnhTieuDe}\n\n' +
         '#h2 Các hoạt động định hướng và nghiên cứu khoa học\n' +
         'Sinh viên được làm quen với các phòng thí nghiệm hiện đại từ năm nhất.\n\n' +
-        '{AnhDangBai}\n'
+        '{AnhDangBai1}\n'
     )
     setModalMediaItems({})
     setModalCoverImage('')
@@ -520,32 +635,42 @@ export default function FepnRecapPage() {
         continue
       }
 
-      // 6. Media Slot: {AnhTieuDe}, {AnhDangBai}, {VideoDangBai}
-      const mediaTagMatch = line.match(/^\{(AnhTieuDe|AnhDangBai|VideoDangBai)(?:_[\w\d]+)?\}$/)
+      // 6. Media Slot: {AnhTieuDe}, {AnhDangBai}, {AnhDangBai1}, {AnhDangBai2}, {VideoDangBai}, {VideoDangBai1}, etc.
+      const mediaTagMatch = line.match(/^\{(AnhTieuDe|AnhDangBai\d*|VideoDangBai\d*)\}$/)
       if (mediaTagMatch) {
         const tag = mediaTagMatch[0]
         const mediaUrl = mediaItems[tag]
 
-        if (tag.includes('AnhTieuDe') || tag.includes('AnhDangBai')) {
+        if (tag.startsWith('{AnhTieuDe') || tag.startsWith('{AnhDangBai')) {
+          const imgNumber = tag.replace(/[^0-9]/g, '')
+          const imgLabel = tag.startsWith('{AnhTieuDe')
+            ? 'Ảnh tiêu đề'
+            : imgNumber
+            ? `Ảnh bài viết #${imgNumber}`
+            : 'Ảnh bài viết'
+
           renderedNodes.push(
             <figure key={`media-${i}`} className="my-7 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-md">
               {mediaUrl ? (
-                <div className="relative w-full h-auto max-h-[550px] overflow-hidden bg-slate-50 flex items-center justify-center">
+                <div className="relative w-full h-auto max-h-[600px] overflow-hidden bg-slate-50 flex items-center justify-center">
                   <img
                     src={mediaUrl}
-                    alt={tag}
-                    className="w-full h-auto object-contain max-h-[550px] transition duration-300 hover:scale-[1.01]"
+                    alt={imgLabel}
+                    className="w-full h-auto object-contain max-h-[600px] transition duration-300 hover:scale-[1.01]"
                   />
                 </div>
               ) : (
                 <div className="p-8 text-center bg-slate-50 text-slate-400 font-medium text-sm flex flex-col items-center justify-center gap-2">
                   <ImageIcon className="h-8 w-8 text-slate-300" />
-                  <span>Vị trí ảnh {tag} (Chưa có ảnh tải lên)</span>
+                  <span>Vị trí {imgLabel} ({tag}) - Chưa có ảnh tải lên</span>
                 </div>
               )}
             </figure>
           )
-        } else if (tag.includes('VideoDangBai')) {
+        } else if (tag.startsWith('{VideoDangBai')) {
+          const videoNumber = tag.replace(/[^0-9]/g, '')
+          const videoLabel = videoNumber ? `Video bài viết #${videoNumber}` : 'Video bài viết'
+
           renderedNodes.push(
             <div key={`video-${i}`} className="my-7 rounded-2xl overflow-hidden border border-slate-200 bg-black shadow-lg">
               {mediaUrl ? (
@@ -553,7 +678,7 @@ export default function FepnRecapPage() {
               ) : (
                 <div className="p-8 text-center bg-slate-900 text-slate-400 font-medium text-sm flex flex-col items-center justify-center gap-2">
                   <Video className="h-8 w-8 text-slate-500" />
-                  <span>Vị trí video {tag} (Chưa có video tải lên)</span>
+                  <span>Vị trí {videoLabel} ({tag}) - Chưa có video tải lên</span>
                 </div>
               )}
             </div>
@@ -1185,19 +1310,36 @@ export default function FepnRecapPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => insertSyntax('{AnhDangBai}')}
-                    className="px-2.5 py-1 rounded bg-indigo-100 font-black text-indigo-800 border border-indigo-300 hover:bg-indigo-200 transition flex items-center gap-1"
+                    onClick={handleInsertNextImageTag}
+                    className="px-2.5 py-1 rounded bg-indigo-50 font-black text-indigo-800 border border-indigo-300 hover:bg-indigo-100 transition flex items-center gap-1"
+                    title="Chèn ảnh đăng bài tiếp theo (VD: {AnhDangBai1}, {AnhDangBai2}...)"
                   >
                     <ImageIcon className="h-3 w-3" />
-                    <span>+ &#123;AnhDangBai&#125;</span>
+                    <span>+ &#123;AnhDangBai + Số&#125;</span>
                   </button>
+                  <label
+                    className="px-2.5 py-1 rounded bg-indigo-600 font-black text-white hover:bg-indigo-700 transition flex items-center gap-1 cursor-pointer shadow-xs"
+                    title="Tải lên nhiều ảnh cùng một lúc từ máy tính"
+                  >
+                    {batchUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                    <span>{batchUploading ? 'Đang tải nhiều ảnh...' : '📸 Tải nhiều ảnh cùng lúc'}</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      disabled={batchUploading}
+                      className="hidden"
+                      onChange={handleBatchImagesUpload}
+                    />
+                  </label>
                   <button
                     type="button"
-                    onClick={() => insertSyntax('{VideoDangBai}')}
-                    className="px-2.5 py-1 rounded bg-amber-100 font-black text-amber-800 border border-amber-300 hover:bg-amber-200 transition flex items-center gap-1"
+                    onClick={handleInsertNextVideoTag}
+                    className="px-2.5 py-1 rounded bg-amber-50 font-black text-amber-800 border border-amber-300 hover:bg-amber-100 transition flex items-center gap-1"
+                    title="Chèn video đăng bài tiếp theo (VD: {VideoDangBai1}, {VideoDangBai2}...)"
                   >
                     <Video className="h-3 w-3" />
-                    <span>+ &#123;VideoDangBai&#125;</span>
+                    <span>+ &#123;VideoDangBai + Số&#125;</span>
                   </button>
                 </div>
               </div>
@@ -1235,9 +1377,21 @@ export default function FepnRecapPage() {
                   <div className="space-y-3">
                     {detectedMediaTags.map((tag) => {
                       const isCover = tag === '{AnhTieuDe}'
-                      const isVideo = tag.includes('VideoDangBai')
+                      const isVideo = tag.startsWith('{VideoDangBai')
+                      const isArticleImg = tag.startsWith('{AnhDangBai')
                       const currentUrl = modalMediaItems[tag] || (isCover ? modalCoverImage : '')
                       const isUploading = uploadingSlot === tag
+
+                      let slotLabel = 'Ảnh đính kèm trong bài'
+                      if (isCover) {
+                        slotLabel = 'Ảnh bìa & Thumbnail danh sách'
+                      } else if (isArticleImg) {
+                        const num = tag.replace(/[^0-9]/g, '')
+                        slotLabel = num ? `Ảnh bài viết số ${num}` : 'Ảnh bài viết'
+                      } else if (isVideo) {
+                        const num = tag.replace(/[^0-9]/g, '')
+                        slotLabel = num ? `Video bài viết số ${num}` : 'Video bài viết'
+                      }
 
                       return (
                         <div
@@ -1257,11 +1411,7 @@ export default function FepnRecapPage() {
                               {tag}
                             </span>
                             <span className="text-xs font-bold text-slate-700">
-                              {isCover
-                                ? 'Ảnh bìa & Thumbnail danh sách'
-                                : isVideo
-                                ? 'Video đính kèm bài viết'
-                                : 'Ảnh đính kèm trong bài'}
+                              {slotLabel}
                             </span>
                           </div>
 
