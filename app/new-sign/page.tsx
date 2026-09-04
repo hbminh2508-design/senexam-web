@@ -122,6 +122,36 @@ export default function NewSignPage() {
     try {
       const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined
 
+      const getDestinationUrl = (userEmail: string) => {
+        const isVnu = userEmail.toLowerCase().endsWith('@vnu.edu.vn')
+        const isFepn =
+          typeof window !== 'undefined' &&
+          (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.'))
+
+        if (isVnu || isFepn) {
+          if (typeof window !== 'undefined') {
+            if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
+              return '/dashboard'
+            }
+            if (window.location.hostname === 'localhost') {
+              return '/tsv-fepn/dashboard'
+            }
+            return 'https://tsv.fepn.senexam.me/dashboard'
+          }
+          return '/tsv-fepn/dashboard'
+        }
+        return '/new-dashboard'
+      }
+
+      const navigatePostLogin = (userEmail: string) => {
+        const target = getDestinationUrl(userEmail)
+        if (target.startsWith('http')) {
+          window.location.href = target
+        } else {
+          router.push(target)
+        }
+      }
+
       if (mode === 'login') {
         // ĐĂNG NHẬP
         const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
@@ -129,7 +159,7 @@ export default function NewSignPage() {
         if (data.user) {
           await ensureStudentProfile(data.user.id)
         }
-        router.push('/new-dashboard')
+        navigatePostLogin(data.user?.email || email.trim())
       } else if (mode === 'signup') {
         // ĐĂNG KÝ
         if (!fullName.trim()) {
@@ -166,7 +196,7 @@ export default function NewSignPage() {
           setResendCooldown(60)
         } else {
           // Tự động đăng nhập được luôn
-          router.push('/new-dashboard')
+          navigatePostLogin(data.user?.email || email.trim())
         }
       } else if (mode === 'magic-link') {
         // ĐĂNG NHẬP QUA MAGIC LINK / EMAIL

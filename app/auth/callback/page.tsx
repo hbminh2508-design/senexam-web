@@ -38,12 +38,32 @@ function CallbackHandler() {
         // Kiểm tra session hiện tại (Supabase client tự động lấy token từ URL hash hoặc PKCE code)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-        if (sessionError) throw sessionError
+        const handleRedirect = (currentUser: any) => {
+          const userEmail = currentUser?.email?.toLowerCase() || ''
+          const isVnu = userEmail.endsWith('@vnu.edu.vn')
+          const isFepn =
+            typeof window !== 'undefined' &&
+            (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.'))
+
+          if (isVnu || isFepn) {
+            if (typeof window !== 'undefined') {
+              if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
+                router.replace('/dashboard')
+              } else if (window.location.hostname === 'localhost') {
+                router.replace('/tsv-fepn/dashboard')
+              } else {
+                window.location.href = 'https://tsv.fepn.senexam.me/dashboard'
+              }
+              return
+            }
+          }
+          router.replace(next)
+        }
 
         if (session?.user) {
           await ensureStudentProfile(session.user.id)
           if (active) {
-            router.replace(next)
+            handleRedirect(session.user)
           }
           return
         }
@@ -53,7 +73,7 @@ function CallbackHandler() {
           if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && newSession?.user) {
             await ensureStudentProfile(newSession.user.id)
             if (active) {
-              router.replace(next)
+              handleRedirect(newSession.user)
             }
           }
         })
