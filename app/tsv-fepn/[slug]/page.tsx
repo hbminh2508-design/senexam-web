@@ -541,6 +541,15 @@ export default function FepnSubjectDetailPage() {
               </button>
             )}
 
+            <Link
+              href="/fepn-recap"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
+              title="Kỷ yếu & Hoạt động FEPN"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-sky-600" />
+              <span>Recap</span>
+            </Link>
+
             <button
               type="button"
               onClick={handleLogout}

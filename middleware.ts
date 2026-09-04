@@ -19,8 +19,12 @@ export function middleware(request: NextRequest) {
 
   // 1. Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
   if (pathname.startsWith('/fepn-')) {
-    // fepn-login và fepn-dashboard là các trang độc lập có sẵn thư mục
-    if (pathname === '/fepn-login' || pathname === '/fepn-dashboard') {
+    // fepn-login, fepn-dashboard, fepn-recap là các trang độc lập có sẵn thư mục
+    if (
+      pathname === '/fepn-login' ||
+      pathname === '/fepn-dashboard' ||
+      pathname === '/fepn-recap'
+    ) {
       return NextResponse.next()
     }
     // fepn-[mã môn học]: rewrite ngầm sang /tsv-fepn/[slug] để giữ nguyên URL fepn-[mã môn học] trên thanh địa chỉ
@@ -43,6 +47,12 @@ export function middleware(request: NextRequest) {
     // 2.2 Trang login -> Chuyển vào FEPN Login
     if (pathname === '/login') {
       url.pathname = '/fepn-login'
+      return NextResponse.rewrite(url)
+    }
+
+    // 2.3 Trang Recap
+    if (pathname === '/recap' || pathname === '/fepn-recap') {
+      url.pathname = '/fepn-recap'
       return NextResponse.rewrite(url)
     }
 
