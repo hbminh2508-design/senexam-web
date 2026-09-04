@@ -281,6 +281,18 @@ export default function NewDashboardPage() {
         return
       }
 
+      // Nếu là sinh viên / cán bộ VNU, tự động chuyển về FEPN Dashboard
+      if (user.email?.toLowerCase().endsWith('@vnu.edu.vn')) {
+        if (typeof window !== 'undefined') {
+          if (window.location.hostname === 'localhost') {
+            router.replace('/fepn-dashboard')
+          } else {
+            window.location.href = 'https://tsv.fepn.senexam.me/fepn-dashboard'
+          }
+          return
+        }
+      }
+
       if (!disposed) {
         setUserEmail(user.email || '')
         setUserId(user.id)

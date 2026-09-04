@@ -7,7 +7,16 @@ import { supabase } from '@/lib/supabaseClient'
 export async function signInWithGoogle(nextPath: string = '/dashboard') {
   if (typeof window === 'undefined') return
 
-  const origin = window.location.origin
+  const host = window.location.hostname
+  let origin = window.location.origin
+
+  // Nếu đang ở FEPN hoặc redirect tới FEPN, callbackUrl trỏ về subdomain FEPN
+  if (host.startsWith('tsv.fepn.') || host.startsWith('fepn.') || nextPath.includes('fepn')) {
+    if (host !== 'localhost') {
+      origin = 'https://tsv.fepn.senexam.me'
+    }
+  }
+
   const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
 
   const { data, error } = await supabase.auth.signInWithOAuth({

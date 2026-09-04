@@ -43,7 +43,9 @@ function CallbackHandler() {
           const isVnu = userEmail.endsWith('@vnu.edu.vn')
           const isFepn =
             typeof window !== 'undefined' &&
-            (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.'))
+            (window.location.hostname.startsWith('tsv.fepn.') ||
+              window.location.hostname.startsWith('fepn.') ||
+              next.includes('fepn'))
 
           if (isVnu || isFepn) {
             if (typeof window !== 'undefined') {
@@ -57,7 +59,11 @@ function CallbackHandler() {
               return
             }
           }
-          router.replace(next)
+          if (next.startsWith('http')) {
+            window.location.href = next
+          } else {
+            router.replace(next)
+          }
         }
 
         if (session?.user) {
@@ -81,7 +87,11 @@ function CallbackHandler() {
         // Safety fallback timeout
         const timer = setTimeout(() => {
           if (active) {
-            router.replace(next)
+            if (next.startsWith('http')) {
+              window.location.href = next
+            } else {
+              router.replace(next)
+            }
           }
         }, 3500)
 

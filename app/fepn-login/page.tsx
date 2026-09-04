@@ -171,6 +171,13 @@ export default function FepnLoginPage() {
     setPendingEmail(fullEmail)
     setLoading(true)
 
+    const redirectUrl =
+      typeof window !== 'undefined'
+        ? window.location.hostname === 'localhost'
+          ? `${window.location.origin}/fepn-dashboard`
+          : 'https://tsv.fepn.senexam.me/fepn-dashboard'
+        : undefined
+
     try {
       if (mode === 'login') {
         // ĐĂNG NHẬP: Kiểm tra mật khẩu trước
@@ -181,11 +188,12 @@ export default function FepnLoginPage() {
 
         if (signInError) throw signInError
 
-        // Gửi mã OTP xác minh về email VNU
+        // Gửi mã OTP xác minh về email VNU (kèm URL callback về FEPN)
         const { error: otpError } = await supabase.auth.signInWithOtp({
           email: fullEmail,
           options: {
             shouldCreateUser: false,
+            emailRedirectTo: redirectUrl,
           },
         })
 
@@ -207,6 +215,7 @@ export default function FepnLoginPage() {
           email: fullEmail,
           password,
           options: {
+            emailRedirectTo: redirectUrl,
             data: {
               full_name: fullName.trim(),
               mssv: mssv.trim(),
@@ -301,17 +310,30 @@ export default function FepnLoginPage() {
     setSuccessMsg('')
     setLoading(true)
 
+    const redirectUrl =
+      typeof window !== 'undefined'
+        ? window.location.hostname === 'localhost'
+          ? `${window.location.origin}/fepn-dashboard`
+          : 'https://tsv.fepn.senexam.me/fepn-dashboard'
+        : undefined
+
     try {
       if (otpType === 'signup') {
         const { error } = await supabase.auth.resend({
           type: 'signup',
           email: pendingEmail,
+          options: {
+            emailRedirectTo: redirectUrl,
+          },
         })
         if (error) throw error
       } else {
         const { error } = await supabase.auth.signInWithOtp({
           email: pendingEmail,
-          options: { shouldCreateUser: false },
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: redirectUrl,
+          },
         })
         if (error) throw error
       }
