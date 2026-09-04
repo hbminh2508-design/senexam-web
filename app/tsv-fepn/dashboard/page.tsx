@@ -22,7 +22,6 @@ import {
   Sun,
   Moon,
   ArrowRight,
-  Sparkles,
   X,
   Layers,
   Cpu,

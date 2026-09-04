@@ -9,7 +9,6 @@ import { supabase } from '@/lib/supabaseClient'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import {
-  Sparkles,
   Search,
   Plus,
   Trash2,
@@ -976,7 +975,7 @@ export default function FepnRecapPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 text-center">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl border border-slate-200">
-          <Sparkles className="mx-auto h-12 w-12 text-sky-600 mb-4" />
+          <BookOpen className="mx-auto h-12 w-12 text-sky-600 mb-4" />
           <h2 className="text-xl font-black text-slate-900 mb-2">Yêu cầu đăng nhập</h2>
           <p className="text-sm text-slate-600 mb-6">
             Bạn cần đăng nhập bằng tài khoản VNU (@vnu.edu.vn) để xem kỷ yếu và các hoạt động của Khoa FEPN.
@@ -1118,8 +1117,7 @@ export default function FepnRecapPage() {
           {/* Header & Year Pills */}
           <div className="p-4 border-b border-slate-200 bg-slate-50/60">
             <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-sky-600" />
+              <div>
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
                   Kỷ Yếu Từng Năm
                 </h2>
@@ -1188,7 +1186,7 @@ export default function FepnRecapPage() {
               </div>
             ) : filteredPosts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center px-4 text-slate-400">
-                <Sparkles className="h-10 w-10 text-slate-300 mb-2" />
+                <BookOpen className="h-10 w-10 text-slate-300 mb-2" />
                 <p className="text-xs font-bold text-slate-600 mb-1">Chưa có bài viết nào</p>
                 <p className="text-[11px] text-slate-400">
                   {selectedYear !== 'all'
@@ -1361,7 +1359,6 @@ export default function FepnRecapPage() {
               {/* Article Footer */}
               <div className="mt-12 pt-6 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
                 <div className="flex items-center gap-2 font-medium">
-                  <Sparkles className="h-4 w-4 text-sky-600" />
                   <span>Khoa Vật lý kỹ thuật & Công nghệ Nano (FEPN - UET - VNU)</span>
                 </div>
                 <div className="text-[11px] text-slate-400">
@@ -1374,7 +1371,7 @@ export default function FepnRecapPage() {
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
-              <Sparkles className="h-12 w-12 text-slate-300 mb-3" />
+              <BookOpen className="h-12 w-12 text-slate-300 mb-3" />
               <h3 className="text-base font-bold text-slate-700 mb-1">Chưa chọn bài viết</h3>
               <p className="text-xs text-slate-400 max-w-sm">
                 Vui lòng chọn một bài viết từ danh sách bên trái để đọc nội dung kỷ yếu và xem hình ảnh hoạt động của Khoa FEPN.
@@ -1392,8 +1389,7 @@ export default function FepnRecapPage() {
           <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5 bg-slate-50">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-sky-600" />
+              <div>
                 <h3 className="text-base font-black text-slate-900">
                   {editingPostId ? 'Chỉnh Sửa Bài Viết Recap' : 'Đăng Bài Viết Recap Mới'}
                 </h3>
@@ -1553,8 +1549,7 @@ export default function FepnRecapPage() {
               {detectedMediaTags.length > 0 && (
                 <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-sky-600" />
+                    <div>
                       <h4 className="text-xs font-black uppercase tracking-wider text-sky-950">
                         Vị trí Media đã phát hiện ({detectedMediaTags.length})
                       </h4>

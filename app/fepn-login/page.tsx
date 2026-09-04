@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   AlertCircle,
   GraduationCap,
-  Sparkles,
   KeyRound,
   Mail,
   Smartphone,
