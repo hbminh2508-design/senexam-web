@@ -201,7 +201,7 @@ export default function FepnLoginPage() {
           console.warn('Gửi OTP login cảnh báo:', otpError.message)
         }
 
-        setOtpType('email')
+        setOtpType('magiclink' as any)
         setStep('otp')
         setResendCooldown(60)
         setSuccessMsg(`Mã OTP xác thực đăng nhập 6 số đã được gửi về hòm thư ${fullEmail}.`)
@@ -266,25 +266,45 @@ export default function FepnLoginPage() {
 
     setLoading(true)
     try {
-      // Xác thực OTP
-      let verifyResult = await supabase.auth.verifyOtp({
-        email: pendingEmail,
-        token: cleanOtp,
-        type: otpType,
-      })
+      // 1. Kiểm tra nếu phiên đăng nhập đã có hiệu lực (ví dụ vừa click link trong mail ở tab khác)
+      const { data: currentSessionData } = await supabase.auth.getSession()
+      const currentEmail = currentSessionData.session?.user?.email?.toLowerCase()
+      if (currentEmail && currentEmail === pendingEmail.toLowerCase()) {
+        await ensureStudentProfile(currentSessionData.session.user.id)
+        setStep('authenticator')
+        initAuthenticatorSetup()
+        return
+      }
 
-      // Nếu loại thử nghiệm thất bại, fallback thử loại còn lại
-      if (verifyResult.error) {
-        const altType = otpType === 'signup' ? 'email' : 'signup'
-        const fallback = await supabase.auth.verifyOtp({
+      // 2. Thử tuần tự các kiểu OTP hợp lệ của Supabase (magiclink cho đăng nhập, signup cho đăng ký)
+      const candidateTypes: ('magiclink' | 'signup' | 'email')[] =
+        otpType === 'signup'
+          ? ['signup', 'magiclink', 'email']
+          : ['magiclink', 'email', 'signup']
+
+      let verifyResult: any = null
+      let lastError: any = null
+
+      for (const t of candidateTypes) {
+        const res = await supabase.auth.verifyOtp({
           email: pendingEmail,
           token: cleanOtp,
-          type: altType,
+          type: t,
         })
-        if (!fallback.error) {
-          verifyResult = fallback
+        if (!res.error && (res.data?.session || res.data?.user)) {
+          verifyResult = res
+          break
+        }
+        lastError = res.error
+      }
+
+      if (!verifyResult) {
+        // Kiểm tra lại phiên đăng nhập phòng trường hợp đã kích hoạt ngầm
+        const { data: recheckSession } = await supabase.auth.getSession()
+        if (recheckSession.session?.user?.email?.toLowerCase() === pendingEmail.toLowerCase()) {
+          verifyResult = { data: recheckSession.session }
         } else {
-          throw verifyResult.error
+          throw lastError || new Error('Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại!')
         }
       }
 
@@ -297,7 +317,11 @@ export default function FepnLoginPage() {
       setStep('authenticator')
       initAuthenticatorSetup()
     } catch (err: any) {
-      setErrorMsg(err.message || 'Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại!')
+      if (err.message?.includes('Token has expired or is invalid')) {
+        setErrorMsg('Mã OTP không chính xác hoặc đã hết hạn. Bạn vui lòng bấm "Gửi lại mã OTP" bên dưới và lấy mã trong email mới nhất!')
+      } else {
+        setErrorMsg(err.message || 'Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại!')
+      }
     } finally {
       setLoading(false)
     }
