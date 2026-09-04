@@ -41,14 +41,14 @@ export function base64ToBuffer(base64: string): ArrayBuffer {
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)
   }
-  return bytes.buffer
+  return bytes.buffer as ArrayBuffer
 }
 
 // Hash string with SHA-512
 export async function sha512(message: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(message)
-  const hashBuffer = await crypto.subtle.digest('SHA-512', data)
+  const hashBuffer = await crypto.subtle.digest('SHA-512', data as any)
   return bufferToHex(hashBuffer)
 }
 
@@ -195,7 +195,7 @@ async function deriveAesKey(payloadToken: string, saltBytes: Uint8Array): Promis
   const encoder = new TextEncoder()
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(payloadToken),
+    encoder.encode(payloadToken) as any,
     { name: 'PBKDF2' },
     false,
     ['deriveKey']
@@ -204,7 +204,7 @@ async function deriveAesKey(payloadToken: string, saltBytes: Uint8Array): Promis
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: saltBytes,
+      salt: saltBytes as any,
       iterations: 100000,
       hash: 'SHA-512',
     },
@@ -230,9 +230,9 @@ export async function encryptSensitiveText(
   const aesKey = await deriveAesKey(payloadToken, salt)
 
   const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     aesKey,
-    data
+    data as any
   )
 
   // Package as salt:iv:ciphertext in Base64
@@ -257,9 +257,9 @@ export async function decryptSensitiveText(
 
   const aesKey = await deriveAesKey(payloadToken, salt)
   const decryptedBuffer = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     aesKey,
-    ciphertext
+    ciphertext as any
   )
 
   const decoder = new TextDecoder()
@@ -289,9 +289,9 @@ export async function encryptFileWithKey(
   const metadataLength = new Uint32Array([metadataBytes.byteLength])
 
   const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     aesKey,
-    fileBytes
+    fileBytes as any
   )
 
   // File structure:
@@ -337,9 +337,9 @@ export async function decryptFileWithKey(
   const aesKey = await deriveAesKey(payloadToken, salt)
 
   const decryptedBuffer = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     aesKey,
-    ciphertext
+    ciphertext as any
   )
 
   const originalType = metadata.type || 'application/octet-stream'

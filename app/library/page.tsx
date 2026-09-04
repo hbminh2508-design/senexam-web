@@ -119,7 +119,7 @@ export default function LibraryPage({ searchParams = {} }: { searchParams?: Reco
 
   const hashPassword = async (password: string, salt: string) => {
     const encoded = new TextEncoder().encode(`${salt}:${password}`)
-    const digest = await crypto.subtle.digest('SHA-256', encoded)
+    const digest = await crypto.subtle.digest('SHA-256', encoded as any)
     return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
   }
 
