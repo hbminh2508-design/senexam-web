@@ -44,7 +44,7 @@ export interface FepnRecapPost {
 
 export default function FepnRecapPage() {
   const router = useRouter()
-  const themeVars = useMemo(() => getModernThemeVars(false), [])
+  const themeVars = useMemo(() => getModernThemeVars('indigo', false), [])
 
   // Auth State
   const [authLoading, setAuthLoading] = useState(true)
@@ -254,8 +254,8 @@ export default function FepnRecapPage() {
       if (!finalUrl) {
         try {
           const uploadUrl = await initGoogleDriveUpload(file.name, file.type || 'application/octet-stream')
-          const uploaded = await uploadFileToGoogleDrive(uploadUrl, file, file.name)
-          const fileId = typeof uploaded === 'string' ? uploaded : uploaded.id
+          const uploaded: any = await uploadFileToGoogleDrive(uploadUrl, file, file.name)
+          const fileId = typeof uploaded === 'string' ? uploaded : uploaded?.id
           finalUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
         } catch (gdErr) {
           console.warn('Google Drive upload fallback failed:', gdErr)
