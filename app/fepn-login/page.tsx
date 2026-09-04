@@ -31,7 +31,7 @@ import {
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
 
-type AuthStep = 'credentials' | 'otp' | 'authenticator'
+type AuthStep = 'credentials' | 'otp' | 'authenticator_setup' | 'authenticator_verify'
 
 export default function FepnLoginPage() {
   const router = useRouter()
@@ -54,6 +54,8 @@ export default function FepnLoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0)
 
   // Authenticator (TOTP) states
+  const [enrolledFactorId, setEnrolledFactorId] = useState('')
+  const [totpVerifyInput, setTotpVerifyInput] = useState('')
   const [mfaFactorId, setMfaFactorId] = useState('')
   const [mfaQrCode, setMfaQrCode] = useState('')
   const [mfaSecret, setMfaSecret] = useState('')
@@ -188,7 +190,34 @@ export default function FepnLoginPage() {
 
         if (signInError) throw signInError
 
-        // Gửi mã OTP xác minh về email VNU (kèm URL callback về FEPN)
+        // Kiểm tra xem tài khoản đã liên kết ứng dụng Authenticator (TOTP) hay chưa
+        let activeTotpFactorId = ''
+        try {
+          const userFactors = (signInData.user as any)?.factors || []
+          const verifiedUserFactor = userFactors.find((f: any) => f.factor_type === 'totp' && f.status === 'verified')
+          if (verifiedUserFactor) {
+            activeTotpFactorId = verifiedUserFactor.id
+          } else {
+            const { data: factorsData } = await supabase.auth.mfa.listFactors()
+            const verifiedFactor = factorsData?.totp?.find((f) => f.status === 'verified')
+            if (verifiedFactor) {
+              activeTotpFactorId = verifiedFactor.id
+            }
+          }
+        } catch (mfaErr) {
+          console.warn('Lỗi kiểm tra factors:', mfaErr)
+        }
+
+        // Nếu người dùng ĐÃ liên kết Authenticator -> Hỏi mã 6 số từ Authenticator thay vì gửi mail!
+        if (activeTotpFactorId) {
+          setEnrolledFactorId(activeTotpFactorId)
+          setStep('authenticator_verify')
+          setTotpVerifyInput('')
+          setSuccessMsg('Tài khoản đã liên kết Authenticator. Vui lòng nhập mã xác thực từ ứng dụng.')
+          return
+        }
+
+        // Nếu CHƯA liên kết Authenticator -> Gửi mã OTP xác minh về email VNU (kèm URL callback về FEPN)
         const { error: otpError } = await supabase.auth.signInWithOtp({
           email: fullEmail,
           options: {
@@ -252,6 +281,75 @@ export default function FepnLoginPage() {
     }
   }
 
+  // Xác nhận đăng nhập bằng mã 6 số từ ứng dụng Authenticator
+  const handleVerifyAuthenticatorLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErrorMsg('')
+    setSuccessMsg('')
+
+    const cleanCode = totpVerifyInput.trim()
+    if (!cleanCode || cleanCode.length < 6) {
+      setErrorMsg('Vui lòng nhập đủ 6 chữ số từ ứng dụng Authenticator.')
+      return
+    }
+
+    if (!enrolledFactorId) {
+      navigateAfterLogin()
+      return
+    }
+
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: enrolledFactorId,
+        code: cleanCode,
+      })
+
+      if (error) throw error
+
+      navigateAfterLogin()
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Mã Authenticator không chính xác hoặc đã hết hạn. Vui lòng kiểm tra lại!')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fallback: Khi người dùng không thể truy cập Authenticator -> Chuyển sang xác minh qua Email
+  const handleFallbackToEmailOtp = async () => {
+    setErrorMsg('')
+    setSuccessMsg('')
+    setLoading(true)
+
+    const redirectUrl =
+      typeof window !== 'undefined'
+        ? window.location.hostname === 'localhost'
+          ? `${window.location.origin}/fepn-dashboard`
+          : 'https://tsv.fepn.senexam.me/fepn-dashboard'
+        : undefined
+
+    try {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: pendingEmail,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: redirectUrl,
+        },
+      })
+
+      if (otpError) throw otpError
+
+      setOtpType('magiclink' as any)
+      setStep('otp')
+      setResendCooldown(60)
+      setSuccessMsg(`Đã chuyển sang xác minh Email. Mã OTP đã được gửi về hòm thư ${pendingEmail}.`)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Không thể gửi mã OTP về email. Vui lòng thử lại sau!')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Bước 2: Xác nhận mã OTP Email
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -272,7 +370,7 @@ export default function FepnLoginPage() {
       const currentEmail = currentSessionUser?.email?.toLowerCase()
       if (currentSessionUser && currentEmail && currentEmail === pendingEmail.toLowerCase()) {
         await ensureStudentProfile(currentSessionUser.id)
-        setStep('authenticator')
+        setStep('authenticator_setup')
         initAuthenticatorSetup()
         return
       }
@@ -315,8 +413,8 @@ export default function FepnLoginPage() {
         await ensureStudentProfile(verifiedUser.id)
       }
 
-      // Chuyển sang bước tuỳ chọn Authenticator App
-      setStep('authenticator')
+      // Chuyển sang bước tuỳ chọn thiết lập Authenticator App
+      setStep('authenticator_setup')
       initAuthenticatorSetup()
     } catch (err: any) {
       if (err.message?.includes('Token has expired or is invalid')) {
@@ -458,7 +556,9 @@ export default function FepnLoginPage() {
             <h1 className="mt-1.5 text-2xl sm:text-3xl font-black text-slate-900" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
               {step === 'otp'
                 ? 'Xác Thực Mã OTP'
-                : step === 'authenticator'
+                : step === 'authenticator_verify'
+                ? 'Xác Thực Authenticator'
+                : step === 'authenticator_setup'
                 ? 'Bảo Mật Authenticator'
                 : mode === 'login'
                 ? 'Đăng Nhập FEPN'
@@ -759,8 +859,86 @@ export default function FepnLoginPage() {
           </form>
         )}
 
-        {/* ----------------- BƯỚC 3: TUỲ CHỌN AUTHENTICATOR APP (TOTP) ----------------- */}
-        {step === 'authenticator' && (
+        {/* ----------------- BƯỚC: XÁC THỰC MÃ AUTHENTICATOR (CHO TÀI KHOẢN ĐÃ LIÊN KẾT) ----------------- */}
+        {step === 'authenticator_verify' && (
+          <form onSubmit={handleVerifyAuthenticatorLogin} className="space-y-4 text-xs">
+            <div className="rounded-2xl bg-indigo-50 border border-indigo-200/80 p-4 text-center space-y-2">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
+                <Smartphone className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-black text-slate-800 text-sm">
+                  Xác Thực Ứng Dụng Authenticator
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Tài khoản {pendingEmail} đã bật bảo mật 2 lớp.
+                </p>
+              </div>
+              <p className="text-[11px] text-indigo-700 font-bold">
+                Mở Google Authenticator hoặc Microsoft Authenticator để lấy mã 6 số.
+              </p>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block text-center mb-1">
+                Nhập mã 6 chữ số:
+              </label>
+              <input
+                type="text"
+                maxLength={6}
+                autoFocus
+                placeholder="••••••"
+                value={totpVerifyInput}
+                onChange={(e) => setTotpVerifyInput(e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-full text-center tracking-[0.5em] font-mono text-xl font-black py-3 rounded-2xl border border-slate-300 bg-slate-50 outline-none focus:border-indigo-500 focus:bg-white transition"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || totpVerifyInput.trim().length < 6}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white font-black uppercase text-xs tracking-wider shadow-lg shadow-indigo-500/25 transition hover:scale-[1.02] disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+              <span>Xác Nhận Mã Authenticator</span>
+            </button>
+
+            {/* Nút chuyển sang xác nhận bằng mail khi không thể truy cập Authenticator */}
+            <div className="pt-2 text-center space-y-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleFallbackToEmailOtp}
+                disabled={loading}
+                className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 transition inline-flex items-center gap-1.5 underline underline-offset-4 cursor-pointer"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                <span>Không thể truy cập Authenticator? Xác minh qua Email</span>
+              </button>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('credentials')
+                    setErrorMsg('')
+                    setSuccessMsg('')
+                  }}
+                  className="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition inline-flex items-center gap-1"
+                >
+                  <ArrowLeft className="h-3 w-3" /> Quay lại đăng nhập
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* ----------------- BƯỚC: TUỲ CHỌN THIẾT LẬP AUTHENTICATOR APP (TOTP) ----------------- */}
+        {step === 'authenticator_setup' && (
           <div className="space-y-4 text-xs">
             <div className="rounded-2xl bg-indigo-50/70 border border-indigo-200/80 p-4 text-center space-y-2">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
