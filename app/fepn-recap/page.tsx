@@ -21,6 +21,7 @@ import {
   Video,
   BookOpen,
   CheckCircle2,
+  ShieldCheck,
   X,
   Loader2,
   ExternalLink,
@@ -1097,6 +1098,18 @@ export default function FepnRecapPage() {
                 50 : 50
               </button>
             </div>
+
+            {/* FEPN Admin Link */}
+            {isAdmin && (
+              <Link
+                href="/fepn-admin"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                title="Cổng Quản Trị FEPN & Deep Vault"
+              >
+                <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                <span className="hidden md:inline">Admin</span>
+              </Link>
+            )}
 
             {/* Admin Add Post Button */}
             {isAdmin && (

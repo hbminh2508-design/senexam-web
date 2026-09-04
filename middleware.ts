@@ -19,11 +19,12 @@ export function middleware(request: NextRequest) {
 
   // 1. Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
   if (pathname.startsWith('/fepn-')) {
-    // fepn-login, fepn-dashboard, fepn-recap là các trang độc lập có sẵn thư mục
+    // fepn-login, fepn-dashboard, fepn-recap, fepn-admin là các trang độc lập có sẵn thư mục
     if (
       pathname === '/fepn-login' ||
       pathname === '/fepn-dashboard' ||
-      pathname === '/fepn-recap'
+      pathname === '/fepn-recap' ||
+      pathname === '/fepn-admin'
     ) {
       return NextResponse.next()
     }
@@ -53,6 +54,12 @@ export function middleware(request: NextRequest) {
     // 2.3 Trang Recap
     if (pathname === '/recap' || pathname === '/fepn-recap') {
       url.pathname = '/fepn-recap'
+      return NextResponse.rewrite(url)
+    }
+
+    // 2.4 Trang Admin Subdomain -> Chuyển vào FEPN Admin
+    if (pathname === '/admin' || pathname === '/fepn-admin') {
+      url.pathname = '/fepn-admin'
       return NextResponse.rewrite(url)
     }
 

@@ -11,8 +11,10 @@ import {
   KeyRound, Filter, Eye, Save, ArrowLeft, PenTool, LayoutDashboard,
   Sparkles, Bell, AlertCircle, Loader2, FileInput, Sun, Moon, Clipboard,
   Bot, Send, Code, Play, CheckCircle2, Database, Shuffle, Home, Image as ImageIcon,
-  MessageSquare, Rocket, History, Bug, FlaskConical, Crown
+  MessageSquare, Rocket, History, Bug, FlaskConical, Crown,
+  Shield, ShieldCheck, Lock
 } from 'lucide-react'
+import AdminSecurityVault, { FileEncryptionCenter } from '@/app/components/AdminSecurityVaultModal'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
@@ -79,7 +81,13 @@ export default function AdminDashboard() {
   const [isDark, setIsDark] = useState(false)
   
   // 🌟 TABS QUẢN TRỊ
-  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab' | 'feedback' | 'release' | 'vip'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'upload' | 'senai' | 'bank' | 'manage' | 'submissions' | 'collab' | 'feedback' | 'release' | 'vip' | 'vault'>('overview')
+
+  // 🌟 QUANTUM MASTER KEY & DEEP VAULT STATES
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [isDeepVaultUnlocked, setIsDeepVaultUnlocked] = useState(false)
+  const [activePayloadToken, setActivePayloadToken] = useState<string | null>(null)
+  const [activeKeyId, setActiveKeyId] = useState<string>('')
 
   // 🌟 GIAO DIỆN MỚI (BETA) - đọc cờ bật/tắt + màu chủ đề từ localStorage
   const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
@@ -226,6 +234,7 @@ export default function AdminDashboard() {
     const checkAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
+      setCurrentUser(user)
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role === 'admin' || profile?.role === 'collab') {
         setIsAdmin(true)
@@ -2026,6 +2035,7 @@ export default function AdminDashboard() {
       { key: 'feedback', label: 'Góp Ý', icon: MessageSquare, badge: feedbackCount },
       ...(currentUserRole === 'admin' ? [{ key: 'release' as const, label: 'Cập Nhật Hệ Thống', icon: Rocket }] : []),
       ...(currentUserRole === 'admin' ? [{ key: 'vip' as const, label: 'Quản Lý VIP', icon: Crown }] : []),
+      ...(currentUserRole === 'admin' ? [{ key: 'vault' as const, label: 'Deep Vault (.key)', icon: ShieldCheck }] : []),
     ]
 
     return (
@@ -2269,6 +2279,37 @@ export default function AdminDashboard() {
 
           {activeTab === 'release' && renderReleaseTab()}
           {activeTab === 'vip' && renderVipManageTab()}
+
+          {activeTab === 'vault' && (
+            <AdminSecurityVault
+              userId={currentUser?.id}
+              userEmail={currentUser?.email}
+              isDeepVaultUnlocked={isDeepVaultUnlocked}
+              activePayloadToken={activePayloadToken}
+              onUnlockSuccess={(token, kId) => {
+                setIsDeepVaultUnlocked(true)
+                setActivePayloadToken(token)
+                setActiveKeyId(kId)
+              }}
+              onLockVault={() => {
+                setIsDeepVaultUnlocked(false)
+                setActivePayloadToken(null)
+                setActiveKeyId('')
+              }}
+            >
+              <div className="space-y-6">
+                <FileEncryptionCenter payloadToken={activePayloadToken} />
+                <div className="rounded-2xl p-6" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <h3 className="text-base font-black uppercase tracking-wider mb-2 text-amber-500 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5" /> Quản Trị Tối Mật Hệ Thống SenExam
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Bạn đang đăng nhập phiên làm việc bảo mật cao nhất (Master Session: {activeKeyId || 'ONLINE'}). Toàn bộ các đề thi, đáp án gốc và dữ liệu nhạy cảm được bảo vệ bởi thuật toán mã hóa lượng tử AES-256-GCM.
+                  </p>
+                </div>
+              </div>
+            </AdminSecurityVault>
+          )}
         </div>
 
         {renderQuickModals()}
@@ -2349,6 +2390,9 @@ export default function AdminDashboard() {
           )}
           {currentUserRole === 'admin' && (
             <button onClick={() => setActiveTab('vip')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'vip' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Crown className="w-4 h-4"/>Quản Lý VIP</button>
+          )}
+          {currentUserRole === 'admin' && (
+            <button onClick={() => setActiveTab('vault')} className={`px-5 py-3.5 text-sm font-bold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'vault' ? 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-900/10 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><ShieldCheck className="w-4 h-4 text-amber-500"/>Deep Vault (.key)</button>
           )}
         </div>
 
@@ -2543,7 +2587,53 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* DEEP SECURITY VAULT (.key) */}
+        {activeTab === 'vault' && (
+          <div className="animate-in fade-in duration-300 space-y-6">
+            <AdminSecurityVault
+              userId={currentUser?.id}
+              userEmail={currentUser?.email}
+              isDeepVaultUnlocked={isDeepVaultUnlocked}
+              activePayloadToken={activePayloadToken}
+              onUnlockSuccess={(token, kId) => {
+                setIsDeepVaultUnlocked(true)
+                setActivePayloadToken(token)
+                setActiveKeyId(kId)
+              }}
+              onLockVault={() => {
+                setIsDeepVaultUnlocked(false)
+                setActivePayloadToken(null)
+                setActiveKeyId('')
+              }}
+            >
+              <div className="space-y-6">
+                <FileEncryptionCenter payloadToken={activePayloadToken} />
+                <div className="rounded-2xl p-6 bg-white dark:bg-[#1A1A1A] border border-slate-200 dark:border-white/5 shadow-sm">
+                  <h3 className="text-base font-black uppercase tracking-wider mb-2 text-amber-500 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5" /> Quản Trị Tối Mật Hệ Thống SenExam
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Bạn đang đăng nhập phiên làm việc bảo mật cao nhất (Master Session: {activeKeyId || 'ONLINE'}). Toàn bộ các đề thi, đáp án gốc và dữ liệu nhạy cảm được bảo vệ bởi thuật toán mã hóa lượng tử AES-256-GCM.
+                  </p>
+                </div>
+              </div>
+            </AdminSecurityVault>
+          </div>
+        )}
+
       </div>
+
+      {/* 🌟 ONE-TIME MASTER KEY ISSUANCE GLOBAL GATE */}
+      {currentUser && (
+        <AdminSecurityVault
+          userId={currentUser?.id}
+          userEmail={currentUser?.email}
+          isDeepVaultUnlocked={true}
+          activePayloadToken={null}
+          onUnlockSuccess={() => {}}
+          onLockVault={() => {}}
+        />
+      )}
 
       {renderQuickModals()}
 
