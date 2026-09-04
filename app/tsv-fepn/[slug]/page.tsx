@@ -24,8 +24,6 @@ import {
   Lock,
   ShieldCheck,
   LogOut,
-  Sun,
-  Moon,
   ArrowLeft,
   Sparkles,
   Upload,
@@ -78,7 +76,7 @@ export default function FepnSubjectDetailPage() {
   const params = useParams()
   const rawSlug = (params?.slug as string) || ''
 
-  const [isDark, setIsDark] = useState(false)
+  const isDark = false
   const [authLoading, setAuthLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<string>('student')
@@ -113,11 +111,10 @@ export default function FepnSubjectDetailPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadingMaterial, setUploadingMaterial] = useState(false)
 
-  // 1. Theme & Width Init
+  // 1. Theme (Mặc định Light Mode) & Width Init
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setIsDark(savedTheme === 'dark' || (!savedTheme && prefersDark))
+    // Luôn áp dụng Light mode cho các trang FEPN
+    document.documentElement.classList.remove('dark')
 
     const savedWidth = localStorage.getItem('fepn_split_width')
     if (savedWidth) {
@@ -211,12 +208,12 @@ export default function FepnSubjectDetailPage() {
       if (matched) {
         setSubject(matched)
 
-        // Tải toàn bộ tài liệu của môn học này
+        // Tải toàn bộ tài liệu của môn học này theo thứ tự thời gian (tài liệu mới ở dưới)
         const { data: matsData, error: matErr } = await supabase
           .from('fepn_materials')
           .select('*')
           .eq('subject_id', matched.id)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: true })
 
         if (!matErr && matsData) {
           setMaterials(matsData)
@@ -270,18 +267,6 @@ export default function FepnSubjectDetailPage() {
       window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [isDragging, leftWidth])
-
-  const toggleDarkMode = () => {
-    const next = !isDark
-    setIsDark(next)
-    if (next) {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
-  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -384,7 +369,7 @@ export default function FepnSubjectDetailPage() {
 
       if (error) throw error
 
-      const updated = [data, ...materials]
+      const updated = [...materials, data]
       setMaterials(updated)
       setSelectedMaterial(data)
       setActiveCategory(newMatCategory)
@@ -555,15 +540,6 @@ export default function FepnSubjectDetailPage() {
                 <span className="hidden sm:inline">Đăng Tài Liệu</span>
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={toggleDarkMode}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm transition hover:scale-105"
-              title={isDark ? 'Chế độ sáng' : 'Chế độ tối'}
-            >
-              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
-            </button>
 
             <button
               type="button"

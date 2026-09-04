@@ -19,8 +19,6 @@ import {
   Lock,
   ShieldCheck,
   LogOut,
-  Sun,
-  Moon,
   ArrowRight,
   Sparkles,
   X,
@@ -65,7 +63,7 @@ export function getFepnSubjectSlug(sub: { code: string; id?: string }) {
 
 export default function FepnDashboardMainPage() {
   const router = useRouter()
-  const [isDark, setIsDark] = useState(false)
+  const isDark = false
   const [authLoading, setAuthLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [userRole, setUserRole] = useState<string>('student')
@@ -86,11 +84,9 @@ export default function FepnDashboardMainPage() {
   const [newSubDesc, setNewSubDesc] = useState('')
   const [addingSubject, setAddingSubject] = useState(false)
 
-  // 1. Theme
+  // 1. Theme (Mặc định Light Mode)
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setIsDark(savedTheme === 'dark' || (!savedTheme && prefersDark))
+    document.documentElement.classList.remove('dark')
   }, [])
 
   // 2. Check Auth & Email @vnu.edu.vn
@@ -176,18 +172,6 @@ export default function FepnDashboardMainPage() {
       setSubjects([])
     } finally {
       setLoadingSubjects(false)
-    }
-  }
-
-  const toggleDarkMode = () => {
-    const next = !isDark
-    setIsDark(next)
-    if (next) {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
     }
   }
 
@@ -471,15 +455,6 @@ export default function FepnDashboardMainPage() {
                 <span>Thêm Môn Học Mới</span>
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={toggleDarkMode}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm transition hover:scale-105"
-              title={isDark ? 'Chế độ sáng' : 'Chế độ tối'}
-            >
-              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-700" />}
-            </button>
 
             <div className="flex items-center gap-2 pl-2 border-l border-black/10 dark:border-white/10">
               <div className="text-right hidden sm:block">
