@@ -807,21 +807,36 @@ export default function FepnRecapPage() {
         const mediaUrl = mediaItems[tag]
 
         if (tag.startsWith('{AnhTieuDe') || tag.startsWith('{AnhDangBai')) {
+          const isCover = tag.startsWith('{AnhTieuDe')
           const imgNumber = tag.replace(/[^0-9]/g, '')
-          const imgLabel = tag.startsWith('{AnhTieuDe')
+          const imgLabel = isCover
             ? 'Ảnh tiêu đề'
             : imgNumber
             ? `Ảnh bài viết #${imgNumber}`
             : 'Ảnh bài viết'
 
+          const resolvedMediaUrl =
+            mediaUrl || (isCover ? (selectedPost?.cover_image || '') : '')
+
           renderedNodes.push(
-            <figure key={`media-${i}`} className="my-7 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-md">
-              {mediaUrl ? (
-                <div className="relative w-full h-auto max-h-[600px] overflow-hidden bg-slate-50 flex items-center justify-center">
+            <figure
+              key={`media-${i}`}
+              className={`my-7 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-md ${
+                isCover ? 'ring-1 ring-sky-200/60 shadow-lg' : ''
+              }`}
+            >
+              {resolvedMediaUrl ? (
+                <div
+                  className={`relative w-full h-auto overflow-hidden bg-slate-50 flex items-center justify-center ${
+                    isCover ? 'max-h-[720px]' : 'max-h-[600px]'
+                  }`}
+                >
                   <SafeImage
-                    src={mediaUrl}
+                    src={resolvedMediaUrl}
                     alt={imgLabel}
-                    className="w-full h-auto object-contain max-h-[600px] transition duration-300 hover:scale-[1.01]"
+                    className={`w-full h-auto object-contain transition duration-300 hover:scale-[1.01] ${
+                      isCover ? 'max-h-[720px]' : 'max-h-[600px]'
+                    }`}
                   />
                 </div>
               ) : (
@@ -960,12 +975,21 @@ export default function FepnRecapPage() {
     )
   }
 
-  // Loading Screen
-  if (authLoading) {
+  // Loading Screen (Đồng bộ giao diện với FEPN Dashboard & Môn học)
+  if (authLoading || (loadingPosts && posts.length === 0)) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4">
-        <Loader2 className="h-10 w-10 animate-spin text-sky-600 mb-3" />
-        <p className="text-sm font-semibold text-slate-600">Đang tải FEPN Recap...</p>
+      <div
+        className={`${headingFont.variable} ${bodyFont.variable} min-h-screen grid place-items-center bg-[#F4F7FB] text-slate-900 font-sans`}
+      >
+        <div className="flex flex-col items-center gap-4 p-8 rounded-3xl bg-white/80 backdrop-blur-2xl border border-black/10 shadow-2xl">
+          <div className="relative h-16 w-16">
+            <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain animate-pulse" priority />
+          </div>
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-sky-500" />
+            <span className="font-bold text-sm tracking-wide">Đang tải kỷ yếu & hoạt động...</span>
+          </div>
+        </div>
       </div>
     )
   }
@@ -973,19 +997,25 @@ export default function FepnRecapPage() {
   // Unauthenticated Screen
   if (authStatus === 'unauthenticated') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-4 text-center">
-        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl border border-slate-200">
-          <BookOpen className="mx-auto h-12 w-12 text-sky-600 mb-4" />
-          <h2 className="text-xl font-black text-slate-900 mb-2">Yêu cầu đăng nhập</h2>
-          <p className="text-sm text-slate-600 mb-6">
-            Bạn cần đăng nhập bằng tài khoản VNU (@vnu.edu.vn) để xem kỷ yếu và các hoạt động của Khoa FEPN.
-          </p>
-          <Link
-            href="/fepn-login"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-bold text-white shadow-md hover:bg-sky-700 transition"
-          >
-            Đăng nhập ngay
-          </Link>
+      <div
+        className={`${headingFont.variable} ${bodyFont.variable} min-h-screen grid place-items-center bg-[#F4F7FB] text-slate-900 p-4 font-sans`}
+      >
+        <div className="flex flex-col items-center gap-4 w-full max-w-md p-8 rounded-3xl bg-white/90 backdrop-blur-2xl border border-black/10 shadow-2xl text-center">
+          <div className="relative h-16 w-16">
+            <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" priority />
+          </div>
+          <div className="w-full">
+            <h2 className="text-xl font-black text-slate-900 mb-2">Yêu cầu đăng nhập</h2>
+            <p className="text-sm text-slate-600 mb-6">
+              Bạn cần đăng nhập bằng tài khoản VNU (@vnu.edu.vn) để xem kỷ yếu và các hoạt động của Khoa FEPN.
+            </p>
+            <Link
+              href="/fepn-login"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-bold text-white shadow-md hover:bg-sky-700 transition"
+            >
+              Đăng nhập ngay
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -1332,8 +1362,8 @@ export default function FepnRecapPage() {
                 </div>
               </div>
 
-              {/* Cover Hero Image ({AnhTieuDe}) */}
-              {selectedPost.cover_image && (
+              {/* Cover Hero Image ({AnhTieuDe}) - Chỉ hiển thị trên đầu nếu trong bài KHÔNG có thẻ {AnhTieuDe} */}
+              {selectedPost.cover_image && !(/\{AnhTieuDe\}/i.test(selectedPost.content || '')) && (
                 <div className="relative w-full max-h-[480px] overflow-hidden rounded-2xl mb-8 border border-slate-200 shadow-md bg-slate-100 flex items-center justify-center">
                   <SafeImage
                     src={selectedPost.cover_image}
