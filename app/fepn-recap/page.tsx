@@ -52,8 +52,136 @@ export function formatImageUrl(url?: string): string {
   return trimmed
 }
 
-// Helper: Client-side Image Compressor to avoid upload limits and ensure 100% display reliability
-export function compressImageFile(file: File, maxWidth = 1600, quality = 0.85): Promise<string> {
+/**
+ * Auto-detect and crop black/dark letterbox & pillarbox bars (viền đen xung quanh)
+ * from images (common in phone screenshots, video player letterboxes, Facebook/TikTok downloads).
+ */
+export function removeBlackBarsFromCanvas(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): { x: number; y: number; width: number; height: number } {
+  try {
+    const imageData = ctx.getImageData(0, 0, width, height)
+    const data = imageData.data
+
+    const isPixelBlack = (x: number, y: number): boolean => {
+      const idx = (y * width + x) * 4
+      const r = data[idx]
+      const g = data[idx + 1]
+      const b = data[idx + 2]
+      const a = data[idx + 3]
+      // Transparent or dark/black letterbox pixel (threshold up to 38/255)
+      return a < 30 || (r <= 38 && g <= 38 && b <= 38)
+    }
+
+    const isRowBlack = (y: number, step = 4): boolean => {
+      for (let x = 0; x < width; x += step) {
+        if (!isPixelBlack(x, y)) return false
+      }
+      return true
+    }
+
+    const isColBlack = (x: number, step = 4): boolean => {
+      for (let y = 0; y < height; y += step) {
+        if (!isPixelBlack(x, y)) return false
+      }
+      return true
+    }
+
+    let top = 0
+    while (top < height - 10 && isRowBlack(top)) {
+      top++
+    }
+
+    let bottom = height - 1
+    while (bottom > top + 10 && isRowBlack(bottom)) {
+      bottom--
+    }
+
+    let left = 0
+    while (left < width - 10 && isColBlack(left)) {
+      left++
+    }
+
+    let right = width - 1
+    while (right > left + 10 && isColBlack(right)) {
+      right--
+    }
+
+    const croppedWidth = right - left + 1
+    const croppedHeight = bottom - top + 1
+
+    // Only crop if a noticeable black border was detected (at least 3px)
+    // and remaining image content is valid (> 50x50 and > 15% of original area)
+    if (
+      (top > 3 || bottom < height - 4 || left > 3 || right < width - 4) &&
+      croppedWidth >= 50 &&
+      croppedHeight >= 50 &&
+      croppedWidth * croppedHeight >= width * height * 0.15
+    ) {
+      return { x: left, y: top, width: croppedWidth, height: croppedHeight }
+    }
+  } catch (err) {
+    console.warn('Không thể phân tích viền ảnh:', err)
+  }
+
+  return { x: 0, y: 0, width, height }
+}
+
+/**
+ * Clean black borders directly from a Data URL
+ */
+export function cleanBlackBarsFromDataUrl(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith('data:image')) {
+      resolve(dataUrl)
+      return
+    }
+    const img = new window.Image()
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width
+        const h = img.naturalHeight || img.height
+        if (!w || !h) return resolve(dataUrl)
+
+        const rawCanvas = document.createElement('canvas')
+        rawCanvas.width = w
+        rawCanvas.height = h
+        const rawCtx = rawCanvas.getContext('2d', { willReadFrequently: true })
+        if (!rawCtx) return resolve(dataUrl)
+
+        rawCtx.fillStyle = '#FFFFFF'
+        rawCtx.fillRect(0, 0, w, h)
+        rawCtx.drawImage(img, 0, 0, w, h)
+
+        const crop = removeBlackBarsFromCanvas(rawCtx, w, h)
+        if (crop.x === 0 && crop.y === 0 && crop.width === w && crop.height === h) {
+          resolve(dataUrl)
+          return
+        }
+
+        const outCanvas = document.createElement('canvas')
+        outCanvas.width = crop.width
+        outCanvas.height = crop.height
+        const outCtx = outCanvas.getContext('2d')
+        if (!outCtx) return resolve(dataUrl)
+
+        outCtx.fillStyle = '#FFFFFF'
+        outCtx.fillRect(0, 0, crop.width, crop.height)
+        outCtx.drawImage(rawCanvas, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height)
+        resolve(outCanvas.toDataURL('image/jpeg', 0.88))
+      } catch {
+        resolve(dataUrl)
+      }
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
+// Helper: Client-side Image Compressor with Auto Black-Border Stripping
+export function compressImageFile(file: File, maxWidth = 1600, quality = 0.88): Promise<string> {
   return new Promise((resolve) => {
     if (!file.type.startsWith('image/') || file.type.includes('svg')) {
       const reader = new FileReader()
@@ -68,23 +196,64 @@ export function compressImageFile(file: File, maxWidth = 1600, quality = 0.85): 
       const img = new window.Image()
       img.onload = () => {
         try {
-          const canvas = document.createElement('canvas')
-          let { width, height } = img
+          const naturalW = img.naturalWidth || img.width
+          const naturalH = img.naturalHeight || img.height
 
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width)
-            width = maxWidth
-          }
-
-          canvas.width = width
-          canvas.height = height
-          const ctx = canvas.getContext('2d')
-          if (!ctx) {
+          if (!naturalW || !naturalH) {
             resolve((e.target?.result as string) || '')
             return
           }
-          ctx.drawImage(img, 0, 0, width, height)
-          const dataUrl = canvas.toDataURL('image/jpeg', quality)
+
+          // 1. Vẽ ảnh gốc lên canvas đệm với nền trắng sạch (tránh trong suốt bị chuyển thành màu đen)
+          const rawCanvas = document.createElement('canvas')
+          rawCanvas.width = naturalW
+          rawCanvas.height = naturalH
+          const rawCtx = rawCanvas.getContext('2d', { willReadFrequently: true })
+          if (!rawCtx) {
+            resolve((e.target?.result as string) || '')
+            return
+          }
+
+          rawCtx.fillStyle = '#FFFFFF'
+          rawCtx.fillRect(0, 0, naturalW, naturalH)
+          rawCtx.drawImage(img, 0, 0, naturalW, naturalH)
+
+          // 2. Tự động nhận diện và cắt bỏ mọi viền đen letterbox / pillarbox xung quanh ảnh
+          const crop = removeBlackBarsFromCanvas(rawCtx, naturalW, naturalH)
+
+          // 3. Tính toán kích thước tối ưu theo maxWidth
+          let targetW = crop.width
+          let targetH = crop.height
+
+          if (targetW > maxWidth) {
+            targetH = Math.round((targetH * maxWidth) / targetW)
+            targetW = maxWidth
+          }
+
+          const finalCanvas = document.createElement('canvas')
+          finalCanvas.width = targetW
+          finalCanvas.height = targetH
+          const finalCtx = finalCanvas.getContext('2d')
+          if (!finalCtx) {
+            resolve((e.target?.result as string) || '')
+            return
+          }
+
+          finalCtx.fillStyle = '#FFFFFF'
+          finalCtx.fillRect(0, 0, targetW, targetH)
+          finalCtx.drawImage(
+            rawCanvas,
+            crop.x,
+            crop.y,
+            crop.width,
+            crop.height,
+            0,
+            0,
+            targetW,
+            targetH
+          )
+
+          const dataUrl = finalCanvas.toDataURL('image/jpeg', quality)
           resolve(dataUrl)
         } catch {
           resolve((e.target?.result as string) || '')
@@ -546,6 +715,43 @@ export default function FepnRecapPage() {
     setShowEditorModal(true)
   }
 
+  // Auto-clean black borders from all images currently in editor
+  const handleAutoCleanAllImages = async () => {
+    setBatchUploading(true)
+    try {
+      const updatedMedia: Record<string, string> = {}
+      let cleanedCount = 0
+      for (const [tag, url] of Object.entries(modalMediaItems)) {
+        if (typeof url === 'string' && url.startsWith('data:image')) {
+          const cleaned = await cleanBlackBarsFromDataUrl(url)
+          if (cleaned !== url) cleanedCount++
+          updatedMedia[tag] = cleaned
+        } else {
+          updatedMedia[tag] = url
+        }
+      }
+
+      let updatedCover = modalCoverImage
+      if (updatedCover && updatedCover.startsWith('data:image')) {
+        const cleanedCover = await cleanBlackBarsFromDataUrl(updatedCover)
+        if (cleanedCover !== updatedCover) cleanedCount++
+        updatedCover = cleanedCover
+      }
+
+      setModalMediaItems(updatedMedia)
+      setModalCoverImage(updatedCover)
+      alert(
+        cleanedCount > 0
+          ? `✨ Đã tự động gọt bỏ viền đen cho ${cleanedCount} bức ảnh thành công!`
+          : '✨ Các ảnh đã ở trạng thái tối ưu, không phát hiện viền đen!'
+      )
+    } catch (err: any) {
+      alert('Lỗi xử lý ảnh: ' + err.message)
+    } finally {
+      setBatchUploading(false)
+    }
+  }
+
   // Save post
   const handleSavePost = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -560,14 +766,27 @@ export default function FepnRecapPage() {
 
     setSavingPost(true)
     try {
-      const coverImage = modalMediaItems['{AnhTieuDe}'] || modalCoverImage || ''
+      // 1. Tự động kiểm tra và gọt bỏ viền đen xung quanh mọi ảnh trước khi lưu
+      const cleanedMediaMap: Record<string, string> = {}
+      for (const [tag, url] of Object.entries(modalMediaItems)) {
+        if (typeof url === 'string' && url.startsWith('data:image')) {
+          cleanedMediaMap[tag] = await cleanBlackBarsFromDataUrl(url)
+        } else {
+          cleanedMediaMap[tag] = url
+        }
+      }
+
+      let coverImage = cleanedMediaMap['{AnhTieuDe}'] || modalCoverImage || ''
+      if (coverImage && coverImage.startsWith('data:image')) {
+        coverImage = await cleanBlackBarsFromDataUrl(coverImage)
+      }
 
       const postPayload: any = {
         year: modalYear.trim(),
         title: modalTitle.trim(),
         content: modalContent.trim(),
         cover_image: coverImage,
-        media_items: modalMediaItems,
+        media_items: cleanedMediaMap,
         updated_at: new Date().toISOString(),
       }
 
@@ -829,7 +1048,7 @@ export default function FepnRecapPage() {
             >
               {resolvedMediaUrl ? (
                 <div
-                  className={`relative w-full h-auto overflow-hidden bg-slate-50 flex items-center justify-center ${
+                  className={`relative w-full h-auto overflow-hidden bg-white flex items-center justify-center ${
                     isCover ? 'max-h-[720px]' : 'max-h-[600px]'
                   }`}
                 >
@@ -1262,7 +1481,7 @@ export default function FepnRecapPage() {
                     }`}
                   >
                     {/* Mini Thumbnail ({AnhTieuDe}) */}
-                    <div className="relative h-16 w-20 sm:h-20 sm:w-24 shrink-0 overflow-hidden rounded-lg bg-slate-100 border border-slate-200">
+                    <div className="relative h-16 w-20 sm:h-20 sm:w-24 shrink-0 overflow-hidden rounded-lg bg-white border border-slate-200">
                       {post.cover_image ? (
                         <SafeImage
                           src={post.cover_image}
@@ -1378,7 +1597,7 @@ export default function FepnRecapPage() {
 
               {/* Cover Hero Image ({AnhTieuDe}) - Chỉ hiển thị trên đầu nếu trong bài KHÔNG có thẻ {AnhTieuDe} */}
               {selectedPost.cover_image && !(/\{AnhTieuDe\}/i.test(selectedPost.content || '')) && (
-                <div className="relative w-full max-h-[480px] overflow-hidden rounded-2xl mb-8 border border-slate-200 shadow-md bg-slate-100 flex items-center justify-center">
+                <div className="relative w-full max-h-[480px] overflow-hidden rounded-2xl mb-8 border border-slate-200 shadow-md bg-white flex items-center justify-center">
                   <SafeImage
                     src={selectedPost.cover_image}
                     alt={selectedPost.title}
@@ -1549,7 +1768,7 @@ export default function FepnRecapPage() {
                   </button>
                   <label
                     className="px-2.5 py-1 rounded bg-indigo-600 font-black text-white hover:bg-indigo-700 transition flex items-center gap-1 cursor-pointer shadow-xs"
-                    title="Tải lên nhiều ảnh cùng một lúc từ máy tính"
+                    title="Tải lên nhiều ảnh cùng một lúc từ máy tính (Tự động gọt bỏ viền đen xung quanh)"
                   >
                     {batchUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
                     <span>{batchUploading ? 'Đang tải nhiều ảnh...' : '📸 Tải nhiều ảnh cùng lúc'}</span>
@@ -1562,6 +1781,15 @@ export default function FepnRecapPage() {
                       onChange={handleBatchImagesUpload}
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={handleAutoCleanAllImages}
+                    disabled={batchUploading}
+                    className="px-2.5 py-1 rounded bg-emerald-50 font-black text-emerald-700 border border-emerald-300 hover:bg-emerald-100 transition flex items-center gap-1 shadow-2xs text-xs"
+                    title="Tự động nhận diện và gọt bỏ viền đen xung quanh tất cả các ảnh trong bài viết"
+                  >
+                    <span>✨ Gỡ viền đen ảnh</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleInsertNextVideoTag}
