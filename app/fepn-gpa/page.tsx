@@ -818,92 +818,240 @@ export default function FepnGpaPage() {
 
             {statsOverview.semesterPoints.length > 0 ? (
               <div className="w-full overflow-x-auto">
-                <div className="min-w-[600px] h-56 relative">
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 800 200" preserveAspectRatio="none">
+                <div className="min-w-[700px] h-72 relative">
+                  <svg className="w-full h-full overflow-visible" viewBox="0 0 880 260">
                     <defs>
                       <linearGradient id="gpaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.3" />
+                        <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.32" />
                         <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.0" />
                       </linearGradient>
+                      <filter id="pillShadow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.15" />
+                      </filter>
                     </defs>
 
-                    {/* Các đường mốc tham chiếu VNU (4.0, 3.6, 3.2, 2.5, 2.0) */}
-                    {/* Mốc 4.0 */}
-                    <line x1="40" y1="10" x2="780" y2="10" stroke="#94a3b8" strokeOpacity="0.2" strokeDasharray="4" />
-                    <text x="5" y="14" fill="#94a3b8" fontSize="10" fontWeight="bold">4.0</text>
-
-                    {/* Mốc 3.6 - Xuất sắc */}
-                    <line x1="40" y1="30" x2="780" y2="30" stroke="#f59e0b" strokeOpacity="0.3" strokeDasharray="3" />
-                    <text x="785" y="33" fill="#f59e0b" fontSize="9" fontWeight="bold">3.6 Xuất sắc</text>
-
-                    {/* Mốc 3.2 - Giỏi */}
-                    <line x1="40" y1="50" x2="780" y2="50" stroke="#0ea5e9" strokeOpacity="0.3" strokeDasharray="3" />
-                    <text x="785" y="53" fill="#0ea5e9" fontSize="9" fontWeight="bold">3.2 Giỏi</text>
-
-                    {/* Mốc 2.5 - Khá */}
-                    <line x1="40" y1="85" x2="780" y2="85" stroke="#10b981" strokeOpacity="0.3" strokeDasharray="3" />
-                    <text x="785" y="88" fill="#10b981" fontSize="9" fontWeight="bold">2.5 Khá</text>
-
-                    {/* Mốc 2.0 - Trung bình */}
-                    <line x1="40" y1="110" x2="780" y2="110" stroke="#eab308" strokeOpacity="0.25" strokeDasharray="3" />
-                    <text x="785" y="113" fill="#eab308" fontSize="9" fontWeight="bold">2.0 TB</text>
-
-                    {/* Mốc 0 */}
-                    <line x1="40" y1="170" x2="780" y2="170" stroke="#94a3b8" strokeOpacity="0.3" />
-                    <text x="15" y="174" fill="#94a3b8" fontSize="10" fontWeight="bold">0.0</text>
-
-                    {/* Tọa độ tính toán SVG:
-                        X chạy từ 70 đến 750
-                        Y: y = 170 - (score / 4.0) * 160
+                    {/* MỐC TỌA ĐỘ CHUẨN XÁC 100%:
+                        viewBox: 880 x 260
+                        GRAPH_LEFT = 55, GRAPH_RIGHT = 755
+                        PAD_TOP = 42 (Điểm 4.0), PAD_BOTTOM = 210 (Điểm 0.0)
+                        PLOT_H = PAD_BOTTOM - PAD_TOP = 168
+                        getY(score) = PAD_BOTTOM - (score / 4.0) * PLOT_H
                     */}
                     {(() => {
+                      const GRAPH_LEFT = 55
+                      const GRAPH_RIGHT = 755
+                      const PAD_TOP = 42
+                      const PAD_BOTTOM = 210
+                      const PLOT_H = PAD_BOTTOM - PAD_TOP
+
+                      const getY = (score: number) => {
+                        const clamped = Math.min(4.0, Math.max(0, score))
+                        return PAD_BOTTOM - (clamped / 4.0) * PLOT_H
+                      }
+
+                      const BENCHMARKS = [
+                        { score: 4.0, label: '4.0', title: '4.0 Tối đa', color: '#94a3b8', strokeStyle: '4 4' },
+                        { score: 3.6, label: '3.6', title: '3.6 Xuất sắc', color: '#f59e0b', strokeStyle: '3 3' },
+                        { score: 3.2, label: '3.2', title: '3.2 Giỏi', color: '#0ea5e9', strokeStyle: '3 3' },
+                        { score: 2.5, label: '2.5', title: '2.5 Khá', color: '#10b981', strokeStyle: '3 3' },
+                        { score: 2.0, label: '2.0', title: '2.0 TB', color: '#eab308', strokeStyle: '3 3' },
+                        { score: 0.0, label: '0.0', title: '0.0', color: '#94a3b8', strokeStyle: 'none' },
+                      ]
+
                       const pts = statsOverview.semesterPoints
                       const n = pts.length
-                      const getX = (i: number) => n === 1 ? 400 : 70 + (i / (n - 1)) * 680
-                      const getY = (score: number) => 170 - Math.min(4.0, Math.max(0, score)) * 40
+                      const START_X = GRAPH_LEFT + 55
+                      const END_X = GRAPH_RIGHT - 45
+                      const getX = (i: number) => n === 1 ? (START_X + END_X) / 2 : START_X + (i / (n - 1)) * (END_X - START_X)
 
-                      // Đường GPA
+                      // Đường GPA & Area
                       const gpaPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p.gpa)}`).join(' ')
-                      const gpaAreaPath = `${gpaPath} L ${getX(n - 1)} 170 L ${getX(0)} 170 Z`
+                      const gpaAreaPath = `${gpaPath} L ${getX(n - 1)} ${PAD_BOTTOM} L ${getX(0)} ${PAD_BOTTOM} Z`
 
                       // Đường CPA
                       const cpaPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p.cpaSoFar)}`).join(' ')
 
                       return (
                         <>
+                          {/* Các đường mốc tham chiếu VNU (Đồng bộ hàm getY 100%) */}
+                          {BENCHMARKS.map((b) => {
+                            const y = getY(b.score)
+                            return (
+                              <g key={`bench-${b.score}`}>
+                                <line
+                                  x1={GRAPH_LEFT}
+                                  y1={y}
+                                  x2={GRAPH_RIGHT}
+                                  y2={y}
+                                  stroke={b.color}
+                                  strokeOpacity={b.score === 0 ? 0.35 : 0.25}
+                                  strokeDasharray={b.strokeStyle === 'none' ? undefined : b.strokeStyle}
+                                />
+                                <text
+                                  x={GRAPH_LEFT - 10}
+                                  y={y + 3.5}
+                                  textAnchor="end"
+                                  fill={b.color}
+                                  fontSize="10"
+                                  fontWeight="bold"
+                                >
+                                  {b.label}
+                                </text>
+                                {b.title && b.score > 0 && (
+                                  <text
+                                    x={GRAPH_RIGHT + 12}
+                                    y={y + 3.5}
+                                    textAnchor="start"
+                                    fill={b.color}
+                                    fontSize="9.5"
+                                    fontWeight="bold"
+                                  >
+                                    {b.title}
+                                  </text>
+                                )}
+                              </g>
+                            )
+                          })}
+
+                          {/* Cột gióng dọc từng học kỳ */}
+                          {pts.map((p, i) => {
+                            const cx = getX(i)
+                            return (
+                              <line
+                                key={`vline-${i}`}
+                                x1={cx}
+                                y1={PAD_TOP - 12}
+                                x2={cx}
+                                y2={PAD_BOTTOM}
+                                stroke="#94a3b8"
+                                strokeOpacity="0.25"
+                                strokeDasharray="2 3"
+                              />
+                            )
+                          })}
+
                           {/* Diện tích tô mờ GPA */}
                           <path d={gpaAreaPath} fill="url(#gpaGradient)" />
 
-                          {/* Đường GPA nét liền */}
-                          <path d={gpaPath} fill="none" stroke="#0ea5e9" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                          {/* Đường GPA nét liền dày sắc nét */}
+                          <path
+                            d={gpaPath}
+                            fill="none"
+                            stroke="#0284c7"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
 
                           {/* Đường CPA nét đứt amber */}
-                          <path d={cpaPath} fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3" strokeLinecap="round" />
+                          <path
+                            d={cpaPath}
+                            fill="none"
+                            stroke="#f59e0b"
+                            strokeWidth="2.5"
+                            strokeDasharray="5 4"
+                            strokeLinecap="round"
+                          />
 
-                          {/* Các điểm nút GPA */}
+                          {/* Nút điểm GPA & Pill Badge điểm số */}
                           {pts.map((p, i) => {
                             const cx = getX(i)
                             const cy = getY(p.gpa)
+                            const badgeY = cy - 27
                             return (
-                              <g key={`gpa-dot-${i}`} className="group cursor-pointer">
-                                <circle cx={cx} cy={cy} r="6" fill="#0ea5e9" stroke="#ffffff" strokeWidth="2.5" className="transition group-hover:scale-150" />
-                                <text x={cx} y={cy - 10} textAnchor="middle" fill="#0284c7" fontSize="11" fontWeight="bold">
+                              <g key={`gpa-node-${i}`} className="group cursor-pointer">
+                                {/* Dot GPA */}
+                                <circle
+                                  cx={cx}
+                                  cy={cy}
+                                  r="6.5"
+                                  fill="#0284c7"
+                                  stroke="#ffffff"
+                                  strokeWidth="2.5"
+                                  className="transition group-hover:scale-125"
+                                />
+                                {/* Pill Badge hiển thị điểm số không bao giờ bị che khuất */}
+                                <rect
+                                  x={cx - 25}
+                                  y={badgeY}
+                                  width="50"
+                                  height="20"
+                                  rx="6"
+                                  fill="#0284c7"
+                                  filter="url(#pillShadow)"
+                                />
+                                <text
+                                  x={cx}
+                                  y={badgeY + 14}
+                                  textAnchor="middle"
+                                  fill="#ffffff"
+                                  fontSize="11"
+                                  fontWeight="900"
+                                  fontFamily="monospace"
+                                >
                                   {p.gpa.toFixed(2)}
-                                </text>
-                                <text x={cx} y="190" textAnchor="middle" fill="#64748b" fontSize="10" fontWeight="bold">
-                                  {p.name.replace('Học kỳ ', 'Kỳ ')}
                                 </text>
                               </g>
                             )
                           })}
 
-                          {/* Các điểm nút CPA */}
+                          {/* Nút điểm CPA & Nhãn CPA */}
                           {pts.map((p, i) => {
                             const cx = getX(i)
                             const cy = getY(p.cpaSoFar)
+                            const cyGpa = getY(p.gpa)
+                            // Nếu điểm CPA gần điểm GPA thì đẩy nhãn CPA xuống dưới dot để tránh đè nhau
+                            const labelY = Math.abs(cy - cyGpa) < 26 ? cy + 15 : cy - 9
                             return (
-                              <g key={`cpa-dot-${i}`} className="group cursor-pointer">
-                                <circle cx={cx} cy={cy} r="4.5" fill="#f59e0b" stroke="#ffffff" strokeWidth="2" className="transition group-hover:scale-150" />
+                              <g key={`cpa-node-${i}`} className="group cursor-pointer">
+                                <circle
+                                  cx={cx}
+                                  cy={cy}
+                                  r="4.5"
+                                  fill="#f59e0b"
+                                  stroke="#ffffff"
+                                  strokeWidth="2"
+                                  className="transition group-hover:scale-125"
+                                />
+                                <text
+                                  x={cx}
+                                  y={labelY}
+                                  textAnchor="middle"
+                                  fill="#d97706"
+                                  fontSize="9.5"
+                                  fontWeight="bold"
+                                >
+                                  CPA {p.cpaSoFar.toFixed(2)}
+                                </text>
+                              </g>
+                            )
+                          })}
+
+                          {/* Nhãn Tên Học Kỳ trục hoành */}
+                          {pts.map((p, i) => {
+                            const cx = getX(i)
+                            return (
+                              <g key={`sem-label-${i}`}>
+                                <rect
+                                  x={cx - 42}
+                                  y="222"
+                                  width="84"
+                                  height="24"
+                                  rx="6"
+                                  className="fill-slate-100 dark:fill-slate-800"
+                                  stroke="#cbd5e1"
+                                  strokeOpacity="0.4"
+                                />
+                                <text
+                                  x={cx}
+                                  y="238"
+                                  textAnchor="middle"
+                                  className="fill-slate-700 dark:fill-slate-200"
+                                  fontSize="10.5"
+                                  fontWeight="bold"
+                                >
+                                  {p.name.replace('Học kỳ ', 'Kỳ ')}
+                                </text>
                               </g>
                             )
                           })}

@@ -55,6 +55,15 @@ export interface FepnSubject {
   total_materials?: number
 }
 
+export interface ScoredSemesterInfo {
+  semId: string
+  name: string
+  shortName: string
+  gpa: number
+  totalCredits: number
+  passedCredits: number
+}
+
 // Tạo slug chuẩn dạng fepn-[mã môn học]
 export function getFepnSubjectSlug(sub: { code: string; id?: string }) {
   if (!sub || !sub.code) return `fepn-${sub?.id || 'mon-hoc'}`
@@ -85,54 +94,118 @@ export default function FepnDashboardMainPage() {
   const [newSubDesc, setNewSubDesc] = useState('')
   const [addingSubject, setAddingSubject] = useState(false)
 
-  // Student GPA Mini Stats
+  // Student GPA Mini Stats & History
   const [studentCpa, setStudentCpa] = useState<number | null>(null)
   const [studentRank, setStudentRank] = useState<string>('')
   const [studentPassedCredits, setStudentPassedCredits] = useState<number>(0)
-  const [studentSparkline, setStudentSparkline] = useState<number[]>([])
+  const [scoredSemesters, setScoredSemesters] = useState<ScoredSemesterInfo[]>([])
 
   // 1. Theme (Mặc định Light Mode)
   useEffect(() => {
     document.documentElement.classList.remove('dark')
   }, [])
 
-  // Load Student GPA Summary
+  // Load Student GPA Summary (Đồng bộ thứ tự học kỳ & điểm từng kỳ)
   useEffect(() => {
     if (!user?.id) return
-    try {
-      const cached = localStorage.getItem(`fepn_grades_${user.id}`)
-      if (cached) {
-        const parsed = JSON.parse(cached)
-        if (parsed && typeof parsed === 'object') {
-          let totalCreds = 0
-          let weightedSum = 0
-          let passedCreds = 0
-          const history: number[] = []
 
-          Object.values(parsed).forEach((sem: any) => {
-            if (sem?.totalCredits > 0) {
-              totalCreds += sem.totalCredits
-              passedCreds += sem.passedCredits || 0
-              weightedSum += (sem.gpa || 0) * sem.totalCredits
-              history.push(sem.gpa || 0)
-            }
-          })
+    const loadGpaData = async () => {
+      // 1. Lấy danh sách học kỳ theo đúng thứ tự
+      let semList: { id: string; name: string; order_index: number }[] = []
+      try {
+        const cachedSems = localStorage.getItem('fepn_semesters_cache')
+        if (cachedSems) {
+          const parsed = JSON.parse(cachedSems)
+          if (Array.isArray(parsed) && parsed.length > 0) semList = parsed
+        }
+      } catch (e) {}
 
-          if (totalCreds > 0) {
-            const cpa = Math.round((weightedSum / totalCreds) * 100) / 100
-            setStudentCpa(cpa)
-            setStudentPassedCredits(passedCreds)
-            setStudentSparkline(history)
+      if (semList.length === 0) {
+        semList = [
+          { id: 'sem-1', name: 'Học kỳ 1 (Năm 1)', order_index: 1 },
+          { id: 'sem-2', name: 'Học kỳ 2 (Năm 1)', order_index: 2 },
+          { id: 'sem-3', name: 'Học kỳ 3 (Năm 2)', order_index: 3 },
+          { id: 'sem-4', name: 'Học kỳ 4 (Năm 2)', order_index: 4 },
+          { id: 'sem-5', name: 'Học kỳ 5 (Năm 3)', order_index: 5 },
+          { id: 'sem-6', name: 'Học kỳ 6 (Năm 3)', order_index: 6 },
+          { id: 'sem-7', name: 'Học kỳ 7 (Năm 4)', order_index: 7 },
+          { id: 'sem-8', name: 'Học kỳ 8 (Năm 4)', order_index: 8 },
+        ]
+      }
 
-            if (cpa >= 3.6) setStudentRank('Xuất sắc')
-            else if (cpa >= 3.2) setStudentRank('Giỏi')
-            else if (cpa >= 2.5) setStudentRank('Khá')
-            else if (cpa >= 2.0) setStudentRank('Trung bình')
-            else setStudentRank('Cần cố gắng')
+      // 2. Lấy dữ liệu điểm từ localStorage
+      let gradesMap: Record<string, any> = {}
+      try {
+        const cachedGrades = localStorage.getItem(`fepn_grades_${user.id}`)
+        if (cachedGrades) {
+          const parsed = JSON.parse(cachedGrades)
+          if (parsed && typeof parsed === 'object') {
+            gradesMap = parsed
           }
         }
+      } catch (e) {}
+
+      // 3. Đồng bộ bổ sung từ Supabase nếu có mạng
+      try {
+        const [{ data: dbSems }, { data: dbGrades }] = await Promise.all([
+          supabase.from('fepn_semesters').select('*').order('order_index', { ascending: true }),
+          supabase.from('fepn_student_grades').select('semester_id, grades_data').eq('user_id', user.id),
+        ])
+        if (dbSems && dbSems.length > 0) semList = dbSems
+        if (dbGrades && dbGrades.length > 0) {
+          dbGrades.forEach((row: any) => {
+            if (row.grades_data) gradesMap[row.semester_id] = row.grades_data
+          })
+        }
+      } catch (e) {}
+
+      // Sắp xếp thứ tự học kỳ
+      semList.sort((a, b) => a.order_index - b.order_index)
+
+      let totalCreds = 0
+      let weightedSum = 0
+      let passedCreds = 0
+      const scored: ScoredSemesterInfo[] = []
+
+      semList.forEach((sem) => {
+        const semData = gradesMap[sem.id]
+        if (semData && semData.totalCredits > 0) {
+          totalCreds += semData.totalCredits
+          passedCreds += semData.passedCredits || 0
+          weightedSum += (semData.gpa || 0) * semData.totalCredits
+
+          const shortName = sem.name.replace('Học kỳ ', 'Kỳ ').split(' (')[0]
+          scored.push({
+            semId: sem.id,
+            name: sem.name,
+            shortName,
+            gpa: Number(semData.gpa) || 0,
+            totalCredits: semData.totalCredits,
+            passedCredits: semData.passedCredits || 0,
+          })
+        }
+      })
+
+      if (totalCreds > 0) {
+        const cpa = Math.round((weightedSum / totalCreds) * 100) / 100
+        setStudentCpa(cpa)
+        setStudentPassedCredits(passedCreds)
+        setScoredSemesters(scored)
+
+        if (cpa >= 3.6) setStudentRank('Xuất sắc')
+        else if (cpa >= 3.2) setStudentRank('Giỏi')
+        else if (cpa >= 2.5) setStudentRank('Khá')
+        else if (cpa >= 2.0) setStudentRank('Trung bình')
+        else setStudentRank('Cần cố gắng')
+      } else {
+        setStudentCpa(null)
+        setStudentRank('')
+        setStudentPassedCredits(0)
+        setScoredSemesters([])
       }
-    } catch (e) {}
+    }
+
+    loadGpaData()
   }, [user?.id])
 
   // 2. Check Auth & Email @vnu.edu.vn
@@ -610,88 +683,226 @@ export default function FepnDashboardMainPage() {
           </div>
 
           {/* KHỐI PHẢI: 1/5 CHIỀU DÀI - HÌNH VUÔNG NHỎ MINI GPA WIDGET */}
-          <Link
-            href="/fepn-gpa"
-            className="lg:col-span-1 group relative overflow-hidden rounded-3xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-indigo-500/10 to-emerald-500/10 p-5 backdrop-blur-2xl hover:border-sky-500/50 hover:shadow-xl hover:shadow-sky-500/10 transition duration-300 flex flex-col justify-between"
-            title="Xem chi tiết đồ thị và tính điểm FEPN GPA"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-500/20 text-sky-600 dark:text-sky-400">
-                    <Calculator className="h-3.5 w-3.5" />
+          {(() => {
+            const latestSem = scoredSemesters.length > 0 ? scoredSemesters[scoredSemesters.length - 1] : null
+            const prevSem = scoredSemesters.length > 1 ? scoredSemesters[scoredSemesters.length - 2] : null
+            const gpaDiff = latestSem && prevSem ? Math.round((latestSem.gpa - prevSem.gpa) * 100) / 100 : null
+
+            return (
+              <Link
+                href="/fepn-gpa"
+                className="lg:col-span-1 group relative overflow-hidden rounded-3xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-indigo-500/10 to-emerald-500/10 p-4 sm:p-5 backdrop-blur-2xl hover:border-sky-500/50 hover:shadow-xl hover:shadow-sky-500/10 transition duration-300 flex flex-col justify-between"
+                title="Xem chi tiết đồ thị và tính điểm FEPN GPA"
+              >
+                <div>
+                  {/* Header widget */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-500/20 text-sky-600 dark:text-sky-400">
+                        <Calculator className="h-3.5 w-3.5" />
+                      </div>
+                      <span className="text-xs font-black tracking-tight" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                        GPA Cá Nhân
+                      </span>
+                    </div>
+                    <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase">
+                      VNU
+                    </span>
                   </div>
-                  <span className="text-xs font-black tracking-tight" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
-                    GPA Cá Nhân
-                  </span>
-                </div>
-                <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase">
-                  VNU
-                </span>
-              </div>
 
-              <div className="mt-3">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CPA Tích Lũy</p>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-3xl font-black font-mono text-sky-600 dark:text-sky-400">
-                    {studentCpa !== null ? studentCpa.toFixed(2) : '--'}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400">/ 4.0</span>
-                </div>
-                {studentRank ? (
-                  <span className="inline-block mt-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    Xếp loại: {studentRank}
-                  </span>
-                ) : (
-                  <span className="inline-block mt-1 text-[10px] font-medium text-slate-400">
-                    Chưa nhập điểm
-                  </span>
-                )}
-              </div>
-            </div>
+                  {/* THÔNG TIN GPA MỚI NHẤT & GPA GẦN NHẤT */}
+                  {scoredSemesters.length >= 2 ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2 p-2 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-black/5 dark:border-white/5 backdrop-blur-sm">
+                      {/* GPA Mới nhất */}
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-tight">
+                            Mới nhất
+                          </span>
+                          {gpaDiff !== null && (
+                            <span
+                              className={`text-[8.5px] font-black px-1 py-0.2 rounded font-mono ${
+                                gpaDiff > 0
+                                  ? 'text-emerald-600 bg-emerald-500/15'
+                                  : gpaDiff < 0
+                                  ? 'text-rose-600 bg-rose-500/15'
+                                  : 'text-slate-500 bg-slate-500/10'
+                              }`}
+                              title={`Biến động so với kỳ trước: ${gpaDiff > 0 ? '+' : ''}${gpaDiff.toFixed(2)}`}
+                            >
+                              {gpaDiff > 0 ? `+${gpaDiff.toFixed(2)}` : gpaDiff.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-1 mt-0.5">
+                          <span className="text-xl font-black font-mono text-sky-600 dark:text-sky-400">
+                            {latestSem?.gpa.toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                          {latestSem?.shortName}
+                        </p>
+                      </div>
 
-            {/* Đồ thị Mini Sparkline */}
-            <div className="w-full h-12 relative my-2 rounded-xl bg-white/40 dark:bg-slate-800/40 p-1 border border-black/5 dark:border-white/5 flex items-center justify-center overflow-hidden">
-              {studentSparkline.length >= 2 ? (
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 30" preserveAspectRatio="none">
-                  <path
-                    d={studentSparkline
-                      .map((s, i) => {
-                        const x = (i / (studentSparkline.length - 1)) * 96 + 2
-                        const y = 28 - (Math.min(4.0, Math.max(0, s)) / 4.0) * 24
-                        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`
-                      })
-                      .join(' ')}
-                    fill="none"
-                    stroke="#0ea5e9"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {studentSparkline.map((s, i) => {
-                    const x = (i / (studentSparkline.length - 1)) * 96 + 2
-                    const y = 28 - (Math.min(4.0, Math.max(0, s)) / 4.0) * 24
-                    return <circle key={i} cx={x} cy={y} r="2" fill="#0ea5e9" />
-                  })}
-                </svg>
-              ) : (
-                <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                  <TrendingUp className="h-3 w-3 text-sky-400" />
-                  <span>Theo dõi điểm kỳ</span>
-                </div>
-              )}
-            </div>
+                      {/* GPA Gần với mới nhất (kỳ liền trước) */}
+                      <div className="border-l border-black/10 dark:border-white/10 pl-2">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">
+                          Gần nhất
+                        </span>
+                        <div className="flex items-baseline gap-1 mt-0.5">
+                          <span className="text-xl font-black font-mono text-slate-700 dark:text-slate-300">
+                            {prevSem?.gpa.toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-400 truncate">
+                          {prevSem?.shortName}
+                        </p>
+                      </div>
+                    </div>
+                  ) : scoredSemesters.length === 1 ? (
+                    <div className="mt-3 p-2 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-black/5 dark:border-white/5 backdrop-blur-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-tight">
+                          GPA Mới nhất ({latestSem?.shortName})
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400">Kỳ đầu</span>
+                      </div>
+                      <div className="flex items-baseline gap-1.5 mt-0.5">
+                        <span className="text-2xl font-black font-mono text-sky-600 dark:text-sky-400">
+                          {latestSem?.gpa.toFixed(2)}
+                        </span>
+                        <span className="text-xs font-bold text-slate-400">/ 4.0</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 p-2.5 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-black/5 dark:border-white/5 backdrop-blur-sm text-center">
+                      <p className="text-[11px] font-bold text-slate-500">Chưa nhập điểm</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">Bấm để tính GPA & CPA</p>
+                    </div>
+                  )}
 
-            <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                {studentPassedCredits > 0 ? `${studentPassedCredits} Tín chỉ đạt` : 'Tính điểm ngay'}
-              </span>
-              <div className="flex items-center gap-1 text-[11px] font-black text-sky-600 dark:text-sky-400 group-hover:translate-x-0.5 transition">
-                <span>Xem chi tiết</span>
-                <ArrowRight className="h-3 w-3" />
-              </div>
-            </div>
-          </Link>
+                  {/* CPA Tích lũy */}
+                  <div className="flex items-center justify-between px-1 mt-2 text-[10px] font-bold">
+                    <span className="text-slate-400">CPA Tích lũy:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-amber-600 dark:text-amber-400 font-black">
+                        {studentCpa !== null ? `${studentCpa.toFixed(2)}/4.0` : '--'}
+                      </span>
+                      {studentRank && (
+                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[8.5px] font-black">
+                          {studentRank}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ĐỒ THỊ MINI SVG HIỆN ĐẦY ĐỦ HỌC KỲ VÀ GPA TỪNG KỲ */}
+                <div className="w-full h-16 relative my-2 rounded-2xl bg-white/50 dark:bg-slate-800/50 p-1 border border-black/5 dark:border-white/5 flex items-center justify-center overflow-hidden">
+                  {scoredSemesters.length > 0 ? (
+                    <svg className="w-full h-full overflow-visible" viewBox="0 0 220 75">
+                      <defs>
+                        <linearGradient id="miniGpaGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.35" />
+                          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+
+                      {/* Đường gióng mốc 4.0 và 0.0 */}
+                      <line x1="16" y1="18" x2="204" y2="18" stroke="#94a3b8" strokeOpacity="0.2" strokeDasharray="2 2" />
+                      <line x1="16" y1="56" x2="204" y2="56" stroke="#94a3b8" strokeOpacity="0.2" />
+
+                      {(() => {
+                        const pts = scoredSemesters
+                        const n = pts.length
+                        const PAD_X = n === 1 ? 110 : n === 2 ? 46 : 24
+                        const getX = (i: number) => (n === 1 ? 110 : PAD_X + (i / (n - 1)) * (220 - 2 * PAD_X))
+                        // y chạy từ 18 (score=4.0) đến 56 (score=0.0), h = 38
+                        const getY = (score: number) => 56 - (Math.min(4.0, Math.max(0, score)) / 4.0) * 38
+
+                        const polylinePoints = pts.map((p, i) => `${getX(i)},${getY(p.gpa)}`).join(' ')
+                        const areaPath =
+                          n > 1
+                            ? `M ${getX(0)} ${getY(pts[0].gpa)} ` +
+                              pts
+                                .slice(1)
+                                .map((p, i) => `L ${getX(i + 1)} ${getY(p.gpa)}`)
+                                .join(' ') +
+                              ` L ${getX(n - 1)} 56 L ${getX(0)} 56 Z`
+                            : ''
+
+                        return (
+                          <>
+                            {areaPath && <path d={areaPath} fill="url(#miniGpaGrad)" />}
+                            {n > 1 && (
+                              <polyline
+                                points={polylinePoints}
+                                fill="none"
+                                stroke="#0ea5e9"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            )}
+                            {pts.map((p, i) => {
+                              const x = getX(i)
+                              const y = getY(p.gpa)
+                              return (
+                                <g key={p.semId}>
+                                  {/* Đường gióng dọc */}
+                                  <line x1={x} y1="18" x2="56" stroke="#94a3b8" strokeOpacity="0.2" strokeDasharray="1 2" />
+                                  {/* Dot GPA */}
+                                  <circle cx={x} cy={y} r="3" fill="#0284c7" stroke="#ffffff" strokeWidth="1.5" />
+                                  {/* Số điểm GPA từng kỳ */}
+                                  <text
+                                    x={x}
+                                    y={y - 4}
+                                    textAnchor="middle"
+                                    fill="#0284c7"
+                                    className="font-mono font-black"
+                                    fontSize="8.5"
+                                  >
+                                    {p.gpa.toFixed(2)}
+                                  </text>
+                                  {/* Tên học kỳ */}
+                                  <text
+                                    x={x}
+                                    y="68"
+                                    textAnchor="middle"
+                                    fill="#64748b"
+                                    className="font-bold"
+                                    fontSize="8"
+                                  >
+                                    {p.shortName}
+                                  </text>
+                                </g>
+                              )
+                            })}
+                          </>
+                        )
+                      })()}
+                    </svg>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                      <TrendingUp className="h-3.5 w-3.5 text-sky-400" />
+                      <span>Theo dõi diễn biến điểm</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer widget */}
+                <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                    {studentPassedCredits > 0 ? `${studentPassedCredits} tín chỉ đạt` : 'Tính điểm ngay'}
+                  </span>
+                  <div className="flex items-center gap-1 text-[11px] font-black text-sky-600 dark:text-sky-400 group-hover:translate-x-0.5 transition">
+                    <span>Xem chi tiết</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </div>
+                </div>
+              </Link>
+            )
+          })()}
         </div>
 
         {/* 3. CONTROLS: SEARCH & SEMESTER FILTER */}
