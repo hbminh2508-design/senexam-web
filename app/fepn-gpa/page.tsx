@@ -31,6 +31,7 @@ import {
   Edit2,
   RefreshCw,
   ArrowLeft,
+  Loader2,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -156,10 +157,11 @@ export function getGradeBadge(letter: string) {
 export default function FepnGpaPage() {
   const router = useRouter()
 
-  // Trạng thái người dùng
+  // Trạng thái người dùng & Xác thực
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState<boolean>(false)
   const [authLoading, setAuthLoading] = useState<boolean>(true)
+  const [authStatus, setAuthStatus] = useState<'checking' | 'authorized' | 'unauthenticated' | 'restricted'>('checking')
 
   // Danh sách các học kỳ
   const [semesters, setSemesters] = useState<Semester[]>(DEFAULT_SEMESTERS)
@@ -196,7 +198,8 @@ export default function FepnGpaPage() {
       try {
         const { data: { user: currentUser } } = await supabase.auth.getUser()
         if (!currentUser) {
-          router.replace('/fepn-login')
+          setAuthStatus('unauthenticated')
+          setAuthLoading(false)
           return
         }
 
@@ -216,21 +219,28 @@ export default function FepnGpaPage() {
         const adminCheck = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
         setIsAdmin(adminCheck)
 
-        // 1. Tải danh sách học kỳ
-        await loadSemesters()
+        const isVnu = email.endsWith('@vnu.edu.vn')
+        if (isVnu || adminCheck) {
+          setAuthStatus('authorized')
 
-        // 2. Tải bảng điểm của sinh viên
-        await loadStudentGrades(currentUser.id)
+          // 1. Tải danh sách học kỳ
+          await loadSemesters()
 
-        // 3. Tải danh sách môn học FEPN để gợi ý
-        const { data: subs } = await supabase
-          .from('fepn_subjects')
-          .select('id, code, name, credits')
-          .order('name', { ascending: true })
-        if (subs) setFepnSubjects(subs)
+          // 2. Tải bảng điểm của sinh viên
+          await loadStudentGrades(currentUser.id)
 
+          // 3. Tải danh sách môn học FEPN để gợi ý
+          const { data: subs } = await supabase
+            .from('fepn_subjects')
+            .select('id, code, name, credits')
+            .order('name', { ascending: true })
+          if (subs) setFepnSubjects(subs)
+        } else {
+          setAuthStatus('restricted')
+        }
       } catch (err) {
         console.error('Lỗi khởi tạo FEPN GPA:', err)
+        setAuthStatus('restricted')
       } finally {
         setAuthLoading(false)
       }
@@ -621,7 +631,86 @@ export default function FepnGpaPage() {
   }
 
   // ========================================================
-  // RENDER
+  // VIEW: LOADING SCREEN (Đồng bộ giao diện với FEPN Dashboard & Recap)
+  // ========================================================
+  if (authLoading) {
+    return (
+      <div
+        className={`${headingFont.variable} ${bodyFont.variable} min-h-screen grid place-items-center bg-[#F4F7FB] dark:bg-[#070B14] text-slate-900 dark:text-slate-100 font-sans`}
+      >
+        <div className="flex flex-col items-center gap-4 p-8 rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-black/10 dark:border-white/10 shadow-2xl">
+          <div className="relative h-16 w-16">
+            <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain animate-pulse" priority />
+          </div>
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-sky-500" />
+            <span className="font-bold text-sm tracking-wide">Đang tải FEPN GPA...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ========================================================
+  // VIEW: UNAUTHENTICATED
+  // ========================================================
+  if (authStatus === 'unauthenticated') {
+    return (
+      <div
+        className={`${headingFont.variable} ${bodyFont.variable} min-h-screen grid place-items-center bg-[#F4F7FB] dark:bg-[#070B14] text-slate-900 dark:text-slate-100 p-4 font-sans`}
+      >
+        <div className="flex flex-col items-center gap-4 w-full max-w-md p-8 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-black/10 dark:border-white/10 shadow-2xl text-center">
+          <div className="relative h-16 w-16">
+            <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" priority />
+          </div>
+          <div className="w-full">
+            <h2 className="text-xl font-black mb-2">Yêu cầu đăng nhập</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Bạn cần đăng nhập bằng tài khoản VNU (@vnu.edu.vn) để tính điểm GPA và theo dõi tiến độ học tập.
+            </p>
+            <Link
+              href="/fepn-login"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-bold text-white shadow-md hover:bg-sky-700 transition"
+            >
+              Đăng nhập ngay
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ========================================================
+  // VIEW: RESTRICTED
+  // ========================================================
+  if (authStatus === 'restricted') {
+    return (
+      <div
+        className={`${headingFont.variable} ${bodyFont.variable} min-h-screen grid place-items-center bg-[#F4F7FB] dark:bg-[#070B14] text-slate-900 dark:text-slate-100 p-4 font-sans`}
+      >
+        <div className="flex flex-col items-center gap-4 w-full max-w-md p-8 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-black/10 dark:border-white/10 shadow-2xl text-center">
+          <div className="relative h-16 w-16">
+            <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" priority />
+          </div>
+          <div className="w-full">
+            <h2 className="text-xl font-black mb-2">Quyền truy cập bị giới hạn</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Trang FEPN GPA dành riêng cho cán bộ và sinh viên sử dụng tài khoản email VNU (@vnu.edu.vn).
+            </p>
+            <button
+              onClick={handleLogout}
+              className="inline-flex w-full items-center justify-center rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+            >
+              Đăng xuất & Đổi tài khoản
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ========================================================
+  // RENDER MAIN PAGE
   // ========================================================
   return (
     <div className={`min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 ${bodyFont.className}`}>
