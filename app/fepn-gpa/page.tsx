@@ -30,6 +30,7 @@ import {
   FileSpreadsheet,
   Edit2,
   RefreshCw,
+  ArrowLeft,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -628,12 +629,21 @@ export default function FepnGpaPage() {
       <header className="sticky top-0 z-40 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4">
           <div className="flex items-center gap-3">
+            {/* Nút quay lại giống ở các môn học */}
             <Link
               href="/fepn-dashboard"
-              className="flex items-center gap-2.5 transition hover:opacity-90"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition shadow-sm"
+              title="Quay lại Dashboard FEPN"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/20">
-                <Calculator className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+
+            <Link
+              href="/fepn-dashboard"
+              className="flex items-center gap-2.5 transition hover:opacity-90 group"
+            >
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl border border-sky-500/20 bg-white p-0.5 shadow-md group-hover:scale-105 transition">
+                <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" priority />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
@@ -654,10 +664,9 @@ export default function FepnGpaPage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/fepn-dashboard"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="inline-flex items-center rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Về FEPN Dashboard"
             >
-              <BookOpen className="h-3.5 w-3.5 text-sky-500" />
               <span className="hidden sm:inline">Dashboard</span>
             </Link>
 
@@ -673,10 +682,9 @@ export default function FepnGpaPage() {
               <button
                 type="button"
                 onClick={() => setShowAdminModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="inline-flex items-center rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Quản lý mở kỳ học dành cho Admin"
               >
-                <Settings className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span className="hidden md:inline">Mở Kỳ Học (Admin)</span>
               </button>
             )}
@@ -684,10 +692,9 @@ export default function FepnGpaPage() {
             {isAdmin && (
               <Link
                 href="/fepn-admin"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Cổng Quản Trị FEPN & Deep Vault"
               >
-                <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                 <span className="hidden md:inline">Admin</span>
               </Link>
             )}
@@ -964,9 +971,8 @@ export default function FepnGpaPage() {
             <button
               type="button"
               onClick={() => setShowScaleModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-500/30 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 text-xs font-bold shrink-0 hover:bg-sky-100 transition shadow-sm"
+              className="inline-flex items-center px-3 py-2 rounded-xl border border-sky-500/30 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 text-xs font-bold shrink-0 hover:bg-sky-100 transition shadow-sm"
             >
-              <HelpCircle className="h-3.5 w-3.5 text-sky-500" />
               <span>Tra Cứu Thang Điểm VNU</span>
             </button>
           </div>
@@ -1021,10 +1027,9 @@ export default function FepnGpaPage() {
                   <button
                     type="button"
                     onClick={() => setShowFepnSubjectModal(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 px-3 py-2 text-xs font-bold transition shadow-sm"
+                    className="inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 px-3 py-2 text-xs font-bold transition shadow-sm"
                     title="Điền nhanh các môn học của Khoa FEPN"
                   >
-                    <BookOpen className="h-3.5 w-3.5 text-sky-500" />
                     <span>Thêm Môn FEPN</span>
                   </button>
                 )}
@@ -1032,9 +1037,8 @@ export default function FepnGpaPage() {
                 <button
                   type="button"
                   onClick={handleAddCourse}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                  className="inline-flex items-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
                 >
-                  <Plus className="h-3.5 w-3.5" />
                   <span>Thêm Môn Học</span>
                 </button>
               </div>
@@ -1154,9 +1158,9 @@ export default function FepnGpaPage() {
               <button
                 type="button"
                 onClick={handleAddCourse}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline"
+                className="inline-flex items-center text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline"
               >
-                <Plus className="h-4 w-4" /> Thêm Môn Học Mới
+                <span>+ Thêm Môn Học Mới</span>
               </button>
 
               <div className="flex flex-wrap items-center gap-6 text-xs">

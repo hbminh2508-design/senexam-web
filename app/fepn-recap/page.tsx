@@ -26,6 +26,7 @@ import {
   Loader2,
   ExternalLink,
   Calculator,
+  ArrowLeft,
 } from 'lucide-react'
 
 // Helper: Format Google Drive & other image URLs for direct embedding
@@ -1256,6 +1257,15 @@ export default function FepnRecapPage() {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/85 backdrop-blur-xl px-4 py-3 sm:px-6">
         <div className="mx-auto flex w-full max-w-[1700px] items-center justify-between gap-4">
           <div className="flex items-center gap-3">
+            {/* Nút quay lại giống ở các môn học */}
+            <Link
+              href="/fepn-dashboard"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition shadow-sm"
+              title="Quay lại Dashboard FEPN"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+
             <Link href="/fepn-dashboard" className="flex items-center gap-3 group">
               <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-sky-500/20 bg-white p-0.5 shadow-md group-hover:scale-105 transition">
                 <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" priority />
@@ -1283,10 +1293,9 @@ export default function FepnRecapPage() {
             {/* Link back to Dashboard */}
             <Link
               href="/fepn-dashboard"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-bold transition shadow-sm"
+              className="hidden sm:inline-flex items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-bold transition shadow-sm"
               title="Về danh sách môn học"
             >
-              <BookOpen className="h-3.5 w-3.5 text-sky-600" />
               <span>Môn Học FEPN</span>
             </Link>
           </div>
@@ -1323,10 +1332,9 @@ export default function FepnRecapPage() {
             {/* FEPN GPA Link */}
             <Link
               href="/fepn-gpa"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Tính điểm GPA & CPA"
             >
-              <Calculator className="h-3.5 w-3.5 text-emerald-600" />
               <span>GPA</span>
             </Link>
 
@@ -1334,11 +1342,10 @@ export default function FepnRecapPage() {
             {isAdmin && (
               <Link
                 href="/fepn-admin"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Cổng Quản Trị FEPN & Deep Vault"
               >
-                <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
-                <span className="hidden md:inline">Admin</span>
+                <span>Admin</span>
               </Link>
             )}
 
@@ -1347,9 +1354,8 @@ export default function FepnRecapPage() {
               <button
                 type="button"
                 onClick={handleOpenNewPost}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                className="inline-flex items-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
               >
-                <Plus className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Đăng Bài Viết Mới</span>
               </button>
             )}

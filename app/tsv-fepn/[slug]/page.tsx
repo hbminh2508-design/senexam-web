@@ -535,9 +535,8 @@ export default function FepnSubjectDetailPage() {
               <button
                 type="button"
                 onClick={() => setShowAddMaterialModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3 py-1.5 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                className="inline-flex items-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3 py-1.5 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
               >
-                <Upload className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Đăng Tài Liệu</span>
               </button>
             )}
@@ -545,10 +544,9 @@ export default function FepnSubjectDetailPage() {
             {isAdmin && (
               <Link
                 href="/fepn-admin"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-1.5 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-1.5 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Cổng Quản Trị FEPN & Deep Vault"
               >
-                <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                 <span className="hidden md:inline">Admin</span>
               </Link>
             )}
@@ -563,10 +561,9 @@ export default function FepnSubjectDetailPage() {
 
             <Link
               href="/fepn-gpa"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Tính điểm GPA & CPA"
             >
-              <Calculator className="h-3.5 w-3.5 text-emerald-600" />
               <span>GPA</span>
             </Link>
 
