@@ -39,6 +39,7 @@ import {
   Clock,
   Eye,
   GraduationCap,
+  Calculator,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -558,6 +559,15 @@ export default function FepnSubjectDetailPage() {
               title="Kỷ yếu & Hoạt động FEPN"
             >
               <span>Recap</span>
+            </Link>
+
+            <Link
+              href="/fepn-gpa"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
+              title="Tính điểm GPA & CPA"
+            >
+              <Calculator className="h-3.5 w-3.5 text-emerald-600" />
+              <span>GPA</span>
             </Link>
 
             <button

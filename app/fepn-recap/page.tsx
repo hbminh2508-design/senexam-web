@@ -25,6 +25,7 @@ import {
   X,
   Loader2,
   ExternalLink,
+  Calculator,
 } from 'lucide-react'
 
 // Helper: Format Google Drive & other image URLs for direct embedding
@@ -1318,6 +1319,16 @@ export default function FepnRecapPage() {
                 50 : 50
               </button>
             </div>
+
+            {/* FEPN GPA Link */}
+            <Link
+              href="/fepn-gpa"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              title="Tính điểm GPA & CPA"
+            >
+              <Calculator className="h-3.5 w-3.5 text-emerald-600" />
+              <span>GPA</span>
+            </Link>
 
             {/* FEPN Admin Link */}
             {isAdmin && (

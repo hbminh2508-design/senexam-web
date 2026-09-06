@@ -32,6 +32,8 @@ import {
   Filter,
   HelpCircle,
   Clock,
+  Calculator,
+  TrendingUp,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -83,10 +85,55 @@ export default function FepnDashboardMainPage() {
   const [newSubDesc, setNewSubDesc] = useState('')
   const [addingSubject, setAddingSubject] = useState(false)
 
+  // Student GPA Mini Stats
+  const [studentCpa, setStudentCpa] = useState<number | null>(null)
+  const [studentRank, setStudentRank] = useState<string>('')
+  const [studentPassedCredits, setStudentPassedCredits] = useState<number>(0)
+  const [studentSparkline, setStudentSparkline] = useState<number[]>([])
+
   // 1. Theme (Mặc định Light Mode)
   useEffect(() => {
     document.documentElement.classList.remove('dark')
   }, [])
+
+  // Load Student GPA Summary
+  useEffect(() => {
+    if (!user?.id) return
+    try {
+      const cached = localStorage.getItem(`fepn_grades_${user.id}`)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (parsed && typeof parsed === 'object') {
+          let totalCreds = 0
+          let weightedSum = 0
+          let passedCreds = 0
+          const history: number[] = []
+
+          Object.values(parsed).forEach((sem: any) => {
+            if (sem?.totalCredits > 0) {
+              totalCreds += sem.totalCredits
+              passedCreds += sem.passedCredits || 0
+              weightedSum += (sem.gpa || 0) * sem.totalCredits
+              history.push(sem.gpa || 0)
+            }
+          })
+
+          if (totalCreds > 0) {
+            const cpa = Math.round((weightedSum / totalCreds) * 100) / 100
+            setStudentCpa(cpa)
+            setStudentPassedCredits(passedCreds)
+            setStudentSparkline(history)
+
+            if (cpa >= 3.6) setStudentRank('Xuất sắc')
+            else if (cpa >= 3.2) setStudentRank('Giỏi')
+            else if (cpa >= 2.5) setStudentRank('Khá')
+            else if (cpa >= 2.0) setStudentRank('Trung bình')
+            else setStudentRank('Cần cố gắng')
+          }
+        }
+      }
+    } catch (e) {}
+  }, [user?.id])
 
   // 2. Check Auth & Email @vnu.edu.vn
   useEffect(() => {
@@ -475,6 +522,15 @@ export default function FepnDashboardMainPage() {
               <span>Recap</span>
             </Link>
 
+            <Link
+              href="/fepn-gpa"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              title="Tính điểm GPA & CPA"
+            >
+              <Calculator className="h-3.5 w-3.5 text-emerald-600" />
+              <span>GPA</span>
+            </Link>
+
             <div className="flex items-center gap-2 pl-2 border-l border-black/10 dark:border-white/10">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold leading-none">{user?.email?.split('@')[0]}</p>
@@ -496,62 +552,149 @@ export default function FepnDashboardMainPage() {
         </div>
       </header>
 
-      {/* 2. HERO GREETING & STATS BANNER */}
+      {/* 2. HERO GREETING & STATS BANNER + 1/5 MINI GPA WIDGET */}
       <div className="mx-auto w-full max-w-[1400px] px-4 pt-8 sm:px-6 lg:px-8 space-y-6">
-        <div className="relative overflow-hidden rounded-3xl border border-sky-500/20 bg-gradient-to-br from-sky-600/10 via-indigo-600/10 to-transparent p-6 sm:p-8 backdrop-blur-2xl">
-          <div className="relative z-10 max-w-2xl space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-sky-500/20 border border-sky-500/30 px-3 py-1 text-xs font-black text-sky-700 dark:text-sky-300 uppercase tracking-wider">
-              <GraduationCap className="h-3.5 w-3.5" /> Không Gian Học Liệu Khoa FEPN
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 items-stretch">
+          {/* KHỐI TRÁI: 4/5 CHIỀU DÀI - BANNER LỜI CHÀO & 4 Ô THỐNG KÊ */}
+          <div className="lg:col-span-4 relative overflow-hidden rounded-3xl border border-sky-500/20 bg-gradient-to-br from-sky-600/10 via-indigo-600/10 to-transparent p-6 sm:p-8 backdrop-blur-2xl flex flex-col justify-between">
+            <div className="relative z-10 max-w-2xl space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full bg-sky-500/20 border border-sky-500/30 px-3 py-1 text-xs font-black text-sky-700 dark:text-sky-300 uppercase tracking-wider">
+                <GraduationCap className="h-3.5 w-3.5" /> Không Gian Học Liệu Khoa FEPN
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                Chào mừng, {user?.email?.split('@')[0]}!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                Tra cứu nhanh chóng toàn bộ slide bài giảng, bài tập, video thực hành và đề thi các năm của Khoa Vật lý kỹ thuật & Công nghệ Nano.
+              </p>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
-              Chào mừng, {user?.email?.split('@')[0]}!
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-              Tra cứu nhanh chóng toàn bộ slide bài giảng, bài tập, video thực hành và đề thi các năm của Khoa Vật lý kỹ thuật & Công nghệ Nano.
-            </p>
+
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Môn Học Mở</span>
+                  <BookOpen className="h-4 w-4 text-sky-500" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-sky-600 dark:text-sky-400 font-mono">
+                  {stats.totalSubjects}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Slide Bài Giảng</span>
+                  <FolderOpen className="h-4 w-4 text-indigo-500" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-indigo-600 dark:text-indigo-400 font-mono">
+                  {stats.totalSlides}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Video Bài Giảng</span>
+                  <Video className="h-4 w-4 text-rose-500" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
+                  {stats.totalVideos}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Đề Thi & Đáp Án</span>
+                  <Award className="h-4 w-4 text-amber-500" />
+                </div>
+                <p className="mt-2 text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
+                  {stats.totalExams}
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
+          {/* KHỐI PHẢI: 1/5 CHIỀU DÀI - HÌNH VUÔNG NHỎ MINI GPA WIDGET */}
+          <Link
+            href="/fepn-gpa"
+            className="lg:col-span-1 group relative overflow-hidden rounded-3xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-indigo-500/10 to-emerald-500/10 p-5 backdrop-blur-2xl hover:border-sky-500/50 hover:shadow-xl hover:shadow-sky-500/10 transition duration-300 flex flex-col justify-between"
+            title="Xem chi tiết đồ thị và tính điểm FEPN GPA"
+          >
+            <div>
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Môn Học Mở</span>
-                <BookOpen className="h-4 w-4 text-sky-500" />
+                <div className="flex items-center gap-1.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-500/20 text-sky-600 dark:text-sky-400">
+                    <Calculator className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="text-xs font-black tracking-tight" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                    GPA Cá Nhân
+                  </span>
+                </div>
+                <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-black text-sky-600 dark:text-sky-400 uppercase">
+                  VNU
+                </span>
               </div>
-              <p className="mt-2 text-2xl font-black text-sky-600 dark:text-sky-400 font-mono">
-                {stats.totalSubjects}
-              </p>
+
+              <div className="mt-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">CPA Tích Lũy</p>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-3xl font-black font-mono text-sky-600 dark:text-sky-400">
+                    {studentCpa !== null ? studentCpa.toFixed(2) : '--'}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400">/ 4.0</span>
+                </div>
+                {studentRank ? (
+                  <span className="inline-block mt-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Xếp loại: {studentRank}
+                  </span>
+                ) : (
+                  <span className="inline-block mt-1 text-[10px] font-medium text-slate-400">
+                    Chưa nhập điểm
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Slide Bài Giảng</span>
-                <FolderOpen className="h-4 w-4 text-indigo-500" />
-              </div>
-              <p className="mt-2 text-2xl font-black text-indigo-600 dark:text-indigo-400 font-mono">
-                {stats.totalSlides}
-              </p>
+            {/* Đồ thị Mini Sparkline */}
+            <div className="w-full h-12 relative my-2 rounded-xl bg-white/40 dark:bg-slate-800/40 p-1 border border-black/5 dark:border-white/5 flex items-center justify-center overflow-hidden">
+              {studentSparkline.length >= 2 ? (
+                <svg className="w-full h-full overflow-visible" viewBox="0 0 100 30" preserveAspectRatio="none">
+                  <path
+                    d={studentSparkline
+                      .map((s, i) => {
+                        const x = (i / (studentSparkline.length - 1)) * 96 + 2
+                        const y = 28 - (Math.min(4.0, Math.max(0, s)) / 4.0) * 24
+                        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`
+                      })
+                      .join(' ')}
+                    fill="none"
+                    stroke="#0ea5e9"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {studentSparkline.map((s, i) => {
+                    const x = (i / (studentSparkline.length - 1)) * 96 + 2
+                    const y = 28 - (Math.min(4.0, Math.max(0, s)) / 4.0) * 24
+                    return <circle key={i} cx={x} cy={y} r="2" fill="#0ea5e9" />
+                  })}
+                </svg>
+              ) : (
+                <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                  <TrendingUp className="h-3 w-3 text-sky-400" />
+                  <span>Theo dõi điểm kỳ</span>
+                </div>
+              )}
             </div>
 
-            <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Video Bài Giảng</span>
-                <Video className="h-4 w-4 text-rose-500" />
+            <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                {studentPassedCredits > 0 ? `${studentPassedCredits} Tín chỉ đạt` : 'Tính điểm ngay'}
+              </span>
+              <div className="flex items-center gap-1 text-[11px] font-black text-sky-600 dark:text-sky-400 group-hover:translate-x-0.5 transition">
+                <span>Xem chi tiết</span>
+                <ArrowRight className="h-3 w-3" />
               </div>
-              <p className="mt-2 text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
-                {stats.totalVideos}
-              </p>
             </div>
-
-            <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-800/60 p-4 backdrop-blur-xl">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Đề Thi & Đáp Án</span>
-                <Award className="h-4 w-4 text-amber-500" />
-              </div>
-              <p className="mt-2 text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">
-                {stats.totalExams}
-              </p>
-            </div>
-          </div>
+          </Link>
         </div>
 
         {/* 3. CONTROLS: SEARCH & SEMESTER FILTER */}
