@@ -247,6 +247,10 @@ export default function FepnGpaPage() {
     }
 
     initPage()
+
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    }
   }, [])
 
   // Tải danh sách học kỳ (từ Supabase hoặc fallback localStorage)
@@ -358,11 +362,13 @@ export default function FepnGpaPage() {
     const updatedCourses = courses.map((course, idx) => {
       const stt = idx + 1
       const credits = Math.max(0, Number(course.credits) || 0)
-      const numScore = parseFloat(course.scoreInput)
+      const cleanInput = (course.scoreInput || '').trim().replace(',', '.')
+      const numScore = parseFloat(cleanInput)
 
       let conv = { letter: '-', score4: 0, isPassed: false }
-      if (!isNaN(numScore) && course.scoreInput.trim() !== '') {
-        conv = scale === '10' ? convertScore10(numScore) : convertScore4(numScore)
+      if (!isNaN(numScore) && cleanInput !== '') {
+        const clamped = Math.max(0, numScore)
+        conv = scale === '10' ? convertScore10(clamped) : convertScore4(clamped)
       }
 
       if (credits > 0 && conv.letter !== '-') {
@@ -463,11 +469,20 @@ export default function FepnGpaPage() {
     updateCurrentSemesterCourses(remaining, currentSemesterData.scale)
   }
 
-  // Chỉnh sửa từng trường của môn học
+  // Chỉnh sửa từng trường của môn học (Có chuẩn hóa ký tự chống lỗi)
   const handleFieldChange = (courseId: string, field: keyof CourseGrade, value: any) => {
+    let sanitizedValue = value
+    if (field === 'scoreInput') {
+      // Chỉ cho phép chữ số, dấu chấm và dấu phẩy
+      sanitizedValue = String(value).replace(/[^0-9.,]/g, '')
+    } else if (field === 'credits') {
+      const num = parseInt(String(value).replace(/[^0-9]/g, '')) || 0
+      sanitizedValue = Math.min(30, Math.max(0, num))
+    }
+
     const updated = currentSemesterData.courses.map((c) => {
       if (c.id === courseId) {
-        return { ...c, [field]: value }
+        return { ...c, [field]: sanitizedValue }
       }
       return c
     })
@@ -890,7 +905,10 @@ export default function FepnGpaPage() {
                   Diễn biến GPA từng kỳ & CPA tích lũy
                 </span>
                 <span className="hidden sm:inline-block text-[11px] text-slate-400 font-medium">
-                  (Rê chuột vào điểm mốc để xem chi tiết)
+                  (Rê chuột hoặc vuốt ngang để xem chi tiết mốc điểm)
+                </span>
+                <span className="sm:hidden text-[10px] text-slate-400 font-medium">
+                  (Vuốt ngang đồ thị)
                 </span>
               </div>
               <div className="flex items-center gap-4 text-xs font-bold">
@@ -906,7 +924,7 @@ export default function FepnGpaPage() {
             </div>
 
             {statsOverview.semesterPoints.length > 0 ? (
-              <div className="w-full overflow-x-auto">
+              <div className="w-full overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                 <div className="min-w-[700px] h-72 relative">
                   <svg className="w-full h-full overflow-visible" viewBox="0 0 880 260">
                     <defs>
@@ -1282,7 +1300,12 @@ export default function FepnGpaPage() {
             </div>
 
             {/* BẢNG ĐIỀN ĐIỂM CHI TIẾT */}
-            <div className="overflow-x-auto">
+            <div className="sm:hidden flex items-center gap-1.5 text-[11px] text-slate-400 font-medium mb-2 px-1">
+              <ArrowUpDown className="h-3 w-3 rotate-90 text-sky-500" />
+              <span>Vuốt ngang bảng để xem đầy đủ điểm chữ & quy đổi</span>
+            </div>
+
+            <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
               <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
                   <tr className="border-b border-black/10 dark:border-white/10 text-[11px] font-black uppercase tracking-wider text-slate-400">
@@ -1312,33 +1335,31 @@ export default function FepnGpaPage() {
                           placeholder="Nhập tên môn học (vd: Đại số tuyến tính, Vật lí đại cương)..."
                           value={course.courseName}
                           onChange={(e) => handleFieldChange(course.id, 'courseName', e.target.value)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 px-3 py-2 text-xs outline-none focus:border-sky-500 focus:bg-white dark:focus:bg-slate-800 transition font-medium"
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 px-3 py-2 text-base sm:text-xs outline-none focus:border-sky-500 focus:bg-white dark:focus:bg-slate-800 transition font-medium"
                         />
                       </td>
 
                       {/* Cột 3: Số Tín Chỉ */}
                       <td className="py-2.5 px-3 text-center">
                         <input
-                          type="number"
-                          min="1"
-                          max="20"
+                          type="text"
+                          inputMode="numeric"
                           value={course.credits || ''}
-                          onChange={(e) => handleFieldChange(course.id, 'credits', parseInt(e.target.value) || 0)}
-                          className="w-20 rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 px-2 py-2 text-xs text-center outline-none focus:border-sky-500 font-bold font-mono transition"
+                          onChange={(e) => handleFieldChange(course.id, 'credits', e.target.value)}
+                          className="w-20 rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 px-2 py-2 text-base sm:text-xs text-center outline-none focus:border-sky-500 font-bold font-mono transition"
                         />
                       </td>
 
                       {/* Cột 4: Điểm (Hệ 10 hoặc Hệ 4) */}
                       <td className="py-2.5 px-3 text-center">
                         <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max={currentSemesterData.scale === '10' ? '10' : '4'}
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
                           placeholder={currentSemesterData.scale === '10' ? 'vd: 8.5' : 'vd: 3.7'}
                           value={course.scoreInput}
                           onChange={(e) => handleFieldChange(course.id, 'scoreInput', e.target.value)}
-                          className="w-28 rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 px-2 py-2 text-xs text-center font-black font-mono outline-none focus:border-sky-500 text-sky-600 dark:text-sky-400 transition"
+                          className="w-28 rounded-xl border border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50 px-2 py-2 text-base sm:text-xs text-center font-black font-mono outline-none focus:border-sky-500 text-sky-600 dark:text-sky-400 transition"
                         />
                       </td>
 

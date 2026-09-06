@@ -1415,7 +1415,7 @@ export default function FepnRecapPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Tìm kiếm bài viết, năm nhập học..."
-                className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 shadow-2xs transition"
+                className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-1.5 text-base sm:text-xs text-slate-800 placeholder-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 shadow-2xs transition"
               />
               {searchQuery && (
                 <button
@@ -1697,7 +1697,7 @@ export default function FepnRecapPage() {
                     onChange={(e) => setModalYear(e.target.value)}
                     placeholder="VD: 2024, 2025"
                     required
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 font-bold focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm text-slate-800 font-bold focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
 
@@ -1712,7 +1712,7 @@ export default function FepnRecapPage() {
                     onChange={(e) => setModalTitle(e.target.value)}
                     placeholder="VD: Kỷ yếu Khóa K69 - Chặng đường khởi đầu rực rỡ"
                     required
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 font-bold focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm text-slate-800 font-bold focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
               </div>

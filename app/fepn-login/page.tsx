@@ -634,7 +634,7 @@ export default function FepnLoginPage() {
                       placeholder="Ví dụ: Hoàng Bình Minh"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 outline-none font-bold text-xs focus:border-sky-500 focus:bg-white transition"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 outline-none font-bold text-base sm:text-xs focus:border-sky-500 focus:bg-white transition"
                       required
                     />
                   </div>
@@ -650,6 +650,7 @@ export default function FepnLoginPage() {
                 <div className="mt-1 flex items-center rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-500/20 transition">
                   <input
                     type="text"
+                    inputMode="numeric"
                     placeholder="Nhập MSSV (vd: 23020001)"
                     value={mssv}
                     onChange={(e) => {
@@ -659,7 +660,7 @@ export default function FepnLoginPage() {
                       }
                       setMssv(val)
                     }}
-                    className="flex-1 bg-transparent px-4 py-3 outline-none font-mono font-bold text-xs"
+                    className="flex-1 bg-transparent px-4 py-3 outline-none font-mono font-bold text-base sm:text-xs"
                     required
                   />
                   <span className="px-3 py-3 bg-sky-50 text-sky-700 font-mono font-black text-xs border-l border-slate-200 select-none">
@@ -682,7 +683,7 @@ export default function FepnLoginPage() {
                     placeholder="Nhập mật khẩu an toàn"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-4 pr-11 py-3 outline-none font-bold text-xs focus:border-sky-500 focus:bg-white transition"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-4 pr-11 py-3 outline-none font-bold text-base sm:text-xs focus:border-sky-500 focus:bg-white transition"
                     required
                   />
                   <button
@@ -808,6 +809,7 @@ export default function FepnLoginPage() {
               <input
                 type="text"
                 maxLength={8}
+                inputMode="numeric"
                 autoFocus
                 placeholder="••••••••"
                 value={otpCode}
@@ -885,6 +887,7 @@ export default function FepnLoginPage() {
               <input
                 type="text"
                 maxLength={6}
+                inputMode="numeric"
                 autoFocus
                 placeholder="••••••"
                 value={totpVerifyInput}
@@ -1001,6 +1004,7 @@ export default function FepnLoginPage() {
                     <input
                       type="text"
                       maxLength={6}
+                      inputMode="numeric"
                       placeholder="vd: 123456"
                       value={totpInput}
                       onChange={(e) => setTotpInput(e.target.value.replace(/[^0-9]/g, ''))}

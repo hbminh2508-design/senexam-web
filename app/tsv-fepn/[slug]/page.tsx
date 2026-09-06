@@ -111,23 +111,36 @@ export default function FepnSubjectDetailPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadingMaterial, setUploadingMaterial] = useState(false)
 
+  // Responsive Desktop vs Mobile/Tablet
+  const [isDesktop, setIsDesktop] = useState(true)
+
   // 1. Theme (Mặc định Light Mode) & Width Init
   useEffect(() => {
     // Luôn áp dụng Light mode cho các trang FEPN
     document.documentElement.classList.remove('dark')
 
-    const savedWidth = localStorage.getItem('fepn_split_width')
-    if (savedWidth) {
-      const parsed = parseFloat(savedWidth)
-      if (!isNaN(parsed) && parsed >= 25 && parsed <= 75) {
-        setLeftWidth(parsed)
-      }
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 1024)
     }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+
+    try {
+      const savedWidth = localStorage.getItem('fepn_split_width')
+      if (savedWidth) {
+        const parsed = parseFloat(savedWidth)
+        if (!isNaN(parsed) && parsed >= 25 && parsed <= 75) {
+          setLeftWidth(parsed)
+        }
+      }
+    } catch (e) {}
 
     if (typeof window !== 'undefined') {
       const host = window.location.hostname
       setIsSubdomain(host.startsWith('tsv.fepn.') || host.startsWith('fepn.'))
     }
+
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   // 2. Check Auth & Email @vnu.edu.vn
@@ -588,8 +601,8 @@ export default function FepnSubjectDetailPage() {
         {/* CỘT TRÁI (LEFT COLUMN): 4 FOLDER TABS & MATERIAL LIST */}
         {/* ======================================================== */}
         <div
-          className="flex flex-col rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-xl overflow-hidden"
-          style={{ width: `${leftWidth}%` }}
+          className="w-full flex flex-col rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-xl overflow-hidden"
+          style={isDesktop ? { width: `${leftWidth}%` } : { width: '100%' }}
         >
           {/* Header Môn học */}
           <div className="p-4 border-b border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]">
@@ -820,7 +833,9 @@ export default function FepnSubjectDetailPage() {
           className={`flex-1 mt-4 lg:mt-0 flex flex-col rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 shadow-xl overflow-hidden ${
             isFullscreen ? 'fixed inset-0 z-50 rounded-none border-none' : ''
           }`}
-          style={{ width: isFullscreen ? '100vw' : `${100 - leftWidth}%` }}
+          style={{
+            width: isFullscreen ? '100vw' : isDesktop ? `${100 - leftWidth}%` : '100%',
+          }}
         >
           {selectedMaterial ? (
             <>

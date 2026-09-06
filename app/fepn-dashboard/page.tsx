@@ -569,9 +569,10 @@ export default function FepnDashboardMainPage() {
               <button
                 type="button"
                 onClick={() => setShowAddSubjectModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-2.5 sm:px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
               >
-                <span>Thêm Môn Học Mới</span>
+                <span className="hidden sm:inline">Thêm Môn Học Mới</span>
+                <span className="sm:hidden">+ Môn</span>
               </button>
             )}
 
@@ -914,7 +915,7 @@ export default function FepnDashboardMainPage() {
               placeholder="Tìm theo tên môn hoặc mã môn (vd: EPN1001)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 pl-9 pr-4 py-2 text-xs outline-none focus:border-sky-500 transition font-medium"
+              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 pl-9 pr-4 py-2 text-base sm:text-xs outline-none focus:border-sky-500 transition font-medium"
             />
           </div>
 
@@ -1079,7 +1080,7 @@ export default function FepnDashboardMainPage() {
                   placeholder="Ví dụ: EPN1001"
                   value={newSubCode}
                   onChange={(e) => setNewSubCode(e.target.value)}
-                  className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none uppercase font-mono font-bold"
+                  className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none uppercase font-mono font-bold text-base sm:text-xs"
                   required
                 />
               </div>
@@ -1091,7 +1092,7 @@ export default function FepnDashboardMainPage() {
                   placeholder="Ví dụ: Vật Lý Đại Cương I (Cơ - Nhiệt)"
                   value={newSubName}
                   onChange={(e) => setNewSubName(e.target.value)}
-                  className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none font-bold"
+                  className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none font-bold text-base sm:text-xs"
                   required
                 />
               </div>
@@ -1105,7 +1106,7 @@ export default function FepnDashboardMainPage() {
                     max="10"
                     value={newSubCredits}
                     onChange={(e) => setNewSubCredits(e.target.value)}
-                    className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none font-bold text-center"
+                    className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none font-bold text-center text-base sm:text-xs"
                   />
                 </div>
 
@@ -1114,7 +1115,7 @@ export default function FepnDashboardMainPage() {
                   <select
                     value={newSubSemester}
                     onChange={(e) => setNewSubSemester(e.target.value)}
-                    className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none font-bold"
+                    className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none font-bold text-base sm:text-xs"
                   >
                     <option value="Kỳ 1">Kỳ 1</option>
                     <option value="Kỳ 2">Kỳ 2</option>
