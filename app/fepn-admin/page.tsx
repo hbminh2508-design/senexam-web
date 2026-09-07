@@ -53,6 +53,7 @@ import {
   Check,
   Copy,
   AlertTriangle,
+  Camera,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -309,6 +310,7 @@ export default function FepnAdminDashboardPage() {
   const [manualStudentMssv, setManualStudentMssv] = useState('')
   const [manualStudentName, setManualStudentName] = useState('')
   const [claimSearchKeyword, setClaimSearchKeyword] = useState('')
+  const [showScannerModal, setShowScannerModal] = useState(false)
 
   // ========================================================
   // 1. AUTHENTICATION & ROLE CHECK
@@ -760,11 +762,17 @@ export default function FepnAdminDashboardPage() {
     }
   }
 
-  const handleCheckClaimCode = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    const raw = verifyCodeInput.trim().toUpperCase()
+  const handleCheckClaimCode = async (overrideCode?: string | React.FormEvent) => {
+    let raw = ''
+    if (typeof overrideCode === 'string') {
+      raw = overrideCode.trim().toUpperCase()
+    } else {
+      if (overrideCode && 'preventDefault' in overrideCode) overrideCode.preventDefault()
+      raw = verifyCodeInput.trim().toUpperCase()
+    }
     if (!raw) return
 
+    setVerifyCodeInput(raw)
     setVerifyingClaim(true)
     setVerifyStatusMessage(null)
     setFoundVerifyClaim(null)
@@ -826,6 +834,13 @@ export default function FepnAdminDashboardPage() {
     } finally {
       setVerifyingClaim(false)
     }
+  }
+
+  const handleQrScanSuccess = (scannedCode: string) => {
+    setShowScannerModal(false)
+    const code = scannedCode.trim().toUpperCase()
+    setVerifyCodeInput(code)
+    handleCheckClaimCode(code)
   }
 
   const handleManualConfirmDelivery = async () => {
@@ -2307,6 +2322,15 @@ export default function FepnAdminDashboardPage() {
                     <span>Kiểm Tra & Đối Soát</span>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setShowScannerModal(true)}
+                    className="px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-sky-600/20 transition hover:scale-105 inline-flex items-center justify-center gap-2 shrink-0"
+                  >
+                    <Camera className="h-4 w-4" />
+                    <span>Quét Mã QR Đối Soát</span>
+                  </button>
+
                   {verifyCodeInput && (
                     <button
                       type="button"
@@ -3091,6 +3115,336 @@ export default function FepnAdminDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* 6. MODAL QUÉT MÃ QR ĐỐI SOÁT BẰNG CAMERA */}
+      <AdminQrScannerModal
+        isOpen={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        onScanSuccess={handleQrScanSuccess}
+      />
+    </div>
+  )
+}
+
+function AdminQrScannerModal({
+  isOpen,
+  onClose,
+  onScanSuccess,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onScanSuccess: (code: string) => void
+}) {
+  const videoRef = React.useRef<HTMLVideoElement | null>(null)
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+  const streamRef = React.useRef<MediaStream | null>(null)
+  const isScanningRef = React.useRef<boolean>(false)
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment')
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const [isProcessingFile, setIsProcessingFile] = useState(false)
+
+  const stopStream = () => {
+    isScanningRef.current = false
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !('BarcodeDetector' in window) && !(window as any).jsQR) {
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
+      script.async = true
+      document.body.appendChild(script)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopStream()
+      return
+    }
+
+    let isMounted = true
+    setCameraError(null)
+
+    const startCamera = async () => {
+      try {
+        stopStream()
+
+        let stream: MediaStream
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: facingMode },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          })
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          })
+        }
+
+        if (!isMounted) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+
+        isScanningRef.current = true
+        startScanLoop()
+      } catch (err: any) {
+        if (!isMounted) return
+        setCameraError(
+          err?.name === 'NotAllowedError'
+            ? 'Quyền truy cập máy ảnh bị từ chối. Vui lòng cho phép quyền Camera trên trình duyệt hoặc tải ảnh QR lên.'
+            : 'Không thể mở máy ảnh (' + (err?.message || 'Lỗi thiết bị') + '). Bạn có thể tải ảnh chụp QR lên.'
+        )
+      }
+    }
+
+    startCamera()
+
+    return () => {
+      isMounted = false
+      stopStream()
+    }
+  }, [isOpen, facingMode])
+
+  const startScanLoop = () => {
+    let detector: any = null
+    if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+      try {
+        detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
+      } catch {
+        detector = null
+      }
+    }
+
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+
+    const tick = async () => {
+      if (!isScanningRef.current) return
+      const video = videoRef.current
+      if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (detector) {
+          try {
+            const barcodes = await detector.detect(video)
+            if (barcodes && barcodes.length > 0 && barcodes[0]?.rawValue) {
+              isScanningRef.current = false
+              stopStream()
+              if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(100)
+              onScanSuccess(barcodes[0].rawValue)
+              return
+            }
+          } catch {}
+        }
+
+        if ((window as any).jsQR && ctx) {
+          try {
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            const code = (window as any).jsQR(imgData.data, imgData.width, imgData.height)
+            if (code && code.data) {
+              isScanningRef.current = false
+              stopStream()
+              if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(100)
+              onScanSuccess(code.data)
+              return
+            }
+          } catch {}
+        }
+      }
+
+      if (isScanningRef.current) {
+        requestAnimationFrame(tick)
+      }
+    }
+
+    requestAnimationFrame(tick)
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsProcessingFile(true)
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new (window as any).Image()
+      img.onload = async () => {
+        try {
+          if ('BarcodeDetector' in window) {
+            try {
+              const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
+              const barcodes = await detector.detect(img)
+              if (barcodes && barcodes.length > 0 && barcodes[0]?.rawValue) {
+                setIsProcessingFile(false)
+                stopStream()
+                onScanSuccess(barcodes[0].rawValue)
+                return
+              }
+            } catch {}
+          }
+
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth || img.width
+          canvas.height = img.naturalHeight || img.height
+          const ctx = canvas.getContext('2d', { willReadFrequently: true })
+          if (ctx) {
+            ctx.drawImage(img, 0, 0)
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            if ((window as any).jsQR) {
+              const code = (window as any).jsQR(imgData.data, imgData.width, imgData.height)
+              if (code && code.data) {
+                setIsProcessingFile(false)
+                stopStream()
+                onScanSuccess(code.data)
+                return
+              }
+            }
+          }
+          alert('Không tìm thấy mã QR hợp lệ trong ảnh vừa tải lên. Vui lòng thử lại với ảnh rõ nét hơn!')
+        } catch (err: any) {
+          alert('Lỗi xử lý ảnh: ' + err.message)
+        } finally {
+          setIsProcessingFile(false)
+        }
+      }
+      img.src = reader.result as string
+    }
+    reader.readAsDataURL(file)
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in">
+      <div className="relative w-full max-w-md rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden text-white flex flex-col">
+        {/* Header */}
+        <div className="p-4 bg-slate-800/80 border-b border-slate-700/60 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-pink-500/20 text-pink-400">
+              <Camera className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black tracking-wide text-white">Quét Mã QR Đối Soát</h3>
+              <p className="text-[11px] text-slate-400">Camera đối soát nhận quà tức thì cho BTC</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              stopStream()
+              onClose()
+            }}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700/50 transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Video Camera Viewport */}
+        <div className="relative aspect-square w-full bg-black overflow-hidden flex items-center justify-center">
+          {cameraError ? (
+            <div className="p-6 text-center space-y-3">
+              <AlertTriangle className="h-10 w-10 text-amber-400 mx-auto" />
+              <p className="text-xs text-amber-200 font-semibold">{cameraError}</p>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-xs font-bold text-white transition inline-flex items-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Tải ảnh mã QR để đối soát</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                autoPlay
+                className="w-full h-full object-cover"
+              />
+
+              {/* Reticle / Scanning Frame */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="relative w-64 h-64 border-2 border-pink-500/60 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                  {/* Glowing Corners */}
+                  <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-pink-400 rounded-tl-lg" />
+                  <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-pink-400 rounded-tr-lg" />
+                  <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-pink-400 rounded-bl-lg" />
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-pink-400 rounded-br-lg" />
+
+                  {/* Laser line moving vertically */}
+                  <div className="absolute inset-x-2 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent shadow-[0_0_12px_#ec4899] animate-bounce" />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="p-4 bg-slate-800/90 border-t border-slate-700/60 flex items-center justify-between gap-2 sm:gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'))}
+            className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold text-slate-200 transition inline-flex items-center gap-1.5"
+            title="Đổi camera trước/sau"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Đổi Camera</span>
+          </button>
+
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isProcessingFile}
+            className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-bold text-slate-200 transition inline-flex items-center gap-1.5"
+            title="Tải ảnh QR từ thư viện ảnh hoặc chụp ảnh"
+          >
+            {isProcessingFile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            <span>Tải Ảnh QR</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              stopStream()
+              onClose()
+            }}
+            className="px-4 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-xs font-bold text-white transition ml-auto"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

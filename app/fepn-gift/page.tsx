@@ -197,6 +197,7 @@ export default function FepnGiftPage() {
   const [latestClaim, setLatestClaim] = useState<FepnGiftClaim | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [copiedClaimCode, setCopiedClaimCode] = useState(false)
 
   // Code Redeem States (Redeem Spin / Direct Gift)
   const [codeInput, setCodeInput] = useState('')
@@ -1404,15 +1405,30 @@ export default function FepnGiftPage() {
                         </p>
                       </div>
 
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase shrink-0 ${
-                          claim.status === 'delivered'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800 animate-pulse'
-                        }`}
-                      >
-                        {claim.status === 'delivered' ? '✓ Đã nhận' : '⏳ Chờ nhận'}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLatestClaim(claim)
+                            setShowWinModal(true)
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-pink-200 bg-pink-50 hover:bg-pink-100 text-pink-700 font-bold text-[11px] transition shadow-2xs"
+                          title="Xem mã QR đối soát và mã code"
+                        >
+                          <QrCode className="h-3.5 w-3.5 text-pink-600" />
+                          <span>Mã QR</span>
+                        </button>
+
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase shrink-0 ${
+                            claim.status === 'delivered'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800 animate-pulse'
+                          }`}
+                        >
+                          {claim.status === 'delivered' ? '✓ Đã nhận' : '⏳ Chờ nhận'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1422,46 +1438,84 @@ export default function FepnGiftPage() {
         </div>
       </main>
 
-      {/* 4. MODAL CHÚC MỪNG TRÚNG QUÀ (VICTORY POPUP VỚI MÃ ĐỐI SOÁT) */}
+      {/* 4. MODAL THÔNG TIN ĐỐI SOÁT (HIỂN THỊ CẢ MÃ QR VÀ MÃ VĂN BẢN) */}
       {showWinModal && latestClaim && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-8 shadow-2xl text-center space-y-5 border border-pink-500/30">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-tr from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/30 animate-bounce">
-              <PartyPopper className="h-8 w-8" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl text-center space-y-4 border border-pink-500/30 my-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/30 animate-bounce">
+              <PartyPopper className="h-7 w-7" />
             </div>
 
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-50 text-pink-700 text-xs font-black uppercase tracking-wider mb-2">
-                🎉 Chúc Mừng Bạn Đã Trúng Thưởng!
+                🎉 Thông Tin Đối Soát Nhận Quà
               </div>
-              <h3 className="text-2xl font-black text-slate-900" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
                 {latestClaim.gift_name}
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Tài khoản: <strong>{latestClaim.user_name}</strong> ({latestClaim.user_mssv})
+              <p className="text-xs text-slate-500 mt-0.5">
+                Sinh viên: <strong>{latestClaim.user_name}</strong> ({latestClaim.user_mssv})
               </p>
             </div>
 
-            {/* Claim Code Box for BTC verification */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200/80 space-y-1.5">
-              <span className="text-[11px] font-black uppercase text-pink-700">Mã Đối Soát Nhận Quà (Claim Code)</span>
-              <p className="text-xl sm:text-2xl font-mono font-black text-pink-600 tracking-wider select-all">
-                {latestClaim.claim_code}
-              </p>
+            {/* Trạng thái trao quà */}
+            {latestClaim.status === 'delivered' ? (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+                <Check className="h-3.5 w-3.5" />
+                <span>Phần quà này đã được trao thành công</span>
+              </div>
+            ) : null}
+
+            {/* KHUNG HIỂN THỊ MÃ QR ĐỐI SOÁT */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center space-y-2">
+              <div className="relative w-44 h-44 rounded-2xl border-2 border-pink-500/30 p-2 bg-white shadow-sm flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
+                    latestClaim.claim_code
+                  )}`}
+                  alt={`Mã QR Đối Soát ${latestClaim.claim_code}`}
+                  className="w-full h-full object-contain rounded-xl"
+                />
+              </div>
+
+              <span className="text-[11px] font-black uppercase tracking-wider text-pink-600 flex items-center gap-1 pt-1">
+                <QrCode className="h-3.5 w-3.5" />
+                <span>Mã QR Đối Soát (Quét Tại Bàn BTC)</span>
+              </span>
+            </div>
+
+            {/* KHUNG HIỂN THỊ MÃ VĂN BẢN (TEXT CODE) */}
+            <div className="p-3.5 rounded-2xl bg-pink-50/70 border border-pink-200/80 space-y-1">
+              <span className="text-[10px] font-black uppercase text-pink-700">Mã Đối Soát (Văn Bản)</span>
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-xl sm:text-2xl font-mono font-black text-pink-600 tracking-wider select-all">
+                  {latestClaim.claim_code}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(latestClaim.claim_code)
+                    setCopiedClaimCode(true)
+                    setTimeout(() => setCopiedClaimCode(false), 2000)
+                  }}
+                  className="p-2 rounded-xl border border-pink-200 bg-white hover:bg-pink-100 text-pink-600 transition shadow-2xs"
+                  title="Sao chép mã đối soát"
+                >
+                  {copiedClaimCode ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                </button>
+              </div>
               <p className="text-[11px] text-slate-500">
-                Hãy xuất trình mã này cho Ban Tổ Chức tại bàn sự kiện để nhận quà hiện vật!
+                Xuất trình <strong>Mã QR</strong> để BTC quét nhanh bằng máy ảnh, hoặc đọc <strong>Mã đối soát</strong> trên tại bàn sự kiện!
               </p>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowWinModal(false)}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-black uppercase text-xs tracking-wider shadow-md transition"
-              >
-                Tuyệt Vời, Tôi Đã Lưu Mã!
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowWinModal(false)}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-black uppercase text-xs tracking-wider shadow-md transition"
+            >
+              Tôi Đã Lưu Mã & QR
+            </button>
           </div>
         </div>
       )}
