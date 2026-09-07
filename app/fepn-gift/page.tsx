@@ -297,15 +297,23 @@ export default function FepnGiftPage() {
           localStorage.setItem(spinKey, String(initialSpins))
         }
 
-        // 4. Load User Claims
-        const { data: dbClaims } = await supabase
-          .from('fepn_gift_claims')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('claimed_at', { ascending: false })
+        // 4. Load User Claims (Match by user_id OR MSSV)
+        const mssv = user.email?.split('@')[0] || ''
+        let claimsQuery = supabase.from('fepn_gift_claims').select('*')
+        if (user.id && mssv) {
+          claimsQuery = claimsQuery.or(`user_id.eq.${user.id},user_mssv.ilike.${mssv}`)
+        } else if (user.id) {
+          claimsQuery = claimsQuery.eq('user_id', user.id)
+        }
+        const { data: dbClaims } = await claimsQuery.order('claimed_at', { ascending: false })
 
         if (dbClaims && dbClaims.length > 0) {
           setMyClaims(dbClaims)
+          setLatestClaim((prev) => {
+            if (!prev) return null
+            const match = dbClaims.find((c) => c.claim_code === prev.claim_code || c.id === prev.id)
+            return match || prev
+          })
         } else {
           const cachedClaims = localStorage.getItem('fepn_gift_claims_data')
           if (cachedClaims) {
@@ -691,6 +699,7 @@ export default function FepnGiftPage() {
             
             // Insert claim to Supabase asynchronously
             supabase.from('fepn_gift_claims').insert({
+              id: newClaim.id,
               event_id: eventConfig.id,
               user_id: user?.id,
               user_mssv: mssv,
@@ -847,6 +856,7 @@ export default function FepnGiftPage() {
           localStorage.setItem('fepn_gift_claims_data', JSON.stringify([newClaim, ...allClaims]))
           
           supabase.from('fepn_gift_claims').insert({
+            id: newClaim.id,
             event_id: eventConfig.id,
             user_id: user?.id,
             user_mssv: mssv,
@@ -887,7 +897,16 @@ export default function FepnGiftPage() {
         const updated = list.map((c) => (c.id === codeObj.id ? codeObj : c))
         localStorage.setItem('fepn_gift_codes_data', JSON.stringify(updated))
       }
-      supabase.from('fepn_gift_codes').update({ used_count: codeObj.used_count }).eq('id', codeObj.id)
+      supabase
+        .from('fepn_gift_codes')
+        .update({
+          used_count: codeObj.used_count,
+          redeemed_users: codeObj.redeemed_users || [],
+        })
+        .eq('id', codeObj.id)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase code update warning:', error)
+        })
     } catch {}
   }
 

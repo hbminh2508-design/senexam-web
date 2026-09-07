@@ -519,6 +519,16 @@ export default function FepnAdminDashboardPage() {
     }
   }
 
+  useEffect(() => {
+    if (activeTab === 'gifts') {
+      fetchGiftData()
+      const interval = setInterval(() => {
+        fetchGiftData()
+      }, 8000)
+      return () => clearInterval(interval)
+    }
+  }, [activeTab])
+
   const handleSaveGiftEvent = async () => {
     setIsSavingGiftEvent(true)
     try {
@@ -886,6 +896,7 @@ export default function FepnAdminDashboardPage() {
 
       try {
         await supabase.from('fepn_gift_claims').insert({
+          id: newClaim.id,
           event_id: giftEvent.id,
           user_mssv: newClaim.user_mssv,
           user_name: newClaim.user_name,
@@ -1782,6 +1793,16 @@ export default function FepnAdminDashboardPage() {
               </div>
 
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => fetchGiftData()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 text-xs font-bold shadow-xs transition hover:scale-105"
+                  title="Tải lại và đồng bộ dữ liệu quà tặng mới nhất từ Supabase"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 text-pink-600" />
+                  <span>Đồng Bộ Ngay</span>
+                </button>
+
                 <Link
                   href="/fepn-gift"
                   target="_blank"
