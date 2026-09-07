@@ -43,6 +43,15 @@ import {
   Database,
   Eye,
   RefreshCw,
+  Gift,
+  Sparkles,
+  Percent,
+  Dices,
+  QrCode,
+  Tag,
+  Check,
+  Copy,
+  AlertTriangle,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -80,6 +89,58 @@ export interface FepnUser {
   [key: string]: any
 }
 
+export interface FepnGiftEvent {
+  id: string
+  title: string
+  description: string
+  event_type: 'wheel' | 'code'
+  is_active: boolean
+  default_spins: number
+  banner_url?: string
+  updated_at?: string
+}
+
+export interface FepnGiftItem {
+  id: string
+  event_id?: string
+  name: string
+  image_url: string
+  total_quantity: number
+  remaining_quantity: number
+  win_rate: number
+  color: string
+  is_consolation: boolean
+  order_index?: number
+}
+
+export interface FepnGiftCode {
+  id: string
+  event_id?: string
+  code: string
+  type: 'spin' | 'gift'
+  spin_count: number
+  gift_item_id?: string
+  max_uses: number
+  used_count: number
+  is_active: boolean
+  created_at?: string
+}
+
+export interface FepnGiftClaim {
+  id: string
+  event_id?: string
+  user_id?: string
+  user_mssv: string
+  user_name: string
+  gift_id: string
+  gift_name: string
+  claim_code: string
+  claimed_at: string
+  status: 'pending' | 'delivered'
+  delivered_at?: string
+  delivered_by?: string
+}
+
 export default function FepnAdminDashboardPage() {
   const router = useRouter()
   const themeVars = useMemo(() => getModernThemeVars('indigo', false), [])
@@ -91,7 +152,7 @@ export default function FepnAdminDashboardPage() {
   const [authStatus, setAuthStatus] = useState<'loading' | 'authenticated' | 'unauthorized' | 'unauthenticated'>('loading')
 
   // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'subjects' | 'materials' | 'recap' | 'vault'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'subjects' | 'materials' | 'recap' | 'gifts' | 'vault'>('overview')
 
   // Deep Security Vault States
   const [isDeepVaultUnlocked, setIsDeepVaultUnlocked] = useState(false)
@@ -129,6 +190,108 @@ export default function FepnAdminDashboardPage() {
   const [searchMaterial, setSearchMaterial] = useState('')
   const [selectedMatSubjectFilter, setSelectedMatSubjectFilter] = useState('all')
   const [selectedMatCategoryFilter, setSelectedMatCategoryFilter] = useState('all')
+
+  // ========================================================
+  // GIFT MANAGEMENT STATES & DATA
+  // ========================================================
+  const DEFAULT_GIFT_EVENT: FepnGiftEvent = useMemo(() => ({
+    id: 'fepn-active-event',
+    title: 'Vòng Quay May Mắn - Chào Đón Tân Sinh Viên K69 Khoa VLKT & CNNN',
+    description: 'Chào mừng các bạn sinh viên đến với sự kiện Khoa Vật lý kỹ thuật & Công nghệ Nano! Mỗi sinh viên đăng nhập bằng tài khoản @vnu.edu.vn được tặng 1 lượt quay miễn phí. Bạn có thể check-in tại bàn BTC hoặc tham gia minigame để nhận mã code nạp thêm lượt quay. Sau khi quay trúng quà, vui lòng xuất trình Mã Đối Soát hiển thị trên màn hình cho Ban Tổ Chức tại Bàn Sự Kiện (Sảnh E4) để nhận quà hiện vật!',
+    event_type: 'wheel',
+    is_active: false,
+    default_spins: 1,
+  }), [])
+
+  const DEFAULT_GIFT_ITEMS: FepnGiftItem[] = useMemo(() => [
+    {
+      id: 'gift-1',
+      name: 'Áo Phông FEPN UET K69',
+      image_url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=60',
+      total_quantity: 25,
+      remaining_quantity: 25,
+      win_rate: 10,
+      color: '#f43f5e',
+      is_consolation: false,
+    },
+    {
+      id: 'gift-2',
+      name: 'Bình Giữ Nhiệt Nano Metallic',
+      image_url: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop&q=60',
+      total_quantity: 30,
+      remaining_quantity: 30,
+      win_rate: 15,
+      color: '#0284c7',
+      is_consolation: false,
+    },
+    {
+      id: 'gift-3',
+      name: 'Sổ Tay & Bút Ký VLKT UET',
+      image_url: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=500&auto=format&fit=crop&q=60',
+      total_quantity: 50,
+      remaining_quantity: 50,
+      win_rate: 20,
+      color: '#10b981',
+      is_consolation: false,
+    },
+    {
+      id: 'gift-4',
+      name: 'Móc Khóa Công Nghệ Nano',
+      image_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60',
+      total_quantity: 80,
+      remaining_quantity: 80,
+      win_rate: 25,
+      color: '#f59e0b',
+      is_consolation: false,
+    },
+    {
+      id: 'gift-5',
+      name: 'Bộ Sticker Khoa Học FEPN',
+      image_url: 'https://images.unsplash.com/photo-1572375992501-4b0892d50c69?w=500&auto=format&fit=crop&q=60',
+      total_quantity: 100,
+      remaining_quantity: 100,
+      win_rate: 20,
+      color: '#8b5cf6',
+      is_consolation: false,
+    },
+    {
+      id: 'gift-6',
+      name: 'Chúc Bạn May Mắn Lần Sau',
+      image_url: '',
+      total_quantity: 9999,
+      remaining_quantity: 9999,
+      win_rate: 10,
+      color: '#64748b',
+      is_consolation: true,
+    },
+  ], [])
+
+  const [giftEvent, setGiftEvent] = useState<FepnGiftEvent>(DEFAULT_GIFT_EVENT)
+  const [giftItems, setGiftItems] = useState<FepnGiftItem[]>(DEFAULT_GIFT_ITEMS)
+  const [giftCodes, setGiftCodes] = useState<FepnGiftCode[]>([])
+  const [giftClaims, setGiftClaims] = useState<FepnGiftClaim[]>([])
+  const [isSavingGiftEvent, setIsSavingGiftEvent] = useState(false)
+  const [showGiftItemModal, setShowGiftItemModal] = useState(false)
+  const [editingGiftItemId, setEditingGiftItemId] = useState<string | null>(null)
+  const [itemFormName, setItemFormName] = useState('')
+  const [itemFormImage, setItemFormImage] = useState('')
+  const [itemFormTotal, setItemFormTotal] = useState(20)
+  const [itemFormRemaining, setItemFormRemaining] = useState(20)
+  const [itemFormWinRate, setItemFormWinRate] = useState(15)
+  const [itemFormColor, setItemFormColor] = useState('#0284c7')
+  const [itemFormConsolation, setItemFormConsolation] = useState(false)
+  const [savingGiftItem, setSavingGiftItem] = useState(false)
+
+  // Code Gen state
+  const [genCodePrefix, setGenCodePrefix] = useState('FEPN-SPIN')
+  const [genCodeCount, setGenCodeCount] = useState(5)
+  const [genCodeType, setGenCodeType] = useState<'spin' | 'gift'>('spin')
+  const [genCodeSpinCount, setGenCodeSpinCount] = useState(1)
+  const [genCodeGiftId, setGenCodeGiftId] = useState('')
+  const [genCodeMaxUses, setGenCodeMaxUses] = useState(1)
+  const [generatingCodes, setGeneratingCodes] = useState(false)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [claimFilterStatus, setClaimFilterStatus] = useState<'all' | 'pending' | 'delivered'>('all')
 
   // ========================================================
   // 1. AUTHENTICATION & ROLE CHECK
@@ -235,11 +398,292 @@ export default function FepnAdminDashboardPage() {
         .select('*')
         .limit(100)
       setUserList(usersData || [])
+
+      // 5. Gift Event Data
+      await fetchGiftData()
     } catch (err) {
       console.error('Error fetching FEPN admin data:', err)
     } finally {
       setLoadingData(false)
     }
+  }
+
+  // ========================================================
+  // GIFT DATA FETCHING & ACTIONS
+  // ========================================================
+  const fetchGiftData = async () => {
+    try {
+      // 1. Event settings
+      const { data: eventData } = await supabase
+        .from('fepn_gift_events')
+        .select('*')
+        .eq('id', 'fepn-active-event')
+        .maybeSingle()
+      if (eventData) {
+        setGiftEvent(eventData)
+        localStorage.setItem('fepn_gift_event_config', JSON.stringify(eventData))
+        localStorage.setItem('fepn_gift_event_active', eventData.is_active ? 'true' : 'false')
+      } else {
+        const cached = localStorage.getItem('fepn_gift_event_config')
+        if (cached) {
+          try {
+            setGiftEvent(JSON.parse(cached))
+          } catch (e) {}
+        }
+      }
+
+      // 2. Gift Items
+      const { data: itemsData } = await supabase
+        .from('fepn_gift_items')
+        .select('*')
+        .order('order_index', { ascending: true })
+      if (itemsData && itemsData.length > 0) {
+        setGiftItems(itemsData)
+        localStorage.setItem('fepn_gift_items_data', JSON.stringify(itemsData))
+      } else {
+        const cachedItems = localStorage.getItem('fepn_gift_items_data')
+        if (cachedItems) {
+          try {
+            const parsed = JSON.parse(cachedItems)
+            if (Array.isArray(parsed) && parsed.length > 0) setGiftItems(parsed)
+          } catch (e) {}
+        }
+      }
+
+      // 3. Gift Codes
+      const { data: codesData } = await supabase
+        .from('fepn_gift_codes')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (codesData) {
+        setGiftCodes(codesData)
+        localStorage.setItem('fepn_gift_codes_data', JSON.stringify(codesData))
+      } else {
+        const cachedCodes = localStorage.getItem('fepn_gift_codes_data')
+        if (cachedCodes) {
+          try {
+            const parsed = JSON.parse(cachedCodes)
+            if (Array.isArray(parsed)) setGiftCodes(parsed)
+          } catch (e) {}
+        }
+      }
+
+      // 4. Gift Claims
+      const { data: claimsData } = await supabase
+        .from('fepn_gift_claims')
+        .select('*')
+        .order('claimed_at', { ascending: false })
+      if (claimsData) {
+        setGiftClaims(claimsData)
+        localStorage.setItem('fepn_gift_claims_data', JSON.stringify(claimsData))
+      } else {
+        const cachedClaims = localStorage.getItem('fepn_gift_claims_data')
+        if (cachedClaims) {
+          try {
+            const parsed = JSON.parse(cachedClaims)
+            if (Array.isArray(parsed)) setGiftClaims(parsed)
+          } catch (e) {}
+        }
+      }
+    } catch (err) {
+      console.warn('Notice loading gift data, using cached fallback:', err)
+      try {
+        const cachedEvent = localStorage.getItem('fepn_gift_event_config')
+        if (cachedEvent) setGiftEvent(JSON.parse(cachedEvent))
+        const cachedItems = localStorage.getItem('fepn_gift_items_data')
+        if (cachedItems) setGiftItems(JSON.parse(cachedItems))
+        const cachedCodes = localStorage.getItem('fepn_gift_codes_data')
+        if (cachedCodes) setGiftCodes(JSON.parse(cachedCodes))
+        const cachedClaims = localStorage.getItem('fepn_gift_claims_data')
+        if (cachedClaims) setGiftClaims(JSON.parse(cachedClaims))
+      } catch (e) {}
+    }
+  }
+
+  const handleSaveGiftEvent = async () => {
+    setIsSavingGiftEvent(true)
+    try {
+      const payload = {
+        ...giftEvent,
+        updated_at: new Date().toISOString(),
+      }
+      localStorage.setItem('fepn_gift_event_config', JSON.stringify(payload))
+      localStorage.setItem('fepn_gift_event_active', payload.is_active ? 'true' : 'false')
+
+      try {
+        await supabase.from('fepn_gift_events').upsert(payload)
+      } catch (e) {
+        console.warn('Supabase upsert gift event notice:', e)
+      }
+
+      alert('Đã lưu cấu hình sự kiện tặng quà thành công!')
+    } catch (err: any) {
+      alert('Lỗi lưu cấu hình: ' + err.message)
+    } finally {
+      setIsSavingGiftEvent(false)
+    }
+  }
+
+  const handleToggleGiftEventActive = async () => {
+    const nextStatus = !giftEvent.is_active
+    const updated = { ...giftEvent, is_active: nextStatus, updated_at: new Date().toISOString() }
+    setGiftEvent(updated)
+    localStorage.setItem('fepn_gift_event_config', JSON.stringify(updated))
+    localStorage.setItem('fepn_gift_event_active', nextStatus ? 'true' : 'false')
+    try {
+      await supabase.from('fepn_gift_events').upsert(updated)
+    } catch (e) {}
+  }
+
+  const handleOpenAddGiftItem = () => {
+    setEditingGiftItemId(null)
+    setItemFormName('')
+    setItemFormImage('')
+    setItemFormTotal(20)
+    setItemFormRemaining(20)
+    setItemFormWinRate(15)
+    setItemFormColor('#0284c7')
+    setItemFormConsolation(false)
+    setShowGiftItemModal(true)
+  }
+
+  const handleOpenEditGiftItem = (item: FepnGiftItem) => {
+    setEditingGiftItemId(item.id)
+    setItemFormName(item.name)
+    setItemFormImage(item.image_url)
+    setItemFormTotal(item.total_quantity)
+    setItemFormRemaining(item.remaining_quantity)
+    setItemFormWinRate(item.win_rate)
+    setItemFormColor(item.color || '#0284c7')
+    setItemFormConsolation(item.is_consolation || false)
+    setShowGiftItemModal(true)
+  }
+
+  const handleSaveGiftItem = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!itemFormName.trim()) {
+      alert('Vui lòng nhập tên món quà!')
+      return
+    }
+    setSavingGiftItem(true)
+    try {
+      const newItem: FepnGiftItem = {
+        id: editingGiftItemId || `gift-${Date.now()}`,
+        name: itemFormName.trim(),
+        image_url: itemFormImage.trim(),
+        total_quantity: Number(itemFormTotal) || 0,
+        remaining_quantity: Number(itemFormRemaining) || 0,
+        win_rate: Number(itemFormWinRate) || 0,
+        color: itemFormColor || '#0284c7',
+        is_consolation: itemFormConsolation,
+        order_index: editingGiftItemId ? undefined : giftItems.length + 1,
+      }
+
+      let updatedList: FepnGiftItem[] = []
+      if (editingGiftItemId) {
+        updatedList = giftItems.map((it) => (it.id === editingGiftItemId ? newItem : it))
+      } else {
+        updatedList = [...giftItems, newItem]
+      }
+      setGiftItems(updatedList)
+      localStorage.setItem('fepn_gift_items_data', JSON.stringify(updatedList))
+
+      try {
+        await supabase.from('fepn_gift_items').upsert(newItem)
+      } catch (e) {}
+
+      setShowGiftItemModal(false)
+    } catch (err: any) {
+      alert('Lỗi lưu món quà: ' + err.message)
+    } finally {
+      setSavingGiftItem(false)
+    }
+  }
+
+  const handleDeleteGiftItem = async (id: string, name: string) => {
+    if (!confirm(`Bạn có chắc muốn xóa món quà "${name}" khỏi danh sách?`)) return
+    const updatedList = giftItems.filter((it) => it.id !== id)
+    setGiftItems(updatedList)
+    localStorage.setItem('fepn_gift_items_data', JSON.stringify(updatedList))
+    try {
+      await supabase.from('fepn_gift_items').delete().eq('id', id)
+    } catch (e) {}
+  }
+
+  const handleGenerateCodes = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setGeneratingCodes(true)
+    try {
+      const count = Math.max(1, Math.min(50, Number(genCodeCount) || 1))
+      const prefix = (genCodePrefix.trim() || 'FEPN-SPIN').toUpperCase()
+      const newCodes: FepnGiftCode[] = []
+
+      for (let i = 0; i < count; i++) {
+        const rand = Math.random().toString(36).substring(2, 6).toUpperCase()
+        const codeStr = `${prefix}-${rand}`
+        newCodes.push({
+          id: `code-${Date.now()}-${i}`,
+          code: codeStr,
+          type: genCodeType,
+          spin_count: genCodeType === 'spin' ? Number(genCodeSpinCount) || 1 : 0,
+          gift_item_id: genCodeType === 'gift' ? genCodeGiftId : undefined,
+          max_uses: Number(genCodeMaxUses) || 1,
+          used_count: 0,
+          is_active: true,
+          created_at: new Date().toISOString(),
+        })
+      }
+
+      const updated = [...newCodes, ...giftCodes]
+      setGiftCodes(updated)
+      localStorage.setItem('fepn_gift_codes_data', JSON.stringify(updated))
+
+      try {
+        await supabase.from('fepn_gift_codes').insert(newCodes)
+      } catch (e) {}
+
+      alert(`Đã tạo thành công ${count} mã quà tặng / lượt quay mới!`)
+    } catch (err: any) {
+      alert('Lỗi sinh mã: ' + err.message)
+    } finally {
+      setGeneratingCodes(false)
+    }
+  }
+
+  const handleDeleteCode = async (id: string) => {
+    if (!confirm('Bạn có chắc muốn xoá mã này?')) return
+    const updated = giftCodes.filter((c) => c.id !== id)
+    setGiftCodes(updated)
+    localStorage.setItem('fepn_gift_codes_data', JSON.stringify(updated))
+    try {
+      await supabase.from('fepn_gift_codes').delete().eq('id', id)
+    } catch (e) {}
+  }
+
+  const handleMarkClaimDelivered = async (claimId: string) => {
+    const updated = giftClaims.map((c) => {
+      if (c.id === claimId) {
+        return {
+          ...c,
+          status: 'delivered' as const,
+          delivered_at: new Date().toISOString(),
+          delivered_by: user?.email || 'Admin',
+        }
+      }
+      return c
+    })
+    setGiftClaims(updated)
+    localStorage.setItem('fepn_gift_claims_data', JSON.stringify(updated))
+    try {
+      await supabase
+        .from('fepn_gift_claims')
+        .update({
+          status: 'delivered',
+          delivered_at: new Date().toISOString(),
+          delivered_by: user?.email || 'Admin',
+        })
+        .eq('id', claimId)
+    } catch (e) {}
   }
 
   useEffect(() => {
@@ -665,6 +1109,19 @@ export default function FepnAdminDashboardPage() {
 
           <button
             type="button"
+            onClick={() => setActiveTab('gifts')}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'gifts'
+                ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Gift className="h-4 w-4" />
+            <span>Quà Tặng FEPN ({giftItems.length})</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('vault')}
             className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'vault'
@@ -1074,7 +1531,599 @@ export default function FepnAdminDashboardPage() {
         )}
 
         {/* ======================================================== */}
-        {/* TAB 5: DEEP SECURITY VAULT (BẢO MẬT TỐI MẬT)            */}
+        {/* TAB 5: QUẢN LÝ TẶNG QUÀ & VÒNG QUAY FEPN               */}
+        {/* ======================================================== */}
+        {activeTab === 'gifts' && (
+          <div className="space-y-8">
+            {/* 1. Header Banner & Quick Stats */}
+            <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-pink-500/10 via-rose-500/10 to-amber-500/10 border border-pink-500/20">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/25">
+                  <Gift className="h-7 w-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-black text-slate-900">Quản Lý Hoạt Động Tặng Quà FEPN</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border ${
+                      giftEvent.is_active
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                        : 'bg-slate-100 text-slate-600 border-slate-300'
+                    }`}>
+                      {giftEvent.is_active ? '● Đang Mở Hoạt Động' : '○ Đang Đóng'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Cấu hình sự kiện đổi quà, vòng quay may mắn, tạo mã nạp lượt quay và kiểm tra đối soát nhận quà cho sinh viên.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/fepn-gift"
+                  target="_blank"
+                  className="inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 text-xs font-bold shadow-xs transition hover:scale-105"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Xem Trang Đổi Quà</span>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={handleToggleGiftEventActive}
+                  className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black uppercase tracking-wider transition shadow-md hover:scale-105 ${
+                    giftEvent.is_active
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25'
+                  }`}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>{giftEvent.is_active ? 'Tạm Đóng Hoạt Động' : 'Mở Hoạt Động Ngay'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+                <span className="text-xs text-slate-500 font-bold">Hình Thức Tổ Chức</span>
+                <p className="text-base font-black text-slate-900 mt-1 flex items-center gap-1.5">
+                  {giftEvent.event_type === 'wheel' ? <Dices className="h-4 w-4 text-pink-600" /> : <Tag className="h-4 w-4 text-sky-600" />}
+                  {giftEvent.event_type === 'wheel' ? 'Vòng quay may mắn' : 'Nhập mã nhận quà'}
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+                <span className="text-xs text-slate-500 font-bold">Danh Mục Quà</span>
+                <p className="text-xl font-black text-slate-900 mt-1">
+                  {giftItems.length} <span className="text-xs font-normal text-slate-500">phần quà</span>
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+                <span className="text-xs text-slate-500 font-bold">Mã Phát Hành</span>
+                <p className="text-xl font-black text-slate-900 mt-1">
+                  {giftCodes.length} <span className="text-xs font-normal text-slate-500">mã code</span>
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+                <span className="text-xs text-slate-500 font-bold">Lượt Trúng Thưởng</span>
+                <p className="text-xl font-black text-emerald-600 mt-1">
+                  {giftClaims.length} <span className="text-xs font-normal text-slate-500">lượt</span>
+                </p>
+              </div>
+            </div>
+
+            {/* 2. CẤU HÌNH SỰ KIỆN TẶNG QUÀ */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-pink-50 text-pink-600 border border-pink-100">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black text-slate-900">Cấu Hình Sự Kiện Đổi Quà</h4>
+                    <p className="text-xs text-slate-500">Thiết lập tiêu đề, thể thức và quy định áp dụng</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveGiftEvent}
+                  disabled={isSavingGiftEvent}
+                  className="inline-flex items-center gap-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-50"
+                >
+                  {isSavingGiftEvent ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  <span>Lưu Cấu Hình Sự Kiện</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Event Name */}
+                <div className="md:col-span-2 space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Tiêu Đề Sự Kiện *</label>
+                  <input
+                    type="text"
+                    value={giftEvent.title}
+                    onChange={(e) => setGiftEvent({ ...giftEvent, title: e.target.value })}
+                    placeholder="Ví dụ: Vòng Quay May Mắn - Chào Đón Tân Sinh Viên K69..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-bold outline-none focus:border-pink-500 focus:bg-white transition"
+                  />
+                </div>
+
+                {/* Event Type */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Hình Thức Tham Gia *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setGiftEvent({ ...giftEvent, event_type: 'wheel' })}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition text-center ${
+                        giftEvent.event_type === 'wheel'
+                          ? 'border-pink-500 bg-pink-50 text-pink-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      🎰 Vòng Quay
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGiftEvent({ ...giftEvent, event_type: 'code' })}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-black transition text-center ${
+                        giftEvent.event_type === 'code'
+                          ? 'border-sky-500 bg-sky-50 text-sky-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      🎟️ Nhập Mã
+                    </button>
+                  </div>
+                </div>
+
+                {/* Default Spins */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Số Lượt Quay Mặc Định / Sinh Viên</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={giftEvent.default_spins}
+                    onChange={(e) => setGiftEvent({ ...giftEvent, default_spins: Number(e.target.value) || 0 })}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-bold outline-none focus:border-pink-500 focus:bg-white transition"
+                  />
+                  <p className="text-[10px] text-slate-400">Số lượt sinh viên tự động có khi đăng nhập bằng email VNU</p>
+                </div>
+
+                {/* Active Toggle */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Trạng Thái Mở Sự Kiện</label>
+                  <div className="flex items-center gap-3 pt-2">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={giftEvent.is_active}
+                        onChange={handleToggleGiftEventActive}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-600"></div>
+                    </label>
+                    <span className="text-xs font-bold text-slate-700">
+                      {giftEvent.is_active ? 'Đang mở (Nút hiển thị trên Dashboard)' : 'Đang đóng'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Rules & Description */}
+                <div className="md:col-span-3 space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Thể Thức Tham Gia & Quy Định Nhận Quà (Hiển thị cho sinh viên)</label>
+                  <textarea
+                    rows={4}
+                    value={giftEvent.description}
+                    onChange={(e) => setGiftEvent({ ...giftEvent, description: e.target.value })}
+                    placeholder="Ghi rõ địa điểm nhận quà (vd: Bàn Sự Kiện Sảnh E4), thời gian trao quà, quy định xuất trình mã đối soát..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-medium outline-none focus:border-pink-500 focus:bg-white transition"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. QUẢN LÝ DANH SÁCH QUÀ TẶNG */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h4 className="text-base font-black text-slate-900">Danh Mục Quà Tặng ({giftItems.length})</h4>
+                  <p className="text-xs text-slate-500">Quản lý tên quà, hình ảnh, số lượng và tỉ lệ trúng thưởng trên vòng quay</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Total Win Rate Indicator */}
+                  {(() => {
+                    const totalRate = giftItems.reduce((acc, it) => acc + (Number(it.win_rate) || 0), 0)
+                    return (
+                      <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${
+                        totalRate === 100
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        <Percent className="h-3.5 w-3.5" />
+                        <span>Tổng tỉ lệ: {totalRate}% {totalRate === 100 ? '(Chuẩn 100%)' : '(Chưa cân bằng 100%)'}</span>
+                      </span>
+                    )
+                  })()}
+
+                  <button
+                    type="button"
+                    onClick={handleOpenAddGiftItem}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Thêm Món Quà</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Gift Items Table */}
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-400 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Ảnh</th>
+                      <th className="px-4 py-3">Tên Món Quà</th>
+                      <th className="px-4 py-3 text-center">Số Lượng Tổng</th>
+                      <th className="px-4 py-3 text-center">Còn Lại</th>
+                      <th className="px-4 py-3 text-center">Tỉ Lệ Trúng</th>
+                      <th className="px-4 py-3 text-center">Màu Múi Quay</th>
+                      <th className="px-4 py-3 text-center">Loại Quà</th>
+                      <th className="px-4 py-3 text-right">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {giftItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition">
+                        <td className="px-4 py-3">
+                          <div className="relative h-10 w-10 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 flex items-center justify-center">
+                            {item.image_url ? (
+                              <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <Gift className="h-5 w-5 text-slate-400" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-slate-800">
+                          {item.name}
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold">
+                          {item.total_quantity}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-md font-black ${
+                            item.remaining_quantity <= 5
+                              ? 'bg-rose-100 text-rose-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {item.remaining_quantity}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold text-pink-600">
+                          {item.win_rate}%
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border border-slate-200 bg-white">
+                            <span className="h-3 w-3 rounded-full border border-black/10" style={{ backgroundColor: item.color }} />
+                            <span className="font-mono text-[10px] uppercase font-bold">{item.color}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {item.is_consolation ? (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+                              May mắn lần sau
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                              Quà hiện vật
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditGiftItem(item)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition"
+                              title="Chỉnh sửa món quà"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteGiftItem(item.id, item.name)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
+                              title="Xóa món quà"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 4. SINH MÃ CODE (MÃ NẠP LƯỢT HOẶC MÃ QUÀ TẶNG) */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-4">
+                <h4 className="text-base font-black text-slate-900">Sinh Mã Code Nạp Lượt Quay & Mã Quà</h4>
+                <p className="text-xs text-slate-500">
+                  Phát mã tại bàn check-in hoặc mini-game để sinh viên nhập vào nhận thêm lượt quay may mắn.
+                </p>
+              </div>
+
+              {/* Form Generator */}
+              <form onSubmit={handleGenerateCodes} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end text-xs">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Tiền tố mã:</label>
+                  <input
+                    type="text"
+                    value={genCodePrefix}
+                    onChange={(e) => setGenCodePrefix(e.target.value)}
+                    placeholder="VD: FEPN-SPIN"
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2.5 font-mono uppercase font-bold outline-none focus:border-pink-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Loại mã:</label>
+                  <select
+                    value={genCodeType}
+                    onChange={(e) => setGenCodeType(e.target.value as 'spin' | 'gift')}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2.5 font-bold outline-none focus:border-pink-500"
+                  >
+                    <option value="spin">Cộng thêm lượt quay</option>
+                    <option value="gift">Nhận quà trực tiếp</option>
+                  </select>
+                </div>
+
+                {genCodeType === 'spin' ? (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Số lượt cộng:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={genCodeSpinCount}
+                      onChange={(e) => setGenCodeSpinCount(Number(e.target.value) || 1)}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 font-bold text-center outline-none focus:border-pink-500"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Chọn món quà:</label>
+                    <select
+                      value={genCodeGiftId}
+                      onChange={(e) => setGenCodeGiftId(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2.5 font-bold outline-none focus:border-pink-500"
+                    >
+                      <option value="">-- Chọn món quà --</option>
+                      {giftItems.filter((g) => !g.is_consolation).map((g) => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Số lượng mã cần sinh:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={genCodeCount}
+                    onChange={(e) => setGenCodeCount(Number(e.target.value) || 1)}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2.5 font-bold text-center outline-none focus:border-pink-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={generatingCodes}
+                  className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-black uppercase text-xs tracking-wider shadow-sm transition hover:scale-105 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+                >
+                  {generatingCodes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  <span>Sinh Mã Ngay</span>
+                </button>
+              </form>
+
+              {/* Codes List Table */}
+              <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="sticky top-0 bg-slate-100 text-[11px] font-black uppercase text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Mã Code</th>
+                      <th className="px-4 py-3">Loại Mã</th>
+                      <th className="px-4 py-3 text-center">Giá Trị</th>
+                      <th className="px-4 py-3 text-center">Số Lần Dùng</th>
+                      <th className="px-4 py-3 text-right">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {giftCodes.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
+                          Chưa có mã nào được sinh. Hãy sử dụng form trên để tạo mã phát cho sinh viên!
+                        </td>
+                      </tr>
+                    ) : (
+                      giftCodes.map((codeItem) => (
+                        <tr key={codeItem.id} className="hover:bg-slate-50/80 transition">
+                          <td className="px-4 py-2.5 font-mono font-bold text-slate-900">
+                            {codeItem.code}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {codeItem.type === 'spin' ? (
+                              <span className="px-2 py-0.5 rounded-md bg-pink-50 text-pink-700 border border-pink-200 text-[10px] font-bold">
+                                Cộng Lượt Quay
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-bold">
+                                Quà Trực Tiếp
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-center font-bold">
+                            {codeItem.type === 'spin' ? `+${codeItem.spin_count} lượt` : '1 phần quà'}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                              codeItem.used_count >= codeItem.max_uses
+                                ? 'bg-slate-200 text-slate-600'
+                                : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {codeItem.used_count} / {codeItem.max_uses}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(codeItem.code)
+                                  setCopiedCode(codeItem.code)
+                                  setTimeout(() => setCopiedCode(null), 2000)
+                                }}
+                                className="p-1 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition"
+                                title="Sao chép mã"
+                              >
+                                {copiedCode === codeItem.code ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCode(codeItem.id)}
+                                className="p-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
+                                title="Xoá mã"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 5. LỊCH SỬ TRÚNG THƯỞNG & ĐỐI SOÁT TRAO QUÀ */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h4 className="text-base font-black text-slate-900">Danh Sách Trúng Thưởng & Đối Soát Trao Quà</h4>
+                  <p className="text-xs text-slate-500">
+                    Sinh viên xuất trình mã đối soát trên điện thoại để BTC kiểm tra và bấm xác nhận trao quà.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                  {(['all', 'pending', 'delivered'] as const).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setClaimFilterStatus(st)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                        claimFilterStatus === st
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      {st === 'all' ? 'Tất cả' : st === 'pending' ? 'Chờ trao quà' : 'Đã trao quà'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Claims Table */}
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="bg-slate-50 text-[11px] font-black uppercase text-slate-400 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Mã Đối Soát</th>
+                      <th className="px-4 py-3">Sinh Viên</th>
+                      <th className="px-4 py-3">Món Quà Trúng</th>
+                      <th className="px-4 py-3">Thời Gian Trúng</th>
+                      <th className="px-4 py-3 text-center">Trạng Thái</th>
+                      <th className="px-4 py-3 text-right">Xác Nhận Trao Quà</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {giftClaims
+                      .filter((c) => claimFilterStatus === 'all' || c.status === claimFilterStatus)
+                      .length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
+                          Chưa có lượt trúng thưởng nào trong danh sách.
+                        </td>
+                      </tr>
+                    ) : (
+                      giftClaims
+                        .filter((c) => claimFilterStatus === 'all' || c.status === claimFilterStatus)
+                        .map((claim) => (
+                          <tr key={claim.id} className="hover:bg-slate-50/80 transition">
+                            <td className="px-4 py-3 font-mono font-black text-pink-600">
+                              {claim.claim_code}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-bold text-slate-900">{claim.user_name || 'Sinh viên VNU'}</p>
+                              <p className="font-mono text-[11px] text-slate-400">{claim.user_mssv}</p>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-800">
+                              {claim.gift_name}
+                            </td>
+                            <td className="px-4 py-3 text-slate-500">
+                              {new Date(claim.claimed_at).toLocaleString('vi-VN')}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {claim.status === 'delivered' ? (
+                                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                                  ✓ Đã trao quà
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black uppercase animate-pulse">
+                                  ⏳ Chờ nhận
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              {claim.status === 'pending' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkClaimDelivered(claim.id)}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition hover:scale-105"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  <span>Xác Nhận Đã Trao</span>
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">
+                                  Đã trao bởi {claim.delivered_by || 'BTC'}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 6: DEEP SECURITY VAULT (BẢO MẬT TỐI MẬT)            */}
         {/* ======================================================== */}
         {activeTab === 'vault' && (
           <div className="space-y-6">
@@ -1417,6 +2466,150 @@ export default function FepnAdminDashboardPage() {
                 >
                   {savingMaterial ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                   <span>Đăng Học Liệu</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. MODAL THÊM / SỬA MÓN QUÀ TẶNG */}
+      {showGiftItemModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-pink-50 text-pink-600">
+                  <Gift className="h-5 w-5" />
+                </div>
+                <h3 className="text-base font-black text-slate-900">
+                  {editingGiftItemId ? 'Chỉnh Sửa Món Quà' : 'Thêm Món Quà Mới'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGiftItemModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGiftItem} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tên Món Quà *</label>
+                <input
+                  type="text"
+                  value={itemFormName}
+                  onChange={(e) => setItemFormName(e.target.value)}
+                  placeholder="VD: Áo Phông Khoa VLKT, Bình Giữ Nhiệt Nano..."
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Đường Dẫn Hình Ảnh (URL hoặc Link Google Drive)
+                </label>
+                <input
+                  type="text"
+                  value={itemFormImage}
+                  onChange={(e) => setItemFormImage(e.target.value)}
+                  placeholder="https://images.unsplash.com/... hoặc link drive"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Để trống nếu là ô "Chúc bạn may mắn lần sau"</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số Lượng Tổng *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={itemFormTotal}
+                    onChange={(e) => setItemFormTotal(Number(e.target.value) || 0)}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-center focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số Lượng Còn Lại *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={itemFormRemaining}
+                    onChange={(e) => setItemFormRemaining(Number(e.target.value) || 0)}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-center focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tỉ Lệ Trúng (% Xác Suất) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={itemFormWinRate}
+                    onChange={(e) => setItemFormWinRate(Number(e.target.value) || 0)}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold text-center focus:ring-2 focus:ring-pink-500 focus:outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Màu Múi Vòng Quay</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={itemFormColor}
+                      onChange={(e) => setItemFormColor(e.target.value)}
+                      className="h-9 w-12 rounded-xl border border-slate-200 cursor-pointer p-0.5"
+                    />
+                    <input
+                      type="text"
+                      value={itemFormColor}
+                      onChange={(e) => setItemFormColor(e.target.value)}
+                      className="flex-1 rounded-xl border border-slate-200 p-2 text-xs font-mono uppercase font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={itemFormConsolation}
+                    onChange={(e) => setItemFormConsolation(e.target.checked)}
+                    className="h-4 w-4 rounded text-pink-600 focus:ring-pink-500"
+                  />
+                  <span className="font-bold text-slate-700 text-xs">
+                    Đây là ô "Chúc bạn may mắn lần sau" (Không trừ số lượng quà vật lý)
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowGiftItemModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingGiftItem}
+                  className="px-5 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold shadow-md flex items-center gap-2"
+                >
+                  {savingGiftItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  <span>Lưu Món Quà</span>
                 </button>
               </div>
             </form>

@@ -142,7 +142,8 @@ export function middleware(request: NextRequest) {
       pathname === '/fepn-dashboard' ||
       pathname === '/fepn-recap' ||
       pathname === '/fepn-admin' ||
-      pathname === '/fepn-gpa'
+      pathname === '/fepn-gpa' ||
+      pathname === '/fepn-gift'
     ) {
       return applySecurityHeaders(NextResponse.next())
     }
@@ -181,7 +182,13 @@ export function middleware(request: NextRequest) {
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
-    // 5.5 Trang Admin Subdomain -> Chuyển vào FEPN Admin
+    // 5.5 Trang Gift
+    if (pathname === '/gift' || pathname === '/fepn-gift') {
+      url.pathname = '/fepn-gift'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+
+    // 5.6 Trang Admin Subdomain -> Chuyển vào FEPN Admin
     if (pathname === '/admin' || pathname === '/fepn-admin') {
       url.pathname = '/fepn-admin'
       return applySecurityHeaders(NextResponse.rewrite(url))

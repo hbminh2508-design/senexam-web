@@ -100,9 +100,42 @@ export default function FepnDashboardMainPage() {
   const [studentPassedCredits, setStudentPassedCredits] = useState<number>(0)
   const [scoredSemesters, setScoredSemesters] = useState<ScoredSemesterInfo[]>([])
 
+  // FEPN Gift Event Active State
+  const [isGiftActive, setIsGiftActive] = useState<boolean>(false)
+
   // 1. Theme (Mặc định Light Mode)
   useEffect(() => {
     document.documentElement.classList.remove('dark')
+  }, [])
+
+  // Check Gift Event Active Status
+  useEffect(() => {
+    const checkGiftStatus = async () => {
+      try {
+        const localActive = localStorage.getItem('fepn_gift_event_active')
+        if (localActive !== null) {
+          setIsGiftActive(localActive === 'true')
+        }
+        const { data, error } = await supabase
+          .from('fepn_gift_events')
+          .select('is_active')
+          .eq('is_active', true)
+          .limit(1)
+        if (!error && data && data.length > 0) {
+          setIsGiftActive(true)
+          localStorage.setItem('fepn_gift_event_active', 'true')
+        } else if (!error && data && data.length === 0) {
+          setIsGiftActive(false)
+          localStorage.setItem('fepn_gift_event_active', 'false')
+        }
+      } catch (err) {
+        const localActive = localStorage.getItem('fepn_gift_event_active')
+        if (localActive !== null) {
+          setIsGiftActive(localActive === 'true')
+        }
+      }
+    }
+    checkGiftStatus()
   }, [])
 
   // Load Student GPA Summary (Đồng bộ thứ tự học kỳ & điểm từng kỳ)
@@ -601,6 +634,26 @@ export default function FepnDashboardMainPage() {
             >
               <span>GPA</span>
             </Link>
+
+            {(isGiftActive || isAdmin) && (
+              <Link
+                href="/fepn-gift"
+                className={`relative inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs transition shadow-sm hover:scale-105 ${
+                  isGiftActive
+                    ? 'bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white font-black shadow-pink-500/25 animate-pulse'
+                    : 'border border-pink-500/30 bg-pink-50 hover:bg-pink-100 text-pink-700 font-bold'
+                }`}
+                title="Sự kiện Đổi Quà & Vòng Quay May Mắn FEPN"
+              >
+                <span>Đổi Quà</span>
+                {isGiftActive && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-300 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400"></span>
+                  </span>
+                )}
+              </Link>
+            )}
 
             <div className="flex items-center gap-2 pl-2 border-l border-black/10 dark:border-white/10">
               <div className="text-right hidden sm:block">
