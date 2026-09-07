@@ -40,6 +40,9 @@ export interface FepnGiftEvent {
   id: string
   title: string
   description: string
+  location?: string
+  time?: string
+  how_to_receive?: string
   event_type: 'wheel' | 'code'
   is_active: boolean
   default_spins: number
@@ -69,6 +72,7 @@ export interface FepnGiftCode {
   max_uses: number
   used_count: number
   is_active: boolean
+  redeemed_users?: string[]
 }
 
 export interface FepnGiftClaim {
@@ -88,12 +92,14 @@ export interface FepnGiftClaim {
 
 const DEFAULT_EVENT_CONFIG: FepnGiftEvent = {
   id: 'fepn-active-event',
-  title: 'Vòng Quay May Mắn - Chào Đón Tân Sinh Viên K69 Khoa VLKT & CNNN',
-  description:
-    'Chào mừng các bạn sinh viên đến với sự kiện Khoa Vật lý kỹ thuật & Công nghệ Nano! Mỗi sinh viên đăng nhập bằng tài khoản email VNU (@vnu.edu.vn) được tặng 1 lượt quay may mắn miễn phí. Sau khi quay trúng quà, vui lòng xuất trình Mã Đối Soát hiển thị trên màn hình cho Ban Tổ Chức tại Bàn Sự Kiện (Sảnh E4) để nhận quà hiện vật!',
+  title: 'Vòng Quay May Mắn - Khoa Vật lý kỹ thuật & CNNN',
+  location: '',
+  time: '',
+  how_to_receive: '',
+  description: '',
   event_type: 'wheel',
   is_active: false,
-  default_spins: 1,
+  default_spins: 0,
 }
 
 const DEFAULT_GIFT_ITEMS: FepnGiftItem[] = [
@@ -171,7 +177,7 @@ export default function FepnGiftPage() {
   // Event Data States
   const [eventConfig, setEventConfig] = useState<FepnGiftEvent>(DEFAULT_EVENT_CONFIG)
   const [giftItems, setGiftItems] = useState<FepnGiftItem[]>(DEFAULT_GIFT_ITEMS)
-  const [spinsRemaining, setSpinsRemaining] = useState<number>(1)
+  const [spinsRemaining, setSpinsRemaining] = useState<number>(0)
   const [myClaims, setMyClaims] = useState<FepnGiftClaim[]>([])
 
   // Wheel Canvas & Physics State
@@ -208,6 +214,7 @@ export default function FepnGiftPage() {
         if (!currentUser) {
           setAuthStatus('unauthenticated')
           setAuthLoading(false)
+          router.replace('/fepn-login')
           return
         }
 
@@ -234,13 +241,14 @@ export default function FepnGiftPage() {
         setAuthStatus('authorized')
       } catch (err) {
         setAuthStatus('unauthenticated')
+        router.replace('/fepn-login')
       } finally {
         setAuthLoading(false)
       }
     }
 
     checkAuth()
-  }, [])
+  }, [router])
 
   // 2. Load Event Settings & Gift Data
   const loadEventData = useCallback(async () => {
@@ -276,14 +284,14 @@ export default function FepnGiftPage() {
       }
       setGiftItems(items)
 
-      // 3. Load User Spins (from localStorage or user state)
+      // 3. Load User Spins (from localStorage or user state, default 0)
       if (user?.id) {
         const spinKey = `fepn_spins_${user.id}`
         const savedSpins = localStorage.getItem(spinKey)
         if (savedSpins !== null) {
           setSpinsRemaining(Number(savedSpins) || 0)
         } else {
-          const initialSpins = activeConfig.default_spins ?? 1
+          const initialSpins = activeConfig.default_spins ?? 0
           setSpinsRemaining(initialSpins)
           localStorage.setItem(spinKey, String(initialSpins))
         }
@@ -316,6 +324,11 @@ export default function FepnGiftPage() {
   useEffect(() => {
     if (authStatus === 'authorized') {
       loadEventData()
+      // Polling every 12 seconds to sync latest gift inventory and claims status
+      const interval = setInterval(() => {
+        loadEventData()
+      }, 12000)
+      return () => clearInterval(interval)
     }
   }, [authStatus, loadEventData])
 
@@ -465,10 +478,14 @@ export default function FepnGiftPage() {
     [giftItems]
   )
 
-  // Re-draw wheel on rotation change or items update
+  // Re-draw wheel on rotation change or items update, and when auth is ready
   useEffect(() => {
     drawWheel(rotationAngle)
-  }, [rotationAngle, drawWheel])
+    const t = setTimeout(() => {
+      drawWheel(rotationAngle)
+    }, 60)
+    return () => clearTimeout(t)
+  }, [rotationAngle, drawWheel, authStatus, authLoading, giftItems])
 
   // Canvas Confetti loop
   const triggerConfetti = useCallback(() => {
@@ -650,7 +667,7 @@ export default function FepnGiftPage() {
           const claimCode = `CLAIM-${mssv.toUpperCase()}-${randHex}`
 
           const newClaim: FepnGiftClaim = {
-            id: `claim-${Date.now()}`,
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `claim-${Date.now()}`,
             event_id: eventConfig.id,
             user_id: user?.id,
             user_mssv: mssv,
@@ -670,7 +687,21 @@ export default function FepnGiftPage() {
             const cachedAll = localStorage.getItem('fepn_gift_claims_data')
             const allClaims = cachedAll ? JSON.parse(cachedAll) : []
             localStorage.setItem('fepn_gift_claims_data', JSON.stringify([newClaim, ...allClaims]))
-            supabase.from('fepn_gift_claims').insert(newClaim)
+            
+            // Insert claim to Supabase asynchronously
+            supabase.from('fepn_gift_claims').insert({
+              event_id: eventConfig.id,
+              user_id: user?.id,
+              user_mssv: mssv,
+              user_name: user?.user_metadata?.full_name || 'Sinh viên VNU',
+              gift_id: wonItem.id,
+              gift_name: wonItem.name,
+              claim_code: claimCode,
+              claimed_at: new Date().toISOString(),
+              status: 'pending',
+            }).then(({ error }) => {
+              if (error) console.warn('Supabase claim insert warning:', error)
+            })
           } catch {}
 
           triggerConfetti()
@@ -695,6 +726,30 @@ export default function FepnGiftPage() {
     const rawCode = codeInput.trim().toUpperCase()
 
     try {
+      if (!user?.id) {
+        setCodeFeedback({
+          type: 'error',
+          message: 'Vui lòng đăng nhập để sử dụng mã!',
+        })
+        return
+      }
+
+      // Check if this specific user has already redeemed this code
+      const userRedeemedKey = `fepn_redeemed_codes_${user.id}`
+      let userRedeemedList: string[] = []
+      try {
+        const stored = localStorage.getItem(userRedeemedKey)
+        if (stored) userRedeemedList = JSON.parse(stored)
+      } catch {}
+
+      if (userRedeemedList.includes(rawCode)) {
+        setCodeFeedback({
+          type: 'error',
+          message: 'Bạn đã đổi mã này rồi!',
+        })
+        return
+      }
+
       let foundCode: FepnGiftCode | null = null
 
       const { data: dbCode } = await supabase.from('fepn_gift_codes').select('*').eq('code', rawCode).maybeSingle()
@@ -719,6 +774,15 @@ export default function FepnGiftPage() {
         return
       }
 
+      // Double check if code tracks this user
+      if (Array.isArray(foundCode.redeemed_users) && foundCode.redeemed_users.includes(user.id)) {
+        setCodeFeedback({
+          type: 'error',
+          message: 'Bạn đã đổi mã này rồi!',
+        })
+        return
+      }
+
       if (foundCode.used_count >= foundCode.max_uses) {
         setCodeFeedback({
           type: 'error',
@@ -727,13 +791,18 @@ export default function FepnGiftPage() {
         return
       }
 
+      // Record this redemption for the user immediately
+      const nextRedeemedList = [...userRedeemedList, rawCode]
+      localStorage.setItem(userRedeemedKey, JSON.stringify(nextRedeemedList))
+
+      if (!Array.isArray(foundCode.redeemed_users)) foundCode.redeemed_users = []
+      foundCode.redeemed_users.push(user.id)
+
       if (foundCode.type === 'spin') {
         const addSpins = foundCode.spin_count || 1
         const newTotal = spinsRemaining + addSpins
         setSpinsRemaining(newTotal)
-        if (user?.id) {
-          localStorage.setItem(`fepn_spins_${user.id}`, String(newTotal))
-        }
+        localStorage.setItem(`fepn_spins_${user.id}`, String(newTotal))
 
         foundCode.used_count += 1
         updateCodeUsed(foundCode)
@@ -755,7 +824,7 @@ export default function FepnGiftPage() {
         const claimCode = `CLAIM-${mssv.toUpperCase()}-${randHex}`
 
         const newClaim: FepnGiftClaim = {
-          id: `claim-${Date.now()}`,
+          id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `claim-${Date.now()}`,
           event_id: eventConfig.id,
           user_id: user?.id,
           user_mssv: mssv,
@@ -775,7 +844,20 @@ export default function FepnGiftPage() {
           const cachedAll = localStorage.getItem('fepn_gift_claims_data')
           const allClaims = cachedAll ? JSON.parse(cachedAll) : []
           localStorage.setItem('fepn_gift_claims_data', JSON.stringify([newClaim, ...allClaims]))
-          supabase.from('fepn_gift_claims').insert(newClaim)
+          
+          supabase.from('fepn_gift_claims').insert({
+            event_id: eventConfig.id,
+            user_id: user?.id,
+            user_mssv: mssv,
+            user_name: user?.user_metadata?.full_name || 'Sinh viên VNU',
+            gift_id: matchingGift.id,
+            gift_name: matchingGift.name,
+            claim_code: claimCode,
+            claimed_at: new Date().toISOString(),
+            status: 'pending',
+          }).then(({ error }) => {
+            if (error) console.warn('Supabase claim insert warning:', error)
+          })
         } catch {}
 
         setCodeFeedback({
@@ -1047,7 +1129,12 @@ export default function FepnGiftPage() {
 
                   <div className="relative max-w-[440px] w-full aspect-square">
                     <canvas
-                      ref={wheelCanvasRef}
+                      ref={(el) => {
+                        wheelCanvasRef.current = el
+                        if (el) {
+                          drawWheel(rotationAngle)
+                        }
+                      }}
                       width={440}
                       height={440}
                       className="w-full h-full cursor-pointer select-none touch-manipulation"
@@ -1257,30 +1344,35 @@ export default function FepnGiftPage() {
                 <h4 className="text-sm font-black text-slate-900">Thể Thức Tham Gia & Nhận Quà</h4>
               </div>
 
-              <div className="space-y-2 text-xs text-slate-600 leading-relaxed">
-                <div className="flex items-start gap-2">
+              <div className="space-y-2.5 text-xs text-slate-600 leading-relaxed">
+                <div className="flex items-start gap-2.5">
                   <MapPin className="h-4 w-4 text-pink-600 shrink-0 mt-0.5" />
-                  <p>
-                    <strong>Địa điểm nhận quà:</strong> Bàn Ban Tổ Chức Khoa Vật lý kỹ thuật & Công nghệ Nano (Sảnh tầng 1 Nhà E4).
-                  </p>
+                  <div>
+                    <span className="font-bold text-slate-800">Địa điểm nhận quà: </span>
+                    <span>{eventConfig.location || 'Theo thông báo của Ban Tổ Chức Khoa VLKT'}</span>
+                  </div>
                 </div>
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-2.5">
                   <Clock className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
-                  <p>
-                    <strong>Thời gian trao quà:</strong> Trong suốt thời gian diễn ra hoạt động chào đón sinh viên Khoa VLKT.
-                  </p>
+                  <div>
+                    <span className="font-bold text-slate-800">Thời gian trao quà: </span>
+                    <span>{eventConfig.time || 'Theo thời gian diễn ra hoạt động của sự kiện'}</span>
+                  </div>
                 </div>
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-2.5">
                   <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <p>
-                    <strong>Cách thức nhận:</strong> Xuất trình màn hình chứa <strong>Mã Đối Soát (Claim Code)</strong> hợp lệ cho BTC kiểm tra và đánh dấu đã trao quà.
-                  </p>
+                  <div>
+                    <span className="font-bold text-slate-800">Cách thức nhận: </span>
+                    <span>{eventConfig.how_to_receive || 'Xuất trình màn hình chứa Mã Đối Soát (Claim Code) cho BTC kiểm tra và xác nhận nhận quà'}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 font-medium">
-                {eventConfig.description}
-              </div>
+              {eventConfig.description ? (
+                <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 font-medium whitespace-pre-line">
+                  {eventConfig.description}
+                </div>
+              ) : null}
             </div>
 
             {/* 3. MY WON GIFTS (LỊCH SỬ TRÚNG THƯỞNG CỦA BẢN THÂN) */}

@@ -40,6 +40,7 @@ import {
   Award,
   Calendar,
   Clock,
+  MapPin,
   Database,
   Eye,
   RefreshCw,
@@ -93,6 +94,9 @@ export interface FepnGiftEvent {
   id: string
   title: string
   description: string
+  location?: string
+  time?: string
+  how_to_receive?: string
   event_type: 'wheel' | 'code'
   is_active: boolean
   default_spins: number
@@ -196,11 +200,14 @@ export default function FepnAdminDashboardPage() {
   // ========================================================
   const DEFAULT_GIFT_EVENT: FepnGiftEvent = useMemo(() => ({
     id: 'fepn-active-event',
-    title: 'Vòng Quay May Mắn - Chào Đón Tân Sinh Viên K69 Khoa VLKT & CNNN',
-    description: 'Chào mừng các bạn sinh viên đến với sự kiện Khoa Vật lý kỹ thuật & Công nghệ Nano! Mỗi sinh viên đăng nhập bằng tài khoản @vnu.edu.vn được tặng 1 lượt quay miễn phí. Bạn có thể check-in tại bàn BTC hoặc tham gia minigame để nhận mã code nạp thêm lượt quay. Sau khi quay trúng quà, vui lòng xuất trình Mã Đối Soát hiển thị trên màn hình cho Ban Tổ Chức tại Bàn Sự Kiện (Sảnh E4) để nhận quà hiện vật!',
+    title: 'Vòng Quay May Mắn - Khoa Vật lý kỹ thuật & CNNN',
+    location: '',
+    time: '',
+    how_to_receive: '',
+    description: '',
     event_type: 'wheel',
     is_active: false,
-    default_spins: 1,
+    default_spins: 0,
   }), [])
 
   const DEFAULT_GIFT_ITEMS: FepnGiftItem[] = useMemo(() => [
@@ -292,6 +299,16 @@ export default function FepnAdminDashboardPage() {
   const [generatingCodes, setGeneratingCodes] = useState(false)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [claimFilterStatus, setClaimFilterStatus] = useState<'all' | 'pending' | 'delivered'>('all')
+
+  // Direct Claim Verification & Search states
+  const [verifyCodeInput, setVerifyCodeInput] = useState('')
+  const [verifyingClaim, setVerifyingClaim] = useState(false)
+  const [foundVerifyClaim, setFoundVerifyClaim] = useState<FepnGiftClaim | null>(null)
+  const [verifyStatusMessage, setVerifyStatusMessage] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
+  const [manualGiftId, setManualGiftId] = useState('')
+  const [manualStudentMssv, setManualStudentMssv] = useState('')
+  const [manualStudentName, setManualStudentName] = useState('')
+  const [claimSearchKeyword, setClaimSearchKeyword] = useState('')
 
   // ========================================================
   // 1. AUTHENTICATION & ROLE CHECK
@@ -660,30 +677,221 @@ export default function FepnAdminDashboardPage() {
     } catch (e) {}
   }
 
-  const handleMarkClaimDelivered = async (claimId: string) => {
-    const updated = giftClaims.map((c) => {
-      if (c.id === claimId) {
-        return {
-          ...c,
-          status: 'delivered' as const,
-          delivered_at: new Date().toISOString(),
-          delivered_by: user?.email || 'Admin',
+  const handleConfirmDelivery = async (targetClaim: FepnGiftClaim) => {
+    try {
+      // 1. Decrement Gift Item quantity
+      const targetGift = giftItems.find(
+        (g) => g.id === targetClaim.gift_id || g.name.trim().toLowerCase() === targetClaim.gift_name.trim().toLowerCase()
+      )
+
+      if (targetGift) {
+        const nextRemaining = Math.max(0, targetGift.remaining_quantity - 1)
+        const updatedGifts = giftItems.map((g) => (g.id === targetGift.id ? { ...g, remaining_quantity: nextRemaining } : g))
+        setGiftItems(updatedGifts)
+        localStorage.setItem('fepn_gift_items_data', JSON.stringify(updatedGifts))
+
+        try {
+          await supabase.from('fepn_gift_items').update({ remaining_quantity: nextRemaining }).eq('id', targetGift.id)
+        } catch (e) {
+          console.warn('Supabase gift item qty update error:', e)
         }
       }
-      return c
-    })
-    setGiftClaims(updated)
-    localStorage.setItem('fepn_gift_claims_data', JSON.stringify(updated))
+
+      // 2. Mark Claim as delivered
+      const deliveredAt = new Date().toISOString()
+      const deliveredBy = user?.email || 'Admin FEPN'
+
+      const updatedClaims = giftClaims.map((c) => {
+        if (c.id === targetClaim.id || c.claim_code === targetClaim.claim_code) {
+          return {
+            ...c,
+            status: 'delivered' as const,
+            delivered_at: deliveredAt,
+            delivered_by: deliveredBy,
+          }
+        }
+        return c
+      })
+      setGiftClaims(updatedClaims)
+      localStorage.setItem('fepn_gift_claims_data', JSON.stringify(updatedClaims))
+
+      try {
+        await supabase
+          .from('fepn_gift_claims')
+          .update({
+            status: 'delivered',
+            delivered_at: deliveredAt,
+            delivered_by: deliveredBy,
+          })
+          .eq('id', targetClaim.id)
+      } catch (e) {
+        try {
+          await supabase
+            .from('fepn_gift_claims')
+            .update({
+              status: 'delivered',
+              delivered_at: deliveredAt,
+              delivered_by: deliveredBy,
+            })
+            .eq('claim_code', targetClaim.claim_code)
+        } catch {}
+      }
+
+      setFoundVerifyClaim({
+        ...targetClaim,
+        status: 'delivered',
+        delivered_at: deliveredAt,
+        delivered_by: deliveredBy,
+      })
+
+      setVerifyStatusMessage({
+        type: 'success',
+        message: `✅ Xác nhận thành công! Đã trao phần quà "${targetClaim.gift_name}" cho sinh viên ${targetClaim.user_name} (${targetClaim.user_mssv}) và giảm 1 suất quà trên hệ thống.`,
+      })
+    } catch (err: any) {
+      alert('Lỗi khi xác nhận trao quà: ' + err.message)
+    }
+  }
+
+  const handleMarkClaimDelivered = async (claimId: string) => {
+    const target = giftClaims.find((c) => c.id === claimId)
+    if (target) {
+      await handleConfirmDelivery(target)
+    }
+  }
+
+  const handleCheckClaimCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const raw = verifyCodeInput.trim().toUpperCase()
+    if (!raw) return
+
+    setVerifyingClaim(true)
+    setVerifyStatusMessage(null)
+    setFoundVerifyClaim(null)
+
     try {
-      await supabase
-        .from('fepn_gift_claims')
-        .update({
-          status: 'delivered',
-          delivered_at: new Date().toISOString(),
-          delivered_by: user?.email || 'Admin',
+      // 1. Search in local state
+      let match = giftClaims.find((c) => c.claim_code.toUpperCase() === raw)
+
+      // 2. If not found in state, try querying Supabase
+      if (!match) {
+        try {
+          const { data: dbClaim } = await supabase
+            .from('fepn_gift_claims')
+            .select('*')
+            .ilike('claim_code', raw)
+            .maybeSingle()
+          if (dbClaim) {
+            match = dbClaim
+            setGiftClaims((prev) => [dbClaim, ...prev.filter((p) => p.id !== dbClaim.id)])
+          }
+        } catch {}
+      }
+
+      if (match) {
+        setFoundVerifyClaim(match)
+        if (match.status === 'delivered') {
+          setVerifyStatusMessage({
+            type: 'warning',
+            message: `⚠️ Mã đối soát này ĐÃ ĐƯỢC TRAO QUÀ trước đó vào lúc ${new Date(match.delivered_at || match.claimed_at).toLocaleString('vi-VN')} bởi ${match.delivered_by || 'Ban Tổ Chức'}!`,
+          })
+        } else {
+          setVerifyStatusMessage({
+            type: 'info',
+            message: `Hợp lệ! Sinh viên: ${match.user_name} (${match.user_mssv}) - Trúng quà: "${match.gift_name}". Hãy bấm nút xác nhận trao quà bên dưới.`,
+          })
+        }
+      } else {
+        // Parse MSSV if in format CLAIM-[MSSV]-[RANDOM]
+        const parts = raw.split('-')
+        let detectedMssv = ''
+        if (parts.length >= 2 && parts[0] === 'CLAIM') {
+          detectedMssv = parts[1]
+        }
+        setManualStudentMssv(detectedMssv || '')
+        setManualStudentName(detectedMssv ? `Sinh viên ${detectedMssv}` : 'Sinh viên VNU')
+        const firstPhysicalGift = giftItems.find((g) => !g.is_consolation)
+        if (firstPhysicalGift) setManualGiftId(firstPhysicalGift.id)
+
+        setVerifyStatusMessage({
+          type: 'warning',
+          message: `Mã "${raw}" chưa có trong danh sách đồng bộ tự động. Bạn có thể kiểm tra màn hình của sinh viên và xác nhận trao quà thủ công ngay bên dưới để trừ kho!`,
         })
-        .eq('id', claimId)
-    } catch (e) {}
+      }
+    } catch (err: any) {
+      setVerifyStatusMessage({
+        type: 'error',
+        message: 'Lỗi kiểm tra mã: ' + err.message,
+      })
+    } finally {
+      setVerifyingClaim(false)
+    }
+  }
+
+  const handleManualConfirmDelivery = async () => {
+    const raw = verifyCodeInput.trim().toUpperCase()
+    if (!raw) return
+    const gift = giftItems.find((g) => g.id === manualGiftId)
+    if (!gift) {
+      alert('Vui lòng chọn món quà trao cho sinh viên!')
+      return
+    }
+
+    try {
+      // 1. Decrement Gift Item quantity
+      const nextRemaining = Math.max(0, gift.remaining_quantity - 1)
+      const updatedGifts = giftItems.map((g) => (g.id === gift.id ? { ...g, remaining_quantity: nextRemaining } : g))
+      setGiftItems(updatedGifts)
+      localStorage.setItem('fepn_gift_items_data', JSON.stringify(updatedGifts))
+
+      try {
+        await supabase.from('fepn_gift_items').update({ remaining_quantity: nextRemaining }).eq('id', gift.id)
+      } catch {}
+
+      // 2. Create Claim record
+      const deliveredAt = new Date().toISOString()
+      const deliveredBy = user?.email || 'Admin FEPN'
+      const newClaim: FepnGiftClaim = {
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `claim-${Date.now()}`,
+        event_id: giftEvent.id,
+        user_mssv: manualStudentMssv.trim().toUpperCase() || 'VNU',
+        user_name: manualStudentName.trim() || 'Sinh viên VNU',
+        gift_id: gift.id,
+        gift_name: gift.name,
+        claim_code: raw,
+        claimed_at: deliveredAt,
+        status: 'delivered',
+        delivered_at: deliveredAt,
+        delivered_by: deliveredBy,
+      }
+
+      const updatedClaims = [newClaim, ...giftClaims]
+      setGiftClaims(updatedClaims)
+      localStorage.setItem('fepn_gift_claims_data', JSON.stringify(updatedClaims))
+
+      try {
+        await supabase.from('fepn_gift_claims').insert({
+          event_id: giftEvent.id,
+          user_mssv: newClaim.user_mssv,
+          user_name: newClaim.user_name,
+          gift_id: gift.id,
+          gift_name: gift.name,
+          claim_code: raw,
+          claimed_at: deliveredAt,
+          status: 'delivered',
+          delivered_at: deliveredAt,
+          delivered_by: deliveredBy,
+        })
+      } catch {}
+
+      setFoundVerifyClaim(newClaim)
+      setVerifyStatusMessage({
+        type: 'success',
+        message: `✅ Xác nhận thành công! Đã tạo phiếu đối soát và trao quà "${gift.name}" cho sinh viên ${newClaim.user_name} (${newClaim.user_mssv}). Số lượng quà trên trang đã được trừ 1 suất!`,
+      })
+    } catch (err: any) {
+      alert('Lỗi xác nhận: ' + err.message)
+    }
   }
 
   useEffect(() => {
@@ -1714,14 +1922,60 @@ export default function FepnAdminDashboardPage() {
                   </div>
                 </div>
 
-                {/* Rules & Description */}
+                {/* Dynamic Rule Fields */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 text-pink-600" />
+                    <span>Địa Điểm Nhận Quà</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={giftEvent.location || ''}
+                    onChange={(e) => setGiftEvent({ ...giftEvent, location: e.target.value })}
+                    placeholder="VD: Bàn Ban Tổ Chức Khoa VLKT (Sảnh Nhà E4)..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-bold outline-none focus:border-pink-500 focus:bg-white transition"
+                  />
+                  <p className="text-[10px] text-slate-400">Vị trí sinh viên sẽ đến đối soát và lấy quà trực tiếp</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-sky-600" />
+                    <span>Thời Gian Trao Quà</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={giftEvent.time || ''}
+                    onChange={(e) => setGiftEvent({ ...giftEvent, time: e.target.value })}
+                    placeholder="VD: 08:30 - 16:30 các ngày 15/09 - 18/09..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-bold outline-none focus:border-pink-500 focus:bg-white transition"
+                  />
+                  <p className="text-[10px] text-slate-400">Khung giờ bàn trực của BTC mở cửa nhận đổi quà</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Cách Thức Nhận Quà</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={giftEvent.how_to_receive || ''}
+                    onChange={(e) => setGiftEvent({ ...giftEvent, how_to_receive: e.target.value })}
+                    placeholder="VD: Xuất trình Mã Đối Soát (Claim Code) trên điện thoại cho BTC..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-bold outline-none focus:border-pink-500 focus:bg-white transition"
+                  />
+                  <p className="text-[10px] text-slate-400">Hướng dẫn thao tác đối soát để nhận quà hiện vật</p>
+                </div>
+
+                {/* Additional Notes & Description */}
                 <div className="md:col-span-3 space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">Thể Thức Tham Gia & Quy Định Nhận Quà (Hiển thị cho sinh viên)</label>
+                  <label className="text-xs font-bold text-slate-700">Ghi Chú / Thể Thức Lưu Ý Thêm (Tùy chọn)</label>
                   <textarea
-                    rows={4}
-                    value={giftEvent.description}
+                    rows={3}
+                    value={giftEvent.description || ''}
                     onChange={(e) => setGiftEvent({ ...giftEvent, description: e.target.value })}
-                    placeholder="Ghi rõ địa điểm nhận quà (vd: Bàn Sự Kiện Sảnh E4), thời gian trao quà, quy định xuất trình mã đối soát..."
+                    placeholder="Ghi chú thêm về quy định nhận quà, hướng dẫn đặc biệt cho sinh viên (nếu có)..."
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-medium outline-none focus:border-pink-500 focus:bg-white transition"
                   />
                 </div>
@@ -2017,31 +2271,239 @@ export default function FepnAdminDashboardPage() {
               </div>
             </div>
 
-            {/* 5. LỊCH SỬ TRÚNG THƯỞNG & ĐỐI SOÁT TRAO QUÀ */}
+            {/* 5. CỔNG NHẬP MÃ ĐỐI SOÁT & DANH SÁCH TRÚNG THƯỞNG */}
             <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+              {/* 5.1 CỔNG NHẬP MÃ ĐỐI SOÁT TRỰC TIẾP */}
+              <div className="rounded-2xl border border-pink-500/20 bg-gradient-to-r from-pink-50/50 via-rose-50/30 to-amber-50/30 p-5 sm:p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-pink-500 to-rose-600 text-white shadow-md">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black text-slate-900">Cổng Nhập Mã Đối Soát Trao Quà Trực Tiếp</h4>
+                    <p className="text-xs text-slate-500">
+                      Nhập hoặc dán mã đối soát (Claim Code) từ màn hình sinh viên để kiểm tra, xác nhận trao quà và tự động giảm số lượng quà trên hệ thống.
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleCheckClaimCode} className="flex flex-col sm:flex-row gap-2.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={verifyCodeInput}
+                      onChange={(e) => setVerifyCodeInput(e.target.value.toUpperCase())}
+                      placeholder="Nhập mã đối soát (VD: CLAIM-23020001-ABCD)..."
+                      className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white font-mono text-sm font-black uppercase tracking-wider outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition text-slate-900"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={verifyingClaim || !verifyCodeInput.trim()}
+                    className="px-6 py-3 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-black text-xs uppercase tracking-wider shadow-sm transition hover:scale-105 disabled:opacity-50 inline-flex items-center justify-center gap-2 shrink-0"
+                  >
+                    {verifyingClaim ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    <span>Kiểm Tra & Đối Soát</span>
+                  </button>
+
+                  {verifyCodeInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVerifyCodeInput('')
+                        setFoundVerifyClaim(null)
+                        setVerifyStatusMessage(null)
+                      }}
+                      className="px-3 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 text-xs font-bold transition shrink-0"
+                      title="Xóa ô nhập"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </form>
+
+                {/* Status Alert */}
+                {verifyStatusMessage && (
+                  <div
+                    className={`p-4 rounded-xl text-xs font-bold border flex items-start gap-2.5 ${
+                      verifyStatusMessage.type === 'success'
+                        ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                        : verifyStatusMessage.type === 'warning'
+                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                        : verifyStatusMessage.type === 'info'
+                        ? 'bg-sky-50 text-sky-900 border-sky-300'
+                        : 'bg-rose-50 text-rose-900 border-rose-300'
+                    }`}
+                  >
+                    {verifyStatusMessage.type === 'success' ? (
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : verifyStatusMessage.type === 'warning' ? (
+                      <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    ) : verifyStatusMessage.type === 'info' ? (
+                      <Check className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <span className="leading-relaxed">{verifyStatusMessage.message}</span>
+                  </div>
+                )}
+
+                {/* Found Claim Card */}
+                {foundVerifyClaim && (
+                  <div className="p-4 rounded-2xl bg-white border border-pink-200 shadow-sm space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-pink-600">Mã Đối Soát Hợp Lệ</span>
+                        <p className="text-lg font-mono font-black text-slate-900">{foundVerifyClaim.claim_code}</p>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
+                          foundVerifyClaim.status === 'delivered'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800 animate-pulse'
+                        }`}
+                      >
+                        {foundVerifyClaim.status === 'delivered' ? '✓ Đã Trao Quà' : '⏳ Chờ Nhận Quà'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                        <span className="text-slate-400 font-bold block mb-1">Sinh Viên:</span>
+                        <p className="font-black text-slate-900">{foundVerifyClaim.user_name || 'Sinh viên VNU'}</p>
+                        <p className="font-mono text-slate-500 font-bold">{foundVerifyClaim.user_mssv}</p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                        <span className="text-slate-400 font-bold block mb-1">Phần Quà Trúng:</span>
+                        <p className="font-black text-pink-600 text-sm">{foundVerifyClaim.gift_name}</p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                        <span className="text-slate-400 font-bold block mb-1">Thời Gian Trúng:</span>
+                        <p className="font-bold text-slate-700">
+                          {new Date(foundVerifyClaim.claimed_at).toLocaleString('vi-VN')}
+                        </p>
+                        {foundVerifyClaim.delivered_at && (
+                          <p className="text-[11px] text-emerald-600 font-bold mt-1">
+                            Trao lúc: {new Date(foundVerifyClaim.delivered_at).toLocaleString('vi-VN')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {foundVerifyClaim.status === 'pending' && (
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmDelivery(foundVerifyClaim)}
+                          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black uppercase text-xs tracking-wider shadow-md transition hover:scale-[1.01] flex items-center justify-center gap-2"
+                        >
+                          <Check className="h-4 w-4" />
+                          <span>Xác Nhận Đã Trao Quà & Giảm Số Lượng Quà Trên Trang (-1)</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Manual Confirmation Card (if claim code not synced yet) */}
+                {!foundVerifyClaim && verifyCodeInput.trim() && verifyStatusMessage?.type === 'warning' && (
+                  <div className="p-4 rounded-2xl bg-white border border-amber-200 shadow-sm space-y-3">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                      <Gift className="h-4 w-4 text-amber-600" />
+                      <span>Xác Nhận Trao Quà Thủ Công & Trừ Số Lượng Trong Kho</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">MSSV Sinh Viên:</label>
+                        <input
+                          type="text"
+                          value={manualStudentMssv}
+                          onChange={(e) => setManualStudentMssv(e.target.value.toUpperCase())}
+                          placeholder="VD: 23020001"
+                          className="w-full rounded-xl border border-slate-300 p-2 font-mono font-bold uppercase outline-none focus:border-pink-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Họ Tên Sinh Viên:</label>
+                        <input
+                          type="text"
+                          value={manualStudentName}
+                          onChange={(e) => setManualStudentName(e.target.value)}
+                          placeholder="Họ tên sinh viên"
+                          className="w-full rounded-xl border border-slate-300 p-2 font-bold outline-none focus:border-pink-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Món Quà Sinh Viên Trúng:</label>
+                        <select
+                          value={manualGiftId}
+                          onChange={(e) => setManualGiftId(e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 p-2 font-bold outline-none focus:border-pink-500 bg-white"
+                        >
+                          {giftItems.filter((g) => !g.is_consolation).map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name} (Còn {g.remaining_quantity})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleManualConfirmDelivery}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black uppercase text-xs tracking-wider shadow-md transition flex items-center justify-center gap-2"
+                    >
+                      <Check className="h-4 w-4" />
+                      <span>Xác Nhận Trao Quà & Giảm Số Lượng Quà (-1)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 5.2 DANH SÁCH TẤT CẢ LƯỢT TRÚNG & BỘ LỌC */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
                 <div>
-                  <h4 className="text-base font-black text-slate-900">Danh Sách Trúng Thưởng & Đối Soát Trao Quà</h4>
+                  <h4 className="text-base font-black text-slate-900">Danh Sách Trúng Thưởng & Đối Soát ({giftClaims.length})</h4>
                   <p className="text-xs text-slate-500">
-                    Sinh viên xuất trình mã đối soát trên điện thoại để BTC kiểm tra và bấm xác nhận trao quà.
+                    Toàn bộ lịch sử trúng thưởng và trạng thái nhận quà của sinh viên.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-                  {(['all', 'pending', 'delivered'] as const).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setClaimFilterStatus(st)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                        claimFilterStatus === st
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      {st === 'all' ? 'Tất cả' : st === 'pending' ? 'Chờ trao quà' : 'Đã trao quà'}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={claimSearchKeyword}
+                      onChange={(e) => setClaimSearchKeyword(e.target.value)}
+                      placeholder="Tìm theo MSSV, mã đối soát..."
+                      className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold outline-none focus:border-pink-500 focus:bg-white transition w-48 sm:w-60"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                    {(['all', 'pending', 'delivered'] as const).map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setClaimFilterStatus(st)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                          claimFilterStatus === st
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {st === 'all' ? 'Tất cả' : st === 'pending' ? 'Chờ trao quà' : 'Đã trao quà'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -2059,62 +2521,75 @@ export default function FepnAdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {giftClaims
-                      .filter((c) => claimFilterStatus === 'all' || c.status === claimFilterStatus)
-                      .length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
-                          Chưa có lượt trúng thưởng nào trong danh sách.
-                        </td>
-                      </tr>
-                    ) : (
-                      giftClaims
+                    {(() => {
+                      const filteredClaims = giftClaims
                         .filter((c) => claimFilterStatus === 'all' || c.status === claimFilterStatus)
-                        .map((claim) => (
-                          <tr key={claim.id} className="hover:bg-slate-50/80 transition">
-                            <td className="px-4 py-3 font-mono font-black text-pink-600">
-                              {claim.claim_code}
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="font-bold text-slate-900">{claim.user_name || 'Sinh viên VNU'}</p>
-                              <p className="font-mono text-[11px] text-slate-400">{claim.user_mssv}</p>
-                            </td>
-                            <td className="px-4 py-3 font-bold text-slate-800">
-                              {claim.gift_name}
-                            </td>
-                            <td className="px-4 py-3 text-slate-500">
-                              {new Date(claim.claimed_at).toLocaleString('vi-VN')}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {claim.status === 'delivered' ? (
-                                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
-                                  ✓ Đã trao quà
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black uppercase animate-pulse">
-                                  ⏳ Chờ nhận
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {claim.status === 'pending' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleMarkClaimDelivered(claim.id)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition hover:scale-105"
-                                >
-                                  <Check className="h-3.5 w-3.5" />
-                                  <span>Xác Nhận Đã Trao</span>
-                                </button>
-                              ) : (
-                                <span className="text-[11px] text-slate-400 italic">
-                                  Đã trao bởi {claim.delivered_by || 'BTC'}
-                                </span>
-                              )}
+                        .filter((c) => {
+                          if (!claimSearchKeyword.trim()) return true
+                          const kw = claimSearchKeyword.trim().toLowerCase()
+                          return (
+                            c.claim_code.toLowerCase().includes(kw) ||
+                            c.user_mssv.toLowerCase().includes(kw) ||
+                            (c.user_name && c.user_name.toLowerCase().includes(kw)) ||
+                            c.gift_name.toLowerCase().includes(kw)
+                          )
+                        })
+
+                      if (filteredClaims.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
+                              {claimSearchKeyword ? 'Không tìm thấy lượt đổi quà khớp với từ khóa tìm kiếm.' : 'Chưa có lượt trúng thưởng nào trong danh sách.'}
                             </td>
                           </tr>
-                        ))
-                    )}
+                        )
+                      }
+
+                      return filteredClaims.map((claim) => (
+                        <tr key={claim.id} className="hover:bg-slate-50/80 transition">
+                          <td className="px-4 py-3 font-mono font-black text-pink-600">
+                            {claim.claim_code}
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-bold text-slate-900">{claim.user_name || 'Sinh viên VNU'}</p>
+                            <p className="font-mono text-[11px] text-slate-400">{claim.user_mssv}</p>
+                          </td>
+                          <td className="px-4 py-3 font-bold text-slate-800">
+                            {claim.gift_name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-500">
+                            {new Date(claim.claimed_at).toLocaleString('vi-VN')}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {claim.status === 'delivered' ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                                ✓ Đã trao quà
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black uppercase animate-pulse">
+                                ⏳ Chờ nhận
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {claim.status === 'pending' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleMarkClaimDelivered(claim.id)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition hover:scale-105"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                <span>Xác Nhận Đã Trao & Trừ Kho</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">
+                                Đã trao bởi {claim.delivered_by || 'BTC'}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    })()}
                   </tbody>
                 </table>
               </div>
