@@ -103,7 +103,7 @@ function getEmailProviderInfo(): {
     return {
       configured: true,
       provider: 'resend',
-      details: `Resend API (From: ${process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'})`,
+      details: `Resend API (${process.env.RESEND_FROM_EMAIL || 'schedule@tsv.fepn.senexam.me'})`,
     }
   }
 
@@ -282,7 +282,8 @@ async function sendSingleEmail(
     // ----------------------------------------------------
     const resendApiKey = process.env.RESEND_API_KEY
     if (resendApiKey) {
-      const fromEmail = process.env.RESEND_FROM_EMAIL || 'FEPN Schedule <onboarding@resend.dev>'
+      const fromEmail =
+        process.env.RESEND_FROM_EMAIL || 'FEPN Schedule <schedule@tsv.fepn.senexam.me>'
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -298,13 +299,13 @@ async function sendSingleEmail(
       })
 
       if (res.ok) {
-        return { email: item.studentEmail, success: true, provider: 'Resend' }
+        return { email: item.studentEmail, success: true, provider: `Resend (${fromEmail})` }
       }
 
       const errText = await res.text()
 
-      // Tự động fallback về onboarding@resend.dev nếu gửi từ domain chưa verify bị từ chối
-      if (fromEmail !== 'FEPN Schedule <onboarding@resend.dev>') {
+      // Nếu gửi từ địa chỉ khác bị lỗi (ví dụ domain senexam.me chưa verify), tự động fallback sang domain đã verify schedule@tsv.fepn.senexam.me
+      if (fromEmail !== 'FEPN Schedule <schedule@tsv.fepn.senexam.me>') {
         const fallbackRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -312,7 +313,7 @@ async function sendSingleEmail(
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'FEPN Schedule <onboarding@resend.dev>',
+            from: 'FEPN Schedule <schedule@tsv.fepn.senexam.me>',
             to: item.studentEmail,
             subject,
             html,
@@ -320,7 +321,7 @@ async function sendSingleEmail(
         })
 
         if (fallbackRes.ok) {
-          return { email: item.studentEmail, success: true, provider: 'Resend (onboarding fallback)' }
+          return { email: item.studentEmail, success: true, provider: 'Resend (tsv.fepn verified domain)' }
         }
       }
 
