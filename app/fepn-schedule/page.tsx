@@ -29,6 +29,9 @@ import {
   ArrowRight,
   Sliders,
   RotateCcw,
+  AlertCircle,
+  CheckCircle2,
+  Bell,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -321,6 +324,13 @@ export default function FepnSchedulePage() {
   // 7. General Notification Settings
   const [customNotificationEmail, setCustomNotificationEmail] = useState('')
   const [copiedSchedule, setCopiedSchedule] = useState(false)
+  const [emailServerStatus, setEmailServerStatus] = useState<{
+    configured: boolean
+    provider: string
+    details: string
+    loading: boolean
+  }>({ configured: false, provider: 'none', details: 'Đang kiểm tra...', loading: true })
+  const [browserNotifyPermission, setBrowserNotifyPermission] = useState<'default' | 'granted' | 'denied'>('default')
 
   // 8. Custom Study Shifts State (Quản lý ca học tùy chỉnh)
   const [shifts, setShifts] = useState<FepnShiftConfig[]>(DEFAULT_FEPN_SHIFTS)
@@ -398,6 +408,138 @@ export default function FepnSchedulePage() {
     }, 15000)
     return () => clearInterval(timer)
   }, [])
+
+  // Kiểm tra trạng thái máy chủ gửi email & quyền thông báo trình duyệt
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setBrowserNotifyPermission(Notification.permission)
+    }
+
+    const checkServerStatus = async () => {
+      try {
+        const res = await fetch('/api/fepn-schedule/send-reminders?status=1')
+        if (res.ok) {
+          const data = await res.json()
+          setEmailServerStatus({
+            configured: !!data.configured,
+            provider: data.provider || 'none',
+            details: data.details || '',
+            loading: false,
+          })
+        }
+      } catch (e) {
+        setEmailServerStatus((prev) => ({ ...prev, loading: false }))
+      }
+    }
+    checkServerStatus()
+  }, [])
+
+  // Tự động quét và kích hoạt nhắc nhở trước 30 phút khi sinh viên đang mở ứng dụng
+  useEffect(() => {
+    if (!subjects || subjects.length === 0) return
+
+    const targetEmail = customNotificationEmail || user?.email || ''
+    if (!targetEmail || !targetEmail.includes('@')) return
+
+    const checkAndTriggerReminders = async () => {
+      const now = new Date()
+      const jsDay = now.getDay()
+      const currentDay = jsDay === 0 ? 8 : ((jsDay + 1) as 2 | 3 | 4 | 5 | 6 | 7 | 8)
+      const currentMinutes = now.getHours() * 60 + now.getMinutes()
+      const todayStr = now.toISOString().split('T')[0]
+
+      const queue: any[] = []
+
+      for (const sub of subjects) {
+        if (sub.notify_email === false) continue
+        for (const sess of sub.sessions) {
+          if (sess.day_of_week === currentDay) {
+            const [h, m] = (sess.start_time || '').split(':').map(Number)
+            if (isNaN(h)) continue
+            const startM = h * 60 + (m || 0)
+            const diff = startM - currentMinutes
+
+            // Cửa sổ thông báo 30 phút: từ 20 đến 35 phút trước giờ vào lớp
+            if (diff >= 20 && diff <= 35) {
+              const storageKey = `fepn_reminded_${sub.id}_${sess.id || sess.start_time}_${todayStr}`
+              const alreadySent = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null
+
+              if (!alreadySent) {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem(storageKey, 'true')
+                }
+
+                queue.push({
+                  studentEmail: targetEmail,
+                  studentName: user?.user_metadata?.full_name || 'Sinh viên FEPN',
+                  subjectName: sub.name,
+                  subjectCode: sub.code || 'EPN',
+                  shiftName: sess.shift_name,
+                  startTime: sess.start_time,
+                  endTime: sess.end_time,
+                  classroom: sess.classroom || sub.default_classroom,
+                  lecturers: sub.lecturers,
+                  sessionType:
+                    sess.type === 'practice'
+                      ? 'Thực hành / Thí nghiệm'
+                      : sess.type === 'exercise'
+                      ? 'Bài tập / Thảo luận'
+                      : sess.type === 'exam'
+                      ? 'Kiểm tra / Thi giữa kỳ'
+                      : 'Lý thuyết chính khóa',
+                  notes: sess.notes,
+                })
+
+                // Thông báo trực tiếp trên màn hình máy tính/điện thoại nếu đã cấp quyền
+                if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                  try {
+                    new Notification(`⏰ FEPN: Sắp đến giờ học môn ${sub.name}`, {
+                      body: `Ca học ${sess.shift_name} (${sess.start_time} - ${sess.end_time}) tại ${sess.classroom || sub.default_classroom}.`,
+                      icon: '/icons/fepn-logo.png',
+                    })
+                  } catch (e) {}
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (queue.length > 0) {
+        try {
+          console.log(`[FEPN Auto-Reminder] Kích hoạt gửi nhắc nhở cho ${queue.length} ca học`)
+          await fetch('/api/fepn-schedule/send-reminders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'batch', items: queue }),
+          })
+        } catch (e) {
+          console.warn('[FEPN Auto-Reminder] Gửi nhắc nhở thất bại:', e)
+        }
+      }
+    }
+
+    checkAndTriggerReminders()
+    const interval = setInterval(checkAndTriggerReminders, 30000)
+    return () => clearInterval(interval)
+  }, [subjects, user, customNotificationEmail])
+
+  const handleRequestBrowserNotification = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission()
+        setBrowserNotifyPermission(perm)
+        if (perm === 'granted') {
+          new Notification('FEPN Schedule', {
+            body: 'Đã bật thông báo trình duyệt thành công! Bạn sẽ nhận được chuông cảnh báo trước 30 phút mỗi khi sắp vào lớp.',
+            icon: '/icons/fepn-logo.png',
+          })
+        }
+      } catch (e) {
+        console.warn('Lỗi xin quyền notification:', e)
+      }
+    }
+  }
 
   // Tải thời khóa biểu từ Supabase & LocalStorage (Tách biệt độc lập theo User ID, không chèn demo cho tài khoản thật)
   const loadSchedule = async (userId: string, email: string) => {
@@ -876,12 +1018,12 @@ export default function FepnSchedulePage() {
       if (res.ok && data.success) {
         setTestEmailResult({
           success: true,
-          message: `Đã gửi thành công email nhắc nhở mô phỏng đến "${targetEmail}". Bạn hãy kiểm tra hộp thư đến (hoặc hòm thư Spam/Quảng cáo nhé)!`,
+          message: data.message || `Đã gửi thành công email nhắc nhở đến "${targetEmail}". Bạn hãy kiểm tra hộp thư đến (hoặc hòm thư Spam/Quảng cáo nhé)!`,
         })
       } else {
         setTestEmailResult({
           success: false,
-          message: data.error || 'Có lỗi xảy ra khi gửi email thử nghiệm.',
+          message: data.message || data.error || 'Có lỗi xảy ra khi gửi email thử nghiệm.',
         })
       }
     } catch (err: any) {
@@ -2273,8 +2415,68 @@ export default function FepnSchedulePage() {
             </div>
 
             <div className="space-y-4 flex-1 overflow-y-auto pr-1">
-              <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 text-xs text-sky-800 dark:text-sky-300 font-medium">
-                Hệ thống được tối ưu kiểm soát nhịp gửi (batching 5 mail/lần, delay 600ms) để không bao giờ bị nghẽn hay quá tải khi gửi cùng lúc nhiều sinh viên.
+              {/* Trạng thái dịch vụ gửi email từ máy chủ */}
+              {emailServerStatus.loading ? (
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs flex items-center gap-2 text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
+                  <span>Đang kiểm tra kết nối dịch vụ email máy chủ...</span>
+                </div>
+              ) : emailServerStatus.configured ? (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs">
+                  <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-300">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    Kênh gửi mail: {emailServerStatus.details}
+                  </div>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1">
+                    Hệ thống sẽ tự động quét và gửi email nhắc nhở trước 30 phút mỗi khi đến giờ học qua Vercel Cron & Bộ điều phối thời gian thực.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs">
+                  <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                    Máy chủ chưa cấu hình biến môi trường gửi email
+                  </div>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+                    Để email có thể chuyển phát thực tế đến hộp thư sinh viên, hãy thêm biến môi trường trên Vercel:
+                    <span className="block mt-1.5 font-mono text-[10px] bg-amber-100 dark:bg-amber-900/60 p-2 rounded-xl text-amber-900 dark:text-amber-200 select-all">
+                      GMAIL_USER = your-email@gmail.com<br />
+                      GMAIL_PASS = xxxx xxxx xxxx xxxx (Mật khẩu ứng dụng 16 chữ)<br />
+                      hoặc RESEND_API_KEY = re_...
+                    </span>
+                  </p>
+                </div>
+              )}
+
+              {/* Tùy chọn thông báo đẩy trình duyệt */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Bell className="h-3.5 w-3.5 text-sky-600" />
+                    Chuông Báo Trên Màn Hình Trình Duyệt
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    {browserNotifyPermission === 'granted'
+                      ? 'Đã bật: Nhận popup cảnh báo trước 30 phút trên máy tính/điện thoại.'
+                      : 'Bật để nhận popup cảnh báo 30 phút trực tiếp khi mở web.'}
+                  </p>
+                </div>
+                {browserNotifyPermission === 'granted' ? (
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                    Đã Bật ✔
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRequestBrowserNotification}
+                    className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-[10px] font-bold shrink-0 transition"
+                  >
+                    Bật Ngay
+                  </button>
+                )}
               </div>
 
               <div className="space-y-1.5">
