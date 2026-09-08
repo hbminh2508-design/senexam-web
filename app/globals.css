@@ -457,3 +457,9 @@
     transform: translate3d(0, -14px, 0) scale(1.02);
   }
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
