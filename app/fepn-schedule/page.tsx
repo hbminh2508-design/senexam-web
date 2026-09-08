@@ -854,7 +854,14 @@ export default function FepnSchedulePage() {
           endTime: firstSession.end_time,
           classroom: firstSession.classroom || subjectToUse.default_classroom,
           lecturers: subjectToUse.lecturers,
-          sessionType: firstSession.type === 'practice' ? 'Thực hành / Thí nghiệm' : 'Lý thuyết',
+          sessionType:
+            firstSession.type === 'practice'
+              ? 'Thực hành / Thí nghiệm'
+              : firstSession.type === 'exercise'
+              ? 'Bài tập / Thảo luận'
+              : firstSession.type === 'exam'
+              ? 'Kiểm tra / Thi giữa kỳ'
+              : 'Lý thuyết chính khóa',
           notes: firstSession.notes || 'Đây là email gửi thử nghiệm tính năng nhắc nhở 30 phút.',
         },
       }
@@ -1100,6 +1107,27 @@ export default function FepnSchedulePage() {
                     <span className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                       Đang Trong Giờ Học
                     </span>
+                    {activeSession.session.type && (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          activeSession.session.type === 'exercise'
+                            ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                            : activeSession.session.type === 'practice'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                            : activeSession.session.type === 'exam'
+                            ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {activeSession.session.type === 'exercise'
+                          ? 'Bài Tập'
+                          : activeSession.session.type === 'practice'
+                          ? 'Thực Hành'
+                          : activeSession.session.type === 'exam'
+                          ? 'Thi / KT'
+                          : 'Lý Thuyết'}
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-black mt-1 text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
                     {activeSession.subject.name}
@@ -1125,6 +1153,27 @@ export default function FepnSchedulePage() {
                     <span className="px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 border border-amber-300 text-amber-800 dark:text-amber-300 text-[11px] font-black uppercase">
                       Sắp Vào Lớp (Còn {upcomingSession.minutesLeft} phút)
                     </span>
+                    {upcomingSession.session.type && (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          upcomingSession.session.type === 'exercise'
+                            ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                            : upcomingSession.session.type === 'practice'
+                            ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                            : upcomingSession.session.type === 'exam'
+                            ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {upcomingSession.session.type === 'exercise'
+                          ? 'Bài Tập'
+                          : upcomingSession.session.type === 'practice'
+                          ? 'Thực Hành'
+                          : upcomingSession.session.type === 'exam'
+                          ? 'Thi / KT'
+                          : 'Lý Thuyết'}
+                      </span>
+                    )}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-black mt-1 text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
                     {upcomingSession.subject.name}
@@ -1339,6 +1388,8 @@ export default function FepnSchedulePage() {
                     <td className="p-2 text-slate-600">
                       {session.type === 'practice'
                         ? 'Thực hành'
+                        : session.type === 'exercise'
+                        ? 'Bài tập'
                         : session.type === 'exam'
                         ? 'Thi / KT'
                         : 'Lý thuyết'}
@@ -1464,8 +1515,20 @@ export default function FepnSchedulePage() {
 
                                   {/* Loại buổi học */}
                                   {session.type && (
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                      {session.type === 'practice'
+                                    <span
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                        session.type === 'exercise'
+                                          ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                          : session.type === 'practice'
+                                          ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                          : session.type === 'exam'
+                                          ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      {session.type === 'exercise'
+                                        ? 'Bài Tập'
+                                        : session.type === 'practice'
                                         ? 'Thực Hành'
                                         : session.type === 'exam'
                                         ? 'Thi / KT'
@@ -1622,9 +1685,32 @@ export default function FepnSchedulePage() {
                                   palette.cardBg
                                 } ${palette.borderColor}`}
                               >
-                                <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${palette.badgeBg}`}>
-                                  {session.start_time}
-                                </span>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${palette.badgeBg}`}>
+                                    {session.start_time}
+                                  </span>
+                                  {session.type && (
+                                    <span
+                                      className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                                        session.type === 'exercise'
+                                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                                          : session.type === 'practice'
+                                          ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                                          : session.type === 'exam'
+                                          ? 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                      }`}
+                                    >
+                                      {session.type === 'exercise'
+                                        ? 'Bài Tập'
+                                        : session.type === 'practice'
+                                        ? 'Thực Hành'
+                                        : session.type === 'exam'
+                                        ? 'Thi'
+                                        : 'Lý Thuyết'}
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-xs font-black text-slate-900 dark:text-white mt-1 line-clamp-2">
                                   {subject.name}
                                 </p>
