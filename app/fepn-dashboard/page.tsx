@@ -635,6 +635,15 @@ export default function FepnDashboardMainPage() {
               <span>GPA</span>
             </Link>
 
+            <Link
+              href="/fepn-schedule"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-50 hover:bg-violet-100 text-violet-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              title="Thời Khóa Biểu & Lịch Học Hằng Tuần"
+            >
+              <Calendar className="h-3.5 w-3.5 text-violet-600" />
+              <span>Lịch Học</span>
+            </Link>
+
             {(isGiftActive || isAdmin) && (
               <Link
                 href="/fepn-gift"
