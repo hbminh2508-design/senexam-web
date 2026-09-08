@@ -323,9 +323,9 @@ export default function FepnSchedulePage() {
         if (currentUser) {
           setUser(currentUser)
           setCustomNotificationEmail(currentUser.email || '')
-          loadSchedule(currentUser.id, currentUser.email || '')
+          await loadSchedule(currentUser.id, currentUser.email || '')
         } else {
-          loadSchedule('guest', '')
+          await loadSchedule('guest', '')
         }
 
         // Tải danh mục môn học FEPN từ bảng fepn_subjects
@@ -377,21 +377,64 @@ export default function FepnSchedulePage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Tải thời khóa biểu từ localStorage
-  const loadSchedule = (userId: string, email: string) => {
+  // Tải thời khóa biểu từ Supabase & LocalStorage (Tách biệt độc lập theo User ID, không chèn demo cho tài khoản thật)
+  const loadSchedule = async (userId: string, email: string) => {
+    // 1. Thử tải từ Supabase nếu sinh viên đã đăng nhập
+    if (userId && userId !== 'guest') {
+      try {
+        const { data, error } = await supabase
+          .from('fepn_schedule_subjects')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: true })
+
+        if (!error && data) {
+          const formatted: FepnScheduleSubject[] = data.map((row: any) => ({
+            id: String(row.id),
+            subject_id: row.subject_id || undefined,
+            code: row.code || '',
+            name: row.name || 'Môn học',
+            credits: Number(row.credits) || 3,
+            color: row.color || 'sky',
+            lecturers: Array.isArray(row.lecturers) ? row.lecturers : [],
+            default_classroom: row.default_classroom || '',
+            sessions: Array.isArray(row.sessions) ? row.sessions : [],
+            notify_email: row.notify_email !== false,
+            student_email: row.student_email || email,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+          }))
+
+          setSubjects(formatted)
+          localStorage.setItem(`fepn_schedule_${userId}`, JSON.stringify(formatted))
+          return
+        }
+      } catch (err) {
+        console.warn('Supabase fetch schedule notice:', err)
+      }
+    }
+
+    // 2. Fallback đọc từ LocalStorage
     const key = `fepn_schedule_${userId}`
     const saved = localStorage.getItem(key)
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setSubjects(parsed)
           return
         }
       } catch (e) {}
     }
 
-    // Nếu chưa có, gán dữ liệu mẫu chuẩn FEPN
+    // Nếu là sinh viên đã đăng nhập nhưng chưa có môn nào trong DB: Khởi tạo trống, tuyệt đối không chèn demo
+    if (userId && userId !== 'guest') {
+      setSubjects([])
+      localStorage.setItem(key, JSON.stringify([]))
+      return
+    }
+
+    // Chỉ khi là khách vãng lai (guest) xem thử thì mới nạp dữ liệu mẫu
     const initial = INITIAL_DEMO_SUBJECTS.map((s) => ({
       ...s,
       student_email: email,
@@ -572,9 +615,10 @@ export default function FepnSchedulePage() {
     const emailToUse = customNotificationEmail || user?.email || 'sinhvien@vnu.edu.vn'
 
     if (editingCourse) {
+      let savedCourse: FepnScheduleSubject | null = null
       const updatedList = subjects.map((sub) => {
         if (sub.id === editingCourse.id) {
-          return {
+          savedCourse = {
             ...sub,
             name: formName.trim(),
             code: formCode.trim().toUpperCase(),
@@ -587,13 +631,37 @@ export default function FepnSchedulePage() {
             student_email: emailToUse,
             updated_at: new Date().toISOString(),
           }
+          return savedCourse
         }
         return sub
       })
       saveSchedule(updatedList)
+
+      if (user?.id && savedCourse) {
+        const sc: FepnScheduleSubject = savedCourse
+        supabase
+          .from('fepn_schedule_subjects')
+          .upsert({
+            id: sc.id,
+            user_id: user.id,
+            code: sc.code,
+            name: sc.name,
+            credits: sc.credits,
+            color: sc.color,
+            default_classroom: sc.default_classroom,
+            lecturers: sc.lecturers,
+            sessions: sc.sessions,
+            notify_email: sc.notify_email,
+            student_email: sc.student_email,
+          })
+          .then(({ error }) => {
+            if (error) console.warn('Lỗi cập nhật môn học lên Supabase:', error.message)
+          })
+      }
     } else {
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `course-${Date.now()}`
       const newCourse: FepnScheduleSubject = {
-        id: `course-${Date.now()}`,
+        id: newId,
         name: formName.trim(),
         code: formCode.trim().toUpperCase(),
         credits: Number(formCredits) || 3,
@@ -607,6 +675,27 @@ export default function FepnSchedulePage() {
         updated_at: new Date().toISOString(),
       }
       saveSchedule([newCourse, ...subjects])
+
+      if (user?.id) {
+        supabase
+          .from('fepn_schedule_subjects')
+          .insert({
+            id: newCourse.id,
+            user_id: user.id,
+            code: newCourse.code,
+            name: newCourse.name,
+            credits: newCourse.credits,
+            color: newCourse.color,
+            default_classroom: newCourse.default_classroom,
+            lecturers: newCourse.lecturers,
+            sessions: newCourse.sessions,
+            notify_email: newCourse.notify_email,
+            student_email: newCourse.student_email,
+          })
+          .then(({ error }) => {
+            if (error) console.warn('Lỗi thêm môn học lên Supabase:', error.message)
+          })
+      }
     }
 
     setShowCourseModal(false)
@@ -616,6 +705,17 @@ export default function FepnSchedulePage() {
     const updated = subjects.filter((s) => s.id !== id)
     saveSchedule(updated)
     setDeleteConfirmId(null)
+
+    if (user?.id) {
+      supabase
+        .from('fepn_schedule_subjects')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .then(({ error }) => {
+          if (error) console.warn('Lỗi xóa môn học trên Supabase:', error.message)
+        })
+    }
   }
 
   // ========================================================
