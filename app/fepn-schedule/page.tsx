@@ -27,6 +27,8 @@ import {
   Loader2,
   Layers,
   ArrowRight,
+  Sliders,
+  RotateCcw,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -45,7 +47,19 @@ export interface FepnScheduleSession {
   type?: 'theory' | 'practice' | 'exercise' | 'exam' | 'other'
   lecturer?: string
   notes?: string
+  shift_mode?: 'preset' | 'custom' // Chọn ca có sẵn hoặc nhập ca tùy ý
+  preset_shift_id?: string // Khóa tham chiếu ca có sẵn
 }
+
+export interface FepnShiftConfig {
+  id: string
+  shift_name: string // "Ca 1"
+  period_label: string // "Tiết 1 - 3"
+  start_time: string // "07:00"
+  end_time: string // "09:50"
+  order_index?: number
+}
+
 
 export interface FepnScheduleSubject {
   id: string
@@ -161,14 +175,15 @@ const DAYS_OF_WEEK: Array<{ id: 2 | 3 | 4 | 5 | 6 | 7 | 8; name: string; shortNa
   { id: 8, name: 'Chủ Nhật', shortName: 'Chủ Nhật' },
 ]
 
-// Ca học mẫu chuẩn ĐHQGHN
-const DEFAULT_SHIFTS = [
-  { name: 'Ca 1 (Tiết 1 - 3)', start: '07:00', end: '09:50' },
-  { name: 'Ca 2 (Tiết 4 - 6)', start: '10:00', end: '12:50' },
-  { name: 'Ca 3 (Tiết 7 - 9)', start: '13:00', end: '15:50' },
-  { name: 'Ca 4 (Tiết 10 - 12)', start: '16:00', end: '18:50' },
-  { name: 'Ca 5 (Tối: Tiết 13 - 15)', start: '19:00', end: '21:30' },
+// Ca học mẫu chuẩn ĐHQGHN (Sinh viên có thể tùy chỉnh lại ca x từ tiết mấy tới tiết mấy và khung giờ)
+export const DEFAULT_FEPN_SHIFTS: FepnShiftConfig[] = [
+  { id: 'shift-1', shift_name: 'Ca 1', period_label: 'Tiết 1 - 3', start_time: '07:00', end_time: '09:50', order_index: 1 },
+  { id: 'shift-2', shift_name: 'Ca 2', period_label: 'Tiết 4 - 6', start_time: '10:00', end_time: '12:50', order_index: 2 },
+  { id: 'shift-3', shift_name: 'Ca 3', period_label: 'Tiết 7 - 9', start_time: '13:00', end_time: '15:50', order_index: 3 },
+  { id: 'shift-4', shift_name: 'Ca 4', period_label: 'Tiết 10 - 12', start_time: '16:00', end_time: '18:50', order_index: 4 },
+  { id: 'shift-5', shift_name: 'Ca 5', period_label: 'Tiết 13 - 15 (Tối)', start_time: '19:00', end_time: '21:30', order_index: 5 },
 ]
+
 
 // Dữ liệu mẫu khởi tạo chuẩn màu sắc FEPN
 const INITIAL_DEMO_SUBJECTS: FepnScheduleSubject[] = [
@@ -307,6 +322,11 @@ export default function FepnSchedulePage() {
   const [customNotificationEmail, setCustomNotificationEmail] = useState('')
   const [copiedSchedule, setCopiedSchedule] = useState(false)
 
+  // 8. Custom Study Shifts State (Quản lý ca học tùy chỉnh)
+  const [shifts, setShifts] = useState<FepnShiftConfig[]>(DEFAULT_FEPN_SHIFTS)
+  const [showShiftModal, setShowShiftModal] = useState(false)
+  const [editingShiftsList, setEditingShiftsList] = useState<FepnShiftConfig[]>(DEFAULT_FEPN_SHIFTS)
+
   // ========================================================
   // 2. INITIALIZE USER & LOAD SCHEDULE
   // ========================================================
@@ -324,8 +344,10 @@ export default function FepnSchedulePage() {
           setUser(currentUser)
           setCustomNotificationEmail(currentUser.email || '')
           await loadSchedule(currentUser.id, currentUser.email || '')
+          await loadShifts(currentUser.id)
         } else {
           await loadSchedule('guest', '')
+          await loadShifts('guest')
         }
 
         // Tải danh mục môn học FEPN từ bảng fepn_subjects
@@ -451,6 +473,79 @@ export default function FepnSchedulePage() {
     localStorage.setItem(key, JSON.stringify(newSubjects))
   }
 
+  // Tải danh sách ca học cấu hình từ Supabase & LocalStorage
+  const loadShifts = async (userId: string) => {
+    if (userId && userId !== 'guest') {
+      try {
+        const { data, error } = await supabase
+          .from('fepn_schedule_shifts')
+          .select('*')
+          .eq('user_id', userId)
+          .order('order_index', { ascending: true })
+
+        if (!error && data && data.length > 0) {
+          const formatted: FepnShiftConfig[] = data.map((d: any) => ({
+            id: String(d.id),
+            shift_name: d.shift_name,
+            period_label: d.period_label || '',
+            start_time: d.start_time,
+            end_time: d.end_time,
+            order_index: d.order_index,
+          }))
+          setShifts(formatted)
+          localStorage.setItem(`fepn_schedule_shifts_${userId}`, JSON.stringify(formatted))
+          return
+        }
+      } catch (e) {
+        console.warn('Load shifts error:', e)
+      }
+    }
+
+    const key = `fepn_schedule_shifts_${userId}`
+    const saved = localStorage.getItem(key)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setShifts(parsed)
+          return
+        }
+      } catch (e) {}
+    }
+
+    setShifts(DEFAULT_FEPN_SHIFTS)
+  }
+
+  const handleOpenShiftModal = () => {
+    setEditingShiftsList([...shifts])
+    setShowShiftModal(true)
+  }
+
+  const handleSaveShifts = async (newShifts: FepnShiftConfig[]) => {
+    setShifts(newShifts)
+    const userId = user?.id || 'guest'
+    const key = `fepn_schedule_shifts_${userId}`
+    localStorage.setItem(key, JSON.stringify(newShifts))
+    setShowShiftModal(false)
+
+    if (user?.id) {
+      try {
+        await supabase.from('fepn_schedule_shifts').delete().eq('user_id', user.id)
+        const rows = newShifts.map((s, idx) => ({
+          user_id: user.id,
+          shift_name: s.shift_name.trim(),
+          period_label: s.period_label.trim(),
+          start_time: s.start_time,
+          end_time: s.end_time,
+          order_index: idx + 1,
+        }))
+        await supabase.from('fepn_schedule_shifts').insert(rows)
+      } catch (e) {
+        console.warn('Save shifts to Supabase error:', e)
+      }
+    }
+  }
+
   // ========================================================
   // 3. REALTIME ACTIVE & UPCOMING CLASS CALCULATOR
   // ========================================================
@@ -515,13 +610,16 @@ export default function FepnSchedulePage() {
     setFormDefaultRoom('Phòng 301-G2')
     setFormLecturers([])
     setNewLecturerInput('')
+    const firstShift = shifts[0] || DEFAULT_FEPN_SHIFTS[0]
     setFormSessions([
       {
-        id: `sess-${Date.now()}-1`,
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}-1`,
         day_of_week: 2,
-        shift_name: 'Ca 1 (Tiết 1 - 3)',
-        start_time: '07:00',
-        end_time: '09:50',
+        shift_mode: 'preset',
+        preset_shift_id: firstShift.id,
+        shift_name: `${firstShift.shift_name}${firstShift.period_label ? ` (${firstShift.period_label})` : ''}`,
+        start_time: firstShift.start_time,
+        end_time: firstShift.end_time,
         classroom: 'Phòng 301-G2',
         type: 'theory',
         notes: '',
@@ -574,12 +672,16 @@ export default function FepnSchedulePage() {
   }
 
   const handleAddSession = () => {
+    const shiftToPick = shifts[formSessions.length % shifts.length] || shifts[0] || DEFAULT_FEPN_SHIFTS[0]
+    const nextDay = ((formSessions.length * 2 + 2) % 7 + 2) as any
     const newSess: FepnScheduleSession = {
-      id: `sess-${Date.now()}-${formSessions.length + 1}`,
-      day_of_week: 4,
-      shift_name: 'Ca 2 (Tiết 4 - 6)',
-      start_time: '10:00',
-      end_time: '12:50',
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}-${formSessions.length + 1}`,
+      day_of_week: nextDay,
+      shift_mode: 'preset',
+      preset_shift_id: shiftToPick.id,
+      shift_name: `${shiftToPick.shift_name}${shiftToPick.period_label ? ` (${shiftToPick.period_label})` : ''}`,
+      start_time: shiftToPick.start_time,
+      end_time: shiftToPick.end_time,
       classroom: formDefaultRoom || 'Phòng 301-G2',
       type: 'theory',
       notes: '',
@@ -912,6 +1014,17 @@ export default function FepnSchedulePage() {
               <ArrowLeft className="h-3.5 w-3.5 text-sky-600" />
               <span className="hidden sm:inline">Về Dashboard</span>
             </Link>
+
+            {/* Nút Điều Chỉnh Ca Học */}
+            <button
+              type="button"
+              onClick={handleOpenShiftModal}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-xs hover:scale-105"
+              title="Tùy chỉnh các ca học: Ca x từ tiết nào tới tiết nào và thời gian"
+            >
+              <Clock className="h-4 w-4 text-sky-600" />
+              <span className="hidden lg:inline">Chỉnh Ca Học</span>
+            </button>
 
             {/* Nút Nhắc Nhở Email (Không rung lắc, màu xanh đồng nhất) */}
             <button
@@ -1470,12 +1583,15 @@ export default function FepnSchedulePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {DEFAULT_SHIFTS.map((shift, shiftIndex) => (
-                  <tr key={shiftIndex} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
+                {shifts.map((shift, shiftIndex) => (
+                  <tr key={shift.id || shiftIndex} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
                     <td className="p-3.5 bg-slate-50/60 dark:bg-slate-800/40 border-r border-slate-200 dark:border-slate-800 align-top">
-                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">{shift.name}</span>
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200 block">{shift.shift_name}</span>
+                      {shift.period_label && (
+                        <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">{shift.period_label}</span>
+                      )}
                       <span className="font-mono text-[11px] text-slate-400 block mt-0.5">
-                        {shift.start} - {shift.end}
+                        {shift.start_time} - {shift.end_time}
                       </span>
                     </td>
 
@@ -1484,8 +1600,8 @@ export default function FepnSchedulePage() {
                       const dayItems = scheduleByDay.get(day.id) || []
                       const shiftItems = dayItems.filter((item) => {
                         return (
-                          item.session.shift_name.includes(`Ca ${shiftIndex + 1}`) ||
-                          (item.session.start_time >= shift.start && item.session.start_time <= shift.end)
+                          item.session.shift_name.toLowerCase().includes(shift.shift_name.toLowerCase()) ||
+                          (item.session.start_time >= shift.start_time && item.session.start_time <= shift.end_time)
                         )
                       })
 
@@ -1776,75 +1892,192 @@ export default function FepnSchedulePage() {
                       key={sess.id}
                       className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3 relative"
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
                         <span className="text-[11px] font-black uppercase text-sky-600">
                           Buổi {idx + 1} trong tuần
                         </span>
-                        {formSessions.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSession(idx)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 transition"
-                            title="Xóa buổi này"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                        {/* Thứ trong tuần */}
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">Thứ Trong Tuần</label>
-                          <select
-                            value={sess.day_of_week}
-                            onChange={(e) =>
-                              handleUpdateSession(idx, { day_of_week: Number(e.target.value) as any })
-                            }
-                            className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold"
-                          >
-                            {DAYS_OF_WEEK.map((d) => (
-                              <option key={d.id} value={d.id}>
-                                {d.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Lựa chọn Ca Có Sẵn hoặc Ca Tùy Ý */}
+                          <div className="inline-flex rounded-lg bg-slate-200/80 dark:bg-slate-700/80 p-0.5 text-[11px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const matchedShift =
+                                  shifts.find((s) => s.id === sess.preset_shift_id) || shifts[0] || DEFAULT_FEPN_SHIFTS[0]
+                                handleUpdateSession(idx, {
+                                  shift_mode: 'preset',
+                                  preset_shift_id: matchedShift.id,
+                                  shift_name: `${matchedShift.shift_name}${matchedShift.period_label ? ` (${matchedShift.period_label})` : ''}`,
+                                  start_time: matchedShift.start_time,
+                                  end_time: matchedShift.end_time,
+                                })
+                              }}
+                              className={`px-2.5 py-0.5 rounded-md transition ${
+                                sess.shift_mode !== 'custom'
+                                  ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-300 shadow-2xs font-black'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                              }`}
+                            >
+                              Ca Có Sẵn
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleUpdateSession(idx, {
+                                  shift_mode: 'custom',
+                                })
+                              }}
+                              className={`px-2.5 py-0.5 rounded-md transition ${
+                                sess.shift_mode === 'custom'
+                                  ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-300 shadow-2xs font-black'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                              }`}
+                            >
+                              Ca Tùy Ý
+                            </button>
+                          </div>
 
-                        {/* Tên Ca Học */}
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">Ca / Tiết</label>
-                          <input
-                            type="text"
-                            value={sess.shift_name}
-                            onChange={(e) => handleUpdateSession(idx, { shift_name: e.target.value })}
-                            placeholder="Ca 1 (Tiết 1-3)"
-                            className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold"
-                          />
-                        </div>
-
-                        {/* Giờ bắt đầu */}
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">Giờ Bắt Đầu</label>
-                          <input
-                            type="time"
-                            value={sess.start_time}
-                            onChange={(e) => handleUpdateSession(idx, { start_time: e.target.value })}
-                            className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono font-bold"
-                          />
-                        </div>
-
-                        {/* Giờ kết thúc */}
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">Giờ Kết Thúc</label>
-                          <input
-                            type="time"
-                            value={sess.end_time}
-                            onChange={(e) => handleUpdateSession(idx, { end_time: e.target.value })}
-                            className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono font-bold"
-                          />
+                          {formSessions.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSession(idx)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 transition"
+                              title="Xóa buổi này"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
+
+                      {sess.shift_mode !== 'custom' ? (
+                        /* CHẾ ĐỘ 1: CHỌN CA CÓ SẴN (TỰ ĐỘNG ĐIỀN TIẾT & GIỜ) */
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                          {/* Thứ trong tuần */}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Thứ Trong Tuần</label>
+                            <select
+                              value={sess.day_of_week}
+                              onChange={(e) =>
+                                handleUpdateSession(idx, { day_of_week: Number(e.target.value) as any })
+                              }
+                              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold"
+                            >
+                              {DAYS_OF_WEEK.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Chọn Ca có sẵn */}
+                          <div className="sm:col-span-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase">Chọn Ca Học Có Sẵn</label>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenShiftModal()}
+                                className="text-[10px] font-bold text-sky-600 hover:text-sky-700 hover:underline inline-flex items-center gap-1"
+                                title="Chỉnh sửa ca x từ tiết mấy tới tiết mấy và thời gian"
+                              >
+                                <Sliders className="h-3 w-3" />
+                                <span>Chỉnh Giờ Ca</span>
+                              </button>
+                            </div>
+                            <select
+                              value={
+                                sess.preset_shift_id ||
+                                shifts.find((s) => s.start_time === sess.start_time)?.id ||
+                                shifts[0]?.id
+                              }
+                              onChange={(e) => {
+                                const selectedShift = shifts.find((s) => s.id === e.target.value)
+                                if (selectedShift) {
+                                  handleUpdateSession(idx, {
+                                    preset_shift_id: selectedShift.id,
+                                    shift_name: `${selectedShift.shift_name}${selectedShift.period_label ? ` (${selectedShift.period_label})` : ''}`,
+                                    start_time: selectedShift.start_time,
+                                    end_time: selectedShift.end_time,
+                                  })
+                                }
+                              }}
+                              className="w-full mt-1 px-3 py-2 rounded-xl border border-sky-300 dark:border-sky-700 bg-white dark:bg-slate-800 text-xs font-bold text-sky-900 dark:text-sky-200"
+                            >
+                              {shifts.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.shift_name}: {s.period_label} ({s.start_time} - {s.end_time})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Khung giờ tự động */}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Khung Giờ</label>
+                            <div className="mt-1 px-3 py-2 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-xs font-mono font-bold text-sky-800 dark:text-sky-300 flex items-center justify-between">
+                              <span>{sess.start_time} - {sess.end_time}</span>
+                              <Check className="h-3.5 w-3.5 text-emerald-600" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* CHẾ ĐỘ 2: NHẬP CA HỌC TÙY Ý */
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                          {/* Thứ trong tuần */}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Thứ Trong Tuần</label>
+                            <select
+                              value={sess.day_of_week}
+                              onChange={(e) =>
+                                handleUpdateSession(idx, { day_of_week: Number(e.target.value) as any })
+                              }
+                              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold"
+                            >
+                              {DAYS_OF_WEEK.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Tên Ca tùy ý */}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Tên Ca / Tiết Học Tùy Ý</label>
+                            <input
+                              type="text"
+                              value={sess.shift_name}
+                              onChange={(e) => handleUpdateSession(idx, { shift_name: e.target.value })}
+                              placeholder="VD: Ca Chiều, Phụ Đạo, Ôn Thi..."
+                              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold"
+                            />
+                          </div>
+
+                          {/* Giờ bắt đầu tùy ý */}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Giờ Bắt Đầu</label>
+                            <input
+                              type="time"
+                              value={sess.start_time}
+                              onChange={(e) => handleUpdateSession(idx, { start_time: e.target.value })}
+                              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono font-bold"
+                            />
+                          </div>
+
+                          {/* Giờ kết thúc tùy ý */}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Giờ Kết Thúc</label>
+                            <input
+                              type="time"
+                              value={sess.end_time}
+                              onChange={(e) => handleUpdateSession(idx, { end_time: e.target.value })}
+                              className="w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono font-bold"
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {/* Phòng học riêng */}
@@ -2039,6 +2272,183 @@ export default function FepnSchedulePage() {
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition"
               >
                 Đồng Ý Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          11. MODAL ĐIỀU CHỈNH & CẤU HÌNH KHUNG GIỜ CA HỌC
+          ======================================================== */}
+      {showShiftModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-3 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
+          <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+            {/* Header Modal (Pinned at top) */}
+            <div className="shrink-0 p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-sky-600 text-white shadow-md shadow-sky-600/30">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                    Điều Chỉnh Khung Giờ Ca Học
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Cấu hình ca x từ tiết mấy tới tiết mấy và thời gian từ mấy giờ đến mấy giờ
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShiftModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body: Danh sách các ca học (Cuộn độc lập) */}
+            <div className="p-5 overflow-y-auto space-y-3.5 flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Danh Sách Các Ca Học Có Sẵn ({editingShiftsList.length} ca):
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextNum = editingShiftsList.length + 1
+                    const newShiftItem: FepnShiftConfig = {
+                      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `shift-${Date.now()}`,
+                      shift_name: `Ca ${nextNum}`,
+                      period_label: `Tiết ${(nextNum - 1) * 3 + 1} - ${nextNum * 3}`,
+                      start_time: '12:00',
+                      end_time: '14:50',
+                      order_index: nextNum,
+                    }
+                    setEditingShiftsList([...editingShiftsList, newShiftItem])
+                  }}
+                  className="text-xs font-bold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1 hover:underline"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Thêm Ca Mới</span>
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {editingShiftsList.map((item, index) => (
+                  <div
+                    key={item.id || index}
+                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+                  >
+                    {/* Tên Ca (VD: Ca 1) */}
+                    <div className="sm:w-28 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Tên Ca</label>
+                      <input
+                        type="text"
+                        value={item.shift_name}
+                        onChange={(e) => {
+                          const updated = [...editingShiftsList]
+                          updated[index] = { ...updated[index], shift_name: e.target.value }
+                          setEditingShiftsList(updated)
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-black text-sky-700 dark:text-sky-400"
+                        placeholder="VD: Ca 1"
+                      />
+                    </div>
+
+                    {/* Tiết học (VD: Tiết 1 - 3) */}
+                    <div className="sm:w-36 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Từ Tiết - Đến Tiết</label>
+                      <input
+                        type="text"
+                        value={item.period_label}
+                        onChange={(e) => {
+                          const updated = [...editingShiftsList]
+                          updated[index] = { ...updated[index], period_label: e.target.value }
+                          setEditingShiftsList(updated)
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium"
+                        placeholder="VD: Tiết 1 - 3"
+                      />
+                    </div>
+
+                    {/* Giờ bắt đầu */}
+                    <div className="flex-1 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Bắt Đầu</label>
+                      <input
+                        type="time"
+                        value={item.start_time}
+                        onChange={(e) => {
+                          const updated = [...editingShiftsList]
+                          updated[index] = { ...updated[index], start_time: e.target.value }
+                          setEditingShiftsList(updated)
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono font-bold"
+                      />
+                    </div>
+
+                    {/* Giờ kết thúc */}
+                    <div className="flex-1 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Kết Thúc</label>
+                      <input
+                        type="time"
+                        value={item.end_time}
+                        onChange={(e) => {
+                          const updated = [...editingShiftsList]
+                          updated[index] = { ...updated[index], end_time: e.target.value }
+                          setEditingShiftsList(updated)
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono font-bold"
+                      />
+                    </div>
+
+                    {/* Nút Xóa Ca */}
+                    {editingShiftsList.length > 1 && (
+                      <div className="sm:self-end pb-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingShiftsList(editingShiftsList.filter((_, i) => i !== index))
+                          }}
+                          className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition"
+                          title="Xóa ca này"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => setEditingShiftsList(DEFAULT_FEPN_SHIFTS)}
+                  className="text-xs font-bold text-slate-500 hover:text-sky-600 inline-flex items-center gap-1.5"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Khôi phục 5 ca mặc định ĐHQGHN</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Pinned Footer Action Buttons */}
+            <div className="shrink-0 p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowShiftModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveShifts(editingShiftsList)}
+                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-sky-600/20 transition hover:scale-105"
+              >
+                Lưu Cấu Hình Ca Học
               </button>
             </div>
           </div>
