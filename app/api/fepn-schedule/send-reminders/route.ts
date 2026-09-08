@@ -325,7 +325,15 @@ async function sendSingleEmail(
       }
 
       console.warn(`[FEPN Reminder] Lỗi gửi mail qua Resend:`, errText)
-      return { email: item.studentEmail, success: false, error: `Resend API: ${errText}` }
+      let readableError = errText
+      try {
+        const parsed = JSON.parse(errText)
+        if (parsed.message) {
+          readableError = parsed.message
+        }
+      } catch (e) {}
+
+      return { email: item.studentEmail, success: false, error: `Resend: ${readableError}` }
     }
 
     // ----------------------------------------------------
