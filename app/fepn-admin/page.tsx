@@ -45,7 +45,6 @@ import {
   Eye,
   RefreshCw,
   Gift,
-  Sparkles,
   Percent,
   Dices,
   QrCode,
@@ -851,6 +850,33 @@ export default function FepnAdminDashboardPage() {
     const code = scannedCode.trim().toUpperCase()
     setVerifyCodeInput(code)
     handleCheckClaimCode(code)
+  }
+
+  const handleExportClaimsCSV = () => {
+    if (giftClaims.length === 0) {
+      alert('Chưa có dữ liệu trúng thưởng để xuất file CSV.')
+      return
+    }
+    const headers = ['Mã Đối Soát', 'Họ Tên Sinh Viên', 'MSSV', 'Email', 'Phần Quà', 'Thời Gian Trúng', 'Trạng Thái']
+    const rows = giftClaims.map((c) => [
+      `"${c.claim_code || ''}"`,
+      `"${c.user_name || ''}"`,
+      `"${c.user_mssv || ''}"`,
+      `"${c.user_email || ''}"`,
+      `"${c.gift_name || ''}"`,
+      `"${new Date(c.created_at).toLocaleString('vi-VN')}"`,
+      `"${c.status === 'delivered' ? 'Đã trao quà' : 'Chờ trao quà'}"`,
+    ])
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.setAttribute('download', `danh-sach-trung-qua-fepn-${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const handleManualConfirmDelivery = async () => {
@@ -1821,7 +1847,7 @@ export default function FepnAdminDashboardPage() {
                       : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25'
                   }`}
                 >
-                  <Sparkles className="h-4 w-4" />
+                  <Check className="h-4 w-4" />
                   <span>{giftEvent.is_active ? 'Tạm Đóng Hoạt Động' : 'Mở Hoạt Động Ngay'}</span>
                 </button>
               </div>
@@ -1864,7 +1890,7 @@ export default function FepnAdminDashboardPage() {
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-xl bg-pink-50 text-pink-600 border border-pink-100">
-                    <Sparkles className="h-5 w-5" />
+                    <Award className="h-5 w-5" />
                   </div>
                   <div>
                     <h4 className="text-base font-black text-slate-900">Cấu Hình Sự Kiện Đổi Quà</h4>
@@ -2222,7 +2248,7 @@ export default function FepnAdminDashboardPage() {
                   disabled={generatingCodes}
                   className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-black uppercase text-xs tracking-wider shadow-sm transition hover:scale-105 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
                 >
-                  {generatingCodes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {generatingCodes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   <span>Sinh Mã Ngay</span>
                 </button>
               </form>
@@ -2549,6 +2575,16 @@ export default function FepnAdminDashboardPage() {
                       </button>
                     ))}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleExportClaimsCSV}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition shadow-xs"
+                    title="Xuất toàn bộ danh sách đối soát trúng thưởng ra file CSV"
+                  >
+                    <Download className="h-3.5 w-3.5 text-pink-600" />
+                    <span>Xuất CSV</span>
+                  </button>
                 </div>
               </div>
 
@@ -3416,7 +3452,7 @@ function AdminQrScannerModal({
                   <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-pink-400 rounded-br-lg" />
 
                   {/* Laser line moving vertically */}
-                  <div className="absolute inset-x-2 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent shadow-[0_0_12px_#ec4899] animate-bounce" />
+                  <div className="absolute inset-x-2 h-0.5 bg-gradient-to-r from-transparent via-pink-400 to-transparent shadow-[0_0_12px_#ec4899]" />
                 </div>
               </div>
             </>

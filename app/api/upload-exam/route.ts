@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
+import { getUserFromRequest } from '@/lib/supabaseAdmin'
+
+export const dynamic = 'force-dynamic'
 
 // 1. Dùng OAuth2 thay cho GoogleAuth cũ
 const oauth2Client = new google.auth.OAuth2(
@@ -19,6 +22,11 @@ const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
 export async function POST(request: Request) {
   try {
+    const user = await getUserFromRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Chưa đăng nhập. Vui lòng đăng nhập để tải lên tài liệu.' }, { status: 401 })
+    }
+
     // Phân tích header để biết Client đang dùng tính năng nào
     const contentType = request.headers.get('content-type') || ''
 

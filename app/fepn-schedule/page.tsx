@@ -1070,6 +1070,129 @@ export default function FepnSchedulePage() {
     return map
   }, [subjects, searchKeyword])
 
+  // ========================================================
+  // 6.1 KIỂM TRA TRÙNG LỊCH HỌC TRONG CÙNG NGÀY
+  // ========================================================
+  const conflictingSessionIds = useMemo(() => {
+    const conflictSet = new Set<string>()
+    const sessionsByDay: Record<number, Array<{ id: string; start: number; end: number }>> = {}
+    
+    for (const sub of subjects) {
+      for (const sess of sub.sessions) {
+        const start = parseTimeToMinutes(sess.start_time)
+        const end = parseTimeToMinutes(sess.end_time)
+        if (!sessionsByDay[sess.day_of_week]) {
+          sessionsByDay[sess.day_of_week] = []
+        }
+        sessionsByDay[sess.day_of_week].push({ id: sess.id, start, end })
+      }
+    }
+
+    for (const day in sessionsByDay) {
+      const list = sessionsByDay[day]
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i]
+          const b = list[j]
+          // Giao nhau về thời gian trong ngày
+          if (a.start < b.end && b.start < a.end) {
+            conflictSet.add(a.id)
+            conflictSet.add(b.id)
+          }
+        }
+      }
+    }
+    return conflictSet
+  }, [subjects])
+
+  // ========================================================
+  // 6.2 XUẤT THỜI KHÓA BIỂU DẠNG FILE LỊCH (.ICS)
+  // ========================================================
+  const handleExportICalendar = () => {
+    if (subjects.length === 0) {
+      alert('Chưa có môn học nào trong thời khóa biểu để xuất file lịch.')
+      return
+    }
+
+    const dayToIcalMap: Record<number, string> = {
+      2: 'MO',
+      3: 'TU',
+      4: 'WE',
+      5: 'TH',
+      6: 'FR',
+      7: 'SA',
+      8: 'SU',
+    }
+
+    const now = new Date()
+    const todayDay = now.getDay() === 0 ? 8 : now.getDay() + 1
+    
+    const icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//FEPN Schedule//SenExam//VI',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:Thời Khóa Biểu FEPN',
+      'X-WR-TIMEZONE:Asia/Ho_Chi_Minh',
+    ]
+
+    for (const sub of subjects) {
+      for (const sess of sub.sessions) {
+        const byDay = dayToIcalMap[sess.day_of_week] || 'MO'
+        const [startH, startM] = sess.start_time.split(':').map(Number)
+        const [endH, endM] = sess.end_time.split(':').map(Number)
+
+        const targetDate = new Date(now)
+        const diffDays = sess.day_of_week - todayDay
+        targetDate.setDate(now.getDate() + diffDays)
+        
+        const pad = (n: number) => (n < 10 ? '0' + n : '' + n)
+        const y = targetDate.getFullYear()
+        const m = pad(targetDate.getMonth() + 1)
+        const d = pad(targetDate.getDate())
+
+        const dtStart = `${y}${m}${d}T${pad(startH || 0)}${pad(startM || 0)}00`
+        const dtEnd = `${y}${m}${d}T${pad(endH || 0)}${pad(endM || 0)}00`
+        const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+        const uid = `fepn-${sess.id}-${Date.now()}@senexam.me`
+
+        const typeLabel =
+          sess.type === 'exercise'
+            ? '[Bài Tập]'
+            : sess.type === 'practice'
+            ? '[Thực Hành]'
+            : sess.type === 'exam'
+            ? '[Thi / KT]'
+            : '[Lý Thuyết]'
+
+        icsLines.push('BEGIN:VEVENT')
+        icsLines.push(`UID:${uid}`)
+        icsLines.push(`DTSTAMP:${stamp}`)
+        icsLines.push(`DTSTART;TZID=Asia/Ho_Chi_Minh:${dtStart}`)
+        icsLines.push(`DTEND;TZID=Asia/Ho_Chi_Minh:${dtEnd}`)
+        icsLines.push(`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`)
+        icsLines.push(`SUMMARY:${typeLabel} ${sub.name} - ${sess.shift_name}`)
+        icsLines.push(`LOCATION:${sess.classroom || sub.default_classroom || 'Khoa VLKT'}`)
+        icsLines.push(`DESCRIPTION:Mã môn: ${sub.code || 'N/A'}\\nGiảng viên: ${sub.lecturers.join(', ') || 'Khoa VLKT'}\\nGhi chú: ${sess.notes || ''}`)
+        icsLines.push('STATUS:CONFIRMED')
+        icsLines.push('END:VEVENT')
+      }
+    }
+
+    icsLines.push('END:VCALENDAR')
+
+    const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'thoi-khoa-bieu-fepn.ics')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   const handleCopyScheduleSummary = () => {
     let text = `📅 THỜI KHÓA BIỂU TUẦN FEPN - KHOA VẬT LÝ KỸ THUẬT\n`
     for (const day of DAYS_OF_WEEK) {
@@ -1242,10 +1365,7 @@ export default function FepnSchedulePage() {
               {activeSession ? (
                 <div className="pt-2">
                   <div className="flex items-center gap-2">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                    </span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-sm"></span>
                     <span className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
                       Đang Trong Giờ Học
                     </span>
@@ -1391,6 +1511,17 @@ export default function FepnSchedulePage() {
                 <Printer className="h-3.5 w-3.5 text-sky-600" />
                 <span>In Lịch</span>
               </button>
+
+              <button
+                type="button"
+                onClick={handleExportICalendar}
+                className="py-2 px-3 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 text-xs font-bold text-sky-800 dark:text-sky-300 transition flex items-center justify-center gap-1.5"
+                title="Xuất lịch học dạng .ics để đồng bộ Google Calendar / Apple Calendar"
+              >
+                <Calendar className="h-3.5 w-3.5 text-sky-600" />
+                <span className="hidden sm:inline">Xuất</span>
+                <span>.ics</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1409,7 +1540,7 @@ export default function FepnSchedulePage() {
               }`}
             >
               <Layers className="h-3.5 w-3.5" />
-              <span>Dạng Dọc Theo Ngày</span>
+              <span>Dạng Dọc</span>
             </button>
             <button
               type="button"
@@ -1421,12 +1552,25 @@ export default function FepnSchedulePage() {
               }`}
             >
               <Calendar className="h-3.5 w-3.5" />
-              <span>Bảng Lưới Tuần</span>
+              <span>Bảng Tuần</span>
             </button>
           </div>
 
-          {/* Lọc nhanh theo ngày */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 max-w-full">
+          {/* Lọc nhanh theo ngày & Nút Nhảy Tới Hôm Nay */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0 max-w-full">
+            <button
+              type="button"
+              onClick={() => setSelectedDayFilter(currentFepnDay)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 flex items-center gap-1.5 ${
+                selectedDayFilter === currentFepnDay
+                  ? 'bg-sky-600 text-white shadow-xs'
+                  : 'bg-sky-50 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300 hover:bg-sky-100'
+              }`}
+              title="Xem ngay lịch học hôm nay"
+            >
+              <Clock className="h-3 w-3" />
+              <span>Hôm Nay</span>
+            </button>
             <button
               type="button"
               onClick={() => setSelectedDayFilter(null)}
@@ -1654,6 +1798,17 @@ export default function FepnSchedulePage() {
                                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${palette.badgeBg}`}>
                                     {session.shift_name}
                                   </span>
+                                   {isCurrentActive && (
+                                     <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider shadow-2xs">
+                                       Đang Diễn Ra
+                                     </span>
+                                   )}
+
+                                   {conflictingSessionIds.has(session.id) && (
+                                     <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[9px] font-black uppercase tracking-wider shadow-2xs flex items-center gap-1" title="Ca học này bị trùng giờ với một ca học khác trong cùng ngày">
+                                       ⚠️ Trùng Giờ
+                                     </span>
+                                   )}
 
                                   {/* Loại buổi học */}
                                   {session.type && (
@@ -1675,12 +1830,6 @@ export default function FepnSchedulePage() {
                                         : session.type === 'exam'
                                         ? 'Thi / KT'
                                         : 'Lý Thuyết'}
-                                    </span>
-                                  )}
-
-                                  {isCurrentActive && (
-                                    <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider animate-pulse">
-                                      Đang Diễn Ra
                                     </span>
                                   )}
                                 </div>
@@ -1828,9 +1977,16 @@ export default function FepnSchedulePage() {
                                 } ${palette.borderColor}`}
                               >
                                 <div className="flex items-center justify-between gap-1">
-                                  <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${palette.badgeBg}`}>
-                                    {session.start_time}
-                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${palette.badgeBg}`}>
+                                      {session.start_time}
+                                    </span>
+                                    {conflictingSessionIds.has(session.id) && (
+                                      <span className="text-[9px] font-black px-1 py-0.2 rounded bg-rose-500 text-white shadow-xs" title="Trùng giờ học với môn khác trong ngày">
+                                        ⚠️
+                                      </span>
+                                    )}
+                                  </div>
                                   {session.type && (
                                     <span
                                       className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
@@ -1878,8 +2034,8 @@ export default function FepnSchedulePage() {
           8. MODAL CÀI ĐẶT / THÊM MÔN HỌC (FIX TRÀN MÀN HÌNH)
           ======================================================== */}
       {showCourseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-3 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
-          <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 backdrop-blur-md p-0 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
+          <div className="relative w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
             {/* Header Modal (Pinned at top) */}
             <div className="shrink-0 p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -2393,8 +2549,8 @@ export default function FepnSchedulePage() {
           9. MODAL CÀI ĐẶT EMAIL & TEST GỬI EMAIL NHẮC 30 PHÚT
           ======================================================== */}
       {showEmailModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-3 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
-          <div className="relative w-full max-w-md max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 backdrop-blur-md p-0 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
+          <div className="relative w-full max-w-md max-h-[92vh] sm:max-h-[90vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-sky-100 dark:bg-sky-950 text-sky-600">
@@ -2424,10 +2580,7 @@ export default function FepnSchedulePage() {
               ) : emailServerStatus.configured ? (
                 <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs">
                   <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-300">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                    </span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-xs"></span>
                     Kênh gửi mail: {emailServerStatus.details}
                   </div>
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1">
@@ -2570,8 +2723,8 @@ export default function FepnSchedulePage() {
           11. MODAL ĐIỀU CHỈNH & CẤU HÌNH KHUNG GIỜ CA HỌC
           ======================================================== */}
       {showShiftModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-3 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
-          <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 backdrop-blur-md p-0 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
+          <div className="relative w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
             {/* Header Modal (Pinned at top) */}
             <div className="shrink-0 p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">

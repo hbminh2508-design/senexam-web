@@ -205,10 +205,7 @@ export default function GlassHome({
 
                 {/* Giờ Server Online thời gian thực */}
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-xs"></span>
                   <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-tight font-mono">
                     {serverTime || '--:--:--'} <span className="hidden md:inline text-[9px] opacity-75 font-sans">• VN Server</span>
                   </span>
@@ -523,7 +520,7 @@ export default function GlassHome({
 
             <div className="relative z-10">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 dark:bg-indigo-400/15 border border-indigo-500/25 text-indigo-700 dark:text-indigo-300 text-xs font-black uppercase tracking-wider mb-4">
-                <Flame className="w-4 h-4 text-orange-500 animate-bounce" />
+                <Flame className="w-4 h-4 text-orange-500" />
                 Mục Tiêu Năm Học 2026
               </div>
 

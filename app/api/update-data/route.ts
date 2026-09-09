@@ -1,18 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireAdmin, getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-// Khởi tạo Supabase Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return NextResponse.json({ error: 'Không có quyền truy cập. Yêu cầu quyền Quản trị viên.' }, { status: 403 });
+    }
+
     const { newData } = await req.json();
 
     if (!newData || !Array.isArray(newData)) {
       return NextResponse.json({ error: 'Dữ liệu gửi lên không đúng định dạng mảng JSON.' }, { status: 400 });
     }
+
+    const supabase = getSupabaseAdmin();
 
     // 1. Đọc dữ liệu cũ từ Supabase
     const { data: dbRecord, error: fetchErr } = await supabase

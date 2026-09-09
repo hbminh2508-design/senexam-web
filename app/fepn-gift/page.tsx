@@ -9,7 +9,6 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
   Gift,
-  Sparkles,
   Trophy,
   QrCode,
   Share2,
@@ -997,7 +996,7 @@ export default function FepnGiftPage() {
         <main className="flex-1 grid place-items-center p-4">
           <div className="flex flex-col items-center gap-4 w-full max-w-lg p-8 rounded-3xl bg-white shadow-xl text-center border border-slate-200">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-50 text-pink-600 border border-pink-100">
-              <Gift className="h-8 w-8 animate-bounce" />
+              <Gift className="h-8 w-8" />
             </div>
             <h2 className="text-2xl font-black text-slate-900">Hoạt Động Tặng Quà Chưa Bắt Đầu</h2>
             <p className="text-sm text-slate-600 leading-relaxed">
@@ -1101,7 +1100,7 @@ export default function FepnGiftPage() {
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 text-white p-6 sm:p-8 shadow-xl shadow-pink-600/10">
           <div className="relative z-10 max-w-2xl space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-[11px] font-black uppercase tracking-wider">
-              <Sparkles className="h-3.5 w-3.5 text-yellow-300" />
+              <Award className="h-3.5 w-3.5 text-yellow-300" />
               <span>Sự Kiện Đổi Quà Chính Thức</span>
             </div>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
@@ -1135,7 +1134,7 @@ export default function FepnGiftPage() {
                   </div>
 
                   <div className="px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-black text-xs shadow-sm flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Trophy className="h-3.5 w-3.5" />
                     <span>Lượt còn lại: {spinsRemaining}</span>
                   </div>
                 </div>
@@ -1171,7 +1170,7 @@ export default function FepnGiftPage() {
                     disabled={isSpinning || spinsRemaining <= 0}
                     className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-black uppercase text-sm tracking-wider shadow-lg shadow-pink-600/25 transition hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
                   >
-                    {isSpinning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
+                    {isSpinning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Gift className="h-5 w-5" />}
                     <span>{isSpinning ? 'Đang quay...' : `QUAY NGAY (Còn ${spinsRemaining} lượt)`}</span>
                   </button>
 
@@ -1265,7 +1264,7 @@ export default function FepnGiftPage() {
                     disabled={codeSubmitting || !codeInput.trim()}
                     className="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-black text-xs uppercase tracking-wider shadow-sm transition hover:scale-105 disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    {codeSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {codeSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                     <span>Áp Dụng</span>
                   </button>
                 </form>
@@ -1461,7 +1460,7 @@ export default function FepnGiftPage() {
       {showWinModal && latestClaim && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in overflow-y-auto">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl text-center space-y-4 border border-pink-500/30 my-8">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/30 animate-bounce">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-pink-500 to-rose-600 text-white shadow-lg shadow-pink-500/30">
               <PartyPopper className="h-7 w-7" />
             </div>
 

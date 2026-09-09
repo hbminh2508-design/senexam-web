@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { getUserFromRequest } from '@/lib/supabaseAdmin'
+
+export const dynamic = 'force-dynamic'
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -15,6 +18,11 @@ const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
 export async function POST(request: Request) {
   try {
+    const user = await getUserFromRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+    }
+
     const { image, fileName, sectionId, questionIndex } = await request.json()
 
     if (!image || !fileName || !sectionId) {

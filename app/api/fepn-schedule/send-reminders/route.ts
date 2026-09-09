@@ -553,6 +553,21 @@ export async function GET(request: Request) {
   })
 }
 
+// Giới hạn tần suất gửi email thử nghiệm: tối đa 5 lần / giờ cho mỗi IP / Email
+const testEmailRateLimit = new Map<string, { count: number; resetAt: number }>()
+
+function checkTestEmailLimit(key: string, max = 5, windowMs = 3600000): boolean {
+  const now = Date.now()
+  const rec = testEmailRateLimit.get(key)
+  if (!rec || now > rec.resetAt) {
+    testEmailRateLimit.set(key, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  if (rec.count >= max) return false
+  rec.count++
+  return true
+}
+
 /**
  * POST /api/fepn-schedule/send-reminders
  * Hỗ trợ 3 chế độ:
@@ -569,9 +584,18 @@ export async function POST(request: Request) {
     // CHẾ ĐỘ 1: GỬI THỬ NGHIỆM TỪ GIAO DIỆN
     // ========================================================
     if (action === 'test' && testItem) {
-      const email = testItem.studentEmail
+      const email = (testItem.studentEmail || '').trim().toLowerCase()
       if (!email || !email.includes('@')) {
         return NextResponse.json({ error: 'Địa chỉ email sinh viên không hợp lệ' }, { status: 400 })
+      }
+
+      const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+      const rateLimitKey = `${clientIp}_${email}`
+      if (!checkTestEmailLimit(rateLimitKey, 5, 3600000)) {
+        return NextResponse.json(
+          { error: 'Bạn đã gửi thử nghiệm quá số lần cho phép (Tối đa 5 lần/giờ). Vui lòng thử lại sau.' },
+          { status: 429 }
+        )
       }
 
       const result = await sendSingleEmail(testItem)

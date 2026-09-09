@@ -89,7 +89,28 @@ export async function POST(request: Request) {
       await supabaseAdmin.from('profiles').update(update).eq('id', user.id)
     }
 
-    await supabaseAdmin.from('gift_codes').update({ used_count: giftCode.used_count + 1 }).eq('id', giftCode.id)
+    // Cập nhật lượt sử dụng an toàn chống xung đột đồng thời (Optimistic Concurrency Control)
+    const { data: updatedCode } = await supabaseAdmin
+      .from('gift_codes')
+      .update({ used_count: giftCode.used_count + 1 })
+      .eq('id', giftCode.id)
+      .eq('used_count', giftCode.used_count)
+      .select('used_count')
+      .maybeSingle()
+
+    if (!updatedCode) {
+      const { data: freshCode } = await supabaseAdmin
+        .from('gift_codes')
+        .select('used_count')
+        .eq('id', giftCode.id)
+        .maybeSingle()
+      if (freshCode) {
+        await supabaseAdmin
+          .from('gift_codes')
+          .update({ used_count: freshCode.used_count + 1 })
+          .eq('id', giftCode.id)
+      }
+    }
 
     return NextResponse.json({ success: true, reward: describeGiftReward(giftCode, SENAI_TIER_LABEL) })
   } catch (e) {

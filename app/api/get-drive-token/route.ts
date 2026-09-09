@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
+import { getUserFromRequest } from '@/lib/supabaseAdmin'
 
-export async function GET() {
+export const dynamic = 'force-dynamic'
+
+export async function GET(request: Request) {
   try {
+    const user = await getUserFromRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Chưa đăng nhập. Yêu cầu xác thực tài khoản.' }, { status: 401 })
+    }
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

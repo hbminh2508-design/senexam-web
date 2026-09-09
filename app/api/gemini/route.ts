@@ -4,8 +4,31 @@ import { NextResponse } from 'next/server'
 const apiKey = process.env.GEMINI_API_KEY
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null
 
+// Rate limiting in-memory: 20 requests per minute per IP
+const ipCallCounts = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(ip: string, limit = 20, windowMs = 60000): boolean {
+  const now = Date.now()
+  const record = ipCallCounts.get(ip)
+  if (!record || now > record.resetAt) {
+    ipCallCounts.set(ip, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  if (record.count >= limit) return false
+  record.count++
+  return true
+}
+
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { error: 'Bạn đang gửi yêu cầu quá nhanh. Vui lòng đợi 1 phút trước khi thử lại.' },
+        { status: 429 }
+      )
+    }
+
     if (!ai) {
       return NextResponse.json(
         { error: 'Thiếu GEMINI_API_KEY trong biến môi trường server.' },
@@ -18,6 +41,10 @@ export async function POST(request: Request) {
 
     if (!prompt) {
       return NextResponse.json({ error: 'Nội dung prompt không được để trống' }, { status: 400 })
+    }
+
+    if (prompt.length > 15000) {
+      return NextResponse.json({ error: 'Nội dung prompt vượt quá giới hạn cho phép (15,000 ký tự)' }, { status: 400 })
     }
 
     const response = await ai.models.generateContent({

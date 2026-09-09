@@ -648,17 +648,14 @@ export default function FepnDashboardMainPage() {
                 href="/fepn-gift"
                 className={`relative inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs transition shadow-sm hover:scale-105 ${
                   isGiftActive
-                    ? 'bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white font-black shadow-pink-500/25 animate-pulse'
+                    ? 'bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white font-black shadow-pink-500/25'
                     : 'border border-pink-500/30 bg-pink-50 hover:bg-pink-100 text-pink-700 font-bold'
                 }`}
                 title="Sự kiện Đổi Quà & Vòng Quay May Mắn FEPN"
               >
                 <span>Đổi Quà</span>
                 {isGiftActive && (
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-300 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400"></span>
-                  </span>
+                  <span className="inline-flex rounded-full h-2 w-2 bg-yellow-300 shadow-xs"></span>
                 )}
               </Link>
             )}
