@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import FepnMobileNav from '@/components/FepnMobileNav'
+import { checkFepnAccessAsync } from '@/lib/authHelper'
 import {
   ArrowLeft,
   Gift,
@@ -233,7 +234,9 @@ export default function FepnGiftPage() {
         const isUserAdmin = role === 'admin' || role === 'collab' || isOwner
         setIsAdmin(isUserAdmin)
 
-        if (!isVnu && !isUserAdmin) {
+        const isAllowed = await checkFepnAccessAsync(currentUser, role)
+
+        if (!isAllowed) {
           setAuthStatus('restricted')
           setAuthLoading(false)
           return

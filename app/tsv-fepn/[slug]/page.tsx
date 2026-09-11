@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import FepnMobileNav from '@/components/FepnMobileNav'
+import { checkFepnAccessAsync } from '@/lib/authHelper'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import {
@@ -172,11 +173,12 @@ export default function FepnSubjectDetailPage() {
         }
 
         const email = currentUser.email?.toLowerCase() || ''
-        const isVnu = email.endsWith('@vnu.edu.vn')
         const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
         const isAdmin = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
 
-        if (isVnu || isAdmin) {
+        const isAllowed = await checkFepnAccessAsync(currentUser, role)
+
+        if (isAllowed) {
           setAuthStatus('authorized')
           await loadSubjectData(currentUser.id)
         } else {

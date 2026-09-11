@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import FepnMobileNav from '@/components/FepnMobileNav'
+import { checkFepnAccessAsync } from '@/lib/authHelper'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import {
@@ -430,11 +431,12 @@ export default function FepnRecapPage() {
         }
 
         const email = currentUser.email?.toLowerCase() || ''
-        const isVnu = email.endsWith('@vnu.edu.vn')
         const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
         const isAdmin = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
 
-        if (isVnu || isAdmin) {
+        const isAllowed = await checkFepnAccessAsync(currentUser, role)
+
+        if (isAllowed) {
           setAuthStatus('authorized')
           await loadPosts()
         } else {
@@ -1231,7 +1233,7 @@ export default function FepnRecapPage() {
           <div className="w-full">
             <h2 className="text-xl font-black text-slate-900 mb-2">Yêu cầu đăng nhập</h2>
             <p className="text-sm text-slate-600 mb-6">
-              Bạn cần đăng nhập bằng tài khoản VNU (@vnu.edu.vn) để xem kỷ yếu và các hoạt động của Khoa FEPN.
+              Bạn cần đăng nhập bằng tài khoản VNU (@vnu.edu.vn) hoặc tài khoản email tên miền FEPN để xem kỷ yếu và các hoạt động của Khoa.
             </p>
             <Link
               href="/fepn-login"

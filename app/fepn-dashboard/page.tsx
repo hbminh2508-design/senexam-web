@@ -38,7 +38,7 @@ import {
   Gift,
   Inbox,
 } from 'lucide-react'
-import { isDomainEmail } from '@/lib/authHelper'
+import { isDomainEmail, checkFepnAccessAsync } from '@/lib/authHelper'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
@@ -301,11 +301,12 @@ export default function FepnDashboardMainPage() {
         }
 
         const email = currentUser.email?.toLowerCase() || ''
-        const isVnu = email.endsWith('@vnu.edu.vn')
         const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
         const isAdmin = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
 
-        if (isVnu || isAdmin) {
+        const isAllowed = await checkFepnAccessAsync(currentUser, role)
+
+        if (isAllowed) {
           setAuthStatus('authorized')
           await loadSubjects()
         } else {
@@ -571,10 +572,10 @@ export default function FepnDashboardMainPage() {
               <Lock className="h-3.5 w-3.5" /> Quyền Truy Cập Bị Giới Hạn
             </span>
             <h1 className="text-2xl font-black" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
-              Yêu Cầu Email @vnu.edu.vn
+              Yêu Cầu Email VNU hoặc Email Tên Miền FEPN
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              Tài khoản hiện tại của bạn là <strong className="text-rose-600">{user?.email}</strong>. Cổng FEPN dành riêng cho sinh viên & giảng viên Đại học Quốc gia Hà Nội.
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Tài khoản hiện tại của bạn là <strong className="text-rose-600 font-mono">{user?.email}</strong>. Cổng FEPN dành riêng cho sinh viên, giảng viên ĐHQGHN và các tài khoản email tên miền được cấp bởi Ban Quản Trị.
             </p>
           </div>
 

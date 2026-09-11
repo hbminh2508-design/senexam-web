@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
-import { signInWithGoogle } from '@/lib/authHelper'
+import { signInWithGoogle, isDomainEmail as checkIsDomainEmail } from '@/lib/authHelper'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import {
   Lock,
@@ -99,6 +99,41 @@ export default function FepnLoginPage() {
   }, [resendCooldown])
 
   const [selectedDomainSuffix, setSelectedDomainSuffix] = useState<string>('@vnu.edu.vn')
+  const [availableDomains, setAvailableDomains] = useState<string[]>([
+    '@vnu.edu.vn',
+    '@sinhvien.tailieufepn.me',
+    '@fepn.edu.vn',
+    '@senexam.me',
+    '@tailieufepn.me',
+    '@vlkt.vnu.edu.vn',
+  ])
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('fepn_allowed_domains')
+      if (cached) {
+        const list: string[] = JSON.parse(cached)
+        if (Array.isArray(list) && list.length > 0) {
+          setAvailableDomains((prev) => Array.from(new Set([...prev, ...list])))
+        }
+      }
+    } catch (e) {}
+
+    const fetchRemoteDomains = async () => {
+      try {
+        const { data } = await supabase.from('fepn_domain_emails').select('domain')
+        if (data && data.length > 0) {
+          const remote = data.map((d: any) => d.domain).filter(Boolean)
+          setAvailableDomains((prev) => {
+            const merged = Array.from(new Set([...prev, ...remote]))
+            localStorage.setItem('fepn_allowed_domains', JSON.stringify(merged))
+            return merged
+          })
+        }
+      } catch (e) {}
+    }
+    fetchRemoteDomains()
+  }, [])
 
   // Chuẩn hóa email từ MSSV hoặc tài khoản tên miền nhập vào
   const getFullVnuEmail = (input: string) => {
@@ -109,24 +144,9 @@ export default function FepnLoginPage() {
     return `${clean}${selectedDomainSuffix}`
   }
 
-  // Kiểm tra email đuôi tên miền được cấp (FEPN / SenExam / Khoa VLKT)
+  // Kiểm tra email đuôi tên miền được cấp (FEPN / SenExam / Khoa VLKT / Tài liệu FEPN)
   const isDomainEmail = (email: string) => {
-    const clean = email.trim().toLowerCase()
-    const domainSuffixes = ['@fepn.edu.vn', '@senexam.me', '@vlkt.vnu.edu.vn']
-    if (domainSuffixes.some((d) => clean.endsWith(d))) {
-      return true
-    }
-    try {
-      const customDomains: string[] = JSON.parse(localStorage.getItem('fepn_allowed_domains') || '[]')
-      if (customDomains.some((d) => clean.endsWith(d.toLowerCase()))) {
-        return true
-      }
-      const domainEmails: any[] = JSON.parse(localStorage.getItem('fepn_domain_emails') || '[]')
-      if (domainEmails.some((item) => item.email?.toLowerCase() === clean)) {
-        return true
-      }
-    } catch (e) {}
-    return false
+    return checkIsDomainEmail(email)
   }
 
   // Quy chuẩn mật khẩu: Tối thiểu 8 ký tự, 1 hoa, 1 ký tự đặc biệt, 1 số
@@ -703,9 +723,11 @@ export default function FepnLoginPage() {
                       onChange={(e) => setSelectedDomainSuffix(e.target.value)}
                       className="bg-sky-50 text-sky-700 font-mono font-bold px-2 py-0.5 rounded-lg border border-sky-200 text-xs outline-none cursor-pointer"
                     >
-                      <option value="@vnu.edu.vn">@vnu.edu.vn (Sinh viên)</option>
-                      <option value="@fepn.edu.vn">@fepn.edu.vn (FEPN Mail)</option>
-                      <option value="@senexam.me">@senexam.me (Sen Mail)</option>
+                      {availableDomains.map((dom) => (
+                        <option key={dom} value={dom}>
+                          {dom} {dom === '@vnu.edu.vn' ? '(Sinh viên)' : ''}
+                        </option>
+                      ))}
                       <option value="">Khác (Nhập đầy đủ email)</option>
                     </select>
                   </div>

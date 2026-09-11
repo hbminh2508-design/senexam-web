@@ -184,9 +184,16 @@ export default function FepnAdminDashboardPage() {
 
   // Domain Email Management States (Cấp Email Tên Miền & Sen Mail)
   const [domainEmails, setDomainEmails] = useState<FepnDomainEmail[]>([])
-  const [allowedDomains, setAllowedDomains] = useState<string[]>(['@fepn.edu.vn', '@senexam.me', '@vlkt.vnu.edu.vn'])
+  const [allowedDomains, setAllowedDomains] = useState<string[]>([
+    '@sinhvien.tailieufepn.me',
+    '@fepn.edu.vn',
+    '@senexam.me',
+    '@tailieufepn.me',
+    '@vlkt.vnu.edu.vn',
+    '@fepn.vn',
+  ])
   const [newDomainUsername, setNewDomainUsername] = useState('')
-  const [newDomainSuffix, setNewDomainSuffix] = useState('@fepn.edu.vn')
+  const [newDomainSuffix, setNewDomainSuffix] = useState('@sinhvien.tailieufepn.me')
   const [newCustomSuffix, setNewCustomSuffix] = useState('')
   const [newDomainFullName, setNewDomainFullName] = useState('')
   const [newDomainPassword, setNewDomainPassword] = useState('')
@@ -591,6 +598,14 @@ export default function FepnAdminDashboardPage() {
       if (!error && data && data.length > 0) {
         setDomainEmails(data)
         localStorage.setItem('fepn_domain_emails', JSON.stringify(data))
+        const extractedDomains = Array.from(new Set(data.map((item: any) => item.domain).filter(Boolean)))
+        if (extractedDomains.length > 0) {
+          setAllowedDomains((prev) => {
+            const merged = Array.from(new Set([...prev, ...extractedDomains])) as string[]
+            localStorage.setItem('fepn_allowed_domains', JSON.stringify(merged))
+            return merged
+          })
+        }
         return
       }
     } catch (e) {
@@ -603,6 +618,14 @@ export default function FepnAdminDashboardPage() {
         const parsed = JSON.parse(cached)
         if (Array.isArray(parsed) && parsed.length > 0) {
           setDomainEmails(parsed)
+          const extractedDomains = Array.from(new Set(parsed.map((item: any) => item.domain).filter(Boolean)))
+          if (extractedDomains.length > 0) {
+            setAllowedDomains((prev) => {
+              const merged = Array.from(new Set([...prev, ...extractedDomains])) as string[]
+              localStorage.setItem('fepn_allowed_domains', JSON.stringify(merged))
+              return merged
+            })
+          }
           return
         }
       }

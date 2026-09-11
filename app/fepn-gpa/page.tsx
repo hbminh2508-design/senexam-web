@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import FepnMobileNav from '@/components/FepnMobileNav'
+import { checkFepnAccessAsync } from '@/lib/authHelper'
 import {
   GraduationCap,
   Calculator,
@@ -220,8 +221,8 @@ export default function FepnGpaPage() {
         const adminCheck = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
         setIsAdmin(adminCheck)
 
-        const isVnu = email.endsWith('@vnu.edu.vn')
-        if (isVnu || adminCheck) {
+        const isAllowed = await checkFepnAccessAsync(currentUser, role)
+        if (isAllowed) {
           setAuthStatus('authorized')
 
           // 1. Tải danh sách học kỳ
@@ -711,7 +712,7 @@ export default function FepnGpaPage() {
           <div className="w-full">
             <h2 className="text-xl font-black mb-2">Quyền truy cập bị giới hạn</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-              Trang FEPN GPA dành riêng cho cán bộ và sinh viên sử dụng tài khoản email VNU (@vnu.edu.vn).
+              Trang FEPN GPA dành riêng cho cán bộ, sinh viên sử dụng tài khoản email VNU (@vnu.edu.vn) hoặc email tên miền FEPN được cấp bởi Admin.
             </p>
             <button
               onClick={handleLogout}

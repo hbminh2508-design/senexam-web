@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import { checkFepnAccessAsync } from '@/lib/authHelper'
 import {
   BookOpen,
   FolderOpen,
@@ -126,11 +127,9 @@ export default function FepnDashboardPage() {
           setUserRole(profile.role)
         }
 
-        const email = currentUser.email?.toLowerCase() || ''
-        const isVnu = email.endsWith('@vnu.edu.vn')
-        const isAdmin = role === 'admin'
+        const isAllowed = await checkFepnAccessAsync(currentUser, role)
 
-        if (isVnu || isAdmin) {
+        if (isAllowed) {
           setAuthStatus('authorized')
           await loadSubjects()
         } else {
@@ -424,10 +423,10 @@ export default function FepnDashboardPage() {
               <Lock className="h-3.5 w-3.5" /> Quyền Truy Cập Bị Giới Hạn
             </span>
             <h1 className="text-2xl font-black" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
-              Yêu Cầu Email @vnu.edu.vn
+              Yêu Cầu Email VNU hoặc Email Tên Miền FEPN
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              Tài khoản hiện tại của bạn là <strong className="text-rose-600">{user?.email}</strong>. Cổng FEPN dành riêng cho sinh viên & giảng viên Đại học Quốc gia Hà Nội.
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Tài khoản hiện tại của bạn là <strong className="text-rose-600 font-mono">{user?.email}</strong>. Cổng FEPN dành riêng cho sinh viên, giảng viên ĐHQGHN và các tài khoản email tên miền được cấp bởi Ban Quản Trị.
             </p>
           </div>
 

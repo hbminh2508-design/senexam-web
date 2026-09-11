@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
+import { isDomainEmail } from '@/lib/authHelper'
 import { Loader2, AlertCircle } from 'lucide-react'
 
 function CallbackHandler() {
@@ -40,7 +41,7 @@ function CallbackHandler() {
 
         const handleRedirect = (currentUser: any) => {
           const userEmail = currentUser?.email?.toLowerCase() || ''
-          const isVnu = userEmail.endsWith('@vnu.edu.vn')
+          const isVnu = userEmail.endsWith('@vnu.edu.vn') || isDomainEmail(userEmail, currentUser)
           const isFepn =
             typeof window !== 'undefined' &&
             (window.location.hostname.startsWith('tsv.fepn.') ||
