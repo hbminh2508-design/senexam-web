@@ -132,6 +132,7 @@ export async function GET(request: Request) {
     // Các hành động riêng biệt trong Drawer theo từng trang
     const pageActions: Record<string, FepnNavPageAction[]> = {
       schedule: [
+        { id: 'semester_setting', label: 'Lịch Theo Kỳ', icon: 'CalendarRange', actionType: 'modal', target: 'semester_modal' },
         { id: 'shift_setting', label: 'Chỉnh Ca Học', icon: 'Clock', actionType: 'modal', target: 'shift_modal' },
         { id: 'email_reminder', label: 'Nhắc Email 30p', icon: 'BellRing', actionType: 'modal', target: 'email_modal' },
       ],

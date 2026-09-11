@@ -33,6 +33,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Bell,
+  CalendarRange,
+  CalendarClock,
+  Sparkles,
+  RefreshCw,
+  History,
+  Download,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -166,6 +172,54 @@ const COLOR_PALETTES: Record<
     accentColor: '#0891b2',
     cardBg: 'bg-white dark:bg-slate-900 hover:border-cyan-500/50',
   },
+}
+
+// Cấu hình học kỳ cho thời khóa biểu và xuất lịch .ics
+export interface FepnSemesterConfig {
+  semesterName: string
+  startDate: string // YYYY-MM-DD
+  endDate: string // YYYY-MM-DD
+  autoPromptOnEnd: boolean
+}
+
+// Cấu trúc sao lưu thời khóa biểu trước khi làm mới kỳ mới
+export interface FepnScheduleBackup {
+  id: string
+  timestamp: string
+  semesterName: string
+  subjectsCount: number
+  subjects: FepnScheduleSubject[]
+}
+
+export const getDefaultSemesterConfig = (): FepnSemesterConfig => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1 // 1-12
+
+  if (month >= 8 || month === 1) {
+    const startYear = month === 1 ? year - 1 : year
+    const endYear = startYear + 1
+    return {
+      semesterName: `Học kỳ 1 (${startYear} - ${endYear})`,
+      startDate: `${startYear}-09-01`,
+      endDate: `${endYear}-01-18`,
+      autoPromptOnEnd: true,
+    }
+  } else if (month >= 2 && month <= 6) {
+    return {
+      semesterName: `Học kỳ 2 (${year - 1} - ${year})`,
+      startDate: `${year}-02-02`,
+      endDate: `${year}-06-21`,
+      autoPromptOnEnd: true,
+    }
+  } else {
+    return {
+      semesterName: `Học kỳ Hè (${year})`,
+      startDate: `${year}-07-01`,
+      endDate: `${year}-08-25`,
+      autoPromptOnEnd: true,
+    }
+  }
 }
 
 // Danh sách các thứ trong tuần
@@ -338,6 +392,48 @@ export default function FepnSchedulePage() {
   const [showShiftModal, setShowShiftModal] = useState(false)
   const [editingShiftsList, setEditingShiftsList] = useState<FepnShiftConfig[]>(DEFAULT_FEPN_SHIFTS)
 
+  // 9. Semester Configuration (Lịch Theo Kỳ & Xoá sạch làm mới cho kỳ mới)
+  const [semesterConfig, setSemesterConfig] = useState<FepnSemesterConfig>(getDefaultSemesterConfig)
+  const [showSemesterModal, setShowSemesterModal] = useState(false)
+  const [showEndedBanner, setShowEndedBanner] = useState(true)
+  const [scheduleBackups, setScheduleBackups] = useState<FepnScheduleBackup[]>([])
+  const [resetFeedback, setResetFeedback] = useState<string | null>(null)
+  const [confirmClearModal, setConfirmClearModal] = useState(false)
+  const [tempSemName, setTempSemName] = useState('')
+  const [tempStartDate, setTempStartDate] = useState('')
+  const [tempEndDate, setTempEndDate] = useState('')
+
+  // Thống kê tiến độ học kỳ tự động
+  const semesterStats = useMemo(() => {
+    try {
+      const start = new Date(semesterConfig.startDate)
+      const end = new Date(semesterConfig.endDate)
+      const now = new Date()
+
+      const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
+      const totalWeeks = Math.ceil(totalDays / 7)
+
+      let currentWeek = 0
+      let status: 'upcoming' | 'ongoing' | 'ended' = 'ongoing'
+
+      if (now < start) {
+        status = 'upcoming'
+        currentWeek = 0
+      } else if (now > end) {
+        status = 'ended'
+        currentWeek = totalWeeks
+      } else {
+        status = 'ongoing'
+        const daysPassed = Math.round((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+        currentWeek = Math.min(totalWeeks, Math.floor(daysPassed / 7) + 1)
+      }
+
+      return { totalWeeks, currentWeek, status, totalDays }
+    } catch {
+      return { totalWeeks: 19, currentWeek: 1, status: 'ongoing' as const, totalDays: 133 }
+    }
+  }, [semesterConfig])
+
   // ========================================================
   // 2. INITIALIZE USER & LOAD SCHEDULE
   // ========================================================
@@ -356,9 +452,13 @@ export default function FepnSchedulePage() {
           setCustomNotificationEmail(currentUser.email || '')
           await loadSchedule(currentUser.id, currentUser.email || '')
           await loadShifts(currentUser.id)
+          loadSemesterConfig(currentUser.id)
+          loadScheduleBackups(currentUser.id)
         } else {
           await loadSchedule('guest', '')
           await loadShifts('guest')
+          loadSemesterConfig('guest')
+          loadScheduleBackups('guest')
         }
 
         // Tải danh mục môn học FEPN từ bảng fepn_subjects
@@ -614,6 +714,132 @@ export default function FepnSchedulePage() {
     const userId = user?.id || 'guest'
     const key = `fepn_schedule_${userId}`
     localStorage.setItem(key, JSON.stringify(newSubjects))
+  }
+
+  // Tải cấu hình học kỳ từ localStorage
+  const loadSemesterConfig = (userId: string) => {
+    const key = `fepn_semester_config_${userId}`
+    const saved = localStorage.getItem(key)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (parsed.startDate && parsed.endDate) {
+          setSemesterConfig(parsed)
+          return
+        }
+      } catch (e) {}
+    }
+    const def = getDefaultSemesterConfig()
+    setSemesterConfig(def)
+  }
+
+  // Tải danh sách bản sao lưu thời khóa biểu cũ
+  const loadScheduleBackups = (userId: string) => {
+    try {
+      const key = `fepn_schedule_backups_${userId}`
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          setScheduleBackups(parsed)
+        }
+      }
+    } catch (e) {}
+  }
+
+  const handleOpenSemesterModal = () => {
+    setTempSemName(semesterConfig.semesterName)
+    setTempStartDate(semesterConfig.startDate)
+    setTempEndDate(semesterConfig.endDate)
+    setShowSemesterModal(true)
+  }
+
+  const handleSaveSemesterConfig = () => {
+    if (!tempStartDate || !tempEndDate) {
+      alert('Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc học kỳ!')
+      return
+    }
+    if (new Date(tempStartDate) >= new Date(tempEndDate)) {
+      alert('Ngày bắt đầu học kỳ phải trước ngày kết thúc học kỳ!')
+      return
+    }
+    const newConfig: FepnSemesterConfig = {
+      semesterName: tempSemName.trim() || 'Học kỳ FEPN',
+      startDate: tempStartDate,
+      endDate: tempEndDate,
+      autoPromptOnEnd: true,
+    }
+    setSemesterConfig(newConfig)
+    const userId = user?.id || 'guest'
+    localStorage.setItem(`fepn_semester_config_${userId}`, JSON.stringify(newConfig))
+    setShowSemesterModal(false)
+    setResetFeedback(`Đã lưu cấu hình học kỳ: ${newConfig.semesterName}`)
+    setTimeout(() => setResetFeedback(null), 4000)
+  }
+
+  // Xóa sạch toàn bộ môn học để bắt đầu học kỳ mới một cách nhanh chóng & tự động
+  const handleClearScheduleForNewSemester = async (newConfig?: FepnSemesterConfig) => {
+    const userId = user?.id || 'guest'
+
+    // 1. Tự động sao lưu TKB cũ trước khi xóa để sinh viên an tâm
+    if (subjects.length > 0) {
+      const backup: FepnScheduleBackup = {
+        id: `backup-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        semesterName: semesterConfig.semesterName,
+        subjectsCount: subjects.length,
+        subjects: [...subjects],
+      }
+      try {
+        const backupKey = `fepn_schedule_backups_${userId}`
+        const existingBackups: FepnScheduleBackup[] = JSON.parse(localStorage.getItem(backupKey) || '[]')
+        const updatedBackups = [backup, ...existingBackups].slice(0, 5)
+        localStorage.setItem(backupKey, JSON.stringify(updatedBackups))
+        setScheduleBackups(updatedBackups)
+      } catch (e) {
+        console.warn('Lỗi lưu backup:', e)
+      }
+    }
+
+    // 2. Xóa trên Supabase nếu đã đăng nhập
+    if (user?.id) {
+      try {
+        await supabase.from('fepn_schedule_subjects').delete().eq('user_id', user.id)
+      } catch (err: any) {
+        console.warn('Lỗi xóa trên Supabase:', err.message)
+      }
+    }
+
+    // 3. Xóa sạch trên State & LocalStorage
+    saveSchedule([])
+
+    // 4. Cập nhật học kỳ mới nếu có
+    const finalConfig = newConfig || semesterConfig
+    if (newConfig) {
+      setSemesterConfig(newConfig)
+      localStorage.setItem(`fepn_semester_config_${userId}`, JSON.stringify(newConfig))
+    }
+
+    setConfirmClearModal(false)
+    setShowSemesterModal(false)
+    setShowEndedBanner(false)
+    setResetFeedback(`Đã làm mới thời khóa biểu thành công cho ${finalConfig.semesterName}! Toàn bộ môn học cũ đã được dọn sạch và sao lưu an toàn.`)
+    setTimeout(() => setResetFeedback(null), 6000)
+  }
+
+  const handleRestoreBackup = (backup: FepnScheduleBackup) => {
+    saveSchedule(backup.subjects)
+    setSemesterConfig((prev) => ({
+      ...prev,
+      semesterName: backup.semesterName,
+    }))
+    const userId = user?.id || 'guest'
+    localStorage.setItem(`fepn_semester_config_${userId}`, JSON.stringify({
+      ...semesterConfig,
+      semesterName: backup.semesterName,
+    }))
+    setResetFeedback(`Đã khôi phục thành công ${backup.subjects.length} môn học từ bản sao lưu (${backup.semesterName})!`)
+    setTimeout(() => setResetFeedback(null), 5000)
   }
 
   // Tải danh sách ca học cấu hình từ Supabase & LocalStorage
@@ -1125,16 +1351,26 @@ export default function FepnSchedulePage() {
       8: 'SU',
     }
 
-    const now = new Date()
-    const todayDay = now.getDay() === 0 ? 8 : now.getDay() + 1
-    
+    const pad = (n: number) => (n < 10 ? '0' + n : '' + n)
+
+    // 1. Phân tích ngày bắt đầu học kỳ để tính ngày học đầu tiên của từng thứ
+    const [startYear, startMonth, startDay] = semesterConfig.startDate.split('-').map(Number)
+    const semStartDt = new Date(startYear || 2025, (startMonth || 9) - 1, startDay || 1)
+    const semStartJsDay = semStartDt.getDay()
+    const semStartDayOfWeek = semStartJsDay === 0 ? 8 : semStartJsDay + 1
+
+    // 2. Tính mốc kết thúc học kỳ UNTIL theo chuẩn UTC RFC 5545 (23:59:59 giờ VN = 16:59:59 UTC)
+    const [endYear, endMonth, endDay] = semesterConfig.endDate.split('-').map(Number)
+    const untilUtc = new Date(Date.UTC(endYear || 2026, (endMonth || 1) - 1, endDay || 1, 16, 59, 59))
+    const untilStr = `${untilUtc.getUTCFullYear()}${pad(untilUtc.getUTCMonth() + 1)}${pad(untilUtc.getUTCDate())}T${pad(untilUtc.getUTCHours())}${pad(untilUtc.getUTCMinutes())}${pad(untilUtc.getUTCSeconds())}Z`
+
     const icsLines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//FEPN Schedule//SenExam//VI',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
-      'X-WR-CALNAME:Thời Khóa Biểu FEPN',
+      `X-WR-CALNAME:Thời Khóa Biểu FEPN - ${semesterConfig.semesterName}`,
       'X-WR-TIMEZONE:Asia/Ho_Chi_Minh',
     ]
 
@@ -1144,14 +1380,17 @@ export default function FepnSchedulePage() {
         const [startH, startM] = sess.start_time.split(':').map(Number)
         const [endH, endM] = sess.end_time.split(':').map(Number)
 
-        const targetDate = new Date(now)
-        const diffDays = sess.day_of_week - todayDay
-        targetDate.setDate(now.getDate() + diffDays)
-        
-        const pad = (n: number) => (n < 10 ? '0' + n : '' + n)
-        const y = targetDate.getFullYear()
-        const m = pad(targetDate.getMonth() + 1)
-        const d = pad(targetDate.getDate())
+        // Tính ngày đầu tiên rơi vào thứ này tính từ ngày bắt đầu học kỳ
+        let dayOffset = sess.day_of_week - semStartDayOfWeek
+        if (dayOffset < 0) {
+          dayOffset += 7
+        }
+        const firstOccurrence = new Date(semStartDt)
+        firstOccurrence.setDate(semStartDt.getDate() + dayOffset)
+
+        const y = firstOccurrence.getFullYear()
+        const m = pad(firstOccurrence.getMonth() + 1)
+        const d = pad(firstOccurrence.getDate())
 
         const dtStart = `${y}${m}${d}T${pad(startH || 0)}${pad(startM || 0)}00`
         const dtEnd = `${y}${m}${d}T${pad(endH || 0)}${pad(endM || 0)}00`
@@ -1172,10 +1411,11 @@ export default function FepnSchedulePage() {
         icsLines.push(`DTSTAMP:${stamp}`)
         icsLines.push(`DTSTART;TZID=Asia/Ho_Chi_Minh:${dtStart}`)
         icsLines.push(`DTEND;TZID=Asia/Ho_Chi_Minh:${dtEnd}`)
-        icsLines.push(`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`)
+        // Quy tắc lặp lại hàng tuần và kết thúc đúng ngày kết thúc học kỳ
+        icsLines.push(`RRULE:FREQ=WEEKLY;BYDAY=${byDay};UNTIL=${untilStr}`)
         icsLines.push(`SUMMARY:${typeLabel} ${sub.name} - ${sess.shift_name}`)
         icsLines.push(`LOCATION:${sess.classroom || sub.default_classroom || 'Khoa VLKT'}`)
-        icsLines.push(`DESCRIPTION:Mã môn: ${sub.code || 'N/A'}\\nGiảng viên: ${sub.lecturers.join(', ') || 'Khoa VLKT'}\\nGhi chú: ${sess.notes || ''}`)
+        icsLines.push(`DESCRIPTION:Học kỳ: ${semesterConfig.semesterName}\\nMã môn: ${sub.code || 'N/A'}\\nGiảng viên: ${sub.lecturers.join(', ') || 'Khoa VLKT'}\\nGhi chú: ${sess.notes || ''}`)
         icsLines.push('STATUS:CONFIRMED')
         icsLines.push('END:VEVENT')
       }
@@ -1183,11 +1423,18 @@ export default function FepnSchedulePage() {
 
     icsLines.push('END:VCALENDAR')
 
+    const safeSemesterSlug = semesterConfig.semesterName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'fepn-schedule'
+
     const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', 'thoi-khoa-bieu-fepn.ics')
+    link.setAttribute('download', `thoi-khoa-bieu-${safeSemesterSlug}.ics`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -1299,6 +1546,17 @@ export default function FepnSchedulePage() {
               <span>Chỉnh Ca Học</span>
             </button>
 
+            {/* Nút Cài Đặt Lịch Theo Kỳ */}
+            <button
+              type="button"
+              onClick={handleOpenSemesterModal}
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 text-sky-800 dark:text-sky-300 text-xs font-bold transition shadow-xs hover:scale-105"
+              title="Cài đặt học kỳ, khoảng thời gian lặp và quản lý TKB mới"
+            >
+              <CalendarRange className="h-4 w-4 text-sky-600" />
+              <span>Lịch Theo Kỳ</span>
+            </button>
+
             {/* Nút Nhắc Nhở Email (Không rung lắc, màu xanh đồng nhất) */}
             <button
               type="button"
@@ -1342,6 +1600,68 @@ export default function FepnSchedulePage() {
 
       {/* 3. MAIN CONTENT AREA */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+        {/* THÔNG BÁO RESET / LƯU CẤU HÌNH THÀNH CÔNG */}
+        {resetFeedback && (
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300 no-print print:hidden">
+            <div className="flex items-center gap-2.5">
+              <Check className="h-5 w-5 text-emerald-600 shrink-0" />
+              <span className="text-sm font-bold">{resetFeedback}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResetFeedback(null)}
+              className="p-1 text-emerald-600 hover:text-emerald-800 rounded-lg hover:bg-emerald-500/10 transition"
+              title="Đóng thông báo"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* CẢNH BÁO TỰ ĐỘNG KHI HỌC KỲ ĐÃ KẾT THÚC */}
+        {showEndedBanner && (
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/30 text-slate-800 dark:text-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm no-print print:hidden">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+                <CalendarRange className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                    Học Kỳ Đã Hoàn Thành
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200">
+                    {semesterConfig.semesterName}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                  Kỳ học đã kết thúc vào ngày {new Date(semesterConfig.endDate).toLocaleDateString('vi-VN')}. Bạn có muốn dọn sạch TKB cũ để chuẩn bị thời khóa biểu mới không? (Hệ thống sẽ tự động sao lưu dữ liệu cũ để bạn có thể khôi phục lại khi cần).
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowEndedBanner(false)}
+                className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                Để Sau
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEndedBanner(false)
+                  setConfirmClearModal(true)
+                }}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-amber-600/20 transition flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Dọn Sạch Cho Kỳ Mới</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* BANNER REAL-TIME ACTIVE / UPCOMING CLASS TRACKER (NO-PRINT) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 no-print print:hidden">
           {/* Card Ca học đang diễn ra / Ca sắp tới (Đồng màu xanh dịu nhẹ với Dashboard) */}
@@ -1474,9 +1794,30 @@ export default function FepnSchedulePage() {
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-500">Tổng Quan Tuần</span>
-                <span className="px-2 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 text-[10px] font-black border border-sky-200 dark:border-sky-800">
-                  Học Kỳ FEPN
-                </span>
+                <button
+                  type="button"
+                  onClick={handleOpenSemesterModal}
+                  className="px-2.5 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300 text-[10px] font-black border border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition inline-flex items-center gap-1.5 cursor-pointer"
+                  title="Bấm để cấu hình học kỳ, khoảng thời gian & tiến độ tuần"
+                >
+                  <CalendarRange className="h-3 w-3 text-sky-600 shrink-0" />
+                  <span className="max-w-[110px] sm:max-w-[140px] truncate">{semesterConfig.semesterName}</span>
+                  {semesterStats.status === 'ongoing' && (
+                    <span className="bg-sky-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-mono shrink-0">
+                      T{semesterStats.currentWeek}/{semesterStats.totalWeeks}
+                    </span>
+                  )}
+                  {semesterStats.status === 'ended' && (
+                    <span className="bg-amber-500 text-white text-[9px] px-1.5 py-0.2 rounded-full shrink-0">
+                      Hết kỳ
+                    </span>
+                  )}
+                  {semesterStats.status === 'upcoming' && (
+                    <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.2 rounded-full shrink-0">
+                      Sắp tới
+                    </span>
+                  )}
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
@@ -1492,21 +1833,21 @@ export default function FepnSchedulePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={handleCopyScheduleSummary}
-                className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition flex items-center justify-center gap-1.5"
+                className="flex-1 min-w-[75px] py-2 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition flex items-center justify-center gap-1.5"
                 title="Sao chép toàn bộ lịch học vào clipboard"
               >
                 {copiedSchedule ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                <span>{copiedSchedule ? 'Đã Sao Chép' : 'Sao Chép Lịch'}</span>
+                <span>{copiedSchedule ? 'Đã Chép' : 'Sao Chép'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition flex items-center justify-center gap-1.5"
+                className="py-2 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition flex items-center justify-center gap-1.5"
                 title="Chỉ in bảng thời khóa biểu sạch đẹp"
               >
                 <Printer className="h-3.5 w-3.5 text-sky-600" />
@@ -1515,13 +1856,22 @@ export default function FepnSchedulePage() {
 
               <button
                 type="button"
-                onClick={handleExportICalendar}
-                className="py-2 px-3 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 text-xs font-bold text-sky-800 dark:text-sky-300 transition flex items-center justify-center gap-1.5"
-                title="Xuất lịch học dạng .ics để đồng bộ Google Calendar / Apple Calendar"
+                onClick={handleOpenSemesterModal}
+                className="py-2 px-2.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 text-xs font-bold text-sky-800 dark:text-sky-300 transition flex items-center justify-center gap-1.5"
+                title="Cài đặt học kỳ, xem tiến độ tuần và quản lý TKB mới"
               >
-                <Calendar className="h-3.5 w-3.5 text-sky-600" />
-                <span className="hidden sm:inline">Xuất</span>
-                <span>.ics</span>
+                <CalendarRange className="h-3.5 w-3.5 text-sky-600" />
+                <span>Lịch Kỳ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportICalendar}
+                className="py-2 px-2.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
+                title={`Xuất file .ics lặp hàng tuần đến hết ngày ${new Date(semesterConfig.endDate).toLocaleDateString('vi-VN')}`}
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Xuất .ics</span>
               </button>
             </div>
           </div>
@@ -1687,6 +2037,41 @@ export default function FepnSchedulePage() {
             </tbody>
           </table>
         </div>
+
+        {/* THÔNG BÁO THỜI KHÓA BIỂU TRỐNG (KHI CHƯA CÓ MÔN HOẶC VỪA DỌN SẠCH CHO KỲ MỚI) */}
+        {subjects.length === 0 && (
+          <div className="p-8 sm:p-12 rounded-3xl bg-white dark:bg-slate-900 border-2 border-dashed border-sky-300 dark:border-sky-800 text-center space-y-4 no-print print:hidden shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 ring-8 ring-sky-500/10">
+              <CalendarRange className="h-8 w-8" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1.5">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                Thời Khóa Biểu Đang Trống ({semesterConfig.semesterName})
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Kỳ học: <strong>{new Date(semesterConfig.startDate).toLocaleDateString('vi-VN')}</strong> đến <strong>{new Date(semesterConfig.endDate).toLocaleDateString('vi-VN')}</strong> (~{semesterStats.totalWeeks} tuần). Hãy thêm các môn học vào thời khóa biểu để quản lý ca học và nhận thông báo nhắc nhở!
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal()}
+                className="px-5 py-2.5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-sky-600/25 transition hover:scale-105 inline-flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Thêm Môn Học Mới</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenSemesterModal}
+                className="px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition inline-flex items-center gap-2"
+              >
+                <Sliders className="h-4 w-4 text-sky-600" />
+                <span>Cài Đặt Học Kỳ & Sao Lưu</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ========================================================
             6. CHẾ ĐỘ HIỂN THỊ 1: DẠNG DỌC RỰC RỠ NHIỀU MÀU SẮC (VERTICAL SCHEDULE FEED)
@@ -2897,6 +3282,298 @@ export default function FepnSchedulePage() {
         </div>
       )}
 
+      {/* ========================================================
+          12. MODAL CẤU HÌNH HỌC KỲ & XUẤT LỊCH THEO KỲ
+          ======================================================== */}
+      {showSemesterModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 backdrop-blur-md p-0 sm:p-4 overflow-hidden animate-in fade-in no-print print:hidden">
+          <div className="relative w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+            {/* Header Modal */}
+            <div className="shrink-0 p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-sky-600 text-white shadow-md shadow-sky-600/30">
+                  <CalendarRange className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                    Cấu Hình Lịch Theo Kỳ FEPN
+                  </h3>
+                  <p className="text-xs text-slate-500">Giới hạn lặp .ics, tính tuần & làm mới TKB cho kỳ mới</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSemesterModal(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition"
+                title="Đóng cửa sổ"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 pr-2 sm:pr-4">
+              {/* Preset nhanh */}
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-slate-500">Chọn Nhanh Học Kỳ Phổ Biến</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                  {(() => {
+                    const currentYear = new Date().getFullYear()
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempSemName(`Học Kỳ 1 (${currentYear}-${currentYear + 1})`)
+                            setTempStartDate(`${currentYear}-09-01`)
+                            setTempEndDate(`${currentYear + 1}-01-20`)
+                          }}
+                          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40 text-left transition"
+                        >
+                          <span className="block text-xs font-black text-slate-800 dark:text-slate-100">Học Kỳ 1</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">01/09 - 20/01</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempSemName(`Học Kỳ 2 (${currentYear - 1}-${currentYear})`)
+                            setTempStartDate(`${currentYear}-02-01`)
+                            setTempEndDate(`${currentYear}-06-30`)
+                          }}
+                          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40 text-left transition"
+                        >
+                          <span className="block text-xs font-black text-slate-800 dark:text-slate-100">Học Kỳ 2</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">01/02 - 30/06</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempSemName(`Học Kỳ Hè (${currentYear})`)
+                            setTempStartDate(`${currentYear}-07-01`)
+                            setTempEndDate(`${currentYear}-08-31`)
+                          }}
+                          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40 text-left transition"
+                        >
+                          <span className="block text-xs font-black text-slate-800 dark:text-slate-100">Học Kỳ Hè</span>
+                          <span className="block text-[10px] text-slate-400 font-mono">01/07 - 31/08</span>
+                        </button>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              {/* Form nhập chi tiết */}
+              <div className="space-y-3.5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Tên Học Kỳ / Niên Khóa:
+                  </label>
+                  <input
+                    type="text"
+                    value={tempSemName}
+                    onChange={(e) => setTempSemName(e.target.value)}
+                    placeholder="VD: Học Kỳ 2 (2024-2025)"
+                    className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold outline-none focus:border-sky-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Ngày Bắt Đầu Học Kỳ:
+                    </label>
+                    <input
+                      type="date"
+                      value={tempStartDate}
+                      onChange={(e) => setTempStartDate(e.target.value)}
+                      className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono font-bold outline-none focus:border-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Ngày Kết Thúc Học Kỳ:
+                    </label>
+                    <input
+                      type="date"
+                      value={tempEndDate}
+                      onChange={(e) => setTempEndDate(e.target.value)}
+                      className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono font-bold outline-none focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Stats Preview */}
+                <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 text-xs space-y-1">
+                  <div className="flex items-center justify-between font-bold text-sky-900 dark:text-sky-200">
+                    <span>Thời lượng kỳ học:</span>
+                    <span className="font-mono">{semesterStats.totalDays} ngày (~{semesterStats.totalWeeks} tuần)</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                    <span>Trạng thái tiến độ:</span>
+                    <span className="font-bold">
+                      {semesterStats.status === 'ongoing' && (
+                        <span className="text-sky-600 dark:text-sky-400">
+                          Đang diễn ra (Tuần {semesterStats.currentWeek}/{semesterStats.totalWeeks})
+                        </span>
+                      )}
+                      {semesterStats.status === 'upcoming' && (
+                        <span className="text-emerald-600">Sắp diễn ra (Chưa bắt đầu)</span>
+                      )}
+                      {semesterStats.status === 'ended' && (
+                        <span className="text-amber-600">Đã kết thúc kỳ học</span>
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-sky-700 dark:text-sky-400 pt-1 border-t border-sky-200 dark:border-sky-800 leading-relaxed">
+                    💡 Khi xuất file <strong>.ics</strong>, quy tắc lặp lại <code>RRULE</code> sẽ dừng chính xác vào ngày {tempEndDate || semesterConfig.endDate}. Lịch điện thoại sẽ không bị kéo dài vô tận sang các kỳ sau!
+                  </p>
+                </div>
+              </div>
+
+              {/* Nút Xuất .ics nhanh trực tiếp từ Modal */}
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-sky-500/10 to-indigo-500/10 border border-sky-500/20">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-black text-slate-900 dark:text-white">Xuất Lịch Học (.ics) Đồng Bộ Điện Thoại</span>
+                  <p className="text-[11px] text-slate-500">Nhập vào Google Calendar, iPhone Calendar, Outlook</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportICalendar}
+                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black transition flex items-center gap-1.5 shadow-md shadow-sky-600/20 shrink-0"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Xuất .ics</span>
+                </button>
+              </div>
+
+              {/* KHU VỰC DỌN SẠCH TKB CHO KỲ MỚI (TỰ ĐỘNG & TIỆN LỢI) */}
+              <div className="p-4 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 space-y-2.5">
+                <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
+                  <RotateCcw className="h-4 w-4 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider">Bắt Đầu Học Kỳ Mới — Dọn Sạch TKB</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Khi bước sang kỳ học mới, bạn có thể xóa sạch các môn cũ ({subjects.length} môn) để lên thời khóa biểu mới nhanh chóng. Hệ thống sẽ <strong>tự động tạo bản sao lưu</strong> để bạn có thể xem lại hoặc khôi phục bất cứ lúc nào.
+                </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSemesterModal(false)
+                      setConfirmClearModal(true)
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-rose-600/20 transition flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Dọn Sạch Thời Khóa Biểu Cũ Cho Kỳ Mới</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* LỊCH SỬ BẢN SAO LƯU (BACKUPS) */}
+              {scheduleBackups.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-slate-500">
+                    <History className="h-3.5 w-3.5 text-sky-600" />
+                    <span>Lịch Sử Sao Lưu TKB Kỳ Trước ({scheduleBackups.length})</span>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {scheduleBackups.map((b) => (
+                      <div
+                        key={b.id}
+                        className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800 dark:text-slate-200 truncate">{b.semesterName}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            {new Date(b.timestamp).toLocaleDateString('vi-VN')} {new Date(b.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {b.subjectsCount} môn học
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreBackup(b)}
+                          className="px-3 py-1.5 rounded-lg border border-sky-300 dark:border-sky-700 bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 text-xs font-bold hover:bg-sky-50 dark:hover:bg-slate-700 transition shrink-0"
+                          title="Khôi phục thời khóa biểu từ bản sao lưu này"
+                        >
+                          Khôi Phục
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Pinned Footer Action Buttons */}
+            <div className="shrink-0 p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSemesterModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSemesterConfig}
+                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-sky-600/20 transition hover:scale-105"
+              >
+                Lưu Cấu Hình Học Kỳ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          13. MODAL XÁC NHẬN DỌN SẠCH TKB CHO KỲ MỚI
+          ======================================================== */}
+      {confirmClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md p-4 animate-in fade-in no-print print:hidden">
+          <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 p-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-center space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 ring-8 ring-amber-500/10">
+              <RotateCcw className="h-7 w-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                Dọn Sạch TKB Cho Kỳ Mới?
+              </h3>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                Toàn bộ <strong>{subjects.length} môn học</strong> hiện tại sẽ được xóa khỏi bảng lịch để bạn bắt đầu thời khóa biểu mới cho <strong>{tempSemName || semesterConfig.semesterName}</strong>.
+              </p>
+              <div className="mt-3 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-left text-[11px] text-emerald-800 dark:text-emerald-300">
+                🛡️ <strong>Tự động sao lưu</strong>: Hệ thống sẽ tự lưu 1 bản sao lưu trước khi xóa. Bạn có thể khôi phục lại bất cứ lúc nào trong mục Lịch Theo Kỳ!
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmClearModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const newCfg = tempStartDate && tempEndDate ? {
+                    semesterName: tempSemName.trim() || semesterConfig.semesterName,
+                    startDate: tempStartDate,
+                    endDate: tempEndDate,
+                    autoPromptOnEnd: true,
+                  } : undefined
+                  await handleClearScheduleForNewSemester(newCfg)
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md shadow-amber-600/20 transition flex items-center justify-center gap-1"
+              >
+                <span>Xác Nhận Làm Mới</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MOBILE BOTTOM NAVIGATION BAR & ALL FEATURES DRAWER */}
       <FepnMobileNav
         activePage="schedule"
@@ -2908,6 +3585,18 @@ export default function FepnSchedulePage() {
         }}
         extraDrawerItems={
           <>
+            <button
+              type="button"
+              onClick={handleOpenSemesterModal}
+              className="flex flex-col items-start p-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 text-left group"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 mb-1.5">
+                <CalendarRange className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-100">Lịch Theo Kỳ</span>
+              <span className="text-[10px] text-slate-400">Thời gian & làm mới kỳ</span>
+            </button>
+
             <button
               type="button"
               onClick={handleOpenShiftModal}
