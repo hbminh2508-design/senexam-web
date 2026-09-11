@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
@@ -531,6 +532,17 @@ export default function FepnLoginPage() {
 
       if (error) throw error
 
+      // Lưu trạng thái kích hoạt và secret vào user_metadata để hỗ trợ xác minh khi cấp lại mật khẩu
+      await supabase.auth
+        .updateUser({
+          data: {
+            fepn_mfa_enrolled: true,
+            fepn_mfa_secret: mfaSecret,
+            fepn_mfa_factor_id: mfaFactorId,
+          },
+        })
+        .catch((e) => console.warn('Lỗi cập nhật metadata MFA:', e))
+
       alert('🎉 Đã kích hoạt bảo mật ứng dụng Authenticator thành công!')
       navigateAfterLogin()
     } catch (err: any) {
@@ -977,18 +989,12 @@ export default function FepnLoginPage() {
                     {/* Nút Quên Mật Khẩu */}
                     {mode === 'login' && (
                       <div className="flex items-center justify-end mt-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMode('forgot')
-                            setForgotStep('request')
-                            setErrorMsg('')
-                            setSuccessMsg('')
-                          }}
+                        <Link
+                          href="/sen-cap-lai-mat-khau"
                           className="text-xs font-bold text-sky-600 hover:text-sky-700 hover:underline transition"
                         >
                           Quên mật khẩu?
-                        </button>
+                        </Link>
                       </div>
                     )}
 

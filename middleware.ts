@@ -134,6 +134,11 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.next())
   }
 
+  // 3.5. Trang cấp lại mật khẩu đồng bộ FEPN
+  if (pathname === '/sen-cap-lai-mat-khau') {
+    return applySecurityHeaders(NextResponse.next())
+  }
+
   // 4. Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
   if (pathname.startsWith('/fepn-')) {
     // fepn-login, fepn-dashboard, fepn-recap, fepn-admin, fepn-gpa, fepn-gift, fepn-schedule, fepn-reset-password là các trang độc lập có sẵn thư mục
@@ -202,9 +207,14 @@ export function middleware(request: NextRequest) {
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
-    // 5.8 Trang Reset Password FEPN
-    if (pathname === '/reset-password' || pathname === '/fepn-reset-password') {
-      url.pathname = '/fepn-reset-password'
+    // 5.8 Trang Cấp Lại Mật Khẩu FEPN
+    if (
+      pathname === '/reset-password' ||
+      pathname === '/fepn-reset-password' ||
+      pathname === '/sen-cap-lai-mat-khau' ||
+      pathname === '/cap-lai-mat-khau'
+    ) {
+      url.pathname = '/sen-cap-lai-mat-khau'
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
@@ -212,7 +222,8 @@ export function middleware(request: NextRequest) {
     if (
       pathname.startsWith('/tsv-fepn') ||
       pathname.startsWith('/new-sign') ||
-      pathname.startsWith('/fepn-reset-password')
+      pathname.startsWith('/fepn-reset-password') ||
+      pathname.startsWith('/sen-cap-lai-mat-khau')
     ) {
       return applySecurityHeaders(NextResponse.next())
     }
