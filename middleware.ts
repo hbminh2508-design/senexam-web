@@ -134,15 +134,9 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.next())
   }
 
-  // Chuyển hướng nhanh /mail sang /sen-mail
-  if (pathname === '/mail') {
-    url.pathname = '/sen-mail'
-    return applySecurityHeaders(NextResponse.rewrite(url))
-  }
-
   // 4. Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
   if (pathname.startsWith('/fepn-')) {
-    // fepn-login, fepn-dashboard, fepn-recap, fepn-admin, fepn-gpa, fepn-gift, fepn-schedule, fepn-mail là các trang độc lập có sẵn thư mục
+    // fepn-login, fepn-dashboard, fepn-recap, fepn-admin, fepn-gpa, fepn-gift, fepn-schedule, fepn-reset-password là các trang độc lập có sẵn thư mục
     if (
       pathname === '/fepn-login' ||
       pathname === '/fepn-dashboard' ||
@@ -151,12 +145,8 @@ export function middleware(request: NextRequest) {
       pathname === '/fepn-gpa' ||
       pathname === '/fepn-gift' ||
       pathname === '/fepn-schedule' ||
-      pathname === '/fepn-mail'
+      pathname === '/fepn-reset-password'
     ) {
-      if (pathname === '/fepn-mail') {
-        url.pathname = '/sen-mail'
-        return applySecurityHeaders(NextResponse.rewrite(url))
-      }
       return applySecurityHeaders(NextResponse.next())
     }
     // fepn-[mã môn học]: rewrite ngầm sang /tsv-fepn/[slug] để giữ nguyên URL fepn-[mã môn học] trên thanh địa chỉ
@@ -212,14 +202,9 @@ export function middleware(request: NextRequest) {
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
-    // 5.8 Trang Sen Mail (Hòm Thư Riêng & Quản Lý Công Việc)
-    if (
-      pathname === '/sen-mail' ||
-      pathname === '/mail' ||
-      pathname === '/fepn-mail' ||
-      pathname.startsWith('/sen-mail/')
-    ) {
-      url.pathname = pathname === '/mail' || pathname === '/fepn-mail' ? '/sen-mail' : pathname
+    // 5.8 Trang Reset Password FEPN
+    if (pathname === '/reset-password' || pathname === '/fepn-reset-password') {
+      url.pathname = '/fepn-reset-password'
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
@@ -227,7 +212,7 @@ export function middleware(request: NextRequest) {
     if (
       pathname.startsWith('/tsv-fepn') ||
       pathname.startsWith('/new-sign') ||
-      pathname.startsWith('/sen-mail')
+      pathname.startsWith('/fepn-reset-password')
     ) {
       return applySecurityHeaders(NextResponse.next())
     }
@@ -235,10 +220,6 @@ export function middleware(request: NextRequest) {
     // 5.10 Nếu là đường dẫn môn học dạng tsv.fepn.senexam.me/[mã môn]
     const slug = pathname.slice(1) // Bỏ dấu /
     const RESERVED_SLUGS = [
-      'sen-mail',
-      'mail',
-      'fepn-mail',
-      'senmail',
       'dashboard',
       'login',
       'recap',
@@ -248,10 +229,12 @@ export function middleware(request: NextRequest) {
       'admin',
       'api',
       'auth',
+      'reset-password',
+      'fepn-reset-password',
     ]
     if (RESERVED_SLUGS.includes(slug.toLowerCase())) {
-      if (['sen-mail', 'mail', 'fepn-mail', 'senmail'].includes(slug.toLowerCase())) {
-        url.pathname = '/sen-mail'
+      if (slug === 'reset-password' || slug === 'fepn-reset-password') {
+        url.pathname = '/fepn-reset-password'
         return applySecurityHeaders(NextResponse.rewrite(url))
       }
       return applySecurityHeaders(NextResponse.next())
