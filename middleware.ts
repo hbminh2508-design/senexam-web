@@ -134,9 +134,15 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.next())
   }
 
+  // Chuyển hướng nhanh /mail sang /sen-mail
+  if (pathname === '/mail') {
+    url.pathname = '/sen-mail'
+    return applySecurityHeaders(NextResponse.rewrite(url))
+  }
+
   // 4. Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
   if (pathname.startsWith('/fepn-')) {
-    // fepn-login, fepn-dashboard, fepn-recap, fepn-admin, fepn-gpa, fepn-gift, fepn-schedule là các trang độc lập có sẵn thư mục
+    // fepn-login, fepn-dashboard, fepn-recap, fepn-admin, fepn-gpa, fepn-gift, fepn-schedule, fepn-mail là các trang độc lập có sẵn thư mục
     if (
       pathname === '/fepn-login' ||
       pathname === '/fepn-dashboard' ||
@@ -144,8 +150,13 @@ export function middleware(request: NextRequest) {
       pathname === '/fepn-admin' ||
       pathname === '/fepn-gpa' ||
       pathname === '/fepn-gift' ||
-      pathname === '/fepn-schedule'
+      pathname === '/fepn-schedule' ||
+      pathname === '/fepn-mail'
     ) {
+      if (pathname === '/fepn-mail') {
+        url.pathname = '/sen-mail'
+        return applySecurityHeaders(NextResponse.rewrite(url))
+      }
       return applySecurityHeaders(NextResponse.next())
     }
     // fepn-[mã môn học]: rewrite ngầm sang /tsv-fepn/[slug] để giữ nguyên URL fepn-[mã môn học] trên thanh địa chỉ
@@ -201,16 +212,51 @@ export function middleware(request: NextRequest) {
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
-    // 5.6 Các đường dẫn hệ thống đã có
+    // 5.8 Trang Sen Mail (Hòm Thư Riêng & Quản Lý Công Việc)
+    if (
+      pathname === '/sen-mail' ||
+      pathname === '/mail' ||
+      pathname === '/fepn-mail' ||
+      pathname.startsWith('/sen-mail/')
+    ) {
+      url.pathname = pathname === '/mail' || pathname === '/fepn-mail' ? '/sen-mail' : pathname
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+
+    // 5.9 Các đường dẫn hệ thống đã có
     if (
       pathname.startsWith('/tsv-fepn') ||
-      pathname.startsWith('/new-sign')
+      pathname.startsWith('/new-sign') ||
+      pathname.startsWith('/sen-mail')
     ) {
       return applySecurityHeaders(NextResponse.next())
     }
 
-    // 5.7 Nếu là đường dẫn môn học dạng tsv.fepn.senexam.me/[mã môn]
+    // 5.10 Nếu là đường dẫn môn học dạng tsv.fepn.senexam.me/[mã môn]
     const slug = pathname.slice(1) // Bỏ dấu /
+    const RESERVED_SLUGS = [
+      'sen-mail',
+      'mail',
+      'fepn-mail',
+      'senmail',
+      'dashboard',
+      'login',
+      'recap',
+      'gpa',
+      'gift',
+      'schedule',
+      'admin',
+      'api',
+      'auth',
+    ]
+    if (RESERVED_SLUGS.includes(slug.toLowerCase())) {
+      if (['sen-mail', 'mail', 'fepn-mail', 'senmail'].includes(slug.toLowerCase())) {
+        url.pathname = '/sen-mail'
+        return applySecurityHeaders(NextResponse.rewrite(url))
+      }
+      return applySecurityHeaders(NextResponse.next())
+    }
+
     if (slug) {
       url.pathname = `/tsv-fepn/${slug}`
       return applySecurityHeaders(NextResponse.rewrite(url))

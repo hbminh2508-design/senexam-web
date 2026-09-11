@@ -145,6 +145,15 @@ export default function FepnSubjectDetailPage() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // 1.5 Tự động chuyển hướng ngay lập tức nếu truy cập nhầm vào slug sen-mail/mail
+  useEffect(() => {
+    const s = (rawSlug || '').toLowerCase().trim()
+    const clean = s.replace(/^fepn-/, '')
+    if (['sen-mail', 'mail', 'senmail'].includes(clean) || ['sen-mail', 'mail', 'fepn-mail', 'senmail'].includes(s)) {
+      router.replace('/sen-mail')
+    }
+  }, [rawSlug, router])
+
   // 2. Check Auth & Email @vnu.edu.vn
   useEffect(() => {
     const checkAuth = async () => {
@@ -198,10 +207,13 @@ export default function FepnSubjectDetailPage() {
   // 3. Load Subject & Materials from Database purely
   const loadSubjectData = async (userId: string) => {
     if (!rawSlug) return
+    const cleanSlug = rawSlug.trim().toLowerCase().replace(/^fepn-/, '')
+    if (['sen-mail', 'mail', 'senmail'].includes(cleanSlug) || ['sen-mail', 'mail', 'fepn-mail', 'senmail'].includes(rawSlug.toLowerCase().trim())) {
+      router.replace('/sen-mail')
+      return
+    }
     setLoadingSubject(true)
     try {
-      // Tìm môn học bằng mã môn (code) hoặc ID hoặc slug dạng fepn-[code]
-      const cleanSlug = rawSlug.trim().toLowerCase().replace(/^fepn-/, '')
 
       // Lấy tất cả môn học để so khớp linh hoạt
       const { data: allSubjects, error: subErr } = await supabase
@@ -436,6 +448,28 @@ export default function FepnSubjectDetailPage() {
           <div className="flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-sky-500" />
             <span className="font-bold text-sm tracking-wide">Đang tải học liệu môn học...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Chuyển hướng an toàn nếu là route Sen Mail
+  const isMailRoute =
+    ['sen-mail', 'mail', 'senmail'].includes(
+      (rawSlug || '').trim().toLowerCase().replace(/^fepn-/, '')
+    ) || ['sen-mail', 'mail', 'fepn-mail', 'senmail'].includes((rawSlug || '').trim().toLowerCase())
+
+  if (isMailRoute) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-[#F4F7FB] dark:bg-[#070B14] text-slate-900 dark:text-slate-100">
+        <div className="flex flex-col items-center gap-4 p-8 rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-black/10 dark:border-white/10 shadow-2xl">
+          <div className="relative h-16 w-16">
+            <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain animate-pulse" />
+          </div>
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+            <span className="font-bold text-sm tracking-wide">Đang chuyển hướng đến Sen Mail...</span>
           </div>
         </div>
       </div>
