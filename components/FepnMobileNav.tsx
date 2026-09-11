@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
@@ -56,6 +56,42 @@ export default function FepnMobileNav({
   onLogout,
 }: FepnMobileNavProps) {
   const [showDrawer, setShowDrawer] = useState(false)
+
+  // Đảm bảo tiêu đề tab trình duyệt và favicon luôn là FEPN khi ở bất kỳ trang web con nào
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const pageTitles: Record<string, string> = {
+        dashboard: 'Tài liệu FEPN - Kho Học Liệu',
+        schedule: 'Tài liệu FEPN - Lịch Học & TKB',
+        gpa: 'Tài liệu FEPN - Tính Điểm GPA',
+        recap: 'Tài liệu FEPN - Kỷ Yếu & Hoạt Động',
+        gift: 'Tài liệu FEPN - Đổi Quà & Vòng Quay',
+        admin: 'Tài liệu FEPN - Quản Trị Khoa & Deep Vault',
+        subject: 'Tài liệu FEPN - Chi Tiết Môn Học',
+      }
+      const targetTitle = pageTitles[activePage || ''] || 'Tài liệu FEPN'
+      if (!document.title.includes('Tài liệu FEPN')) {
+        document.title = targetTitle
+      }
+
+      // Đổi favicon trên tab trình duyệt sang Logo FEPN
+      const iconSelectors = ["link[rel*='icon']", "link[rel='shortcut icon']", "link[rel='apple-touch-icon']"]
+      let updated = false
+      iconSelectors.forEach((sel) => {
+        document.querySelectorAll<HTMLLinkElement>(sel).forEach((el) => {
+          el.href = '/fepn-logo.png'
+          updated = true
+        })
+      })
+
+      if (!updated) {
+        const newLink = document.createElement('link')
+        newLink.rel = 'icon'
+        newLink.href = '/fepn-logo.png'
+        document.head.appendChild(newLink)
+      }
+    }
+  }, [activePage])
 
   const defaultLeft = {
     label: 'Dashboard',

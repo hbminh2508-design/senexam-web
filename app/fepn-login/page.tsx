@@ -67,9 +67,26 @@ export default function FepnLoginPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
-  // 1. Enforce Light Mode
+  // 1. Enforce Light Mode & FEPN Branding
   useEffect(() => {
     document.documentElement.classList.remove('dark')
+    if (typeof document !== 'undefined') {
+      document.title = 'Tài liệu FEPN - Đăng Nhập Xác Thực VNU'
+      const iconSelectors = ["link[rel*='icon']", "link[rel='shortcut icon']", "link[rel='apple-touch-icon']"]
+      let updated = false
+      iconSelectors.forEach((sel) => {
+        document.querySelectorAll<HTMLLinkElement>(sel).forEach((el) => {
+          el.href = '/fepn-logo.png'
+          updated = true
+        })
+      })
+      if (!updated) {
+        const newLink = document.createElement('link')
+        newLink.rel = 'icon'
+        newLink.href = '/fepn-logo.png'
+        document.head.appendChild(newLink)
+      }
+    }
   }, [])
 
   // Cooldown đếm ngược gửi lại OTP

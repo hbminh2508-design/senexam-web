@@ -247,6 +247,19 @@ export default function DashboardPage() {
   // ĐẾM THÔNG BÁO CHƯA ĐỌC
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
 
+  // Đảm bảo thương hiệu web mẹ SenExam
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = 'SenExam - Thi cử và học tập trực tuyến'
+      const iconSelectors = ["link[rel*='icon']", "link[rel='shortcut icon']", "link[rel='apple-touch-icon']"]
+      iconSelectors.forEach((sel) => {
+        document.querySelectorAll<HTMLLinkElement>(sel).forEach((el) => {
+          el.href = '/icon.png'
+        })
+      })
+    }
+  }, [])
+
   // Khi mở hộp Thông báo, đánh dấu đã đọc toàn bộ và ghi lại vào localStorage
   // (chưa có bảng lưu trạng thái đọc theo từng người dùng trên Supabase nên dùng localStorage)
   useEffect(() => {

@@ -116,10 +116,26 @@ export default function FepnDashboardMainPage() {
     }
   }
 
-  // 1. Theme & Web Name
+  // 1. Theme & Web Name & Favicon
   useEffect(() => {
     document.documentElement.classList.remove('dark')
     document.title = 'Tài liệu FEPN - Khoa Vật lý kỹ thuật & Công nghệ Nano'
+    if (typeof document !== 'undefined') {
+      const iconSelectors = ["link[rel*='icon']", "link[rel='shortcut icon']", "link[rel='apple-touch-icon']"]
+      let updated = false
+      iconSelectors.forEach((sel) => {
+        document.querySelectorAll<HTMLLinkElement>(sel).forEach((el) => {
+          el.href = '/fepn-logo.png'
+          updated = true
+        })
+      })
+      if (!updated) {
+        const newLink = document.createElement('link')
+        newLink.rel = 'icon'
+        newLink.href = '/fepn-logo.png'
+        document.head.appendChild(newLink)
+      }
+    }
   }, [])
 
   // Check Gift Event Active Status
