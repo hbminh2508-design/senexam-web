@@ -406,8 +406,15 @@ export default function FepnSchedulePage() {
   // Thống kê tiến độ học kỳ tự động
   const semesterStats = useMemo(() => {
     try {
-      const start = new Date(semesterConfig.startDate)
-      const end = new Date(semesterConfig.endDate)
+      if (!semesterConfig.startDate || !semesterConfig.endDate) {
+        return { totalWeeks: 19, currentWeek: 1, status: 'ongoing' as const, totalDays: 133 }
+      }
+
+      const [sYear, sMonth, sDay] = semesterConfig.startDate.split('-').map(Number)
+      const [eYear, eMonth, eDay] = semesterConfig.endDate.split('-').map(Number)
+
+      const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0)
+      const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999)
       const now = new Date()
 
       const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
@@ -416,15 +423,15 @@ export default function FepnSchedulePage() {
       let currentWeek = 0
       let status: 'upcoming' | 'ongoing' | 'ended' = 'ongoing'
 
-      if (now < start) {
+      if (now.getTime() < start.getTime()) {
         status = 'upcoming'
         currentWeek = 0
-      } else if (now > end) {
+      } else if (now.getTime() > end.getTime()) {
         status = 'ended'
         currentWeek = totalWeeks
       } else {
         status = 'ongoing'
-        const daysPassed = Math.round((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+        const daysPassed = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
         currentWeek = Math.min(totalWeeks, Math.floor(daysPassed / 7) + 1)
       }
 
@@ -1760,8 +1767,8 @@ export default function FepnSchedulePage() {
           </div>
         )}
 
-        {/* CẢNH BÁO TỰ ĐỘNG KHI HỌC KỲ ĐÃ KẾT THÚC */}
-        {showEndedBanner && (
+        {/* CẢNH BÁO TỰ ĐỘNG KHI HỌC KỲ ĐÃ KẾT THÚC (CHỈ HIỂN THỊ KHI HỌC KỲ THỰC SỰ ĐÃ KẾT THÚC) */}
+        {showEndedBanner && semesterStats.status === 'ended' && semesterConfig.autoPromptOnEnd !== false && (
           <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/30 text-slate-800 dark:text-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm no-print print:hidden">
             <div className="flex items-start sm:items-center gap-3">
               <div className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
