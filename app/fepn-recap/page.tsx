@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
+import FepnMobileNav from '@/components/FepnMobileNav'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import {
@@ -1246,7 +1247,7 @@ export default function FepnRecapPage() {
 
   return (
     <div
-      className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-slate-900 font-sans flex flex-col bg-slate-50`}
+      className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-slate-900 font-sans flex flex-col bg-slate-50 pb-32 sm:pb-20`}
       style={{
         ...themeVars,
         background:
@@ -1293,7 +1294,7 @@ export default function FepnRecapPage() {
             {/* Link back to Dashboard */}
             <Link
               href="/fepn-dashboard"
-              className="hidden sm:inline-flex items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-bold transition shadow-sm"
+              className="hidden md:inline-flex items-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-bold transition shadow-sm"
               title="Về danh sách môn học"
             >
               <span>Môn Học FEPN</span>
@@ -1332,7 +1333,7 @@ export default function FepnRecapPage() {
             {/* FEPN GPA Link */}
             <Link
               href="/fepn-gpa"
-              className="inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Tính điểm GPA & CPA"
             >
               <span>GPA</span>
@@ -1342,7 +1343,7 @@ export default function FepnRecapPage() {
             {isAdmin && (
               <Link
                 href="/fepn-admin"
-                className="inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="hidden md:inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Cổng Quản Trị FEPN & Deep Vault"
               >
                 <span>Admin</span>
@@ -1354,9 +1355,9 @@ export default function FepnRecapPage() {
               <button
                 type="button"
                 onClick={handleOpenNewPost}
-                className="inline-flex items-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                className="hidden md:inline-flex items-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
               >
-                <span className="hidden sm:inline">Đăng Bài Viết Mới</span>
+                <span>Đăng Bài Viết Mới</span>
               </button>
             )}
 
@@ -1978,6 +1979,35 @@ export default function FepnRecapPage() {
           </div>
         </div>
       )}
+
+      {/* Mobile Unified 3-Button Navigation */}
+      <FepnMobileNav
+        activePage="recap"
+        centerButton={{
+          label: isAdmin ? 'Đăng Bài' : 'Kỷ Yếu FEPN',
+          icon: isAdmin ? <Plus className="h-6 w-6" /> : <BookOpen className="h-6 w-6" />,
+          onClick: () => {
+            if (isAdmin) {
+              handleOpenNewPost()
+            } else {
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          },
+        }}
+        customDrawerActions={
+          isAdmin
+            ? [
+                {
+                  label: 'Đăng Bài Viết Kỷ Yếu',
+                  icon: <Plus className="h-4 w-4 text-emerald-500" />,
+                  onClick: handleOpenNewPost,
+                },
+              ]
+            : undefined
+        }
+        userEmail={user?.email}
+        onLogout={handleLogout}
+      />
     </div>
   )
 }

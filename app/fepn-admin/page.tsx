@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
+import FepnMobileNav from '@/components/FepnMobileNav'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import AdminSecurityVault, { FileEncryptionCenter } from '@/app/components/AdminSecurityVaultModal'
 import {
@@ -527,6 +528,11 @@ export default function FepnAdminDashboardPage() {
       return () => clearInterval(interval)
     }
   }, [activeTab])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/fepn-login')
+  }
 
   const handleSaveGiftEvent = async () => {
     setIsSavingGiftEvent(true)
@@ -1303,7 +1309,7 @@ export default function FepnAdminDashboardPage() {
                 await supabase.auth.signOut()
                 router.push('/fepn-login')
               }}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-50 text-rose-600 hover:bg-rose-100 shadow-sm transition"
+              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-50 text-rose-600 hover:bg-rose-100 shadow-sm transition"
               title="Đăng xuất"
             >
               <LogOut className="h-4 w-4" />
@@ -1398,7 +1404,7 @@ export default function FepnAdminDashboardPage() {
       </nav>
 
       {/* 3. MAIN WORKSPACE CONTAINER */}
-      <main className="flex-1 mx-auto w-full max-w-[1700px] p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 mx-auto w-full max-w-[1700px] p-4 sm:p-6 lg:p-8 pb-32 sm:pb-8">
         {/* ======================================================== */}
         {/* TAB 1: TỔNG QUAN (OVERVIEW)                              */}
         {/* ======================================================== */}
@@ -3178,6 +3184,50 @@ export default function FepnAdminDashboardPage() {
         isOpen={showScannerModal}
         onClose={() => setShowScannerModal(false)}
         onScanSuccess={handleQrScanSuccess}
+      />
+
+      {/* Mobile Unified 3-Button Navigation */}
+      <FepnMobileNav
+        activePage="admin"
+        centerButton={{
+          label: 'Deep Vault',
+          icon: <ShieldCheck className="h-6 w-6" />,
+          onClick: () => setActiveTab('vault'),
+        }}
+        customDrawerActions={[
+          {
+            label: 'Tổng Quan Hệ Thống',
+            icon: <Database className="h-4 w-4 text-sky-500" />,
+            onClick: () => setActiveTab('overview'),
+          },
+          {
+            label: 'Quản Lý Môn Học',
+            icon: <BookOpen className="h-4 w-4 text-indigo-500" />,
+            onClick: () => setActiveTab('subjects'),
+          },
+          {
+            label: 'Quản Lý Tài Liệu & Đề Thi',
+            icon: <FolderOpen className="h-4 w-4 text-emerald-500" />,
+            onClick: () => setActiveTab('materials'),
+          },
+          {
+            label: 'Quản Lý Kỷ Yếu FEPN',
+            icon: <Award className="h-4 w-4 text-amber-500" />,
+            onClick: () => setActiveTab('recap'),
+          },
+          {
+            label: 'Quản Lý Sự Kiện Đổi Quà',
+            icon: <Gift className="h-4 w-4 text-pink-500" />,
+            onClick: () => setActiveTab('gifts'),
+          },
+          {
+            label: 'Bảo Mật Deep Vault (.key)',
+            icon: <ShieldCheck className="h-4 w-4 text-purple-500" />,
+            onClick: () => setActiveTab('vault'),
+          },
+        ]}
+        userEmail={user?.email}
+        onLogout={handleLogout}
       />
     </div>
   )

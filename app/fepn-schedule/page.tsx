@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
+import FepnMobileNav from '@/components/FepnMobileNav'
 import {
   Calendar,
   Clock,
@@ -1245,7 +1246,7 @@ export default function FepnSchedulePage() {
   // ========================================================
   return (
     <div
-      className={`min-h-screen bg-[#F4F7FB] dark:bg-[#070B14] text-slate-900 dark:text-slate-100 transition-colors pb-24 overflow-x-hidden print:p-0 print:m-0 print:bg-white print:text-black ${bodyFont.className}`}
+      className={`min-h-screen bg-[#F4F7FB] dark:bg-[#070B14] text-slate-900 dark:text-slate-100 transition-colors pb-32 sm:pb-24 overflow-x-hidden print:p-0 print:m-0 print:bg-white print:text-black ${bodyFont.className}`}
     >
       {/* 1. TOP HEADER & BRANDING (NO-PRINT) */}
       <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl no-print print:hidden">
@@ -1280,40 +1281,40 @@ export default function FepnSchedulePage() {
             {/* Nút Quay về Dashboard */}
             <Link
               href="/fepn-dashboard"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs"
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs"
               title="Trở về Trang chủ FEPN Dashboard"
             >
               <ArrowLeft className="h-3.5 w-3.5 text-sky-600" />
-              <span className="hidden sm:inline">Về Dashboard</span>
+              <span>Về Dashboard</span>
             </Link>
 
             {/* Nút Điều Chỉnh Ca Học */}
             <button
               type="button"
               onClick={handleOpenShiftModal}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-xs hover:scale-105"
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition shadow-xs hover:scale-105"
               title="Tùy chỉnh các ca học: Ca x từ tiết nào tới tiết nào và thời gian"
             >
               <Clock className="h-4 w-4 text-sky-600" />
-              <span className="hidden lg:inline">Chỉnh Ca Học</span>
+              <span>Chỉnh Ca Học</span>
             </button>
 
             {/* Nút Nhắc Nhở Email (Không rung lắc, màu xanh đồng nhất) */}
             <button
               type="button"
               onClick={() => setShowEmailModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 text-sky-800 dark:text-sky-300 text-xs font-bold transition shadow-xs hover:scale-105"
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 text-sky-800 dark:text-sky-300 text-xs font-bold transition shadow-xs hover:scale-105"
               title="Cài đặt thông báo qua Email trước 30 phút"
             >
               <BellRing className="h-4 w-4 text-sky-600" />
-              <span className="hidden md:inline">Nhắc Email 30p</span>
+              <span>Nhắc Email 30p</span>
             </button>
 
             {/* Nút Thêm Môn Học (Xanh chuẩn đồng nhất Dashboard) */}
             <button
               type="button"
               onClick={() => handleOpenAddModal()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-sky-600/20 transition hover:scale-105"
+              className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-sky-600/20 transition hover:scale-105"
             >
               <Plus className="h-4 w-4" />
               <span>Thêm Môn Học</span>
@@ -2895,6 +2896,49 @@ export default function FepnSchedulePage() {
           </div>
         </div>
       )}
+
+      {/* MOBILE BOTTOM NAVIGATION BAR & ALL FEATURES DRAWER */}
+      <FepnMobileNav
+        activePage="schedule"
+        centerButton={{
+          label: 'Thêm Môn',
+          icon: <Plus className="h-6 w-6" />,
+          onClick: () => handleOpenAddModal(),
+          title: 'Thêm Môn Học Mới Vào TKB',
+        }}
+        extraDrawerItems={
+          <>
+            <button
+              type="button"
+              onClick={handleOpenShiftModal}
+              className="flex flex-col items-start p-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 text-left group"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 mb-1.5">
+                <Clock className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-100">Chỉnh Ca Học</span>
+              <span className="text-[10px] text-slate-400">Tiết & thời gian ca</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowEmailModal(true)}
+              className="flex flex-col items-start p-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 text-left group"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 mb-1.5">
+                <BellRing className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-100">Nhắc Email 30p</span>
+              <span className="text-[10px] text-slate-400">Thông báo trước giờ học</span>
+            </button>
+          </>
+        }
+        user={user}
+        onLogout={async () => {
+          await supabase.auth.signOut()
+          window.location.href = '/fepn-login'
+        }}
+      />
     </div>
   )
 }

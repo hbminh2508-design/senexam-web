@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
+import FepnMobileNav from '@/components/FepnMobileNav'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import {
@@ -548,25 +549,25 @@ export default function FepnSubjectDetailPage() {
               <button
                 type="button"
                 onClick={() => setShowAddMaterialModal(true)}
-                className="inline-flex items-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3 py-1.5 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                className="hidden md:inline-flex items-center rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-3 py-1.5 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
               >
-                <span className="hidden sm:inline">Đăng Tài Liệu</span>
+                <span>Đăng Tài Liệu</span>
               </button>
             )}
 
             {isAdmin && (
               <Link
                 href="/fepn-admin"
-                className="inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-1.5 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="hidden md:inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-1.5 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Cổng Quản Trị FEPN & Deep Vault"
               >
-                <span className="hidden md:inline">Admin</span>
+                <span>Admin</span>
               </Link>
             )}
 
             <Link
               href="/fepn-recap"
-              className="inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Kỷ yếu & Hoạt động FEPN"
             >
               <span>Recap</span>
@@ -574,7 +575,7 @@ export default function FepnSubjectDetailPage() {
 
             <Link
               href="/fepn-gpa"
-              className="inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Tính điểm GPA & CPA"
             >
               <span>GPA</span>
@@ -583,7 +584,7 @@ export default function FepnSubjectDetailPage() {
             <button
               type="button"
               onClick={handleLogout}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 shadow-sm transition"
+              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 shadow-sm transition"
               title="Đăng xuất"
             >
               <LogOut className="h-4 w-4" />
@@ -595,12 +596,13 @@ export default function FepnSubjectDetailPage() {
       {/* 2. MAIN 2-COLUMN RESIZABLE SPLIT VIEW */}
       <div
         ref={splitContainerRef}
-        className="mx-auto flex-1 w-full max-w-[1600px] flex flex-col lg:flex-row p-4 sm:p-6 gap-0 select-none overflow-hidden"
+        className="mx-auto flex-1 w-full max-w-[1600px] flex flex-col lg:flex-row p-4 sm:p-6 gap-0 select-none overflow-hidden pb-32 sm:pb-6"
       >
         {/* ======================================================== */}
         {/* CỘT TRÁI (LEFT COLUMN): 4 FOLDER TABS & MATERIAL LIST */}
         {/* ======================================================== */}
         <div
+          id="materials-section"
           className="w-full flex flex-col rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-xl overflow-hidden"
           style={isDesktop ? { width: `${leftWidth}%` } : { width: '100%' }}
         >
@@ -1039,6 +1041,60 @@ export default function FepnSubjectDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Mobile Unified 3-Button Navigation */}
+      <FepnMobileNav
+        activePage="subject"
+        centerButton={{
+          label: isAdmin ? 'Đăng Tài Liệu' : 'Tài Liệu',
+          icon: isAdmin ? <Upload className="h-6 w-6" /> : <FolderOpen className="h-6 w-6" />,
+          onClick: () => {
+            if (isAdmin) {
+              setShowAddMaterialModal(true)
+            } else {
+              const matEl = document.getElementById('materials-section')
+              if (matEl) matEl.scrollIntoView({ behavior: 'smooth' })
+            }
+          },
+        }}
+        customDrawerActions={[
+          ...(isAdmin
+            ? [
+                {
+                  label: 'Đăng Học Liệu Cho Môn Này',
+                  icon: <Upload className="h-4 w-4 text-sky-500" />,
+                  onClick: () => setShowAddMaterialModal(true),
+                },
+              ]
+            : []),
+          {
+            label: 'Xem Kỷ Yếu FEPN (Recap)',
+            icon: <Award className="h-4 w-4 text-amber-500" />,
+            onClick: () => router.push('/fepn-recap'),
+          },
+          {
+            label: 'Tính Điểm GPA / CPA',
+            icon: <Calculator className="h-4 w-4 text-indigo-500" />,
+            onClick: () => router.push('/fepn-gpa'),
+          },
+          {
+            label: 'Vòng Quay Đổi Quà',
+            icon: <FolderOpen className="h-4 w-4 text-pink-500" />,
+            onClick: () => router.push('/fepn-gift'),
+          },
+          ...(isAdmin
+            ? [
+                {
+                  label: 'Cổng Quản Trị Khoa (Admin)',
+                  icon: <ShieldCheck className="h-4 w-4 text-emerald-500" />,
+                  onClick: () => router.push('/fepn-admin'),
+                },
+              ]
+            : []),
+        ]}
+        userEmail={user?.email}
+        onLogout={handleLogout}
+      />
     </main>
   )
 }

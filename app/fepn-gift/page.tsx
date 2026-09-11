@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
+import FepnMobileNav from '@/components/FepnMobileNav'
 import {
   ArrowLeft,
   Gift,
@@ -328,6 +329,11 @@ export default function FepnGiftPage() {
       console.warn('Error loading gift data:', err)
     }
   }, [user])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/fepn-login')
+  }
 
   useEffect(() => {
     if (authStatus === 'authorized') {
@@ -1066,7 +1072,7 @@ export default function FepnGiftPage() {
             <button
               type="button"
               onClick={() => setShowShareModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 transition"
               title="Chia sẻ mã QR hoặc link tham gia"
             >
               <Share2 className="h-3.5 w-3.5 text-pink-600" />
@@ -1076,7 +1082,7 @@ export default function FepnGiftPage() {
             <button
               type="button"
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition shadow-2xs"
+              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition shadow-2xs"
               title={soundEnabled ? 'Tắt âm thanh hiệu ứng' : 'Bật âm thanh hiệu ứng'}
             >
               {soundEnabled ? <Volume2 className="h-4 w-4 text-emerald-600" /> : <VolumeX className="h-4 w-4 text-slate-400" />}
@@ -1095,7 +1101,7 @@ export default function FepnGiftPage() {
       </header>
 
       {/* 2. MAIN CONTAINER */}
-      <main className="flex-1 mx-auto w-full max-w-[1400px] p-4 sm:p-6 lg:p-8 space-y-8">
+      <main className="flex-1 mx-auto w-full max-w-[1400px] p-4 sm:p-6 lg:p-8 space-y-8 pb-32 sm:pb-8">
         {/* Banner Title */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 text-white p-6 sm:p-8 shadow-xl shadow-pink-600/10">
           <div className="relative z-10 max-w-2xl space-y-2">
@@ -1121,7 +1127,7 @@ export default function FepnGiftPage() {
           {/* LEFT COLUMN (LG: 7 COLS) -> LUCKY WHEEL OR CODE REDEMPTION */}
           <div className="lg:col-span-7 space-y-6">
             {eventConfig.event_type === 'wheel' ? (
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm flex flex-col items-center text-center space-y-6">
+              <div id="wheel-section" className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm flex flex-col items-center text-center space-y-6">
                 <div className="w-full flex items-center justify-between border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2 text-left">
                     <div className="p-2 rounded-xl bg-pink-50 text-pink-600">
@@ -1239,7 +1245,7 @@ export default function FepnGiftPage() {
 
             {/* REDEEM CODE FORM (FOR RECHARGING SPINS) */}
             {eventConfig.event_type === 'wheel' && (
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+              <div id="code-section" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-pink-50 text-pink-600">
                     <Ticket className="h-4 w-4" />
@@ -1593,6 +1599,61 @@ export default function FepnGiftPage() {
           </div>
         </div>
       )}
+
+      {/* Mobile Unified 3-Button Navigation */}
+      <FepnMobileNav
+        activePage="gift"
+        centerButton={{
+          label: 'Quay Thưởng',
+          icon: <Gift className="h-6 w-6" />,
+          onClick: () => {
+            const wheelEl = document.getElementById('wheel-section')
+            if (wheelEl) {
+              wheelEl.scrollIntoView({ behavior: 'smooth' })
+            }
+            if (!isSpinning && spinsRemaining > 0) {
+              handleSpinWheel()
+            }
+          },
+        }}
+        customDrawerActions={[
+          {
+            label: 'Chia Sẻ Mã QR & Link',
+            icon: <Share2 className="h-4 w-4 text-pink-500" />,
+            onClick: () => setShowShareModal(true),
+          },
+          {
+            label: soundEnabled ? 'Tắt Hiệu Ứng Âm Thanh' : 'Bật Hiệu Ứng Âm Thanh',
+            icon: soundEnabled ? (
+              <VolumeX className="h-4 w-4 text-slate-400" />
+            ) : (
+              <Volume2 className="h-4 w-4 text-emerald-500" />
+            ),
+            onClick: () => setSoundEnabled(!soundEnabled),
+          },
+          {
+            label: 'Nhập Mã Nhận Thêm Lượt',
+            icon: <Ticket className="h-4 w-4 text-amber-500" />,
+            onClick: () => {
+              const codeEl = document.getElementById('code-section')
+              if (codeEl) {
+                codeEl.scrollIntoView({ behavior: 'smooth' })
+              }
+            },
+          },
+          ...(isAdmin
+            ? [
+                {
+                  label: 'Quản Trị Sự Kiện (Admin)',
+                  icon: <ShieldCheck className="h-4 w-4 text-rose-500" />,
+                  onClick: () => router.push('/fepn-admin'),
+                },
+              ]
+            : []),
+        ]}
+        userEmail={user?.email}
+        onLogout={handleLogout}
+      />
     </div>
   )
 }

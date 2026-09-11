@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
+import FepnMobileNav from '@/components/FepnMobileNav'
 import {
   GraduationCap,
   Calculator,
@@ -728,7 +729,7 @@ export default function FepnGpaPage() {
   // RENDER MAIN PAGE
   // ========================================================
   return (
-    <div className={`min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 ${bodyFont.className}`}>
+    <div className={`min-h-screen bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 pb-32 sm:pb-20 ${bodyFont.className}`}>
       {/* 1. HEADER ĐỒNG BỘ FEPN */}
       <header className="sticky top-0 z-40 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl px-4 py-3 sm:px-6">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4">
@@ -768,15 +769,15 @@ export default function FepnGpaPage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/fepn-dashboard"
-              className="inline-flex items-center rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Về FEPN Dashboard"
             >
-              <span className="hidden sm:inline">Dashboard</span>
+              <span>Dashboard</span>
             </Link>
 
             <Link
               href="/fepn-recap"
-              className="inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Kỷ yếu & Hoạt động FEPN"
             >
               <span>Recap</span>
@@ -786,20 +787,20 @@ export default function FepnGpaPage() {
               <button
                 type="button"
                 onClick={() => setShowAdminModal(true)}
-                className="inline-flex items-center rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="hidden md:inline-flex items-center rounded-xl border border-indigo-500/40 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Quản lý mở kỳ học dành cho Admin"
               >
-                <span className="hidden md:inline">Mở Kỳ Học (Admin)</span>
+                <span>Mở Kỳ Học (Admin)</span>
               </button>
             )}
 
             {isAdmin && (
               <Link
                 href="/fepn-admin"
-                className="inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="hidden md:inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Cổng Quản Trị FEPN & Deep Vault"
               >
-                <span className="hidden md:inline">Admin</span>
+                <span>Admin</span>
               </Link>
             )}
 
@@ -1755,6 +1756,55 @@ export default function FepnGpaPage() {
         </div>
       )}
 
+      {/* MOBILE BOTTOM NAVIGATION BAR & ALL FEATURES DRAWER */}
+      <FepnMobileNav
+        activePage="gpa"
+        centerButton={{
+          label: '+ Thêm Điểm',
+          icon: <Plus className="h-6 w-6" />,
+          onClick: () => {
+            if (semesters.length > 0) {
+              if (!selectedSemesterId) setSelectedSemesterId(semesters[0].id)
+              setShowAddModal(true)
+            } else {
+              setShowAddSemesterModal(true)
+            }
+          },
+          title: 'Thêm Điểm Môn Học Vào Kỳ',
+        }}
+        extraDrawerItems={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowAddSemesterModal(true)}
+              className="flex flex-col items-start p-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-left group"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 mb-1.5">
+                <Plus className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-100">+ Học Kỳ Mới</span>
+              <span className="text-[10px] text-slate-400">Tạo thêm học kỳ</span>
+            </button>
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowAdminModal(true)}
+                className="flex flex-col items-start p-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 text-left group"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-600 mb-1.5">
+                  <GraduationCap className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-black text-slate-800 dark:text-slate-100">Mở Kỳ (Admin)</span>
+                <span className="text-[10px] text-slate-400">Quản lý kỳ mở</span>
+              </button>
+            )}
+          </>
+        }
+        user={user}
+        isAdmin={isAdmin}
+        onLogout={handleLogout}
+      />
     </div>
   )
 }
