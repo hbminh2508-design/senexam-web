@@ -439,6 +439,8 @@ export default function FepnSchedulePage() {
   // ========================================================
   useEffect(() => {
     let isMounted = true
+    let realtimeChannel: any = null
+
     const init = async () => {
       try {
         setAuthLoading(true)
@@ -452,13 +454,58 @@ export default function FepnSchedulePage() {
           setCustomNotificationEmail(currentUser.email || '')
           await loadSchedule(currentUser.id, currentUser.email || '')
           await loadShifts(currentUser.id)
-          loadSemesterConfig(currentUser.id)
-          loadScheduleBackups(currentUser.id)
+          await loadSemesterConfig(currentUser.id)
+          await loadScheduleBackups(currentUser.id)
+
+          // Kích hoạt kênh Supabase Realtime để đồng bộ tức thì trên nhiều thiết bị
+          try {
+            realtimeChannel = supabase
+              .channel(`fepn_realtime_${currentUser.id}`)
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'fepn_schedule_subjects',
+                  filter: `user_id=eq.${currentUser.id}`,
+                },
+                () => {
+                  if (isMounted) loadSchedule(currentUser.id, currentUser.email || '')
+                }
+              )
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'fepn_semester_configs',
+                  filter: `user_id=eq.${currentUser.id}`,
+                },
+                () => {
+                  if (isMounted) loadSemesterConfig(currentUser.id)
+                }
+              )
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'fepn_schedule_shifts',
+                  filter: `user_id=eq.${currentUser.id}`,
+                },
+                () => {
+                  if (isMounted) loadShifts(currentUser.id)
+                }
+              )
+              .subscribe()
+          } catch (channelErr) {
+            console.warn('Realtime channel subscribe warning:', channelErr)
+          }
         } else {
           await loadSchedule('guest', '')
           await loadShifts('guest')
-          loadSemesterConfig('guest')
-          loadScheduleBackups('guest')
+          await loadSemesterConfig('guest')
+          await loadScheduleBackups('guest')
         }
 
         // Tải danh mục môn học FEPN từ bảng fepn_subjects
@@ -499,6 +546,9 @@ export default function FepnSchedulePage() {
 
     return () => {
       isMounted = false
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel)
+      }
     }
   }, [])
 
@@ -717,7 +767,33 @@ export default function FepnSchedulePage() {
   }
 
   // Tải cấu hình học kỳ từ localStorage
-  const loadSemesterConfig = (userId: string) => {
+  const loadSemesterConfig = async (userId: string) => {
+    // 1. Thử tải cấu hình học kỳ từ Supabase để đồng bộ đa thiết bị
+    if (userId && userId !== 'guest') {
+      try {
+        const { data, error } = await supabase
+          .from('fepn_semester_configs')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (!error && data && data.start_date && data.end_date) {
+          const cfg: FepnSemesterConfig = {
+            semesterName: data.semester_name || 'Học kỳ FEPN',
+            startDate: data.start_date,
+            endDate: data.end_date,
+            autoPromptOnEnd: data.auto_prompt_on_end !== false,
+          }
+          setSemesterConfig(cfg)
+          localStorage.setItem(`fepn_semester_config_${userId}`, JSON.stringify(cfg))
+          return
+        }
+      } catch (e) {
+        console.warn('Load semester config from Supabase notice:', e)
+      }
+    }
+
+    // 2. Fallback sang LocalStorage nếu chưa cấu hình trên Supabase
     const key = `fepn_semester_config_${userId}`
     const saved = localStorage.getItem(key)
     if (saved) {
@@ -733,8 +809,34 @@ export default function FepnSchedulePage() {
     setSemesterConfig(def)
   }
 
-  // Tải danh sách bản sao lưu thời khóa biểu cũ
-  const loadScheduleBackups = (userId: string) => {
+  // Tải danh sách bản sao lưu thời khóa biểu cũ từ Supabase & LocalStorage
+  const loadScheduleBackups = async (userId: string) => {
+    if (userId && userId !== 'guest') {
+      try {
+        const { data, error } = await supabase
+          .from('fepn_schedule_backups')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(5)
+
+        if (!error && data && data.length > 0) {
+          const formatted: FepnScheduleBackup[] = data.map((d: any) => ({
+            id: String(d.id),
+            timestamp: d.created_at || new Date().toISOString(),
+            semesterName: d.semester_name || 'Học kỳ FEPN',
+            subjectsCount: Number(d.subjects_count) || (Array.isArray(d.subjects_data) ? d.subjects_data.length : 0),
+            subjects: Array.isArray(d.subjects_data) ? d.subjects_data : [],
+          }))
+          setScheduleBackups(formatted)
+          localStorage.setItem(`fepn_schedule_backups_${userId}`, JSON.stringify(formatted))
+          return
+        }
+      } catch (e) {
+        console.warn('Load backups from Supabase notice:', e)
+      }
+    }
+
     try {
       const key = `fepn_schedule_backups_${userId}`
       const saved = localStorage.getItem(key)
@@ -754,7 +856,7 @@ export default function FepnSchedulePage() {
     setShowSemesterModal(true)
   }
 
-  const handleSaveSemesterConfig = () => {
+  const handleSaveSemesterConfig = async () => {
     if (!tempStartDate || !tempEndDate) {
       alert('Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc học kỳ!')
       return
@@ -772,6 +874,23 @@ export default function FepnSchedulePage() {
     setSemesterConfig(newConfig)
     const userId = user?.id || 'guest'
     localStorage.setItem(`fepn_semester_config_${userId}`, JSON.stringify(newConfig))
+
+    // Đồng bộ lên Supabase để hiển thị trên tất cả thiết bị (điện thoại & laptop)
+    if (userId !== 'guest') {
+      try {
+        await supabase.from('fepn_semester_configs').upsert({
+          user_id: userId,
+          semester_name: newConfig.semesterName,
+          start_date: newConfig.startDate,
+          end_date: newConfig.endDate,
+          auto_prompt_on_end: newConfig.autoPromptOnEnd,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+      } catch (err: any) {
+        console.warn('Lỗi đồng bộ cấu hình học kỳ lên Supabase:', err?.message)
+      }
+    }
+
     setShowSemesterModal(false)
     setResetFeedback(`Đã lưu cấu hình học kỳ: ${newConfig.semesterName}`)
     setTimeout(() => setResetFeedback(null), 4000)
@@ -781,7 +900,7 @@ export default function FepnSchedulePage() {
   const handleClearScheduleForNewSemester = async (newConfig?: FepnSemesterConfig) => {
     const userId = user?.id || 'guest'
 
-    // 1. Tự động sao lưu TKB cũ trước khi xóa để sinh viên an tâm
+    // 1. Tự động sao lưu TKB cũ trước khi xóa để sinh viên an tâm (lưu cả localStorage & Supabase)
     if (subjects.length > 0) {
       const backup: FepnScheduleBackup = {
         id: `backup-${Date.now()}`,
@@ -796,6 +915,16 @@ export default function FepnSchedulePage() {
         const updatedBackups = [backup, ...existingBackups].slice(0, 5)
         localStorage.setItem(backupKey, JSON.stringify(updatedBackups))
         setScheduleBackups(updatedBackups)
+
+        if (userId !== 'guest') {
+          await supabase.from('fepn_schedule_backups').insert({
+            user_id: userId,
+            semester_name: semesterConfig.semesterName,
+            subjects_count: subjects.length,
+            subjects_data: subjects,
+            created_at: new Date().toISOString(),
+          })
+        }
       } catch (e) {
         console.warn('Lỗi lưu backup:', e)
       }
@@ -818,6 +947,19 @@ export default function FepnSchedulePage() {
     if (newConfig) {
       setSemesterConfig(newConfig)
       localStorage.setItem(`fepn_semester_config_${userId}`, JSON.stringify(newConfig))
+
+      if (userId !== 'guest') {
+        try {
+          await supabase.from('fepn_semester_configs').upsert({
+            user_id: userId,
+            semester_name: newConfig.semesterName,
+            start_date: newConfig.startDate,
+            end_date: newConfig.endDate,
+            auto_prompt_on_end: newConfig.autoPromptOnEnd,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' })
+        } catch (err) {}
+      }
     }
 
     setConfirmClearModal(false)
