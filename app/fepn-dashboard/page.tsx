@@ -34,6 +34,8 @@ import {
   Clock,
   Calculator,
   TrendingUp,
+  LayoutGrid,
+  Gift,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -103,9 +105,21 @@ export default function FepnDashboardMainPage() {
   // FEPN Gift Event Active State
   const [isGiftActive, setIsGiftActive] = useState<boolean>(false)
 
-  // 1. Theme (Mặc định Light Mode)
+  // Mobile Bottom Nav & Feature Sheet
+  const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false)
+
+  const scrollToMaterials = () => {
+    setSelectedSemester('all')
+    const el = document.getElementById('materials-section')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
+  // 1. Theme & Web Name
   useEffect(() => {
     document.documentElement.classList.remove('dark')
+    document.title = 'Tài liệu FEPN - Khoa Vật lý kỹ thuật & Công nghệ Nano'
   }, [])
 
   // Check Gift Event Active Status
@@ -565,7 +579,7 @@ export default function FepnDashboardMainPage() {
   // ==========================================
   return (
     <main
-      className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 pb-20`}
+      className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 pb-32 sm:pb-20`}
       style={{
         ...themeVars,
         background: isDark
@@ -584,7 +598,7 @@ export default function FepnDashboardMainPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-lg sm:text-xl font-black tracking-tight text-sky-950 dark:text-sky-100" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
-                    FEPN Dashboard
+                    Tài liệu FEPN
                   </h1>
                   <span className="rounded-md bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 text-[10px] font-black uppercase text-sky-600 dark:text-sky-400">
                     UET - VNU
@@ -602,17 +616,16 @@ export default function FepnDashboardMainPage() {
               <button
                 type="button"
                 onClick={() => setShowAddSubjectModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-2.5 sm:px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
+                className="hidden md:inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white px-2.5 sm:px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:scale-105"
               >
-                <span className="hidden sm:inline">Thêm Môn Học Mới</span>
-                <span className="sm:hidden">+ Môn</span>
+                <span>Thêm Môn Học Mới</span>
               </button>
             )}
 
             {isAdmin && (
               <Link
                 href="/fepn-admin"
-                className="inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
+                className="hidden md:inline-flex items-center rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-black uppercase tracking-wider transition shadow-sm hover:scale-105"
                 title="Cổng Quản Trị FEPN & Deep Vault"
               >
                 <span>Admin</span>
@@ -621,7 +634,7 @@ export default function FepnDashboardMainPage() {
 
             <Link
               href="/fepn-recap"
-              className="inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Kỷ yếu & Hoạt động FEPN"
             >
               <span>Recap</span>
@@ -629,7 +642,7 @@ export default function FepnDashboardMainPage() {
 
             <Link
               href="/fepn-gpa"
-              className="inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Tính điểm GPA & CPA"
             >
               <span>GPA</span>
@@ -637,7 +650,7 @@ export default function FepnDashboardMainPage() {
 
             <Link
               href="/fepn-schedule"
-              className="inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+              className="hidden md:inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
               title="Thời Khóa Biểu & Lịch Học Hằng Tuần"
             >
               <span>Lịch Học</span>
@@ -646,7 +659,7 @@ export default function FepnDashboardMainPage() {
             {(isGiftActive || isAdmin) && (
               <Link
                 href="/fepn-gift"
-                className={`relative inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs transition shadow-sm hover:scale-105 ${
+                className={`hidden md:inline-flex relative items-center gap-1.5 rounded-xl px-3 py-2 text-xs transition shadow-sm hover:scale-105 ${
                   isGiftActive
                     ? 'bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 text-white font-black shadow-pink-500/25'
                     : 'border border-pink-500/30 bg-pink-50 hover:bg-pink-100 text-pink-700 font-bold'
@@ -965,7 +978,7 @@ export default function FepnDashboardMainPage() {
         </div>
 
         {/* 3. CONTROLS: SEARCH & SEMESTER FILTER */}
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl">
+        <div id="materials-section" className="scroll-mt-20 flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl">
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <input
@@ -1216,6 +1229,182 @@ export default function FepnDashboardMainPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MOBILE BOTTOM NAVIGATION BAR (md:hidden) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-black/10 dark:border-white/10 px-6 py-2 shadow-2xl safe-area-bottom">
+        <div className="flex items-center justify-between max-w-md mx-auto relative">
+          {/* Nút bên trái: Lịch học (Hình lịch) */}
+          <Link
+            href="/fepn-schedule"
+            className="flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition flex-1 py-1"
+          >
+            <Calendar className="h-5 w-5" />
+            <span className="text-[11px] font-bold">Lịch học</span>
+          </Link>
+
+          {/* Nút ở giữa to nhất: Tất cả tài liệu (Hình folder) */}
+          <div className="relative flex-1 flex flex-col items-center justify-center">
+            <button
+              type="button"
+              onClick={scrollToMaterials}
+              className="-top-5 absolute flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 text-white shadow-lg shadow-sky-500/40 hover:scale-105 active:scale-95 transition border-4 border-slate-50 dark:border-slate-950"
+              title="Cuộn tới tất cả tài liệu"
+            >
+              <FolderOpen className="h-6 w-6" />
+            </button>
+            <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 pt-8">Tất cả tài liệu</span>
+          </div>
+
+          {/* Nút bên phải: Tất cả tính năng (Hình 4 dấu chấm xếp thành hình vuông) */}
+          <button
+            type="button"
+            onClick={() => setShowMobileMenu(true)}
+            className="flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition flex-1 py-1"
+          >
+            <LayoutGrid className="h-5 w-5" />
+            <span className="text-[11px] font-bold">Tất cả tính năng</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* 6. MOBILE FEATURE DRAWER MODAL */}
+      {showMobileMenu && (
+        <div 
+          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center animate-in fade-in duration-200"
+          onClick={() => setShowMobileMenu(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl border-t border-black/10 dark:border-white/10 p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header drawer */}
+            <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-xl border border-sky-500/20 bg-white p-0.5 shadow-sm">
+                  <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
+                    Tất cả tính năng
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Tài liệu FEPN</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 hover:bg-black/10 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* List tính năng */}
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <Link
+                href="/fepn-schedule"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-start p-3.5 rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/30 transition group"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 mb-2 group-hover:scale-105 transition">
+                  <Calendar className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-black text-slate-800 dark:text-slate-100">Lịch Học</span>
+                <span className="text-[10px] text-slate-400 font-medium">Thời khóa biểu sinh viên</span>
+              </Link>
+
+              <Link
+                href="/fepn-gpa"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-start p-3.5 rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-emerald-500/10 hover:border-emerald-500/30 transition group"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 mb-2 group-hover:scale-105 transition">
+                  <Calculator className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-black text-slate-800 dark:text-slate-100">Tính Điểm GPA</span>
+                <span className="text-[10px] text-slate-400 font-medium">GPA & CPA toàn khóa</span>
+              </Link>
+
+              <Link
+                href="/fepn-recap"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-start p-3.5 rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-indigo-500/10 hover:border-indigo-500/30 transition group"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 mb-2 group-hover:scale-105 transition">
+                  <BookOpen className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-black text-slate-800 dark:text-slate-100">Kỷ Yếu Recap</span>
+                <span className="text-[10px] text-slate-400 font-medium">Hoạt động Khoa FEPN</span>
+              </Link>
+
+              {(isGiftActive || isAdmin) && (
+                <Link
+                  href="/fepn-gift"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="flex flex-col items-start p-3.5 rounded-2xl border border-pink-500/20 bg-pink-500/5 hover:bg-pink-500/15 transition group"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pink-500/20 text-pink-600 dark:text-pink-400 mb-2 group-hover:scale-105 transition">
+                    <Gift className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-black text-pink-700 dark:text-pink-300">Đổi Quà FEPN</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Sự kiện & Vòng quay</span>
+                </Link>
+              )}
+
+              {isAdmin && (
+                <Link
+                  href="/fepn-admin"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="flex flex-col items-start p-3.5 rounded-2xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/15 transition group"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 mb-2 group-hover:scale-105 transition">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-black text-amber-700 dark:text-amber-300">Quản Trị Admin</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Deep Vault & CSDL</span>
+                </Link>
+              )}
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileMenu(false)
+                    setShowAddSubjectModal(true)
+                  }}
+                  className="flex flex-col items-start p-3.5 rounded-2xl border border-sky-500/20 bg-sky-500/5 hover:bg-sky-500/15 transition text-left group"
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/20 text-sky-600 dark:text-sky-400 mb-2 group-hover:scale-105 transition">
+                    <Plus className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-black text-sky-700 dark:text-sky-300">Thêm Môn Học</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Tạo môn học mới</span>
+                </button>
+              )}
+            </div>
+
+            {/* Tài khoản & Đăng xuất */}
+            <div className="pt-2 border-t border-black/10 dark:border-white/10 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">
+                  {user?.email}
+                </p>
+                <span className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase">
+                  {isAdmin ? 'Quản Trị Viên' : 'Sinh Viên VNU'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 font-bold text-xs transition"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

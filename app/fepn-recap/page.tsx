@@ -1276,7 +1276,7 @@ export default function FepnRecapPage() {
                     className="text-lg sm:text-xl font-black tracking-tight text-sky-950"
                     style={{ fontFamily: 'var(--font-fepn-heading)' }}
                   >
-                    FEPN Recap
+                    Tài liệu FEPN
                   </h1>
                   <span className="rounded-md bg-sky-500/10 border border-sky-500/30 px-2 py-0.5 text-[10px] font-black uppercase text-sky-600">
                     Kỷ Yếu & Hoạt Động

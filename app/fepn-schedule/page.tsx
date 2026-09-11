@@ -1253,10 +1253,10 @@ export default function FepnSchedulePage() {
           <div className="flex items-center gap-3">
             <Link
               href="/fepn-dashboard"
-              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/20 hover:scale-105 transition shrink-0"
-              title="Quay lại FEPN Dashboard"
+              className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl border border-sky-500/20 bg-white p-0.5 shadow-md hover:scale-105 transition"
+              title="Quay lại Tài liệu FEPN"
             >
-              <Calendar className="h-5 w-5" />
+              <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" priority />
             </Link>
             <div>
               <div className="flex items-center gap-2">
@@ -1264,10 +1264,10 @@ export default function FepnSchedulePage() {
                   className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white"
                   style={{ fontFamily: 'var(--font-fepn-heading)' }}
                 >
-                  FEPN Schedule
+                  Tài liệu FEPN
                 </h1>
-                <span className="hidden sm:inline-block px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 text-[10px] font-black uppercase">
-                  Thời Khóa Biểu
+                <span className="inline-block px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 text-[10px] font-black uppercase">
+                  Lịch Học
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 hidden sm:block">

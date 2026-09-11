@@ -1232,10 +1232,10 @@ export default function FepnAdminDashboardPage() {
                     className="text-lg sm:text-xl font-black tracking-tight text-sky-950"
                     style={{ fontFamily: 'var(--font-fepn-heading)' }}
                   >
-                    FEPN Admin Portal
+                    Tài liệu FEPN
                   </h1>
                   <span className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[10px] font-black uppercase text-amber-600">
-                    Bảo mật tối cao
+                    Quản Trị
                   </span>
                 </div>
                 <p className="hidden sm:block text-[11px] text-slate-500 font-medium">

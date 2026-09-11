@@ -1049,10 +1049,10 @@ export default function FepnGiftPage() {
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-base sm:text-lg font-black tracking-tight text-slate-900" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
-                    FEPN Gift Center
+                    Tài liệu FEPN
                   </span>
                   <span className="rounded-md bg-pink-500/10 px-1.5 py-0.5 text-[10px] font-black text-pink-600 border border-pink-500/20">
-                    VNU - UET
+                    Đổi Quà
                   </span>
                 </div>
                 <p className="hidden sm:block text-[11px] text-slate-500 font-medium">

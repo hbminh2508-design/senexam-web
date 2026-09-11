@@ -752,10 +752,10 @@ export default function FepnGpaPage() {
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-base sm:text-lg font-black tracking-tight" style={{ fontFamily: 'var(--font-fepn-heading)' }}>
-                    FEPN GPA
+                    Tài liệu FEPN
                   </span>
                   <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-black text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                    VNU - UET
+                    Tính Điểm GPA
                   </span>
                 </div>
                 <p className="hidden sm:block text-[11px] text-slate-500 dark:text-slate-400 font-medium">
