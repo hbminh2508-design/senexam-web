@@ -74,6 +74,15 @@ export async function GET(request: Request) {
         color: 'pink',
         description: 'Vòng quay may mắn & quà tặng hiện vật',
       },
+      {
+        id: 'senmail',
+        label: 'Sen Mail',
+        href: '/sen-mail',
+        icon: 'Inbox',
+        badge: 'Email',
+        color: 'teal',
+        description: 'Hòm thư & quản lý công việc nội bộ',
+      },
       ...(isAdmin
         ? [
             {
@@ -125,6 +134,11 @@ export async function GET(request: Request) {
       subject: {
         left: { label: 'Dashboard', href: '/fepn-dashboard', icon: 'LayoutDashboard' },
         center: { label: isAdmin ? 'Đăng Tài Liệu' : 'Tài Liệu', action: isAdmin ? 'open_add_material' : 'scroll_materials', icon: isAdmin ? 'Upload' : 'FolderOpen', targetId: 'materials-section' },
+        right: { label: 'Tính năng', action: 'open_drawer', icon: 'LayoutGrid' },
+      },
+      senmail: {
+        left: { label: 'Dashboard', href: '/fepn-dashboard', icon: 'LayoutDashboard' },
+        center: { label: 'Soạn Thư', action: 'open_compose', icon: 'Send', targetId: 'compose_modal' },
         right: { label: 'Tính năng', action: 'open_drawer', icon: 'LayoutGrid' },
       },
     }

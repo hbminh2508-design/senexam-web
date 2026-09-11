@@ -98,13 +98,35 @@ export default function FepnLoginPage() {
     return () => clearInterval(timer)
   }, [resendCooldown])
 
-  // Chuẩn hóa email VNU từ MSSV nhập vào
+  const [selectedDomainSuffix, setSelectedDomainSuffix] = useState<string>('@vnu.edu.vn')
+
+  // Chuẩn hóa email từ MSSV hoặc tài khoản tên miền nhập vào
   const getFullVnuEmail = (input: string) => {
     const clean = input.trim().toLowerCase()
     if (clean.includes('@')) {
       return clean
     }
-    return `${clean}@vnu.edu.vn`
+    return `${clean}${selectedDomainSuffix}`
+  }
+
+  // Kiểm tra email đuôi tên miền được cấp (FEPN / SenExam / Khoa VLKT)
+  const isDomainEmail = (email: string) => {
+    const clean = email.trim().toLowerCase()
+    const domainSuffixes = ['@fepn.edu.vn', '@senexam.me', '@vlkt.vnu.edu.vn']
+    if (domainSuffixes.some((d) => clean.endsWith(d))) {
+      return true
+    }
+    try {
+      const customDomains: string[] = JSON.parse(localStorage.getItem('fepn_allowed_domains') || '[]')
+      if (customDomains.some((d) => clean.endsWith(d.toLowerCase()))) {
+        return true
+      }
+      const domainEmails: any[] = JSON.parse(localStorage.getItem('fepn_domain_emails') || '[]')
+      if (domainEmails.some((item) => item.email?.toLowerCase() === clean)) {
+        return true
+      }
+    } catch (e) {}
+    return false
   }
 
   // Quy chuẩn mật khẩu: Tối thiểu 8 ký tự, 1 hoa, 1 ký tự đặc biệt, 1 số
@@ -205,6 +227,16 @@ export default function FepnLoginPage() {
         })
 
         if (signInError) throw signInError
+
+        // NẾU LÀ EMAIL ĐUÔI TÊN MIỀN ĐƯỢC CẤP (FEPN / SENEXAM):
+        // THEO YÊU CẦU: BỎ QUA HOÀN TOÀN XÁC NHẬN OTP & AUTHENTICATOR!
+        if (isDomainEmail(fullEmail)) {
+          setSuccessMsg('🎉 Đăng nhập thành công với Email tên miền! Đang chuyển hướng...')
+          setTimeout(() => {
+            navigateAfterLogin()
+          }, 300)
+          return
+        }
 
         // Kiểm tra xem tài khoản đã liên kết ứng dụng Authenticator (TOTP) hay chưa
         let activeTotpFactorId = ''
@@ -658,34 +690,46 @@ export default function FepnLoginPage() {
                 </div>
               )}
 
-              {/* Ô Nhập MSSV với đuôi cố định @vnu.edu.vn */}
+              {/* Ô Nhập MSSV hoặc Tài Khoản Email Tên Miền */}
               <div>
-                <label className="font-bold text-slate-700 flex items-center justify-between">
-                  <span>Mã Số Sinh Viên (MSSV):</span>
-                  <span className="text-[10px] text-sky-600 font-black">Email VNU</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700">
+                    Tài khoản / MSSV / Email:
+                  </label>
+                  <div className="flex items-center gap-1 text-[11px] font-bold">
+                    <span className="text-slate-400">Đuôi:</span>
+                    <select
+                      value={selectedDomainSuffix}
+                      onChange={(e) => setSelectedDomainSuffix(e.target.value)}
+                      className="bg-sky-50 text-sky-700 font-mono font-bold px-2 py-0.5 rounded-lg border border-sky-200 text-xs outline-none cursor-pointer"
+                    >
+                      <option value="@vnu.edu.vn">@vnu.edu.vn (Sinh viên)</option>
+                      <option value="@fepn.edu.vn">@fepn.edu.vn (FEPN Mail)</option>
+                      <option value="@senexam.me">@senexam.me (Sen Mail)</option>
+                      <option value="">Khác (Nhập đầy đủ email)</option>
+                    </select>
+                  </div>
+                </div>
                 <div className="mt-1 flex items-center rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-500/20 transition">
                   <input
                     type="text"
-                    inputMode="numeric"
-                    placeholder="Nhập MSSV (vd: 23020001)"
+                    placeholder={selectedDomainSuffix ? "Nhập MSSV hoặc tên người dùng (vd: hoang.nv)" : "Nhập đầy đủ email (vd: hoang.nv@fepn.edu.vn)"}
                     value={mssv}
-                    onChange={(e) => {
-                      let val = e.target.value.trim()
-                      if (val.includes('@vnu.edu.vn')) {
-                        val = val.replace('@vnu.edu.vn', '')
-                      }
-                      setMssv(val)
-                    }}
+                    onChange={(e) => setMssv(e.target.value.trim())}
                     className="flex-1 bg-transparent px-4 py-3 outline-none font-mono font-bold text-base sm:text-xs"
                     required
                   />
-                  <span className="px-3 py-3 bg-sky-50 text-sky-700 font-mono font-black text-xs border-l border-slate-200 select-none">
-                    @vnu.edu.vn
-                  </span>
+                  {selectedDomainSuffix && !mssv.includes('@') && (
+                    <span className="px-3 py-3 bg-sky-50 text-sky-700 font-mono font-black text-xs border-l border-slate-200 select-none">
+                      {selectedDomainSuffix}
+                    </span>
+                  )}
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Sinh viên chỉ cần điền đúng MSSV, hệ thống tự ghép đuôi @vnu.edu.vn.
+                <p className="mt-1 text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-1">
+                  <span>Hỗ trợ cả email sinh viên VNU và email tên miền do Admin cấp.</span>
+                  {selectedDomainSuffix !== '@vnu.edu.vn' && (
+                    <span className="text-emerald-600 font-bold">⚡ Đăng nhập trực tiếp không cần OTP</span>
+                  )}
                 </p>
               </div>
 

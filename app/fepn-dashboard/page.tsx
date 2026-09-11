@@ -36,7 +36,9 @@ import {
   TrendingUp,
   LayoutGrid,
   Gift,
+  Inbox,
 } from 'lucide-react'
+import { isDomainEmail } from '@/lib/authHelper'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
@@ -689,11 +691,26 @@ export default function FepnDashboardMainPage() {
               </Link>
             )}
 
+            {(isDomainEmail(user?.email) || isAdmin) && (
+              <Link
+                href="/sen-mail"
+                className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-teal-500/30 bg-teal-50 hover:bg-teal-100 text-teal-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
+                title="Hòm Thư Riêng & Quản Lý Công Việc Nội Bộ Sen Mail"
+              >
+                <Inbox className="h-3.5 w-3.5 text-teal-600" />
+                <span>Sen Mail</span>
+              </Link>
+            )}
+
             <div className="flex items-center gap-2 pl-2 border-l border-black/10 dark:border-white/10">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold leading-none">{user?.email?.split('@')[0]}</p>
                 <span className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase">
-                  {isAdmin ? 'Quản Trị Viên' : 'Sinh Viên VNU'}
+                  {isAdmin
+                    ? 'Quản Trị Viên'
+                    : isDomainEmail(user?.email)
+                    ? 'Tài Khoản Tên Miền'
+                    : 'Sinh Viên VNU'}
                 </span>
               </div>
 

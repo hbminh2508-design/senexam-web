@@ -13,7 +13,9 @@ import {
   LogOut,
   LayoutGrid,
   X,
+  Inbox,
 } from 'lucide-react'
+import { isDomainEmail } from '@/lib/authHelper'
 
 export interface FepnDrawerAction {
   label: string
@@ -326,7 +328,25 @@ export default function FepnMobileNav({
                   <span className="text-[10px] text-slate-400 font-medium">Vòng quay & quà tặng</span>
                 </Link>
 
-                {/* 6. Admin Portal (chỉ hiện khi là Admin) */}
+                {/* 6. Sen Mail (đặc quyền cho người dùng email tên miền hoặc Admin) */}
+                {(isDomainEmail(displayEmail) || isAdmin) && (
+                  <Link
+                    href="/sen-mail"
+                    onClick={() => setShowDrawer(false)}
+                    className="flex flex-col items-start p-3 rounded-2xl border transition group border-teal-500/20 bg-teal-500/5 hover:bg-teal-500/15"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-500/20 text-teal-700 dark:text-teal-300 mb-1.5 group-hover:scale-105 transition">
+                      <Inbox className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-black text-teal-700 dark:text-teal-300 flex items-center gap-1">
+                      <span>Sen Mail</span>
+                      <span className="px-1 py-0.5 text-[9px] bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 rounded font-black">NỘI BỘ</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">Hòm thư & công việc</span>
+                  </Link>
+                )}
+
+                {/* 7. Admin Portal (chỉ hiện khi là Admin) */}
                 {isAdmin && (
                   <Link
                     href="/fepn-admin"
@@ -356,7 +376,11 @@ export default function FepnMobileNav({
                       {displayEmail}
                     </p>
                     <span className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase">
-                      {isAdmin ? 'Quản Trị Viên' : 'Sinh Viên VNU'}
+                      {isAdmin
+                        ? 'Quản Trị Viên'
+                        : isDomainEmail(displayEmail)
+                        ? 'Tài Khoản Tên Miền / Sen Mail'
+                        : 'Sinh Viên VNU'}
                     </span>
                   </div>
                 ) : <div />}

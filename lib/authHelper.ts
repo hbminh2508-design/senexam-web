@@ -64,3 +64,43 @@ export async function linkWithGoogle(nextPath?: string) {
 
   return data
 }
+
+/**
+ * Kiểm tra xem một email có phải là email tên miền đặc quyền (FEPN / Sen Mail / Khoa VLKT) hay không.
+ * Các email này được bypass hoàn toàn OTP & 2FA khi đăng nhập và có quyền truy cập Sen Mail.
+ */
+export function isDomainEmail(emailStr: string | null | undefined): boolean {
+  if (!emailStr) return false
+  const lower = emailStr.toLowerCase().trim()
+  if (
+    lower.endsWith('@fepn.edu.vn') ||
+    lower.endsWith('@senexam.me') ||
+    lower.endsWith('@vlkt.vnu.edu.vn') ||
+    lower.endsWith('@fepn.vn') ||
+    lower.includes('@fepn.')
+  ) {
+    return true
+  }
+
+  // Kiểm tra danh sách allowed domains tùy chỉnh hoặc email được cấp lưu trong cache
+  if (typeof window !== 'undefined') {
+    try {
+      const customDomains = localStorage.getItem('fepn_allowed_domains')
+      if (customDomains) {
+        const list: string[] = JSON.parse(customDomains)
+        if (list.some((d) => lower.endsWith(d.toLowerCase()))) {
+          return true
+        }
+      }
+      const domainEmailsCached = localStorage.getItem('fepn_domain_emails')
+      if (domainEmailsCached) {
+        const list: Array<{ email: string }> = JSON.parse(domainEmailsCached)
+        if (list.some((item) => item.email?.toLowerCase() === lower)) {
+          return true
+        }
+      }
+    } catch (e) {}
+  }
+
+  return false
+}

@@ -51,9 +51,17 @@ import {
   QrCode,
   Tag,
   Check,
-  Copy,
   AlertTriangle,
   Camera,
+  Mail,
+  Send,
+  AtSign,
+  UserPlus,
+  Globe,
+  Inbox,
+  Sparkles,
+  Key,
+  Copy,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -146,6 +154,21 @@ export interface FepnGiftClaim {
   delivered_by?: string
 }
 
+export interface FepnDomainEmail {
+  id: string
+  email: string
+  username: string
+  domain: string
+  full_name: string
+  initial_password?: string
+  role: 'student' | 'lecturer' | 'researcher' | 'admin' | 'staff'
+  notes?: string
+  status: 'active' | 'suspended'
+  created_at: string
+  last_login_at?: string
+  user_id?: string
+}
+
 export default function FepnAdminDashboardPage() {
   const router = useRouter()
   const themeVars = useMemo(() => getModernThemeVars('indigo', false), [])
@@ -157,7 +180,25 @@ export default function FepnAdminDashboardPage() {
   const [authStatus, setAuthStatus] = useState<'loading' | 'authenticated' | 'unauthorized' | 'unauthenticated'>('loading')
 
   // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'subjects' | 'materials' | 'recap' | 'gifts' | 'vault'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'subjects' | 'materials' | 'recap' | 'gifts' | 'vault' | 'domains'>('overview')
+
+  // Domain Email Management States (Cấp Email Tên Miền & Sen Mail)
+  const [domainEmails, setDomainEmails] = useState<FepnDomainEmail[]>([])
+  const [allowedDomains, setAllowedDomains] = useState<string[]>(['@fepn.edu.vn', '@senexam.me', '@vlkt.vnu.edu.vn'])
+  const [newDomainUsername, setNewDomainUsername] = useState('')
+  const [newDomainSuffix, setNewDomainSuffix] = useState('@fepn.edu.vn')
+  const [newCustomSuffix, setNewCustomSuffix] = useState('')
+  const [newDomainFullName, setNewDomainFullName] = useState('')
+  const [newDomainPassword, setNewDomainPassword] = useState('')
+  const [newDomainRole, setNewDomainRole] = useState<'student' | 'lecturer' | 'researcher' | 'admin' | 'staff'>('student')
+  const [newDomainNotes, setNewDomainNotes] = useState('')
+  const [searchDomainQuery, setSearchDomainQuery] = useState('')
+  const [filterDomainRole, setFilterDomainRole] = useState<string>('all')
+  const [editingDomainPassId, setEditingDomainPassId] = useState<string | null>(null)
+  const [newDomainPassInput, setNewDomainPassInput] = useState('')
+  const [domainFeedbackMsg, setDomainFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [loadingDomainAction, setLoadingDomainAction] = useState(false)
+  const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null)
 
   // Deep Security Vault States
   const [isDeepVaultUnlocked, setIsDeepVaultUnlocked] = useState(false)
@@ -420,6 +461,9 @@ export default function FepnAdminDashboardPage() {
 
       // 5. Gift Event Data
       await fetchGiftData()
+
+      // 6. Domain Emails (Cấp Email Tên Miền & Sen Mail)
+      await fetchDomainEmails()
     } catch (err) {
       console.error('Error fetching FEPN admin data:', err)
     } finally {
@@ -533,6 +577,262 @@ export default function FepnAdminDashboardPage() {
     await supabase.auth.signOut()
     router.push('/fepn-login')
   }
+
+  // ========================================================
+  // 3. DOMAIN EMAIL MANAGEMENT (CẤP EMAIL TÊN MIỀN & SEN MAIL)
+  // ========================================================
+  const fetchDomainEmails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('fepn_domain_emails')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!error && data && data.length > 0) {
+        setDomainEmails(data)
+        localStorage.setItem('fepn_domain_emails', JSON.stringify(data))
+        return
+      }
+    } catch (e) {
+      console.warn('Notice loading domain emails from Supabase:', e)
+    }
+
+    try {
+      const cached = localStorage.getItem('fepn_domain_emails')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setDomainEmails(parsed)
+          return
+        }
+      }
+    } catch (e) {}
+
+    const initialEmails: FepnDomainEmail[] = [
+      {
+        id: 'dom-1',
+        email: 'admin@senexam.me',
+        username: 'admin',
+        domain: '@senexam.me',
+        full_name: 'Quản Trị Viên Hệ Thống FEPN',
+        initial_password: 'FepnAdmin@2026',
+        role: 'admin',
+        notes: 'Tài khoản quản trị điều phối cấp cao',
+        status: 'active',
+        created_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString(),
+      },
+      {
+        id: 'dom-2',
+        email: 'nano.lab@fepn.edu.vn',
+        username: 'nano.lab',
+        domain: '@fepn.edu.vn',
+        full_name: 'Phòng Thí Nghiệm Công Nghệ Nano',
+        initial_password: 'NanoLab#2026',
+        role: 'researcher',
+        notes: 'Quản lý thiết bị và tài liệu phòng Lab 402-E3',
+        status: 'active',
+        created_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
+      },
+      {
+        id: 'dom-3',
+        email: 'giangvien.vlkt@fepn.edu.vn',
+        username: 'giangvien.vlkt',
+        domain: '@fepn.edu.vn',
+        full_name: 'Cán Bộ Giảng Dạy Khoa VLKT',
+        initial_password: 'GiangVien@2026',
+        role: 'lecturer',
+        notes: 'Phụ trách giảng dạy các học phần chuyên ngành',
+        status: 'active',
+        created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+      },
+    ]
+    setDomainEmails(initialEmails)
+    localStorage.setItem('fepn_domain_emails', JSON.stringify(initialEmails))
+  }
+
+  const handleCreateDomainEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setDomainFeedbackMsg(null)
+
+    const username = newDomainUsername.trim().toLowerCase()
+    if (!username) {
+      setDomainFeedbackMsg({ type: 'error', text: 'Vui lòng nhập tiền tố tài khoản (username)!' })
+      return
+    }
+    if (!newDomainFullName.trim()) {
+      setDomainFeedbackMsg({ type: 'error', text: 'Vui lòng nhập họ và tên người nhận!' })
+      return
+    }
+    if (!newDomainPassword.trim() || newDomainPassword.length < 6) {
+      setDomainFeedbackMsg({ type: 'error', text: 'Mật khẩu khởi tạo phải từ 6 ký tự trở lên!' })
+      return
+    }
+
+    const domain = newDomainSuffix === 'custom'
+      ? (newCustomSuffix.trim().startsWith('@') ? newCustomSuffix.trim() : `@${newCustomSuffix.trim()}`)
+      : newDomainSuffix
+
+    if (!domain || !domain.includes('.')) {
+      setDomainFeedbackMsg({ type: 'error', text: 'Đuôi tên miền không hợp lệ (Ví dụ: @fepn.edu.vn hoặc @senexam.me)!' })
+      return
+    }
+
+    const fullEmail = `${username}${domain}`
+
+    if (domainEmails.some((item) => item.email.toLowerCase() === fullEmail)) {
+      setDomainFeedbackMsg({ type: 'error', text: `Email ${fullEmail} đã tồn tại trên hệ thống!` })
+      return
+    }
+
+    setLoadingDomainAction(true)
+
+    const newEntry: FepnDomainEmail = {
+      id: `dom-${Date.now()}`,
+      email: fullEmail,
+      username,
+      domain,
+      full_name: newDomainFullName.trim(),
+      initial_password: newDomainPassword.trim(),
+      role: newDomainRole,
+      notes: newDomainNotes.trim() || 'Cấp bởi Admin FEPN',
+      status: 'active',
+      created_at: new Date().toISOString(),
+    }
+
+    try {
+      // 1. Thử tạo Auth User trong Supabase để đăng nhập được ngay
+      try {
+        await supabase.auth.signUp({
+          email: fullEmail,
+          password: newDomainPassword.trim(),
+          options: {
+            data: {
+              full_name: newDomainFullName.trim(),
+              role: newDomainRole,
+              is_domain_email: true,
+            },
+          },
+        })
+      } catch (authErr) {
+        console.warn('Sign up notice:', authErr)
+      }
+
+      // 2. Thử lưu vào Supabase table
+      try {
+        await supabase.from('fepn_domain_emails').insert(newEntry)
+      } catch (dbErr) {
+        console.warn('Insert to fepn_domain_emails warning:', dbErr)
+      }
+
+      // 3. Cập nhật State & LocalStorage
+      const updatedList = [newEntry, ...domainEmails]
+      setDomainEmails(updatedList)
+      localStorage.setItem('fepn_domain_emails', JSON.stringify(updatedList))
+
+      // Cập nhật danh sách allowed domains nếu dùng custom
+      if (newDomainSuffix === 'custom' && !allowedDomains.includes(domain)) {
+        const updatedDomains = [...allowedDomains, domain]
+        setAllowedDomains(updatedDomains)
+        localStorage.setItem('fepn_allowed_domains', JSON.stringify(updatedDomains))
+      }
+
+      // Reset form
+      setNewDomainUsername('')
+      setNewDomainFullName('')
+      setNewDomainPassword('')
+      setNewDomainNotes('')
+      setNewCustomSuffix('')
+
+      setDomainFeedbackMsg({
+        type: 'success',
+        text: `Đã cấp thành công tài khoản email: ${fullEmail} cho ${newEntry.full_name}!`,
+      })
+    } catch (err: any) {
+      setDomainFeedbackMsg({ type: 'error', text: err.message || 'Lỗi khi cấp email tên miền' })
+    } finally {
+      setLoadingDomainAction(false)
+    }
+  }
+
+  const handleToggleDomainEmailStatus = async (id: string, currentStatus: 'active' | 'suspended') => {
+    const nextStatus = currentStatus === 'active' ? 'suspended' : 'active'
+    const updated = domainEmails.map((item) => (item.id === id ? { ...item, status: nextStatus } : item))
+    setDomainEmails(updated)
+    localStorage.setItem('fepn_domain_emails', JSON.stringify(updated))
+
+    try {
+      await supabase.from('fepn_domain_emails').update({ status: nextStatus }).eq('id', id)
+    } catch (e) {}
+
+    setDomainFeedbackMsg({
+      type: 'success',
+      text: nextStatus === 'active' ? 'Đã kích hoạt lại tài khoản email!' : 'Đã tạm khóa tài khoản email!',
+    })
+    setTimeout(() => setDomainFeedbackMsg(null), 3000)
+  }
+
+  const handleChangeDomainEmailPassword = async (id: string, newPass: string) => {
+    if (!newPass || newPass.length < 6) {
+      alert('Mật khẩu mới phải từ 6 ký tự trở lên!')
+      return
+    }
+    const targetEmail = domainEmails.find((item) => item.id === id)
+    const updated = domainEmails.map((item) => (item.id === id ? { ...item, initial_password: newPass } : item))
+    setDomainEmails(updated)
+    localStorage.setItem('fepn_domain_emails', JSON.stringify(updated))
+
+    try {
+      await supabase.from('fepn_domain_emails').update({ initial_password: newPass }).eq('id', id)
+    } catch (e) {}
+
+    setEditingDomainPassId(null)
+    setNewDomainPassInput('')
+    setDomainFeedbackMsg({
+      type: 'success',
+      text: `Đã cập nhật mật khẩu mới cho ${targetEmail?.email || 'tài khoản'}!`,
+    })
+    setTimeout(() => setDomainFeedbackMsg(null), 4000)
+  }
+
+  const handleDeleteDomainEmail = async (id: string) => {
+    const target = domainEmails.find((item) => item.id === id)
+    if (!confirm(`Bạn có chắc chắn muốn thu hồi và xóa vĩnh viễn email ${target?.email}?`)) {
+      return
+    }
+    const updated = domainEmails.filter((item) => item.id !== id)
+    setDomainEmails(updated)
+    localStorage.setItem('fepn_domain_emails', JSON.stringify(updated))
+
+    try {
+      await supabase.from('fepn_domain_emails').delete().eq('id', id)
+    } catch (e) {}
+
+    setDomainFeedbackMsg({
+      type: 'success',
+      text: `Đã thu hồi thành công tài khoản email ${target?.email}!`,
+    })
+    setTimeout(() => setDomainFeedbackMsg(null), 3500)
+  }
+
+  const handleCopyDomainCredentials = (item: FepnDomainEmail) => {
+    const info = `TÀI KHOẢN EMAIL TÊN MIỀN FEPN / SEN MAIL:\n- Email: ${item.email}\n- Mật khẩu: ${item.initial_password || '(Liên hệ Admin)'}\n- Họ tên: ${item.full_name} (${item.role})\n- Đăng nhập tại: https://tsv.fepn.senexam.me/fepn-login (Không cần OTP)\n- Truy cập Sen Mail tại: https://tsv.fepn.senexam.me/sen-mail`
+    navigator.clipboard.writeText(info)
+    setCopiedEmailId(item.id)
+    setTimeout(() => setCopiedEmailId(null), 2500)
+  }
+
+  const filteredDomainEmails = useMemo(() => {
+    return domainEmails.filter((item) => {
+      const matchQuery =
+        !searchDomainQuery ||
+        item.email.toLowerCase().includes(searchDomainQuery.toLowerCase()) ||
+        item.full_name.toLowerCase().includes(searchDomainQuery.toLowerCase()) ||
+        (item.notes && item.notes.toLowerCase().includes(searchDomainQuery.toLowerCase()))
+
+      const matchRole = filterDomainRole === 'all' || item.role === filterDomainRole
+      return matchQuery && matchRole
+    })
+  }, [domainEmails, searchDomainQuery, filterDomainRole])
 
   const handleSaveGiftEvent = async () => {
     setIsSavingGiftEvent(true)
@@ -1399,6 +1699,19 @@ export default function FepnAdminDashboardPage() {
           >
             {isDeepVaultUnlocked ? <ShieldCheck className="h-4 w-4 text-emerald-500" /> : <Shield className="h-4 w-4 text-amber-500" />}
             <span>Deep Security Vault (.key)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('domains')}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'domains'
+                ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <AtSign className="h-4 w-4" />
+            <span>Cấp Email Tên Miền ({domainEmails.length})</span>
           </button>
         </div>
       </nav>
@@ -2827,6 +3140,524 @@ export default function FepnAdminDashboardPage() {
             </AdminSecurityVault>
           </div>
         )}
+
+        {/* ======================================================== */}
+        {/* TAB 7: CẤP & QUẢN LÝ EMAIL ĐUÔI TÊN MIỀN (SEN MAIL)       */}
+        {/* ======================================================== */}
+        {activeTab === 'domains' && (
+          <div className="space-y-6">
+            {/* Header / Intro Card */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-900 via-slate-900 to-cyan-950 p-6 sm:p-8 text-white shadow-xl">
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-2 max-w-2xl">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 border border-teal-400/30 px-3 py-1 text-xs font-bold text-teal-300 backdrop-blur-sm">
+                    <AtSign className="h-3.5 w-3.5" />
+                    <span>Hệ Thống Đặc Quyền FEPN Domain Email</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                    Cấp & Quản Lý Email Tên Miền
+                  </h2>
+                  <p className="text-sm text-teal-100/80 leading-relaxed">
+                    Admin có toàn quyền cấp tài khoản email với các đuôi tên miền độc quyền{' '}
+                    <span className="font-bold text-white">@fepn.edu.vn</span>,{' '}
+                    <span className="font-bold text-white">@senexam.me</span> hoặc tên miền tùy chọn. 
+                    Người dùng đăng nhập bằng tài khoản này được <strong className="text-amber-300">miễn trừ OTP & Authenticator</strong> và được kích hoạt workspace <strong className="text-cyan-300">Sen Mail</strong> để quản lý công việc, đồ án và nhiệm vụ khoa học.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/sen-mail"
+                    target="_blank"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-bold text-xs shadow-lg shadow-teal-500/25 transition-all hover:scale-105"
+                  >
+                    <Inbox className="h-4 w-4" />
+                    <span>Mở Hòm Thư Sen Mail</span>
+                    <ExternalLink className="h-3.5 w-3.5 opacity-80" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetchDomainEmails()
+                    }}
+                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs backdrop-blur-sm transition border border-white/10"
+                    title="Tải lại danh sách"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    <span className="hidden sm:inline">Đồng Bộ</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Decorative background glow */}
+              <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl" />
+              <div className="pointer-events-none absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-1">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Tổng Email Đã Cấp</span>
+                  <AtSign className="h-4 w-4 text-teal-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-slate-900">{domainEmails.length}</div>
+                <p className="text-[11px] text-slate-400">Tài khoản tên miền nội bộ</p>
+              </div>
+
+              <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-1">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Đang Kích Hoạt</span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-600">
+                  {domainEmails.filter((e) => e.status === 'active').length}
+                </div>
+                <p className="text-[11px] text-slate-400">Hoạt động bình thường</p>
+              </div>
+
+              <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-1">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Cơ Chế Đăng Nhập</span>
+                  <ShieldCheck className="h-4 w-4 text-amber-500" />
+                </div>
+                <div className="text-lg sm:text-xl font-black text-amber-600">Bypass OTP 100%</div>
+                <p className="text-[11px] text-slate-400">Mật khẩu trực tiếp</p>
+              </div>
+
+              <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm space-y-1">
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Tên Miền Khả Dụng</span>
+                  <Globe className="h-4 w-4 text-cyan-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-cyan-700">{allowedDomains.length}</div>
+                <p className="text-[11px] text-slate-400">@fepn.edu.vn, @senexam.me...</p>
+              </div>
+            </div>
+
+            {/* Alert / Feedback Notification */}
+            {domainFeedbackMsg && (
+              <div
+                className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                  domainFeedbackMsg.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                {domainFeedbackMsg.type === 'success' ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+                )}
+                <span className="text-xs sm:text-sm font-bold flex-1">{domainFeedbackMsg.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setDomainFeedbackMsg(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {/* SECTION 1: FORM CẤP MỚI EMAIL TÊN MIỀN */}
+            <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-teal-50 via-cyan-50 to-white px-6 py-4 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-md shadow-teal-500/20">
+                    <UserPlus className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-slate-900">Biểu Mẫu Cấp Mới Email Tên Miền</h3>
+                    <p className="text-xs text-slate-500">Khởi tạo nhanh tài khoản cán bộ, sinh viên, lab với quyền hạn và mật khẩu ban đầu</p>
+                  </div>
+                </div>
+
+                {/* Email Live Preview */}
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-teal-100/70 border border-teal-200 text-teal-900 text-xs font-mono font-bold">
+                  <Sparkles className="h-3.5 w-3.5 text-teal-600 animate-pulse" />
+                  <span>
+                    {newDomainUsername ? newDomainUsername.trim().toLowerCase() : 'username'}
+                    {newDomainSuffix === 'custom'
+                      ? newCustomSuffix.trim()
+                        ? newCustomSuffix.trim().startsWith('@')
+                          ? newCustomSuffix.trim()
+                          : `@${newCustomSuffix.trim()}`
+                        : '@domain.com'
+                      : newDomainSuffix}
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateDomainEmail} className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6">
+                  {/* Cột 1: Username & Domain */}
+                  <div className="md:col-span-6 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Tiền Tố Email (Username)</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <AtSign className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={newDomainUsername}
+                        onChange={(e) => setNewDomainUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
+                        placeholder="vd: hoangminh hoặc nano.lab"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
+                      />
+                    </div>
+                    <span className="text-[10px] text-slate-400">Chỉ dùng chữ cái thường, số, dấu chấm (.) hoặc gạch ngang (-)</span>
+                  </div>
+
+                  {/* Cột 2: Chọn Đuôi Tên Miền */}
+                  <div className="md:col-span-6 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Đuôi Tên Miền (Domain Suffix)</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <select
+                        value={newDomainSuffix}
+                        onChange={(e) => setNewDomainSuffix(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-white"
+                      >
+                        {allowedDomains.map((dom) => (
+                          <option key={dom} value={dom}>
+                            {dom}
+                          </option>
+                        ))}
+                        <option value="custom">✏️ Nhập tên miền tùy chỉnh...</option>
+                      </select>
+
+                      {newDomainSuffix === 'custom' && (
+                        <input
+                          type="text"
+                          required
+                          value={newCustomSuffix}
+                          onChange={(e) => setNewCustomSuffix(e.target.value.toLowerCase())}
+                          placeholder="@fepn.org hoặc @domain.vn"
+                          className="w-full px-3 py-2.5 rounded-xl border border-teal-300 text-xs sm:text-sm font-semibold text-teal-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-teal-50/40"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Cột 3: Họ và Tên */}
+                  <div className="md:col-span-6 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Họ và Tên Người Nhận</span>
+                      <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newDomainFullName}
+                      onChange={(e) => setNewDomainFullName(e.target.value)}
+                      placeholder="vd: TS. Hoàng Văn Minh hoặc Nhóm Nghiên Cứu Nano"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
+                    />
+                  </div>
+
+                  {/* Cột 4: Mật Khẩu Khởi Tạo */}
+                  <div className="md:col-span-6 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <span>Mật Khẩu Khởi Tạo</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const randomPass = `Fepn@${Math.floor(1000 + Math.random() * 9000)}`
+                          setNewDomainPassword(randomPass)
+                        }}
+                        className="text-[11px] font-bold text-teal-600 hover:text-teal-700 hover:underline"
+                      >
+                        Tạo ngẫu nhiên
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Key className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={newDomainPassword}
+                        onChange={(e) => setNewDomainPassword(e.target.value)}
+                        placeholder="vd: Fepn2026@Pass"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-mono font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Cột 5: Vai trò (Role) */}
+                  <div className="md:col-span-4 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">Vai Trò Người Dùng</label>
+                    <select
+                      value={newDomainRole}
+                      onChange={(e: any) => setNewDomainRole(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-white"
+                    >
+                      <option value="student">🎓 Sinh Viên Khoa VLKT</option>
+                      <option value="lecturer">👨‍🏫 Giảng Viên / Cán Bộ</option>
+                      <option value="researcher">🔬 Nghiên Cứu Sinh / Lab</option>
+                      <option value="staff">💼 Nhân Viên Hỗ Trợ</option>
+                      <option value="admin">🛡️ Quản Trị Viên (Admin)</option>
+                    </select>
+                  </div>
+
+                  {/* Cột 6: Ghi chú / Mục đích */}
+                  <div className="md:col-span-8 space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">Ghi Chú Công Việc / Đơn Vị</label>
+                    <input
+                      type="text"
+                      value={newDomainNotes}
+                      onChange={(e) => setNewDomainNotes(e.target.value)}
+                      placeholder="vd: Phòng Lab 402-E3, phục vụ nghiên cứu đề tài cấp ĐHQG"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-slate-50/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <CheckCircle2 className="h-4 w-4 text-teal-600" />
+                    <span>Sau khi cấp, tài khoản có thể đăng nhập ngay tại <strong>/fepn-login</strong> không cần mã OTP.</span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loadingDomainAction}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white text-xs sm:text-sm font-bold shadow-lg shadow-teal-600/20 transition disabled:opacity-50"
+                  >
+                    {loadingDomainAction ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-4 w-4" />
+                    )}
+                    <span>Cấp Email & Kích Hoạt Sen Mail</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* SECTION 2: DANH SÁCH EMAIL ĐÃ CẤP */}
+            <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Danh Sách Email Đuôi Tên Miền ({filteredDomainEmails.length})
+                  </h3>
+                  <p className="text-xs text-slate-500">Quản lý, cấp đổi mật khẩu và cấp phát bàn giao tài khoản cho người dùng</p>
+                </div>
+
+                {/* Filter & Search */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Search className="h-3.5 w-3.5" />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchDomainQuery}
+                      onChange={(e) => setSearchDomainQuery(e.target.value)}
+                      placeholder="Tìm email, họ tên, ghi chú..."
+                      className="pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 w-48 sm:w-60"
+                    />
+                  </div>
+
+                  <select
+                    value={filterDomainRole}
+                    onChange={(e) => setFilterDomainRole(e.target.value)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-teal-500 bg-white"
+                  >
+                    <option value="all">Mọi vai trò</option>
+                    <option value="student">Sinh viên</option>
+                    <option value="lecturer">Giảng viên</option>
+                    <option value="researcher">Nghiên cứu / Lab</option>
+                    <option value="staff">Nhân viên</option>
+                    <option value="admin">Quản trị viên</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/70 border-b border-slate-200/80 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                      <th className="px-5 py-3.5">Email & Chủ Sở Hữu</th>
+                      <th className="px-4 py-3.5">Vai Trò</th>
+                      <th className="px-4 py-3.5">Mật Khẩu Ban Đầu</th>
+                      <th className="px-4 py-3.5">Trạng Thái</th>
+                      <th className="px-4 py-3.5">Ghi Chú Công Việc</th>
+                      <th className="px-5 py-3.5 text-right">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {filteredDomainEmails.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-12 text-slate-400">
+                          <AtSign className="h-8 w-8 mx-auto mb-2 opacity-30 text-teal-600" />
+                          <p className="font-bold">Không tìm thấy tài khoản email tên miền nào</p>
+                          <p className="text-[11px]">Hãy tạo mới một email bằng biểu mẫu phía trên</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredDomainEmails.map((item) => {
+                        const isCopied = copiedEmailId === item.id
+                        const roleColor =
+                          item.role === 'admin'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : item.role === 'lecturer'
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            : item.role === 'researcher'
+                            ? 'bg-teal-50 text-teal-700 border-teal-200'
+                            : item.role === 'staff'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-sky-50 text-sky-700 border-sky-200'
+
+                        const roleLabel =
+                          item.role === 'admin'
+                            ? 'Quản Trị'
+                            : item.role === 'lecturer'
+                            ? 'Giảng Viên'
+                            : item.role === 'researcher'
+                            ? 'Nghiên Cứu'
+                            : item.role === 'staff'
+                            ? 'Nhân Viên'
+                            : 'Sinh Viên'
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                            {/* Email & Full Name */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+                                  {item.full_name?.charAt(0) || 'U'}
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="font-mono font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                                    <span>{item.email}</span>
+                                  </div>
+                                  <div className="text-[11px] font-semibold text-slate-600">
+                                    {item.full_name}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Vai Trò */}
+                            <td className="px-4 py-3.5 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold border ${roleColor}`}>
+                                {roleLabel}
+                              </span>
+                            </td>
+
+                            {/* Mật Khẩu Khởi Tạo */}
+                            <td className="px-4 py-3.5 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 font-mono text-[11px] font-bold text-slate-700">
+                                <Key className="h-3 w-3 text-slate-400" />
+                                <span>{item.initial_password || '******'}</span>
+                              </div>
+                            </td>
+
+                            {/* Trạng Thái */}
+                            <td className="px-4 py-3.5 whitespace-nowrap">
+                              {item.status === 'active' ? (
+                                <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold text-xs">
+                                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                  Kích Hoạt
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-slate-400 font-bold text-xs">
+                                  <span className="h-2 w-2 rounded-full bg-slate-400" />
+                                  Tạm Khóa
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Ghi Chú & Ngày Cấp */}
+                            <td className="px-4 py-3.5 max-w-xs">
+                              <p className="text-xs text-slate-700 font-medium truncate" title={item.notes}>
+                                {item.notes || '—'}
+                              </p>
+                              <span className="text-[10px] text-slate-400">
+                                {new Date(item.created_at).toLocaleDateString('vi-VN')}
+                              </span>
+                            </td>
+
+                            {/* Thao Tác */}
+                            <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5">
+                                {/* Nút Sao Chép Bàn Giao */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyDomainCredentials(item)}
+                                  className={`p-1.5 rounded-lg border text-xs font-bold transition inline-flex items-center gap-1 ${
+                                    isCopied
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                  }`}
+                                  title="Sao chép toàn bộ thông tin bàn giao cho người dùng"
+                                >
+                                  {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-slate-500" />}
+                                  <span className="text-[10px]">{isCopied ? 'Đã chép' : 'Bàn giao'}</span>
+                                </button>
+
+                                {/* Nút Đổi Mật Khẩu */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingDomainPassId(item.id)
+                                    setNewDomainPassInput('')
+                                  }}
+                                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition"
+                                  title="Đổi mật khẩu tài khoản này"
+                                >
+                                  <Key className="h-3.5 w-3.5" />
+                                </button>
+
+                                {/* Nút Khóa / Mở Khóa */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleDomainEmailStatus(item.id, item.status)}
+                                  className={`p-1.5 rounded-lg border transition ${
+                                    item.status === 'active'
+                                      ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                      : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  }`}
+                                  title={item.status === 'active' ? 'Tạm khóa tài khoản' : 'Mở khóa tài khoản'}
+                                >
+                                  {item.status === 'active' ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                                </button>
+
+                                {/* Nút Xóa / Thu Hồi */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDomainEmail(item.id)}
+                                  className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 transition"
+                                  title="Thu hồi vĩnh viễn email"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* ======================================================== */}
@@ -3179,6 +4010,83 @@ export default function FepnAdminDashboardPage() {
         </div>
       )}
 
+      {/* 7. MODAL ĐỔI MẬT KHẨU EMAIL TÊN MIỀN */}
+      {editingDomainPassId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-200 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
+                  <Key className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Đổi Mật Khẩu Email</h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    {domainEmails.find((i) => i.id === editingDomainPassId)?.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingDomainPassId(null)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleChangeDomainEmailPassword(editingDomainPassId, newDomainPassInput)
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">Mật khẩu mới (Tối thiểu 6 ký tự)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={newDomainPassInput}
+                    onChange={(e) => setNewDomainPassInput(e.target.value)}
+                    placeholder="Nhập mật khẩu mới..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rand = `Fepn@${Math.floor(1000 + Math.random() * 9000)}`
+                      setNewDomainPassInput(rand)
+                    }}
+                    className="absolute right-2 top-2 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 text-xs font-bold hover:bg-teal-100 transition"
+                  >
+                    Tạo ngẫu nhiên
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingDomainPassId(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-md flex items-center gap-2"
+                >
+                  <Key className="h-3.5 w-3.5" />
+                  <span>Cập Nhật Mật Khẩu</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 6. MODAL QUÉT MÃ QR ĐỐI SOÁT BẰNG CAMERA */}
       <AdminQrScannerModal
         isOpen={showScannerModal}
@@ -3224,6 +4132,11 @@ export default function FepnAdminDashboardPage() {
             label: 'Bảo Mật Deep Vault (.key)',
             icon: <ShieldCheck className="h-4 w-4 text-purple-500" />,
             onClick: () => setActiveTab('vault'),
+          },
+          {
+            label: 'Cấp Email Tên Miền',
+            icon: <AtSign className="h-4 w-4 text-teal-500" />,
+            onClick: () => setActiveTab('domains'),
           },
         ]}
         userEmail={user?.email}
