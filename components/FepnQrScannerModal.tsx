@@ -20,8 +20,10 @@ import {
 interface FepnQrScannerModalProps {
   isOpen: boolean
   onClose: () => void
-  userId: string
-  userEmail: string
+  userId?: string
+  userEmail?: string
+  currentUser?: any
+  onApproved?: () => void
 }
 
 interface TargetDeviceInfo {
@@ -37,6 +39,8 @@ export default function FepnQrScannerModal({
   onClose,
   userId,
   userEmail,
+  currentUser,
+  onApproved,
 }: FepnQrScannerModalProps) {
   const [mode, setMode] = useState<'scan' | 'code' | 'confirm'>('code')
   const [codeInputValue, setCodeInputValue] = useState('')
@@ -45,7 +49,12 @@ export default function FepnQrScannerModal({
   const [successMsg, setSuccessMsg] = useState('')
   const [targetToken, setTargetToken] = useState('')
   const [targetDevice, setTargetDevice] = useState<TargetDeviceInfo | null>(null)
+  const [verifyDigit, setVerifyDigit] = useState('')
+  const [isConfirmedRisk, setIsConfirmedRisk] = useState(false)
   const [expiresSeconds, setExpiresSeconds] = useState(180)
+
+  const effectiveUserId = userId || currentUser?.id || ''
+  const effectiveUserEmail = userEmail || currentUser?.email || ''
 
   // Camera video ref
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -135,6 +144,8 @@ export default function FepnQrScannerModal({
 
       setTargetToken(data.token)
       setTargetDevice(data.deviceInfo)
+      setVerifyDigit(data.verifyDigit || '')
+      setIsConfirmedRisk(false)
       setExpiresSeconds(data.expiresInSeconds || 180)
       setMode('confirm')
       stopCamera()
@@ -145,9 +156,46 @@ export default function FepnQrScannerModal({
     }
   }
 
+  // Từ chối đăng nhập (nghi vấn bị kẻ xấu lừa quét mã)
+  const handleReject = async () => {
+    if (!targetToken) return
+    setLoading(true)
+    setErrorMsg('')
+    try {
+      await fetch('/api/fepn-auth/qr-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          token: targetToken,
+        }),
+      })
+      setSuccessMsg('🛡️ Đã từ chối và hủy bỏ yêu cầu đăng nhập này an toàn.')
+      setTimeout(() => {
+        setMode('code')
+        setTargetDevice(null)
+        setTargetToken('')
+        setSuccessMsg('')
+      }, 1800)
+    } catch (err: any) {
+      setErrorMsg('Không thể gửi lệnh từ chối.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Phê duyệt đăng nhập cho máy kia
   const handleApprove = async () => {
-    if (!targetToken || !userId || !userEmail) return
+    if (!targetToken || !effectiveUserId || !effectiveUserEmail) {
+      setErrorMsg('Không tìm thấy thông tin phiên người dùng đăng nhập.')
+      return
+    }
+
+    if (!isConfirmedRisk) {
+      setErrorMsg('Vui lòng tích xác nhận cam kết đây là thiết bị của chính bạn.')
+      return
+    }
+
     setLoading(true)
     setErrorMsg('')
     try {
@@ -157,8 +205,8 @@ export default function FepnQrScannerModal({
         body: JSON.stringify({
           action: 'approve',
           token: targetToken,
-          userId,
-          userEmail,
+          userId: effectiveUserId,
+          userEmail: effectiveUserEmail,
         }),
       })
 
@@ -167,6 +215,7 @@ export default function FepnQrScannerModal({
         throw new Error(data.error || 'Phê duyệt thất bại')
       }
 
+      onApproved?.()
       setSuccessMsg('🎉 Đã xác nhận đăng nhập thành công! Thiết bị kia đã được đăng nhập vào tài khoản của bạn.')
       setTimeout(() => {
         onClose()
@@ -174,7 +223,8 @@ export default function FepnQrScannerModal({
         setMode('code')
         setCodeInputValue('')
         setTargetDevice(null)
-      }, 2500)
+        setIsConfirmedRisk(false)
+      }, 2200)
     } catch (err: any) {
       setErrorMsg(err.message || 'Lỗi khi phê duyệt đăng nhập')
     } finally {
@@ -314,14 +364,20 @@ export default function FepnQrScannerModal({
         {/* BƯỚC 2: XÁC NHẬN THÔNG TIN THIẾT BỊ MÁY A */}
         {mode === 'confirm' && targetDevice && (
           <div className="space-y-4">
-            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
-              <div className="flex items-center gap-1.5 font-black text-amber-900">
-                <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
-                <span>Yêu Cầu Đăng Nhập Thiết Bị Mới</span>
+            {/* CẢNH BÁO BẢO MẬT & CHỐNG LỪA ĐẢO TỐI QUAN TRỌNG */}
+            <div className="p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-xs text-rose-900 space-y-1.5 shadow-sm">
+              <div className="flex items-center gap-2 font-black text-rose-700 uppercase tracking-wider text-[11px]">
+                <ShieldAlert className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>Cảnh Báo Bảo Mật Chống Lừa Đảo</span>
               </div>
-              <p className="text-[11px] leading-relaxed">
-                Chỉ bấm <strong>"Xác Nhận"</strong> nếu bạn đang đứng trước máy tính này. Không xác nhận cho bất kỳ ai khác!
-              </p>
+              <ul className="list-disc list-inside text-[11px] text-rose-800 space-y-0.5 leading-relaxed font-semibold">
+                <li>
+                  Tuyệt đối <strong>KHÔNG</strong> quét mã hoặc nhập số do người lạ gửi qua Zalo, Messenger, Telegram...
+                </li>
+                <li>
+                  <strong>CHỈ XÁC NHẬN</strong> nếu chính bạn đang ngồi trực tiếp trước màn hình thiết bị này!
+                </li>
+              </ul>
             </div>
 
             {/* Thẻ thông tin máy yêu cầu */}
@@ -329,23 +385,23 @@ export default function FepnQrScannerModal({
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shrink-0">
                   {targetDevice.deviceType === 'mobile' ? (
-                    <Smartphone className="h-5 w-5" />
+                    <Smartphone className="h-5 w-5 text-sky-600" />
                   ) : (
-                    <Laptop className="h-5 w-5" />
+                    <Laptop className="h-5 w-5 text-sky-600" />
                   )}
                 </div>
                 <div>
                   <h4 className="font-black text-slate-900 text-sm">
                     {targetDevice.browser} ({targetDevice.os})
                   </h4>
-                  <span className="text-[11px] text-slate-500">Thiết bị đang yêu cầu truy cập</span>
+                  <span className="text-[11px] text-slate-500">Thiết bị đang yêu cầu truy cập tài khoản</span>
                 </div>
               </div>
 
               <div className="space-y-1 pt-2 border-t border-slate-200/80 text-[11px] text-slate-600">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1 text-slate-400">
-                    <MapPin className="h-3 w-3" /> Địa chỉ IP:
+                    <MapPin className="h-3 w-3" /> Địa chỉ IP yêu cầu:
                   </span>
                   <span className="font-mono font-bold text-slate-800">{targetDevice.ip}</span>
                 </div>
@@ -357,30 +413,57 @@ export default function FepnQrScannerModal({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1 text-slate-400">
-                    <Globe className="h-3 w-3" /> Tài khoản cấp phép:
+                    <Globe className="h-3 w-3" /> Tài khoản cấp quyền:
                   </span>
-                  <span className="font-mono font-bold text-sky-700">{userEmail}</span>
+                  <span className="font-mono font-bold text-sky-700">{effectiveUserEmail}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            {/* Mã kiểm chứng an toàn 2 số */}
+            {verifyDigit && (
+              <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-indigo-900 uppercase tracking-wider block">
+                    Mã kiểm chứng an toàn
+                  </span>
+                  <span className="text-[11px] text-indigo-700">
+                    Đối chiếu với số trên màn hình máy kia:
+                  </span>
+                </div>
+                <div className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-mono text-xl font-black tracking-widest shadow-xs">
+                  {verifyDigit}
+                </div>
+              </div>
+            )}
+
+            {/* Checkbox cam kết bắt buộc */}
+            <label className="flex items-start gap-2.5 p-3 rounded-2xl border border-slate-200 bg-white cursor-pointer select-none text-xs text-slate-700 hover:bg-slate-50 transition">
+              <input
+                type="checkbox"
+                checked={isConfirmedRisk}
+                onChange={(e) => setIsConfirmedRisk(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 transition cursor-pointer shrink-0"
+              />
+              <span className="font-bold leading-relaxed text-[11px] text-slate-800">
+                Tôi cam kết đây là thiết bị của chính tôi và tôi đang trực tiếp sử dụng máy tính/điện thoại này.
+              </span>
+            </label>
+
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => {
-                  setMode('code')
-                  setTargetDevice(null)
-                }}
+                onClick={handleReject}
                 disabled={loading}
-                className="w-1/3 py-3 rounded-2xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                className="w-1/2 py-3 rounded-2xl border border-rose-200 bg-rose-50 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
               >
-                Hủy Bỏ
+                Từ Chối (Không phải tôi)
               </button>
               <button
                 type="button"
                 onClick={handleApprove}
-                disabled={loading}
-                className="w-2/3 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={loading || !isConfirmedRisk}
+                className="w-1/2 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 <span>Xác Nhận Đăng Nhập</span>

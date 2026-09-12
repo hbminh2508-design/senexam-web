@@ -82,6 +82,7 @@ export default function FepnLoginPage() {
   // Fast QR Login states
   const [qrToken, setQrToken] = useState('')
   const [qrShortCode, setQrShortCode] = useState('')
+  const [qrVerifyDigit, setQrVerifyDigit] = useState('')
   const [qrImageUrl, setQrImageUrl] = useState('')
   const [qrExpiresIn, setQrExpiresIn] = useState(180)
   const [qrLoading, setQrLoading] = useState(false)
@@ -225,6 +226,7 @@ export default function FepnLoginPage() {
       if (data.success) {
         setQrToken(data.token)
         setQrShortCode(data.shortCode)
+        setQrVerifyDigit(data.verifyDigit || '')
         setQrImageUrl(data.qrImageUrl)
         setQrExpiresIn(data.expiresInSeconds || 180)
         setQrApproved(false)
@@ -1309,6 +1311,20 @@ export default function FepnLoginPage() {
                             {qrShortCode ? `${qrShortCode.slice(0, 3)} ${qrShortCode.slice(3)}` : '••••••'}
                           </div>
                         </div>
+
+                        {qrVerifyDigit && (
+                          <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-center space-y-0.5">
+                            <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider block">
+                              Mã kiểm chứng an toàn (2 số)
+                            </span>
+                            <span className="font-mono text-xl font-black text-indigo-950 tracking-widest">
+                              {qrVerifyDigit}
+                            </span>
+                            <p className="text-[10px] text-indigo-600 font-medium">
+                              Thiết bị quét sẽ đối chiếu số này để đảm bảo an toàn tuyệt đối
+                            </p>
+                          </div>
+                        )}
 
                         {qrExpiresIn > 0 && (
                           <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
