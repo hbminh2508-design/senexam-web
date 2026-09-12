@@ -37,8 +37,12 @@ import {
   LayoutGrid,
   Gift,
   Inbox,
+  QrCode,
+  Smartphone,
 } from 'lucide-react'
 import { checkFepnAccessAsync } from '@/lib/authHelper'
+import FepnQrScannerModal from '@/components/FepnQrScannerModal'
+import FepnDeviceSecurityModal from '@/components/FepnDeviceSecurityModal'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
@@ -109,6 +113,11 @@ export default function FepnDashboardMainPage() {
 
   // Mobile Bottom Nav & Feature Sheet
   const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false)
+
+  // Fast QR Scanner & Device Security states
+  const [showQrScanner, setShowQrScanner] = useState<boolean>(false)
+  const [showDeviceSecurity, setShowDeviceSecurity] = useState<boolean>(false)
+  const [activeDeviceCount, setActiveDeviceCount] = useState<number>(1)
 
   const scrollToMaterials = () => {
     setSelectedSemester('all')
@@ -309,6 +318,40 @@ export default function FepnDashboardMainPage() {
         if (isAllowed) {
           setAuthStatus('authorized')
           await loadSubjects()
+
+          // Kiểm tra xem thiết bị này có bị đăng xuất từ xa không
+          if (typeof window !== 'undefined') {
+            const devId = localStorage.getItem('fepn_device_id')
+            if (devId) {
+              fetch('/api/fepn-auth/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'check_active', deviceId: devId, userId: currentUser.id }),
+              })
+                .then((res) => res.json())
+                .then((data) => {
+                  if (data.revoked) {
+                    alert('Phiên đăng nhập trên thiết bị này đã bị đăng xuất từ xa.')
+                    supabase.auth.signOut().then(() => router.push('/fepn-login'))
+                  }
+                })
+                .catch(() => {})
+            }
+          }
+
+          // Lấy số lượng thiết bị đang đăng nhập
+          fetch('/api/fepn-auth/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list', userId: currentUser.id }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.success && typeof data.activeCount === 'number') {
+                setActiveDeviceCount(data.activeCount)
+              }
+            })
+            .catch(() => {})
         } else {
           setAuthStatus('restricted')
         }
@@ -691,6 +734,33 @@ export default function FepnDashboardMainPage() {
                 )}
               </Link>
             )}
+
+            {/* Nút Quét QR Đăng Nhập cho máy khác */}
+            <button
+              type="button"
+              onClick={() => setShowQrScanner(true)}
+              className="flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 shadow-xs transition text-xs font-bold"
+              title="Quét mã QR để đăng nhập cho máy khác"
+            >
+              <QrCode className="h-4 w-4" />
+              <span className="hidden md:inline">Quét QR</span>
+            </button>
+
+            {/* Nút Quản lý thiết bị đăng nhập & Log 15 ngày */}
+            <button
+              type="button"
+              onClick={() => setShowDeviceSecurity(true)}
+              className="relative flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 shadow-xs transition text-xs font-bold"
+              title="Quản lý thiết bị đăng nhập & Nhật ký 15 ngày"
+            >
+              <Smartphone className="h-4 w-4" />
+              <span className="hidden md:inline">Thiết Bị</span>
+              {activeDeviceCount > 0 && (
+                <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-indigo-600 text-[10px] font-black text-white">
+                  {activeDeviceCount}
+                </span>
+              )}
+            </button>
 
             <div className="flex items-center gap-2 pl-2 border-l border-black/10 dark:border-white/10">
               <div className="text-right hidden sm:block">
@@ -1405,6 +1475,32 @@ export default function FepnDashboardMainPage() {
               )}
             </div>
 
+            {/* Phím di động Quét QR & Thiết Bị */}
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobileMenu(false)
+                  setShowQrScanner(true)
+                }}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-sky-500/20 bg-sky-50 text-sky-800 font-bold text-xs"
+              >
+                <QrCode className="h-4 w-4" />
+                <span>Quét QR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobileMenu(false)
+                  setShowDeviceSecurity(true)
+                }}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-indigo-500/20 bg-indigo-50 text-indigo-800 font-bold text-xs"
+              >
+                <Smartphone className="h-4 w-4" />
+                <span>Thiết Bị ({activeDeviceCount})</span>
+              </button>
+            </div>
+
             {/* Tài khoản & Đăng xuất */}
             <div className="pt-2 border-t border-black/10 dark:border-white/10 flex items-center justify-between">
               <div>
@@ -1427,6 +1523,52 @@ export default function FepnDashboardMainPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL QUÉT QR ĐĂNG NHẬP NHANH */}
+      <FepnQrScannerModal
+        isOpen={showQrScanner}
+        onClose={() => setShowQrScanner(false)}
+        currentUser={user}
+        onApproved={() => {
+          if (user?.id) {
+            fetch('/api/fepn-auth/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'list', userId: user.id }),
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.success && typeof data.activeCount === 'number') {
+                  setActiveDeviceCount(data.activeCount)
+                }
+              })
+              .catch(() => {})
+          }
+        }}
+      />
+
+      {/* MODAL QUẢN LÝ THIẾT BỊ VÀ NHẬT KÝ 15 NGÀY */}
+      <FepnDeviceSecurityModal
+        isOpen={showDeviceSecurity}
+        onClose={() => {
+          setShowDeviceSecurity(false)
+          if (user?.id) {
+            fetch('/api/fepn-auth/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'list', userId: user.id }),
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.success && typeof data.activeCount === 'number') {
+                  setActiveDeviceCount(data.activeCount)
+                }
+              })
+              .catch(() => {})
+          }
+        }}
+        userId={user?.id || ''}
+      />
     </main>
   )
 }

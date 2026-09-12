@@ -26,12 +26,38 @@ import {
   ArrowRight,
   RefreshCw,
   ArrowLeft,
+  QrCode,
+  AlertTriangle,
+  Timer,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
 
 type AuthStep = 'credentials' | 'otp' | 'authenticator_setup' | 'authenticator_verify'
+
+// Helper phát hiện thiết bị người dùng
+function getClientDeviceInfo() {
+  if (typeof window === 'undefined') return { browser: 'Trình duyệt Web', os: 'Hệ điều hành', deviceName: 'Thiết bị Web' }
+  const ua = navigator.userAgent
+  let browser = 'Trình duyệt'
+  if (ua.includes('Edg/')) browser = 'Microsoft Edge'
+  else if (ua.includes('Chrome/')) browser = 'Google Chrome'
+  else if (ua.includes('Firefox/')) browser = 'Mozilla Firefox'
+  else if (ua.includes('Safari/') && !ua.includes('Chrome/')) browser = 'Apple Safari'
+
+  let os = 'Hệ điều hành'
+  if (ua.includes('Windows NT 10.0')) os = 'Windows 10/11'
+  else if (ua.includes('Windows')) os = 'Windows'
+  else if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'macOS'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iPhone')) os = 'iPhone'
+  else if (ua.includes('iPad')) os = 'iPad'
+  else if (ua.includes('Linux')) os = 'Linux'
+
+  const deviceName = `${browser} trên ${os}`
+  return { browser, os, deviceName }
+}
 
 export default function FepnLoginPage() {
   const router = useRouter()
@@ -40,12 +66,26 @@ export default function FepnLoginPage() {
 
   const [step, setStep] = useState<AuthStep>('credentials')
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
+  const [loginMethod, setLoginMethod] = useState<'credentials' | 'qr'>('credentials')
 
   // Form states
   const [mssv, setMssv] = useState('')
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
+
+  // Khóa đăng nhập lũy tiến
+  const [lockoutSeconds, setLockoutSeconds] = useState(0)
+  const [isPermanentLocked, setIsPermanentLocked] = useState(false)
+
+  // Fast QR Login states
+  const [qrToken, setQrToken] = useState('')
+  const [qrShortCode, setQrShortCode] = useState('')
+  const [qrImageUrl, setQrImageUrl] = useState('')
+  const [qrExpiresIn, setQrExpiresIn] = useState(180)
+  const [qrLoading, setQrLoading] = useState(false)
+  const [qrApproved, setQrApproved] = useState(false)
 
   // Forgot password states
   const [forgotStep, setForgotStep] = useState<'request' | 'reset'>('request')
@@ -98,6 +138,35 @@ export default function FepnLoginPage() {
     }
   }, [])
 
+  // Đọc dữ liệu Lưu đăng nhập (Remember Me) từ localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedMssv = localStorage.getItem('fepn_saved_mssv')
+      const savedRemember = localStorage.getItem('fepn_remember_me')
+      if (savedMssv) {
+        setMssv(savedMssv)
+      }
+      if (savedRemember !== null) {
+        setRememberMe(savedRemember === 'true')
+      }
+    }
+  }, [])
+
+  // Đếm ngược khóa tài khoản lũy tiến
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return
+    const timer = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [lockoutSeconds])
+
   // Cooldown đếm ngược gửi lại OTP đăng nhập / đăng ký
   useEffect(() => {
     if (resendCooldown <= 0) return
@@ -124,6 +193,131 @@ export default function FepnLoginPage() {
     }
     return `${clean}@vnu.edu.vn`
   }
+
+  // Định dạng thời gian khóa (phút:giây hoặc giờ phút)
+  const formatLockoutTime = (sec: number) => {
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    const s = sec % 60
+    if (h > 0) return `${h} giờ ${m.toString().padStart(2, '0')} phút ${s.toString().padStart(2, '0')} giây`
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  }
+
+  // Khởi tạo mã QR đăng nhập nhanh
+  const initQrCode = async () => {
+    setQrLoading(true)
+    setErrorMsg('')
+    try {
+      const dev = getClientDeviceInfo()
+      const res = await fetch('/api/fepn-auth/qr-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          deviceInfo: {
+            browser: dev.browser,
+            os: dev.os,
+            deviceName: dev.deviceName,
+          },
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setQrToken(data.token)
+        setQrShortCode(data.shortCode)
+        setQrImageUrl(data.qrImageUrl)
+        setQrExpiresIn(data.expiresInSeconds || 180)
+        setQrApproved(false)
+      } else {
+        setErrorMsg(data.error || 'Không thể tạo mã QR đăng nhập.')
+      }
+    } catch (err: any) {
+      setErrorMsg('Lỗi kết nối máy chủ tạo mã QR.')
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
+  // Tự động khởi tạo QR khi chuyển sang chế độ QR
+  useEffect(() => {
+    if (loginMethod === 'qr' && !qrToken) {
+      initQrCode()
+    }
+  }, [loginMethod])
+
+  // Đếm ngược thời hạn mã QR (3 phút)
+  useEffect(() => {
+    if (loginMethod !== 'qr' || qrExpiresIn <= 0) return
+    const t = setInterval(() => {
+      setQrExpiresIn((prev) => {
+        if (prev <= 1) {
+          clearInterval(t)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(t)
+  }, [loginMethod, qrExpiresIn])
+
+  // Polling trạng thái phê duyệt mã QR từ Máy B
+  useEffect(() => {
+    if (loginMethod !== 'qr' || !qrToken || qrApproved || qrExpiresIn <= 0) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/fepn-auth/qr-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'check', token: qrToken }),
+        })
+        const data = await res.json()
+        if (data.status === 'approved') {
+          setQrApproved(true)
+          clearInterval(interval)
+          setSuccessMsg('🎉 Đã xác nhận đăng nhập thành công từ thiết bị!')
+
+          // Kích hoạt phiên đăng nhập Supabase nếu có authTokenHash
+          if (data.authTokenHash) {
+            try {
+              await supabase.auth.verifyOtp({
+                token_hash: data.authTokenHash,
+                type: 'magiclink',
+              })
+            } catch (vErr) {
+              console.warn('verifyOtp notice:', vErr)
+            }
+          }
+
+          // Ghi nhận session thiết bị
+          const devInfo = getClientDeviceInfo()
+          let devId = localStorage.getItem('fepn_device_id')
+          if (!devId) {
+            devId = 'dev_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
+            localStorage.setItem('fepn_device_id', devId)
+          }
+          await fetch('/api/fepn-auth/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'record',
+              email: data.email,
+              deviceId: devId,
+              deviceName: devInfo.deviceName,
+              browser: devInfo.browser,
+              os: devInfo.os,
+            }),
+          }).catch(() => {})
+
+          setTimeout(() => {
+            navigateAfterLogin()
+          }, 800)
+        }
+      } catch (e) {}
+    }, 2500)
+
+    return () => clearInterval(interval)
+  }, [loginMethod, qrToken, qrApproved, qrExpiresIn])
 
   // Quy chuẩn mật khẩu: Tối thiểu 8 ký tự, 1 hoa, 1 ký tự đặc biệt, 1 số
   const hasMinLength = password.length >= 8
@@ -196,11 +390,34 @@ export default function FepnLoginPage() {
       return
     }
 
-    if (!isPasswordValid) {
-      setErrorMsg(
-        'Mật khẩu chưa đáp ứng tiêu chuẩn an toàn: Tối thiểu 8 ký tự, có ít nhất 1 chữ viết hoa, 1 ký tự đặc biệt và 1 chữ số.'
-      )
-      return
+    // Chỉ kiểm tra tiêu chuẩn mật khẩu mạnh khi ĐĂNG KÝ
+    if (mode === 'signup') {
+      if (!fullName.trim()) {
+        setErrorMsg('Vui lòng nhập họ và tên của bạn.')
+        return
+      }
+      if (!isPasswordValid) {
+        setErrorMsg(
+          'Mật khẩu chưa đáp ứng tiêu chuẩn an toàn: Tối thiểu 8 ký tự, có ít nhất 1 chữ viết hoa, 1 ký tự đặc biệt và 1 chữ số.'
+        )
+        return
+      }
+    } else {
+      // ĐĂNG NHẬP: chỉ cần mật khẩu không rỗng
+      if (!password) {
+        setErrorMsg('Vui lòng nhập mật khẩu của bạn.')
+        return
+      }
+
+      // Kiểm tra trạng thái khóa tài khoản hiện tại
+      if (isPermanentLocked) {
+        setErrorMsg('Tài khoản của bạn đã bị khóa do nhập sai mật khẩu quá 30 lần. Vui lòng liên hệ với minhhb@senexam.me để được hỗ trợ.')
+        return
+      }
+      if (lockoutSeconds > 0) {
+        setErrorMsg(`Tài khoản đang bị tạm khóa. Vui lòng thử lại sau: ${formatLockoutTime(lockoutSeconds)}`)
+        return
+      }
     }
 
     const fullEmail = getFullVnuEmail(mssv)
@@ -216,13 +433,104 @@ export default function FepnLoginPage() {
 
     try {
       if (mode === 'login') {
-        // ĐĂNG NHẬP: Kiểm tra mật khẩu trước
+        // Kiểm tra lockout trước khi gọi Supabase
+        try {
+          const chkRes = await fetch('/api/fepn-auth/login-lockout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'check', email: fullEmail }),
+          })
+          const chkData = await chkRes.json()
+          if (chkData.isLocked) {
+            if (chkData.isPermanent) {
+              setIsPermanentLocked(true)
+              setErrorMsg('Tài khoản của bạn đã bị khóa do nhập sai mật khẩu quá 30 lần. Vui lòng liên hệ với minhhb@senexam.me để được hỗ trợ.')
+              setLoading(false)
+              return
+            }
+            setLockoutSeconds(chkData.remainingSeconds || 60)
+            setErrorMsg(`Tài khoản đang bị tạm khóa (${chkData.lockoutLevel || 'tạm thời'}). Vui lòng thử lại sau: ${formatLockoutTime(chkData.remainingSeconds || 60)}`)
+            setLoading(false)
+            return
+          }
+        } catch (lockCheckErr) {
+          console.warn('Lỗi kiểm tra khóa:', lockCheckErr)
+        }
+
+        // ĐĂNG NHẬP: Xác thực mật khẩu
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: fullEmail,
           password,
         })
 
-        if (signInError) throw signInError
+        if (signInError) {
+          // Ghi nhận lần nhập sai để tính lũy tiến khóa 1p, 3p, 5p, 10p, 1h, 3h hoặc vĩnh viễn
+          try {
+            const failRes = await fetch('/api/fepn-auth/login-lockout', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'record_fail', email: fullEmail }),
+            })
+            const failData = await failRes.json()
+            if (failData.isLocked) {
+              if (failData.isPermanent) {
+                setIsPermanentLocked(true)
+                setErrorMsg('Tài khoản của bạn đã bị khóa do nhập sai mật khẩu quá 30 lần. Vui lòng liên hệ với minhhb@senexam.me để được hỗ trợ.')
+                setLoading(false)
+                return
+              } else {
+                setLockoutSeconds(failData.remainingSeconds || 60)
+                setErrorMsg(`Tài khoản đã bị tạm khóa ${failData.lockoutLevel} do nhập sai liên tiếp ${failData.failedAttempts} lần. Vui lòng thử lại sau: ${formatLockoutTime(failData.remainingSeconds || 60)}`)
+                setLoading(false)
+                return
+              }
+            } else {
+              const nextTier = (Math.floor(failData.failedAttempts / 5) + 1) * 5
+              const remainingTries = nextTier - failData.failedAttempts
+              setErrorMsg(`Mã số sinh viên hoặc mật khẩu không chính xác! Bạn đã nhập sai ${failData.failedAttempts} lần (còn ${remainingTries} lần thử trước khi bị tạm khóa).`)
+              setLoading(false)
+              return
+            }
+          } catch (lockErr) {}
+          throw signInError
+        }
+
+        // Đăng nhập thành công -> Xử lý Remember Me
+        if (rememberMe) {
+          localStorage.setItem('fepn_saved_mssv', mssv.trim())
+          localStorage.setItem('fepn_remember_me', 'true')
+        } else {
+          localStorage.removeItem('fepn_saved_mssv')
+          localStorage.setItem('fepn_remember_me', 'false')
+        }
+
+        // Reset lockout về 0
+        fetch('/api/fepn-auth/login-lockout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reset', email: fullEmail }),
+        }).catch(() => {})
+
+        // Ghi nhận session thiết bị
+        const devInfo = getClientDeviceInfo()
+        let devId = localStorage.getItem('fepn_device_id')
+        if (!devId) {
+          devId = 'dev_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
+          localStorage.setItem('fepn_device_id', devId)
+        }
+        fetch('/api/fepn-auth/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'record',
+            userId: signInData.user.id,
+            email: fullEmail,
+            deviceId: devId,
+            deviceName: devInfo.deviceName,
+            browser: devInfo.browser,
+            os: devInfo.os,
+          }),
+        }).catch(() => {})
 
         // Kiểm tra xem tài khoản đã liên kết ứng dụng Authenticator (TOTP) hay chưa
         let activeTotpFactorId = ''
@@ -270,10 +578,6 @@ export default function FepnLoginPage() {
         setSuccessMsg(`Mã OTP xác thực đăng nhập đã được gửi về hòm thư ${fullEmail}.`)
       } else {
         // ĐĂNG KÝ: Tạo tài khoản mới
-        if (!fullName.trim()) {
-          throw new Error('Vui lòng nhập họ và tên của bạn.')
-        }
-
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: fullEmail,
           password,
@@ -920,126 +1224,292 @@ export default function FepnLoginPage() {
                   </button>
                 </div>
 
-                <form onSubmit={handleCredentialsSubmit} className="space-y-4 text-xs">
-                  {/* Họ tên (Chỉ hiện khi Đăng ký) */}
-                  {mode === 'signup' && (
+                {/* Khi ở chế độ Đăng Nhập: Có tuỳ chọn Đăng Nhập Mật Khẩu hoặc Quét QR Đăng Nhập Nhanh */}
+                {mode === 'login' && (
+                  <div className="flex rounded-xl bg-sky-50/80 p-1 text-xs font-bold border border-sky-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginMethod('credentials')
+                        setErrorMsg('')
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 text-xs font-bold ${
+                        loginMethod === 'credentials'
+                          ? 'bg-white text-sky-700 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>Nhập Mật Khẩu</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginMethod('qr')
+                        setErrorMsg('')
+                        if (!qrToken) initQrCode()
+                      }}
+                      className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 text-xs font-bold ${
+                        loginMethod === 'qr'
+                          ? 'bg-white text-sky-700 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <QrCode className="h-3.5 w-3.5" />
+                      <span>Đăng Nhập Mã QR</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* GIAO DIỆN QUÉT MÃ QR ĐĂNG NHẬP NHANH */}
+                {mode === 'login' && loginMethod === 'qr' ? (
+                  <div className="space-y-4 text-center">
+                    <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200/80 space-y-1">
+                      <p className="text-xs font-black text-slate-800">
+                        Quét mã QR để đăng nhập ngay
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Dùng thiết bị đã đăng nhập FEPN (điện thoại hoặc máy tính khác) để xác nhận.
+                      </p>
+                    </div>
+
+                    {qrLoading ? (
+                      <div className="py-8 flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="h-7 w-7 animate-spin text-sky-600" />
+                        <span className="text-xs font-bold text-slate-500">Đang khởi tạo mã xác thực...</span>
+                      </div>
+                    ) : qrImageUrl ? (
+                      <div className="space-y-3">
+                        <div className="relative mx-auto w-fit p-3 rounded-2xl border-2 border-dashed border-sky-300 bg-white shadow-md">
+                          <img
+                            src={qrImageUrl}
+                            alt="QR Đăng nhập FEPN"
+                            className={`h-48 w-48 object-contain transition ${
+                              qrExpiresIn <= 0 ? 'opacity-20 blur-xs' : ''
+                            }`}
+                          />
+                          {qrExpiresIn <= 0 && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 p-4 rounded-2xl space-y-2">
+                              <AlertCircle className="h-6 w-6 text-amber-500" />
+                              <p className="text-xs font-black text-slate-800">Mã QR đã hết hạn</p>
+                              <button
+                                type="button"
+                                onClick={initQrCode}
+                                className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-black text-xs hover:bg-sky-700 transition"
+                              >
+                                Làm mới mã QR
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-bold text-slate-500">Hoặc nhập mã 6 số trên thiết bị đã đăng nhập:</p>
+                          <div className="mt-1 inline-flex items-center justify-center px-4 py-1.5 rounded-xl bg-slate-100 border border-slate-200 font-mono text-lg font-black tracking-widest text-slate-800 select-all">
+                            {qrShortCode ? `${qrShortCode.slice(0, 3)} ${qrShortCode.slice(3)}` : '••••••'}
+                          </div>
+                        </div>
+
+                        {qrExpiresIn > 0 && (
+                          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                            <Timer className="h-3.5 w-3.5 text-sky-600 animate-pulse" />
+                            <span>
+                              Hiệu lực còn:{' '}
+                              <span className="font-mono text-sky-700 font-black">
+                                {Math.floor(qrExpiresIn / 60)}:{(qrExpiresIn % 60).toString().padStart(2, '0')}
+                              </span>
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="text-[11px] text-slate-600 leading-relaxed text-left bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
+                          <p className="font-bold text-slate-800">Hướng dẫn nhanh:</p>
+                          <p>1. Mở FEPN trên thiết bị đã đăng nhập, bấm nút <strong>Quét QR</strong> trên thanh điều hướng.</p>
+                          <p>2. Quét mã QR này hoặc nhập mã 6 số rồi bấm <strong>Xác Nhận</strong>.</p>
+                          <p>3. Thiết bị này sẽ tự động đăng nhập vào tài khoản ngay lập tức!</p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={initQrCode}
+                          disabled={qrLoading}
+                          className="text-xs font-bold text-sky-600 hover:text-sky-800 inline-flex items-center gap-1 transition"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${qrLoading ? 'animate-spin' : ''}`} />
+                          <span>Làm mới mã QR</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  /* FORM ĐĂNG NHẬP / ĐĂNG KÝ BẰNG MẬT KHẨU */
+                  <form onSubmit={handleCredentialsSubmit} className="space-y-4 text-xs">
+                    {/* BẢNG CẢNH BÁO KHÓA TÀI KHOẢN LŨY TIẾN */}
+                    {mode === 'login' && isPermanentLocked && (
+                      <div className="rounded-2xl border-2 border-rose-500 bg-rose-50 p-4 text-center space-y-2">
+                        <AlertTriangle className="h-7 w-7 text-rose-600 mx-auto" />
+                        <h4 className="text-sm font-black text-rose-900">Tài Khoản Đã Bị Khóa</h4>
+                        <p className="text-xs text-rose-700 leading-relaxed font-semibold">
+                          Bạn đã nhập sai mật khẩu quá 30 lần. Hệ thống đã khóa tài khoản này để đảm bảo an toàn.
+                        </p>
+                        <div className="p-2.5 rounded-xl bg-white border border-rose-200 text-xs font-mono font-black text-rose-900 select-all">
+                          Liên hệ hỗ trợ: minhhb@senexam.me
+                        </div>
+                      </div>
+                    )}
+
+                    {mode === 'login' && !isPermanentLocked && lockoutSeconds > 0 && (
+                      <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-center space-y-2">
+                        <Timer className="h-6 w-6 text-amber-600 mx-auto animate-pulse" />
+                        <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider">
+                          Tài khoản đang bị tạm khóa
+                        </h4>
+                        <div className="text-2xl font-black font-mono text-amber-700 tracking-wider">
+                          {formatLockoutTime(lockoutSeconds)}
+                        </div>
+                        <p className="text-[11px] text-amber-700">
+                          Mỗi 5 lần nhập sai sẽ bị khóa lần lượt: 1p, 3p, 5p, 10p, 1h, 3h. Vui lòng chờ đếm ngược để thử lại.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Họ tên (Chỉ hiện khi Đăng ký) */}
+                    {mode === 'signup' && (
+                      <div>
+                        <label className="font-bold text-slate-700">
+                          Họ và tên sinh viên / cán bộ:
+                        </label>
+                        <div className="relative mt-1">
+                          <input
+                            type="text"
+                            placeholder="Ví dụ: Hoàng Bình Minh"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 outline-none font-bold text-base sm:text-xs focus:border-sky-500 focus:bg-white transition"
+                            required
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ô Nhập MSSV Cố Định Đuôi @vnu.edu.vn */}
                     <div>
                       <label className="font-bold text-slate-700">
-                        Họ và tên sinh viên / cán bộ:
+                        Mã số sinh viên (MSSV):
+                      </label>
+                      <div className="mt-1 flex items-center rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-500/20 transition">
+                        <input
+                          type="text"
+                          placeholder="Nhập MSSV (ví dụ: 21020001)"
+                          value={mssv}
+                          onChange={(e) => setMssv(e.target.value.trim())}
+                          className="flex-1 bg-transparent px-4 py-3 outline-none font-mono font-bold text-base sm:text-xs"
+                          required
+                        />
+                        <span className="px-3 py-3 bg-sky-50 text-sky-700 font-mono font-black text-xs border-l border-slate-200 select-none">
+                          @vnu.edu.vn
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        Cổng xác thực danh tính sinh viên VNU — Khoa FEPN.
+                      </p>
+                    </div>
+
+                    {/* Mật khẩu */}
+                    <div>
+                      <label className="font-bold text-slate-700">
+                        Mật khẩu:
                       </label>
                       <div className="relative mt-1">
                         <input
-                          type="text"
-                          placeholder="Ví dụ: Hoàng Bình Minh"
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 outline-none font-bold text-base sm:text-xs focus:border-sky-500 focus:bg-white transition"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder={mode === 'signup' ? 'Tạo mật khẩu an toàn' : 'Nhập mật khẩu'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-4 pr-11 py-3 outline-none font-bold text-base sm:text-xs focus:border-sky-500 focus:bg-white transition"
                           required
                         />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Ô Nhập MSSV Cố Định Đuôi @vnu.edu.vn */}
-                  <div>
-                    <label className="font-bold text-slate-700">
-                      Mã số sinh viên (MSSV):
-                    </label>
-                    <div className="mt-1 flex items-center rounded-2xl border border-slate-200 bg-slate-50/70 overflow-hidden focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-500/20 transition">
-                      <input
-                        type="text"
-                        placeholder="Nhập MSSV (ví dụ: 21020001)"
-                        value={mssv}
-                        onChange={(e) => setMssv(e.target.value.trim())}
-                        className="flex-1 bg-transparent px-4 py-3 outline-none font-mono font-bold text-base sm:text-xs"
-                        required
-                      />
-                      <span className="px-3 py-3 bg-sky-50 text-sky-700 font-mono font-black text-xs border-l border-slate-200 select-none">
-                        @vnu.edu.vn
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      Cổng xác thực danh tính sinh viên VNU — Khoa FEPN.
-                    </p>
-                  </div>
-
-                  {/* Mật khẩu */}
-                  <div>
-                    <label className="font-bold text-slate-700">
-                      Mật khẩu:
-                    </label>
-                    <div className="relative mt-1">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Nhập mật khẩu an toàn"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 pl-4 pr-11 py-3 outline-none font-bold text-base sm:text-xs focus:border-sky-500 focus:bg-white transition"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 p-0.5 text-slate-400 hover:text-slate-800 transition"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-
-                    {/* Nút Quên Mật Khẩu */}
-                    {mode === 'login' && (
-                      <div className="flex items-center justify-end mt-1.5">
-                        <Link
-                          href="/sen-cap-lai-mat-khau"
-                          className="text-xs font-bold text-sky-600 hover:text-sky-700 hover:underline transition"
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-3 p-0.5 text-slate-400 hover:text-slate-800 transition"
                         >
-                          Quên mật khẩu?
-                        </Link>
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                       </div>
-                    )}
 
-                    {/* Tiêu chuẩn kiểm tra mật khẩu trực quan */}
-                    <div className="mt-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                        Yêu cầu độ bảo mật mật khẩu:
-                      </p>
-                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                        <div className={`flex items-center gap-1.5 font-bold transition ${hasMinLength ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {hasMinLength ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
-                          <span>Tối thiểu 8 ký tự</span>
+                      {/* Hàng "Lưu đăng nhập" & "Quên mật khẩu?" bên Đăng Nhập */}
+                      {mode === 'login' && (
+                        <div className="flex items-center justify-between mt-2.5">
+                          <label className="inline-flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-slate-600 hover:text-slate-900">
+                            <input
+                              type="checkbox"
+                              checked={rememberMe}
+                              onChange={(e) => setRememberMe(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 transition cursor-pointer"
+                            />
+                            <span>Lưu đăng nhập</span>
+                          </label>
+                          <Link
+                            href="/sen-cap-lai-mat-khau"
+                            className="text-xs font-bold text-sky-600 hover:text-sky-700 hover:underline transition"
+                          >
+                            Quên mật khẩu?
+                          </Link>
                         </div>
-                        <div className={`flex items-center gap-1.5 font-bold transition ${hasUppercase ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {hasUppercase ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
-                          <span>1 chữ hoa (A-Z)</span>
+                      )}
+
+                      {/* Tiêu chuẩn kiểm tra mật khẩu CHỈ HIỂN THỊ KHI ĐĂNG KÝ */}
+                      {mode === 'signup' && (
+                        <div className="mt-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                            Yêu cầu độ bảo mật mật khẩu:
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                            <div className={`flex items-center gap-1.5 font-bold transition ${hasMinLength ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {hasMinLength ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
+                              <span>Tối thiểu 8 ký tự</span>
+                            </div>
+                            <div className={`flex items-center gap-1.5 font-bold transition ${hasUppercase ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {hasUppercase ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
+                              <span>1 chữ hoa (A-Z)</span>
+                            </div>
+                            <div className={`flex items-center gap-1.5 font-bold transition ${hasSpecialChar ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {hasSpecialChar ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
+                              <span>1 ký tự đặc biệt (@#$)</span>
+                            </div>
+                            <div className={`flex items-center gap-1.5 font-bold transition ${hasDigit ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {hasDigit ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
+                              <span>1 chữ số (0-9)</span>
+                            </div>
+                          </div>
                         </div>
-                        <div className={`flex items-center gap-1.5 font-bold transition ${hasSpecialChar ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {hasSpecialChar ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
-                          <span>1 ký tự đặc biệt (@#$)</span>
-                        </div>
-                        <div className={`flex items-center gap-1.5 font-bold transition ${hasDigit ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {hasDigit ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" /> : <div className="h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300" />}
-                          <span>1 chữ số (0-9)</span>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  </div>
 
-                  {/* Nút Submit */}
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-black uppercase text-xs tracking-wider shadow-lg shadow-sky-500/25 transition hover:scale-[1.02] disabled:opacity-50 inline-flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Lock className="h-4 w-4" />
-                    )}
-                    <span>
-                      {mode === 'login' ? 'Đăng Nhập & Nhận Mã OTP' : 'Đăng Ký & Nhận Mã OTP'}
-                    </span>
-                  </button>
-                </form>
+                    {/* Nút Submit */}
+                    <button
+                      type="submit"
+                      disabled={loading || (mode === 'login' && (isPermanentLocked || lockoutSeconds > 0))}
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-black uppercase text-xs tracking-wider shadow-lg shadow-sky-500/25 transition hover:scale-[1.02] disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Lock className="h-4 w-4" />
+                      )}
+                      <span>
+                        {mode === 'login'
+                          ? isPermanentLocked
+                            ? 'Tài Khoản Đang Bị Khóa'
+                            : lockoutSeconds > 0
+                            ? `Tạm Khóa (${formatLockoutTime(lockoutSeconds)})`
+                            : 'Đăng Nhập & Nhận Mã OTP'
+                          : 'Đăng Ký & Nhận Mã OTP'}
+                      </span>
+                    </button>
+                  </form>
+                )}
 
                 {/* HOẶC */}
                 <div className="relative flex items-center justify-center">

@@ -46,8 +46,12 @@ import {
   Headphones,
   Sparkles,
   FileAudio,
+  QrCode,
+  Smartphone,
 } from 'lucide-react'
 import FepnAudioLectureViewer from '@/components/FepnAudioLectureViewer'
+import FepnQrScannerModal from '@/components/FepnQrScannerModal'
+import FepnDeviceSecurityModal from '@/components/FepnDeviceSecurityModal'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
@@ -120,6 +124,11 @@ export default function FepnSubjectDetailPage() {
   const [uploadingMaterial, setUploadingMaterial] = useState(false)
   const [autoAnalyzeWithGemini, setAutoAnalyzeWithGemini] = useState(true)
   const [togglingRecordings, setTogglingRecordings] = useState(false)
+
+  // Fast QR Scanner & Device Security states
+  const [showQrScanner, setShowQrScanner] = useState<boolean>(false)
+  const [showDeviceSecurity, setShowDeviceSecurity] = useState<boolean>(false)
+  const [activeDeviceCount, setActiveDeviceCount] = useState<number>(1)
 
   // Kiểm tra xem tính năng File Ghi Âm có đang BẬT cho môn học này không (Mặc định: TẮT)
   const isSubjectRecordingsEnabled = (sub: FepnSubject | null): boolean => {
@@ -257,6 +266,40 @@ export default function FepnSubjectDetailPage() {
         if (isAllowed) {
           setAuthStatus('authorized')
           await loadSubjectData(currentUser.id)
+
+          // Kiểm tra xem thiết bị này có bị đăng xuất từ xa không
+          if (typeof window !== 'undefined') {
+            const devId = localStorage.getItem('fepn_device_id')
+            if (devId) {
+              fetch('/api/fepn-auth/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'check_active', deviceId: devId, userId: currentUser.id }),
+              })
+                .then((res) => res.json())
+                .then((data) => {
+                  if (data.revoked) {
+                    alert('Phiên đăng nhập trên thiết bị này đã bị đăng xuất từ xa.')
+                    supabase.auth.signOut().then(() => router.push('/fepn-login'))
+                  }
+                })
+                .catch(() => {})
+            }
+          }
+
+          // Lấy số lượng thiết bị đang đăng nhập
+          fetch('/api/fepn-auth/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list', userId: currentUser.id }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.success && typeof data.activeCount === 'number') {
+                setActiveDeviceCount(data.activeCount)
+              }
+            })
+            .catch(() => {})
         } else {
           setAuthStatus('restricted')
         }
@@ -689,6 +732,33 @@ export default function FepnSubjectDetailPage() {
             >
               <span>GPA</span>
             </Link>
+
+            {/* Nút Quét QR Đăng Nhập cho máy khác */}
+            <button
+              type="button"
+              onClick={() => setShowQrScanner(true)}
+              className="hidden sm:flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 shadow-xs transition text-xs font-bold"
+              title="Quét mã QR để đăng nhập cho máy khác"
+            >
+              <QrCode className="h-4 w-4" />
+              <span className="hidden lg:inline">Quét QR</span>
+            </button>
+
+            {/* Nút Quản lý thiết bị đăng nhập & Log 15 ngày */}
+            <button
+              type="button"
+              onClick={() => setShowDeviceSecurity(true)}
+              className="relative hidden sm:flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 shadow-xs transition text-xs font-bold"
+              title="Quản lý thiết bị đăng nhập & Nhật ký 15 ngày"
+            >
+              <Smartphone className="h-4 w-4" />
+              <span className="hidden lg:inline">Thiết Bị</span>
+              {activeDeviceCount > 0 && (
+                <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-indigo-600 text-[10px] font-black text-white">
+                  {activeDeviceCount}
+                </span>
+              )}
+            </button>
 
             <button
               type="button"
@@ -1283,6 +1353,16 @@ export default function FepnSubjectDetailPage() {
             icon: <FolderOpen className="h-4 w-4 text-pink-500" />,
             onClick: () => router.push('/fepn-gift'),
           },
+          {
+            label: 'Quét QR Đăng Nhập',
+            icon: <QrCode className="h-4 w-4 text-sky-500" />,
+            onClick: () => setShowQrScanner(true),
+          },
+          {
+            label: `Quản Lý Thiết Bị (${activeDeviceCount})`,
+            icon: <Smartphone className="h-4 w-4 text-indigo-500" />,
+            onClick: () => setShowDeviceSecurity(true),
+          },
           ...(isAdmin
             ? [
                 {
@@ -1295,6 +1375,52 @@ export default function FepnSubjectDetailPage() {
         ]}
         userEmail={user?.email}
         onLogout={handleLogout}
+      />
+
+      {/* MODAL QUÉT QR ĐĂNG NHẬP NHANH */}
+      <FepnQrScannerModal
+        isOpen={showQrScanner}
+        onClose={() => setShowQrScanner(false)}
+        currentUser={user}
+        onApproved={() => {
+          if (user?.id) {
+            fetch('/api/fepn-auth/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'list', userId: user.id }),
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.success && typeof data.activeCount === 'number') {
+                  setActiveDeviceCount(data.activeCount)
+                }
+              })
+              .catch(() => {})
+          }
+        }}
+      />
+
+      {/* MODAL QUẢN LÝ THIẾT BỊ VÀ NHẬT KÝ 15 NGÀY */}
+      <FepnDeviceSecurityModal
+        isOpen={showDeviceSecurity}
+        onClose={() => {
+          setShowDeviceSecurity(false)
+          if (user?.id) {
+            fetch('/api/fepn-auth/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'list', userId: user.id }),
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.success && typeof data.activeCount === 'number') {
+                  setActiveDeviceCount(data.activeCount)
+                }
+              })
+              .catch(() => {})
+          }
+        }}
+        userId={user?.id || ''}
       />
     </main>
   )
