@@ -42,12 +42,17 @@ import {
   Eye,
   GraduationCap,
   Calculator,
+  Mic,
+  Headphones,
+  Sparkles,
+  FileAudio,
 } from 'lucide-react'
+import FepnAudioLectureViewer from '@/components/FepnAudioLectureViewer'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-body' })
 
-export type MaterialCategory = 'slides' | 'exercises' | 'videos' | 'exams'
+export type MaterialCategory = 'slides' | 'exercises' | 'videos' | 'exams' | 'recordings'
 
 export interface FepnSubject {
   id: string
@@ -58,6 +63,7 @@ export interface FepnSubject {
   description?: string
   icon?: string
   created_at?: string
+  enable_recordings?: boolean
 }
 
 export interface FepnMaterial {
@@ -112,6 +118,75 @@ export default function FepnSubjectDetailPage() {
   const [newMatType, setNewMatType] = useState('pdf')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadingMaterial, setUploadingMaterial] = useState(false)
+  const [autoAnalyzeWithGemini, setAutoAnalyzeWithGemini] = useState(true)
+  const [togglingRecordings, setTogglingRecordings] = useState(false)
+
+  // Kiểm tra xem tính năng File Ghi Âm có đang BẬT cho môn học này không (Mặc định: TẮT)
+  const isSubjectRecordingsEnabled = (sub: FepnSubject | null): boolean => {
+    if (!sub) return false
+    if (sub.enable_recordings === true) return true
+    if (sub.description && sub.description.includes('[ENABLE_RECORDINGS]')) return true
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(`fepn_recordings_enabled_${sub.code}`) === 'true'
+    }
+    return false
+  }
+
+  const isRecordingsOn = isSubjectRecordingsEnabled(subject)
+
+  // Admin bật / tắt tính năng File Ghi Âm cho môn học này
+  const handleToggleRecordings = async () => {
+    if (!subject) return
+    const nextVal = !isRecordingsOn
+    setTogglingRecordings(true)
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`fepn_recordings_enabled_${subject.code}`, nextVal ? 'true' : 'false')
+    }
+
+    let rawDesc = subject.description || ''
+    if (nextVal) {
+      if (!rawDesc.includes('[ENABLE_RECORDINGS]')) {
+        rawDesc = `${rawDesc} [ENABLE_RECORDINGS]`.trim()
+      }
+    } else {
+      rawDesc = rawDesc.replace(/\[ENABLE_RECORDINGS\]/g, '').trim()
+    }
+
+    const updatedSubject: FepnSubject = {
+      ...subject,
+      enable_recordings: nextVal,
+      description: rawDesc,
+    }
+    setSubject(updatedSubject)
+
+    try {
+      // Cập nhật cơ sở dữ liệu Supabase
+      const { error } = await supabase
+        .from('fepn_subjects')
+        .update({
+          description: rawDesc,
+          enable_recordings: nextVal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', subject.id)
+
+      if (error) {
+        // Dự phòng: nếu cột enable_recordings chưa có trong bảng, lưu qua trường description
+        await supabase
+          .from('fepn_subjects')
+          .update({
+            description: rawDesc,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', subject.id)
+      }
+    } catch (err) {
+      console.warn('Cập nhật trạng thái ghi âm môn học:', err)
+    } finally {
+      setTogglingRecordings(false)
+    }
+  }
 
   // Responsive Desktop vs Mobile/Tablet
   const [isDesktop, setIsDesktop] = useState(true)
@@ -367,6 +442,31 @@ export default function FepnSubjectDetailPage() {
         finalUrl = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
       }
 
+      let finalExtra = newMatExtra.trim()
+      if (newMatCategory === 'recordings' && autoAnalyzeWithGemini) {
+        try {
+          const aiRes = await fetch('/api/fepn-materials/analyze-audio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audioUrl: finalUrl,
+              subjectName: subject.name,
+              title: newMatTitle.trim(),
+            }),
+          })
+          const aiData = await aiRes.json()
+          if (aiData.analysis) {
+            finalExtra = JSON.stringify({
+              analysis: aiData.analysis,
+              model: aiData.model || 'gemini-3.8-flash',
+              analyzed_at: new Date().toISOString(),
+            })
+          }
+        } catch (aiErr) {
+          console.warn('Lỗi phân tích AI khi đăng file ghi âm:', aiErr)
+        }
+      }
+
       const newMatItem = {
         subject_id: subject.id,
         category: newMatCategory,
@@ -374,7 +474,13 @@ export default function FepnSubjectDetailPage() {
         description: newMatDesc.trim(),
         file_url: finalUrl,
         file_type: newMatType,
-        extra_info: newMatExtra.trim() || (newMatType === 'video' ? 'Video bài giảng' : 'Tài liệu học tập'),
+        extra_info:
+          finalExtra ||
+          (newMatCategory === 'recordings'
+            ? 'Bản ghi âm bài giảng'
+            : newMatType === 'video'
+            ? 'Video bài giảng'
+            : 'Tài liệu học tập'),
         created_by: user?.id,
       }
 
@@ -636,13 +742,40 @@ export default function FepnSubjectDetailPage() {
             </h3>
             {subject.description && (
               <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
-                {subject.description}
+                {subject.description.replace(/\[ENABLE_RECORDINGS\]/g, '').trim()}
               </p>
+            )}
+
+            {/* Quick Admin Toggle: BẬT / TẮT File Ghi Âm */}
+            {isAdmin && (
+              <div className="mt-3 flex items-center justify-between p-2 rounded-2xl bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800 text-xs">
+                <div className="flex items-center gap-1.5 text-sky-900 dark:text-sky-200 font-bold">
+                  <Mic className="h-3.5 w-3.5 text-sky-600" />
+                  <span>File Ghi Âm & AI:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleRecordings}
+                  disabled={togglingRecordings}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                    isRecordingsOn
+                      ? 'bg-sky-600 text-white shadow-xs hover:bg-sky-700'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300'
+                  }`}
+                  title="Admin bật/tắt tính năng File Ghi Âm cho môn học này"
+                >
+                  {togglingRecordings ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <span>{isRecordingsOn ? 'ĐANG BẬT' : 'ĐANG TẮT'}</span>
+                  )}
+                </button>
+              </div>
             )}
           </div>
 
-          {/* 4 FOLDER TABS */}
-          <div className="grid grid-cols-4 gap-1 p-2 border-b border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03]">
+          {/* 4 HOẶC 5 FOLDER TABS (Hiển thị tab thứ 5 khi Admin BẬT) */}
+          <div className={`grid ${isRecordingsOn ? 'grid-cols-5' : 'grid-cols-4'} gap-1 p-2 border-b border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03]`}>
             {/* Tab 1: Slide */}
             <button
               type="button"
@@ -714,6 +847,32 @@ export default function FepnSubjectDetailPage() {
               <Award className="h-4 w-4 mb-1" />
               <span className="text-[11px] leading-tight">Tài Liệu Bài Thi</span>
             </button>
+
+            {/* Tab 5: File Ghi Âm (Hiện khi Admin BẬT) */}
+            {isRecordingsOn && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCategory('recordings')
+                  const first = materials.find((m) => m.category === 'recordings')
+                  if (first) setSelectedMaterial(first)
+                }}
+                className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs font-bold transition text-center relative ${
+                  activeCategory === 'recordings'
+                    ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm font-black'
+                    : 'text-slate-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <div className="relative">
+                  <Mic className="h-4 w-4 mb-1" />
+                  <span className="absolute -top-1 -right-1.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                  </span>
+                </div>
+                <span className="text-[11px] leading-tight">File Ghi Âm</span>
+              </button>
+            )}
           </div>
 
           {/* DANH SÁCH FILE TRONG FOLDER ĐANG CHỌN (100% DATABASE) */}
@@ -757,14 +916,18 @@ export default function FepnSubjectDetailPage() {
                     <div className="flex items-start gap-3 min-w-0">
                       <div
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold transition ${
-                          mat.category === 'videos'
+                          mat.category === 'recordings'
+                            ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
+                            : mat.category === 'videos'
                             ? 'bg-rose-500/15 text-rose-600'
                             : mat.category === 'exams'
                             ? 'bg-amber-500/15 text-amber-600'
                             : 'bg-sky-500/15 text-sky-600'
                         }`}
                       >
-                        {mat.category === 'videos' ? (
+                        {mat.category === 'recordings' ? (
+                          <Mic className="h-4 w-4" />
+                        ) : mat.category === 'videos' ? (
                           <Video className="h-4 w-4" />
                         ) : mat.category === 'exams' ? (
                           <Award className="h-4 w-4" />
@@ -853,6 +1016,8 @@ export default function FepnSubjectDetailPage() {
                       ? 'Đề Thi'
                       : selectedMaterial.category === 'exercises'
                       ? 'Bài Tập'
+                      : selectedMaterial.category === 'recordings'
+                      ? 'Ghi Âm AI'
                       : 'Slide'}
                   </span>
                   <h3 className="text-xs sm:text-sm font-black truncate text-slate-800 dark:text-slate-100">
@@ -895,7 +1060,17 @@ export default function FepnSubjectDetailPage() {
 
               {/* LIVE VIEWER FRAME */}
               <div className="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative min-h-[480px]">
-                {selectedMaterial.category === 'videos' ? (
+                {selectedMaterial.category === 'recordings' ? (
+                  <FepnAudioLectureViewer
+                    material={selectedMaterial}
+                    subjectName={subject.name}
+                    userRole={userRole}
+                    onUpdateMaterial={(updated) => {
+                      setMaterials((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+                      setSelectedMaterial(updated)
+                    }}
+                  />
+                ) : selectedMaterial.category === 'videos' ? (
                   <iframe
                     src={getEmbedUrl(selectedMaterial.file_url, 'video')}
                     title={selectedMaterial.title}
@@ -958,6 +1133,7 @@ export default function FepnSubjectDetailPage() {
                     const cat = e.target.value as MaterialCategory
                     setNewMatCategory(cat)
                     if (cat === 'videos') setNewMatType('video')
+                    else if (cat === 'recordings') setNewMatType('audio')
                     else setNewMatType('pdf')
                   }}
                   className="w-full mt-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 outline-none font-bold"
@@ -966,8 +1142,30 @@ export default function FepnSubjectDetailPage() {
                   <option value="exercises">📝 Tài Liệu Bài Tập</option>
                   <option value="videos">🎥 Video Bài Giảng Trực Tuyến</option>
                   <option value="exams">📋 Đề Thi & Đáp Án</option>
+                  <option value="recordings">🎙️ File Ghi Âm & Lời Giảng AI</option>
                 </select>
               </div>
+
+              {newMatCategory === 'recordings' && (
+                <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 space-y-2">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoAnalyzeWithGemini}
+                      onChange={(e) => setAutoAnalyzeWithGemini(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded accent-indigo-600"
+                    />
+                    <div className="text-xs">
+                      <span className="font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Tự động phân tích & ghi lại kiến thức bằng AI gemini-3.8-flash
+                      </span>
+                      <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium mt-0.5">
+                        AI sẽ nghe và bóc tách đầy đủ lời giảng của thầy cô, tóm tắt lý thuyết, công thức LaTeX và các lưu ý thi cử.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
 
               <div>
                 <label className="font-bold text-slate-600 dark:text-slate-300">Tiêu Đề Tài Liệu:</label>

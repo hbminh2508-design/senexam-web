@@ -62,6 +62,8 @@ import {
   Sparkles,
   Key,
   Copy,
+  Mic,
+  Headphones,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-fepn-heading' })
@@ -77,16 +79,18 @@ export interface FepnSubject {
   icon?: string
   created_at?: string
   total_materials?: number
+  enable_recordings?: boolean
 }
 
 export interface FepnMaterial {
   id: string
   subject_id: string
   title: string
-  category: 'slide' | 'exercise' | 'video' | 'exam'
+  category: 'slide' | 'exercise' | 'video' | 'exam' | 'recording' | string
   file_url: string
   file_type?: string
   created_at?: string
+  extra_info?: string
 }
 
 export interface FepnUser {
@@ -187,14 +191,16 @@ export default function FepnAdminDashboardPage() {
   const [subCredits, setSubCredits] = useState(3)
   const [subSemester, setSubSemester] = useState('Kỳ 1')
   const [subDescription, setSubDescription] = useState('')
+  const [subEnableRecordings, setSubEnableRecordings] = useState(false)
   const [savingSubject, setSavingSubject] = useState(false)
 
   // Material Modal State
   const [showMaterialModal, setShowMaterialModal] = useState(false)
   const [matSubjectId, setMatSubjectId] = useState('')
   const [matTitle, setMatTitle] = useState('')
-  const [matCategory, setMatCategory] = useState<'slide' | 'exercise' | 'video' | 'exam'>('slide')
+  const [matCategory, setMatCategory] = useState<'slide' | 'exercise' | 'video' | 'exam' | 'recording'>('slide')
   const [matFileUrl, setMatFileUrl] = useState('')
+  const [matAutoAnalyze, setMatAutoAnalyze] = useState(true)
   const [savingMaterial, setSavingMaterial] = useState(false)
 
   // Filters & Search
@@ -979,6 +985,54 @@ export default function FepnAdminDashboardPage() {
     setActiveKeyId('')
   }
 
+  // Helper: check recordings status
+  const isSubjectRecordingsEnabled = (sub: FepnSubject) => {
+    if (sub.enable_recordings !== undefined) return Boolean(sub.enable_recordings)
+    if (sub.description && sub.description.includes('[ENABLE_RECORDINGS]')) return true
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`fepn_recordings_${sub.id}`)
+      if (stored !== null) return stored === 'true'
+    }
+    return false
+  }
+
+  const handleToggleSubjectRecordings = async (sub: FepnSubject) => {
+    const currentStatus = isSubjectRecordingsEnabled(sub)
+    const nextStatus = !currentStatus
+
+    let descClean = (sub.description || '').replace(/\[ENABLE_RECORDINGS\]/g, '').trim()
+    if (nextStatus) {
+      descClean = descClean ? `${descClean} [ENABLE_RECORDINGS]` : '[ENABLE_RECORDINGS]'
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`fepn_recordings_${sub.id}`, nextStatus ? 'true' : 'false')
+    }
+
+    setSubjects((prev) =>
+      prev.map((s) => (s.id === sub.id ? { ...s, description: descClean, enable_recordings: nextStatus } : s))
+    )
+
+    try {
+      const { error } = await supabase
+        .from('fepn_subjects')
+        .update({ description: descClean, enable_recordings: nextStatus })
+        .eq('id', sub.id)
+
+      if (error) {
+        await supabase
+          .from('fepn_subjects')
+          .update({ description: descClean })
+          .eq('id', sub.id)
+      }
+    } catch {
+      await supabase
+        .from('fepn_subjects')
+        .update({ description: descClean })
+        .eq('id', sub.id)
+    }
+  }
+
   // ========================================================
   // 3. SUBJECT ACTIONS
   // ========================================================
@@ -989,6 +1043,7 @@ export default function FepnAdminDashboardPage() {
     setSubCredits(3)
     setSubSemester('Kỳ 1')
     setSubDescription('')
+    setSubEnableRecordings(false) // Mặc định là TẮT cho mọi môn
     setShowSubjectModal(true)
   }
 
@@ -998,7 +1053,9 @@ export default function FepnAdminDashboardPage() {
     setSubName(sub.name)
     setSubCredits(sub.credits)
     setSubSemester(sub.semester)
-    setSubDescription(sub.description || '')
+    const cleanDesc = (sub.description || '').replace(/\[ENABLE_RECORDINGS\]/g, '').trim()
+    setSubDescription(cleanDesc)
+    setSubEnableRecordings(isSubjectRecordingsEnabled(sub))
     setShowSubjectModal(true)
   }
 
@@ -1011,26 +1068,45 @@ export default function FepnAdminDashboardPage() {
 
     setSavingSubject(true)
     try {
-      const payload = {
+      let descClean = subDescription.replace(/\[ENABLE_RECORDINGS\]/g, '').trim()
+      if (subEnableRecordings) {
+        descClean = descClean ? `${descClean} [ENABLE_RECORDINGS]` : '[ENABLE_RECORDINGS]'
+      }
+
+      const payload: any = {
         code: subCode.trim().toUpperCase(),
         name: subName.trim(),
         credits: Number(subCredits) || 3,
         semester: subSemester,
-        description: subDescription.trim(),
+        description: descClean,
         updated_at: new Date().toISOString(),
       }
 
       if (editingSubjectId) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`fepn_recordings_${editingSubjectId}`, subEnableRecordings ? 'true' : 'false')
+        }
         const { error } = await supabase
           .from('fepn_subjects')
-          .update(payload)
+          .update({ ...payload, enable_recordings: subEnableRecordings })
           .eq('id', editingSubjectId)
-        if (error) throw error
+        if (error) {
+          await supabase.from('fepn_subjects').update(payload).eq('id', editingSubjectId)
+        }
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('fepn_subjects')
-          .insert(payload)
-        if (error) throw error
+          .insert({ ...payload, enable_recordings: subEnableRecordings })
+          .select()
+          .single()
+        if (error) {
+          const { data: d2 } = await supabase.from('fepn_subjects').insert(payload).select().single()
+          if (d2 && typeof window !== 'undefined') {
+            localStorage.setItem(`fepn_recordings_${d2.id}`, subEnableRecordings ? 'true' : 'false')
+          }
+        } else if (data && typeof window !== 'undefined') {
+          localStorage.setItem(`fepn_recordings_${data.id}`, subEnableRecordings ? 'true' : 'false')
+        }
       }
 
       setShowSubjectModal(false)
@@ -1061,6 +1137,7 @@ export default function FepnAdminDashboardPage() {
     setMatTitle('')
     setMatCategory('slide')
     setMatFileUrl('')
+    setMatAutoAnalyze(true)
     setShowMaterialModal(true)
   }
 
@@ -1073,17 +1150,49 @@ export default function FepnAdminDashboardPage() {
 
     setSavingMaterial(true)
     try {
+      const isRec = matCategory === 'recording'
+      const assignedSubject = subjects.find((s) => s.id === matSubjectId)
+
+      let extraInfo = isRec ? 'Bản ghi âm bài giảng' : matCategory === 'video' ? 'Video bài giảng' : 'Tài liệu học tập'
+
+      if (isRec && matAutoAnalyze) {
+        try {
+          const aiRes = await fetch('/api/fepn-materials/analyze-audio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audioUrl: matFileUrl.trim(),
+              subjectName: assignedSubject?.name || 'Môn học FEPN',
+              title: matTitle.trim(),
+            }),
+          })
+          const aiData = await aiRes.json()
+          if (aiData.analysis) {
+            extraInfo = JSON.stringify({
+              analysis: aiData.analysis,
+              model: aiData.model || 'gemini-3.8-flash',
+              analyzed_at: new Date().toISOString(),
+            })
+          }
+        } catch (aiErr) {
+          console.warn('Lỗi phân tích AI khi đăng file ghi âm từ Admin:', aiErr)
+        }
+      }
+
       const { error } = await supabase.from('fepn_materials').insert({
         subject_id: matSubjectId,
         title: matTitle.trim(),
-        category: matCategory,
+        category: matCategory === 'recording' ? 'recordings' : matCategory,
         file_url: matFileUrl.trim(),
+        file_type: isRec ? 'audio' : matCategory === 'video' ? 'video' : 'pdf',
+        extra_info: extraInfo,
         created_at: new Date().toISOString(),
       })
       if (error) throw error
 
       setShowMaterialModal(false)
       fetchAllData()
+      alert('🎉 Đăng tài liệu mới thành công!')
     } catch (err: any) {
       alert('Lỗi lưu học liệu: ' + err.message)
     } finally {
@@ -1137,7 +1246,14 @@ export default function FepnAdminDashboardPage() {
     return materials.filter((m) => {
       const matchSearch = m.title.toLowerCase().includes(searchMaterial.toLowerCase())
       const matchSub = selectedMatSubjectFilter === 'all' || m.subject_id === selectedMatSubjectFilter
-      const matchCat = selectedMatCategoryFilter === 'all' || m.category === selectedMatCategoryFilter
+      const matchCat =
+        selectedMatCategoryFilter === 'all' ||
+        m.category === selectedMatCategoryFilter ||
+        (selectedMatCategoryFilter === 'recording' && (m.category === 'recording' || m.category === 'recordings')) ||
+        (selectedMatCategoryFilter === 'slide' && (m.category === 'slide' || m.category === 'slides')) ||
+        (selectedMatCategoryFilter === 'exercise' && (m.category === 'exercise' || m.category === 'exercises')) ||
+        (selectedMatCategoryFilter === 'video' && (m.category === 'video' || m.category === 'videos')) ||
+        (selectedMatCategoryFilter === 'exam' && (m.category === 'exam' || m.category === 'exams'))
       return matchSearch && matchSub && matchCat
     })
   }, [materials, searchMaterial, selectedMatSubjectFilter, selectedMatCategoryFilter])
@@ -1573,6 +1689,7 @@ export default function FepnAdminDashboardPage() {
                     <th className="px-5 py-3.5">Tên Môn Học</th>
                     <th className="px-5 py-3.5">Số Tín Chỉ</th>
                     <th className="px-5 py-3.5">Học Kỳ</th>
+                    <th className="px-5 py-3.5 text-center">File Ghi Âm</th>
                     <th className="px-5 py-3.5">Mô Tả</th>
                     <th className="px-5 py-3.5 text-right">Thao Tác</th>
                   </tr>
@@ -1580,49 +1697,69 @@ export default function FepnAdminDashboardPage() {
                 <tbody className="divide-y divide-slate-100">
                   {filteredSubjects.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-12 text-slate-400">
+                      <td colSpan={7} className="text-center py-12 text-slate-400">
                         Không tìm thấy môn học nào phù hợp.
                       </td>
                     </tr>
                   ) : (
-                    filteredSubjects.map((sub) => (
-                      <tr key={sub.id} className="hover:bg-slate-50/50 transition">
-                        <td className="px-5 py-3 font-mono font-black text-sky-700">
-                          <Link href={`/tsv-fepn/${sub.code.toLowerCase()}`} className="hover:underline flex items-center gap-1">
-                            <span>{sub.code}</span>
-                            <ExternalLink className="h-3 w-3 opacity-60" />
-                          </Link>
-                        </td>
-                        <td className="px-5 py-3 font-bold text-slate-900">{sub.name}</td>
-                        <td className="px-5 py-3 font-semibold text-slate-600">{sub.credits} TC</td>
-                        <td className="px-5 py-3">
-                          <span className="rounded-md bg-sky-50 border border-sky-200 px-2 py-0.5 text-[11px] font-bold text-sky-700">
-                            {sub.semester}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-slate-500 max-w-xs truncate">{sub.description || 'Chưa có mô tả'}</td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                    filteredSubjects.map((sub) => {
+                      const recEnabled = isSubjectRecordingsEnabled(sub)
+                      return (
+                        <tr key={sub.id} className="hover:bg-slate-50/50 transition">
+                          <td className="px-5 py-3 font-mono font-black text-sky-700">
+                            <Link href={`/tsv-fepn/${sub.code.toLowerCase()}`} className="hover:underline flex items-center gap-1">
+                              <span>{sub.code}</span>
+                              <ExternalLink className="h-3 w-3 opacity-60" />
+                            </Link>
+                          </td>
+                          <td className="px-5 py-3 font-bold text-slate-900">{sub.name}</td>
+                          <td className="px-5 py-3 font-semibold text-slate-600">{sub.credits} TC</td>
+                          <td className="px-5 py-3">
+                            <span className="rounded-md bg-sky-50 border border-sky-200 px-2 py-0.5 text-[11px] font-bold text-sky-700">
+                              {sub.semester}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-center">
                             <button
                               type="button"
-                              onClick={() => handleOpenEditSubject(sub)}
-                              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
-                              title="Sửa môn học"
+                              onClick={() => handleToggleSubjectRecordings(sub)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black transition border shadow-2xs ${
+                                recEnabled
+                                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                  : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-slate-200'
+                              }`}
+                              title="Bấm để Bật / Tắt tính năng File Ghi Âm & Lời Giảng AI cho môn học này (Mặc định: TẮT)"
                             >
-                              <Edit3 className="h-3.5 w-3.5" />
+                              <Mic className={`h-3 w-3 ${recEnabled ? 'text-indigo-600' : 'text-slate-400'}`} />
+                              <span>{recEnabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteSubject(sub.id, sub.name)}
-                              className="p-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-600 transition"
-                              title="Xóa môn học"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="px-5 py-3 text-slate-500 max-w-xs truncate">
+                            {(sub.description || '').replace(/\[ENABLE_RECORDINGS\]/g, '').trim() || 'Chưa có mô tả'}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditSubject(sub)}
+                                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition"
+                                title="Sửa môn học"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSubject(sub.id, sub.name)}
+                                className="p-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 text-rose-600 transition"
+                                title="Xóa môn học"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
@@ -1676,6 +1813,7 @@ export default function FepnAdminDashboardPage() {
                   <option value="exercise">Bài tập</option>
                   <option value="video">Video bài giảng</option>
                   <option value="exam">Đề thi & Đáp án</option>
+                  <option value="recording">🎙️ File Ghi Âm AI</option>
                 </select>
 
                 <button
@@ -1712,6 +1850,7 @@ export default function FepnAdminDashboardPage() {
                   ) : (
                     filteredMaterials.map((mat) => {
                       const sub = subjectMap.get(mat.subject_id)
+                      const isRec = mat.category === 'recording' || mat.category === 'recordings'
                       return (
                         <tr key={mat.id} className="hover:bg-slate-50/50 transition">
                           <td className="px-5 py-3 font-mono font-bold text-slate-800">
@@ -1722,17 +1861,28 @@ export default function FepnAdminDashboardPage() {
                           </td>
                           <td className="px-5 py-3">
                             <span
-                              className={`rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${
-                                mat.category === 'exam'
-                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                  : mat.category === 'video'
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                  : mat.category === 'exercise'
+                              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${
+                                isRec
                                   ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                  : 'bg-sky-50 text-sky-700 border border-sky-200'
+                                  : mat.category === 'exam' || mat.category === 'exams'
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : mat.category === 'video' || mat.category === 'videos'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : mat.category === 'exercise' || mat.category === 'exercises'
+                                  ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                               }`}
                             >
-                              {mat.category}
+                              {isRec && <Mic className="h-3 w-3" />}
+                              {isRec
+                                ? 'Ghi Âm AI'
+                                : mat.category === 'exam' || mat.category === 'exams'
+                                ? 'Đề Thi'
+                                : mat.category === 'video' || mat.category === 'videos'
+                                ? 'Video'
+                                : mat.category === 'exercise' || mat.category === 'exercises'
+                                ? 'Bài Tập'
+                                : 'Slide'}
                             </span>
                           </td>
                           <td className="px-5 py-3 max-w-xs truncate text-sky-600 font-mono text-[11px]">
@@ -2836,6 +2986,283 @@ export default function FepnAdminDashboardPage() {
           </div>
         )}
       </main>
+
+      {/* ======================================================== */}
+      {/* 2. MODAL THÊM / SỬA MÔN HỌC                              */}
+      {/* ======================================================== */}
+      {showSubjectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-200 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-sky-50 text-sky-600">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <h3 className="text-base font-black text-slate-900">
+                  {editingSubjectId ? 'Chỉnh Sửa Môn Học FEPN' : 'Thêm Môn Học FEPN Mới'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSubjectModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSubject} className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Mã Môn Học</label>
+                  <input
+                    type="text"
+                    value={subCode}
+                    onChange={(e) => setSubCode(e.target.value)}
+                    required
+                    placeholder="VD: PHY1100"
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none uppercase"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tên Môn Học</label>
+                  <input
+                    type="text"
+                    value={subName}
+                    onChange={(e) => setSubName(e.target.value)}
+                    required
+                    placeholder="VD: Vật lý đại cương I"
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số Tín Chỉ</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={subCredits}
+                    onChange={(e) => setSubCredits(Number(e.target.value))}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Học Kỳ</label>
+                  <select
+                    value={subSemester}
+                    onChange={(e) => setSubSemester(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  >
+                    <option value="Kỳ 1">Kỳ 1</option>
+                    <option value="Kỳ 2">Kỳ 2</option>
+                    <option value="Kỳ Hè">Kỳ Hè</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Mô Tả Tóm Tắt</label>
+                <textarea
+                  rows={3}
+                  value={subDescription}
+                  onChange={(e) => setSubDescription(e.target.value)}
+                  placeholder="Mô tả nội dung môn học..."
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                />
+              </div>
+
+              {/* BẬT / TẮT TÍNH NĂNG FILE GHI ÂM (MẶC ĐỊNH LÀ TẮT) */}
+              <div className="p-3.5 rounded-2xl border border-indigo-100 bg-indigo-50/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-xl bg-indigo-100 text-indigo-700">
+                      <Mic className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-black text-indigo-950">
+                        Tính năng File Ghi Âm & Lời Giảng AI
+                      </span>
+                      <p className="text-[11px] text-indigo-600 font-medium">
+                        Phân tích kiến thức bài giảng bằng gemini-3.8-flash (Mặc định: TẮT)
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={subEnableRecordings}
+                      onChange={(e) => setSubEnableRecordings(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Khi <strong className="text-indigo-700 font-bold">BẬT</strong>, mục học liệu của môn học này sẽ mở thêm thư mục thứ 5: <strong>🎙️ File Ghi Âm</strong>, cho phép sinh viên nghe bản ghi âm và đọc toàn bộ lời giảng được AI bóc tách chi tiết.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowSubjectModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSubject}
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-md flex items-center gap-2 disabled:opacity-50"
+                >
+                  {savingSubject && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>{editingSubjectId ? 'Cập Nhật Môn Học' : 'Thêm Môn Học'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 3. MODAL ĐĂNG HỌC LIỆU / FILE GHI ÂM                     */}
+      {/* ======================================================== */}
+      {showMaterialModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-200 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-sky-50 text-sky-600">
+                  <Upload className="h-5 w-5" />
+                </div>
+                <h3 className="text-base font-black text-slate-900">Đăng Học Liệu / Ghi Âm FEPN</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMaterialModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMaterial} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Môn Học Thuộc Về</label>
+                <select
+                  value={matSubjectId}
+                  onChange={(e) => setMatSubjectId(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                >
+                  {subjects.map((sub) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.code} - {sub.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tiêu Đề Tài Liệu / Buổi Ghi Âm</label>
+                <input
+                  type="text"
+                  value={matTitle}
+                  onChange={(e) => setMatTitle(e.target.value)}
+                  required
+                  placeholder="Ví dụ: Slide Chương 1, File ghi âm Buổi 3: Lực Coriolis..."
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Phân Loại Học Liệu</label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                  {(
+                    [
+                      { id: 'slide', label: 'Slide' },
+                      { id: 'exercise', label: 'Bài tập' },
+                      { id: 'video', label: 'Video' },
+                      { id: 'exam', label: 'Đề thi' },
+                      { id: 'recording', label: '🎙️ Ghi Âm' },
+                    ] as const
+                  ).map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setMatCategory(cat.id as any)}
+                      className={`py-2 px-1 text-center rounded-xl text-[11px] font-black uppercase transition border ${
+                        matCategory === cat.id
+                          ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {matCategory === 'recording' && (
+                <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-200 space-y-2">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={matAutoAnalyze}
+                      onChange={(e) => setMatAutoAnalyze(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded accent-indigo-600"
+                    />
+                    <div className="text-xs">
+                      <span className="font-black text-indigo-950 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Tự động phân tích bài giảng bằng AI gemini-3.8-flash
+                      </span>
+                      <p className="text-[11px] text-indigo-700 font-medium mt-0.5">
+                        AI sẽ bóc tách đầy đủ lời giảng của thầy cô, công thức LaTeX, ví dụ và lưu ý thi cử buổi hôm đó.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Đường Dẫn File (Link Google Drive, YouTube hoặc URL Audio)
+                </label>
+                <input
+                  type="url"
+                  value={matFileUrl}
+                  onChange={(e) => setMatFileUrl(e.target.value)}
+                  required
+                  placeholder="https://drive.google.com/file/d/... hoặc URL âm thanh"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowMaterialModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingMaterial}
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-md flex items-center gap-2 disabled:opacity-50"
+                >
+                  {savingMaterial && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  <span>{savingMaterial ? 'Đang Xử Lý...' : 'Đăng Học Liệu'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* 4. MODAL THÊM / SỬA MÓN QUÀ TẶNG */}
       {showGiftItemModal && (
