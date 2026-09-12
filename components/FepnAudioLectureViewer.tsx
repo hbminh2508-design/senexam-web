@@ -173,6 +173,8 @@ export default function FepnAudioLectureViewer({
     setTimeout(() => setCopied(false), 2500)
   }
 
+  const isAdmin = userRole === 'admin' || userRole === 'collab'
+
   // Phân tích hoặc Phân tích lại bằng AI gemini-3.8-flash
   const handleAnalyzeWithGemini = async () => {
     setIsAnalyzing(true)
@@ -181,6 +183,7 @@ export default function FepnAudioLectureViewer({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          materialId: material.id,
           audioUrl: material.file_url,
           subjectName,
           title: material.title,
@@ -203,14 +206,18 @@ export default function FepnAudioLectureViewer({
         analyzed_at: new Date().toISOString(),
       })
 
-      const { error: updateErr } = await supabase
-        .from('fepn_materials')
-        .update({
-          extra_info: payloadInfo,
-        })
-        .eq('id', material.id)
+      try {
+        await supabase
+          .from('fepn_materials')
+          .update({
+            extra_info: payloadInfo,
+          })
+          .eq('id', material.id)
+      } catch (dbErr) {
+        console.warn('Lỗi cập nhật client supabase:', dbErr)
+      }
 
-      if (!updateErr && onUpdateMaterial) {
+      if (onUpdateMaterial) {
         onUpdateMaterial({
           ...material,
           extra_info: payloadInfo,
@@ -469,13 +476,14 @@ export default function FepnAudioLectureViewer({
               </button>
             )}
 
-            {/* Nút phân tích lại dành cho Admin */}
-            {userRole === 'admin' && (
+            {/* Nút phân tích / phân tích lại: CHỈ ADMIN MỚI SỬ DỤNG ĐƯỢC */}
+            {isAdmin && (
               <button
                 type="button"
                 onClick={handleAnalyzeWithGemini}
                 disabled={isAnalyzing}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs font-bold shadow-xs transition disabled:opacity-50 cursor-pointer"
+                title={analysisText ? 'Phân tích lại bài giảng bằng AI' : 'Bắt đầu phân tích lời giảng bằng AI'}
               >
                 {isAnalyzing ? (
                   <>
@@ -485,7 +493,7 @@ export default function FepnAudioLectureViewer({
                 ) : (
                   <>
                     <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-                    <span>{analysisText ? 'Phân tích lại bằng AI' : 'Bóc tách bằng gemini-3.8-flash'}</span>
+                    <span>{analysisText ? 'Phân tích lại' : 'Phân tích lời giảng AI'}</span>
                   </>
                 )}
               </button>
@@ -519,22 +527,26 @@ export default function FepnAudioLectureViewer({
               <div className="mx-auto h-14 w-14 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 flex items-center justify-center border border-sky-100 dark:border-sky-800">
                 <BookOpen className="h-7 w-7" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <h5 className="text-sm font-black text-slate-800 dark:text-slate-200">
                   Chưa có bản phân tích lời giảng cho File ghi âm này
                 </h5>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Bạn có thể nhấn nút bên dưới để AI <span className="font-mono font-bold text-sky-600">gemini-3.8-flash</span> tự động bóc tách toàn bộ bài giảng của thầy cô ngay lập tức.
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  {isAdmin
+                    ? 'Bạn có thể nhấn nút bên dưới để AI gemini-3.8-flash tự động bóc tách toàn bộ bài giảng của thầy cô ngay lập tức.'
+                    : 'Vui lòng chờ Giảng viên hoặc Quản trị viên khởi chạy phân tích lời giảng cho buổi học này.'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleAnalyzeWithGemini}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs font-black uppercase tracking-wider shadow-md hover:scale-102 transition"
-              >
-                <Sparkles className="h-4 w-4 text-amber-300" />
-                <span>Bắt Đầu Phân Tích Lời Giảng Bằng AI</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleAnalyzeWithGemini}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs font-black uppercase tracking-wider shadow-md hover:scale-102 transition cursor-pointer"
+                >
+                  <Sparkles className="h-4 w-4 text-amber-300" />
+                  <span>Phân Tích Lời Giảng AI (Gemini 3.8 Flash)</span>
+                </button>
+              )}
             </div>
           )}
         </div>

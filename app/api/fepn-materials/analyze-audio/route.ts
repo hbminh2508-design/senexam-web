@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { GoogleGenAI } from '@google/genai'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const {
+      materialId,
       audioUrl,
       audioBase64,
       audioMimeType = 'audio/mp3',
@@ -19,10 +21,30 @@ export async function POST(request: Request) {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
       // Fallback mô phỏng phân tích bài giảng nếu server chưa có GEMINI_API_KEY để kiểm thử không bị gián đoạn
+      const simulatedText = generateSimulatedLectureNotes(subjectName, title)
+      const simulatedModel = 'gemini-3.8-flash (Simulated - Thiếu GEMINI_API_KEY)'
+
+      if (materialId) {
+        try {
+          const supabaseAdmin = getSupabaseAdmin()
+          const payloadInfo = JSON.stringify({
+            analysis: simulatedText,
+            model: simulatedModel,
+            analyzed_at: new Date().toISOString(),
+          })
+          await supabaseAdmin
+            .from('fepn_materials')
+            .update({ extra_info: payloadInfo })
+            .eq('id', materialId)
+        } catch (dbErr) {
+          console.warn('Lỗi lưu extra_info mô phỏng:', dbErr)
+        }
+      }
+
       return NextResponse.json({
         success: true,
-        model: 'gemini-3.8-flash (Simulated - Thiếu GEMINI_API_KEY)',
-        analysis: generateSimulatedLectureNotes(subjectName, title),
+        model: simulatedModel,
+        analysis: simulatedText,
       })
     }
 
@@ -141,6 +163,27 @@ ${instructions ? `\nYêu cầu bổ sung: ${instructions}` : ''}
           analysisText = generateSimulatedLectureNotes(subjectName, title)
           usedModel = 'gemini-3.8-flash (Offline Smart Synthesizer)'
         }
+      }
+    }
+
+    // Lưu trực tiếp vào Database Supabase qua quyền Service Role của getSupabaseAdmin()
+    if (materialId && analysisText) {
+      try {
+        const supabaseAdmin = getSupabaseAdmin()
+        const payloadInfo = JSON.stringify({
+          analysis: analysisText,
+          model: usedModel,
+          analyzed_at: new Date().toISOString(),
+        })
+        const { error: saveErr } = await supabaseAdmin
+          .from('fepn_materials')
+          .update({ extra_info: payloadInfo })
+          .eq('id', materialId)
+        if (saveErr) {
+          console.warn('Lỗi lưu extra_info bằng supabaseAdmin:', saveErr)
+        }
+      } catch (dbErr) {
+        console.warn('Lỗi kết nối cơ sở dữ liệu khi lưu kết quả phân tích:', dbErr)
       }
     }
 

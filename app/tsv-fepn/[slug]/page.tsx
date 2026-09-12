@@ -242,16 +242,17 @@ export default function FepnSubjectDetailPage() {
           .eq('id', currentUser.id)
           .maybeSingle()
 
-        if (profile?.role) {
-          role = profile.role
+        const email = currentUser.email?.toLowerCase() || ''
+        const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
+        const isUserAdmin = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
+
+        if (isUserAdmin) {
+          setUserRole('admin')
+        } else if (profile?.role) {
           setUserRole(profile.role)
         }
 
-        const email = currentUser.email?.toLowerCase() || ''
-        const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
-        const isAdmin = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
-
-        const isAllowed = await checkFepnAccessAsync(currentUser, role)
+        const isAllowed = await checkFepnAccessAsync(currentUser, isUserAdmin ? 'admin' : role)
 
         if (isAllowed) {
           setAuthStatus('authorized')
@@ -528,7 +529,7 @@ export default function FepnSubjectDetailPage() {
   }
 
   const themeVars = getModernThemeVars('indigo', isDark)
-  const isAdmin = userRole === 'admin'
+  const isAdmin = userRole === 'admin' || userRole === 'collab' || user?.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com'
   const dashboardLink = '/fepn-dashboard'
 
   // Loading state
@@ -1064,7 +1065,7 @@ export default function FepnSubjectDetailPage() {
                   <FepnAudioLectureViewer
                     material={selectedMaterial}
                     subjectName={subject.name}
-                    userRole={userRole}
+                    userRole={isAdmin ? 'admin' : userRole}
                     onUpdateMaterial={(updated) => {
                       setMaterials((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
                       setSelectedMaterial(updated)
