@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
+import jsQR from 'jsqr'
 import {
   QrCode,
   Camera,
@@ -15,7 +16,13 @@ import {
   Clock,
   ShieldAlert,
   ArrowRight,
+  ShieldCheck,
+  Copy,
+  Check,
+  Upload,
+  RefreshCw,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 
 interface FepnQrScannerModalProps {
   isOpen: boolean
@@ -42,7 +49,7 @@ export default function FepnQrScannerModal({
   currentUser,
   onApproved,
 }: FepnQrScannerModalProps) {
-  const [mode, setMode] = useState<'scan' | 'code' | 'confirm'>('code')
+  const [mode, setMode] = useState<'code' | 'scan' | 'confirm' | 'code_display'>('code')
   const [codeInputValue, setCodeInputValue] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -51,17 +58,121 @@ export default function FepnQrScannerModal({
   const [targetDevice, setTargetDevice] = useState<TargetDeviceInfo | null>(null)
   const [verifyDigit, setVerifyDigit] = useState('')
   const [isConfirmedRisk, setIsConfirmedRisk] = useState(false)
-  const [expiresSeconds, setExpiresSeconds] = useState(180)
+  const [generatedCompletionCode, setGeneratedCompletionCode] = useState('')
+  const [isCopied, setIsCopied] = useState(false)
 
-  const effectiveUserId = userId || currentUser?.id || ''
-  const effectiveUserEmail = userEmail || currentUser?.email || ''
+  // Lưu thông tin người dùng đang thao tác
+  const [sessionUser, setSessionUser] = useState<{ id: string; email: string } | null>(null)
 
-  // Camera video ref
+  // Camera video & canvas ref
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const [cameraActive, setCameraActive] = useState(false)
+  const scanLoopRef = useRef<number | null>(null)
 
-  // Khởi động Camera khi chuyển sang tab 'scan'
+  // Đồng bộ user hiện tại
+  useEffect(() => {
+    if (userId && userEmail) {
+      setSessionUser({ id: userId, email: userEmail })
+    } else if (currentUser?.id && currentUser?.email) {
+      setSessionUser({ id: currentUser.id, email: currentUser.email })
+    } else if (isOpen) {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data?.user) {
+          setSessionUser({ id: data.user.id, email: data.user.email || '' })
+        }
+      })
+    }
+  }, [userId, userEmail, currentUser, isOpen])
+
+  const effectiveUserId = sessionUser?.id || userId || currentUser?.id || ''
+  const effectiveUserEmail = sessionUser?.email || userEmail || currentUser?.email || ''
+
+  // Dừng camera & vòng lặp quét
+  const stopCamera = useCallback(() => {
+    if (scanLoopRef.current) {
+      cancelAnimationFrame(scanLoopRef.current)
+      scanLoopRef.current = null
+    }
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop())
+      setCameraStream(null)
+    }
+    setCameraActive(false)
+  }, [cameraStream])
+
+  // Xử lý quét từng khung hình từ camera
+  const processFrame = useCallback(() => {
+    if (!videoRef.current || videoRef.current.readyState < 2) {
+      scanLoopRef.current = requestAnimationFrame(processFrame)
+      return
+    }
+
+    const video = videoRef.current
+    if (video.videoWidth > 0 && video.videoHeight > 0) {
+      if (!canvasRef.current) {
+        canvasRef.current = document.createElement('canvas')
+      }
+      const canvas = canvasRef.current
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+        // Quét bằng jsQR thuần JS (chạy 100% trên mọi trình duyệt)
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert',
+        })
+
+        if (code && code.data) {
+          if (navigator.vibrate) {
+            try {
+              navigator.vibrate(80)
+            } catch {}
+          }
+          stopCamera()
+          handleCheckTargetInfo(code.data)
+          return
+        }
+      }
+    }
+
+    scanLoopRef.current = requestAnimationFrame(processFrame)
+  }, [stopCamera])
+
+  // Khởi động camera
+  const startCamera = async () => {
+    setErrorMsg('')
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Trình duyệt không hỗ trợ mở camera trực tiếp. Vui lòng nhập mã 6 số!')
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      })
+      setCameraStream(stream)
+      setCameraActive(true)
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.setAttribute('playsinline', 'true')
+        await videoRef.current.play()
+        scanLoopRef.current = requestAnimationFrame(processFrame)
+      }
+    } catch (err: any) {
+      stopCamera()
+      setErrorMsg(err.message || 'Không thể truy cập camera. Vui lòng chuyển sang nhập mã 6 số.')
+      setMode('code')
+    }
+  }
+
+  // Quản lý trạng thái camera theo mode và modal
   useEffect(() => {
     if (!isOpen) {
       stopCamera()
@@ -79,41 +190,53 @@ export default function FepnQrScannerModal({
     }
   }, [isOpen, mode])
 
-  const startCamera = async () => {
+  // Quét mã QR từ file ảnh được tải lên (Ảnh chụp màn hình hoặc tải từ thư viện)
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setLoading(true)
     setErrorMsg('')
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Trình duyệt không hỗ trợ mở camera trực tiếp. Vui lòng nhập mã 6 số!')
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) {
+          setLoading(false)
+          setErrorMsg('Không thể xử lý hình ảnh này.')
+          return
+        }
+        ctx.drawImage(img, 0, 0, img.width, img.height)
+        const imageData = ctx.getImageData(0, 0, img.width, img.height)
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'attemptBoth',
+        })
+        setLoading(false)
+        if (code && code.data) {
+          handleCheckTargetInfo(code.data)
+        } else {
+          setErrorMsg('Không tìm thấy mã QR trong ảnh vừa tải lên. Vui lòng thử lại hoặc nhập mã 6 số.')
+        }
       }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      })
-      setCameraStream(stream)
-      setCameraActive(true)
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
+      img.onerror = () => {
+        setLoading(false)
+        setErrorMsg('Không thể đọc file ảnh.')
       }
-    } catch (err: any) {
-      setCameraActive(false)
-      setErrorMsg(err.message || 'Không thể truy cập camera. Vui lòng chuyển sang nhập mã 6 số.')
-      setMode('code')
+      img.src = event.target?.result as string
     }
-  }
-
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((t) => t.stop())
-      setCameraStream(null)
-    }
-    setCameraActive(false)
+    reader.readAsDataURL(file)
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   // Lấy thông tin thiết bị yêu cầu đăng nhập từ mã code / QR token
   const handleCheckTargetInfo = async (inputStr: string) => {
-    const cleanStr = inputStr.trim().replace(/-/g, '')
+    const cleanStr = inputStr.replace(/[\s-]/g, '').trim()
     if (!cleanStr) return
 
     setLoading(true)
@@ -146,7 +269,6 @@ export default function FepnQrScannerModal({
       setTargetDevice(data.deviceInfo)
       setVerifyDigit(data.verifyDigit || '')
       setIsConfirmedRisk(false)
-      setExpiresSeconds(data.expiresInSeconds || 180)
       setMode('confirm')
       stopCamera()
     } catch (err: any) {
@@ -184,10 +306,10 @@ export default function FepnQrScannerModal({
     }
   }
 
-  // Phê duyệt đăng nhập cho máy kia
+  // Phê duyệt đăng nhập -> Nhận mã 6 số Challenge-Response để hiển thị cho Máy A
   const handleApprove = async () => {
     if (!targetToken || !effectiveUserId || !effectiveUserEmail) {
-      setErrorMsg('Không tìm thấy thông tin phiên người dùng đăng nhập.')
+      setErrorMsg('Không tìm thấy thông tin phiên người dùng đăng nhập. Vui lòng thử lại.')
       return
     }
 
@@ -215,16 +337,11 @@ export default function FepnQrScannerModal({
         throw new Error(data.error || 'Phê duyệt thất bại')
       }
 
+      // Lấy mã xác thực 6 số trả về từ máy chủ
+      const completionCode = data.completionCode
+      setGeneratedCompletionCode(completionCode)
+      setMode('code_display')
       onApproved?.()
-      setSuccessMsg('🎉 Đã xác nhận đăng nhập thành công! Thiết bị kia đã được đăng nhập vào tài khoản của bạn.')
-      setTimeout(() => {
-        onClose()
-        setSuccessMsg('')
-        setMode('code')
-        setCodeInputValue('')
-        setTargetDevice(null)
-        setIsConfirmedRisk(false)
-      }, 2200)
     } catch (err: any) {
       setErrorMsg(err.message || 'Lỗi khi phê duyệt đăng nhập')
     } finally {
@@ -232,12 +349,32 @@ export default function FepnQrScannerModal({
     }
   }
 
+  const handleCopyCode = () => {
+    if (generatedCompletionCode) {
+      navigator.clipboard.writeText(generatedCompletionCode)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    }
+  }
+
+  const handleFinish = () => {
+    stopCamera()
+    setMode('code')
+    setCodeInputValue('')
+    setTargetDevice(null)
+    setTargetToken('')
+    setGeneratedCompletionCode('')
+    setIsConfirmedRisk(false)
+    setErrorMsg('')
+    setSuccessMsg('')
+    onClose()
+  }
+
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-slate-200 p-6 space-y-5">
-        
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
@@ -245,17 +382,13 @@ export default function FepnQrScannerModal({
               <QrCode className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-black text-slate-900">
-                Xác Thực Đăng Nhập Bằng QR
-              </h3>
-              <p className="text-[11px] text-slate-500 font-medium">
-                Đăng nhập tức thì cho máy tính / thiết bị khác
-              </p>
+              <h3 className="text-base font-black text-slate-900">Xác Thực Đăng Nhập FEPN</h3>
+              <p className="text-[11px] text-slate-500 font-medium">Cấp quyền đăng nhập cho máy tính / điện thoại khác</p>
             </div>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleFinish}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
           >
             <X className="h-5 w-5" />
@@ -278,7 +411,7 @@ export default function FepnQrScannerModal({
         )}
 
         {/* BƯỚC 1: QUÉT CAMERA HOẶC NHẬP MÃ 6 SỐ */}
-        {mode !== 'confirm' && (
+        {mode !== 'confirm' && mode !== 'code_display' && (
           <div className="space-y-4">
             {/* Mode Switcher */}
             <div className="flex rounded-2xl bg-slate-100 p-1 text-xs font-bold">
@@ -316,21 +449,21 @@ export default function FepnQrScannerModal({
                 <div className="relative">
                   <input
                     type="text"
-                    maxLength={7}
-                    placeholder="VD: 849204"
+                    maxLength={10}
+                    placeholder="VD: 849 204"
                     value={codeInputValue}
                     onChange={(e) => setCodeInputValue(e.target.value.toUpperCase())}
-                    className="w-full text-center tracking-[0.3em] font-mono text-xl font-black py-3 px-4 rounded-2xl border border-slate-200 bg-slate-50/70 focus:border-sky-500 focus:bg-white transition uppercase"
+                    className="w-full text-center tracking-[0.25em] font-mono text-xl font-black py-3 px-4 rounded-2xl border border-slate-200 bg-slate-50/70 focus:border-sky-500 focus:bg-white transition uppercase"
                     autoFocus
                   />
                 </div>
                 <p className="text-[11px] text-slate-400 text-center">
-                  Mã này xuất hiện ngay dưới mã QR trên màn hình đăng nhập của máy bạn muốn đăng nhập.
+                  Mã này hiển thị ngay dưới mã QR trên màn hình đăng nhập của máy bạn muốn đăng nhập.
                 </p>
 
                 <button
                   type="submit"
-                  disabled={loading || codeInputValue.trim().length < 6}
+                  disabled={loading || codeInputValue.replace(/[\s-]/g, '').length < 6}
                   className="w-full py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs font-black uppercase tracking-wider shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
@@ -342,12 +475,30 @@ export default function FepnQrScannerModal({
                 <div className="relative aspect-square w-full rounded-2xl bg-black overflow-hidden flex items-center justify-center">
                   <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
                   <div className="absolute inset-8 border-2 border-dashed border-sky-400/80 rounded-2xl pointer-events-none animate-pulse"></div>
-                  <div className="absolute bottom-3 left-0 right-0 text-center text-white/80 text-[11px] font-bold bg-black/40 py-1">
-                    Hướng camera về phía mã QR trên màn hình máy kia
+                  <div className="absolute bottom-3 left-0 right-0 text-center text-white/90 text-[11px] font-bold bg-black/50 py-1.5 px-2">
+                    Hướng camera vào mã QR trên màn hình đăng nhập
                   </div>
                 </div>
 
-                <div className="text-center">
+                <div className="flex flex-col gap-2 pt-1 text-center">
+                  {/* Nút upload ảnh QR fallback */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={loading}
+                    className="inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition"
+                  >
+                    <Upload className="h-3.5 w-3.5 text-sky-600" />
+                    <span>Chọn ảnh mã QR / Ảnh chụp màn hình</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setMode('code')}
@@ -372,10 +523,10 @@ export default function FepnQrScannerModal({
               </div>
               <ul className="list-disc list-inside text-[11px] text-rose-800 space-y-0.5 leading-relaxed font-semibold">
                 <li>
-                  Tuyệt đối <strong>KHÔNG</strong> quét mã hoặc nhập số do người lạ gửi qua Zalo, Messenger, Telegram...
+                  Tuyệt đối <strong>KHÔNG</strong> quét mã hoặc nhập số do người lạ gửi qua tin nhắn.
                 </li>
                 <li>
-                  <strong>CHỈ XÁC NHẬN</strong> nếu chính bạn đang ngồi trực tiếp trước màn hình thiết bị này!
+                  <strong>CHỈ XÁC NHẬN</strong> nếu chính bạn đang trực tiếp đăng nhập trên thiết bị này!
                 </li>
               </ul>
             </div>
@@ -428,7 +579,7 @@ export default function FepnQrScannerModal({
                     Mã kiểm chứng an toàn
                   </span>
                   <span className="text-[11px] text-indigo-700">
-                    Đối chiếu với số trên màn hình máy kia:
+                    Đối chiếu với 2 số trên màn hình máy kia:
                   </span>
                 </div>
                 <div className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-mono text-xl font-black tracking-widest shadow-xs">
@@ -446,7 +597,7 @@ export default function FepnQrScannerModal({
                 className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 transition cursor-pointer shrink-0"
               />
               <span className="font-bold leading-relaxed text-[11px] text-slate-800">
-                Tôi cam kết đây là thiết bị của chính tôi và tôi đang trực tiếp sử dụng máy tính/điện thoại này.
+                Tôi cam kết đây là thiết bị của chính tôi và tôi đang trực tiếp sử dụng thiết bị này.
               </span>
             </label>
 
@@ -469,6 +620,55 @@ export default function FepnQrScannerModal({
                 <span>Xác Nhận Đăng Nhập</span>
               </button>
             </div>
+          </div>
+        )}
+
+        {/* BƯỚC 3: HIỂN THỊ MÃ BẢO MẬT 6 SỐ ĐỂ MÁY A NHẬP TAY (CHALLENGE-RESPONSE) */}
+        {mode === 'code_display' && generatedCompletionCode && (
+          <div className="space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
+              <div className="inline-flex p-2 rounded-full bg-emerald-100 text-emerald-600 mb-1">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <h4 className="text-sm font-black text-emerald-900">ĐÃ PHÊ DUYỆT THIẾT BỊ!</h4>
+              <p className="text-xs text-emerald-700">
+                Vui lòng nhập mã số xác thực gồm 6 số dưới đây vào màn hình của thiết bị bạn muốn đăng nhập:
+              </p>
+            </div>
+
+            {/* MÃ 6 SỐ HIỂN THỊ KHỔNG LỒ & RÕ NÉT */}
+            <div className="p-4 rounded-3xl bg-slate-900 text-white shadow-xl relative overflow-hidden group">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
+                MÃ XÁC NHẬN BẢO MẬT 2 CHIỀU
+              </span>
+              <div className="flex items-center justify-center gap-3">
+                <span className="font-mono text-4xl font-black tracking-[0.25em] text-amber-400 select-all">
+                  {generatedCompletionCode.slice(0, 3)} {generatedCompletionCode.slice(3)}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition"
+                  title="Sao chép mã"
+                >
+                  {isCopied ? <Check className="h-5 w-5 text-emerald-400" /> : <Copy className="h-5 w-5" />}
+                </button>
+              </div>
+              <div className="mt-2 text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
+                <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></div>
+                <span>Màn hình thiết bị kia đang chờ bạn nhập mã này</span>
+              </div>
+            </div>
+
+            {/* Nút hoàn tất */}
+            <button
+              type="button"
+              onClick={handleFinish}
+              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider shadow-md transition flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span>Đã Nhập Xong Trên Máy Kia (Đóng)</span>
+            </button>
           </div>
         )}
       </div>

@@ -88,6 +88,13 @@ export default function FepnLoginPage() {
   const [qrLoading, setQrLoading] = useState(false)
   const [qrApproved, setQrApproved] = useState(false)
 
+  // Fast QR Login 2-way verification states (Challenge-Response)
+  const [qrStep, setQrStep] = useState<'qr' | 'awaiting_code'>('qr')
+  const [completionCodeInput, setCompletionCodeInput] = useState('')
+  const [isSubmittingCode, setIsSubmittingCode] = useState(false)
+  const [codeErrorMsg, setCodeErrorMsg] = useState('')
+  const [approverDeviceName, setApproverDeviceName] = useState('')
+
   // Forgot password states
   const [forgotStep, setForgotStep] = useState<'request' | 'reset'>('request')
   const [resetOtpCode, setResetOtpCode] = useState('')
@@ -208,6 +215,10 @@ export default function FepnLoginPage() {
   const initQrCode = async () => {
     setQrLoading(true)
     setErrorMsg('')
+    setCodeErrorMsg('')
+    setQrStep('qr')
+    setCompletionCodeInput('')
+    setApproverDeviceName('')
     try {
       const dev = getClientDeviceInfo()
       const res = await fetch('/api/fepn-auth/qr-login', {
@@ -274,6 +285,15 @@ export default function FepnLoginPage() {
           body: JSON.stringify({ action: 'check', token: qrToken }),
         })
         const data = await res.json()
+
+        // BƯỚC BẢO MẬT 2 CHIỀU: MÁY B ĐÃ PHÊ DUYỆT -> YÊU CẦU MÁY A NHẬP MÃ 6 SỐ
+        if (data.status === 'awaiting_code') {
+          setQrStep('awaiting_code')
+          if (data.deviceName) {
+            setApproverDeviceName(data.deviceName)
+          }
+        }
+
         if (data.status === 'approved') {
           setQrApproved(true)
           clearInterval(interval)
@@ -316,10 +336,82 @@ export default function FepnLoginPage() {
           }, 800)
         }
       } catch (e) {}
-    }, 2500)
+    }, 2000)
 
     return () => clearInterval(interval)
   }, [loginMethod, qrToken, qrApproved, qrExpiresIn])
+
+  // Máy A gửi mã xác thực 6 số (Challenge-Response) để hoàn tất đăng nhập
+  const handleCompleteQrLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const cleanCode = completionCodeInput.replace(/[\s-]/g, '').trim()
+    if (cleanCode.length < 6) {
+      setCodeErrorMsg('Vui lòng nhập đủ 6 số xác thực hiển thị trên thiết bị của bạn.')
+      return
+    }
+
+    setIsSubmittingCode(true)
+    setCodeErrorMsg('')
+    try {
+      const res = await fetch('/api/fepn-auth/qr-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'complete_login',
+          token: qrToken,
+          completionCode: cleanCode,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Mã xác thực không hợp lệ')
+      }
+
+      setQrApproved(true)
+      setSuccessMsg('🎉 Xác thực thành công! Đang chuyển hướng vào hệ thống...')
+
+      if (data.authTokenHash) {
+        try {
+          await supabase.auth.verifyOtp({
+            token_hash: data.authTokenHash,
+            type: 'magiclink',
+          })
+        } catch (vErr) {
+          console.warn('verifyOtp notice:', vErr)
+        }
+      }
+
+      // Ghi nhận session thiết bị
+      const devInfo = getClientDeviceInfo()
+      let devId = localStorage.getItem('fepn_device_id')
+      if (!devId) {
+        devId = 'dev_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
+        localStorage.setItem('fepn_device_id', devId)
+      }
+
+      await fetch('/api/fepn-auth/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'record',
+          email: data.email,
+          deviceId: devId,
+          deviceName: devInfo.deviceName,
+          browser: devInfo.browser,
+          os: devInfo.os,
+        }),
+      }).catch(() => {})
+
+      setTimeout(() => {
+        navigateAfterLogin()
+      }, 600)
+    } catch (err: any) {
+      setCodeErrorMsg(err.message || 'Mã xác thực không đúng. Vui lòng kiểm tra lại 6 số trên màn hình thiết bị kia.')
+    } finally {
+      setIsSubmittingCode(false)
+    }
+  }
 
   // Quy chuẩn mật khẩu: Tối thiểu 8 ký tự, 1 hoa, 1 ký tự đặc biệt, 1 số
   const hasMinLength = password.length >= 8
@@ -1266,96 +1358,176 @@ export default function FepnLoginPage() {
                 {/* GIAO DIỆN QUÉT MÃ QR ĐĂNG NHẬP NHANH */}
                 {mode === 'login' && loginMethod === 'qr' ? (
                   <div className="space-y-4 text-center">
-                    <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200/80 space-y-1">
-                      <p className="text-xs font-black text-slate-800">
-                        Quét mã QR để đăng nhập ngay
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Dùng thiết bị đã đăng nhập FEPN (điện thoại hoặc máy tính khác) để xác nhận.
-                      </p>
-                    </div>
-
-                    {qrLoading ? (
-                      <div className="py-8 flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="h-7 w-7 animate-spin text-sky-600" />
-                        <span className="text-xs font-bold text-slate-500">Đang khởi tạo mã xác thực...</span>
-                      </div>
-                    ) : qrImageUrl ? (
-                      <div className="space-y-3">
-                        <div className="relative mx-auto w-fit p-3 rounded-2xl border-2 border-dashed border-sky-300 bg-white shadow-md">
-                          <img
-                            src={qrImageUrl}
-                            alt="QR Đăng nhập FEPN"
-                            className={`h-48 w-48 object-contain transition ${
-                              qrExpiresIn <= 0 ? 'opacity-20 blur-xs' : ''
-                            }`}
-                          />
-                          {qrExpiresIn <= 0 && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 p-4 rounded-2xl space-y-2">
-                              <AlertCircle className="h-6 w-6 text-amber-500" />
-                              <p className="text-xs font-black text-slate-800">Mã QR đã hết hạn</p>
-                              <button
-                                type="button"
-                                onClick={initQrCode}
-                                className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-black text-xs hover:bg-sky-700 transition"
-                              >
-                                Làm mới mã QR
-                              </button>
+                    {/* TRƯỜNG HỢP 1: MÁY B ĐÃ DUYỆT VÀ CHỜ MÁY A NHẬP MÃ 6 SỐ XÁC THỰC */}
+                    {qrStep === 'awaiting_code' ? (
+                      <div className="space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 space-y-1.5 shadow-sm">
+                          <div className="inline-flex p-2 rounded-full bg-emerald-100 text-emerald-600 mb-1">
+                            <ShieldCheck className="h-6 w-6" />
+                          </div>
+                          <h4 className="text-sm font-black text-emerald-900 uppercase tracking-wide">
+                            Thiết Bị Của Bạn Đã Phê Duyệt!
+                          </h4>
+                          <p className="text-xs text-emerald-700 leading-relaxed font-semibold">
+                            Vui lòng nhập <strong>mã số gồm 6 chữ số</strong> đang hiển thị trên màn hình thiết bị đó để hoàn tất:
+                          </p>
+                          {approverDeviceName && (
+                            <div className="text-[11px] font-bold text-emerald-800 bg-emerald-100/70 py-1 px-3 rounded-xl w-fit mx-auto">
+                              Xác nhận từ: {approverDeviceName}
                             </div>
                           )}
                         </div>
 
-                        <div>
-                          <p className="text-[11px] font-bold text-slate-500">Hoặc nhập mã 6 số trên thiết bị đã đăng nhập:</p>
-                          <div className="mt-1 inline-flex items-center justify-center px-4 py-1.5 rounded-xl bg-slate-100 border border-slate-200 font-mono text-lg font-black tracking-widest text-slate-800 select-all">
-                            {qrShortCode ? `${qrShortCode.slice(0, 3)} ${qrShortCode.slice(3)}` : '••••••'}
-                          </div>
-                        </div>
-
-                        {qrVerifyDigit && (
-                          <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-center space-y-0.5">
-                            <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider block">
-                              Mã kiểm chứng an toàn (2 số)
-                            </span>
-                            <span className="font-mono text-xl font-black text-indigo-950 tracking-widest">
-                              {qrVerifyDigit}
-                            </span>
-                            <p className="text-[10px] text-indigo-600 font-medium">
-                              Thiết bị quét sẽ đối chiếu số này để đảm bảo an toàn tuyệt đối
-                            </p>
+                        {codeErrorMsg && (
+                          <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-600 flex items-center justify-center gap-2">
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                            <span>{codeErrorMsg}</span>
                           </div>
                         )}
 
-                        {qrExpiresIn > 0 && (
-                          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
-                            <Timer className="h-3.5 w-3.5 text-sky-600 animate-pulse" />
-                            <span>
-                              Hiệu lực còn:{' '}
-                              <span className="font-mono text-sky-700 font-black">
-                                {Math.floor(qrExpiresIn / 60)}:{(qrExpiresIn % 60).toString().padStart(2, '0')}
-                              </span>
-                            </span>
+                        <form onSubmit={handleCompleteQrLogin} className="space-y-3.5">
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-slate-600">
+                              Mã xác nhận bảo mật 2 chiều (6 số):
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                maxLength={8}
+                                placeholder="VD: 729 415"
+                                value={completionCodeInput}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/[^0-9\s]/g, '')
+                                  setCompletionCodeInput(val)
+                                }}
+                                className="w-full text-center tracking-[0.25em] font-mono text-2xl font-black py-3 px-4 rounded-2xl border-2 border-emerald-500 bg-emerald-50/20 focus:border-emerald-600 focus:bg-white transition"
+                                autoFocus
+                              />
+                            </div>
                           </div>
-                        )}
 
-                        <div className="text-[11px] text-slate-600 leading-relaxed text-left bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
-                          <p className="font-bold text-slate-800">Hướng dẫn nhanh:</p>
-                          <p>1. Mở FEPN trên thiết bị đã đăng nhập, bấm nút <strong>Quét QR</strong> trên thanh điều hướng.</p>
-                          <p>2. Quét mã QR này hoặc nhập mã 6 số rồi bấm <strong>Xác Nhận</strong>.</p>
-                          <p>3. Thiết bị này sẽ tự động đăng nhập vào tài khoản ngay lập tức!</p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={initQrCode}
-                          disabled={qrLoading}
-                          className="text-xs font-bold text-sky-600 hover:text-sky-800 inline-flex items-center gap-1 transition"
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 ${qrLoading ? 'animate-spin' : ''}`} />
-                          <span>Làm mới mã QR</span>
-                        </button>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrStep('qr')
+                                setCompletionCodeInput('')
+                                setCodeErrorMsg('')
+                              }}
+                              className="w-1/3 py-3 rounded-2xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                            >
+                              Quay Lại QR
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isSubmittingCode || completionCodeInput.replace(/[\s-]/g, '').length < 6}
+                              className="w-2/3 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              {isSubmittingCode ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <ArrowRight className="h-4 w-4" />
+                              )}
+                              <span>Hoàn Tất Đăng Nhập</span>
+                            </button>
+                          </div>
+                        </form>
                       </div>
-                    ) : null}
+                    ) : (
+                      /* TRƯỜNG HỢP 2: HIỂN THỊ MÃ QR CHỜ QUÉT HOẶC NHẬP 6 SỐ BAN ĐẦU */
+                      <div className="space-y-4 text-center">
+                        <div className="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200/80 space-y-1">
+                          <p className="text-xs font-black text-slate-800">
+                            Quét mã QR để đăng nhập ngay
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            Dùng thiết bị đã đăng nhập FEPN (điện thoại hoặc máy tính khác) để xác nhận.
+                          </p>
+                        </div>
+
+                        {qrLoading ? (
+                          <div className="py-8 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="h-7 w-7 animate-spin text-sky-600" />
+                            <span className="text-xs font-bold text-slate-500">Đang khởi tạo mã xác thực...</span>
+                          </div>
+                        ) : qrImageUrl ? (
+                          <div className="space-y-3">
+                            <div className="relative mx-auto w-fit p-3 rounded-2xl border-2 border-dashed border-sky-300 bg-white shadow-md">
+                              <img
+                                src={qrImageUrl}
+                                alt="QR Đăng nhập FEPN"
+                                className={`h-48 w-48 object-contain transition ${
+                                  qrExpiresIn <= 0 ? 'opacity-20 blur-xs' : ''
+                                }`}
+                              />
+                              {qrExpiresIn <= 0 && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 p-4 rounded-2xl space-y-2">
+                                  <AlertCircle className="h-6 w-6 text-amber-500" />
+                                  <p className="text-xs font-black text-slate-800">Mã QR đã hết hạn</p>
+                                  <button
+                                    type="button"
+                                    onClick={initQrCode}
+                                    className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-black text-xs hover:bg-sky-700 transition"
+                                  >
+                                    Làm mới mã QR
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-500">Hoặc nhập mã 6 số trên thiết bị đã đăng nhập:</p>
+                              <div className="mt-1 inline-flex items-center justify-center px-4 py-1.5 rounded-xl bg-slate-100 border border-slate-200 font-mono text-lg font-black tracking-widest text-slate-800 select-all">
+                                {qrShortCode ? `${qrShortCode.slice(0, 3)} ${qrShortCode.slice(3)}` : '••••••'}
+                              </div>
+                            </div>
+
+                            {qrVerifyDigit && (
+                              <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-center space-y-0.5">
+                                <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider block">
+                                  Mã kiểm chứng an toàn (2 số)
+                                </span>
+                                <span className="font-mono text-xl font-black text-indigo-950 tracking-widest">
+                                  {qrVerifyDigit}
+                                </span>
+                                <p className="text-[10px] text-indigo-600 font-medium">
+                                  Thiết bị quét sẽ đối chiếu số này để đảm bảo an toàn tuyệt đối
+                                </p>
+                              </div>
+                            )}
+
+                            {qrExpiresIn > 0 && (
+                              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                                <Timer className="h-3.5 w-3.5 text-sky-600 animate-pulse" />
+                                <span>
+                                  Hiệu lực còn:{' '}
+                                  <span className="font-mono text-sky-700 font-black">
+                                    {Math.floor(qrExpiresIn / 60)}:{(qrExpiresIn % 60).toString().padStart(2, '0')}
+                                  </span>
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="text-[11px] text-slate-600 leading-relaxed text-left bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1">
+                              <p className="font-bold text-slate-800">Hướng dẫn nhanh:</p>
+                              <p>1. Mở FEPN trên thiết bị đã đăng nhập, bấm nút <strong>Quét QR</strong> trên thanh điều hướng.</p>
+                              <p>2. Quét camera hoặc nhập mã 6 số hiển thị ở trên.</p>
+                              <p>3. Thiết bị kia sẽ cấp mã 6 số để bạn nhập xác nhận tại đây!</p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={initQrCode}
+                              disabled={qrLoading}
+                              className="text-xs font-bold text-sky-600 hover:text-sky-800 inline-flex items-center gap-1 transition"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${qrLoading ? 'animate-spin' : ''}`} />
+                              <span>Làm mới mã QR</span>
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* FORM ĐĂNG NHẬP / ĐĂNG KÝ BẰNG MẬT KHẨU */
