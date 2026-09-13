@@ -41,4 +41,7 @@ export type HomeProps = {
   isPremium: boolean
   vipExpiresAt: string | null
   senCashBalance: number
+  isRealAdmin?: boolean
+  viewAsStudent?: boolean
+  toggleViewAsStudent?: () => void
 }

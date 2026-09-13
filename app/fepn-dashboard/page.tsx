@@ -39,6 +39,7 @@ import {
   Inbox,
   QrCode,
   Smartphone,
+  Eye,
 } from 'lucide-react'
 import { checkFepnAccessAsync } from '@/lib/authHelper'
 import FepnQrScannerModal from '@/components/FepnQrScannerModal'
@@ -118,6 +119,24 @@ export default function FepnDashboardMainPage() {
   const [showQrScanner, setShowQrScanner] = useState<boolean>(false)
   const [showDeviceSecurity, setShowDeviceSecurity] = useState<boolean>(false)
   const [activeDeviceCount, setActiveDeviceCount] = useState<number>(1)
+
+  // Chế độ góc nhìn sinh viên cho Admin
+  const [viewAsStudent, setViewAsStudent] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('fepn_view_as_student') === 'true'
+    }
+    return false
+  })
+
+  const toggleViewAsStudent = () => {
+    setViewAsStudent((prev) => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fepn_view_as_student', next ? 'true' : 'false')
+      }
+      return next
+    })
+  }
 
   const scrollToMaterials = () => {
     setSelectedSemester('all')
@@ -513,7 +532,8 @@ export default function FepnDashboardMainPage() {
   }
 
   const themeVars = getModernThemeVars('indigo', isDark)
-  const isAdmin = userRole === 'admin'
+  const isRealAdmin = userRole === 'admin'
+  const isAdmin = isRealAdmin && !viewAsStudent
 
   // ==========================================
   // VIEW: LOADING
@@ -674,6 +694,43 @@ export default function FepnDashboardMainPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Nút gạt chuyển chế độ góc nhìn Sinh viên / Quản trị cho Admin */}
+            {isRealAdmin && (
+              <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-2xl border border-sky-500/30 bg-sky-500/5 shadow-xs">
+                <div className="flex items-center gap-1.5 text-xs font-black select-none">
+                  {viewAsStudent ? (
+                    <span className="text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                      <GraduationCap className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span className="hidden sm:inline">Góc nhìn:</span> Sinh viên
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                      <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span className="hidden sm:inline">Góc nhìn:</span> Quản trị
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={viewAsStudent}
+                  onClick={toggleViewAsStudent}
+                  className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    viewAsStudent ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                  title={viewAsStudent ? 'Đang xem góc nhìn sinh viên (Bấm để trở về Quản trị)' : 'Đang ở góc nhìn Quản trị (Bấm để xem góc nhìn sinh viên)'}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      viewAsStudent ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
             {isAdmin && (
               <button
                 type="button"
@@ -766,7 +823,7 @@ export default function FepnDashboardMainPage() {
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold leading-none">{user?.email?.split('@')[0]}</p>
                 <span className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase">
-                  {isAdmin ? 'Quản Trị Viên' : 'Sinh Viên VNU'}
+                  {isAdmin ? 'Quản Trị Viên' : isRealAdmin && viewAsStudent ? 'Quản Trị (Góc nhìn SV)' : 'Sinh Viên VNU'}
                 </span>
               </div>
 
@@ -782,6 +839,21 @@ export default function FepnDashboardMainPage() {
           </div>
         </div>
       </header>
+
+      {/* BANNER THÔNG BÁO CHẾ ĐỘ GÓC NHÌN SINH VIÊN */}
+      {isRealAdmin && viewAsStudent && (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-4 py-2.5 text-xs font-bold text-center flex flex-wrap items-center justify-center gap-2 shadow-md animate-in fade-in slide-in-from-top duration-300">
+          <Eye className="h-4 w-4 shrink-0 animate-pulse" />
+          <span>Bạn đang trải nghiệm giao diện ở <strong>chế độ góc nhìn của sinh viên</strong> (Toàn bộ tính năng & tài liệu quản trị đã được ẩn).</span>
+          <button
+            type="button"
+            onClick={toggleViewAsStudent}
+            className="ml-2 underline hover:no-underline bg-white/20 hover:bg-white/30 px-2.5 py-0.5 rounded-lg transition text-[11px] font-black"
+          >
+            Quay lại góc nhìn Admin
+          </button>
+        </div>
+      )}
 
       {/* 2. HERO GREETING & STATS BANNER + 1/5 MINI GPA WIDGET */}
       <div className="mx-auto w-full max-w-[1400px] px-4 pt-8 sm:px-6 lg:px-8 space-y-6">

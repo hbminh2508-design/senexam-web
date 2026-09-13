@@ -1996,8 +1996,8 @@ export default function FepnRecapPage() {
             }
           },
         }}
-        customDrawerActions={
-          isAdmin
+        customDrawerActions={[
+          ...(isAdmin
             ? [
                 {
                   label: 'Đăng Bài Viết Kỷ Yếu',
@@ -2005,8 +2005,24 @@ export default function FepnRecapPage() {
                   onClick: handleOpenNewPost,
                 },
               ]
-            : undefined
-        }
+            : []),
+          {
+            label: 'Xem Bài Viết Mới Nhất',
+            icon: <BookOpen className="h-4 w-4 text-sky-500" />,
+            onClick: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+          },
+          {
+            label: 'Tìm Kiếm Kỷ Yếu',
+            icon: <Search className="h-4 w-4 text-indigo-500" />,
+            onClick: () => {
+              const el = document.querySelector('input[type="text"]') as HTMLInputElement | null
+              if (el) {
+                el.focus()
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
+            },
+          },
+        ]}
         userEmail={user?.email}
         onLogout={handleLogout}
       />

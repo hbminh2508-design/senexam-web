@@ -3,7 +3,7 @@
 import {
   BookOpen, Clock, Trophy, User, ChevronRight, ShieldCheck, AlertCircle,
   LayoutGrid, Sun, Moon, KeyRound, Target, Bell, Lock, ArrowRight,
-  FileText, Crown, Coins,
+  FileText, Crown, Coins, Eye, GraduationCap
 } from 'lucide-react'
 import { AnnouncementRenderer } from './Announcement'
 import { getModernThemeVars } from '@/app/components/modernTheme'
@@ -29,6 +29,7 @@ export default function ModernHome({
   FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
   overlayActive, themeColor, density, animationsEnabled, isBetaTester,
   isVip, isPremium, senCashBalance,
+  isRealAdmin, viewAsStudent, toggleViewAsStudent,
 }: HomeProps) {
   const bestScore = studentHistoryList.length > 0 ? Math.max(...studentHistoryList.map(s => s.score || 0)) : null
   const isCompact = density === 'compact'
@@ -106,6 +107,46 @@ export default function ModernHome({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {/* Nút gạt chuyển chế độ góc nhìn Sinh viên / Quản trị cho Admin */}
+          {isRealAdmin && (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg mr-1 text-xs font-medium"
+              style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+            >
+              <div className="flex items-center gap-1 text-[11px] font-bold select-none">
+                {viewAsStudent ? (
+                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    <span className="hidden xl:inline">Góc nhìn:</span> SV
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1" style={{ color: 'var(--accent)' }}>
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span className="hidden xl:inline">Góc nhìn:</span> Admin
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={viewAsStudent}
+                onClick={toggleViewAsStudent}
+                className={`relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  viewAsStudent ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                title={viewAsStudent ? 'Đang xem góc nhìn sinh viên (Bấm để quay về Admin)' : 'Đang ở góc nhìn Admin (Bấm để chuyển sang góc nhìn sinh viên)'}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                    viewAsStudent ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
+
           {(userRole === 'admin' || userRole === 'collab') && (
             <button
               onClick={() => router.push('/admin')}
@@ -150,6 +191,25 @@ export default function ModernHome({
           </button>
         </div>
       </header>
+
+      {/* Banner thông báo góc nhìn sinh viên */}
+      {isRealAdmin && viewAsStudent && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          <div className="flex flex-wrap items-center justify-between p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs font-semibold shadow-xs gap-2">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 animate-pulse" />
+              <span>Đang ở <strong>Chế độ góc nhìn của sinh viên</strong>: Toàn bộ tính năng quản trị & tài liệu bị ẩn bởi Admin đã được ẩn đi.</span>
+            </div>
+            <button
+              type="button"
+              onClick={toggleViewAsStudent}
+              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition shrink-0"
+            >
+              Trở về Admin
+            </button>
+          </div>
+        </div>
+      )}
 
       <main
         className={`max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 transition-opacity duration-200 ${isCompact ? 'py-5 space-y-5' : 'py-8 space-y-8'} ${overlayActive ? 'opacity-30 pointer-events-none select-none' : ''}`}

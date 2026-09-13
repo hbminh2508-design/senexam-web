@@ -13,7 +13,10 @@ import {
   LogOut,
   LayoutGrid,
   X,
+  ArrowRight,
+  Sparkles,
 } from 'lucide-react'
+import { isDomainEmail } from '@/lib/authHelper'
 
 export interface FepnDrawerAction {
   label: string
@@ -102,6 +105,23 @@ export default function FepnMobileNav({
   const left = leftButton || defaultLeft
   const displayEmail = userEmail || user?.email
 
+  const isDashboard = activePage === 'dashboard' || !activePage
+
+  const pageMeta: Record<string, { title: string; subtitle: string }> = {
+    schedule: { title: 'Tính Năng Lịch Học', subtitle: 'Thời khóa biểu & Tiện ích TKB' },
+    gpa: { title: 'Tính Năng Điểm GPA', subtitle: 'GPA, CPA & Mục tiêu học tập' },
+    gift: { title: 'Tính Năng Đổi Quà', subtitle: 'Vòng quay may mắn & Phần thưởng' },
+    recap: { title: 'Tính Năng Kỷ Yếu', subtitle: 'Kỷ niệm & Hoạt động Khoa FEPN' },
+    subject: { title: 'Tính Năng Môn Học', subtitle: 'Tài liệu, Slide & Đề thi môn' },
+    admin: { title: 'Tính Năng Quản Trị', subtitle: 'Quản trị hệ thống & Deep Vault' },
+    dashboard: { title: 'Tất cả tính năng', subtitle: 'Hệ sinh thái FEPN' },
+  }
+
+  const currentMeta = pageMeta[activePage || 'dashboard'] || {
+    title: 'Tất cả tính năng',
+    subtitle: 'Hệ sinh thái FEPN',
+  }
+
   return (
     <>
       {/* 1. FIXED BOTTOM NAVIGATION BAR (md:hidden) */}
@@ -161,7 +181,7 @@ export default function FepnMobileNav({
             type="button"
             onClick={() => setShowDrawer(true)}
             className="flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition flex-1 py-1 font-bold"
-            title="Mở tất cả tính năng FEPN"
+            title="Mở tất cả tính năng"
           >
             <LayoutGrid className="h-5 w-5" />
             <span className="text-[11px] leading-tight">Tính năng</span>
@@ -187,9 +207,9 @@ export default function FepnMobileNav({
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading, inherit)' }}>
-                    Tất cả tính năng
+                    {currentMeta.title}
                   </h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase">Tài liệu FEPN</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">{currentMeta.subtitle}</p>
                 </div>
               </div>
               <button
@@ -201,151 +221,157 @@ export default function FepnMobileNav({
               </button>
             </div>
 
-            {/* Các nút hành động riêng của trang nếu có */}
-            {((customDrawerActions && customDrawerActions.length > 0) || extraDrawerItems) && (
-              <div className="space-y-2 pb-3 border-b border-black/10 dark:border-white/10">
+            {/* TRƯỜNG HỢP 1: KHI Ở TRANG CON (SCHEDULE, GPA, GIFT, RECAP, SUBJECT, ADMIN) */}
+            {/* -> GÓI GỌN CÁC TÍNH NĂNG VÀ THAO TÁC CỦA CHÍNH ỨNG DỤNG ĐÓ */}
+            {!isDashboard ? (
+              <div className="space-y-3">
                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
-                  Thao tác trang hiện tại
+                  Thao tác & Tiện ích trong ứng dụng
                 </p>
-                {customDrawerActions && customDrawerActions.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {customDrawerActions.map((action, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setShowDrawer(false)
-                          action.onClick()
-                        }}
-                        className="flex items-center gap-2 p-2.5 rounded-xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/30 text-left transition"
-                      >
-                        {action.icon}
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-1">
-                          {action.label}
-                        </span>
-                      </button>
-                    ))}
+
+                {((customDrawerActions && customDrawerActions.length > 0) || extraDrawerItems) ? (
+                  <div className="space-y-2.5">
+                    {customDrawerActions && customDrawerActions.length > 0 && (
+                      <div className="grid grid-cols-2 gap-2">
+                        {customDrawerActions.map((action, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setShowDrawer(false)
+                              action.onClick()
+                            }}
+                            className="flex items-center gap-2 p-2.5 rounded-xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/30 text-left transition"
+                          >
+                            {action.icon}
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-1">
+                              {action.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {extraDrawerItems && (
+                      <div className="grid grid-cols-2 gap-2">
+                        {extraDrawerItems}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 text-center rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                    <p className="text-xs font-medium text-slate-500">Đã kích hoạt toàn bộ tính năng khả dụng của trang này.</p>
                   </div>
                 )}
-                {extraDrawerItems && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {extraDrawerItems}
-                  </div>
-                )}
+
+                {/* Nút điều hướng tinh tế về Dashboard để khám phá các ứng dụng khác */}
+                <div className="pt-2 border-t border-black/10 dark:border-white/10">
+                  <Link
+                    href="/fepn-dashboard"
+                    onClick={() => setShowDrawer(false)}
+                    className="w-full flex items-center justify-between p-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 hover:bg-sky-500/15 text-sky-700 dark:text-sky-300 font-bold text-xs transition group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 group-hover:scale-105 transition shrink-0">
+                        <LayoutDashboard className="h-4 w-4" />
+                      </div>
+                      <div className="text-left">
+                        <span className="block font-black text-slate-800 dark:text-slate-100">Về FEPN Dashboard</span>
+                        <span className="block text-[10px] text-slate-400 font-medium">Khám phá các ứng dụng & môn học khác</span>
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-sky-500 group-hover:translate-x-0.5 transition shrink-0" />
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              /* TRƯỜNG HỢP 2: KHI Ở DASHBOARD -> HIỂN THỊ ĐẦY ĐỦ HỆ SINH THÁI TÍNH NĂNG */
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2">
+                  Hệ sinh thái FEPN
+                </p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {/* 1. Môn học & Tài liệu */}
+                  <Link
+                    href="/fepn-dashboard"
+                    onClick={() => setShowDrawer(false)}
+                    className="flex flex-col items-start p-3 rounded-2xl border transition group border-sky-500 bg-sky-500/10"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 mb-1.5 group-hover:scale-105 transition">
+                      <BookOpen className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100">Kho Học Liệu</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Slide, đề thi & bài tập</span>
+                  </Link>
+
+                  {/* 2. Lịch học & Thời khóa biểu */}
+                  <Link
+                    href="/fepn-schedule"
+                    onClick={() => setShowDrawer(false)}
+                    className="flex flex-col items-start p-3 rounded-2xl border transition group border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/30"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 mb-1.5 group-hover:scale-105 transition">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100">Lịch Học</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Thời khóa biểu tuần</span>
+                  </Link>
+
+                  {/* 3. GPA & CPA Calculator */}
+                  <Link
+                    href="/fepn-gpa"
+                    onClick={() => setShowDrawer(false)}
+                    className="flex flex-col items-start p-3 rounded-2xl border transition group border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-emerald-500/10 hover:border-emerald-500/30"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 mb-1.5 group-hover:scale-105 transition">
+                      <Calculator className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100">Tính Điểm GPA</span>
+                    <span className="text-[10px] text-slate-400 font-medium">GPA & CPA tích lũy</span>
+                  </Link>
+
+                  {/* 4. Kỷ yếu Recap */}
+                  <Link
+                    href="/fepn-recap"
+                    onClick={() => setShowDrawer(false)}
+                    className="flex flex-col items-start p-3 rounded-2xl border transition group border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-indigo-500/10 hover:border-indigo-500/30"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 mb-1.5 group-hover:scale-105 transition">
+                      <BookOpen className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-black text-slate-800 dark:text-slate-100">Kỷ Yếu Recap</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Hoạt động Khoa FEPN</span>
+                  </Link>
+
+                  {/* 5. Đổi quà FEPN */}
+                  <Link
+                    href="/fepn-gift"
+                    onClick={() => setShowDrawer(false)}
+                    className="flex flex-col items-start p-3 rounded-2xl border transition group border-pink-500/20 bg-pink-500/5 hover:bg-pink-500/15"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-pink-500/20 text-pink-600 dark:text-pink-400 mb-1.5 group-hover:scale-105 transition">
+                      <Gift className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-black text-pink-700 dark:text-pink-300">Đổi Quà FEPN</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Vòng quay & quà tặng</span>
+                  </Link>
+
+                  {/* 6. Admin Portal (chỉ hiện khi là Admin) */}
+                  {isAdmin && (
+                    <Link
+                      href="/fepn-admin"
+                      onClick={() => setShowDrawer(false)}
+                      className="flex flex-col items-start p-3 rounded-2xl border transition group border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/15"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 mb-1.5 group-hover:scale-105 transition">
+                        <ShieldCheck className="h-4 w-4" />
+                      </div>
+                      <span className="text-xs font-black text-amber-700 dark:text-amber-300">Quản Trị Admin</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Deep Vault & CSDL</span>
+                    </Link>
+                  )}
+                </div>
               </div>
             )}
-
-            {/* Hệ sinh thái tính năng FEPN */}
-            <div>
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2">
-                Hệ sinh thái FEPN
-              </p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {/* 1. Môn học & Tài liệu */}
-                <Link
-                  href="/fepn-dashboard"
-                  onClick={() => setShowDrawer(false)}
-                  className={`flex flex-col items-start p-3 rounded-2xl border transition group ${
-                    activePage === 'dashboard'
-                      ? 'border-sky-500 bg-sky-500/10'
-                      : 'border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/30'
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 mb-1.5 group-hover:scale-105 transition">
-                    <BookOpen className="h-4 w-4" />
-                  </div>
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-100">Kho Học Liệu</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Slide, đề thi & bài tập</span>
-                </Link>
-
-                {/* 2. Lịch học & Thời khóa biểu */}
-                <Link
-                  href="/fepn-schedule"
-                  onClick={() => setShowDrawer(false)}
-                  className={`flex flex-col items-start p-3 rounded-2xl border transition group ${
-                    activePage === 'schedule'
-                      ? 'border-sky-500 bg-sky-500/10'
-                      : 'border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/30'
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 mb-1.5 group-hover:scale-105 transition">
-                    <Calendar className="h-4 w-4" />
-                  </div>
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-100">Lịch Học</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Thời khóa biểu tuần</span>
-                </Link>
-
-                {/* 3. GPA & CPA Calculator */}
-                <Link
-                  href="/fepn-gpa"
-                  onClick={() => setShowDrawer(false)}
-                  className={`flex flex-col items-start p-3 rounded-2xl border transition group ${
-                    activePage === 'gpa'
-                      ? 'border-emerald-500 bg-emerald-500/10'
-                      : 'border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-emerald-500/10 hover:border-emerald-500/30'
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 mb-1.5 group-hover:scale-105 transition">
-                    <Calculator className="h-4 w-4" />
-                  </div>
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-100">Tính Điểm GPA</span>
-                  <span className="text-[10px] text-slate-400 font-medium">GPA & CPA tích lũy</span>
-                </Link>
-
-                {/* 4. Kỷ yếu Recap */}
-                <Link
-                  href="/fepn-recap"
-                  onClick={() => setShowDrawer(false)}
-                  className={`flex flex-col items-start p-3 rounded-2xl border transition group ${
-                    activePage === 'recap'
-                      ? 'border-indigo-500 bg-indigo-500/10'
-                      : 'border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-indigo-500/10 hover:border-indigo-500/30'
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 mb-1.5 group-hover:scale-105 transition">
-                    <BookOpen className="h-4 w-4" />
-                  </div>
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-100">Kỷ Yếu Recap</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Hoạt động Khoa FEPN</span>
-                </Link>
-
-                {/* 5. Đổi quà FEPN */}
-                <Link
-                  href="/fepn-gift"
-                  onClick={() => setShowDrawer(false)}
-                  className={`flex flex-col items-start p-3 rounded-2xl border transition group ${
-                    activePage === 'gift'
-                      ? 'border-pink-500 bg-pink-500/10'
-                      : 'border-pink-500/20 bg-pink-500/5 hover:bg-pink-500/15'
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-pink-500/20 text-pink-600 dark:text-pink-400 mb-1.5 group-hover:scale-105 transition">
-                    <Gift className="h-4 w-4" />
-                  </div>
-                  <span className="text-xs font-black text-pink-700 dark:text-pink-300">Đổi Quà FEPN</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Vòng quay & quà tặng</span>
-                </Link>
-
-                {/* 6. Admin Portal (chỉ hiện khi là Admin) */}
-                {isAdmin && (
-                  <Link
-                    href="/fepn-admin"
-                    onClick={() => setShowDrawer(false)}
-                    className={`flex flex-col items-start p-3 rounded-2xl border transition group ${
-                      activePage === 'admin'
-                        ? 'border-amber-500 bg-amber-500/10'
-                        : 'border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/15'
-                    }`}
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 mb-1.5 group-hover:scale-105 transition">
-                      <ShieldCheck className="h-4 w-4" />
-                    </div>
-                    <span className="text-xs font-black text-amber-700 dark:text-amber-300">Quản Trị Admin</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Deep Vault & CSDL</span>
-                  </Link>
-                )}
-              </div>
-            </div>
 
             {/* Thông tin tài khoản & Nút đăng xuất */}
             {(displayEmail || onLogout) && (
@@ -358,7 +384,7 @@ export default function FepnMobileNav({
                     <span className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase">
                       {isAdmin
                         ? 'Quản Trị Viên'
-                        : isDomainEmail(displayEmail)
+                        : isDomainEmail(displayEmail, user)
                         ? 'Tài Khoản Tên Miền / Sen Mail'
                         : 'Sinh Viên VNU'}
                     </span>

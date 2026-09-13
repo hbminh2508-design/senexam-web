@@ -57,7 +57,8 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.headers.set('X-XSS-Protection', '1; mode=block')
   res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
-  res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  // Cho phép camera=(self) để hỗ trợ Proctoring thi cử và quét mã QR đăng nhập nội bộ, chặn microphone & geolocation
+  res.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()')
   return res
 }
 
@@ -86,14 +87,19 @@ export function middleware(request: NextRequest) {
     return new NextResponse('Access Denied: Malicious activity detected.', { status: 403 })
   }
 
-  // 2. Chặn các query parameter chứa payload tấn công XSS / SQLi rõ ràng
+  // 2. Chặn các query parameter chứa payload tấn công XSS / SQLi / Path Traversal rõ ràng
   const searchLower = url.search.toLowerCase()
   if (
     searchLower.includes('<script') ||
     searchLower.includes('javascript:') ||
     searchLower.includes('union%20select') ||
     searchLower.includes('exec(') ||
-    searchLower.includes('base64_decode')
+    searchLower.includes('base64_decode') ||
+    searchLower.includes('../') ||
+    searchLower.includes('..%2f') ||
+    searchLower.includes('etc/passwd') ||
+    searchLower.includes('${') ||
+    searchLower.includes('eval(')
   ) {
     return new NextResponse('Bad Request: Invalid parameters detected.', { status: 400 })
   }
@@ -103,7 +109,12 @@ export function middleware(request: NextRequest) {
     pathname === '/fepn-login' ||
     pathname === '/login' ||
     pathname === '/fepn-admin' ||
-    pathname === '/admin'
+    pathname === '/admin' ||
+    pathname.startsWith('/api/admin') ||
+    pathname.startsWith('/api/fepn-auth') ||
+    pathname.startsWith('/api/gift-codes') ||
+    pathname.startsWith('/api/beta') ||
+    pathname.startsWith('/api/gemini')
 
   // Đường dẫn nhạy cảm: tối đa 35 req/phút; Đường dẫn thông thường: tối đa 140 req/10s
   const limitKey = isSensitivePath ? `auth_${clientIp}` : `gen_${clientIp}`

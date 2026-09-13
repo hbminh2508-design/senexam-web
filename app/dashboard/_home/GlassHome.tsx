@@ -5,7 +5,8 @@ import {
   BookOpen, Clock, Trophy, User, ChevronRight, ChevronLeft, ShieldCheck, AlertCircle,
   LayoutGrid, Sun, Moon, KeyRound, Target, Bell, Sparkles, Lock, ArrowRight,
   FileText, Crown, Coins, Settings, ExternalLink, FolderOpen, Video, MessageSquare,
-  Flame, Search, X, CheckCircle2, TrendingUp, BarChart3, Award, LineChart
+  Flame, Search, X, CheckCircle2, TrendingUp, BarChart3, Award, LineChart,
+  Eye, GraduationCap
 } from 'lucide-react'
 
 
@@ -22,6 +23,7 @@ export default function GlassHome({
   FEATURES, activeAnnouncement, studentHistoryList, setShowCodeModal,
   overlayActive, themeColor, density, animationsEnabled, isBetaTester,
   isVip, isPremium, senCashBalance,
+  isRealAdmin, viewAsStudent, toggleViewAsStudent,
 }: HomeProps) {
   const [serverTime, setServerTime] = useState<string>('')
   const [showAccountDropdown, setShowAccountDropdown] = useState(false)
@@ -271,6 +273,43 @@ export default function GlassHome({
 
           {/* BÊN PHẢI: VIP, SenCash, Chuông, Sáng/Tối, Cài đặt, Tài khoản (Gom Admin & Nâng cao) */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            {/* Nút gạt chuyển chế độ góc nhìn Sinh viên / Quản trị cho Admin */}
+            {isRealAdmin && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-500/10 mr-1">
+                <div className="flex items-center gap-1 text-[11px] font-extrabold select-none">
+                  {viewAsStudent ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <GraduationCap className="w-3.5 h-3.5" />
+                      <span className="hidden xl:inline">Góc nhìn:</span> SV
+                    </span>
+                  ) : (
+                    <span className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span className="hidden xl:inline">Góc nhìn:</span> Admin
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={viewAsStudent}
+                  onClick={toggleViewAsStudent}
+                  className={`relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    viewAsStudent ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                  title={viewAsStudent ? 'Đang xem góc nhìn sinh viên (Bấm để quay về Admin)' : 'Đang ở góc nhìn Admin (Bấm để chuyển sang góc nhìn sinh viên)'}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                      viewAsStudent ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
             {/* VIP Quick Badge */}
             <button
               onClick={() => router.push('/vip')}
@@ -432,6 +471,25 @@ export default function GlassHome({
           </div>
         </header>
       </div>
+
+      {/* Banner thông báo góc nhìn sinh viên */}
+      {isRealAdmin && viewAsStudent && (
+        <div className="mx-auto max-w-7xl px-4 pt-3 pb-1">
+          <div className="flex flex-wrap items-center justify-between p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 text-xs font-bold backdrop-blur-md shadow-xs animate-in fade-in slide-in-from-top-2 gap-2">
+            <div className="flex items-center gap-2">
+              <Eye className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 animate-pulse" />
+              <span>Đang ở <strong>Chế độ góc nhìn của sinh viên</strong>: Toàn bộ tính năng quản trị & tài liệu bị ẩn bởi Admin đã được ẩn đi.</span>
+            </div>
+            <button
+              type="button"
+              onClick={toggleViewAsStudent}
+              className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition shrink-0"
+            >
+              Trở về Admin
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Popover Tất cả tính năng (Feature Menu Modal/Drawer) */}
       {showFeatureMenu && (

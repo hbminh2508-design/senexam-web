@@ -559,7 +559,7 @@ export async function POST(request: Request) {
         mssv: cleanMssv,
         message: `Mã xác thực 8 chữ số đã được gửi tới hòm thư ${fullEmail}`,
         provider: sendResult.provider,
-        previewOtp: process.env.NODE_ENV !== 'production' ? otp8 : undefined,
+        previewOtp: process.env.NODE_ENV === 'development' ? otp8 : undefined,
       })
     }
 

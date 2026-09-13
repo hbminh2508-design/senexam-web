@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 
 // Khởi tạo trễ (lazy) — SUPABASE_SERVICE_ROLE_KEY có thể chưa được cấu hình lúc build,
 // tạo client ngay ở top-level sẽ làm `next build` thất bại khi thu thập page data.
@@ -21,7 +21,7 @@ export function getSupabaseAdmin(): SupabaseClient {
 let _anon: SupabaseClient | null = null
 function getAnonClient(): SupabaseClient {
   if (_anon) return _anon
-  _anon = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+  _anon = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder')
   return _anon
 }
 

@@ -85,6 +85,24 @@ export default function DashboardPage() {
   
   // ĐỒNG BỘ: Sử dụng isDark
   const [isDark, setIsDark] = useState(false)
+
+  // Chế độ xem góc nhìn sinh viên cho Admin
+  const [viewAsStudent, setViewAsStudent] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('senexam_view_as_student') === 'true'
+    }
+    return false
+  })
+
+  const toggleViewAsStudent = () => {
+    setViewAsStudent((prev) => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('senexam_view_as_student', next ? 'true' : 'false')
+      }
+      return next
+    })
+  }
   
   // -- Data States --
   const [activeAnnouncement, setActiveAnnouncement] = useState<string | null>(null)
@@ -728,11 +746,14 @@ export default function DashboardPage() {
     ? getGlassThemeVars(themeColor, isDark)
     : getModernThemeVars(themeColor, isDark)
 
+  const isRealAdmin = userRole === 'admin' || userRole === 'collab'
+  const effectiveUserRole = (viewAsStudent && isRealAdmin) ? 'student' : userRole
+
   return (
     <>
       <HomeComponent
         router={router}
-        userRole={userRole}
+        userRole={effectiveUserRole}
         formData={formData}
         isDark={isDark}
         toggleTheme={toggleTheme}
@@ -754,6 +775,9 @@ export default function DashboardPage() {
         isPremium={planTier === 'premium'}
         vipExpiresAt={vipExpiresAt}
         senCashBalance={senCashBalance}
+        isRealAdmin={isRealAdmin}
+        viewAsStudent={viewAsStudent}
+        toggleViewAsStudent={toggleViewAsStudent}
       />
 
 
