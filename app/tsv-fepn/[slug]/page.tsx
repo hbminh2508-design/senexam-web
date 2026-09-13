@@ -94,6 +94,30 @@ export default function FepnSubjectDetailPage() {
   const [userRole, setUserRole] = useState<string>('student')
   const [authStatus, setAuthStatus] = useState<'checking' | 'authorized' | 'unauthenticated' | 'restricted'>('checking')
 
+  // Chế độ góc nhìn sinh viên cho Admin
+  const [viewAsStudent, setViewAsStudent] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('fepn_view_as_student') === 'true'
+    }
+    return false
+  })
+
+  const toggleViewAsStudent = () => {
+    setViewAsStudent((prev) => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fepn_view_as_student', next ? 'true' : 'false')
+      }
+      return next
+    })
+  }
+
+  const isRealAdmin =
+    userRole === 'admin' ||
+    userRole === 'collab' ||
+    user?.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com'
+  const isAdmin = isRealAdmin && !viewAsStudent
+
   const [isSubdomain, setIsSubdomain] = useState(false)
 
   // Subject & Materials Data from Database ONLY
@@ -131,27 +155,26 @@ export default function FepnSubjectDetailPage() {
   const [activeDeviceCount, setActiveDeviceCount] = useState<number>(1)
 
   // Kiểm tra xem tính năng File Ghi Âm có đang BẬT cho môn học này không (Mặc định: TẮT)
+  // Chỉ đọc trực tiếp từ dữ liệu môn học đã được Admin duyệt trên database
   const isSubjectRecordingsEnabled = (sub: FepnSubject | null): boolean => {
     if (!sub) return false
     if (sub.enable_recordings === true) return true
     if (sub.description && sub.description.includes('[ENABLE_RECORDINGS]')) return true
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(`fepn_recordings_enabled_${sub.code}`) === 'true'
-    }
     return false
   }
 
   const isRecordingsOn = isSubjectRecordingsEnabled(subject)
 
-  // Admin bật / tắt tính năng File Ghi Âm cho môn học này
+  // Admin bật / tắt tính năng File Ghi Âm cho môn học này (NGHIÊM CẤM sinh viên thao tác)
   const handleToggleRecordings = async () => {
     if (!subject) return
+    if (!isAdmin || !isRealAdmin || viewAsStudent) {
+      alert('Chỉ có Quản trị viên (Admin) mới có quyền Bật / Tắt tính năng File Ghi Âm & Lời Giảng AI!')
+      return
+    }
+
     const nextVal = !isRecordingsOn
     setTogglingRecordings(true)
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`fepn_recordings_enabled_${subject.code}`, nextVal ? 'true' : 'false')
-    }
 
     let rawDesc = subject.description || ''
     if (nextVal) {
@@ -251,14 +274,23 @@ export default function FepnSubjectDetailPage() {
           .eq('id', currentUser.id)
           .maybeSingle()
 
+        if (profile?.role) {
+          role = profile.role
+        }
+
         const email = currentUser.email?.toLowerCase() || ''
         const metaRole = (currentUser.user_metadata?.role || currentUser.app_metadata?.role || '').toLowerCase().trim()
-        const isUserAdmin = role === 'admin' || role === 'collab' || metaRole === 'admin' || metaRole === 'collab' || email === 'hoangbinhminh2508@gmail.com'
+        const isUserAdmin =
+          role === 'admin' ||
+          role === 'collab' ||
+          metaRole === 'admin' ||
+          metaRole === 'collab' ||
+          email === 'hoangbinhminh2508@gmail.com'
 
         if (isUserAdmin) {
           setUserRole('admin')
-        } else if (profile?.role) {
-          setUserRole(profile.role)
+        } else {
+          setUserRole(role)
         }
 
         const isAllowed = await checkFepnAccessAsync(currentUser, isUserAdmin ? 'admin' : role)
@@ -572,7 +604,6 @@ export default function FepnSubjectDetailPage() {
   }
 
   const themeVars = getModernThemeVars('indigo', isDark)
-  const isAdmin = userRole === 'admin' || userRole === 'collab' || user?.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com'
   const dashboardLink = '/fepn-dashboard'
 
   // Loading state
@@ -717,6 +748,46 @@ export default function FepnSubjectDetailPage() {
               </Link>
             )}
 
+            {/* Nút gạt chế độ Góc nhìn sinh viên cho Admin */}
+            {isRealAdmin && (
+              <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-2xl border border-sky-500/30 bg-sky-500/5 shadow-xs">
+                <div className="flex items-center gap-1.5 text-xs font-black select-none">
+                  {viewAsStudent ? (
+                    <span className="text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                      <GraduationCap className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span className="hidden sm:inline">Góc nhìn: </span>Sinh viên
+                    </span>
+                  ) : (
+                    <span className="text-sky-700 dark:text-sky-300 flex items-center gap-1">
+                      <ShieldCheck className="h-4 w-4 text-sky-600 shrink-0" />
+                      <span className="hidden sm:inline">Góc nhìn: </span>Quản trị
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={viewAsStudent}
+                  onClick={toggleViewAsStudent}
+                  className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    viewAsStudent ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                  title={
+                    viewAsStudent
+                      ? 'Đang xem góc nhìn sinh viên (Bấm để trở về Quản trị)'
+                      : 'Đang ở góc nhìn Quản trị (Bấm để xem góc nhìn sinh viên)'
+                  }
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      viewAsStudent ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
             <Link
               href="/fepn-recap"
               className="hidden md:inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
@@ -733,32 +804,35 @@ export default function FepnSubjectDetailPage() {
               <span>GPA</span>
             </Link>
 
-            {/* Nút Quét QR Đăng Nhập cho máy khác */}
-            <button
-              type="button"
-              onClick={() => setShowQrScanner(true)}
-              className="hidden sm:flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 shadow-xs transition text-xs font-bold"
-              title="Quét mã QR để đăng nhập cho máy khác"
-            >
-              <QrCode className="h-4 w-4" />
-              <span className="hidden lg:inline">Quét QR</span>
-            </button>
+            {/* Nút Quét QR & Thiết Bị (Tạm ẩn theo yêu cầu) */}
+            {false && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowQrScanner(true)}
+                  className="hidden sm:flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 shadow-xs transition text-xs font-bold"
+                  title="Quét mã QR để đăng nhập cho máy khác"
+                >
+                  <QrCode className="h-4 w-4" />
+                  <span className="hidden lg:inline">Quét QR</span>
+                </button>
 
-            {/* Nút Quản lý thiết bị đăng nhập & Log 15 ngày */}
-            <button
-              type="button"
-              onClick={() => setShowDeviceSecurity(true)}
-              className="relative hidden sm:flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 shadow-xs transition text-xs font-bold"
-              title="Quản lý thiết bị đăng nhập & Nhật ký 15 ngày"
-            >
-              <Smartphone className="h-4 w-4" />
-              <span className="hidden lg:inline">Thiết Bị</span>
-              {activeDeviceCount > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-indigo-600 text-[10px] font-black text-white">
-                  {activeDeviceCount}
-                </span>
-              )}
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeviceSecurity(true)}
+                  className="relative hidden sm:flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 shadow-xs transition text-xs font-bold"
+                  title="Quản lý thiết bị đăng nhập & Nhật ký 15 ngày"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  <span className="hidden lg:inline">Thiết Bị</span>
+                  {activeDeviceCount > 0 && (
+                    <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-indigo-600 text-[10px] font-black text-white">
+                      {activeDeviceCount}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
 
             <button
               type="button"
@@ -771,6 +845,21 @@ export default function FepnSubjectDetailPage() {
           </div>
         </div>
       </header>
+
+      {/* BANNER THÔNG BÁO CHẾ ĐỘ GÓC NHÌN SINH VIÊN */}
+      {isRealAdmin && viewAsStudent && (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-4 py-2 text-xs font-bold text-center flex flex-wrap items-center justify-center gap-2 shadow-md animate-in fade-in slide-in-from-top duration-300">
+          <Eye className="h-4 w-4 shrink-0 animate-pulse" />
+          <span>Bạn đang xem môn học dưới <strong>Góc nhìn Sinh viên</strong> (Các nút quản trị, bật/tắt ghi âm, đăng tài liệu đã được ẩn).</span>
+          <button
+            type="button"
+            onClick={toggleViewAsStudent}
+            className="ml-2 underline hover:no-underline bg-white/20 hover:bg-white/30 px-2.5 py-0.5 rounded-lg transition text-[11px] font-black"
+          >
+            Quay lại Quản trị
+          </button>
+        </div>
+      )}
 
       {/* 2. MAIN 2-COLUMN RESIZABLE SPLIT VIEW */}
       <div
@@ -1352,16 +1441,6 @@ export default function FepnSubjectDetailPage() {
             label: 'Vòng Quay Đổi Quà',
             icon: <FolderOpen className="h-4 w-4 text-pink-500" />,
             onClick: () => router.push('/fepn-gift'),
-          },
-          {
-            label: 'Quét QR Đăng Nhập',
-            icon: <QrCode className="h-4 w-4 text-sky-500" />,
-            onClick: () => setShowQrScanner(true),
-          },
-          {
-            label: `Quản Lý Thiết Bị (${activeDeviceCount})`,
-            icon: <Smartphone className="h-4 w-4 text-indigo-500" />,
-            onClick: () => setShowDeviceSecurity(true),
           },
           ...(isAdmin
             ? [

@@ -792,32 +792,35 @@ export default function FepnDashboardMainPage() {
               </Link>
             )}
 
-            {/* Nút Quét QR Đăng Nhập cho máy khác */}
-            <button
-              type="button"
-              onClick={() => setShowQrScanner(true)}
-              className="flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 shadow-xs transition text-xs font-bold"
-              title="Quét mã QR để đăng nhập cho máy khác"
-            >
-              <QrCode className="h-4 w-4" />
-              <span className="hidden md:inline">Quét QR</span>
-            </button>
+            {/* Nút Quét QR & Quản lý thiết bị đăng nhập (Tạm ẩn theo yêu cầu) */}
+            {false && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowQrScanner(true)}
+                  className="flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 shadow-xs transition text-xs font-bold"
+                  title="Quét mã QR để đăng nhập cho máy khác"
+                >
+                  <QrCode className="h-4 w-4" />
+                  <span className="hidden md:inline">Quét QR</span>
+                </button>
 
-            {/* Nút Quản lý thiết bị đăng nhập & Log 15 ngày */}
-            <button
-              type="button"
-              onClick={() => setShowDeviceSecurity(true)}
-              className="relative flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 shadow-xs transition text-xs font-bold"
-              title="Quản lý thiết bị đăng nhập & Nhật ký 15 ngày"
-            >
-              <Smartphone className="h-4 w-4" />
-              <span className="hidden md:inline">Thiết Bị</span>
-              {activeDeviceCount > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-indigo-600 text-[10px] font-black text-white">
-                  {activeDeviceCount}
-                </span>
-              )}
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeviceSecurity(true)}
+                  className="relative flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 shadow-xs transition text-xs font-bold"
+                  title="Quản lý thiết bị đăng nhập & Nhật ký 15 ngày"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  <span className="hidden md:inline">Thiết Bị</span>
+                  {activeDeviceCount > 0 && (
+                    <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-indigo-600 text-[10px] font-black text-white">
+                      {activeDeviceCount}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
 
             <div className="flex items-center gap-2 pl-2 border-l border-black/10 dark:border-white/10">
               <div className="text-right hidden sm:block">
@@ -1547,31 +1550,33 @@ export default function FepnDashboardMainPage() {
               )}
             </div>
 
-            {/* Phím di động Quét QR & Thiết Bị */}
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10 dark:border-white/10">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMobileMenu(false)
-                  setShowQrScanner(true)
-                }}
-                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-sky-500/20 bg-sky-50 text-sky-800 font-bold text-xs"
-              >
-                <QrCode className="h-4 w-4" />
-                <span>Quét QR</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMobileMenu(false)
-                  setShowDeviceSecurity(true)
-                }}
-                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-indigo-500/20 bg-indigo-50 text-indigo-800 font-bold text-xs"
-              >
-                <Smartphone className="h-4 w-4" />
-                <span>Thiết Bị ({activeDeviceCount})</span>
-              </button>
-            </div>
+            {/* Phím di động Quét QR & Thiết Bị (Tạm ẩn theo yêu cầu) */}
+            {false && (
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/10 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileMenu(false)
+                    setShowQrScanner(true)
+                  }}
+                  className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-sky-500/20 bg-sky-50 text-sky-800 font-bold text-xs"
+                >
+                  <QrCode className="h-4 w-4" />
+                  <span>Quét QR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileMenu(false)
+                    setShowDeviceSecurity(true)
+                  }}
+                  className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-indigo-500/20 bg-indigo-50 text-indigo-800 font-bold text-xs"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  <span>Thiết Bị ({activeDeviceCount})</span>
+                </button>
+              </div>
+            )}
 
             {/* Tài khoản & Đăng xuất */}
             <div className="pt-2 border-t border-black/10 dark:border-white/10 flex items-center justify-between">

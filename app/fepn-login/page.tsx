@@ -1318,8 +1318,8 @@ export default function FepnLoginPage() {
                   </button>
                 </div>
 
-                {/* Khi ở chế độ Đăng Nhập: Có tuỳ chọn Đăng Nhập Mật Khẩu hoặc Quét QR Đăng Nhập Nhanh */}
-                {mode === 'login' && (
+                {/* Khi ở chế độ Đăng Nhập: Có tuỳ chọn Đăng Nhập Mật Khẩu hoặc Quét QR Đăng Nhập Nhanh (Tạm ẩn QR theo yêu cầu) */}
+                {false && mode === 'login' && (
                   <div className="flex rounded-xl bg-sky-50/80 p-1 text-xs font-bold border border-sky-100">
                     <button
                       type="button"
@@ -1355,8 +1355,8 @@ export default function FepnLoginPage() {
                   </div>
                 )}
 
-                {/* GIAO DIỆN QUÉT MÃ QR ĐĂNG NHẬP NHANH */}
-                {mode === 'login' && loginMethod === 'qr' ? (
+                {/* GIAO DIỆN QUÉT MÃ QR ĐĂNG NHẬP NHANH (TẠM ẨN) */}
+                {false && mode === 'login' && loginMethod === 'qr' ? (
                   <div className="space-y-4 text-center">
                     {/* TRƯỜNG HỢP 1: MÁY B ĐÃ DUYỆT VÀ CHỜ MÁY A NHẬP MÃ 6 SỐ XÁC THỰC */}
                     {qrStep === 'awaiting_code' ? (
