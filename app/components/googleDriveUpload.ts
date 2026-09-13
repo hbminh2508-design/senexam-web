@@ -1,22 +1,40 @@
+import { supabase } from '@/lib/supabaseClient'
+
 type ResponsePayload = {
   ok: boolean
   data?: any
   error?: string
 }
 
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  try {
+    const { data } = await supabase.auth.getSession()
+    if (data?.session?.access_token) {
+      return { Authorization: `Bearer ${data.session.access_token}` }
+    }
+  } catch (e) {
+    // Session token retrieval error - fallback
+  }
+  return {}
+}
+
 const uploadFileViaApi = async (file: File, title: string) => {
+  const authHeaders = await getAuthHeaders()
   const formData = new FormData()
   formData.append('file', file)
   formData.append('title', title)
 
   const response = await fetch('/api/upload-exam', {
     method: 'POST',
+    headers: {
+      ...authHeaders,
+    },
     body: formData,
   })
 
   const payload = await readResponsePayload(response)
   if (!payload.ok || !response.ok) {
-    throw new Error((payload as ResponsePayload).error || 'Không thể tải file qua API nội bộ.')
+    throw new Error((payload as ResponsePayload).error || (payload as any).data?.error || 'Không thể tải file qua API nội bộ.')
   }
 
   const driveFileId = payload.data?.driveFileId
@@ -37,21 +55,34 @@ const readResponsePayload = async (response: Response): Promise<ResponsePayload>
 
   if (contentType.includes('application/json')) {
     try {
-      return { ok: true, data: JSON.parse(rawText) }
+      const parsed = JSON.parse(rawText)
+      if (!response.ok) {
+        return {
+          ok: false,
+          error: parsed.error || parsed.message || `Lỗi từ server (${response.status})`,
+          data: parsed,
+        }
+      }
+      return { ok: true, data: parsed }
     } catch (error) {
       return { ok: false, error: rawText || 'Phản hồi JSON không hợp lệ.' }
     }
   }
 
-  return { ok: false, error: rawText || `Lỗi kết nối server (${response.status})` }
+  return { ok: response.ok, error: response.ok ? undefined : (rawText || `Lỗi kết nối server (${response.status})`) }
 }
 
 export const initGoogleDriveUpload = async (fileName: string, mimeType: string) => {
   // Lấy Access Token từ server (server chỉ trả token, không truyền file)
-  const tokenResp = await fetch('/api/get-drive-token')
+  const authHeaders = await getAuthHeaders()
+  const tokenResp = await fetch('/api/get-drive-token', {
+    headers: {
+      ...authHeaders,
+    },
+  })
   const tokenPayload = await readResponsePayload(tokenResp)
   if (!tokenPayload.ok || !tokenPayload.data?.accessToken) {
-    throw new Error(tokenPayload.error || 'Không thể lấy access token từ server')
+    throw new Error(tokenPayload.error || tokenPayload.data?.error || 'Không thể lấy access token từ server')
   }
   const accessToken = tokenPayload.data.accessToken
 
@@ -95,7 +126,7 @@ export const uploadFileToGoogleDrive = async (uploadUrl: string, file: File, fal
 
     const payload = await readResponsePayload(response)
     if (!payload.ok || !response.ok) {
-      throw new Error((payload as ResponsePayload).error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
+      throw new Error((payload as ResponsePayload).error || (payload as any).data?.error || 'Lỗi khi tải file trực tiếp lên Google Drive.')
     }
 
     const fileId = payload.data?.id

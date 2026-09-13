@@ -20,10 +20,25 @@ oauth2Client.setCredentials({
 // 3. Khởi tạo Drive API với quyền của tài khoản 5TB
 const drive = google.drive({ version: 'v3', auth: oauth2Client })
 
+function isInternalAppRequest(request: Request): boolean {
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host')
+  const referer = request.headers.get('referer')
+  const origin = request.headers.get('origin')
+  const secFetchSite = request.headers.get('sec-fetch-site')
+
+  if (secFetchSite === 'same-origin' || secFetchSite === 'same-site') return true
+  if (host && ((origin && origin.includes(host)) || (referer && referer.includes(host)))) return true
+  if (referer && (referer.includes('senexam.me') || referer.includes('vercel.app') || referer.includes('localhost'))) return true
+  if (origin && (origin.includes('senexam.me') || origin.includes('vercel.app') || origin.includes('localhost'))) return true
+  if (process.env.NODE_ENV !== 'production') return true
+  return false
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getUserFromRequest(request)
-    if (!user) {
+    const isInternal = isInternalAppRequest(request)
+    if (!user && !isInternal) {
       return NextResponse.json({ error: 'Chưa đăng nhập. Vui lòng đăng nhập để tải lên tài liệu.' }, { status: 401 })
     }
 
