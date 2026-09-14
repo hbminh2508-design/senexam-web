@@ -1014,16 +1014,36 @@ export default function FepnAdminDashboardPage() {
     )
 
     try {
-      const { error } = await supabase
-        .from('fepn_subjects')
-        .update({ description: descClean, enable_recordings: nextStatus })
-        .eq('id', sub.id)
+      let authHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (sessionData?.session?.access_token) {
+          authHeaders['Authorization'] = `Bearer ${sessionData.session.access_token}`
+        }
+      } catch (e) {}
 
-      if (error) {
-        await supabase
+      const apiRes = await fetch('/api/fepn-subjects/toggle-recordings', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          subjectId: sub.id,
+          enabled: nextStatus,
+          userRole: 'admin',
+        }),
+      })
+
+      if (!apiRes.ok) {
+        const { error } = await supabase
           .from('fepn_subjects')
-          .update({ description: descClean })
+          .update({ description: descClean, enable_recordings: nextStatus })
           .eq('id', sub.id)
+
+        if (error) {
+          await supabase
+            .from('fepn_subjects')
+            .update({ description: descClean })
+            .eq('id', sub.id)
+        }
       }
     } catch {
       await supabase
@@ -1179,7 +1199,7 @@ export default function FepnAdminDashboardPage() {
         }
       }
 
-      const { error } = await supabase.from('fepn_materials').insert({
+      const matPayload = {
         subject_id: matSubjectId,
         title: matTitle.trim(),
         category: matCategory === 'recording' ? 'recordings' : matCategory,
@@ -1187,8 +1207,35 @@ export default function FepnAdminDashboardPage() {
         file_type: isRec ? 'audio' : matCategory === 'video' ? 'video' : 'pdf',
         extra_info: extraInfo,
         created_at: new Date().toISOString(),
-      })
-      if (error) throw error
+      }
+
+      let { error: insertErr } = await supabase.from('fepn_materials').insert(matPayload)
+
+      if (insertErr && (insertErr.message?.includes('category_check') || insertErr.message?.includes('violates check constraint'))) {
+        // Thử dạng số ít 'recording'
+        const fallbackCat = matPayload.category === 'recordings' ? 'recording' : matPayload.category
+        const retryRes = await supabase.from('fepn_materials').insert({
+          ...matPayload,
+          category: fallbackCat,
+        })
+
+        if (!retryRes.error) {
+          insertErr = null
+        } else {
+          // Lưu vào slides với marker [AUDIO_RECORDING]
+          const retryRes2 = await supabase.from('fepn_materials').insert({
+            ...matPayload,
+            category: 'slides',
+            file_type: 'audio',
+            extra_info: `[AUDIO_RECORDING] ${matPayload.extra_info}`,
+          })
+          if (!retryRes2.error) {
+            insertErr = null
+          }
+        }
+      }
+
+      if (insertErr) throw insertErr
 
       setShowMaterialModal(false)
       fetchAllData()

@@ -1,12 +1,36 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { GoogleGenAI } from '@google/genai'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
+function isInternalAppRequest(request: Request): boolean {
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host')
+  const referer = request.headers.get('referer')
+  const origin = request.headers.get('origin')
+  const secFetchSite = request.headers.get('sec-fetch-site')
+
+  if (secFetchSite === 'same-origin' || secFetchSite === 'same-site') return true
+  if (host && ((origin && origin.includes(host)) || (referer && referer.includes(host)))) return true
+  if (referer && (referer.includes('senexam.me') || referer.includes('vercel.app') || referer.includes('localhost'))) return true
+  if (origin && (origin.includes('senexam.me') || origin.includes('vercel.app') || origin.includes('localhost'))) return true
+  if (process.env.NODE_ENV !== 'production') return true
+  return false
+}
+
 export async function POST(request: Request) {
   try {
+    const user = await getUserFromRequest(request)
+    const isInternal = isInternalAppRequest(request)
+
+    if (!user && !isInternal) {
+      return NextResponse.json(
+        { error: 'Truy cập bị từ chối. Vui lòng đăng nhập để sử dụng tính năng phân tích bài giảng AI.' },
+        { status: 401 }
+      )
+    }
+
     const body = await request.json()
     const {
       materialId,

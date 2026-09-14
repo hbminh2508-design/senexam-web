@@ -83,6 +83,16 @@ export interface FepnMaterial {
   created_by?: string
 }
 
+export const isRecordingMaterial = (m: FepnMaterial | null | undefined): boolean => {
+  if (!m) return false
+  return (
+    m.category === 'recordings' ||
+    (m.category as any) === 'recording' ||
+    m.file_type === 'audio' ||
+    Boolean(m.extra_info && m.extra_info.includes('[AUDIO_RECORDING]'))
+  )
+}
+
 export default function FepnSubjectDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -155,11 +165,15 @@ export default function FepnSubjectDetailPage() {
   const [activeDeviceCount, setActiveDeviceCount] = useState<number>(1)
 
   // Kiểm tra xem tính năng File Ghi Âm có đang BẬT cho môn học này không (Mặc định: TẮT)
-  // Chỉ đọc trực tiếp từ dữ liệu môn học đã được Admin duyệt trên database
+  // Đọc từ dữ liệu môn học trên database, thẻ [ENABLE_RECORDINGS] và bộ nhớ cục bộ
   const isSubjectRecordingsEnabled = (sub: FepnSubject | null): boolean => {
     if (!sub) return false
     if (sub.enable_recordings === true) return true
     if (sub.description && sub.description.includes('[ENABLE_RECORDINGS]')) return true
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`fepn_recordings_${sub.id}`)
+      if (stored !== null) return stored === 'true'
+    }
     return false
   }
 
@@ -192,29 +206,54 @@ export default function FepnSubjectDetailPage() {
     }
     setSubject(updatedSubject)
 
-    try {
-      // Cập nhật cơ sở dữ liệu Supabase
-      const { error } = await supabase
-        .from('fepn_subjects')
-        .update({
-          description: rawDesc,
-          enable_recordings: nextVal,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', subject.id)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`fepn_recordings_${subject.id}`, nextVal ? 'true' : 'false')
+    }
 
-      if (error) {
-        // Dự phòng: nếu cột enable_recordings chưa có trong bảng, lưu qua trường description
+    try {
+      // 1. Gọi API Route bảo mật chuyên dụng với service role
+      let authHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (sessionData?.session?.access_token) {
+          authHeaders['Authorization'] = `Bearer ${sessionData.session.access_token}`
+        }
+      } catch (e) {}
+
+      const apiRes = await fetch('/api/fepn-subjects/toggle-recordings', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          subjectId: subject.id,
+          enabled: nextVal,
+          userRole: userRole,
+          userEmail: user?.email,
+        }),
+      })
+
+      if (!apiRes.ok) {
+        // 2. Dự phòng: cập nhật trực tiếp qua Supabase client
         await supabase
           .from('fepn_subjects')
           .update({
             description: rawDesc,
+            enable_recordings: nextVal,
             updated_at: new Date().toISOString(),
           })
           .eq('id', subject.id)
       }
     } catch (err) {
       console.warn('Cập nhật trạng thái ghi âm môn học:', err)
+      try {
+        await supabase
+          .from('fepn_subjects')
+          .update({
+            description: rawDesc,
+            enable_recordings: nextVal,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', subject.id)
+      } catch {}
     } finally {
       setTogglingRecordings(false)
     }
@@ -454,9 +493,19 @@ export default function FepnSubjectDetailPage() {
     }
   }
 
-  // Lọc tài liệu theo danh mục thư mục đang chọn
+  // Lọc tài liệu theo danh mục thư mục đang chọn (hỗ trợ đầy đủ cả recordings, recording và audio)
   const currentCategoryMaterials = useMemo(() => {
-    return materials.filter((m) => m.category === activeCategory)
+    return materials.filter((m) => {
+      if (activeCategory === 'recordings') {
+        return (
+          m.category === 'recordings' ||
+          m.category === 'recording' ||
+          m.file_type === 'audio' ||
+          Boolean(m.extra_info && m.extra_info.includes('[AUDIO_RECORDING]'))
+        )
+      }
+      return m.category === activeCategory
+    })
   }, [materials, activeCategory])
 
   // Chuẩn hóa đường dẫn nhúng xem trước
@@ -560,17 +609,72 @@ export default function FepnSubjectDetailPage() {
         created_by: user?.id,
       }
 
-      const { data, error } = await supabase
+      let insertedData: any = null
+      let insertError: any = null
+
+      // Lần 1: Thử insert với category gốc (vd: 'recordings')
+      const res1 = await supabase
         .from('fepn_materials')
         .insert(newMatItem)
         .select('*')
         .single()
 
-      if (error) throw error
+      if (!res1.error) {
+        insertedData = res1.data
+      } else {
+        insertError = res1.error
+        console.warn('Lần 1 insert thất bại:', res1.error.message)
 
-      const updated = [...materials, data]
+        // Nếu gặp lỗi check constraint category (fepn_materials_category_check)
+        if (
+          res1.error.message?.includes('category_check') ||
+          res1.error.message?.includes('violates check constraint')
+        ) {
+          // Lần 2: Thử insert với danh mục dạng số ít ('recording')
+          const fallbackCat = newMatCategory === 'recordings' ? 'recording' : newMatCategory
+          const res2 = await supabase
+            .from('fepn_materials')
+            .insert({
+              ...newMatItem,
+              category: fallbackCat,
+            })
+            .select('*')
+            .single()
+
+          if (!res2.error) {
+            insertedData = res2.data
+            insertError = null
+          } else {
+            // Lần 3: Lưu tạm vào category 'slides' kèm marker [AUDIO_RECORDING] để KHÔNG BAO GIỜ bị mất file!
+            const res3 = await supabase
+              .from('fepn_materials')
+              .insert({
+                ...newMatItem,
+                category: 'slides',
+                file_type: 'audio',
+                extra_info: `[AUDIO_RECORDING] ${newMatItem.extra_info}`,
+              })
+              .select('*')
+              .single()
+
+            if (!res3.error) {
+              insertedData = {
+                ...res3.data,
+                category: 'recordings',
+              }
+              insertError = null
+            } else {
+              insertError = res3.error
+            }
+          }
+        }
+      }
+
+      if (insertError || !insertedData) throw insertError || new Error('Không thể thêm tài liệu vào cơ sở dữ liệu.')
+
+      const updated = [...materials, insertedData]
       setMaterials(updated)
-      setSelectedMaterial(data)
+      setSelectedMaterial(insertedData)
       setActiveCategory(newMatCategory)
       setShowAddMaterialModal(false)
       setNewMatTitle('')
@@ -1014,7 +1118,7 @@ export default function FepnSubjectDetailPage() {
                 type="button"
                 onClick={() => {
                   setActiveCategory('recordings')
-                  const first = materials.find((m) => m.category === 'recordings')
+                  const first = materials.find((m) => isRecordingMaterial(m))
                   if (first) setSelectedMaterial(first)
                 }}
                 className={`flex flex-col items-center justify-center p-2 rounded-xl text-xs font-bold transition text-center relative ${
@@ -1076,7 +1180,7 @@ export default function FepnSubjectDetailPage() {
                     <div className="flex items-start gap-3 min-w-0">
                       <div
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold transition ${
-                          mat.category === 'recordings'
+                          isRecordingMaterial(mat)
                             ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
                             : mat.category === 'videos'
                             ? 'bg-rose-500/15 text-rose-600'
@@ -1085,7 +1189,7 @@ export default function FepnSubjectDetailPage() {
                             : 'bg-sky-500/15 text-sky-600'
                         }`}
                       >
-                        {mat.category === 'recordings' ? (
+                        {isRecordingMaterial(mat) ? (
                           <Mic className="h-4 w-4" />
                         ) : mat.category === 'videos' ? (
                           <Video className="h-4 w-4" />
@@ -1176,7 +1280,7 @@ export default function FepnSubjectDetailPage() {
                       ? 'Đề Thi'
                       : selectedMaterial.category === 'exercises'
                       ? 'Bài Tập'
-                      : selectedMaterial.category === 'recordings'
+                      : isRecordingMaterial(selectedMaterial)
                       ? 'Ghi Âm AI'
                       : 'Slide'}
                   </span>
@@ -1220,7 +1324,7 @@ export default function FepnSubjectDetailPage() {
 
               {/* LIVE VIEWER FRAME */}
               <div className="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative min-h-[480px]">
-                {selectedMaterial.category === 'recordings' ? (
+                {isRecordingMaterial(selectedMaterial) ? (
                   <FepnAudioLectureViewer
                     material={selectedMaterial}
                     subjectName={subject.name}
