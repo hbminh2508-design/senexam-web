@@ -80,6 +80,11 @@ export default function NewExamRoomPage() {
         return
       }
 
+      if (data.require_seb) {
+        router.replace(`/seb-exam/${examId}`)
+        return
+      }
+
       if (data.drive_file_id) {
         setCachedPdfUrl(`https://drive.google.com/file/d/${data.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`)
       } else if (data.pdf_url) {

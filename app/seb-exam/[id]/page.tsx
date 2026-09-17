@@ -168,11 +168,6 @@ export default function SebExamRoomPage() {
   const [sebAccessCode, setSebAccessCode] = useState('')
   const [autoLoggingIn, setAutoLoggingIn] = useState(false)
 
-  // Tùy biến dạng câu hỏi theo ý thí sinh (nếu đề thi hiển thị dạng khác)
-  const [typeOverrides, setTypeOverrides] = useState<Record<string, 'single_choice' | 'true_false' | 'short_answer' | 'essay'>>({})
-  // Bộ lọc dạng câu trên bảng điều hướng (all, single_choice, true_false, short_answer, essay)
-  const [activeTypeFilter, setActiveTypeFilter] = useState<'all' | 'single_choice' | 'true_false' | 'short_answer' | 'essay'>('all')
-
   // 1. Khởi tạo & Kiểm tra môi trường Safe Exam Browser
   useEffect(() => {
     document.documentElement.classList.remove('dark')
@@ -286,7 +281,6 @@ export default function SebExamRoomPage() {
             const parsed = JSON.parse(savedDraft)
             if (parsed.answers) setAnswers(parsed.answers)
             if (parsed.bookmarked) setBookmarked(parsed.bookmarked)
-            if (parsed.typeOverrides) setTypeOverrides(parsed.typeOverrides)
           } catch (e) {}
         }
       } catch (err) {
@@ -353,11 +347,11 @@ export default function SebExamRoomPage() {
       const draftKey = `seb_draft_${examId}_${currentUser.id}`
       localStorage.setItem(
         draftKey,
-        JSON.stringify({ answers, bookmarked, typeOverrides, updatedAt: Date.now() })
+        JSON.stringify({ answers, bookmarked, updatedAt: Date.now() })
       )
     }, 800)
     return () => clearTimeout(timer)
-  }, [answers, bookmarked, typeOverrides, examId, hasStarted, currentUser])
+  }, [answers, bookmarked, examId, hasStarted, currentUser])
 
   // Format thời gian đếm ngược mm:ss
   const formatTimer = (seconds: number) => {
@@ -373,16 +367,10 @@ export default function SebExamRoomPage() {
   }, [exam])
 
   // Tính toán số lượng câu hỏi và vị trí bắt đầu của mỗi phần
-  const { questionMeta, computedOffsets, typeCounts } = useMemo(() => {
+  const { questionMeta, computedOffsets } = useMemo(() => {
     let count = 0
     const offsets: Record<string, number> = {}
     const flat: any[] = []
-    const counts: Record<string, number> = {
-      single_choice: 0,
-      true_false: 0,
-      short_answer: 0,
-      essay: 0,
-    }
 
     activeSections.forEach((section: any) => {
       offsets[section.id] = count
@@ -393,9 +381,7 @@ export default function SebExamRoomPage() {
           section.questionTypeMode === 'custom' && section.questionTypes?.[i]
             ? section.questionTypes[i]
             : section.type
-        const qType = typeOverrides[key] || normalizeQuestionType(rawType, section, i)
-
-        counts[qType] = (counts[qType] || 0) + 1
+        const qType = normalizeQuestionType(rawType, section, i)
 
         flat.push({
           sectionId: section.id,
@@ -411,9 +397,8 @@ export default function SebExamRoomPage() {
     return {
       questionMeta: { totalCount: count, flatList: flat },
       computedOffsets: offsets,
-      typeCounts: counts,
     }
-  }, [activeSections, typeOverrides])
+  }, [activeSections])
 
   // Số lượng câu đã trả lời
   const answeredCount = useMemo(() => {
@@ -476,7 +461,7 @@ export default function SebExamRoomPage() {
           section.questionTypeMode === 'custom' && section.questionTypes?.[i]
             ? section.questionTypes[i]
             : section.type
-        const qType = typeOverrides[key] || normalizeQuestionType(rawType, section, i)
+        const qType = normalizeQuestionType(rawType, section, i)
 
         const customPointsVal = Number(section.pointsPerQuestion?.[i] ?? section.customPoints?.[i])
         const qPoint = isAutoDivide
@@ -1162,101 +1147,32 @@ export default function SebExamRoomPage() {
               </div>
             </div>
 
-            {/* Filter dạng câu hỏi trên bảng điều hướng */}
-            <div className="flex items-center gap-1 mb-2.5 overflow-x-auto pb-0.5 text-[10px] font-bold">
-              <button
-                type="button"
-                onClick={() => setActiveTypeFilter('all')}
-                className={`px-2 py-0.5 rounded-lg transition shrink-0 ${
-                  activeTypeFilter === 'all'
-                    ? 'bg-sky-600 text-white shadow-2xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Tất cả ({questionMeta.totalCount})
-              </button>
-              {(typeCounts?.single_choice || 0) > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTypeFilter('single_choice')}
-                  className={`px-2 py-0.5 rounded-lg transition shrink-0 ${
-                    activeTypeFilter === 'single_choice'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-50'
-                  }`}
-                >
-                  🔵 Trắc nghiệm ({typeCounts.single_choice})
-                </button>
-              )}
-              {(typeCounts?.true_false || 0) > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTypeFilter('true_false')}
-                  className={`px-2 py-0.5 rounded-lg transition shrink-0 ${
-                    activeTypeFilter === 'true_false'
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
-                  }`}
-                >
-                  🟢 Đúng/Sai ({typeCounts.true_false})
-                </button>
-              )}
-              {(typeCounts?.short_answer || 0) > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTypeFilter('short_answer')}
-                  className={`px-2 py-0.5 rounded-lg transition shrink-0 ${
-                    activeTypeFilter === 'short_answer'
-                      ? 'bg-amber-600 text-white shadow-2xs'
-                      : 'bg-white text-amber-700 border border-amber-200 hover:bg-amber-50'
-                  }`}
-                >
-                  🟠 Điền số ({typeCounts.short_answer})
-                </button>
-              )}
-              {(typeCounts?.essay || 0) > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTypeFilter('essay')}
-                  className={`px-2 py-0.5 rounded-lg transition shrink-0 ${
-                    activeTypeFilter === 'essay'
-                      ? 'bg-purple-600 text-white shadow-2xs'
-                      : 'bg-white text-purple-700 border border-purple-200 hover:bg-purple-50'
-                  }`}
-                >
-                  🟣 Tự luận ({typeCounts.essay})
-                </button>
-              )}
-            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+              {questionMeta.flatList.map((item) => {
+                const ans = answers[item.key]
+                const isAnswered =
+                  ans !== undefined &&
+                  ans !== null &&
+                  ans !== '' &&
+                  (typeof ans !== 'object' || Object.values(ans).some((v) => v !== undefined && v !== ''))
+                const isMarked = bookmarked[item.key]
 
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-              {questionMeta.flatList
-                .filter((item) => activeTypeFilter === 'all' || item.type === activeTypeFilter)
-                .map((item) => {
-                  const ans = answers[item.key]
-                  const isAnswered =
-                    ans !== undefined &&
-                    ans !== null &&
-                    ans !== '' &&
-                    (typeof ans !== 'object' || Object.values(ans).some((v) => v !== undefined && v !== ''))
-                  const isMarked = bookmarked[item.key]
-
-                  return (
-                    <a
-                      key={item.key}
-                      href={`#q-${item.key}`}
-                      className={`h-7 w-8 rounded-lg text-xs font-black flex items-center justify-center transition ${
-                        isMarked
-                          ? 'bg-amber-500 text-white ring-2 ring-amber-300'
-                          : isAnswered
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {item.globalNum}
-                    </a>
-                  )
-                })}
+                return (
+                  <a
+                    key={item.key}
+                    href={`#q-${item.key}`}
+                    className={`h-7 w-8 rounded-lg text-xs font-black flex items-center justify-center transition ${
+                      isMarked
+                        ? 'bg-amber-500 text-white ring-2 ring-amber-300'
+                        : isAnswered
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {item.globalNum}
+                  </a>
+                )
+              })}
             </div>
           </div>
 
@@ -1286,7 +1202,7 @@ export default function SebExamRoomPage() {
                         section.questionTypeMode === 'custom' && section.questionTypes?.[qIdx]
                           ? section.questionTypes[qIdx]
                           : section.type
-                      const currentType = typeOverrides[key] || normalizeQuestionType(rawType, section, qIdx)
+                      const currentType = normalizeQuestionType(rawType, section, qIdx)
 
                       const qPoint =
                         section.scoringMode === 'custom_points'
@@ -1318,43 +1234,6 @@ export default function SebExamRoomPage() {
                                   </span>
                                 )}
                               </span>
-
-                              {/* Badge Thể Loại Câu Hỏi */}
-                              <span
-                                className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg border shadow-2xs ${
-                                  currentType === 'single_choice'
-                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                    : currentType === 'true_false'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : currentType === 'short_answer'
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : 'bg-purple-50 text-purple-700 border-purple-200'
-                                }`}
-                              >
-                                {currentType === 'single_choice'
-                                  ? '🔵 Trắc nghiệm 4 PA'
-                                  : currentType === 'true_false'
-                                  ? '🟢 Đúng / Sai 4 ý'
-                                  : currentType === 'short_answer'
-                                  ? '🟠 Trả lời ngắn / Điền số'
-                                  : '🟣 Tự luận'}
-                              </span>
-
-                              {/* Quick selector để đổi dạng câu nếu đề thi thực tế hiển thị khác */}
-                              <select
-                                value={currentType}
-                                onChange={(e) => {
-                                  const nextType = e.target.value as any
-                                  setTypeOverrides((prev) => ({ ...prev, [key]: nextType }))
-                                }}
-                                title="Bấm để đổi định dạng câu nếu đề PDF hiển thị dạng khác"
-                                className="text-[10px] font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded-md border border-slate-200 cursor-pointer outline-none transition"
-                              >
-                                <option value="single_choice">Đổi: Trắc nghiệm</option>
-                                <option value="true_false">Đổi: Đúng/Sai 4 ý</option>
-                                <option value="short_answer">Đổi: Điền số/Ngắn</option>
-                                <option value="essay">Đổi: Tự luận</option>
-                              </select>
                             </div>
 
                             <button

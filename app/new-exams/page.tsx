@@ -46,6 +46,7 @@ type ExamItem = {
   is_hidden?: boolean
   access_code?: string | null
   is_vip?: boolean | null
+  require_seb?: boolean | null
 }
 
 const EXAM_TYPES = ['Tất cả', 'THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL']
@@ -151,7 +152,11 @@ export default function NewExamsPage() {
       if (error || !data) {
         setAccessCodeError('Mã truy cập không hợp lệ hoặc đề thi không tồn tại.')
       } else {
-        router.push(`/new-exams/${data.id}`)
+        if (data.require_seb) {
+          router.push(`/seb-exam/${data.id}`)
+        } else {
+          router.push(`/new-exams/${data.id}`)
+        }
       }
     } catch (err: any) {
       setAccessCodeError('Không tìm thấy đề thi với mã này.')
@@ -360,6 +365,11 @@ export default function NewExamsPage() {
                         </span>
 
                         <div className="flex items-center gap-1.5">
+                          {exam.require_seb && (
+                            <span className="flex items-center gap-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-2 py-0.5 text-[10px] font-black uppercase shadow-2xs">
+                              🛡️ SEB
+                            </span>
+                          )}
                           {isVip && (
                             <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[10px] font-black uppercase">
                               <Crown className="h-3 w-3" /> VIP
@@ -412,8 +422,12 @@ export default function NewExamsPage() {
                       )}
 
                       <Link
-                        href={`/new-exams/${exam.id}`}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:opacity-90 active:scale-95"
+                        href={exam.require_seb ? `/seb-exam/${exam.id}` : `/new-exams/${exam.id}`}
+                        className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:opacity-90 active:scale-95 ${
+                          exam.require_seb
+                            ? 'bg-sky-600 hover:bg-sky-700 text-white shadow-sky-600/20'
+                            : 'bg-[#111827] dark:bg-white text-white dark:text-slate-900'
+                        }`}
                       >
                         <Rocket className="h-3.5 w-3.5" /> Vào thi
                       </Link>

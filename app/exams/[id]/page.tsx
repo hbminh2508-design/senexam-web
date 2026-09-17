@@ -62,6 +62,11 @@ export default function ExamRoomPage() {
       // 1. Lấy dữ liệu cấu trúc đề
       const { data: examData, error } = await supabase.from('exams').select('*').eq('id', examId).single()
       if (error || !examData) { alert('Đề thi không tồn tại!'); router.push('/exams'); return }
+
+      if (examData.require_seb) {
+        router.replace(`/seb-exam/${examId}`)
+        return
+      }
       
       if (examData.drive_file_id) {
         setCachedPdfUrl(`https://drive.google.com/file/d/${examData.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`)

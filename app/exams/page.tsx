@@ -189,7 +189,7 @@ export default function ExamsLibraryPage() {
                         <Clock className="w-3.5 h-3.5" /> {exam.duration} phút
                       </div>
                       <button
-                        onClick={() => !isLocked && router.push(`/exams/${exam.id}`)}
+                        onClick={() => !isLocked && (exam.require_seb ? router.push(`/seb-exam/${exam.id}`) : router.push(`/exams/${exam.id}`))}
                         disabled={isLocked}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
                         style={isLocked ? { background: 'var(--border)', color: 'var(--text-muted)' } : { background: 'var(--accent)', color: '#fff' }}
@@ -274,9 +274,16 @@ export default function ExamsLibraryPage() {
                   
                   <div>
                     <div className="flex justify-between items-start mb-4">
-                      <span className="px-3 py-1.5 bg-blue-100/80 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-black uppercase tracking-wider backdrop-blur-sm border border-blue-200 dark:border-blue-800/50 shadow-sm">
-                        {highlightSearchText(exam.exam_type, deferredSearchQuery)}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-3 py-1.5 bg-blue-100/80 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-black uppercase tracking-wider backdrop-blur-sm border border-blue-200 dark:border-blue-800/50 shadow-sm">
+                          {highlightSearchText(exam.exam_type, deferredSearchQuery)}
+                        </span>
+                        {exam.require_seb && (
+                          <span className="px-2.5 py-1 bg-sky-100/80 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300 rounded-xl text-xs font-black uppercase tracking-wider backdrop-blur-sm border border-sky-200 dark:border-sky-800/50 shadow-sm flex items-center gap-1">
+                            🛡️ SEB
+                          </span>
+                        )}
+                      </div>
                       {exam.max_attempts > 0 && (
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border backdrop-blur-sm shadow-sm flex items-center gap-1 ${isLocked ? 'bg-red-100/80 text-red-600 border-red-200' : 'bg-emerald-100/80 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800/50'}`}>
                           {isLocked ? <Lock className="w-3 h-3"/> : <CheckCircle2 className="w-3 h-3"/>}
@@ -304,11 +311,13 @@ export default function ExamsLibraryPage() {
                     </div>
                     
                     <button 
-                      onClick={() => !isLocked && router.push(`/exams/${exam.id}`)}
+                      onClick={() => !isLocked && (exam.require_seb ? router.push(`/seb-exam/${exam.id}`) : router.push(`/exams/${exam.id}`))}
                       disabled={isLocked}
                       className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm backdrop-blur-md border ${
                         isLocked 
                           ? 'bg-slate-200/50 dark:bg-slate-800/50 text-slate-400 border-slate-300/50 dark:border-slate-700/50 cursor-not-allowed' 
+                          : exam.require_seb
+                          ? 'bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 text-white border-white/20 hover:scale-105 hover:shadow-[0_6px_18px_rgba(56,189,248,0.38)]'
                           : 'bg-gradient-to-r from-blue-600/90 via-indigo-600/90 to-cyan-600/90 text-white border-white/20 hover:scale-105 hover:shadow-[0_6px_18px_rgba(59,130,246,0.38)]'
                       }`}
                     >
