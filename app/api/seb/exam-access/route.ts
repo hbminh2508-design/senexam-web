@@ -101,6 +101,23 @@ export async function POST(request: Request) {
       codeStore.set(newCode, record)
       userExamCodeMap.set(mapKey, newCode)
 
+      // Lưu vết vào bảng seb_access_codes trong CSDL Supabase (nếu có bảng)
+      try {
+        await admin.from('seb_access_codes').insert({
+          code: newCode,
+          user_id: userId,
+          user_email: userEmail || null,
+          exam_id: examId,
+          token_hash: tokenHash || null,
+          action_link: actionLink || null,
+          device_id: deviceId || null,
+          expires_at: new Date(expiresAt).toISOString(),
+          used: false,
+        })
+      } catch (dbErr: any) {
+        console.warn('Lưu vết seb_access_codes vào CSDL:', dbErr?.message)
+      }
+
       return NextResponse.json({
         success: true,
         code: newCode,
@@ -120,6 +137,34 @@ export async function POST(request: Request) {
 
       const record = codeStore.get(cleanCode)
       if (!record) {
+        // Tra cứu fallback từ CSDL Supabase nếu cache server đã khởi động lại
+        try {
+          const { data: dbCode } = await admin
+            .from('seb_access_codes')
+            .select('*')
+            .eq('code', cleanCode)
+            .eq('used', false)
+            .gt('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .maybeSingle()
+
+          if (dbCode) {
+            await admin
+              .from('seb_access_codes')
+              .update({ used: true, used_at: new Date().toISOString() })
+              .eq('id', dbCode.id)
+
+            return NextResponse.json({
+              success: true,
+              examId: dbCode.exam_id,
+              userId: dbCode.user_id,
+              userEmail: dbCode.user_email,
+              tokenHash: dbCode.token_hash,
+              actionLink: dbCode.action_link,
+            })
+          }
+        } catch (dbSearchErr) {}
+
         return NextResponse.json({ error: 'Mã dự thi không tồn tại hoặc đã hết hạn!' }, { status: 404 })
       }
 
@@ -136,6 +181,14 @@ export async function POST(request: Request) {
       record.used = true
       codeStore.delete(cleanCode)
       userExamCodeMap.delete(`${record.userId}_${record.examId}`)
+
+      // Cập nhật CSDL
+      try {
+        await admin
+          .from('seb_access_codes')
+          .update({ used: true, used_at: new Date().toISOString() })
+          .eq('code', cleanCode)
+      } catch (e) {}
 
       return NextResponse.json({
         success: true,
@@ -172,6 +225,25 @@ export async function POST(request: Request) {
       } catch (sessErr: any) {
         console.warn('Lỗi thu hồi sessions thiết bị khác:', sessErr?.message)
       }
+
+      // Cập nhật trạng thái chấm dứt phiên trong seb_access_codes và profiles
+      try {
+        await admin
+          .from('seb_access_codes')
+          .update({ terminated_other_sessions: true })
+          .eq('user_id', userId)
+          .eq('exam_id', examId)
+
+        const activeSessionKey = `seb_${Date.now()}`
+        await admin
+          .from('profiles')
+          .update({
+            active_seb_session: activeSessionKey,
+            last_seb_exam_id: examId,
+            last_seb_exam_at: new Date().toISOString(),
+          })
+          .eq('id', userId)
+      } catch (e) {}
 
       return NextResponse.json({
         success: true,
