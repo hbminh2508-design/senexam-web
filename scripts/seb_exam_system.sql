@@ -85,6 +85,8 @@ END $$;
 
 -- 5. ĐỒNG BỘ CỘT CHO BẢNG SUBMISSIONS DÙNG CHUNG SENEXAM & SEB
 ALTER TABLE public.submissions
+  ADD COLUMN IF NOT EXISTS is_graded boolean DEFAULT true,
+  ADD COLUMN IF NOT EXISTS is_completed boolean DEFAULT true,
   ADD COLUMN IF NOT EXISTS submitted_at timestamptz DEFAULT now(),
   ADD COLUMN IF NOT EXISTS tab_switches integer DEFAULT 0,
   ADD COLUMN IF NOT EXISTS blur_count integer DEFAULT 0;

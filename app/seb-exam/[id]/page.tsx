@@ -343,30 +343,52 @@ export default function SebExamRoomPage() {
     try {
       const calculatedScore = calculateScore()
 
-      const { data: subData, error: subErr } = await supabase
-        .from('submissions')
-        .insert({
-          user_id: currentUser.id,
-          exam_id: examId,
-          score: calculatedScore,
-          total_questions: questionMeta.totalCount,
-          answers: answers,
-          is_completed: true,
-          submitted_at: new Date().toISOString(),
-          tab_switches: tabSwitches,
-          blur_count: tabSwitches,
-        })
-        .select('*')
-        .single()
+      // 1. Dữ liệu chuẩn tương thích hoàn toàn với bảng submissions của SenExam
+      const coreSubmission = {
+        user_id: currentUser.id,
+        exam_id: examId,
+        score: calculatedScore,
+        answers: answers,
+        is_graded: true,
+      }
 
-      if (subErr) throw subErr
+      // 2. Thử ghi kèm telemetry mở rộng (nếu CSDL đã có cột)
+      let subData: any = null
+      const enhancedSubmission = {
+        ...coreSubmission,
+        total_questions: questionMeta.totalCount,
+        tab_switches: tabSwitches,
+        blur_count: tabSwitches,
+        submitted_at: new Date().toISOString(),
+      }
+
+      const { data: firstTryData, error: firstTryErr } = await supabase
+        .from('submissions')
+        .insert(enhancedSubmission)
+        .select('*')
+        .maybeSingle()
+
+      if (firstTryErr) {
+        console.warn('Lỗi ghi telemetry mở rộng, tự động fallback sang schema chuẩn SenExam:', firstTryErr.message)
+        // Fallback an toàn tuyệt đối: chỉ gửi các cột chắc chắn có trong bảng submissions
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .from('submissions')
+          .insert(coreSubmission)
+          .select('*')
+          .single()
+
+        if (fallbackErr) throw fallbackErr
+        subData = fallbackData
+      } else {
+        subData = firstTryData
+      }
 
       // Xóa bản nháp
       const draftKey = `seb_draft_${examId}_${currentUser.id}`
       localStorage.removeItem(draftKey)
 
       setSubmittedResult({
-        submissionId: subData.id,
+        submissionId: subData?.id || 'done',
         score: calculatedScore,
       })
       setShowSubmitModal(false)

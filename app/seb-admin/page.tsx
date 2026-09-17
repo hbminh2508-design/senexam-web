@@ -98,8 +98,6 @@ export default function SebAdminPage() {
 
   // AI Assistant State (Gemini 3.5 Flash Lite)
   const [analyzingWithAi, setAnalyzingWithAi] = useState(false)
-  const [showAiModal, setShowAiModal] = useState(false)
-  const [aiExamText, setAiExamText] = useState('')
 
   // Cấu trúc Phần thi linh hoạt (Sections)
   const [examSections, setExamSections] = useState<SectionItem[]>([
@@ -183,8 +181,8 @@ export default function SebAdminPage() {
       // 3. Tải bài nộp gần nhất
       const { data: subData } = await supabase
         .from('submissions')
-        .select('id, user_id, score, is_completed, submitted_at, created_at, tab_switches, exams(title), profiles(full_name, email)')
-        .order('submitted_at', { ascending: false })
+        .select('id, user_id, score, is_graded, created_at, exams(title), profiles(full_name, email)')
+        .order('created_at', { ascending: false })
         .limit(30)
       setSubmissions(subData || [])
     } catch (err) {
@@ -301,30 +299,25 @@ export default function SebAdminPage() {
     })
   }
 
-  // Kích hoạt Gemini 3.5 Flash Lite phân tích đề & tự động tạo đáp án
-  const handleAiAnalyze = async (textOverride?: string) => {
-    if (!examPdfFile && !textOverride && !aiExamText.trim()) {
-      alert('Vui lòng chọn file đề thi PDF hoặc dán nội dung văn bản đề thi để AI phân tích!')
+  // Kích hoạt Gemini 3.5 Flash Lite phân tích file PDF & tự động tạo đề
+  const handleAiAnalyze = async (fileToAnalyze?: File) => {
+    const targetFile = fileToAnalyze || examPdfFile
+    if (!targetFile) {
+      alert('Vui lòng chọn hoặc kéo thả file PDF đề thi để Gemini 3.5 Flash Lite phân tích!')
       return
     }
 
     setAnalyzingWithAi(true)
     try {
-      let fileBase64 = ''
-      let mimeType = 'application/pdf'
-
-      if (examPdfFile) {
-        fileBase64 = await fileToBase64(examPdfFile)
-        mimeType = examPdfFile.type || 'application/pdf'
-      }
+      const fileBase64 = await fileToBase64(targetFile)
+      const mimeType = targetFile.type || 'application/pdf'
 
       const res = await fetch('/api/seb/ai-analyze-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fileBase64: fileBase64 || undefined,
-          mimeType: fileBase64 ? mimeType : undefined,
-          examText: textOverride || aiExamText.trim() || undefined,
+          fileBase64,
+          mimeType,
         }),
       })
 
@@ -362,11 +355,11 @@ export default function SebAdminPage() {
 
         setExamSections(mappedSections)
         setShowAiModal(false)
-        alert(`✨ Phân tích thành công bằng Gemini 3.5 Flash Lite!\nĐã tạo ${mappedSections.length} phần thi và tự động giải đáp án. Bạn có thể xem và hiệu chỉnh lại bên dưới.`)
+        alert(`🎉 Phân tích file PDF thành công bằng Gemini 3.5 Flash Lite!\nĐã nhận diện ${mappedSections.length} phần thi và tự động giải sẵn bảng đáp án. Bạn có thể kiểm tra lại thông tin và bảng đáp án bên dưới.`)
       }
     } catch (err: any) {
       console.error('Lỗi phân tích AI:', err)
-      alert('Lỗi phân tích đề thi bằng Gemini: ' + (err.message || 'Vui lòng thử lại.'))
+      alert('Lỗi phân tích file PDF bằng Gemini: ' + (err.message || 'Vui lòng kiểm tra lại file PDF.'))
     } finally {
       setAnalyzingWithAi(false)
     }
@@ -664,12 +657,134 @@ export default function SebAdminPage() {
         {/* ======================================================== */}
         {activeTab === 'create_exam' && (
           <form onSubmit={handleCreateExam} className="space-y-6">
+            {/* 1. TẢI FILE PDF & PHÂN TÍCH TỰ ĐỘNG BẰNG GEMINI 3.5 FLASH LITE */}
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-50 via-sky-50 to-blue-50 border border-indigo-200/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2
+                      className="text-lg font-black text-indigo-950 flex items-center gap-2"
+                      style={{ fontFamily: 'var(--font-sebadm-heading)' }}
+                    >
+                      <span>1. Tải Lên File PDF Đề Thi (Phân Tích Bằng Gemini 3.5 Flash Lite)</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white uppercase tracking-wider">
+                        AI Tự Động
+                      </span>
+                    </h2>
+                    <p className="text-xs text-indigo-700/80">
+                      Tải file PDF đề thi của bạn lên. Gemini 3.5 Flash Lite sẽ tự động đọc, trích xuất cấu trúc đề thi, số phần, số câu và giải trước bảng đáp án chính xác.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Khu vực Tải / Kéo thả File PDF */}
+              {!examPdfFile ? (
+                <label className="border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-white/70 hover:bg-white rounded-3xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition text-center group shadow-xs">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) {
+                        setExamPdfFile(f)
+                        handleAiAnalyze(f)
+                      }
+                    }}
+                  />
+                  <div className="h-12 w-12 rounded-2xl bg-indigo-100 text-indigo-600 group-hover:scale-110 transition flex items-center justify-center">
+                    <UploadCloud className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-sm font-black text-indigo-950 block">
+                      Bấm vào đây để chọn File PDF Đề Thi (hoặc kéo thả file vào đây)
+                    </span>
+                    <span className="text-xs text-slate-500 mt-1 block">
+                      Khi tải file PDF lên, hệ thống sẽ tự động gửi tới Gemini 3.5 Flash Lite để phân tích và giải đề ngay lập tức
+                    </span>
+                  </div>
+                </label>
+              ) : (
+                <div className="p-4 rounded-2xl bg-white border border-indigo-200 space-y-3 shadow-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-200">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-slate-900 truncate block">
+                            {examPdfFile.name}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                            ✓ File PDF Đã Chọn
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {(examPdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer transition">
+                        <span>Đổi file PDF khác</span>
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0]
+                            if (f) {
+                              setExamPdfFile(f)
+                              handleAiAnalyze(f)
+                            }
+                          }}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        disabled={analyzingWithAi}
+                        onClick={() => handleAiAnalyze(examPdfFile)}
+                        className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-500/20 disabled:opacity-50"
+                      >
+                        {analyzingWithAi ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Đang Phân Tích & Giải...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Phân Tích Lại Bằng AI</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {analyzingWithAi && (
+                    <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center gap-2.5 text-xs text-indigo-900 font-bold animate-pulse">
+                      <Loader2 className="h-4 w-4 animate-spin text-indigo-600 shrink-0" />
+                      <span>Gemini 3.5 Flash Lite đang đọc file PDF, phân tích các phần thi và giải ma trận đáp án... Vui lòng đợi trong giây lát.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 2. THÔNG TIN CHUNG ĐỀ THI */}
             <div className="p-6 rounded-3xl bg-white border border-sky-100 shadow-sm space-y-5">
               <h2
                 className="text-xl font-black text-slate-900"
                 style={{ fontFamily: 'var(--font-sebadm-heading)' }}
               >
-                1. Thông Tin Chung & File Đề Thi PDF
+                2. Thông Tin Chung Đề Thi (AI Tự Động Điền)
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -679,7 +794,7 @@ export default function SebAdminPage() {
                     type="text"
                     value={examTitle}
                     onChange={(e) => setExamTitle(e.target.value)}
-                    placeholder="Ví dụ: Đề Khảo Sát Chất Lượng Học Kỳ 1 Môn Vật Lí"
+                    placeholder="Tự động điền sau khi tải file PDF, hoặc nhập thủ công..."
                     className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
                     required
                   />
@@ -729,30 +844,16 @@ export default function SebAdminPage() {
                     ))}
                   </select>
                 </div>
-
-                {/* File PDF Đề Thi */}
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-bold text-slate-700">
-                    File Đề Thi PDF (Tải trực tiếp lên Google Drive) *
-                  </label>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(e) => setExamPdfFile(e.target.files?.[0] || null)}
-                    className="w-full px-3.5 py-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-xs cursor-pointer"
-                    required
-                  />
-                </div>
               </div>
             </div>
 
-            {/* 2. Bảo Mật Safe Exam Browser (SEB) */}
+            {/* 3. Bảo Mật Safe Exam Browser (SEB) */}
             <div className="p-6 rounded-3xl bg-white border border-sky-100 shadow-sm space-y-4">
               <h2
                 className="text-xl font-black text-slate-900"
                 style={{ fontFamily: 'var(--font-sebadm-heading)' }}
               >
-                2. Bảo Mật Safe Exam Browser (SEB)
+                3. Bảo Mật Safe Exam Browser (SEB)
               </h2>
 
               <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-sky-50/70 border border-sky-100">
@@ -767,71 +868,6 @@ export default function SebAdminPage() {
                   Khóa môi trường thi bằng Safe Exam Browser (Chặn Alt+Tab, chụp màn hình, mở ứng dụng ngoài, bắt buộc chạy đúng môi trường SEB)
                 </label>
               </div>
-            </div>
-
-            {/* 3. Trợ Lý AI: Phân Tích & Giải Đề Bằng Gemini 3.5 Flash Lite */}
-            <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-50/80 via-sky-50/70 to-blue-50/80 border border-indigo-200/80 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-sky-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
-                    <Sparkles className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2
-                      className="text-lg font-black text-indigo-950 flex items-center gap-2"
-                      style={{ fontFamily: 'var(--font-sebadm-heading)' }}
-                    >
-                      <span>Trợ Lý Khảo Thí: Gemini 3.5 Flash Lite</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white uppercase tracking-wider">
-                        AI Tự Động
-                      </span>
-                    </h2>
-                    <p className="text-xs text-indigo-700/80">
-                      Tự động phân tích file đề thi PDF (hoặc văn bản), trích xuất số phần, số câu, tính điểm và giải trước bảng đáp án chính xác.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAiModal(true)}
-                    className="px-3 py-2 rounded-xl border border-indigo-200 bg-white/80 hover:bg-white text-indigo-700 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    <span>Dán Văn Bản Đề</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={analyzingWithAi}
-                    onClick={() => handleAiAnalyze()}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-bold transition flex items-center gap-2 shadow-md shadow-indigo-500/20 disabled:opacity-50"
-                  >
-                    {analyzingWithAi ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Gemini Đang Phân Tích & Giải...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4" />
-                        <span>Phân Tích Bằng Gemini 3.5 Flash Lite</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {examPdfFile && (
-                <div className="p-2.5 rounded-xl bg-white/70 border border-indigo-100 flex items-center justify-between text-xs text-indigo-900">
-                  <div className="flex items-center gap-2 truncate">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span className="truncate">File PDF sẵn sàng phân tích: <strong>{examPdfFile.name}</strong></span>
-                  </div>
-                  <span className="text-[11px] text-indigo-500 font-mono shrink-0">{(examPdfFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                </div>
-              )}
             </div>
 
             {/* 4. Cấu Trúc Đề Thi & Bảng Đáp Án Linh Hoạt */}
@@ -1464,78 +1500,6 @@ export default function SebAdminPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Nhập Nội Dung Đề Thi Bằng Văn Bản Cho Gemini 3.5 Flash Lite */}
-      {showAiModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="max-w-2xl w-full bg-white rounded-3xl p-6 border border-sky-100 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <h3
-                  className="text-base font-black text-slate-900"
-                  style={{ fontFamily: 'var(--font-sebadm-heading)' }}
-                >
-                  Nhập Văn Bản Đề Thi Cho Gemini 3.5 Flash Lite
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAiModal(false)}
-                className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center text-xs font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Dán toàn bộ nội dung đề thi, các phần thi và đáp án (nếu có). Gemini 3.5 Flash Lite sẽ tự động phân tích cấu trúc, nhận diện từng câu hỏi và tạo đề hoàn chỉnh.
-            </p>
-
-            <textarea
-              value={aiExamText}
-              onChange={(e) => setAiExamText(e.target.value)}
-              placeholder="Dán nội dung đề thi vào đây... Ví dụ:
-Phần 1: Trắc nghiệm...
-Câu 1: Cho hàm số... A... B... C... D...
-Phần 2: Đúng Sai...
-Câu 1: a)... b)... c)... d)..."
-              rows={12}
-              className="w-full p-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed"
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowAiModal(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600"
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                disabled={analyzingWithAi || !aiExamText.trim()}
-                onClick={() => handleAiAnalyze()}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-500/20 disabled:opacity-50"
-              >
-                {analyzingWithAi ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>Đang Phân Tích...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>Bắt Đầu Phân Tích</span>
-                  </>
-                )}
-              </button>
-            </div>
           </div>
         </div>
       )}
