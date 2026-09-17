@@ -170,6 +170,42 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.rewrite(url))
   }
 
+  // 4.5 Kiểm tra nếu truy cập qua subdomain thi cử bảo mật SEB: seb.thicu.tailieufepn.senexam.com
+  const isSebSubdomain =
+    hostname.startsWith('seb.thicu.tailieufepn.') ||
+    hostname.startsWith('seb.') ||
+    hostname.startsWith('thicu.')
+
+  if (isSebSubdomain) {
+    if (pathname === '/' || pathname === '/dashboard') {
+      url.pathname = '/seb-dashboard'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/login') {
+      url.pathname = '/seb-login'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/profile') {
+      url.pathname = '/seb-profile'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/admin') {
+      url.pathname = '/seb-admin'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/exam/')) {
+      url.pathname = `/seb-exam/${pathname.replace('/exam/', '')}`
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/exams/')) {
+      url.pathname = `/seb-exam/${pathname.replace('/exams/', '')}`
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/seb-')) {
+      return applySecurityHeaders(NextResponse.next())
+    }
+  }
+
   // 5. Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
   const isFepnSubdomain =
     hostname.startsWith('tsv.fepn.') ||
