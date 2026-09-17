@@ -604,6 +604,19 @@ export default function SebAdminPage() {
         ? examCustomCode.trim().toUpperCase() || Math.random().toString(36).substring(2, 8).toUpperCase()
         : null
 
+      // Đồng bộ cấu trúc đề thi để cả SenExam lẫn SEB đều đọc được chuẩn xác
+      const synchronizedSections = examSections.map((s) => {
+        const pts = Number(s.totalPoints) || 10
+        return {
+          ...s,
+          totalPoints: pts,
+          sectionTotalPoints: pts,
+          scoringMode: s.scoringMode || 'auto_divide',
+          pointsPerQuestion: s.pointsPerQuestion || {},
+          customPoints: s.pointsPerQuestion || {},
+        }
+      })
+
       const { data: newExam, error: examErr } = await supabase
         .from('exams')
         .insert({
@@ -611,7 +624,7 @@ export default function SebAdminPage() {
           exam_type: examTypeVal,
           duration: parseInt(examDuration) || 50,
           drive_file_id: driveFileId,
-          exam_structure: examSections,
+          exam_structure: synchronizedSections,
           allow_review: examAllowReview,
           is_hidden: examIsHidden,
           access_code: accessCode,

@@ -224,13 +224,21 @@ export default function NewExamRoomPage() {
       const detailedScores: Record<string, number> = {}
 
       activeSections.forEach((section: any) => {
-        const perQuestionPoints = section.scoringMode === 'auto_divide'
-          ? ((section.sectionTotalPoints || 0) / (section.questionCount || 1))
-          : 0
+        const qCount = parseInt(section.questionCount) || 1
+        const isAutoDivide = section.scoringMode !== 'custom' && section.scoringMode !== 'custom_points'
 
-        Array.from({ length: section.questionCount || 0 }).forEach((_, qIdx) => {
+        let secPoints = Number(section.totalPoints ?? section.sectionTotalPoints)
+        if (!secPoints || isNaN(secPoints)) {
+          if (exam?.exam_type === 'HSA') secPoints = qCount || 50
+          else if (exam?.exam_type === 'TSA') secPoints = Math.round(100 / (activeSections.length || 1))
+          else secPoints = 10
+        }
+        const perQuestionPoints = secPoints / qCount
+
+        Array.from({ length: qCount }).forEach((_, qIdx) => {
           const key = `${section.id}-${qIdx}`
-          const qPoint = section.scoringMode === 'custom' ? (section.customPoints?.[qIdx] || 0) : perQuestionPoints
+          const customVal = Number(section.customPoints?.[qIdx] ?? section.pointsPerQuestion?.[qIdx])
+          const qPoint = isAutoDivide ? perQuestionPoints : (!isNaN(customVal) && customVal > 0 ? customVal : perQuestionPoints)
           let earned = 0
 
           let currentType = section.type || 'single_choice'
@@ -250,9 +258,13 @@ export default function NewExamRoomPage() {
               let correctSubCount = 0
               if (studentAns && typeof studentAns === 'object' && correctAns && typeof correctAns === 'object') {
                 ;['a', 'b', 'c', 'd'].forEach((sub) => {
-                  const sVal = studentAns[sub] === 'Đ' || studentAns[sub] === 'T' ? 'T' : studentAns[sub] === 'S' || studentAns[sub] === 'F' ? 'F' : studentAns[sub]
-                  const cVal = correctAns[sub] === 'Đ' || correctAns[sub] === 'T' ? 'T' : correctAns[sub] === 'S' || correctAns[sub] === 'F' ? 'F' : correctAns[sub]
-                  if (sVal && cVal && sVal === cVal) correctSubCount++
+                  const sVal = String(studentAns[sub] || '').toUpperCase()
+                  const cVal = String(correctAns[sub] || '').toUpperCase()
+                  const sT = sVal === 'Đ' || sVal === 'T' || sVal === 'TRUE' || sVal === '1'
+                  const sF = sVal === 'S' || sVal === 'F' || sVal === 'FALSE' || sVal === '0'
+                  const cT = cVal === 'Đ' || cVal === 'T' || cVal === 'TRUE' || cVal === '1'
+                  const cF = cVal === 'S' || cVal === 'F' || cVal === 'FALSE' || cVal === '0'
+                  if ((sT && cT) || (sF && cF)) correctSubCount++
                 })
               }
               if (correctSubCount === 1) earned = qPoint * 0.1
@@ -264,8 +276,14 @@ export default function NewExamRoomPage() {
                 earned = qPoint
               }
             } else {
-              if (studentAns !== undefined && studentAns !== null && String(studentAns).trim().toUpperCase() === String(correctAns).trim().toUpperCase()) {
-                earned = qPoint
+              if (studentAns !== undefined && studentAns !== null) {
+                const sStr = String(studentAns).trim().toUpperCase().replace(/\s+/g, '')
+                const cStr = String(correctAns || '').trim().toUpperCase().replace(/\s+/g, '')
+                const sNorm = sStr.replace(',', '.')
+                const cNorm = cStr.replace(',', '.')
+                if (sStr && (sStr === cStr || sNorm === cNorm)) {
+                  earned = qPoint
+                }
               }
             }
           }

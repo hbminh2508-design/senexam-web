@@ -119,6 +119,9 @@ export default function SebExamRoomPage() {
   const [pdfFullscreen, setPdfFullscreen] = useState(false)
   const [cachedPdfUrl, setCachedPdfUrl] = useState('')
 
+  const [sebAccessCode, setSebAccessCode] = useState('')
+  const [autoLoggingIn, setAutoLoggingIn] = useState(false)
+
   // 1. Khởi tạo & Kiểm tra môi trường Safe Exam Browser
   useEffect(() => {
     document.documentElement.classList.remove('dark')
@@ -140,8 +143,61 @@ export default function SebExamRoomPage() {
 
     const fetchExam = async () => {
       try {
+        let user: any = null
         const { data: auth } = await supabase.auth.getUser()
-        const user = auth.user
+        user = auth?.user
+
+        // 🌟 TỰ ĐỘNG ĐĂNG NHẬP VÀO SEB QUA AUTO_CODE NẾU CHƯA CÓ SESSION
+        if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search)
+          const autoCode = urlParams.get('auto_code') || urlParams.get('code') || urlParams.get('token')
+
+          if (!user && autoCode) {
+            setAutoLoggingIn(true)
+            try {
+              const res = await fetch('/api/seb/exam-access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'verify_and_login',
+                  code: autoCode.trim(),
+                }),
+              })
+              const data = await res.json()
+              if (data.success) {
+                if (data.tokenHash) {
+                  await supabase.auth.verifyOtp({
+                    token_hash: data.tokenHash,
+                    type: 'magiclink',
+                  })
+                }
+                const { data: reAuth } = await supabase.auth.getUser()
+                user = reAuth?.user
+
+                if (data.userId) {
+                  await supabase.auth.signOut({ scope: 'others' }).catch(() => {})
+                  await fetch('/api/seb/exam-access', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'enter_exam_and_terminate_others',
+                      userId: data.userId,
+                      examId: examId,
+                    }),
+                  }).catch(() => {})
+                }
+
+                // Xóa param trên URL để an toàn
+                window.history.replaceState({}, '', window.location.pathname)
+              }
+            } catch (authErr) {
+              console.warn('Lỗi auto-login SEB:', authErr)
+            } finally {
+              setAutoLoggingIn(false)
+            }
+          }
+        }
+
         if (!user) {
           router.replace('/seb-login')
           return
@@ -333,12 +389,21 @@ export default function SebExamRoomPage() {
   // Chấm điểm bài thi theo đúng cấu trúc từng phần thi và chế độ điểm
   const calculateScore = () => {
     let totalScore = 0
+    const detailedScores: Record<string, number> = {}
 
     activeSections.forEach((section: any) => {
       const qCount = parseInt(section.questionCount) || 0
       const correctMap = section.correctAnswers || {}
-      const isAutoDivide = section.scoringMode !== 'custom_points'
-      const defaultPointsPerQ = qCount > 0 ? (Number(section.totalPoints) || 0) / qCount : 0
+      const isAutoDivide = section.scoringMode !== 'custom_points' && section.scoringMode !== 'custom'
+
+      // Đồng bộ quy định điểm số theo chuẩn kỳ thi và cấu hình admin
+      let secPoints = Number(section.totalPoints ?? section.sectionTotalPoints)
+      if (!secPoints || isNaN(secPoints)) {
+        if (exam?.exam_type === 'HSA') secPoints = qCount || 50
+        else if (exam?.exam_type === 'TSA') secPoints = Math.round(100 / (activeSections.length || 1))
+        else secPoints = 10
+      }
+      const defaultPointsPerQ = qCount > 0 ? secPoints / qCount : 0
 
       for (let i = 0; i < qCount; i++) {
         const key = `${section.id}-${i}`
@@ -348,15 +413,18 @@ export default function SebExamRoomPage() {
             : section.type
         const qType = normalizeQuestionType(rawType, section, i)
 
+        const customPointsVal = Number(section.pointsPerQuestion?.[i] ?? section.customPoints?.[i])
         const qPoint = isAutoDivide
           ? defaultPointsPerQ
-          : Number(section.pointsPerQuestion?.[i]) ?? defaultPointsPerQ
+          : (!isNaN(customPointsVal) && customPointsVal > 0 ? customPointsVal : defaultPointsPerQ)
+
+        let earned = 0
 
         if (qType === 'single_choice') {
           const userVal = String(answers[key] || '').trim().toUpperCase()
           const corrVal = String(correctMap[i] || '').trim().toUpperCase()
           if (userVal && corrVal && userVal === corrVal) {
-            totalScore += qPoint
+            earned = qPoint
           }
         } else if (qType === 'true_false') {
           const userObj = answers[key] || {}
@@ -377,27 +445,35 @@ export default function SebExamRoomPage() {
           })
 
           // Tỷ lệ chuẩn Bộ GD&ĐT: 1 ý: 10%, 2 ý: 25%, 3 ý: 50%, 4 ý: 100%
-          if (matchedSubCount === 4) totalScore += qPoint * 1.0
-          else if (matchedSubCount === 3) totalScore += qPoint * 0.5
-          else if (matchedSubCount === 2) totalScore += qPoint * 0.25
-          else if (matchedSubCount === 1) totalScore += qPoint * 0.1
+          if (matchedSubCount === 4) earned = qPoint * 1.0
+          else if (matchedSubCount === 3) earned = qPoint * 0.5
+          else if (matchedSubCount === 2) earned = qPoint * 0.25
+          else if (matchedSubCount === 1) earned = qPoint * 0.1
         } else if (qType === 'short_answer') {
-          const userAns = (answers[key] || '').toString().trim().toLowerCase()
-          const correctAns = (correctMap[i] || '').toString().trim().toLowerCase()
-          if (userAns && userAns === correctAns) {
-            totalScore += qPoint
+          const userAns = (answers[key] || '').toString().trim().toLowerCase().replace(/\s+/g, '')
+          const correctAns = (correctMap[i] || '').toString().trim().toLowerCase().replace(/\s+/g, '')
+          const normUser = userAns.replace(',', '.')
+          const normCorr = correctAns.replace(',', '.')
+          if (userAns && (userAns === correctAns || normUser === normCorr)) {
+            earned = qPoint
           }
         } else if (qType === 'essay') {
           const userAns = (answers[key] || '').toString().trim().toLowerCase()
           const correctAns = (correctMap[i] || '').toString().trim().toLowerCase()
           if (correctAns && userAns === correctAns) {
-            totalScore += qPoint
+            earned = qPoint
           }
         }
+
+        detailedScores[key] = parseFloat(earned.toFixed(2))
+        totalScore += earned
       }
     })
 
-    return Math.round(totalScore * 100) / 100
+    return {
+      score: Math.round(totalScore * 100) / 100,
+      detailedScores,
+    }
   }
 
   // Nộp bài thi
@@ -406,7 +482,7 @@ export default function SebExamRoomPage() {
     setSubmitting(true)
 
     try {
-      const calculatedScore = calculateScore()
+      const { score: calculatedScore, detailedScores } = calculateScore()
 
       // 1. Dữ liệu chuẩn tương thích hoàn toàn với bảng submissions của SenExam
       const coreSubmission = {
@@ -414,6 +490,7 @@ export default function SebExamRoomPage() {
         exam_id: examId,
         score: calculatedScore,
         answers: answers,
+        detailed_scores: detailedScores,
         is_graded: true,
       }
 
@@ -464,18 +541,43 @@ export default function SebExamRoomPage() {
     }
   }
 
+  // Lấy hoặc sinh mã truy cập an toàn cho phiên thi này nếu mở từ trình duyệt web thông thường
+  useEffect(() => {
+    if (currentUser && examId && !isInsideSeb) {
+      fetch('/api/seb/exam-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate_code',
+          userId: currentUser.id,
+          userEmail: currentUser.email,
+          examId: examId,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.code) setSebAccessCode(data.code)
+        })
+        .catch(() => {})
+    }
+  }, [currentUser, examId, isInsideSeb])
+
   // Tự động nộp khi hết giờ
   const handleAutoSubmit = () => {
     alert('Hết giờ làm bài! Hệ thống tự động thu bài và chấm điểm.')
     handleSubmitExam()
   }
 
-  if (loading) {
+  if (loading || autoLoggingIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 text-sky-600 animate-spin" />
-          <span className="text-xs font-bold text-slate-500">Đang chuẩn bị phòng thi bảo mật...</span>
+          <span className="text-xs font-bold text-slate-600">
+            {autoLoggingIn
+              ? 'Đang tự động xác thực & đăng nhập vào Safe Exam Browser...'
+              : 'Đang chuẩn bị phòng thi bảo mật...'}
+          </span>
         </div>
       </div>
     )
@@ -488,8 +590,9 @@ export default function SebExamRoomPage() {
     const isEnforced = !isInsideSeb && !adminBypassSeb
     const host = typeof window !== 'undefined' ? window.location.host : ''
     const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:'
-    const sebProtocolUrl = protocol === 'https:' ? `sebs://${host}/seb-exam/${examId}` : `seb://${host}/seb-exam/${examId}`
-    const downloadConfigUrl = `/api/seb/config?examId=${examId}&download=1`
+    const autoParam = sebAccessCode ? `?auto_code=${encodeURIComponent(sebAccessCode)}` : ''
+    const sebProtocolUrl = protocol === 'https:' ? `sebs://${host}/seb-exam/${examId}${autoParam}` : `seb://${host}/seb-exam/${examId}${autoParam}`
+    const downloadConfigUrl = `/api/seb/config?examId=${examId}${sebAccessCode ? `&code=${encodeURIComponent(sebAccessCode)}` : ''}&download=1`
 
     // MÀN HÌNH KHÓA CỔNG (KHI CHƯA MỞ TRONG SAFE EXAM BROWSER)
     if (isEnforced) {
@@ -846,7 +949,14 @@ export default function SebExamRoomPage() {
             <span className={`text-4xl font-black ${isGood ? 'text-emerald-600' : 'text-sky-600'}`}>
               {submittedResult.score.toFixed(2)}
             </span>
-            <span className="text-xs text-slate-400 font-bold block mt-1">Thang điểm: 10.0</span>
+            <span className="text-xs text-slate-400 font-bold block mt-1">
+              Thang điểm:{' '}
+              {exam?.exam_type === 'HSA'
+                ? `${questionMeta.totalCount || 50}.0`
+                : exam?.exam_type === 'TSA'
+                ? '100.0'
+                : '10.0'}
+            </span>
           </div>
 
           {tabSwitches > 0 && (
@@ -855,7 +965,16 @@ export default function SebExamRoomPage() {
             </div>
           )}
 
-          <div className="flex items-center gap-3 pt-2">
+          {/* Nút Xem Lại Bài Thi */}
+          <Link
+            href={`/submissions/${submittedResult.submissionId}/review?from=seb`}
+            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/20"
+          >
+            <BookOpen className="h-4 w-4" />
+            <span>Xem Chi Tiết Lời Giải & Đáp Án Bài Thi</span>
+          </Link>
+
+          <div className="flex items-center gap-3 pt-1">
             <Link
               href="/seb-dashboard"
               className="flex-1 py-3 px-4 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs transition shadow-md shadow-sky-500/20"

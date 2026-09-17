@@ -154,13 +154,26 @@ export async function POST(request: Request) {
               .update({ used: true, used_at: new Date().toISOString() })
               .eq('id', dbCode.id)
 
+            let tokenHash = dbCode.token_hash
+            let actionLink = dbCode.action_link
+            if (!tokenHash && dbCode.user_email) {
+              try {
+                const { data: linkData } = await admin.auth.admin.generateLink({
+                  type: 'magiclink',
+                  email: dbCode.user_email,
+                })
+                tokenHash = linkData?.properties?.hashed_token || ''
+                actionLink = linkData?.properties?.action_link || ''
+              } catch (e) {}
+            }
+
             return NextResponse.json({
               success: true,
               examId: dbCode.exam_id,
               userId: dbCode.user_id,
               userEmail: dbCode.user_email,
-              tokenHash: dbCode.token_hash,
-              actionLink: dbCode.action_link,
+              tokenHash,
+              actionLink,
             })
           }
         } catch (dbSearchErr) {}
@@ -190,13 +203,26 @@ export async function POST(request: Request) {
           .eq('code', cleanCode)
       } catch (e) {}
 
+      let tokenHash = record.tokenHash
+      let actionLink = record.actionLink
+      if (!tokenHash && record.userEmail) {
+        try {
+          const { data: linkData } = await admin.auth.admin.generateLink({
+            type: 'magiclink',
+            email: record.userEmail,
+          })
+          tokenHash = linkData?.properties?.hashed_token || ''
+          actionLink = linkData?.properties?.action_link || ''
+        } catch (e) {}
+      }
+
       return NextResponse.json({
         success: true,
         examId: record.examId,
         userId: record.userId,
         userEmail: record.userEmail,
-        tokenHash: record.tokenHash,
-        actionLink: record.actionLink,
+        tokenHash,
+        actionLink,
       })
     }
 

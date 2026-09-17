@@ -63,28 +63,39 @@ export default function StudentReviewPage() {
         return; 
       }
 
+      const isFromSeb = typeof window !== 'undefined' && window.location.search.includes('from=seb')
+
       const { data, error } = await supabase
         .from('submissions')
         .select(`
           *, 
           exams (
-            title, exam_structure, drive_file_id, allow_review, exam_type
+            title, exam_structure, drive_file_id, pdf_url, allow_review, exam_type, require_seb
           ),
           profiles ( full_name )
         `)
         .eq('id', params.id as string)
-        .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
       if (error || !data) {
         alert('Hệ thống không tìm thấy dữ liệu bài làm hoặc bạn không có quyền truy cập!')
-        router.push('/dashboard')
+        router.push(isFromSeb ? '/seb-profile' : '/dashboard')
         return
       }
 
-      if (!data.exams?.allow_review) {
+      const email = user.email?.toLowerCase() || ''
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+      const isAdminUser = profile?.role === 'admin' || profile?.role === 'collab' || email === 'hoangbinhminh2508@gmail.com'
+
+      if (data.user_id !== user.id && !isAdminUser) {
+        alert('Bạn không có quyền xem bài làm của thí sinh khác!')
+        router.push(isFromSeb ? '/seb-profile' : '/dashboard')
+        return
+      }
+
+      if (data.exams?.allow_review === false && !isAdminUser) {
         alert('Hội đồng thi đã khóa quyền xem lại cấu phần câu hỏi này để bảo mật đề thi!')
-        router.push('/dashboard')
+        router.push(isFromSeb ? '/seb-profile' : '/dashboard')
         return
       }
 
@@ -258,7 +269,17 @@ Yêu cầu định dạng:
     )
   }
 
-  const pdfUrl = `https://drive.google.com/file/d/${submission.exams?.drive_file_id}/preview`
+  const pdfUrl = submission.exams?.drive_file_id
+    ? `https://drive.google.com/file/d/${submission.exams?.drive_file_id}/preview`
+    : (submission.exams?.pdf_url || '')
+
+  const handleGoBack = () => {
+    if (typeof window !== 'undefined' && window.location.search.includes('from=seb')) {
+      router.push('/seb-profile')
+    } else {
+      router.push('/dashboard')
+    }
+  }
 
   if (newUiEnabled) {
     return (
@@ -269,7 +290,7 @@ Yêu cầu định dạng:
       >
         <header className="min-h-[72px] md:h-[88px] flex items-center justify-between gap-2 px-3 sm:px-6 lg:px-8 py-3 shrink-0" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-            <button onClick={() => router.push('/dashboard')} className="p-2.5 sm:p-3 rounded-full shrink-0" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+            <button onClick={handleGoBack} className="p-2.5 sm:p-3 rounded-full shrink-0" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="flex flex-col justify-center min-w-0">
@@ -301,7 +322,7 @@ Yêu cầu định dạng:
 
         <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
           <div className="flex-1 h-[38vh] md:h-full relative" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
-            {submission.exams?.drive_file_id ? (
+            {pdfUrl ? (
               <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay" title="Tài liệu PDF Đề thi"></iframe>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
@@ -569,7 +590,7 @@ Yêu cầu định dạng:
       <header className="min-h-[72px] md:h-[88px] bg-white/80 dark:bg-[#121212]/80 backdrop-blur-2xl backdrop-saturate-[1.5] border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-2 px-3 sm:px-6 lg:px-8 py-3 shrink-0 z-20 shadow-sm transition-all duration-300">
         <div className="flex items-center gap-2 sm:gap-5 min-w-0 flex-1">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={handleGoBack}
             className="p-2.5 sm:p-3.5 bg-slate-100 dark:bg-[#202020] hover:bg-slate-200 dark:hover:bg-[#2A2A2A] transition-transform active:scale-95 rounded-full shadow-inner group border border-slate-200/50 dark:border-white/5 shrink-0"
           >
             <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-300 group-hover:-translate-x-0.5 transition-transform"/>
@@ -610,7 +631,7 @@ Yêu cầu định dạng:
         
         {/* CỘT TRÁI: PDF VIEWER */}
         <div className="flex-1 h-[40vh] md:h-full relative bg-slate-200/50 dark:bg-[#0A0A0A] border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/5 shadow-inner">
-          {submission.exams?.drive_file_id ? (
+          {pdfUrl ? (
             <iframe 
               src={pdfUrl} 
               className="absolute inset-0 w-full h-full border-none bg-white dark:bg-[#121212]" 

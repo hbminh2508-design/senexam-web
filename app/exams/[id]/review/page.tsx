@@ -16,27 +16,75 @@ export default function StudentReviewPage() {
   const { newUiEnabled, themeColor, animationsEnabled } = useNewUiPrefs()
   const [isDark, setIsDark] = useState(false)
 
+  const handleGoBack = () => {
+    if (typeof window !== 'undefined' && window.location.search.includes('from=seb')) {
+      router.push('/seb-profile')
+    } else {
+      router.push('/dashboard')
+    }
+  }
+
   useEffect(() => {
     const fetchSubmissionData = async () => {
-      const { data, error } = await supabase
-        .from('submissions')
-        .select('*, exams(title, exam_structure, drive_file_id, allow_review)')
-        .eq('id', params.id as string)
-        .single()
+      const isFromSeb = typeof window !== 'undefined' && window.location.search.includes('from=seb')
+      const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+      const querySubId = searchParams.get('submissionId')
 
-      if (error || !data) {
+      const { data: auth } = await supabase.auth.getUser()
+      const user = auth?.user
+
+      let subData: any = null
+
+      // 1. Thử tìm theo submissionId trong query string nếu có
+      if (querySubId) {
+        const { data } = await supabase
+          .from('submissions')
+          .select('*, exams(title, exam_structure, drive_file_id, pdf_url, allow_review)')
+          .eq('id', querySubId)
+          .maybeSingle()
+        subData = data
+      }
+
+      // 2. Thử tìm theo params.id như là submission ID
+      if (!subData && params.id) {
+        const { data } = await supabase
+          .from('submissions')
+          .select('*, exams(title, exam_structure, drive_file_id, pdf_url, allow_review)')
+          .eq('id', params.id as string)
+          .maybeSingle()
+        subData = data
+      }
+
+      // 3. Nếu không tìm thấy, thử tìm bài làm gần nhất của thí sinh cho đề thi này (khi params.id là exam_id)
+      if (!subData && user && params.id) {
+        const { data } = await supabase
+          .from('submissions')
+          .select('*, exams(title, exam_structure, drive_file_id, pdf_url, allow_review)')
+          .eq('exam_id', params.id as string)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        subData = data
+      }
+
+      if (!subData) {
         alert('Không tìm thấy dữ liệu bài làm!')
-        router.push('/dashboard')
+        router.push(isFromSeb ? '/seb-profile' : '/dashboard')
         return
       }
 
-      if (!data.exams?.allow_review) {
-        alert('Người ra đề đã khóa quyền xem lại cấu phần câu hỏi này!')
-        router.push('/dashboard')
+      const email = user?.email?.toLowerCase() || ''
+      const { data: profile } = user ? await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle() : { data: null }
+      const isAdminUser = profile?.role === 'admin' || profile?.role === 'collab' || email === 'hoangbinhminh2508@gmail.com'
+
+      if (subData.exams?.allow_review === false && !isAdminUser) {
+        alert('Hội đồng thi đã khóa quyền xem lại cấu phần câu hỏi này!')
+        router.push(isFromSeb ? '/seb-profile' : '/dashboard')
         return
       }
 
-      setSubmission(data)
+      setSubmission(subData)
       setLoading(false)
     }
     fetchSubmissionData()
@@ -56,7 +104,9 @@ export default function StudentReviewPage() {
     return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white font-bold">Đang kết xuất bài làm...</div>
   }
 
-  const pdfUrl = `https://drive.google.com/file/d/${submission.exams?.drive_file_id}/preview`
+  const pdfUrl = submission?.exams?.drive_file_id
+    ? `https://drive.google.com/file/d/${submission.exams?.drive_file_id}/preview`
+    : (submission?.exams?.pdf_url || '')
 
   if (newUiEnabled) {
     return (
@@ -67,7 +117,7 @@ export default function StudentReviewPage() {
       >
         <header className="h-16 flex items-center justify-between px-4 sm:px-6 shrink-0" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => router.push('/dashboard')} className="p-2 rounded-full" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}><ArrowLeft className="w-4 h-4" /></button>
+            <button onClick={handleGoBack} className="p-2 rounded-full" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}><ArrowLeft className="w-4 h-4" /></button>
             <div className="min-w-0">
               <h1 className="font-semibold text-xs md:text-sm truncate">Báo cáo kết quả: {submission.exams?.title}</h1>
               <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Tổng điểm ghi nhận: <span className="font-bold" style={{ color: 'var(--accent)' }}>{submission.score} điểm</span></p>
@@ -77,7 +127,13 @@ export default function StudentReviewPage() {
 
         <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
           <div className="flex-1 h-[40vh] md:h-full relative" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
-            <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay"></iframe>
+            {pdfUrl ? (
+              <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay"></iframe>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center text-slate-400 text-xs font-medium">
+                Tài liệu PDF không khả dụng hoặc chưa được tải lên.
+              </div>
+            )}
           </div>
 
           <div className="w-full md:w-[480px] lg:w-[580px] h-[55vh] md:h-full overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar shrink-0" style={{ background: 'var(--surface)', borderLeft: '1px solid var(--border)' }}>
@@ -145,7 +201,7 @@ export default function StudentReviewPage() {
     <div className="app-shell h-screen w-full flex flex-col bg-transparent text-slate-900 dark:text-slate-100 overflow-hidden">
       <header className="h-16 liquid-panel-strong flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/dashboard')} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
+          <button onClick={handleGoBack} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-slate-200 transition-colors"><ArrowLeft className="w-5 h-5"/></button>
           <div>
             <h1 className="font-extrabold text-sm md:text-base">Báo cáo kết quả: {submission.exams?.title}</h1>
             <p className="text-xs text-slate-400 font-medium">Tổng điểm ghi nhận: <span className="font-black text-blue-600">{submission.score} điểm</span></p>
@@ -155,7 +211,13 @@ export default function StudentReviewPage() {
 
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
         <div className="flex-1 h-[45vh] md:h-full border-b md:border-b-0 md:border-r border-white/10 bg-slate-200/60 dark:bg-slate-900/30 relative">
-          <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay"></iframe>
+          {pdfUrl ? (
+            <iframe src={pdfUrl} className="absolute inset-0 w-full h-full border-none" allow="autoplay"></iframe>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center p-8 text-center text-slate-400 text-xs font-medium">
+              Tài liệu PDF không khả dụng hoặc chưa được tải lên.
+            </div>
+          )}
         </div>
 
         <div className="w-full md:w-[480px] lg:w-[580px] h-[55vh] md:h-full liquid-panel-strong overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar shrink-0">

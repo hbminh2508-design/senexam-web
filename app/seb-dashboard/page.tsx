@@ -677,7 +677,10 @@ export default function SebDashboardPage() {
                       {highestScore !== undefined && (
                         <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50/80 px-2.5 py-1 rounded-xl border border-emerald-100 w-fit">
                           <span>🏆 Kỷ lục của bạn:</span>
-                          <span className="text-emerald-800 font-black">{highestScore.toFixed(1)}/10đ</span>
+                          <span className="text-emerald-800 font-black">
+                            {highestScore.toFixed(1)}
+                            {exam.exam_type === 'HSA' ? 'đ' : exam.exam_type === 'TSA' ? '/100đ' : '/10đ'}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -780,18 +783,18 @@ export default function SebDashboardPage() {
                 </>
               )}
 
-              {/* LƯU Ý ĐẶC BIỆT KHI MỞ SEB (KHÔNG DÁN ĐƯỢC MÃ) */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-300 text-left space-y-1.5 shadow-2xs">
-                <div className="flex items-center gap-2 font-black text-amber-950 text-xs">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                  <span>LƯU Ý ĐẶC BIỆT: KHÔNG THỂ DÁN (PASTE) TRONG SEB!</span>
+              {/* TỰ ĐỘNG ĐĂNG NHẬP THÔNG MINH KHI MỞ SEB */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-sky-500/15 border-2 border-emerald-300 text-left space-y-1.5 shadow-2xs">
+                <div className="flex items-center gap-2 font-black text-emerald-950 text-xs">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>TỰ ĐỘNG ĐĂNG NHẬP: KHÔNG CẦN NHẬP MÃ 6 SỐ!</span>
                 </div>
-                <p className="text-[11px] text-amber-900 leading-relaxed font-semibold">
-                  Khi khởi chạy ứng dụng <strong>Safe Exam Browser (SEB)</strong>, tính năng dán (Ctrl+V) sẽ <strong>bị khóa hoàn toàn để bảo mật</strong>.
+                <p className="text-[11px] text-emerald-900 leading-relaxed font-semibold">
+                  Hệ thống đã tích hợp xác thực tài khoản của bạn vào liên kết Safe Exam Browser. Khi bấm <strong>"Mở Trực Tiếp SEB"</strong> hoặc mở file <strong>.seb</strong>, SEB sẽ <strong>tự động đăng nhập và đưa bạn vào thẳng bài thi</strong>.
                 </p>
-                <p className="text-[11px] text-amber-950 leading-relaxed font-black bg-white/80 p-2 rounded-xl border border-amber-200">
-                  👉 Thí sinh vui lòng <span className="text-red-600 uppercase underline decoration-2">GHI NHỚ MÃ 6 SỐ NÀY</span> hoặc <span className="text-red-600 uppercase underline decoration-2">GHI RA GIẤY NHÁP</span> trước khi vào SEB để có thể tự tay nhập mã vào bài thi.
-                </p>
+                <div className="text-[10px] text-slate-500 pt-0.5">
+                  💡 <span className="italic">Dự phòng:</span> Nếu bạn tự tay mở ứng dụng SEB từ desktop, hãy nhập mã 6 số ở trên.
+                </div>
               </div>
             </div>
 
@@ -799,45 +802,82 @@ export default function SebDashboardPage() {
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-1.5">
               <div className="flex items-center gap-2 font-black text-slate-800 text-xs">
                 <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />
-                <span>CẢNH BÁO BẢO VỆ TÀI KHOẢN & PHÒNG THI:</span>
+                <span>BẢO MẬT TÀI KHOẢN PHÒNG THI:</span>
               </div>
               <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
-                • <strong>Tuyệt đối không chia sẻ mã này</strong> cho bất kỳ ai.
-              </p>
-              <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
-                • Hành động bấm <strong>"Xác Nhận & Bắt Đầu Vào Thi"</strong> sẽ <strong>CHẤM DỨT PHIÊN ĐĂNG NHẬP TRÊN TẤT CẢ CÁC THIẾT BỊ KHÁC</strong> đang truy cập tài khoản của bạn.
+                • Bắt đầu vào thi sẽ <strong>CHẤM DỨT PHIÊN ĐĂNG NHẬP TRÊN CÁC THIẾT BỊ KHÁC</strong> của bạn.
               </p>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
-              <button
-                type="button"
-                disabled={enteringExam || generatingCode}
-                onClick={handleConfirmStartExam}
-                className="w-full sm:flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/20"
-              >
-                {enteringExam ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Đang kích hoạt bảo mật & vào thi...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="h-4 w-4" />
-                    <span>Xác Nhận & Bắt Đầu Vào Thi</span>
-                  </>
-                )}
-              </button>
+            {/* Action Buttons: 2 Cách Mở SEB Tự Động Đăng Nhập */}
+            {(() => {
+              const host = typeof window !== 'undefined' ? window.location.host : ''
+              const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:'
+              const directAutoParam = accessCode ? `?auto_code=${encodeURIComponent(accessCode)}` : ''
+              const directSebUrl = protocol === 'https:'
+                ? `sebs://${host}/seb-exam/${selectedExamForEntry.id}${directAutoParam}`
+                : `seb://${host}/seb-exam/${selectedExamForEntry.id}${directAutoParam}`
+              const directConfigUrl = `/api/seb/config?examId=${selectedExamForEntry.id}${accessCode ? `&code=${encodeURIComponent(accessCode)}` : ''}&download=1`
 
-              <button
-                type="button"
-                onClick={() => setSelectedExamForEntry(null)}
-                className="w-full sm:w-auto px-4 py-3 rounded-2xl border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold transition"
-              >
-                Đóng / Quay Lại
-              </button>
-            </div>
+              return (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                    <a
+                      href={directSebUrl}
+                      onClick={() => {
+                        supabase.auth.signOut({ scope: 'others' }).catch(() => {})
+                        fetch('/api/seb/exam-access', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            action: 'enter_exam_and_terminate_others',
+                            userId: currentUser?.id,
+                            examId: selectedExamForEntry.id,
+                          }),
+                        }).catch(() => {})
+                      }}
+                      className="w-full sm:flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/25 uppercase tracking-wider"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Mở Trực Tiếp SEB (Tự Đăng Nhập)</span>
+                    </a>
+
+                    <a
+                      href={directConfigUrl}
+                      download
+                      onClick={() => {
+                        supabase.auth.signOut({ scope: 'others' }).catch(() => {})
+                      }}
+                      className="w-full sm:w-auto py-3.5 px-4 rounded-2xl border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
+                      title="Tải file .seb về máy rồi click đúp để mở SEB và tự động đăng nhập"
+                    >
+                      <Download className="h-4 w-4 text-sky-600" />
+                      <span>Tải File .seb</span>
+                    </a>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={enteringExam || generatingCode}
+                      onClick={handleConfirmStartExam}
+                      className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                      <span>Vào Phòng Chờ Trên Trình Duyệt Web</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedExamForEntry(null)}
+                      className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-500 text-xs font-bold transition"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}

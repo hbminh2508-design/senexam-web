@@ -5,6 +5,12 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const examId = searchParams.get('examId') || ''
+  const accessCode =
+    searchParams.get('code') ||
+    searchParams.get('auto_code') ||
+    searchParams.get('token') ||
+    ''
+
   const host =
     request.headers.get('x-forwarded-host') ||
     request.headers.get('host') ||
@@ -13,9 +19,10 @@ export async function GET(request: Request) {
   const protoHeader = request.headers.get('x-forwarded-proto')
   const protocol = protoHeader || (request.url.startsWith('https') ? 'https' : (host.includes('localhost') ? 'http' : 'http'))
 
-  const targetUrl = `${protocol}://${host}/seb-exam/${examId}`
+  const autoParam = accessCode ? `?auto_code=${encodeURIComponent(accessCode)}` : ''
+  const targetUrl = `${protocol}://${host}/seb-exam/${examId}${autoParam}`
   // Giao thức deep-link: sebs:// cho HTTPS, seb:// cho HTTP
-  const sebsProtocolUrl = protocol === 'https' ? `sebs://${host}/seb-exam/${examId}` : `seb://${host}/seb-exam/${examId}`
+  const sebsProtocolUrl = protocol === 'https' ? `sebs://${host}/seb-exam/${examId}${autoParam}` : `seb://${host}/seb-exam/${examId}${autoParam}`
 
   // Tạo file cấu hình Safe Exam Browser định dạng chuẩn XML Plist (.seb)
   const sebConfigXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -78,6 +85,6 @@ export async function GET(request: Request) {
     examId,
     targetUrl,
     sebsUrl: sebsProtocolUrl,
-    downloadUrl: `/api/seb/config?examId=${examId}&download=1`,
+    downloadUrl: `/api/seb/config?examId=${examId}${autoParam ? `&code=${encodeURIComponent(accessCode)}` : ''}&download=1`,
   })
 }
