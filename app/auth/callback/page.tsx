@@ -156,8 +156,14 @@ function CallbackHandler() {
             return
           }
 
-          // 2. Chuyển hướng FEPN: Chỉ khi thực sự đến từ FEPN
-          if (isFepnFlow) {
+          // 2. Chuyển hướng FEPN: Khi đăng nhập từ FEPN hoặc tài khoản có email VNU (@vnu.edu.vn)
+          const userEmail = currentUser?.email?.toLowerCase() || ''
+          const isVnu =
+            userEmail.endsWith('@vnu.edu.vn') ||
+            userEmail.endsWith('.vnu.edu.vn') ||
+            isDomainEmail(userEmail, currentUser)
+
+          if (isFepnFlow || isVnu) {
             if (typeof window !== 'undefined') {
               if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
                 router.replace('/fepn-dashboard')
