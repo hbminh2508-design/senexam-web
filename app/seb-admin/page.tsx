@@ -7,6 +7,7 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import SebLogo from '@/components/SebLogo'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
+import { isExamInFolder } from '@/lib/sebFolderUtils'
 import {
   Folder,
   FolderPlus,
@@ -197,6 +198,39 @@ export default function SebAdminPage() {
   const [folderNameInput, setFolderNameInput] = useState('')
   const [folderParentSelect, setFolderParentSelect] = useState('')
   const [folderSaving, setFolderSaving] = useState(false)
+
+  // Quản lý đề thi trong Thư Mục Con (Admin Modal)
+  const [selectedAdminChildFolder, setSelectedAdminChildFolder] = useState<any | null>(null)
+  const [showAdminFolderExamModal, setShowAdminFolderExamModal] = useState<boolean>(false)
+  const [adminFolderExamSearch, setAdminFolderExamSearch] = useState<string>('')
+  const [updatingAdminFolderExams, setUpdatingAdminFolderExams] = useState<boolean>(false)
+
+  const handleToggleExamInChildFolder = async (examId: string, currentInFolder: boolean) => {
+    if (!selectedAdminChildFolder) return
+    setUpdatingAdminFolderExams(true)
+    try {
+      const res = await fetch('/api/seb/folder-exams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderId: selectedAdminChildFolder.id,
+          ...(currentInFolder ? { unassignExamId: examId } : { assignExamId: examId }),
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setExamsList((prev) =>
+          prev.map((e) =>
+            e.id === examId ? { ...e, folder_id: currentInFolder ? null : selectedAdminChildFolder.id } : e
+          )
+        )
+      }
+    } catch (e) {
+      console.error('Lỗi cập nhật đề vào thư mục:', e)
+    } finally {
+      setUpdatingAdminFolderExams(false)
+    }
+  }
 
   // Tải dữ liệu ban đầu
   const fetchAllData = async () => {
@@ -1390,34 +1424,160 @@ export default function SebAdminPage() {
 
                   {/* Danh sách Thư mục con */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
-                    {parent.children?.map((child: any) => (
-                      <div
-                        key={child.id}
-                        className="p-3 rounded-2xl border border-slate-100 bg-slate-50 flex items-center justify-between gap-2"
-                      >
-                        <div className="min-w-0 flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full bg-sky-500" />
-                          <span className="text-xs font-bold text-slate-800 truncate">{child.name}</span>
-                        </div>
+                    {parent.children?.map((child: any) => {
+                      const realExamCount = examsList.filter((ex) => !ex.is_hidden && isExamInFolder(ex, child)).length
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 font-mono">
-                            {child.exam_count || 0} đề
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFolder(child.id, child.name)}
-                            className="text-slate-400 hover:text-rose-600 p-1 rounded-lg"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                      return (
+                        <div
+                          key={child.id}
+                          className="p-3 rounded-2xl border border-slate-100 bg-slate-50 flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-sky-500" />
+                            <span className="text-xs font-bold text-slate-800 truncate">{child.name}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 font-mono">
+                              {realExamCount} đề
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAdminChildFolder(child)
+                                setShowAdminFolderExamModal(true)
+                              }}
+                              className="text-slate-400 hover:text-sky-600 p-1 rounded-lg transition"
+                              title="Quản lý / Gán đề thi cho môn này"
+                            >
+                              <Sliders className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFolder(child.id, child.name)}
+                              className="text-slate-400 hover:text-rose-600 p-1 rounded-lg transition"
+                              title="Xóa thư mục con này"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* Modal Quản Lý Đề Thi Trong Thư Mục Con (Admin) */}
+            {showAdminFolderExamModal && selectedAdminChildFolder && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                <div className="w-full max-w-2xl rounded-3xl bg-white border border-sky-100 shadow-2xl p-6 flex flex-col max-h-[85vh] space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-sky-600 tracking-wider">
+                        Phân Bổ Đề Thi Thư Mục Con
+                      </span>
+                      <h3
+                        className="text-lg font-black text-slate-900"
+                        style={{ fontFamily: 'var(--font-sebadm-heading)' }}
+                      >
+                        Môn: {selectedAdminChildFolder.name}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Tick chọn để gán đề thủ công hoặc gỡ bỏ khỏi môn thi này. Hệ thống vẫn tự động nhận diện nếu đề chưa được gán.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminFolderExamModal(false)}
+                      className="h-8 w-8 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Tìm kiếm đề thi */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={adminFolderExamSearch}
+                      onChange={(e) => setAdminFolderExamSearch(e.target.value)}
+                      placeholder="Tìm kiếm đề thi cần gán..."
+                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+                    />
+                    <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  </div>
+
+                  {/* Danh sách đề thi */}
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[420px]">
+                    {examsList
+                      .filter((ex) => {
+                        if (ex.is_hidden) return false
+                        if (!adminFolderExamSearch.trim()) return true
+                        return ex.title?.toLowerCase().includes(adminFolderExamSearch.toLowerCase())
+                      })
+                      .map((ex) => {
+                        const isDirect = ex.folder_id === selectedAdminChildFolder.id
+                        const isAuto = !isDirect && isExamInFolder(ex, selectedAdminChildFolder)
+
+                        return (
+                          <div
+                            key={ex.id}
+                            className="p-3.5 rounded-2xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-sky-200 transition flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 font-mono">
+                                  {ex.exam_type || 'ĐỀ THI'}
+                                </span>
+                                {isDirect ? (
+                                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    ✓ Đã gán thủ công
+                                  </span>
+                                ) : isAuto ? (
+                                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">
+                                    ⚡ Tự động nhận diện
+                                  </span>
+                                ) : null}
+                              </div>
+                              <h4 className="text-xs font-bold text-slate-800 truncate">{ex.title}</h4>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={updatingAdminFolderExams}
+                              onClick={() => handleToggleExamInChildFolder(ex.id, isDirect)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 ${
+                                isDirect
+                                  ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                                  : 'bg-sky-600 text-white hover:bg-sky-700 shadow-2xs'
+                              }`}
+                            >
+                              {isDirect ? 'Gỡ Khỏi Môn' : '+ Gán Vào Môn'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                  </div>
+
+                  {/* Footer Modal */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs text-slate-400 font-medium">
+                      Tổng số đề trong môn: {examsList.filter((ex) => !ex.is_hidden && isExamInFolder(ex, selectedAdminChildFolder)).length} đề
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminFolderExamModal(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+                    >
+                      Xong
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

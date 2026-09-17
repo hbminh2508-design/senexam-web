@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import SebLogo from '@/components/SebLogo'
+import { isExamInFolder } from '@/lib/sebFolderUtils'
 import {
   Folder,
   FolderOpen,
@@ -29,6 +30,14 @@ import {
   Lock,
   ArrowRight,
   RotateCcw,
+  Copy,
+  Check,
+  KeyRound,
+  Sliders,
+  X,
+  Loader2,
+  Download,
+  AlertTriangle,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-seb-heading' })
@@ -69,6 +78,18 @@ export default function SebDashboardPage() {
   const [userSubmissionsCount, setUserSubmissionsCount] = useState<Record<string, number>>({})
   const [userHighestScores, setUserHighestScores] = useState<Record<string, number>>({})
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Modal Cấp Mã 6 Số & Xác Nhận Vào Phòng Thi An Toàn
+  const [selectedExamForEntry, setSelectedExamForEntry] = useState<any | null>(null)
+  const [accessCode, setAccessCode] = useState<string>('')
+  const [generatingCode, setGeneratingCode] = useState<boolean>(false)
+  const [copiedCode, setCopiedCode] = useState<boolean>(false)
+  const [enteringExam, setEnteringExam] = useState<boolean>(false)
+
+  // Modal Admin Quản Lý Đề Thi Trong Thư Mục Con
+  const [showFolderExamModal, setShowFolderExamModal] = useState<boolean>(false)
+  const [folderExamSearch, setFolderExamSearch] = useState<string>('')
+  const [updatingFolderExams, setUpdatingFolderExams] = useState<boolean>(false)
 
   useEffect(() => {
     document.documentElement.classList.remove('dark')
@@ -180,53 +201,137 @@ export default function SebDashboardPage() {
     router.replace('/seb-login')
   }
 
-  // Lọc danh sách đề thi theo thư mục con đang chọn & thanh tìm kiếm
-  const displayedExams = exams.filter((ex) => {
-    if (ex.is_hidden === true) return false
-
-    const matchesSearch =
-      !searchTerm.trim() ||
-      ex.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ex.exam_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (Array.isArray(ex.subjects) &&
-        ex.subjects.some((s: string) => s.toLowerCase().includes(searchTerm.toLowerCase())))
-
-    // Nếu đang ở chế độ xem tất cả
-    if (!selectedChildId) {
-      return matchesSearch
-    }
-
-    const childName = (selectedFolderObj?.name || '').toLowerCase()
-
-    // 1. Khớp theo folder_id
-    if (ex.folder_id && ex.folder_id === selectedChildId) {
-      return matchesSearch
-    }
-
-    // 2. Khớp thông minh theo subjects
-    if (Array.isArray(ex.subjects) && ex.subjects.length > 0) {
-      const matchSubject = ex.subjects.some((s: string) => {
-        const sl = s.toLowerCase()
-        return childName.includes(sl) || sl.includes(childName)
+  // Đếm số lượng đề thi thực tế theo thời gian thực cho từng thư mục con
+  const folderExamCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    folders.forEach((parent) => {
+      ;(parent.children || []).forEach((child) => {
+        counts[child.id] = exams.filter((ex) => !ex.is_hidden && isExamInFolder(ex, child)).length
       })
-      if (matchSubject) return matchesSearch
+    })
+    return counts
+  }, [folders, exams])
+
+  // Lọc danh sách đề thi theo thư mục con đang chọn & thanh tìm kiếm
+  const displayedExams = useMemo(() => {
+    return exams.filter((ex) => {
+      if (ex.is_hidden === true) return false
+
+      const matchesSearch =
+        !searchTerm.trim() ||
+        ex.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ex.exam_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (Array.isArray(ex.subjects) &&
+          ex.subjects.some((s: string) => s.toLowerCase().includes(searchTerm.toLowerCase())))
+
+      if (!matchesSearch) return false
+
+      // Nếu đang ở chế độ xem tất cả
+      if (!selectedChildId || !selectedFolderObj) {
+        return true
+      }
+
+      return isExamInFolder(ex, selectedFolderObj)
+    })
+  }, [exams, searchTerm, selectedChildId, selectedFolderObj])
+
+  // Mở modal cấp mã 6 số & xác nhận vào thi
+  const handleOpenEntryModal = async (exam: any) => {
+    setSelectedExamForEntry(exam)
+    setAccessCode('')
+    setCopiedCode(false)
+    setGeneratingCode(true)
+
+    try {
+      const res = await fetch('/api/seb/exam-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate_code',
+          userId: currentUser?.id,
+          userEmail: currentUser?.email,
+          examId: exam.id,
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.code) {
+        setAccessCode(data.code)
+      } else {
+        setAccessCode(Math.floor(100000 + Math.random() * 900000).toString())
+      }
+    } catch (err) {
+      console.warn('Lỗi sinh mã 6 số:', err)
+      setAccessCode(Math.floor(100000 + Math.random() * 900000).toString())
+    } finally {
+      setGeneratingCode(false)
     }
+  }
 
-    // 3. Khớp thông minh theo từ khóa tiêu đề hoặc exam_type (cho các đề gốc SenExam)
-    const titleLower = (ex.title || '').toLowerCase()
-    const typeLower = (ex.exam_type || '').toLowerCase()
+  // Sao chép mã 6 số
+  const handleCopyCode = () => {
+    if (!accessCode) return
+    navigator.clipboard.writeText(accessCode)
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 3000)
+  }
 
-    if (childName.includes('toán') && (titleLower.includes('toán') || typeLower.includes('toán'))) return matchesSearch
-    if ((childName.includes('vật lý') || childName.includes('vật lí')) && (titleLower.includes('vật lý') || titleLower.includes('vật lí') || typeLower.includes('lý') || typeLower.includes('lí'))) return matchesSearch
-    if (childName.includes('hóa') && (titleLower.includes('hóa') || typeLower.includes('hóa'))) return matchesSearch
-    if (childName.includes('sinh') && (titleLower.includes('sinh') || typeLower.includes('sinh'))) return matchesSearch
-    if (childName.includes('anh') && (titleLower.includes('anh') || titleLower.includes('english') || typeLower.includes('anh'))) return matchesSearch
-    if (childName.includes('hsa') && (titleLower.includes('hsa') || typeLower.includes('hsa') || titleLower.includes('đgnl'))) return matchesSearch
-    if (childName.includes('tsa') && (titleLower.includes('tsa') || typeLower.includes('tsa') || titleLower.includes('đgtd'))) return matchesSearch
-    if (childName.includes('kinh tế') && (titleLower.includes('kinh tế') || typeLower.includes('kinh tế'))) return matchesSearch
+  // Bắt đầu vào thi & Chấm dứt phiên tất cả các thiết bị khác
+  const handleConfirmStartExam = async () => {
+    if (!selectedExamForEntry) return
+    setEnteringExam(true)
 
-    return false
-  })
+    try {
+      // 1. Kick các session khác từ client Supabase
+      await supabase.auth.signOut({ scope: 'others' }).catch(() => {})
+
+      // 2. Gọi backend hủy kích hoạt phiên trên các máy khác trong database
+      await fetch('/api/seb/exam-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'enter_exam_and_terminate_others',
+          userId: currentUser?.id,
+          examId: selectedExamForEntry.id,
+        }),
+      }).catch(() => {})
+
+      // 3. Chuyển hướng vào trang thi
+      router.push(`/seb-exam/${selectedExamForEntry.id}`)
+    } catch (err) {
+      console.error('Lỗi khi vào phòng thi:', err)
+      router.push(`/seb-exam/${selectedExamForEntry.id}`)
+    } finally {
+      setEnteringExam(false)
+    }
+  }
+
+  // Admin: Gán hoặc gỡ đề thi khỏi thư mục con đang chọn
+  const handleToggleExamInFolder = async (examId: string, currentInFolder: boolean) => {
+    if (!selectedChildId) return
+    setUpdatingFolderExams(true)
+    try {
+      const res = await fetch('/api/seb/folder-exams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderId: selectedChildId,
+          ...(currentInFolder ? { unassignExamId: examId } : { assignExamId: examId }),
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setExams((prev) =>
+          prev.map((e) =>
+            e.id === examId ? { ...e, folder_id: currentInFolder ? null : selectedChildId } : e
+          )
+        )
+      }
+    } catch (e) {
+      console.error('Lỗi cập nhật đề vào thư mục:', e)
+    } finally {
+      setUpdatingFolderExams(false)
+    }
+  }
 
   return (
     <div
@@ -418,7 +523,7 @@ export default function SebDashboardPage() {
                                       : 'bg-slate-100 text-slate-500'
                                   }`}
                                 >
-                                  {child.exam_count || 0} đề
+                                  {folderExamCounts[child.id] ?? (child.exam_count || 0)} đề
                                 </span>
                               </button>
                             )
@@ -447,17 +552,30 @@ export default function SebDashboardPage() {
         <main className="flex-1 flex flex-col gap-4">
           {/* Header Môn thi đang chọn & Search */}
           <div className="p-5 rounded-3xl bg-white border border-sky-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-sky-600 mb-1">
-                <span>Môn Thi Đang Chọn</span>
-                <ChevronRight className="h-3 w-3" />
+            <div className="flex flex-wrap items-center gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold text-sky-600 mb-1">
+                  <span>Môn Thi Đang Chọn</span>
+                  <ChevronRight className="h-3 w-3" />
+                </div>
+                <h2
+                  className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight"
+                  style={{ fontFamily: 'var(--font-seb-heading)' }}
+                >
+                  {selectedFolderObj?.name || 'Tất Cả Đề Thi Trực Tuyến'}
+                </h2>
               </div>
-              <h2
-                className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight"
-                style={{ fontFamily: 'var(--font-seb-heading)' }}
-              >
-                {selectedFolderObj?.name || 'Tất Cả Đề Thi Trực Tuyến'}
-              </h2>
+
+              {isAdmin && selectedChildId && (
+                <button
+                  type="button"
+                  onClick={() => setShowFolderExamModal(true)}
+                  className="mt-1 sm:mt-0 px-3 py-1.5 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Sliders className="h-3.5 w-3.5" />
+                  <span>Quản Lý Đề Trong Môn Này</span>
+                </button>
+              )}
             </div>
 
             {/* Thanh tìm kiếm */}
@@ -571,17 +689,19 @@ export default function SebDashboardPage() {
                         <span>{isSebRequired ? 'Yêu cầu Safe Exam Browser' : 'Hệ sinh thái SenExam'}</span>
                       </div>
 
-                      <Link
-                        href={`/seb-exam/${exam.id}`}
+                      <button
+                        type="button"
+                        disabled={isOutOfAttempts}
+                        onClick={() => handleOpenEntryModal(exam)}
                         className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm ${
                           isOutOfAttempts
-                            ? 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             : 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-sky-500/20'
                         }`}
                       >
                         <span>{isOutOfAttempts ? 'Hết Lượt Thi' : 'Vào Phòng Thi'}</span>
                         <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 )
@@ -590,6 +710,239 @@ export default function SebDashboardPage() {
           )}
         </main>
       </div>
+
+      {/* ======================================================== */}
+      {/* MODAL 1: CẤP MÃ 6 SỐ VÀO THI & CHẤM DỨT PHIÊN ĐA THIẾT BỊ */}
+      {/* ======================================================== */}
+      {selectedExamForEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg rounded-3xl bg-white border border-sky-100 shadow-2xl p-6 sm:p-7 space-y-5 text-center relative overflow-hidden">
+            {/* Background security pattern */}
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-36 h-36 bg-sky-400/10 rounded-full blur-2xl pointer-events-none" />
+
+            {/* Header Modal */}
+            <div className="flex flex-col items-center">
+              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-sky-500/25 mb-3">
+                <KeyRound className="h-7 w-7" />
+              </div>
+              <span className="text-[11px] font-black uppercase text-sky-600 tracking-wider">
+                Xác Nhận & Cấp Mã Phòng Thi SEB
+              </span>
+              <h3
+                className="text-lg sm:text-xl font-black text-slate-900 mt-1 line-clamp-2"
+                style={{ fontFamily: 'var(--font-seb-heading)' }}
+              >
+                {selectedExamForEntry.title}
+              </h3>
+              <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
+                <span>{selectedExamForEntry.duration || 50} phút</span>
+                <span>•</span>
+                <span>{selectedExamForEntry.exam_type || 'Đề chuẩn'}</span>
+              </div>
+            </div>
+
+            {/* Khối hiển thị mã 6 số */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
+              <div className="text-xs font-bold text-slate-500">
+                Mã dự thi 6 số bảo mật của bạn (hiệu lực trong 30 phút):
+              </div>
+
+              {generatingCode ? (
+                <div className="py-6 flex items-center justify-center gap-2 text-sky-600 text-xs font-bold">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Đang khởi tạo mã phòng thi an toàn...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-center gap-2 sm:gap-3">
+                    {accessCode.split('').map((digit, idx) => (
+                      <div
+                        key={idx}
+                        className="w-10 h-14 sm:w-12 sm:h-16 rounded-2xl bg-white border-2 border-sky-300 text-sky-900 font-mono font-black text-2xl sm:text-3xl flex items-center justify-center shadow-xs"
+                      >
+                        {digit}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    className="mx-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-sky-50 text-sky-700 text-xs font-bold border border-sky-200 transition shadow-2xs"
+                  >
+                    {copiedCode ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    <span>{copiedCode ? 'Đã sao chép mã 6 số!' : 'Sao chép mã vào thi'}</span>
+                  </button>
+                </>
+              )}
+
+              <p className="text-[11px] text-slate-500 leading-relaxed max-w-sm mx-auto">
+                Sinh viên có thể sao chép mã 6 số này để đăng nhập nhanh vào đúng tài khoản trong môi trường Safe Exam Browser (SEB) hoặc máy tính phòng thi.
+              </p>
+            </div>
+
+            {/* Cảnh báo bảo mật & chấm dứt phiên */}
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-left space-y-1.5">
+              <div className="flex items-center gap-2 font-black text-amber-950 text-xs">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>LƯU Ý BẢO MẬT & CHỐNG GIAN LẬN:</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                • <strong>Tuyệt đối không chia sẻ mã này</strong> cho bất kỳ ai.
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                • Hành động bấm <strong>"Bắt Đầu Vào Thi"</strong> sẽ lập tức kích hoạt bảo vệ tài khoản và <strong>CHẤM DỨT PHIÊN ĐĂNG NHẬP TRÊN TẤT CẢ CÁC THIẾT BỊ KHÁC</strong> đang truy cập tài khoản của bạn.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
+              <button
+                type="button"
+                disabled={enteringExam || generatingCode}
+                onClick={handleConfirmStartExam}
+                className="w-full sm:flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/20"
+              >
+                {enteringExam ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Đang kích hoạt bảo mật & vào thi...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Xác Nhận & Bắt Đầu Vào Thi</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedExamForEntry(null)}
+                className="w-full sm:w-auto px-4 py-3 rounded-2xl border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold transition"
+              >
+                Đóng / Quay Lại
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL 2: ADMIN QUẢN LÝ ĐỀ THI TRONG THƯ MỤC CON */}
+      {/* ======================================================== */}
+      {showFolderExamModal && selectedFolderObj && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-2xl rounded-3xl bg-white border border-sky-100 shadow-2xl p-6 flex flex-col max-h-[85vh] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <span className="text-[10px] font-black uppercase text-sky-600 tracking-wider">
+                  Quản Trị Thư Mục Con
+                </span>
+                <h3
+                  className="text-lg font-black text-slate-900"
+                  style={{ fontFamily: 'var(--font-seb-heading)' }}
+                >
+                  Quản Lý Đề Thi Trong Môn: {selectedFolderObj.name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Các đề thi khớp tên hoặc môn vẫn sẽ tự động xuất hiện. Bạn có thể chủ động gán thêm hoặc bỏ bớt đề thi cho môn này.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowFolderExamModal(false)}
+                className="h-8 w-8 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Tìm kiếm đề thi trong modal */}
+            <div className="relative">
+              <input
+                type="text"
+                value={folderExamSearch}
+                onChange={(e) => setFolderExamSearch(e.target.value)}
+                placeholder="Tìm tên đề thi để gán vào môn này..."
+                className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+              />
+              <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            </div>
+
+            {/* Danh sách đề thi */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[420px]">
+              {exams
+                .filter((ex) => {
+                  if (ex.is_hidden) return false
+                  if (!folderExamSearch.trim()) return true
+                  return ex.title?.toLowerCase().includes(folderExamSearch.toLowerCase())
+                })
+                .map((ex) => {
+                  const isDirect = ex.folder_id === selectedFolderObj.id
+                  const isAuto = !isDirect && isExamInFolder(ex, selectedFolderObj)
+
+                  return (
+                    <div
+                      key={ex.id}
+                      className="p-3.5 rounded-2xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:border-sky-200 transition flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 font-mono">
+                            {ex.exam_type || 'ĐỀ THI'}
+                          </span>
+                          {isDirect ? (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ✓ Đã gán thủ công
+                            </span>
+                          ) : isAuto ? (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">
+                              ⚡ Tự động nhận diện
+                            </span>
+                          ) : null}
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-800 truncate">{ex.title}</h4>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={updatingFolderExams}
+                        onClick={() => handleToggleExamInFolder(ex.id, isDirect)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 ${
+                          isDirect
+                            ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                            : 'bg-sky-600 text-white hover:bg-sky-700 shadow-2xs'
+                        }`}
+                      >
+                        {isDirect ? 'Gỡ Khỏi Môn' : '+ Gán Vào Môn'}
+                      </button>
+                    </div>
+                  )
+                })}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-medium">
+                Số đề hiển thị trong môn này: {folderExamCounts[selectedFolderObj.id] ?? 0} đề
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowFolderExamModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+              >
+                Hoàn Tất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

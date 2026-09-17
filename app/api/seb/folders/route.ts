@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { isExamInFolder } from '@/lib/sebFolderUtils'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,17 +48,12 @@ export async function GET() {
       })
     }
 
-    // 2. Lấy số lượng đề thi cho mỗi folder
+    // 2. Lấy danh sách đề thi để tính số lượng cho từng môn
     const { data: exams } = await admin
       .from('exams')
-      .select('id, folder_id')
+      .select('id, title, exam_type, subjects, folder_id, is_hidden')
 
-    const examCounts: Record<string, number> = {}
-    ;(exams || []).forEach((ex) => {
-      if (ex.folder_id) {
-        examCounts[ex.folder_id] = (examCounts[ex.folder_id] || 0) + 1
-      }
-    })
+    const examList = (exams || []).filter((e) => !e.is_hidden)
 
     // 3. Phân tách thư mục Mẹ và Con
     const allFolders = folders || []
@@ -67,7 +63,7 @@ export async function GET() {
         .filter((c) => c.parent_id === parent.id)
         .map((child) => ({
           ...child,
-          exam_count: examCounts[child.id] || 0,
+          exam_count: examList.filter((ex) => isExamInFolder(ex, child)).length,
         }))
       return {
         ...parent,

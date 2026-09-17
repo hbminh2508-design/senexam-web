@@ -70,32 +70,53 @@ export default function SebProfilePage() {
           setSchool(profileData.school || '')
         }
 
-        // 2. Lấy danh sách toàn bộ các bài thi đã làm từ SenExam và SEB
-        const { data: subsData } = await supabase
+        // 2. Lấy danh sách toàn bộ các bài thi đã làm từ SenExam và SEB với cơ chế truy vấn linh hoạt
+        let subsList: any[] = []
+
+        // Thử lấy kèm quan hệ exams(*)
+        const { data: joinedSubs, error: joinErr } = await supabase
           .from('submissions')
-          .select(`
-            id,
-            score,
-            total_questions,
-            submitted_at,
-            created_at,
-            tab_switches,
-            blur_count,
-            time_spent,
-            exams (
-              id,
-              title,
-              duration,
-              allow_review,
-              exam_type,
-              require_seb,
-              subjects
-            )
-          `)
+          .select('*, exams(*)')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
 
-        setSubmissions(subsData || [])
+        if (!joinErr && Array.isArray(joinedSubs) && joinedSubs.length > 0) {
+          subsList = joinedSubs
+        } else {
+          // Fallback: Lấy trực tiếp từ submissions rồi tra cứu thông tin đề thi exams
+          const { data: rawSubs, error: rawErr } = await supabase
+            .from('submissions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+
+          if (rawErr) {
+            console.error('Lỗi lấy bài nộp raw:', rawErr)
+          } else if (rawSubs && rawSubs.length > 0) {
+            const examIds = Array.from(new Set(rawSubs.map((s) => s.exam_id).filter(Boolean)))
+            const examMap: Record<string, any> = {}
+
+            if (examIds.length > 0) {
+              const { data: examsData } = await supabase
+                .from('exams')
+                .select('id, title, duration, allow_review, exam_type, require_seb, subjects')
+                .in('id', examIds)
+
+              if (examsData) {
+                examsData.forEach((ex) => {
+                  examMap[ex.id] = ex
+                })
+              }
+            }
+
+            subsList = rawSubs.map((s) => ({
+              ...s,
+              exams: s.exams || examMap[s.exam_id] || null,
+            }))
+          }
+        }
+
+        setSubmissions(subsList)
       } catch (err) {
         console.error('Lỗi tải dữ liệu hồ sơ SEB:', err)
       } finally {

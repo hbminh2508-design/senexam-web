@@ -30,13 +30,17 @@ const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-se
 export default function SebLoginPage() {
   const router = useRouter()
 
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'quick_code'>('login')
   const [accountInput, setAccountInput] = useState('')
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
+
+  // Mã dự thi 6 số
+  const [examCode, setExamCode] = useState('')
+  const [codeLoading, setCodeLoading] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -100,6 +104,70 @@ export default function SebLoginPage() {
     } catch (err: any) {
       setErrorMsg(err.message || 'Lỗi khi đăng nhập bằng Google')
       setGoogleLoading(false)
+    }
+  }
+
+  // Đăng nhập nhanh bằng Mã dự thi 6 số
+  const handleQuickCodeLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const cleanCode = examCode.trim().replace(/\s+/g, '')
+    if (!cleanCode || cleanCode.length !== 6) {
+      setErrorMsg('Vui lòng nhập chính xác 6 chữ số mã dự thi!')
+      return
+    }
+
+    setCodeLoading(true)
+    setErrorMsg('')
+    try {
+      const res = await fetch('/api/seb/exam-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify_and_login',
+          code: cleanCode,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Mã dự thi không hợp lệ hoặc đã hết hạn!')
+      }
+
+      // Xác thực đăng nhập qua token hash nếu có
+      if (data.tokenHash) {
+        const { error: vErr } = await supabase.auth.verifyOtp({
+          token_hash: data.tokenHash,
+          type: 'magiclink',
+        })
+        if (vErr) {
+          console.warn('Lỗi verifyOtp magiclink:', vErr)
+        }
+      } else if (data.actionLink) {
+        window.location.href = data.actionLink
+        return
+      }
+
+      // Kích hoạt hủy phiên các thiết bị khác khi đăng nhập qua mã thi
+      if (data.userId) {
+        await supabase.auth.signOut({ scope: 'others' }).catch(() => {})
+        await fetch('/api/seb/exam-access', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'enter_exam_and_terminate_others',
+            userId: data.userId,
+            examId: data.examId,
+          }),
+        }).catch(() => {})
+      }
+
+      setSuccessMsg('Đăng nhập thành công! Đang chuyển vào phòng thi an toàn...')
+      setTimeout(() => {
+        router.replace(data.examId ? `/seb-exam/${data.examId}` : '/seb-dashboard')
+      }, 700)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi xác thực mã thi')
+    } finally {
+      setCodeLoading(false)
     }
   }
 
@@ -237,6 +305,8 @@ export default function SebLoginPage() {
                 ? 'Đăng Nhập Khảo Thí'
                 : mode === 'signup'
                 ? 'Đăng Ký Tài Khoản Thi'
+                : mode === 'quick_code'
+                ? 'Vào Thi Bằng Mã 6 Số'
                 : 'Khôi Phục Mật Khẩu'}
             </h1>
             <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -244,13 +314,15 @@ export default function SebLoginPage() {
                 ? 'Hệ thống thi cử trực tuyến tích hợp Safe Exam Browser'
                 : mode === 'signup'
                 ? 'Tạo tài khoản nhanh chóng để tham gia các kỳ thi trực tuyến'
+                : mode === 'quick_code'
+                ? 'Nhập mã dự thi 6 số được cấp trên dashboard để đăng nhập tức thì'
                 : 'Nhập email hoặc tài khoản để nhận liên kết đặt lại mật khẩu'}
             </p>
           </div>
 
-          {/* Tab Switcher: Login / Signup */}
+          {/* Tab Switcher: Login / Quick Code / Signup */}
           {mode !== 'forgot' && (
-            <div className="flex rounded-2xl bg-slate-100/90 p-1 mb-6 border border-slate-200/60 text-xs font-bold">
+            <div className="flex rounded-2xl bg-slate-100/90 p-1 mb-6 border border-slate-200/60 text-xs font-bold gap-1">
               <button
                 type="button"
                 onClick={() => {
@@ -269,6 +341,22 @@ export default function SebLoginPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setMode('quick_code')
+                  setErrorMsg('')
+                  setSuccessMsg('')
+                }}
+                className={`flex-1 py-2 rounded-xl transition flex items-center justify-center gap-1 ${
+                  mode === 'quick_code'
+                    ? 'bg-white text-sky-700 shadow-xs font-black'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <KeyRound className="h-3 w-3" />
+                <span>Mã 6 Số</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setMode('signup')
                   setErrorMsg('')
                   setSuccessMsg('')
@@ -279,7 +367,7 @@ export default function SebLoginPage() {
                     : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
-                Đăng Ký Mới
+                Đăng Ký
               </button>
             </div>
           )}
@@ -299,50 +387,101 @@ export default function SebLoginPage() {
             </div>
           )}
 
-          {/* Google Quick Sign-In */}
-          {mode !== 'forgot' && (
-            <div className="mb-5">
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={googleLoading || loading}
-                className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition shadow-xs hover:shadow-sm"
-              >
-                {googleLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
-                ) : (
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                )}
-                <span>Đăng nhập trực tiếp bằng Google</span>
-              </button>
-
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200"></div>
-                </div>
-                <div className="relative flex justify-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <span className="bg-white px-2">Hoặc tiếp tục với email</span>
-                </div>
+          {/* Chế độ 1: Đăng nhập nhanh bằng Mã Dự Thi 6 Số */}
+          {mode === 'quick_code' ? (
+            <form onSubmit={handleQuickCodeLogin} className="space-y-4">
+              <div className="space-y-2 text-center">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Mã Dự Thi 6 Chữ Số Của Bạn
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={examCode}
+                  onChange={(e) => setExamCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="123456"
+                  className="w-full text-center tracking-[0.4em] text-3xl font-mono font-black py-3 px-4 rounded-2xl border-2 border-sky-300 bg-sky-50/40 text-sky-950 focus:bg-white focus:outline-none focus:ring-4 focus:ring-sky-500/15 focus:border-sky-500 transition"
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Nhập mã 6 số xuất hiện khi bạn bấm chọn bài thi trên SEB Dashboard
+                </p>
               </div>
-            </div>
-          )}
+
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-left text-[11px] text-amber-800 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>Cơ chế bảo mật phòng thi:</span>
+                </div>
+                <p>
+                  Đăng nhập qua mã 6 số sẽ tự động đồng bộ tài khoản thí sinh và chấm dứt phiên trên các thiết bị khác.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={codeLoading || examCode.length !== 6}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {codeLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Đang xác thực mã thi...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Vào Phòng Thi Ngay</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          ) : (
+            <>
+              {/* Google Quick Sign-In */}
+              {mode !== 'forgot' && (
+                <div className="mb-5">
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={googleLoading || loading}
+                    className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition shadow-xs hover:shadow-sm"
+                  >
+                    {googleLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                    )}
+                    <span>Đăng nhập trực tiếp bằng Google</span>
+                  </button>
+
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200"></div>
+                    </div>
+                    <div className="relative flex justify-center text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      <span className="bg-white px-2">Hoặc tiếp tục với email</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
           {/* Main Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -489,6 +628,8 @@ export default function SebLoginPage() {
               )}
             </button>
           </form>
+          </>
+          )}
 
           {/* Back to Login from Forgot Mode */}
           {mode === 'forgot' && (

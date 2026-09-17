@@ -781,7 +781,21 @@ export default function SebExamRoomPage() {
               <button
                 type="button"
                 disabled={!honorAgreed}
-                onClick={() => setHasStarted(true)}
+                onClick={async () => {
+                  setHasStarted(true)
+                  if (currentUser?.id) {
+                    await supabase.auth.signOut({ scope: 'others' }).catch(() => {})
+                    fetch('/api/seb/exam-access', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'enter_exam_and_terminate_others',
+                        userId: currentUser.id,
+                        examId,
+                      }),
+                    }).catch(() => {})
+                  }
+                }}
                 className={`flex-1 w-full py-3 px-6 rounded-2xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-md ${
                   honorAgreed
                     ? 'bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-sky-500/20'
