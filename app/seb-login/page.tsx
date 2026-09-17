@@ -70,17 +70,21 @@ export default function SebLoginPage() {
       const isSecure = window.location.protocol === 'https:' ? '; Secure' : ''
 
       // Lưu cookie nhận diện SEB OAuth trên toàn bộ tên miền gốc (.senexam.me / .senexam.com)
+      document.cookie = `auth_source=seb; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+      document.cookie = `auth_next=${encodeURIComponent('/seb-dashboard')}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
       document.cookie = `seb_target=${encodeURIComponent(origin + '/seb-dashboard')}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
       document.cookie = `seb_origin=${encodeURIComponent(origin)}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
       document.cookie = `seb_login=1; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
 
       // Lưu fallback vào localStorage
       try {
+        localStorage.setItem('auth_source', 'seb')
+        localStorage.setItem('auth_next', '/seb-dashboard')
         localStorage.setItem('seb_oauth_target', origin + '/seb-dashboard')
         localStorage.setItem('seb_oauth_origin', origin)
       } catch (e) {}
 
-      const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent('/seb-dashboard')}&from_seb=1&seb_origin=${encodeURIComponent(origin)}`
+      const callbackUrl = `${origin}/auth/callback?source=seb&next=${encodeURIComponent('/seb-dashboard')}&from_seb=1&seb_origin=${encodeURIComponent(origin)}`
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',

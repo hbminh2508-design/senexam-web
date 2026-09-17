@@ -143,21 +143,35 @@ export async function POST(request: Request) {
 
     const parsedData = extractJson(responseText)
 
-    // Chuẩn hóa id cho từng section
+    // Chuẩn hóa id và type cho từng section
     if (Array.isArray(parsedData.sections)) {
-      parsedData.sections = parsedData.sections.map((s: any, idx: number) => ({
-        id: `sec-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`,
-        name: s.name || `Phần ${idx + 1}`,
-        totalPoints: Number(s.totalPoints) || (idx === 0 ? 4 : idx === 1 ? 4 : 2),
-        scoringMode: s.scoringMode || 'auto_divide',
-        questionCount: parseInt(s.questionCount) || 10,
-        questionTypeMode: s.questionTypeMode || 'uniform',
-        type: s.type || 'single_choice',
-        instructions: s.instructions || `Thí sinh đọc kỹ đề bài và hoàn thành câu hỏi của ${s.name || `Phần ${idx + 1}`}.`,
-        instructionImage: s.instructionImage || '',
-        correctAnswers: s.correctAnswers || {},
-        pointsPerQuestion: s.pointsPerQuestion || {},
-      }))
+      parsedData.sections = parsedData.sections.map((s: any, idx: number) => {
+        let normType = 'single_choice'
+        const rawT = (s.type || '').toString().toLowerCase().trim()
+        if (rawT.includes('true') || rawT.includes('tf') || rawT.includes('đúng') || rawT.includes('sai')) {
+          normType = 'true_false'
+        } else if (rawT.includes('short') || rawT.includes('ngắn') || rawT.includes('điền') || rawT.includes('fill') || rawT === 'sa') {
+          normType = 'short_answer'
+        } else if (rawT.includes('essay') || rawT.includes('luận')) {
+          normType = 'essay'
+        } else {
+          normType = 'single_choice'
+        }
+
+        return {
+          id: `sec-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`,
+          name: s.name || `Phần ${idx + 1}`,
+          totalPoints: Number(s.totalPoints) || (idx === 0 ? 4.5 : idx === 1 ? 4 : 1.5),
+          scoringMode: s.scoringMode || 'auto_divide',
+          questionCount: parseInt(s.questionCount) || 10,
+          questionTypeMode: s.questionTypeMode || 'uniform',
+          type: normType,
+          instructions: s.instructions || `Thí sinh đọc kỹ đề bài và hoàn thành câu hỏi của ${s.name || `Phần ${idx + 1}`}.`,
+          instructionImage: s.instructionImage || '',
+          correctAnswers: s.correctAnswers || {},
+          pointsPerQuestion: s.pointsPerQuestion || {},
+        }
+      })
     }
 
     return NextResponse.json({

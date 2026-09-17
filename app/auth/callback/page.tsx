@@ -37,24 +37,67 @@ function CallbackHandler() {
         const error = searchParams.get('error')
         const errorDescription = searchParams.get('error_description')
         const errorCode = searchParams.get('error_code')
-        const next = searchParams.get('next') || '/dashboard'
+        const sourceParam = searchParams.get('source')
+        const fromSebParam = searchParams.get('from_seb') === '1'
+        const sebOriginParam = searchParams.get('seb_origin')
+        const rawNext = searchParams.get('next')
 
-        const isSebSource =
-          searchParams.get('from_seb') === '1' ||
-          Boolean(searchParams.get('seb_origin')) ||
-          Boolean(getCookie('seb_login')) ||
-          Boolean(getCookie('seb_target')) ||
-          (typeof window !== 'undefined' &&
-            (window.location.hostname.startsWith('seb.') ||
-              window.location.hostname.startsWith('thicu.') ||
-              window.location.hostname.includes('seb.thicu.tailieufepn.')))
+        const authSourceCookie = getCookie('auth_source')
+        const authNextCookie = getCookie('auth_next')
+        const sebTargetCookie = getCookie('seb_target')
+        const sebOriginCookie = getCookie('seb_origin')
+        const sebLoginCookie = getCookie('seb_login')
+
+        let storageSource: string | null = null
+        let storageNext: string | null = null
+        let sebStorageTarget: string | null = null
+        try {
+          storageSource = localStorage.getItem('auth_source')
+          storageNext = localStorage.getItem('auth_next')
+          sebStorageTarget = localStorage.getItem('seb_oauth_target')
+        } catch (e) {}
+
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : ''
+        const isSebHost =
+          currentHost.startsWith('seb.') ||
+          currentHost.startsWith('thicu.') ||
+          currentHost.includes('seb.thicu.tailieufepn.')
+
+        const isFepnHost =
+          currentHost.startsWith('tsv.fepn.') ||
+          currentHost.startsWith('fepn.')
+
+        // 1. Phân loại luồng SEB
+        const isSebFlow =
+          sourceParam === 'seb' ||
+          fromSebParam ||
+          Boolean(sebOriginParam) ||
+          authSourceCookie === 'seb' ||
+          storageSource === 'seb' ||
+          Boolean(sebTargetCookie) ||
+          Boolean(sebOriginCookie) ||
+          sebLoginCookie === '1' ||
+          Boolean(sebStorageTarget) ||
+          isSebHost ||
+          Boolean(rawNext && rawNext.includes('seb-')) ||
+          Boolean(authNextCookie && authNextCookie.includes('seb-'))
+
+        // 2. Phân loại luồng FEPN
+        const isFepnFlow =
+          !isSebFlow &&
+          (sourceParam === 'fepn' ||
+            authSourceCookie === 'fepn' ||
+            storageSource === 'fepn' ||
+            isFepnHost ||
+            Boolean(rawNext && rawNext.includes('fepn')) ||
+            Boolean(authNextCookie && authNextCookie.includes('fepn')))
 
         if (error || errorCode) {
           const detail = errorDescription || error || errorCode || 'Lỗi xác thực OAuth'
           if (active) {
             setErrorMsg(`Đăng nhập Google không thành công: ${detail}`)
           }
-          const failRedirect = isSebSource ? '/seb-login' : '/new-sign'
+          const failRedirect = isSebFlow ? '/seb-login' : isFepnFlow ? '/fepn-login' : '/new-sign'
           setTimeout(() => {
             if (active) {
               router.replace(`${failRedirect}?error=${encodeURIComponent(detail)}`)
@@ -67,38 +110,21 @@ function CallbackHandler() {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
         const handleRedirect = (currentUser: any) => {
+          // Dọn dẹp cookie và storage tạm thời
+          clearDomainCookie('auth_source')
+          clearDomainCookie('auth_next')
+          clearDomainCookie('seb_target')
+          clearDomainCookie('seb_origin')
+          clearDomainCookie('seb_login')
+          try {
+            localStorage.removeItem('auth_source')
+            localStorage.removeItem('auth_next')
+            localStorage.removeItem('seb_oauth_target')
+            localStorage.removeItem('seb_oauth_origin')
+          } catch (e) {}
+
           // 1. ƯU TIÊN SỐ 1: Chuyển hướng về Hệ thống thi cử SEB nếu đăng nhập từ SEB
-          const fromSebParam = searchParams.get('from_seb') === '1'
-          const sebOriginParam = searchParams.get('seb_origin')
-          const sebTargetCookie = getCookie('seb_target')
-          const sebOriginCookie = getCookie('seb_origin')
-          const sebLoginCookie = getCookie('seb_login')
-          const sebStorageTarget = typeof window !== 'undefined' ? localStorage.getItem('seb_oauth_target') : null
-          const isSebHost =
-            typeof window !== 'undefined' &&
-            (window.location.hostname.startsWith('seb.') ||
-              window.location.hostname.startsWith('thicu.') ||
-              window.location.hostname.includes('seb.thicu.tailieufepn.'))
-
-          const isSebFlow =
-            fromSebParam ||
-            Boolean(sebOriginParam) ||
-            Boolean(sebTargetCookie) ||
-            Boolean(sebOriginCookie) ||
-            sebLoginCookie === '1' ||
-            Boolean(sebStorageTarget) ||
-            isSebHost ||
-            next.includes('seb-')
-
           if (isSebFlow) {
-            clearDomainCookie('seb_target')
-            clearDomainCookie('seb_origin')
-            clearDomainCookie('seb_login')
-            try {
-              localStorage.removeItem('seb_oauth_target')
-              localStorage.removeItem('seb_oauth_origin')
-            } catch (e) {}
-
             let sebDestination = ''
             if (sebTargetCookie && sebTargetCookie.startsWith('http')) {
               sebDestination = sebTargetCookie
@@ -112,10 +138,14 @@ function CallbackHandler() {
               sebDestination = '/seb-dashboard'
             } else {
               const host = window.location.hostname
-              const hostParts = host.split('.')
-              const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
-              const protocol = window.location.protocol
-              sebDestination = `${protocol}//seb.thicu.tailieufepn.${rootDomain}/seb-dashboard`
+              if (host === 'localhost') {
+                sebDestination = '/seb-dashboard'
+              } else {
+                const hostParts = host.split('.')
+                const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
+                const protocol = window.location.protocol
+                sebDestination = `${protocol}//seb.thicu.tailieufepn.${rootDomain}/seb-dashboard`
+              }
             }
 
             if (sebDestination.startsWith('http')) {
@@ -126,16 +156,8 @@ function CallbackHandler() {
             return
           }
 
-          // 2. Chuyển hướng FEPN
-          const userEmail = currentUser?.email?.toLowerCase() || ''
-          const isVnu = userEmail.endsWith('@vnu.edu.vn') || isDomainEmail(userEmail, currentUser)
-          const isFepn =
-            typeof window !== 'undefined' &&
-            (window.location.hostname.startsWith('tsv.fepn.') ||
-              window.location.hostname.startsWith('fepn.') ||
-              next.includes('fepn'))
-
-          if (isVnu || isFepn) {
+          // 2. Chuyển hướng FEPN: Chỉ khi thực sự đến từ FEPN
+          if (isFepnFlow) {
             if (typeof window !== 'undefined') {
               if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
                 router.replace('/fepn-dashboard')
@@ -148,11 +170,20 @@ function CallbackHandler() {
             }
           }
 
-          // 3. Mặc định SenExam
-          if (next.startsWith('http')) {
-            window.location.href = next
+          // 3. Mặc định SenExam (New-Sign): Luôn đưa về /new-dashboard (hoặc đường dẫn cụ thể nếu có)
+          const destination =
+            rawNext && rawNext !== '/dashboard' && !rawNext.includes('fepn')
+              ? rawNext
+              : authNextCookie && authNextCookie !== '/dashboard' && !authNextCookie.includes('fepn')
+              ? authNextCookie
+              : storageNext && storageNext !== '/dashboard' && !storageNext.includes('fepn')
+              ? storageNext
+              : '/new-dashboard'
+
+          if (destination.startsWith('http')) {
+            window.location.href = destination
           } else {
-            router.replace(next)
+            router.replace(destination)
           }
         }
 
@@ -177,10 +208,16 @@ function CallbackHandler() {
         // Safety fallback timeout
         const timer = setTimeout(() => {
           if (active) {
-            if (next.startsWith('http')) {
-              window.location.href = next
+            if (isSebFlow) {
+              router.replace('/seb-dashboard')
+            } else if (isFepnFlow) {
+              if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !isFepnHost) {
+                window.location.href = 'https://tsv.fepn.senexam.me/fepn-dashboard'
+              } else {
+                router.replace('/fepn-dashboard')
+              }
             } else {
-              router.replace(next)
+              router.replace('/new-dashboard')
             }
           }
         }, 3500)

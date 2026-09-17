@@ -2,22 +2,45 @@ import { supabase } from '@/lib/supabaseClient'
 
 /**
  * Đăng nhập / Đăng ký bằng Google OAuth
- * @param nextPath Đường dẫn redirect sau khi đăng nhập thành công (mặc định: /dashboard)
+ * @param nextPath Đường dẫn redirect sau khi đăng nhập thành công (mặc định: /new-dashboard)
  */
-export async function signInWithGoogle(nextPath: string = '/dashboard') {
+export async function signInWithGoogle(nextPath: string = '/new-dashboard') {
   if (typeof window === 'undefined') return
 
   const host = window.location.hostname
   let origin = window.location.origin
 
+  const isSeb =
+    host.startsWith('seb.') ||
+    host.startsWith('thicu.') ||
+    host.includes('seb.thicu.tailieufepn.') ||
+    nextPath.includes('seb-')
+
+  const isFepn =
+    !isSeb &&
+    (host.startsWith('tsv.fepn.') ||
+      host.startsWith('fepn.') ||
+      nextPath.includes('fepn'))
+
+  const source = isSeb ? 'seb' : isFepn ? 'fepn' : 'new-sign'
+
   // Nếu đang ở FEPN hoặc redirect tới FEPN, callbackUrl trỏ về subdomain FEPN
-  if (host.startsWith('tsv.fepn.') || host.startsWith('fepn.') || nextPath.includes('fepn')) {
-    if (host !== 'localhost') {
-      origin = 'https://tsv.fepn.senexam.me'
-    }
+  if (isFepn && host !== 'localhost') {
+    origin = 'https://tsv.fepn.senexam.me'
   }
 
-  const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
+  // Ghi nhận nguồn đăng nhập vào Cookie và LocalStorage để bảo toàn sau khi redirect qua Google OAuth
+  try {
+    const hostParts = host.split('.')
+    const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
+    const isSecure = window.location.protocol === 'https:' ? '; Secure' : ''
+    document.cookie = `auth_source=${source}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+    document.cookie = `auth_next=${encodeURIComponent(nextPath)}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+    localStorage.setItem('auth_source', source)
+    localStorage.setItem('auth_next', nextPath)
+  } catch (e) {}
+
+  const callbackUrl = `${origin}/auth/callback?source=${source}&next=${encodeURIComponent(nextPath)}`
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -46,7 +69,7 @@ export async function linkWithGoogle(nextPath?: string) {
   if (typeof window === 'undefined') return
 
   const origin = window.location.origin
-  const target = nextPath || window.location.pathname || '/dashboard'
+  const target = nextPath || window.location.pathname || '/new-dashboard'
   const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(target)}`
 
   // Supabase v2 linkIdentity

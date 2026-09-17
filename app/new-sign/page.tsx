@@ -122,13 +122,12 @@ export default function NewSignPage() {
     try {
       const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined
 
-      const getDestinationUrl = (userEmail: string) => {
-        const isVnu = userEmail.toLowerCase().endsWith('@vnu.edu.vn')
+      const getDestinationUrl = (_userEmail: string) => {
         const isFepn =
           typeof window !== 'undefined' &&
           (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.'))
 
-        if (isVnu || isFepn) {
+        if (isFepn) {
           if (typeof window !== 'undefined') {
             if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
               return '/fepn-dashboard'

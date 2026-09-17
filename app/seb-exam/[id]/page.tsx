@@ -35,6 +35,60 @@ import {
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-sebexam-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-sebexam-body' })
 
+/**
+ * Chuẩn hóa thể loại câu hỏi với cơ chế Fallback an toàn
+ * Đảm bảo các tùy chọn đáp án không bao giờ bị biến mất
+ */
+function normalizeQuestionType(
+  rawType: any,
+  section?: any,
+  qIdx?: number
+): 'single_choice' | 'true_false' | 'short_answer' | 'essay' {
+  let type = (rawType || '').toString().toLowerCase().trim()
+
+  // Hỗ trợ dạng đề hỗn hợp (mixed) có mixedRanges
+  if ((type === 'mixed' || !type) && section?.mixedRanges && Array.isArray(section.mixedRanges) && qIdx !== undefined) {
+    const range = section.mixedRanges.find(
+      (r: any) => qIdx + 1 >= (r.start || 1) && qIdx + 1 <= (r.end || 999)
+    )
+    if (range?.type) {
+      type = range.type.toString().toLowerCase().trim()
+    }
+  }
+
+  if (
+    type.includes('true') ||
+    type.includes('tf') ||
+    type.includes('dung_sai') ||
+    type.includes('đúng') ||
+    type.includes('sai')
+  ) {
+    return 'true_false'
+  }
+
+  if (
+    type.includes('short') ||
+    type.includes('ngắn') ||
+    type.includes('điền') ||
+    type.includes('fill') ||
+    type.includes('dien_so') ||
+    type === 'sa'
+  ) {
+    return 'short_answer'
+  }
+
+  if (
+    type.includes('essay') ||
+    type.includes('luận') ||
+    type.includes('tu_luan')
+  ) {
+    return 'essay'
+  }
+
+  // Fallback mặc định an toàn tuyệt đối: single_choice (A, B, C, D)
+  return 'single_choice'
+}
+
 export default function SebExamRoomPage() {
   const params = useParams()
   const router = useRouter()
@@ -217,10 +271,11 @@ export default function SebExamRoomPage() {
       offsets[section.id] = count
       const qCount = parseInt(section.questionCount) || 0
       for (let i = 0; i < qCount; i++) {
-        const qType =
+        const rawType =
           section.questionTypeMode === 'custom' && section.questionTypes?.[i]
             ? section.questionTypes[i]
-            : section.type || 'single_choice'
+            : section.type
+        const qType = normalizeQuestionType(rawType, section, i)
 
         flat.push({
           sectionId: section.id,
@@ -287,17 +342,20 @@ export default function SebExamRoomPage() {
 
       for (let i = 0; i < qCount; i++) {
         const key = `${section.id}-${i}`
-        const qType =
+        const rawType =
           section.questionTypeMode === 'custom' && section.questionTypes?.[i]
             ? section.questionTypes[i]
-            : section.type || 'single_choice'
+            : section.type
+        const qType = normalizeQuestionType(rawType, section, i)
 
         const qPoint = isAutoDivide
           ? defaultPointsPerQ
           : Number(section.pointsPerQuestion?.[i]) ?? defaultPointsPerQ
 
         if (qType === 'single_choice') {
-          if (answers[key] && answers[key] === correctMap[i]) {
+          const userVal = String(answers[key] || '').trim().toUpperCase()
+          const corrVal = String(correctMap[i] || '').trim().toUpperCase()
+          if (userVal && corrVal && userVal === corrVal) {
             totalScore += qPoint
           }
         } else if (qType === 'true_false') {
@@ -306,7 +364,14 @@ export default function SebExamRoomPage() {
 
           let matchedSubCount = 0
           ;['a', 'b', 'c', 'd'].forEach((sub) => {
-            if (userObj[sub] && userObj[sub] === correctObj[sub]) {
+            const uVal = String(userObj[sub] || '').toUpperCase()
+            const cVal = String(correctObj[sub] || '').toUpperCase()
+            const isUserTrue = uVal === 'Đ' || uVal === 'T' || uVal === 'TRUE' || uVal === '1'
+            const isUserFalse = uVal === 'S' || uVal === 'F' || uVal === 'FALSE' || uVal === '0'
+            const isCorrTrue = cVal === 'Đ' || cVal === 'T' || cVal === 'TRUE' || cVal === '1'
+            const isCorrFalse = cVal === 'S' || cVal === 'F' || cVal === 'FALSE' || cVal === '0'
+
+            if ((isUserTrue && isCorrTrue) || (isUserFalse && isCorrFalse)) {
               matchedSubCount++
             }
           })
@@ -949,10 +1014,11 @@ export default function SebExamRoomPage() {
                       const globalNum = offset + qIdx + 1
                       const isMarked = bookmarked[key]
                       const currentAns = answers[key]
-                      const currentType =
+                      const rawType =
                         section.questionTypeMode === 'custom' && section.questionTypes?.[qIdx]
                           ? section.questionTypes[qIdx]
-                          : section.type || 'single_choice'
+                          : section.type
+                      const currentType = normalizeQuestionType(rawType, section, qIdx)
 
                       const qPoint =
                         section.scoringMode === 'custom_points'
@@ -1000,23 +1066,30 @@ export default function SebExamRoomPage() {
                             </button>
                           </div>
 
-                          {/* 1. Trắc nghiệm 4 lựa chọn A, B, C, D */}
+                          {/* 1. Trắc nghiệm lựa chọn A, B, C, D (hoặc nhiều hơn) */}
                           {currentType === 'single_choice' && (
-                            <div className="flex gap-2">
-                              {['A', 'B', 'C', 'D'].map((opt) => (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  onClick={() => handleAnswer(key, opt)}
-                                  className={`flex-1 py-2 rounded-xl text-xs font-black transition ${
-                                    currentAns === opt
-                                      ? 'bg-sky-600 text-white shadow-sm'
-                                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                  }`}
-                                >
-                                  {opt}
-                                </button>
-                              ))}
+                            <div className="flex gap-2 flex-wrap">
+                              {(() => {
+                                const optCount = Math.max(2, Math.min(10, parseInt(section.optionsCount) || 4))
+                                const opts = Array.from({ length: optCount }).map((_, oIdx) => String.fromCharCode(65 + oIdx))
+                                return opts.map((opt) => {
+                                  const isSelected = String(currentAns || '').trim().toUpperCase() === opt
+                                  return (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      onClick={() => handleAnswer(key, opt)}
+                                      className={`flex-1 min-w-[50px] py-2.5 rounded-xl text-xs font-black transition ${
+                                        isSelected
+                                          ? 'bg-sky-600 text-white shadow-sm ring-2 ring-sky-300'
+                                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                      }`}
+                                    >
+                                      {opt}
+                                    </button>
+                                  )
+                                })
+                              })()}
                             </div>
                           )}
 

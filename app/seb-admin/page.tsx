@@ -64,6 +64,54 @@ export interface SectionItem {
   mixedRanges?: any[]
 }
 
+function normalizeQuestionType(
+  rawType: any,
+  section?: any,
+  qIdx?: number
+): 'single_choice' | 'true_false' | 'short_answer' | 'essay' {
+  let type = (rawType || '').toString().toLowerCase().trim()
+
+  if ((type === 'mixed' || !type) && section?.mixedRanges && Array.isArray(section.mixedRanges) && qIdx !== undefined) {
+    const range = section.mixedRanges.find(
+      (r: any) => qIdx + 1 >= (r.start || 1) && qIdx + 1 <= (r.end || 999)
+    )
+    if (range?.type) {
+      type = range.type.toString().toLowerCase().trim()
+    }
+  }
+
+  if (
+    type.includes('true') ||
+    type.includes('tf') ||
+    type.includes('dung_sai') ||
+    type.includes('đúng') ||
+    type.includes('sai')
+  ) {
+    return 'true_false'
+  }
+
+  if (
+    type.includes('short') ||
+    type.includes('ngắn') ||
+    type.includes('điền') ||
+    type.includes('fill') ||
+    type.includes('dien_so') ||
+    type === 'sa'
+  ) {
+    return 'short_answer'
+  }
+
+  if (
+    type.includes('essay') ||
+    type.includes('luận') ||
+    type.includes('tu_luan')
+  ) {
+    return 'essay'
+  }
+
+  return 'single_choice'
+}
+
 export default function SebAdminPage() {
   const router = useRouter()
 
@@ -346,7 +394,7 @@ export default function SebAdminPage() {
           pointsPerQuestion: s.pointsPerQuestion || {},
           questionCount: parseInt(s.questionCount) || 1,
           questionTypeMode: s.questionTypeMode || 'uniform',
-          type: s.type || 'single_choice',
+          type: normalizeQuestionType(s.type, s, idx),
           questionTypes: s.questionTypes || {},
           instructions: s.instructions || '',
           instructionImage: s.instructionImage || '',
@@ -354,7 +402,6 @@ export default function SebAdminPage() {
         }))
 
         setExamSections(mappedSections)
-        setShowAiModal(false)
         alert(`🎉 Phân tích file PDF thành công bằng Gemini 3.5 Flash Lite!\nĐã nhận diện ${mappedSections.length} phần thi và tự động giải sẵn bảng đáp án. Bạn có thể kiểm tra lại thông tin và bảng đáp án bên dưới.`)
       }
     } catch (err: any) {
@@ -1101,10 +1148,11 @@ export default function SebAdminPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                           {Array.from({ length: qCount }).map((_, qIdx) => {
                             const ans = section.correctAnswers[qIdx]
-                            const qType =
+                            const rawQType =
                               section.questionTypeMode === 'custom' && section.questionTypes?.[qIdx]
                                 ? section.questionTypes[qIdx]
                                 : section.type
+                            const qType = normalizeQuestionType(rawQType, section, qIdx)
 
                             const currentPoint =
                               section.scoringMode === 'custom_points'
