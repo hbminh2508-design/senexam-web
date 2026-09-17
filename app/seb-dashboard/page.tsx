@@ -322,7 +322,7 @@ export default function SebDashboardPage() {
       if (data.success) {
         setExams((prev) =>
           prev.map((e) =>
-            e.id === examId ? { ...e, folder_id: currentInFolder ? null : selectedChildId } : e
+            e.id === examId ? { ...e, folder_id: currentInFolder ? 'none' : selectedChildId } : e
           )
         )
       }
@@ -780,22 +780,32 @@ export default function SebDashboardPage() {
                 </>
               )}
 
-              <p className="text-[11px] text-slate-500 leading-relaxed max-w-sm mx-auto">
-                Sinh viên có thể sao chép mã 6 số này để đăng nhập nhanh vào đúng tài khoản trong môi trường Safe Exam Browser (SEB) hoặc máy tính phòng thi.
-              </p>
+              {/* LƯU Ý ĐẶC BIỆT KHI MỞ SEB (KHÔNG DÁN ĐƯỢC MÃ) */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-300 text-left space-y-1.5 shadow-2xs">
+                <div className="flex items-center gap-2 font-black text-amber-950 text-xs">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>LƯU Ý ĐẶC BIỆT: KHÔNG THỂ DÁN (PASTE) TRONG SEB!</span>
+                </div>
+                <p className="text-[11px] text-amber-900 leading-relaxed font-semibold">
+                  Khi khởi chạy ứng dụng <strong>Safe Exam Browser (SEB)</strong>, tính năng dán (Ctrl+V) sẽ <strong>bị khóa hoàn toàn để bảo mật</strong>.
+                </p>
+                <p className="text-[11px] text-amber-950 leading-relaxed font-black bg-white/80 p-2 rounded-xl border border-amber-200">
+                  👉 Thí sinh vui lòng <span className="text-red-600 uppercase underline decoration-2">GHI NHỚ MÃ 6 SỐ NÀY</span> hoặc <span className="text-red-600 uppercase underline decoration-2">GHI RA GIẤY NHÁP</span> trước khi vào SEB để có thể tự tay nhập mã vào bài thi.
+                </p>
+              </div>
             </div>
 
             {/* Cảnh báo bảo mật & chấm dứt phiên */}
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-left space-y-1.5">
-              <div className="flex items-center gap-2 font-black text-amber-950 text-xs">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                <span>LƯU Ý BẢO MẬT & CHỐNG GIAN LẬN:</span>
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-1.5">
+              <div className="flex items-center gap-2 font-black text-slate-800 text-xs">
+                <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />
+                <span>CẢNH BÁO BẢO VỆ TÀI KHOẢN & PHÒNG THI:</span>
               </div>
-              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+              <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
                 • <strong>Tuyệt đối không chia sẻ mã này</strong> cho bất kỳ ai.
               </p>
-              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
-                • Hành động bấm <strong>"Bắt Đầu Vào Thi"</strong> sẽ lập tức kích hoạt bảo vệ tài khoản và <strong>CHẤM DỨT PHIÊN ĐĂNG NHẬP TRÊN TẤT CẢ CÁC THIẾT BỊ KHÁC</strong> đang truy cập tài khoản của bạn.
+              <p className="text-[11px] text-slate-700 leading-relaxed font-medium">
+                • Hành động bấm <strong>"Xác Nhận & Bắt Đầu Vào Thi"</strong> sẽ <strong>CHẤM DỨT PHIÊN ĐĂNG NHẬP TRÊN TẤT CẢ CÁC THIẾT BỊ KHÁC</strong> đang truy cập tài khoản của bạn.
               </p>
             </div>
 
@@ -886,6 +896,7 @@ export default function SebDashboardPage() {
                 .map((ex) => {
                   const isDirect = ex.folder_id === selectedFolderObj.id
                   const isAuto = !isDirect && isExamInFolder(ex, selectedFolderObj)
+                  const isInFolder = isDirect || isAuto
 
                   return (
                     <div
@@ -905,7 +916,11 @@ export default function SebDashboardPage() {
                             <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">
                               ⚡ Tự động nhận diện
                             </span>
-                          ) : null}
+                          ) : (
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500">
+                              Chưa có trong môn
+                            </span>
+                          )}
                         </div>
                         <h4 className="text-xs font-bold text-slate-800 truncate">{ex.title}</h4>
                       </div>
@@ -913,14 +928,14 @@ export default function SebDashboardPage() {
                       <button
                         type="button"
                         disabled={updatingFolderExams}
-                        onClick={() => handleToggleExamInFolder(ex.id, isDirect)}
+                        onClick={() => handleToggleExamInFolder(ex.id, isInFolder)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 ${
-                          isDirect
+                          isInFolder
                             ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
                             : 'bg-sky-600 text-white hover:bg-sky-700 shadow-2xs'
                         }`}
                       >
-                        {isDirect ? 'Gỡ Khỏi Môn' : '+ Gán Vào Môn'}
+                        {isInFolder ? 'Gỡ Khỏi Môn' : '+ Gán Vào Môn'}
                       </button>
                     </div>
                   )

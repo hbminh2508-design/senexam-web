@@ -99,11 +99,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'Đã gán đề vào thư mục!' })
     }
 
-    // Gỡ 1 đề đơn lẻ
+    // Gỡ 1 đề đơn lẻ (đặt sang 'none' để không bị tự động đoán lại)
     if (unassignExamId) {
       const { error } = await admin
         .from('exams')
-        .update({ folder_id: null })
+        .update({ folder_id: 'none' })
         .eq('id', unassignExamId)
 
       if (error) throw error
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     if (Array.isArray(examIdsToRemove) && examIdsToRemove.length > 0) {
       const { error } = await admin
         .from('exams')
-        .update({ folder_id: null })
+        .update({ folder_id: 'none' })
         .in('id', examIdsToRemove)
 
       if (error) throw error

@@ -222,7 +222,7 @@ export default function SebAdminPage() {
       if (data.success) {
         setExamsList((prev) =>
           prev.map((e) =>
-            e.id === examId ? { ...e, folder_id: currentInFolder ? null : selectedAdminChildFolder.id } : e
+            e.id === examId ? { ...e, folder_id: currentInFolder ? 'none' : selectedAdminChildFolder.id } : e
           )
         )
       }
@@ -1570,6 +1570,7 @@ export default function SebAdminPage() {
                       .map((ex) => {
                         const isDirect = ex.folder_id === selectedAdminChildFolder.id
                         const isAuto = !isDirect && isExamInFolder(ex, selectedAdminChildFolder)
+                        const isInFolder = isDirect || isAuto
 
                         return (
                           <div
@@ -1589,7 +1590,11 @@ export default function SebAdminPage() {
                                   <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">
                                     ⚡ Tự động nhận diện
                                   </span>
-                                ) : null}
+                                ) : (
+                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-500">
+                                    Chưa có trong môn
+                                  </span>
+                                )}
                               </div>
                               <h4 className="text-xs font-bold text-slate-800 truncate">{ex.title}</h4>
                             </div>
@@ -1597,14 +1602,14 @@ export default function SebAdminPage() {
                             <button
                               type="button"
                               disabled={updatingAdminFolderExams}
-                              onClick={() => handleToggleExamInChildFolder(ex.id, isDirect)}
+                              onClick={() => handleToggleExamInChildFolder(ex.id, isInFolder)}
                               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 ${
-                                isDirect
+                                isInFolder
                                   ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
                                   : 'bg-sky-600 text-white hover:bg-sky-700 shadow-2xs'
                               }`}
                             >
-                              {isDirect ? 'Gỡ Khỏi Môn' : '+ Gán Vào Môn'}
+                              {isInFolder ? 'Gỡ Khỏi Môn' : '+ Gán Vào Môn'}
                             </button>
                           </div>
                         )

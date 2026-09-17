@@ -25,9 +25,10 @@ export interface SebExamLike {
 export function isExamInFolder(exam: SebExamLike, folder: SebFolderLike): boolean {
   if (!exam || !folder) return false
 
-  // 1. Khớp tuyệt đối theo folder_id (Do Admin gán thủ công)
-  if (exam.folder_id && exam.folder_id === folder.id) {
-    return true
+  // 1. Ưu tiên tuyệt đối quyết định của Admin:
+  // Nếu đề thi đã có folder_id (kể cả 'none' hay gán cho môn khác), không tự động đoán nữa
+  if (exam.folder_id && typeof exam.folder_id === 'string' && exam.folder_id.trim() !== '') {
+    return exam.folder_id === folder.id
   }
 
   const folderName = (folder.name || '').toLowerCase().trim()
@@ -49,7 +50,19 @@ export function isExamInFolder(exam: SebExamLike, folder: SebFolderLike): boolea
   }
 
   // 3. Khớp thông minh theo từ khóa môn học và kỳ thi
+  // Phân biệt rõ Tư duy Định lượng (Toán/Số học) vs Tư duy Định tính (Văn học/Ngôn ngữ)
+  if (folderName.includes('định lượng')) {
+    if (title.includes('định tính') || title.includes('ngữ văn') || title.includes('văn')) return false
+    if (title.includes('định lượng') || title.includes('toán') || examType.includes('toán')) return true
+  }
+
+  if (folderName.includes('định tính')) {
+    if (title.includes('định lượng') || title.includes('toán')) return false
+    if (title.includes('định tính') || title.includes('ngữ văn') || title.includes('văn') || title.includes('tiếng việt')) return true
+  }
+
   if (folderName.includes('toán') && (title.includes('toán') || examType.includes('toán'))) {
+    if (title.includes('định tính')) return false
     return true
   }
 
@@ -78,16 +91,19 @@ export function isExamInFolder(exam: SebExamLike, folder: SebFolderLike): boolea
     return true
   }
 
+  // Khớp TSA / ĐGTD (tránh khớp nhầm chỉ vì từ 'tư duy' chung chung)
   if (
-    (folderName.includes('hsa') || folderName.includes('đgnl') || folderName.includes('năng lực')) &&
-    (title.includes('hsa') || examType.includes('hsa') || title.includes('đgnl') || examType.includes('đgnl') || title.includes('năng lực'))
+    (folderName.includes('tsa') || folderName.includes('đgtd')) &&
+    (title.includes('tsa') || examType.includes('tsa') || title.includes('đgtd') || examType.includes('đgtd'))
   ) {
     return true
   }
 
+  // Khớp HSA chung khi môn không phân định tính/lượng
   if (
-    (folderName.includes('tsa') || folderName.includes('đgtd') || folderName.includes('tư duy')) &&
-    (title.includes('tsa') || examType.includes('tsa') || title.includes('đgtd') || examType.includes('đgtd') || title.includes('tư duy'))
+    (folderName.includes('hsa') || folderName.includes('đgnl') || folderName.includes('năng lực')) &&
+    !folderName.includes('định tính') && !folderName.includes('định lượng') &&
+    (title.includes('hsa') || examType.includes('hsa') || title.includes('đgnl') || examType.includes('đgnl') || title.includes('năng lực'))
   ) {
     return true
   }
@@ -96,6 +112,7 @@ export function isExamInFolder(exam: SebExamLike, folder: SebFolderLike): boolea
     (folderName.includes('văn') || folderName.includes('ngữ văn')) &&
     (title.includes('văn') || title.includes('ngữ văn') || examType.includes('văn'))
   ) {
+    if (title.includes('định lượng')) return false
     return true
   }
 
@@ -127,8 +144,8 @@ export function isExamInFolder(exam: SebExamLike, folder: SebFolderLike): boolea
     return true
   }
 
-  // 4. Khớp trực tiếp nếu tên folder nằm trong title đề thi hoặc ngược lại
-  if (folderName.length >= 3 && title.includes(folderName)) {
+  // 4. Khớp trực tiếp nếu tên folder nằm trong title đề thi hoặc ngược lại (yêu cầu độ dài tối thiểu 4 ký tự)
+  if (folderName.length >= 4 && title.includes(folderName)) {
     return true
   }
 

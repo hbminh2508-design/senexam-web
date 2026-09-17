@@ -403,18 +403,21 @@ export default function SebLoginPage() {
                   className="w-full text-center tracking-[0.4em] text-3xl font-mono font-black py-3 px-4 rounded-2xl border-2 border-sky-300 bg-sky-50/40 text-sky-950 focus:bg-white focus:outline-none focus:ring-4 focus:ring-sky-500/15 focus:border-sky-500 transition"
                   autoFocus
                 />
-                <p className="text-[11px] text-slate-400 font-medium">
+                <p className="text-[11px] text-slate-500 font-bold">
                   Nhập mã 6 số xuất hiện khi bạn bấm chọn bài thi trên SEB Dashboard
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-left text-[11px] text-amber-800 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-left text-[11px] text-amber-900 space-y-1.5 shadow-2xs">
+                <div className="flex items-center gap-1.5 font-black text-amber-950">
                   <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
-                  <span>Cơ chế bảo mật phòng thi:</span>
+                  <span>LƯU Ý KHI THI TRÊN ỨNG DỤNG SEB:</span>
                 </div>
-                <p>
-                  Đăng nhập qua mã 6 số sẽ tự động đồng bộ tài khoản thí sinh và chấm dứt phiên trên các thiết bị khác.
+                <p className="leading-relaxed">
+                  • <strong>Không thể dán (Paste / Ctrl+V)</strong>: SEB khóa clipboard để chống gian lận, bạn vui lòng <strong>tự tay gõ 6 chữ số</strong> đã ghi nhớ hoặc ghi ra giấy nháp vào ô trên.
+                </p>
+                <p className="leading-relaxed">
+                  • Đăng nhập qua mã 6 số sẽ tự động đồng bộ hồ sơ và <strong>chấm dứt phiên trên các thiết bị khác</strong>.
                 </p>
               </div>
 
