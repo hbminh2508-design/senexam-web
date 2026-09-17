@@ -34,6 +34,7 @@ export default function SebProfilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [submissions, setSubmissions] = useState<any[]>([])
+  const [subFilter, setSubFilter] = useState<'all' | 'seb' | 'senexam'>('all')
 
   // Form edit profile state
   const [fullName, setFullName] = useState('')
@@ -69,7 +70,7 @@ export default function SebProfilePage() {
           setSchool(profileData.school || '')
         }
 
-        // 2. Lấy danh sách các bài thi đã làm và điểm số
+        // 2. Lấy danh sách toàn bộ các bài thi đã làm từ SenExam và SEB
         const { data: subsData } = await supabase
           .from('submissions')
           .select(`
@@ -80,16 +81,19 @@ export default function SebProfilePage() {
             created_at,
             tab_switches,
             blur_count,
+            time_spent,
             exams (
               id,
               title,
               duration,
               allow_review,
-              exam_type
+              exam_type,
+              require_seb,
+              subjects
             )
           `)
           .eq('user_id', user.id)
-          .order('submitted_at', { ascending: false })
+          .order('created_at', { ascending: false })
 
         setSubmissions(subsData || [])
       } catch (err) {
@@ -143,6 +147,19 @@ export default function SebProfilePage() {
     totalCompleted > 0
       ? Math.max(...submissions.map((s) => Number(s.score) || 0)).toFixed(1)
       : '0.0'
+
+  const sebSubsCount = submissions.filter((s) => s.exams?.require_seb === true).length
+  const senSubsCount = submissions.filter((s) => !s.exams?.require_seb).length
+
+  const filteredSubmissions = submissions.filter((sub) => {
+    if (subFilter === 'seb') {
+      return sub.exams?.require_seb === true
+    }
+    if (subFilter === 'senexam') {
+      return !sub.exams?.require_seb
+    }
+    return true
+  })
 
   return (
     <div
@@ -214,19 +231,50 @@ export default function SebProfilePage() {
           </div>
         </div>
 
-        {/* 2 Cột: Cột Trái Cập nhật thông tin / Cột Phải Bảng điểm và Lịch sử bài đã thi */}
+        {/* Banner Đồng Bộ Dữ Liệu Toàn Diện Từ SenExam */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-sky-500/10 border border-emerald-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/20">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wide">
+                Dữ Liệu Đã Đồng Bộ Hoàn Toàn Với SenExam
+              </h4>
+              <p className="text-[11px] text-emerald-800 font-medium mt-0.5">
+                Toàn bộ lịch sử làm bài, số lần thi và điểm số từ SenExam đã được tích hợp đầy đủ vào tài khoản SEB của bạn.
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <span className="text-xs font-black text-emerald-800 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
+              {submissions.length} bài thi đã đồng bộ
+            </span>
+          </div>
+        </div>
+
+        {/* 2 Cột: Thông Tin Cá Nhân (Trái) & Lịch Sử Làm Bài (Phải) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Cột 1: Thông tin cá nhân */}
-          <div className="p-6 rounded-3xl bg-white border border-sky-100 shadow-sm h-fit">
-            <h3
-              className="text-base font-black text-slate-900 mb-4"
-              style={{ fontFamily: 'var(--font-seb-heading)' }}
-            >
-              Thông Tin Cá Nhân
-            </h3>
+          {/* Cột 1: Thông Tin Cá Nhân */}
+          <div className="p-6 rounded-3xl bg-white border border-sky-100 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+              <User className="h-4 w-4 text-sky-600" />
+              <h3
+                className="text-base font-black text-slate-900"
+                style={{ fontFamily: 'var(--font-seb-heading)' }}
+              >
+                Thông Tin Cá Nhân
+              </h3>
+            </div>
 
             {saveMsg && (
-              <div className="mb-4 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
+              <div
+                className={`p-3 rounded-2xl text-xs font-bold border ${
+                  saveMsg.includes('Lỗi')
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                }`}
+              >
                 {saveMsg}
               </div>
             )}
@@ -238,7 +286,7 @@ export default function SebProfilePage() {
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Nguyễn Văn An"
+                  placeholder="Nguyễn Văn A"
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
                   required
                 />
@@ -285,28 +333,65 @@ export default function SebProfilePage() {
 
           {/* Cột 2: Bảng Điểm & Các Bài Đã Làm */}
           <div className="lg:col-span-2 p-6 rounded-3xl bg-white border border-sky-100 shadow-sm flex flex-col">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Award className="h-4 w-4 text-sky-600" />
                 <h3
                   className="text-base font-black text-slate-900"
                   style={{ fontFamily: 'var(--font-seb-heading)' }}
                 >
-                  Các Bài Thi Đã Làm ({submissions.length})
+                  Lịch Sử Làm Bài ({filteredSubmissions.length})
                 </h3>
+              </div>
+
+              {/* Bộ lọc bài thi SEB / SenExam */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setSubFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    subFilter === 'all'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Tất cả ({submissions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubFilter('seb')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    subFilter === 'seb'
+                      ? 'bg-white text-sky-700 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Bảo Mật SEB ({sebSubsCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubFilter('senexam')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    subFilter === 'senexam'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  SenExam ({senSubsCount})
+                </button>
               </div>
             </div>
 
-            {submissions.length === 0 ? (
+            {filteredSubmissions.length === 0 ? (
               <div className="py-16 text-center text-slate-400 text-xs font-medium">
-                Bạn chưa hoàn thành bài thi nào trên hệ thống Safe Exam Browser.
+                Chưa có bài thi nào trong danh mục đã chọn.
               </div>
             ) : (
               <div className="space-y-3 overflow-y-auto max-h-[600px] pr-1">
-                {submissions.map((sub) => {
+                {filteredSubmissions.map((sub) => {
                   const exam = sub.exams
-                  const submittedDate = sub.submitted_at
-                    ? new Date(sub.submitted_at).toLocaleString('vi-VN', {
+                  const submittedDate = (sub.submitted_at || sub.created_at)
+                    ? new Date(sub.submitted_at || sub.created_at).toLocaleString('vi-VN', {
                         day: '2-digit',
                         month: '2-digit',
                         year: 'numeric',
@@ -317,6 +402,7 @@ export default function SebProfilePage() {
 
                   const scoreNum = Number(sub.score) || 0
                   const isGoodScore = scoreNum >= 8
+                  const isSebExam = exam?.require_seb === true
 
                   return (
                     <div
@@ -324,26 +410,42 @@ export default function SebProfilePage() {
                       className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-sky-200 transition-all duration-200 flex items-center justify-between gap-4"
                     >
                       <div className="min-w-0 flex-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">
-                          {exam?.exam_type || 'Đề Thi SEB'}
-                        </span>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                              isSebExam
+                                ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}
+                          >
+                            {isSebExam ? '🛡️ Bảo Mật SEB' : '📘 Đề Thi SenExam'}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            {exam?.exam_type || 'BÀI THI'}
+                          </span>
+                        </div>
                         <h4 className="text-sm font-bold text-slate-900 truncate">
                           {exam?.title || 'Đề thi không xác định'}
                         </h4>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 mt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {submittedDate}
                           </span>
+                          {sub.time_spent ? (
+                            <span>• {Math.round(sub.time_spent / 60)} phút</span>
+                          ) : exam?.duration ? (
+                            <span>• {exam.duration} phút</span>
+                          ) : null}
                           {sub.tab_switches > 0 && (
-                            <span className="text-rose-600 font-bold">
-                              ⚠️ Chuyển tab: {sub.tab_switches} lần
+                            <span className="text-amber-700 font-bold">
+                              • Mất tiêu điểm: {sub.tab_switches} lần
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Điểm số */}
+                      {/* Điểm số & Xem lại */}
                       <div className="text-right shrink-0 flex items-center gap-3">
                         <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-center shadow-xs">
                           <span className="text-[9px] font-bold text-slate-400 uppercase block">
@@ -358,14 +460,12 @@ export default function SebProfilePage() {
                           </span>
                         </div>
 
-                        {exam?.allow_review && (
-                          <Link
-                            href={`/exams/${exam.id}/review`}
-                            className="text-xs font-bold text-sky-600 hover:text-sky-700 bg-sky-50 px-2.5 py-1.5 rounded-xl border border-sky-100 transition"
-                          >
-                            Xem lại
-                          </Link>
-                        )}
+                        <Link
+                          href={`/exams/${exam?.id || sub.exam_id}/review`}
+                          className="text-xs font-bold text-sky-600 hover:text-sky-700 bg-sky-50 px-2.5 py-1.5 rounded-xl border border-sky-100 transition"
+                        >
+                          Xem lại
+                        </Link>
                       </div>
                     </div>
                   )

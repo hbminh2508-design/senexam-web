@@ -7,6 +7,23 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { isDomainEmail } from '@/lib/authHelper'
 import { Loader2, AlertCircle } from 'lucide-react'
 
+const getCookie = (name: string): string => {
+  if (typeof document === 'undefined') return ''
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; ${name}=`)
+  if (parts.length === 2) return decodeURIComponent(parts.pop()?.split(';').shift() || '')
+  return ''
+}
+
+const clearDomainCookie = (name: string) => {
+  if (typeof document === 'undefined') return
+  const host = window.location.hostname
+  const hostParts = host.split('.')
+  const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
+  document.cookie = `${name}=; domain=.${rootDomain}; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+  document.cookie = `${name}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+}
+
 function CallbackHandler() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -22,15 +39,25 @@ function CallbackHandler() {
         const errorCode = searchParams.get('error_code')
         const next = searchParams.get('next') || '/dashboard'
 
+        const isSebSource =
+          searchParams.get('from_seb') === '1' ||
+          Boolean(searchParams.get('seb_origin')) ||
+          Boolean(getCookie('seb_login')) ||
+          Boolean(getCookie('seb_target')) ||
+          (typeof window !== 'undefined' &&
+            (window.location.hostname.startsWith('seb.') ||
+              window.location.hostname.startsWith('thicu.') ||
+              window.location.hostname.includes('seb.thicu.tailieufepn.')))
+
         if (error || errorCode) {
           const detail = errorDescription || error || errorCode || 'Lỗi xác thực OAuth'
           if (active) {
             setErrorMsg(`Đăng nhập Google không thành công: ${detail}`)
           }
-          // Redirect về trang đăng nhập sau 3s nếu có lỗi
+          const failRedirect = isSebSource ? '/seb-login' : '/new-sign'
           setTimeout(() => {
             if (active) {
-              router.replace(`/new-sign?error=${encodeURIComponent(detail)}`)
+              router.replace(`${failRedirect}?error=${encodeURIComponent(detail)}`)
             }
           }, 3000)
           return
@@ -40,6 +67,66 @@ function CallbackHandler() {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
         const handleRedirect = (currentUser: any) => {
+          // 1. ƯU TIÊN SỐ 1: Chuyển hướng về Hệ thống thi cử SEB nếu đăng nhập từ SEB
+          const fromSebParam = searchParams.get('from_seb') === '1'
+          const sebOriginParam = searchParams.get('seb_origin')
+          const sebTargetCookie = getCookie('seb_target')
+          const sebOriginCookie = getCookie('seb_origin')
+          const sebLoginCookie = getCookie('seb_login')
+          const sebStorageTarget = typeof window !== 'undefined' ? localStorage.getItem('seb_oauth_target') : null
+          const isSebHost =
+            typeof window !== 'undefined' &&
+            (window.location.hostname.startsWith('seb.') ||
+              window.location.hostname.startsWith('thicu.') ||
+              window.location.hostname.includes('seb.thicu.tailieufepn.'))
+
+          const isSebFlow =
+            fromSebParam ||
+            Boolean(sebOriginParam) ||
+            Boolean(sebTargetCookie) ||
+            Boolean(sebOriginCookie) ||
+            sebLoginCookie === '1' ||
+            Boolean(sebStorageTarget) ||
+            isSebHost ||
+            next.includes('seb-')
+
+          if (isSebFlow) {
+            clearDomainCookie('seb_target')
+            clearDomainCookie('seb_origin')
+            clearDomainCookie('seb_login')
+            try {
+              localStorage.removeItem('seb_oauth_target')
+              localStorage.removeItem('seb_oauth_origin')
+            } catch (e) {}
+
+            let sebDestination = ''
+            if (sebTargetCookie && sebTargetCookie.startsWith('http')) {
+              sebDestination = sebTargetCookie
+            } else if (sebStorageTarget && sebStorageTarget.startsWith('http')) {
+              sebDestination = sebStorageTarget
+            } else if (sebOriginParam) {
+              sebDestination = `${decodeURIComponent(sebOriginParam)}/seb-dashboard`
+            } else if (sebOriginCookie) {
+              sebDestination = `${sebOriginCookie}/seb-dashboard`
+            } else if (isSebHost) {
+              sebDestination = '/seb-dashboard'
+            } else {
+              const host = window.location.hostname
+              const hostParts = host.split('.')
+              const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
+              const protocol = window.location.protocol
+              sebDestination = `${protocol}//seb.thicu.tailieufepn.${rootDomain}/seb-dashboard`
+            }
+
+            if (sebDestination.startsWith('http')) {
+              window.location.href = sebDestination
+            } else {
+              router.replace(sebDestination)
+            }
+            return
+          }
+
+          // 2. Chuyển hướng FEPN
           const userEmail = currentUser?.email?.toLowerCase() || ''
           const isVnu = userEmail.endsWith('@vnu.edu.vn') || isDomainEmail(userEmail, currentUser)
           const isFepn =
@@ -60,6 +147,8 @@ function CallbackHandler() {
               return
             }
           }
+
+          // 3. Mặc định SenExam
           if (next.startsWith('http')) {
             window.location.href = next
           } else {

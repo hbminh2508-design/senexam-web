@@ -5,11 +5,17 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const examId = searchParams.get('examId') || ''
-  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'seb.thicu.tailieufepn.senexam.com'
-  const protocol = host.includes('localhost') ? 'http' : 'https'
+  const host =
+    request.headers.get('x-forwarded-host') ||
+    request.headers.get('host') ||
+    'seb.thicu.tailieufepn.senexam.com'
+
+  const protoHeader = request.headers.get('x-forwarded-proto')
+  const protocol = protoHeader || (request.url.startsWith('https') ? 'https' : (host.includes('localhost') ? 'http' : 'http'))
 
   const targetUrl = `${protocol}://${host}/seb-exam/${examId}`
-  const sebsProtocolUrl = `sebs://${host}/seb-exam/${examId}`
+  // Giao thức deep-link: sebs:// cho HTTPS, seb:// cho HTTP
+  const sebsProtocolUrl = protocol === 'https' ? `sebs://${host}/seb-exam/${examId}` : `seb://${host}/seb-exam/${examId}`
 
   // Tạo file cấu hình Safe Exam Browser định dạng chuẩn XML Plist (.seb)
   const sebConfigXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -17,7 +23,7 @@ export async function GET(request: Request) {
 <plist version="1.0">
 <dict>
     <key>originatorVersion</key>
-    <string>SEB_Win_3.5.0</string>
+    <string>SEB_Win_3.7.0</string>
     <key>startURL</key>
     <string>${targetUrl}</string>
     <key>allowPreferencesWindow</key>
@@ -31,7 +37,7 @@ export async function GET(request: Request) {
     <key>browserWindowAllowReload</key>
     <true/>
     <key>showTaskBar</key>
-    <true/>
+    <false/>
     <key>allowDownUploads</key>
     <false/>
     <key>enableAltTab</key>
@@ -48,10 +54,14 @@ export async function GET(request: Request) {
     <false/>
     <key>allowFlashFullscreen</key>
     <false/>
+    <key>allowSpellCheck</key>
+    <false/>
+    <key>insideSebUA</key>
+    <true/>
 </dict>
 </plist>`
 
-  // Nếu client gọi với ?download=1 thì trả về file download
+  // Nếu client gọi với ?download=1 thì trả về file download .seb
   if (searchParams.get('download') === '1') {
     return new NextResponse(sebConfigXml, {
       status: 200,

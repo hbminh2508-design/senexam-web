@@ -78,4 +78,33 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'Khởi tạo hệ thống thư mục và bảng SEB thành công!' AS status;
+-- 5. ĐỒNG BỘ CỘT CHO BẢNG SUBMISSIONS DÙNG CHUNG SENEXAM & SEB
+ALTER TABLE public.submissions
+  ADD COLUMN IF NOT EXISTS submitted_at timestamptz DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS tab_switches integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS blur_count integer DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_submissions_user_created ON public.submissions(user_id, created_at DESC);
+
+-- 6. TỰ ĐỘNG ĐỒNG BỘ CÁC ĐỀ THI SENEXAM HIỆN CÓ VÀO CÂY THƯ MỤC SEB
+UPDATE public.exams 
+SET folder_id = 'child_dgnl_hsa' 
+WHERE folder_id IS NULL AND (title ILIKE '%hsa%' OR exam_type ILIKE '%hsa%' OR title ILIKE '%đgnl%');
+
+UPDATE public.exams 
+SET folder_id = 'child_dgtd_tsa' 
+WHERE folder_id IS NULL AND (title ILIKE '%tsa%' OR exam_type ILIKE '%tsa%' OR title ILIKE '%đgtd%');
+
+UPDATE public.exams 
+SET folder_id = 'child_thpt_vatly' 
+WHERE folder_id IS NULL AND (title ILIKE '%vật lý%' OR title ILIKE '%vật lí%' OR exam_type ILIKE '%lý%' OR exam_type ILIKE '%lí%');
+
+UPDATE public.exams 
+SET folder_id = 'child_thpt_toanhoc' 
+WHERE folder_id IS NULL AND (title ILIKE '%toán%' OR exam_type ILIKE '%toán%');
+
+UPDATE public.exams 
+SET folder_id = 'child_thpt_hoahoc' 
+WHERE folder_id IS NULL AND (title ILIKE '%hóa%' OR exam_type ILIKE '%hóa%');
+
+SELECT 'Khởi tạo hệ thống thư mục, đồng bộ submissions và đề thi SEB thành công!' AS status;

@@ -61,10 +61,35 @@ export default function SebLoginPage() {
     try {
       setGoogleLoading(true)
       setErrorMsg('')
+
+      if (typeof window === 'undefined') return
+      const host = window.location.hostname
+      const origin = window.location.origin
+      const hostParts = host.split('.')
+      const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
+      const isSecure = window.location.protocol === 'https:' ? '; Secure' : ''
+
+      // Lưu cookie nhận diện SEB OAuth trên toàn bộ tên miền gốc (.senexam.me / .senexam.com)
+      document.cookie = `seb_target=${encodeURIComponent(origin + '/seb-dashboard')}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+      document.cookie = `seb_origin=${encodeURIComponent(origin)}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+      document.cookie = `seb_login=1; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+
+      // Lưu fallback vào localStorage
+      try {
+        localStorage.setItem('seb_oauth_target', origin + '/seb-dashboard')
+        localStorage.setItem('seb_oauth_origin', origin)
+      } catch (e) {}
+
+      const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent('/seb-dashboard')}&from_seb=1&seb_origin=${encodeURIComponent(origin)}`
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/seb-dashboard`,
+          redirectTo: callbackUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
         },
       })
       if (error) throw error

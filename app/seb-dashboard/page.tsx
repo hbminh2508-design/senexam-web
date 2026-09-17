@@ -67,6 +67,7 @@ export default function SebDashboardPage() {
   // Đề thi & Lượt làm bài của học sinh
   const [exams, setExams] = useState<any[]>([])
   const [userSubmissionsCount, setUserSubmissionsCount] = useState<Record<string, number>>({})
+  const [userHighestScores, setUserHighestScores] = useState<Record<string, number>>({})
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
@@ -124,19 +125,25 @@ export default function SebDashboardPage() {
 
         setExams(examsData || [])
 
-        // 3. Lấy số lần đã thi của người dùng này cho từng đề thi
+        // 3. Lấy số lần đã thi và điểm số cao nhất của người dùng này cho từng đề thi từ bảng submissions dùng chung
         const { data: userSubs } = await supabase
           .from('submissions')
-          .select('exam_id')
+          .select('exam_id, score')
           .eq('user_id', user.id)
 
         const subCounts: Record<string, number> = {}
+        const highestMap: Record<string, number> = {}
         ;(userSubs || []).forEach((s) => {
           if (s.exam_id) {
             subCounts[s.exam_id] = (subCounts[s.exam_id] || 0) + 1
+            const sc = Number(s.score) || 0
+            if (highestMap[s.exam_id] === undefined || sc > highestMap[s.exam_id]) {
+              highestMap[s.exam_id] = sc
+            }
           }
         })
         setUserSubmissionsCount(subCounts)
+        setUserHighestScores(highestMap)
       } catch (err) {
         console.error('Lỗi khởi tạo SEB Dashboard:', err)
       } finally {
@@ -161,6 +168,12 @@ export default function SebDashboardPage() {
     setSelectedFolderObj(child)
   }
 
+  // Chọn Xem Tất Cả Đề Thi (Cả SenExam & SEB)
+  const handleSelectAllExams = () => {
+    setSelectedChildId('')
+    setSelectedFolderObj(null)
+  }
+
   // Đăng xuất
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -169,23 +182,50 @@ export default function SebDashboardPage() {
 
   // Lọc danh sách đề thi theo thư mục con đang chọn & thanh tìm kiếm
   const displayedExams = exams.filter((ex) => {
+    if (ex.is_hidden === true) return false
+
     const matchesSearch =
       !searchTerm.trim() ||
       ex.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ex.exam_type?.toLowerCase().includes(searchTerm.toLowerCase())
+      ex.exam_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (Array.isArray(ex.subjects) &&
+        ex.subjects.some((s: string) => s.toLowerCase().includes(searchTerm.toLowerCase())))
 
-    // Nếu đề thi có folder_id khớp với thư mục con đang chọn
-    if (selectedChildId) {
-      const matchesFolder =
-        ex.folder_id === selectedChildId ||
-        (Array.isArray(ex.subjects) &&
-          ex.subjects.some((s: string) =>
-            selectedFolderObj?.name?.toLowerCase().includes(s.toLowerCase())
-          ))
-      return matchesSearch && matchesFolder
+    // Nếu đang ở chế độ xem tất cả
+    if (!selectedChildId) {
+      return matchesSearch
     }
 
-    return matchesSearch
+    const childName = (selectedFolderObj?.name || '').toLowerCase()
+
+    // 1. Khớp theo folder_id
+    if (ex.folder_id && ex.folder_id === selectedChildId) {
+      return matchesSearch
+    }
+
+    // 2. Khớp thông minh theo subjects
+    if (Array.isArray(ex.subjects) && ex.subjects.length > 0) {
+      const matchSubject = ex.subjects.some((s: string) => {
+        const sl = s.toLowerCase()
+        return childName.includes(sl) || sl.includes(childName)
+      })
+      if (matchSubject) return matchesSearch
+    }
+
+    // 3. Khớp thông minh theo từ khóa tiêu đề hoặc exam_type (cho các đề gốc SenExam)
+    const titleLower = (ex.title || '').toLowerCase()
+    const typeLower = (ex.exam_type || '').toLowerCase()
+
+    if (childName.includes('toán') && (titleLower.includes('toán') || typeLower.includes('toán'))) return matchesSearch
+    if ((childName.includes('vật lý') || childName.includes('vật lí')) && (titleLower.includes('vật lý') || titleLower.includes('vật lí') || typeLower.includes('lý') || typeLower.includes('lí'))) return matchesSearch
+    if (childName.includes('hóa') && (titleLower.includes('hóa') || typeLower.includes('hóa'))) return matchesSearch
+    if (childName.includes('sinh') && (titleLower.includes('sinh') || typeLower.includes('sinh'))) return matchesSearch
+    if (childName.includes('anh') && (titleLower.includes('anh') || titleLower.includes('english') || typeLower.includes('anh'))) return matchesSearch
+    if (childName.includes('hsa') && (titleLower.includes('hsa') || typeLower.includes('hsa') || titleLower.includes('đgnl'))) return matchesSearch
+    if (childName.includes('tsa') && (titleLower.includes('tsa') || typeLower.includes('tsa') || titleLower.includes('đgtd'))) return matchesSearch
+    if (childName.includes('kinh tế') && (titleLower.includes('kinh tế') || typeLower.includes('kinh tế'))) return matchesSearch
+
+    return false
   })
 
   return (
@@ -281,6 +321,31 @@ export default function SebDashboardPage() {
                 {folders.reduce((acc, p) => acc + (p.children?.length || 0), 0)} Môn
               </span>
             </div>
+
+            {/* Nút Xem Tất Cả Đề Thi Hệ Thống (SenExam & SEB) */}
+            <button
+              type="button"
+              onClick={handleSelectAllExams}
+              className={`w-full flex items-center justify-between p-3 mb-2 rounded-2xl border transition text-left text-xs font-black ${
+                !selectedChildId
+                  ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sm shadow-sky-500/20 border-transparent'
+                  : 'bg-sky-50/50 hover:bg-sky-100/60 text-sky-900 border-sky-100'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
+                <span className="truncate">Tất Cả Đề Thi (SenExam & SEB)</span>
+              </div>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
+                  !selectedChildId
+                    ? 'bg-white/20 text-white font-bold'
+                    : 'bg-white text-sky-700 border border-sky-200'
+                }`}
+              >
+                {exams.filter((e) => !e.is_hidden).length}
+              </span>
+            </button>
 
             {/* Folder Tree Items */}
             <div className="space-y-2 overflow-y-auto max-h-[500px] pr-1">
@@ -427,6 +492,8 @@ export default function SebDashboardPage() {
                 const userAttempts = userSubmissionsCount[exam.id] || 0
                 const maxAttempts = exam.max_attempts || 1
                 const isOutOfAttempts = maxAttempts > 0 && userAttempts >= maxAttempts
+                const highestScore = userHighestScores[exam.id]
+                const isSebRequired = exam.require_seb === true
 
                 return (
                   <div
@@ -435,9 +502,20 @@ export default function SebDashboardPage() {
                   >
                     {/* Corner Badge: SỐ LẦN THI Ở GÓC NHỎ MỖI ĐỀ THI */}
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 border border-slate-200/80">
-                        {exam.exam_type || 'Đề Thi SEB'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200/80">
+                          {exam.exam_type || 'ĐỀ THI'}
+                        </span>
+                        <span
+                          className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                            isSebRequired
+                              ? 'bg-sky-50 text-sky-700 border-sky-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}
+                        >
+                          {isSebRequired ? '🛡️ SEB' : '📘 SenExam'}
+                        </span>
+                      </div>
 
                       {/* Huy hiệu số lần thi nhỏ ở góc */}
                       <span
@@ -459,7 +537,7 @@ export default function SebDashboardPage() {
                         {exam.title}
                       </h4>
 
-                      <div className="flex items-center gap-3 text-xs text-slate-400 mt-2">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-2">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3.5 w-3.5 text-slate-400" />
                           {exam.duration || 50} phút
@@ -476,13 +554,21 @@ export default function SebDashboardPage() {
                           câu hỏi
                         </span>
                       </div>
+
+                      {/* Điểm kỷ lục đã đạt được trước đây từ SenExam hoặc SEB */}
+                      {highestScore !== undefined && (
+                        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50/80 px-2.5 py-1 rounded-xl border border-emerald-100 w-fit">
+                          <span>🏆 Kỷ lục của bạn:</span>
+                          <span className="text-emerald-800 font-black">{highestScore.toFixed(1)}/10đ</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Footer Thẻ: Nút Vào Thi SEB */}
                     <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                        <ShieldAlert className="h-3.5 w-3.5 text-sky-600" />
-                        <span>Chống gian lận SEB</span>
+                        <ShieldCheck className="h-3.5 w-3.5 text-sky-600" />
+                        <span>{isSebRequired ? 'Yêu cầu Safe Exam Browser' : 'Hệ sinh thái SenExam'}</span>
                       </div>
 
                       <Link

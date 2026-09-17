@@ -43,17 +43,19 @@ export default function SebExamRoomPage() {
   const [exam, setExam] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminBypassSeb, setAdminBypassSeb] = useState(false)
 
   // Trạng thái Phòng thi
   const [hasStarted, setHasStarted] = useState(false)
   const [honorAgreed, setHonorAgreed] = useState(false)
   const [isInsideSeb, setIsInsideSeb] = useState(false)
+  const [currentBrowserName, setCurrentBrowserName] = useState('Trình duyệt web')
   const [submitting, setSubmitting] = useState(false)
   const [submittedResult, setSubmittedResult] = useState<{ submissionId: string; score: number } | null>(null)
 
-  // Chống gian lận & Cảnh báo
+  // Chống gian lận: ghi nhận ngầm số lần mất tiêu điểm để lưu CSDL mà không gây xao nhãng bài thi
   const [tabSwitches, setTabSwitches] = useState(0)
-  const [cheatWarning, setCheatWarning] = useState<string | null>(null)
 
   // Tiến trình làm bài
   const [answers, setAnswers] = useState<Record<string, any>>({})
@@ -72,6 +74,14 @@ export default function SebExamRoomPage() {
       const ua = window.navigator.userAgent
       const isSeb = ua.includes('SEB') || ua.includes('SafeExamBrowser')
       setIsInsideSeb(isSeb)
+
+      let bName = 'Trình duyệt web'
+      if (ua.includes('Firefox/')) bName = 'Mozilla Firefox'
+      else if (ua.includes('Edg/')) bName = 'Microsoft Edge'
+      else if (ua.includes('Chrome/')) bName = 'Google Chrome'
+      else if (ua.includes('Safari/') && !ua.includes('Chrome')) bName = 'Apple Safari'
+      else if (ua.includes('OPR/') || ua.includes('Opera/')) bName = 'Opera'
+      setCurrentBrowserName(bName)
     }
 
     const fetchExam = async () => {
@@ -84,6 +94,12 @@ export default function SebExamRoomPage() {
         }
         setCurrentUser(user)
         await ensureStudentProfile(user.id)
+
+        const email = user.email?.toLowerCase() || ''
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        if (profile?.role === 'admin' || profile?.role === 'collab' || email === 'hoangbinhminh2508@gmail.com') {
+          setIsAdmin(true)
+        }
 
         const { data, error } = await supabase.from('exams').select('*').eq('id', examId).single()
         if (error || !data) {
@@ -121,27 +137,17 @@ export default function SebExamRoomPage() {
     fetchExam()
   }, [examId, router])
 
-  // 2. Chống Gian Lận: Phát hiện chuyển tab / mất tiêu điểm
+  // 2. Chống Gian Lận: Ghi nhận ngầm chuyển tab / mất tiêu điểm (Không rung lắc, không cản trở thí sinh)
   useEffect(() => {
     if (!hasStarted || submittedResult || submitting) return
 
     const handleBlur = () => {
-      setTabSwitches((prev) => {
-        const next = prev + 1
-        setCheatWarning(`⚠️ CẢNH BÁO: Phát hiện bạn vừa rời khỏi màn hình thi (${next} lần)!`)
-        setTimeout(() => setCheatWarning(null), 5000)
-        return next
-      })
+      setTabSwitches((prev) => prev + 1)
     }
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        setTabSwitches((prev) => {
-          const next = prev + 1
-          setCheatWarning(`⚠️ CẢNH BÁO: Bạn vừa chuyển sang ứng dụng khác (${next} lần)!`)
-          setTimeout(() => setCheatWarning(null), 5000)
-          return next
-        })
+        setTabSwitches((prev) => prev + 1)
       }
     }
 
@@ -376,9 +382,164 @@ export default function SebExamRoomPage() {
   }
 
   // ========================================================
-  // MÀN HÌNH 1: PHÒNG CHỜ & CẢNH BÁO QUY CHẾ THI SEB (TRƯỚC KHI BẮT ĐẦU)
+  // MÀN HÌNH 1: KHÓA CỔNG SEB BẮT BUỘC 100% HOẶC PHÒNG CHỜ XÁC THỰC
   // ========================================================
   if (!hasStarted && !submittedResult) {
+    const isEnforced = !isInsideSeb && !adminBypassSeb
+    const host = typeof window !== 'undefined' ? window.location.host : ''
+    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:'
+    const sebProtocolUrl = protocol === 'https:' ? `sebs://${host}/seb-exam/${examId}` : `seb://${host}/seb-exam/${examId}`
+    const downloadConfigUrl = `/api/seb/config?examId=${examId}&download=1`
+
+    // MÀN HÌNH KHÓA CỔNG (KHI CHƯA MỞ TRONG SAFE EXAM BROWSER)
+    if (isEnforced) {
+      return (
+        <div
+          className={`min-h-screen w-full bg-slate-50 flex flex-col justify-between text-slate-800 antialiased ${headingFont.variable} ${bodyFont.variable}`}
+          style={{ fontFamily: 'var(--font-seb-body)' }}
+        >
+          <header className="h-16 w-full border-b border-sky-100 bg-white/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/seb-dashboard"
+                className="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition"
+                title="Quay lại Dashboard"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+              <SebLogo size={34} showText={true} />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 rounded-full text-xs font-bold border border-rose-200 bg-rose-50 text-rose-700 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                <span>Chưa phát hiện Safe Exam Browser</span>
+              </span>
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-2xl w-full mx-auto p-4 sm:p-6 my-auto">
+            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-rose-100 shadow-xl space-y-6">
+              {/* Header Cảnh Báo Khóa Cổng */}
+              <div className="text-center space-y-3 border-b border-slate-100 pb-5">
+                <div className="h-16 w-16 rounded-3xl bg-rose-50 text-rose-600 mx-auto flex items-center justify-center border border-rose-100 shadow-sm">
+                  <Lock className="h-8 w-8" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200">
+                    BẢO MẬT TUYỆT ĐỐI • YÊU CẦU SEB
+                  </span>
+                  <h1
+                    className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-2"
+                    style={{ fontFamily: 'var(--font-seb-heading)' }}
+                  >
+                    Yêu Cầu Sử Dụng Safe Exam Browser
+                  </h1>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                    Bạn đang truy cập bằng <strong>{currentBrowserName}</strong>. Đề thi <span className="font-bold text-slate-800">{exam?.title}</span> yêu cầu môi trường Safe Exam Browser (SEB) để chống gian lận 100%.
+                  </p>
+                </div>
+              </div>
+
+              {/* Hướng dẫn 2 bước */}
+              <div className="space-y-4">
+                {/* Bước 1: Cài đặt SEB */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <span className="h-5 w-5 rounded-full bg-sky-600 text-white text-[11px] flex items-center justify-center">1</span>
+                    Tải và Cài Đặt Safe Exam Browser (nếu máy chưa có)
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-bold">
+                    <a
+                      href="https://safeexambrowser.org/download_en.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2.5 rounded-xl border border-slate-200 bg-white hover:border-sky-300 hover:text-sky-700 transition flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <span>🪟 Cho Windows</span>
+                      <ExternalLink className="h-3 w-3 text-slate-400" />
+                    </a>
+                    <a
+                      href="https://safeexambrowser.org/download_en.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2.5 rounded-xl border border-slate-200 bg-white hover:border-sky-300 hover:text-sky-700 transition flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <span>🍏 Cho macOS</span>
+                      <ExternalLink className="h-3 w-3 text-slate-400" />
+                    </a>
+                    <a
+                      href="https://apps.apple.com/app/safe-exam-browser/id1138834550"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2.5 rounded-xl border border-slate-200 bg-white hover:border-sky-300 hover:text-sky-700 transition flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <span>📱 Cho iOS / iPad</span>
+                      <ExternalLink className="h-3 w-3 text-slate-400" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Bước 2: Khởi chạy SEB */}
+                <div className="p-4 rounded-2xl bg-sky-50/60 border border-sky-100 space-y-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-sky-900 flex items-center gap-1.5">
+                    <span className="h-5 w-5 rounded-full bg-sky-600 text-white text-[11px] flex items-center justify-center">2</span>
+                    Khởi Chạy Phòng Thi Trong Safe Exam Browser
+                  </span>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                    <a
+                      href={sebProtocolUrl}
+                      className="w-full sm:flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/20"
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Mở Bằng Safe Exam Browser</span>
+                    </a>
+
+                    <a
+                      href={downloadConfigUrl}
+                      className="w-full sm:w-auto py-3 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition flex items-center justify-center gap-2"
+                      title="Tải file .seb về máy rồi click đúp để mở"
+                    >
+                      <Download className="h-4 w-4 text-sky-600" />
+                      <span>Tải Cấu Hình (.seb)</span>
+                    </a>
+                  </div>
+                  <p className="text-[11px] text-slate-500 italic text-center">
+                    💡 Khi bấm mở, trình duyệt sẽ hỏi xác nhận khởi chạy ứng dụng Safe Exam Browser. Hãy chọn "Mở" hoặc "Open Safe Exam Browser".
+                  </p>
+                </div>
+              </div>
+
+              {/* Nút Kiểm Tra Lại & Quyền Admin */}
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold transition flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Tôi Đã Mở SEB (Kiểm tra lại)</span>
+                </button>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setAdminBypassSeb(true)}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  >
+                    <Award className="h-3.5 w-3.5" />
+                    <span>Xem Trước Với Tư Cách Quản Trị Viên</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </main>
+        </div>
+      )
+    }
+
+    // MÀN HÌNH CHỜ KHI ĐÃ ĐƯỢC XÁC THỰC TRONG SEB HOẶC ADMIN BYPASS
     const instructionsConfig = exam?.part_instructions || { part1: true, part2: true, part3: true }
 
     return (
@@ -407,7 +568,7 @@ export default function SebExamRoomPage() {
               }`}
             >
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>{isInsideSeb ? 'Safe Exam Browser Đã Kích Hoạt' : 'Trình Duyệt Tiêu Chuẩn'}</span>
+              <span>{isInsideSeb ? 'Safe Exam Browser Đã Xác Thực An Toàn' : 'Quản Trị Viên Xem Trước'}</span>
             </span>
           </div>
         </header>
@@ -436,25 +597,6 @@ export default function SebExamRoomPage() {
                   {questionMeta.totalCount} câu hỏi
                 </span>
               </div>
-            </div>
-
-            {/* SEB Anti-Cheat Warning */}
-            <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-amber-900 space-y-2">
-              <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider text-amber-800">
-                <ShieldAlert className="h-4 w-4 text-amber-600" />
-                <span>Quy Chế Chống Gian Lận & Giám Sát Thi Cử</span>
-              </div>
-              <ul className="text-xs space-y-1.5 list-disc pl-5 text-amber-800/90 font-medium">
-                <li>
-                  Mọi hành vi chuyển tab, thoát cửa sổ hoặc sử dụng ứng dụng ngoài đều bị ghi nhận số lần vi phạm vào kết quả thi.
-                </li>
-                <li>
-                  Hệ thống khóa phím chuột phải và các tổ hợp phím sao chép, chụp màn hình.
-                </li>
-                <li>
-                  Khuyến khích sử dụng Safe Exam Browser để đảm bảo điều kiện thi cử công bằng nhất.
-                </li>
-              </ul>
             </div>
 
             {/* Hướng Dẫn Chi Tiết Các Phần Thi Được Admin Cấu Hình */}
@@ -522,15 +664,6 @@ export default function SebExamRoomPage() {
 
             {/* Nút Bắt Đầu Làm Bài */}
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-              <a
-                href={`/api/seb/config?examId=${examId}&download=1`}
-                className="w-full sm:w-auto px-4 py-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-2"
-                title="Tải file cấu hình .seb để mở trực tiếp trong Safe Exam Browser"
-              >
-                <Download className="h-4 w-4 text-sky-600" />
-                <span>Tải Cấu Hình SEB (.seb)</span>
-              </a>
-
               <button
                 type="button"
                 disabled={!honorAgreed}
@@ -621,14 +754,6 @@ export default function SebExamRoomPage() {
       className={`min-h-screen w-full bg-slate-100 flex flex-col text-slate-800 select-none antialiased ${headingFont.variable} ${bodyFont.variable}`}
       style={{ fontFamily: 'var(--font-seb-body)' }}
     >
-      {/* Cảnh báo chuyển tab nổi bật */}
-      {cheatWarning && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl bg-rose-600 text-white font-bold text-xs shadow-xl animate-bounce flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4" />
-          <span>{cheatWarning}</span>
-        </div>
-      )}
-
       {/* Top Exam Header */}
       <header className="h-14 w-full border-b border-sky-100 bg-white px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
         <div className="flex items-center gap-3 min-w-0">
@@ -640,6 +765,12 @@ export default function SebExamRoomPage() {
 
         {/* Timer & Nút Nộp Bài */}
         <div className="flex items-center gap-3">
+          {tabSwitches > 0 && (
+            <span className="hidden sm:inline-block text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+              Mất tiêu điểm: {tabSwitches} lần
+            </span>
+          )}
+
           {/* Timer đếm ngược */}
           <div
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-mono font-black text-xs ${
@@ -669,15 +800,12 @@ export default function SebExamRoomPage() {
         <div className={`flex-1 h-[calc(100vh-3.5rem)] bg-slate-200 relative flex flex-col ${pdfFullscreen ? 'fixed inset-0 z-50' : ''}`}>
           {cachedPdfUrl ? (
             <div className="flex-1 w-full h-full flex flex-col">
-              <div className="h-10 bg-slate-800 text-white px-4 flex items-center justify-between text-xs font-bold">
-                <span className="flex items-center gap-1.5">
-                  <Lock className="h-3.5 w-3.5 text-sky-400" />
-                  <span>Đề thi được bảo vệ chống in và tải xuống</span>
-                </span>
+              <div className="h-9 bg-slate-100 border-b border-slate-200 text-slate-700 px-4 flex items-center justify-between text-xs font-bold">
+                <span className="text-slate-600">Tài liệu đề thi</span>
                 <button
                   type="button"
                   onClick={() => setPdfFullscreen(!pdfFullscreen)}
-                  className="text-slate-300 hover:text-white flex items-center gap-1"
+                  className="text-slate-600 hover:text-sky-600 flex items-center gap-1 transition"
                 >
                   {pdfFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
                   <span>{pdfFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}</span>
