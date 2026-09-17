@@ -147,6 +147,7 @@ export default function SebAdminPage() {
 
   // AI Assistant State (Gemini 3.5 Flash Lite)
   const [analyzingWithAi, setAnalyzingWithAi] = useState(false)
+  const [aiStatusMessage, setAiStatusMessage] = useState<string>('')
 
   // Cấu trúc Phần thi linh hoạt (Sections)
   const [examSections, setExamSections] = useState<SectionItem[]>([
@@ -371,41 +372,88 @@ export default function SebAdminPage() {
     reader.readAsDataURL(file)
   }
 
-  // Helper chuyển file sang Base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = (error) => reject(error)
-    })
+  // Trích xuất toàn bộ văn bản từ file PDF trên client bằng pdfjs-dist
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    try {
+      const pdfjsLib = await import('pdfjs-dist')
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
+      }
+
+      const fileToArrayBuffer = await file.arrayBuffer()
+      const pdf = await pdfjsLib.getDocument({ data: fileToArrayBuffer }).promise
+
+      let fullTextContent = ''
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i)
+        const textContent = await page.getTextContent()
+        const pageText = textContent.items
+          .map((item: any) => ('str' in item ? item.str : ''))
+          .join(' ')
+        fullTextContent += `\n[--- TRANG ${i} ---]\n` + pageText
+      }
+
+      return fullTextContent.trim()
+    } catch (err: any) {
+      console.warn('Không thể trích xuất văn bản từ PDF qua pdfjs:', err)
+      return ''
+    }
   }
 
-  // Kích hoạt Gemini 3.5 Flash Lite phân tích file PDF & tự động tạo đề
+  // Kích hoạt Gemini phân tích file PDF & tự động tạo đề
   const handleAiAnalyze = async (fileToAnalyze?: File) => {
     const targetFile = fileToAnalyze || examPdfFile
     if (!targetFile) {
-      alert('Vui lòng chọn hoặc kéo thả file PDF đề thi để Gemini 3.5 Flash Lite phân tích!')
+      alert('Vui lòng chọn hoặc kéo thả file PDF đề thi để Gemini phân tích!')
       return
     }
 
     setAnalyzingWithAi(true)
+    setAiStatusMessage('Đang quét và bóc tách nội dung văn bản từ file PDF...')
+
     try {
-      const fileBase64 = await fileToBase64(targetFile)
-      const mimeType = targetFile.type || 'application/pdf'
+      // 1. Thử trích xuất văn bản trên client bằng PDF.js (chỉ mất ~200ms, không tốn băng thông)
+      const extractedText = await extractTextFromPdf(targetFile)
 
-      const res = await fetch('/api/seb/ai-analyze-exam', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileBase64,
-          mimeType,
-        }),
-      })
+      let res: Response
 
-      const json = await res.json()
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Không thể phân tích đề thi bằng Gemini 3.5 Flash Lite.')
+      if (extractedText && extractedText.length > 50) {
+        setAiStatusMessage('Đã trích xuất xong đề thi! AI đang phân tích các phần thi và giải ma trận đáp án...')
+        res = await fetch('/api/seb/ai-analyze-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            examText: extractedText,
+          }),
+        })
+      } else {
+        // Nếu là PDF scan không có text layer, gửi trực tiếp qua FormData thay vì bọc Base64
+        setAiStatusMessage('Đang gửi file PDF tới AI để nhận diện nội dung và giải đề...')
+        const formData = new FormData()
+        formData.append('file', targetFile)
+        res = await fetch('/api/seb/ai-analyze-exam', {
+          method: 'POST',
+          body: formData,
+        })
+      }
+
+      // Xử lý an toàn phản hồi từ server, tuyệt đối không để crash JSON.parse
+      const resText = await res.text()
+      let json: any = null
+      try {
+        json = JSON.parse(resText)
+      } catch {
+        if (res.status === 413) {
+          throw new Error('Dung lượng file đề thi vượt quá giới hạn máy chủ (413 Payload Too Large). Vui lòng thử nén file hoặc dùng file PDF có lớp văn bản.')
+        }
+        if (res.status === 504 || res.status === 502) {
+          throw new Error('Quá thời gian phản hồi từ máy chủ (Gateway Timeout). Vui lòng thử lại.')
+        }
+        throw new Error(`Máy chủ trả về phản hồi không hợp lệ (${res.status}): ${resText.slice(0, 100)}...`)
+      }
+
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'Không thể phân tích đề thi bằng AI.')
       }
 
       const data = json.data
@@ -436,13 +484,14 @@ export default function SebAdminPage() {
         }))
 
         setExamSections(mappedSections)
-        alert(`🎉 Phân tích file PDF thành công bằng Gemini 3.5 Flash Lite!\nĐã nhận diện ${mappedSections.length} phần thi và tự động giải sẵn bảng đáp án. Bạn có thể kiểm tra lại thông tin và bảng đáp án bên dưới.`)
+        alert(`🎉 Phân tích file PDF thành công bằng Gemini!\nĐã nhận diện ${mappedSections.length} phần thi và tự động giải sẵn bảng đáp án. Bạn có thể kiểm tra lại thông tin và bảng đáp án bên dưới.`)
       }
     } catch (err: any) {
       console.error('Lỗi phân tích AI:', err)
       alert('Lỗi phân tích file PDF bằng Gemini: ' + (err.message || 'Vui lòng kiểm tra lại file PDF.'))
     } finally {
       setAnalyzingWithAi(false)
+      setAiStatusMessage('')
     }
   }
 
@@ -852,7 +901,7 @@ export default function SebAdminPage() {
                   {analyzingWithAi && (
                     <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center gap-2.5 text-xs text-indigo-900 font-bold animate-pulse">
                       <Loader2 className="h-4 w-4 animate-spin text-indigo-600 shrink-0" />
-                      <span>Gemini 3.5 Flash Lite đang đọc file PDF, phân tích các phần thi và giải ma trận đáp án... Vui lòng đợi trong giây lát.</span>
+                      <span>{aiStatusMessage || 'Gemini 3.5 Flash Lite đang đọc file PDF, phân tích các phần thi và giải ma trận đáp án... Vui lòng đợi trong giây lát.'}</span>
                     </div>
                   )}
                 </div>

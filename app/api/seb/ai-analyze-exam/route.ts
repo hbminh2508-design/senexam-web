@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { getUserFromRequest } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60 // Cho phép thời gian xử lý lên tới 60s
+export const maxDuration = 120 // Cho phép thời gian xử lý lên tới 120s
 
 const SYSTEM_PROMPT = `Bạn là chuyên gia khảo thí và số hóa đề thi hàng đầu Việt Nam.
 Nhiệm vụ của bạn là phân tích đề thi được tải lên và trích xuất cấu trúc đề thi hoàn chỉnh kèm đáp án chính xác.
@@ -42,9 +40,18 @@ QUY TẮC QUAN TRỌNG:
 6. Tổng điểm (totalPoints) của các phần cộng lại nên bằng 10.0 (hoặc tổng điểm phù hợp với kỳ thi).`
 
 function extractJson(raw: string): any {
-  const jsonMatch = raw.match(/```json\n?([\s\S]*?)\n?```/) || raw.match(/({[\s\S]*})/)
-  const jsonString = jsonMatch ? jsonMatch[1] : raw
-  return JSON.parse(jsonString)
+  if (!raw) return {}
+  let cleaned = raw.trim()
+  const jsonMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+  if (jsonMatch) {
+    cleaned = jsonMatch[1].trim()
+  } else {
+    const braceMatch = cleaned.match(/({[\s\S]*})/)
+    if (braceMatch) {
+      cleaned = braceMatch[1].trim()
+    }
+  }
+  return JSON.parse(cleaned)
 }
 
 export async function POST(request: Request) {
@@ -54,91 +61,94 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Chưa cấu hình GEMINI_API_KEY trên hệ thống server.' }, { status: 500 })
     }
 
-    const body = await request.json().catch(() => null)
-    const { fileBase64, mimeType, examText } = body || {}
+    let fileBase64: string | undefined
+    let mimeType = 'application/pdf'
+    let examText = ''
 
-    if (!fileBase64 && !examText) {
-      return NextResponse.json({ error: 'Vui lòng cung cấp file đề thi (PDF/Ảnh) hoặc nội dung đề thi.' }, { status: 400 })
+    const contentType = request.headers.get('content-type') || ''
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData()
+      examText = (formData.get('examText') as string) || ''
+      const uploadedFile = formData.get('file') as File | null
+      if (uploadedFile) {
+        mimeType = uploadedFile.type || 'application/pdf'
+        const arrayBuffer = await uploadedFile.arrayBuffer()
+        fileBase64 = Buffer.from(arrayBuffer).toString('base64')
+      }
+    } else {
+      const body = await request.json().catch(() => null)
+      if (body) {
+        fileBase64 = body.fileBase64
+        mimeType = body.mimeType || 'application/pdf'
+        examText = body.examText || ''
+      }
     }
 
+    if (!fileBase64 && !examText) {
+      return NextResponse.json({ error: 'Vui lòng cung cấp file đề thi (PDF/Ảnh) hoặc nội dung đề thi trích xuất.' }, { status: 400 })
+    }
+
+    const parts: any[] = []
+    if (fileBase64 && !examText) {
+      const cleanBase64 = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64
+      parts.push({
+        inlineData: {
+          data: cleanBase64,
+          mimeType: mimeType || 'application/pdf',
+        },
+      })
+    }
+
+    const promptMsg = `${SYSTEM_PROMPT}\n\n${
+      examText
+        ? `Nội dung toàn bộ đề thi đã được trích xuất như sau:\n\n${examText}`
+        : 'Hãy đọc và phân tích kỹ tài liệu đề thi được đính kèm ở trên.'
+    }`
+    parts.push({ text: promptMsg })
+
+    const candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-1.5-flash',
+    ]
+
+    const genAI = new GoogleGenerativeAI(apiKey)
     let responseText = ''
+    let modelUsed = ''
+    let lastError: any = null
 
-    // 1. Thử với SDK @google/genai và model 'gemini-3.5-flash-lite'
-    try {
-      const ai = new GoogleGenAI({ apiKey })
-
-      const parts: any[] = []
-      if (fileBase64) {
-        const cleanBase64 = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64
-        parts.push({
-          inlineData: {
-            data: cleanBase64,
-            mimeType: mimeType || 'application/pdf',
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
           },
         })
-      }
-
-      const promptMsg = `${SYSTEM_PROMPT}\n\n${examText ? `Nội dung đề thi do người dùng cung cấp:\n${examText}` : 'Hãy phân tích file tài liệu đề thi được đính kèm ở trên.'}`
-      parts.push({ text: promptMsg })
-
-      const res = await ai.models.generateContent({
-        model: 'gemini-3.5-flash-lite',
-        contents: parts,
-      })
-
-      responseText = res.text ?? ''
-    } catch (primaryErr: any) {
-      console.warn('Lỗi gọi gemini-3.5-flash-lite qua @google/genai, thử fallback qua GoogleGenerativeAI:', primaryErr?.message)
-
-      // 2. Fallback qua @google/generative-ai
-      try {
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
-
-        const parts: any[] = []
-        if (fileBase64) {
-          const cleanBase64 = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64
-          parts.push({
-            inlineData: {
-              data: cleanBase64,
-              mimeType: mimeType || 'application/pdf',
-            },
-          })
-        }
-
-        const promptMsg = `${SYSTEM_PROMPT}\n\n${examText ? `Nội dung đề thi do người dùng cung cấp:\n${examText}` : 'Hãy phân tích file tài liệu đề thi được đính kèm ở trên.'}`
-        parts.push({ text: promptMsg })
 
         const res = await model.generateContent(parts)
-        responseText = res.response.text()
-      } catch (fallbackErr: any) {
-        console.warn('Lỗi fallback gemini-3.5-flash-lite, thử với gemini-2.5-flash:', fallbackErr?.message)
-
-        // 3. Fallback cuối cùng: gemini-2.5-flash
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
-        const parts: any[] = []
-        if (fileBase64) {
-          const cleanBase64 = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64
-          parts.push({
-            inlineData: {
-              data: cleanBase64,
-              mimeType: mimeType || 'application/pdf',
-            },
-          })
+        const text = res.response.text()
+        if (text && text.trim()) {
+          responseText = text.trim()
+          modelUsed = modelName
+          break
         }
-
-        const promptMsg = `${SYSTEM_PROMPT}\n\n${examText ? `Nội dung đề thi do người dùng cung cấp:\n${examText}` : 'Hãy phân tích file tài liệu đề thi được đính kèm ở trên.'}`
-        parts.push({ text: promptMsg })
-
-        const res = await model.generateContent(parts)
-        responseText = res.response.text()
+      } catch (err: any) {
+        console.warn(`Thử model ${modelName} cho phân tích đề thi thất bại:`, err?.message || err)
+        lastError = err
       }
     }
 
     if (!responseText) {
-      return NextResponse.json({ error: 'AI không trả về kết quả phân tích.' }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: 'AI không thể phân tích đề thi này.',
+          details: lastError?.message || 'Không có phản hồi từ các model Gemini.',
+        },
+        { status: 500 }
+      )
     }
 
     const parsedData = extractJson(responseText)
@@ -177,7 +187,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       data: parsedData,
-      modelUsed: 'gemini-3.5-flash-lite',
+      modelUsed: modelUsed || 'gemini-2.5-flash',
     })
   } catch (error: any) {
     console.error('Lỗi API phân tích đề thi AI:', error)
