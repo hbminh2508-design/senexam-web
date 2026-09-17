@@ -64,16 +64,30 @@ export async function POST(request: Request) {
     let fileBase64: string | undefined
     let mimeType = 'application/pdf'
     let examText = ''
+    let answerText = ''
+    let answerFileBase64: string | undefined
+    let answerMimeType = 'application/pdf'
+    let hasSeparateAnswer = false
 
     const contentType = request.headers.get('content-type') || ''
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
       examText = (formData.get('examText') as string) || ''
+      answerText = (formData.get('answerText') as string) || ''
+      hasSeparateAnswer = formData.get('hasSeparateAnswer') === '1'
+
       const uploadedFile = formData.get('file') as File | null
       if (uploadedFile) {
         mimeType = uploadedFile.type || 'application/pdf'
         const arrayBuffer = await uploadedFile.arrayBuffer()
         fileBase64 = Buffer.from(arrayBuffer).toString('base64')
+      }
+
+      const uploadedAnswer = formData.get('answerFile') as File | null
+      if (uploadedAnswer) {
+        answerMimeType = uploadedAnswer.type || 'application/pdf'
+        const arrayBuffer = await uploadedAnswer.arrayBuffer()
+        answerFileBase64 = Buffer.from(arrayBuffer).toString('base64')
       }
     } else {
       const body = await request.json().catch(() => null)
@@ -81,6 +95,10 @@ export async function POST(request: Request) {
         fileBase64 = body.fileBase64
         mimeType = body.mimeType || 'application/pdf'
         examText = body.examText || ''
+        answerText = body.answerText || ''
+        answerFileBase64 = body.answerFileBase64
+        answerMimeType = body.answerMimeType || 'application/pdf'
+        hasSeparateAnswer = Boolean(body.hasSeparateAnswer)
       }
     }
 
@@ -99,11 +117,41 @@ export async function POST(request: Request) {
       })
     }
 
-    const promptMsg = `${SYSTEM_PROMPT}\n\n${
-      examText
-        ? `Nội dung toàn bộ đề thi đã được trích xuất như sau:\n\n${examText}`
-        : 'Hãy đọc và phân tích kỹ tài liệu đề thi được đính kèm ở trên.'
-    }`
+    if (answerFileBase64 && !answerText) {
+      const cleanAnswerBase64 = answerFileBase64.includes('base64,') ? answerFileBase64.split('base64,')[1] : answerFileBase64
+      parts.push({
+        inlineData: {
+          data: cleanAnswerBase64,
+          mimeType: answerMimeType || 'application/pdf',
+        },
+      })
+    }
+
+    let answerPromptSection = ''
+    if (answerText || answerFileBase64 || hasSeparateAnswer) {
+      answerPromptSection = `
+=== ĐẶC BIỆT CHÚ Ý: ĐÃ CÓ TÀI LIỆU ĐÁP ÁN CHÍNH THỨC ===
+Người dùng ĐÃ CUNG CẤP TÀI LIỆU ĐÁP ÁN RIÊNG BIỆT:
+${answerText ? `\n[NỘI DUNG TÀI LIỆU ĐÁP ÁN]:\n${answerText}\n` : '(Xem tài liệu đáp án đã được đính kèm ở trên)'}
+
+YÊU CẦU ĐỐI CHIẾU ĐÁP ÁN:
+1. Bạn KHÔNG CẦN giải đề bài. Hãy giảm tải tính toán suy luận và tập trung trích xuất chính xác 100% đáp án từ tài liệu đáp án được cung cấp ở trên.
+2. Đối chiếu số thứ tự câu hỏi trong đề và điền đáp án chuẩn xác vào từng phần (Sections):
+   - Trắc nghiệm 4 lựa chọn: "A", "B", "C", "D"
+   - Đúng/Sai 4 ý: {"a": "Đ", "b": "S", "c": "Đ", "d": "S"}
+   - Điền đáp số ngắn: Điền số hoặc từ ngắn gọn (ví dụ: "12.5", "-4")
+`
+    }
+
+    const promptMsg = `${SYSTEM_PROMPT}
+
+${answerPromptSection}
+
+${
+  examText
+    ? `Nội dung toàn bộ đề thi đã được trích xuất như sau:\n\n${examText}`
+    : 'Hãy đọc và phân tích kỹ tài liệu đề thi được đính kèm ở trên.'
+}`
     parts.push({ text: promptMsg })
 
     const candidateModels = [

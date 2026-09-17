@@ -134,6 +134,8 @@ export default function SebAdminPage() {
   const [examIsHidden, setExamIsHidden] = useState(false)
   const [examCustomCode, setExamCustomCode] = useState('')
   const [examPdfFile, setExamPdfFile] = useState<File | null>(null)
+  const [hasSeparateAnswerFile, setHasSeparateAnswerFile] = useState(false)
+  const [answerPdfFile, setAnswerPdfFile] = useState<File | null>(null)
   const [creatingExam, setCreatingExam] = useState(false)
 
   // SEB & Folder Settings
@@ -372,6 +374,16 @@ export default function SebAdminPage() {
     reader.readAsDataURL(file)
   }
 
+  // Helper chuyển file sang Base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = (error) => reject(error)
+    })
+  }
+
   // Trích xuất toàn bộ văn bản từ file PDF trên client bằng pdfjs-dist
   const extractTextFromPdf = async (file: File): Promise<string> => {
     try {
@@ -400,37 +412,86 @@ export default function SebAdminPage() {
     }
   }
 
-  // Kích hoạt Gemini phân tích file PDF & tự động tạo đề
-  const handleAiAnalyze = async (fileToAnalyze?: File) => {
+  // Kích hoạt Gemini phân tích file PDF & đối chiếu đáp án nếu có
+  const handleAiAnalyze = async (fileToAnalyze?: File, answerFileToAnalyze?: File | null) => {
     const targetFile = fileToAnalyze || examPdfFile
+    const targetAnswerFile = answerFileToAnalyze !== undefined ? answerFileToAnalyze : answerPdfFile
+
     if (!targetFile) {
-      alert('Vui lòng chọn hoặc kéo thả file PDF đề thi để Gemini phân tích!')
+      alert('Vui lòng chọn hoặc kéo thả file PDF đề thi!')
+      return
+    }
+
+    if (hasSeparateAnswerFile && !targetAnswerFile) {
+      alert('Bạn đã chọn chế độ "Đã có file đáp án riêng", vui lòng tải lên file đáp án (PDF hoặc ảnh) ở cột bên phải!')
       return
     }
 
     setAnalyzingWithAi(true)
-    setAiStatusMessage('Đang quét và bóc tách nội dung văn bản từ file PDF...')
+    setAiStatusMessage('Đang quét và bóc tách nội dung văn bản từ file PDF đề thi...')
 
     try {
-      // 1. Thử trích xuất văn bản trên client bằng PDF.js (chỉ mất ~200ms, không tốn băng thông)
-      const extractedText = await extractTextFromPdf(targetFile)
+      // 1. Thử trích xuất văn bản đề thi trên client bằng PDF.js
+      const extractedExamText = await extractTextFromPdf(targetFile)
+
+      // 2. Thử trích xuất văn bản file đáp án nếu có
+      let extractedAnswerText = ''
+      let answerFileBase64 = ''
+      let answerMimeType = ''
+
+      if (targetAnswerFile) {
+        setAiStatusMessage('Đang đọc và xử lý file đáp án...')
+        if (targetAnswerFile.type.includes('pdf') || targetAnswerFile.name.toLowerCase().endsWith('.pdf')) {
+          extractedAnswerText = await extractTextFromPdf(targetAnswerFile)
+        } else {
+          // Là ảnh hoặc định dạng khác
+          answerFileBase64 = await fileToBase64(targetAnswerFile)
+          answerMimeType = targetAnswerFile.type || 'image/jpeg'
+        }
+      }
 
       let res: Response
 
-      if (extractedText && extractedText.length > 50) {
-        setAiStatusMessage('Đã trích xuất xong đề thi! AI đang phân tích các phần thi và giải ma trận đáp án...')
+      // Nếu bóc tách được text đề thi sạch sẽ, gửi qua JSON siêu nhẹ (~20KB)
+      const canSendJson =
+        extractedExamText && extractedExamText.length > 50 &&
+        (!targetAnswerFile || extractedAnswerText.length > 10 || answerFileBase64)
+
+      if (canSendJson) {
+        setAiStatusMessage(
+          targetAnswerFile
+            ? 'Đã bóc tách dữ liệu! AI đang phân tích cấu trúc đề và đối chiếu bảng đáp án chính thức...'
+            : 'Đã trích xuất xong đề thi! AI đang phân tích các phần thi và giải ma trận đáp án...'
+        )
         res = await fetch('/api/seb/ai-analyze-exam', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            examText: extractedText,
+            examText: extractedExamText,
+            answerText: extractedAnswerText,
+            answerFileBase64: answerFileBase64 || undefined,
+            answerMimeType: answerMimeType || undefined,
+            hasSeparateAnswer: Boolean(targetAnswerFile),
           }),
         })
       } else {
-        // Nếu là PDF scan không có text layer, gửi trực tiếp qua FormData thay vì bọc Base64
-        setAiStatusMessage('Đang gửi file PDF tới AI để nhận diện nội dung và giải đề...')
+        setAiStatusMessage('Đang tải các file lên và gửi tới AI để nhận diện nội dung...')
         const formData = new FormData()
-        formData.append('file', targetFile)
+        if (extractedExamText && extractedExamText.length > 50) {
+          formData.append('examText', extractedExamText)
+        } else {
+          formData.append('file', targetFile)
+        }
+
+        if (targetAnswerFile) {
+          if (extractedAnswerText && extractedAnswerText.length > 10) {
+            formData.append('answerText', extractedAnswerText)
+          } else {
+            formData.append('answerFile', targetAnswerFile)
+          }
+        }
+        formData.append('hasSeparateAnswer', targetAnswerFile ? '1' : '0')
+
         res = await fetch('/api/seb/ai-analyze-exam', {
           method: 'POST',
           body: formData,
@@ -484,11 +545,15 @@ export default function SebAdminPage() {
         }))
 
         setExamSections(mappedSections)
-        alert(`🎉 Phân tích file PDF thành công bằng Gemini!\nĐã nhận diện ${mappedSections.length} phần thi và tự động giải sẵn bảng đáp án. Bạn có thể kiểm tra lại thông tin và bảng đáp án bên dưới.`)
+        alert(
+          targetAnswerFile
+            ? `🎉 Phân tích đề và đối chiếu đáp án thành công!\nĐã nhận diện ${mappedSections.length} phần thi và nạp chuẩn xác 100% bảng đáp án từ tài liệu bạn cung cấp.`
+            : `🎉 Phân tích file PDF thành công bằng Gemini!\nĐã nhận diện ${mappedSections.length} phần thi và tự động giải sẵn bảng đáp án. Bạn có thể kiểm tra lại thông tin và bảng đáp án bên dưới.`
+        )
       }
     } catch (err: any) {
       console.error('Lỗi phân tích AI:', err)
-      alert('Lỗi phân tích file PDF bằng Gemini: ' + (err.message || 'Vui lòng kiểm tra lại file PDF.'))
+      alert('Lỗi phân tích file đề thi: ' + (err.message || 'Vui lòng kiểm tra lại file.'))
     } finally {
       setAnalyzingWithAi(false)
       setAiStatusMessage('')
@@ -787,123 +852,341 @@ export default function SebAdminPage() {
         {/* ======================================================== */}
         {activeTab === 'create_exam' && (
           <form onSubmit={handleCreateExam} className="space-y-6">
-            {/* 1. TẢI FILE PDF & PHÂN TÍCH TỰ ĐỘNG BẰNG GEMINI 3.5 FLASH LITE */}
+            {/* 1. TẢI FILE ĐỀ THI & ĐÁP ÁN (PHÂN TÍCH BẰNG AI) */}
             <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-50 via-sky-50 to-blue-50 border border-indigo-200/80 shadow-sm space-y-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2.5">
-                  <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20">
+                  <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
                     <Sparkles className="h-5 w-5" />
                   </div>
                   <div>
                     <h2
-                      className="text-lg font-black text-indigo-950 flex items-center gap-2"
+                      className="text-lg font-black text-indigo-950 flex items-center gap-2 flex-wrap"
                       style={{ fontFamily: 'var(--font-sebadm-heading)' }}
                     >
-                      <span>1. Tải Lên File PDF Đề Thi (Phân Tích Bằng Gemini 3.5 Flash Lite)</span>
+                      <span>1. Tải Lên Đề Thi & Đáp Án (Phân Tích Bằng AI Gemini)</span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-600 text-white uppercase tracking-wider">
                         AI Tự Động
                       </span>
                     </h2>
                     <p className="text-xs text-indigo-700/80">
-                      Tải file PDF đề thi của bạn lên. Gemini 3.5 Flash Lite sẽ tự động đọc, trích xuất cấu trúc đề thi, số phần, số câu và giải trước bảng đáp án chính xác.
+                      Tự động đọc, trích xuất cấu trúc đề thi, số phần, số câu và đối chiếu bảng đáp án chuẩn xác.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Khu vực Tải / Kéo thả File PDF */}
-              {!examPdfFile ? (
-                <label className="border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-white/70 hover:bg-white rounded-3xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition text-center group shadow-xs">
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) {
-                        setExamPdfFile(f)
-                        handleAiAnalyze(f)
-                      }
-                    }}
-                  />
-                  <div className="h-12 w-12 rounded-2xl bg-indigo-100 text-indigo-600 group-hover:scale-110 transition flex items-center justify-center">
-                    <UploadCloud className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-black text-indigo-950 block">
-                      Bấm vào đây để chọn File PDF Đề Thi (hoặc kéo thả file vào đây)
-                    </span>
-                    <span className="text-xs text-slate-500 mt-1 block">
-                      Khi tải file PDF lên, hệ thống sẽ tự động gửi tới Gemini 3.5 Flash Lite để phân tích và giải đề ngay lập tức
+              {/* HỎI TRƯỚC: BẠN ĐÃ CÓ FILE ĐÁP ÁN CHƯA? */}
+              <div className="p-4 rounded-2xl bg-white/90 border border-indigo-200/90 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="h-4 w-4 text-indigo-600 shrink-0" />
+                    <span className="text-xs font-black text-slate-800">
+                      Bạn đã có sẵn file / bảng đáp án riêng của đề thi này chưa?
                     </span>
                   </div>
-                </label>
-              ) : (
-                <div className="p-4 rounded-2xl bg-white border border-indigo-200 space-y-3 shadow-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-200">
-                        <FileText className="h-5 w-5" />
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setHasSeparateAnswerFile(false)}
+                      className={`px-3 py-1.5 rounded-lg transition ${
+                        !hasSeparateAnswerFile
+                          ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Chưa có (AI tự giải)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHasSeparateAnswerFile(true)}
+                      className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                        hasSeparateAnswerFile
+                          ? 'bg-indigo-600 text-white shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Đã có file đáp án (Khuyên dùng)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  {hasSeparateAnswerFile
+                    ? '💡 Bạn tải 1 bên File Đề Thi và 1 bên File Đáp Án (PDF/Ảnh). Gemini sẽ đối chiếu trực tiếp để nạp đáp án chuẩn 100%, nhanh chóng và giảm tải tính toán cho AI.'
+                    : '💡 Bạn chỉ cần tải 1 file Đề Thi, Gemini sẽ tự động đọc câu hỏi và suy luận giải toàn bộ bảng đáp án.'}
+                </p>
+              </div>
+
+              {/* KHU VỰC TẢI FILE: 1 BÊN ĐỀ VÀ 1 BÊN ĐÁP ÁN (HOẶC 1 CỘT KHI CHƯA CÓ ĐÁP ÁN) */}
+              {hasSeparateAnswerFile ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* CỘT 1: BÊN TẢI FILE ĐỀ THI */}
+                    <div className="p-4 rounded-2xl bg-white border border-indigo-200 space-y-3 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-indigo-950 flex items-center gap-1.5">
+                          <FileText className="h-4 w-4 text-indigo-600" />
+                          <span>1. File Đề Thi (PDF) *</span>
+                        </span>
+                        {examPdfFile && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            ✓ Đã chọn
+                          </span>
+                        )}
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-slate-900 truncate block">
-                            {examPdfFile.name}
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                            ✓ File PDF Đã Chọn
-                          </span>
+
+                      {!examPdfFile ? (
+                        <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-indigo-50/30 hover:bg-indigo-50/60 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition text-center group">
+                          <input
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0]
+                              if (f) setExamPdfFile(f)
+                            }}
+                          />
+                          <div className="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-600 group-hover:scale-110 transition flex items-center justify-center">
+                            <UploadCloud className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-indigo-950 block">
+                              Chọn File PDF Đề Thi
+                            </span>
+                            <span className="text-[11px] text-slate-400 mt-0.5 block">
+                              Kéo thả hoặc bấm để chọn tệp
+                            </span>
+                          </div>
+                        </label>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-red-600 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-slate-800 truncate block">
+                                {examPdfFile.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {(examPdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                              </span>
+                            </div>
+                          </div>
+                          <label className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-bold cursor-pointer transition shrink-0">
+                            <span>Đổi file</span>
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) setExamPdfFile(f)
+                              }}
+                            />
+                          </label>
                         </div>
-                        <span className="text-[11px] text-slate-400 font-mono">
-                          {(examPdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                      )}
+                    </div>
+
+                    {/* CỘT 2: BÊN TẢI FILE ĐÁP ÁN */}
+                    <div className="p-4 rounded-2xl bg-white border border-emerald-200 space-y-3 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          <span>2. File Đáp Án (PDF hoặc Ảnh) *</span>
+                        </span>
+                        {answerPdfFile && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            ✓ Đã chọn
+                          </span>
+                        )}
+                      </div>
+
+                      {!answerPdfFile ? (
+                        <label className="border-2 border-dashed border-emerald-200 hover:border-emerald-400 bg-emerald-50/30 hover:bg-emerald-50/60 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition text-center group">
+                          <input
+                            type="file"
+                            accept="application/pdf,image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0]
+                              if (f) setAnswerPdfFile(f)
+                            }}
+                          />
+                          <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-600 group-hover:scale-110 transition flex items-center justify-center">
+                            <UploadCloud className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-emerald-950 block">
+                              Chọn File Đáp Án (PDF hoặc Ảnh)
+                            </span>
+                            <span className="text-[11px] text-slate-400 mt-0.5 block">
+                              Bảng đáp án trắc nghiệm, lời giải hoặc ảnh chụp
+                            </span>
+                          </div>
+                        </label>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-slate-800 truncate block">
+                                {answerPdfFile.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {(answerPdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <label className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-[11px] font-bold cursor-pointer transition">
+                              <span>Đổi file</span>
+                              <input
+                                type="file"
+                                accept="application/pdf,image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0]
+                                  if (f) setAnswerPdfFile(f)
+                                }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setAnswerPdfFile(null)}
+                              className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition"
+                              title="Xóa file đáp án"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* NÚT BẮT ĐẦU PHÂN TÍCH ĐỀ & ĐỐI CHIẾU ĐÁP ÁN */}
+                  <div className="flex items-center justify-end gap-3 pt-1">
+                    <button
+                      type="button"
+                      disabled={analyzingWithAi || !examPdfFile}
+                      onClick={() => handleAiAnalyze(examPdfFile, answerPdfFile)}
+                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-black transition flex items-center gap-2 shadow-md shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {analyzingWithAi ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Đang Phân Tích & Đối Chiếu Đáp Án...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          <span>✨ Bắt Đầu Phân Tích Đề & Nạp Đáp Án Bằng AI</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* CHẾ ĐỘ 1 CỘT (CHỈ CÓ FILE ĐỀ THI, AI TỰ GIẢI) */
+                <>
+                  {!examPdfFile ? (
+                    <label className="border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-white/70 hover:bg-white rounded-3xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition text-center group shadow-xs">
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (f) {
+                            setExamPdfFile(f)
+                            handleAiAnalyze(f, null)
+                          }
+                        }}
+                      />
+                      <div className="h-12 w-12 rounded-2xl bg-indigo-100 text-indigo-600 group-hover:scale-110 transition flex items-center justify-center">
+                        <UploadCloud className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-black text-indigo-950 block">
+                          Bấm vào đây để chọn File PDF Đề Thi (hoặc kéo thả file vào đây)
+                        </span>
+                        <span className="text-xs text-slate-500 mt-1 block">
+                          Khi tải file PDF lên, hệ thống sẽ tự động gửi tới Gemini để phân tích cấu trúc và tự giải đề ngay lập tức
                         </span>
                       </div>
-                    </div>
+                    </label>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-white border border-indigo-200 space-y-3 shadow-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-200">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-slate-900 truncate block">
+                                {examPdfFile.name}
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                                ✓ File PDF Đã Chọn
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              {(examPdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                            </span>
+                          </div>
+                        </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <label className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer transition">
-                        <span>Đổi file PDF khác</span>
-                        <input
-                          type="file"
-                          accept="application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0]
-                            if (f) {
-                              setExamPdfFile(f)
-                              handleAiAnalyze(f)
-                            }
-                          }}
-                        />
-                      </label>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer transition">
+                            <span>Đổi file PDF khác</span>
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) {
+                                  setExamPdfFile(f)
+                                  handleAiAnalyze(f, null)
+                                }
+                              }}
+                            />
+                          </label>
 
-                      <button
-                        type="button"
-                        disabled={analyzingWithAi}
-                        onClick={() => handleAiAnalyze(examPdfFile)}
-                        className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-500/20 disabled:opacity-50"
-                      >
-                        {analyzingWithAi ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            <span>Đang Phân Tích & Giải...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="h-3.5 w-3.5" />
-                            <span>Phân Tích Lại Bằng AI</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {analyzingWithAi && (
-                    <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center gap-2.5 text-xs text-indigo-900 font-bold animate-pulse">
-                      <Loader2 className="h-4 w-4 animate-spin text-indigo-600 shrink-0" />
-                      <span>{aiStatusMessage || 'Gemini 3.5 Flash Lite đang đọc file PDF, phân tích các phần thi và giải ma trận đáp án... Vui lòng đợi trong giây lát.'}</span>
+                          <button
+                            type="button"
+                            disabled={analyzingWithAi}
+                            onClick={() => handleAiAnalyze(examPdfFile, null)}
+                            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-indigo-500/20 disabled:opacity-50"
+                          >
+                            {analyzingWithAi ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span>Đang Phân Tích & Giải...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Phân Tích Lại Bằng AI</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
+                </>
+              )}
+
+              {analyzingWithAi && (
+                <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200/80 flex items-center gap-2.5 text-xs text-indigo-900 font-bold animate-pulse">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600 shrink-0" />
+                  <span>
+                    {aiStatusMessage || 'AI đang xử lý file đề thi và ma trận đáp án... Vui lòng đợi trong giây lát.'}
+                  </span>
                 </div>
               )}
             </div>
