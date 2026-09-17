@@ -157,6 +157,17 @@ export default function ModernHome({
             </button>
           )}
 
+          <a
+            href="https://seb.thicu.tailieufepn.senexam.me"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors"
+            style={{ border: '1px solid rgba(14, 165, 233, 0.3)' }}
+            title="Cổng thi khảo thí Safe Exam Browser"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-500" /> Thi Bảo mật cao
+          </a>
+
           <button
             onClick={() => router.push('/vip')}
             className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-transform active:scale-95"

@@ -104,6 +104,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: FileCheck,
   },
   {
+    key: 'seb-security',
+    title: 'Thi Bảo mật cao',
+    description: 'Cổng thi bảo mật chống gian lận 100% qua Safe Exam Browser (SEB).',
+    href: 'https://seb.thicu.tailieufepn.senexam.me',
+    tone: 'from-[#0EA5E9] via-[#0284C7] to-[#1D4ED8]',
+    badge: 'SEB',
+    icon: ShieldCheck,
+  },
+  {
     key: 'library',
     title: 'Thư viện thông minh',
     description: 'Kho tài liệu chuyên sâu được sắp xếp theo môn và mục tiêu thi cử.',
@@ -584,12 +593,16 @@ export default function NewDashboardPage() {
             <div className="mt-5 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
               {filteredActions.map((item, index) => {
                 const Icon = item.icon
+                const isExternal = item.href.startsWith('http')
+                const Wrapper = isExternal ? 'a' : Link
+                const extraProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}
                 return (
-                  <Link
+                  <Wrapper
                     key={item.key}
                     href={item.href}
                     className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-4 transition-all duration-200"
                     style={{ animationDelay: `${index * 50}ms` }}
+                    {...extraProps}
                   >
                     <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.tone}`} />
                     <div className="flex items-start justify-between gap-3">
@@ -611,7 +624,7 @@ export default function NewDashboardPage() {
                     <p className="mt-1 text-xs leading-relaxed text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
                       {item.description}
                     </p>
-                  </Link>
+                  </Wrapper>
                 )
               })}
               {filteredActions.length === 0 ? (

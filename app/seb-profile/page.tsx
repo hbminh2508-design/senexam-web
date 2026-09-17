@@ -482,7 +482,7 @@ export default function SebProfilePage() {
                         </div>
 
                         <Link
-                          href={`/submissions/${sub.id}/review?from=seb`}
+                          href={`/seb-reviews/${sub.id}`}
                           className="text-xs font-bold text-sky-600 hover:text-sky-700 bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-100 transition shadow-2xs hover:bg-sky-100"
                         >
                           Xem lại

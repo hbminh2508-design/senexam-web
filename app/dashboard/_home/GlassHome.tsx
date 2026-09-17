@@ -242,6 +242,15 @@ export default function GlassHome({
             >
               <Target className="w-3.5 h-3.5 text-emerald-500" /> Vào thi
             </button>
+            <a
+              href="https://seb.thicu.tailieufepn.senexam.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-full text-xs font-black bg-gradient-to-r from-sky-500/15 to-blue-600/15 hover:from-sky-500/25 hover:to-blue-600/25 transition-all flex items-center gap-1.5 text-sky-700 dark:text-sky-300 border border-sky-400/30 shadow-2xs"
+              title="Cổng thi bảo mật cao Safe Exam Browser"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-sky-500" /> Thi Bảo mật cao
+            </a>
             {isBetaTester && (
               <button
                 onClick={() => router.push('/senai-studio')}

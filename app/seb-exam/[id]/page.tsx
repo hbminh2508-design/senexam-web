@@ -30,6 +30,7 @@ import {
   Download,
   AlertCircle,
   Lock,
+  BookOpen,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-sebexam-heading' })
@@ -919,7 +920,8 @@ export default function SebExamRoomPage() {
   // MÀN HÌNH 2: KẾT QUẢ SAU KHI NỘP BÀI
   // ========================================================
   if (submittedResult) {
-    const isGood = submittedResult.score >= 8
+    const scoreVal = Number(submittedResult?.score) || 0
+    const isGood = scoreVal >= 8
 
     return (
       <div
@@ -947,12 +949,12 @@ export default function SebExamRoomPage() {
           <div className="p-5 rounded-2xl bg-sky-50/70 border border-sky-100">
             <span className="text-xs font-bold text-slate-500 uppercase block">Điểm Của Bạn</span>
             <span className={`text-4xl font-black ${isGood ? 'text-emerald-600' : 'text-sky-600'}`}>
-              {submittedResult.score.toFixed(2)}
+              {scoreVal.toFixed(2)}
             </span>
             <span className="text-xs text-slate-400 font-bold block mt-1">
               Thang điểm:{' '}
               {exam?.exam_type === 'HSA'
-                ? `${questionMeta.totalCount || 50}.0`
+                ? `${questionMeta?.totalCount || 50}.0`
                 : exam?.exam_type === 'TSA'
                 ? '100.0'
                 : '10.0'}
@@ -965,9 +967,9 @@ export default function SebExamRoomPage() {
             </div>
           )}
 
-          {/* Nút Xem Lại Bài Thi */}
+          {/* Nút Xem Lại Bài Thi Độc Quyền SEB */}
           <Link
-            href={`/submissions/${submittedResult.submissionId}/review?from=seb`}
+            href={`/seb-reviews/${submittedResult.submissionId}`}
             className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/20"
           >
             <BookOpen className="h-4 w-4" />

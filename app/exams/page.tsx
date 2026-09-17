@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { 
   Search, BookOpen, Clock, Target, ChevronLeft, 
-  Filter, Lock, PlayCircle, Loader2, CheckCircle2
+  Filter, Lock, PlayCircle, Loader2, CheckCircle2, ShieldCheck
 } from 'lucide-react'
 
 import { glassSearchInputClass, highlightSearchText } from '@/app/components/searchUtils'
@@ -137,6 +137,14 @@ export default function ExamsLibraryPage() {
                   {EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
+              <a
+                href="https://seb.thicu.tailieufepn.senexam.me"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 transition-all shadow-sm"
+              >
+                <ShieldCheck className="w-4 h-4" /> Thi Bảo mật cao
+              </a>
             </div>
           </div>
 

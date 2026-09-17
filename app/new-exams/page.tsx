@@ -27,6 +27,7 @@ import {
   History,
   RotateCcw,
   Zap,
+  ShieldCheck,
 } from 'lucide-react'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 
@@ -237,6 +238,14 @@ export default function NewExamsPage() {
             >
               <History className="h-4 w-4 text-teal-500" /> Xem lịch sử thi
             </Link>
+            <a
+              href="https://seb.thicu.tailieufepn.senexam.me"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:from-sky-600 hover:to-blue-700"
+            >
+              <ShieldCheck className="h-4 w-4" /> Thi Bảo mật cao
+            </a>
           </div>
         </div>
 

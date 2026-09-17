@@ -9,7 +9,7 @@ import {
   LogOut, User, MessageSquare,
   Settings, X, Sun, Moon, GraduationCap, Loader2, KeyRound,
   Bell, FolderOpen, Sparkles, Lock, Music2, ArrowRight, Calculator,
-  FlaskConical, PlaySquare, Wand2, Palette, Target, RefreshCw, Rocket, CheckCircle2, Crown
+  FlaskConical, PlaySquare, Wand2, Palette, Target, RefreshCw, Rocket, CheckCircle2, Crown, ShieldCheck
 } from 'lucide-react'
 
 import { AnnouncementRenderer } from './_home/Announcement'
@@ -717,6 +717,14 @@ export default function DashboardPage() {
       onSelect: () => router.push('/forum'),
     },
     { key: 'exams', label: 'Vào thi ngay', desc: 'Kho đề thi thử bám sát cấu trúc mới nhất.', icon: Target, color: 'indigo', onSelect: () => router.push('/exams') },
+    {
+      key: 'seb-security',
+      label: 'Thi Bảo mật cao',
+      desc: 'Cổng thi bảo mật chống gian lận 100% qua Safe Exam Browser (SEB).',
+      icon: ShieldCheck,
+      color: 'sky',
+      onSelect: () => window.open('https://seb.thicu.tailieufepn.senexam.me', '_blank'),
+    },
     { key: 'focus', label: 'Phòng Tập Trung', desc: 'Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.', icon: Music2, color: 'purple', onSelect: () => router.push('/focus') },
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },
     { key: 'score', label: 'Tính điểm ĐH', desc: 'Quy chuẩn thang 30. Tự động cộng/trừ ưu tiên.', icon: Calculator, color: 'rose', onSelect: () => router.push('/tinhdiem') },
