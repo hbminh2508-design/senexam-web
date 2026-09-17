@@ -55,14 +55,19 @@ export interface SectionItem {
   scoringMode: 'auto_divide' | 'custom_points'
   pointsPerQuestion?: Record<number, number>
   questionCount: number
-  questionTypeMode: 'uniform' | 'custom'
-  type: 'single_choice' | 'true_false' | 'short_answer' | 'essay'
+  questionTypeMode: 'uniform' | 'custom' | 'mixed'
+  type: 'single_choice' | 'true_false' | 'short_answer' | 'essay' | 'mixed'
   questionTypes?: Record<number, string>
   instructions: string
   instructionImage?: string
   correctAnswers: Record<string, any>
   optionsCount?: number
-  mixedRanges?: any[]
+  mixedRanges?: Array<{
+    start: number
+    end: number
+    type: 'single_choice' | 'true_false' | 'short_answer' | 'essay'
+    optionsCount?: number
+  }>
 }
 
 function normalizeQuestionType(
@@ -70,16 +75,49 @@ function normalizeQuestionType(
   section?: any,
   qIdx?: number
 ): 'single_choice' | 'true_false' | 'short_answer' | 'essay' {
-  let type = (rawType || '').toString().toLowerCase().trim()
-
-  if ((type === 'mixed' || !type) && section?.mixedRanges && Array.isArray(section.mixedRanges) && qIdx !== undefined) {
+  // 1. Kiểm tra nếu có dải câu mixedRanges
+  if (section?.mixedRanges && Array.isArray(section.mixedRanges) && qIdx !== undefined) {
     const range = section.mixedRanges.find(
-      (r: any) => qIdx + 1 >= (r.start || 1) && qIdx + 1 <= (r.end || 999)
+      (r: any) => (qIdx + 1) >= (Number(r.start) || 1) && (qIdx + 1) <= (Number(r.end) || 999)
     )
     if (range?.type) {
-      type = range.type.toString().toLowerCase().trim()
+      return normalizeQuestionType(range.type)
     }
   }
+
+  // 2. Kiểm tra tùy chỉnh từng câu (custom questionTypes)
+  if (section?.questionTypeMode === 'custom' && section?.questionTypes && qIdx !== undefined) {
+    if (section.questionTypes[qIdx]) {
+      return normalizeQuestionType(section.questionTypes[qIdx])
+    }
+  }
+
+  // 3. Tự động nhận diện từ đáp án đúng (correctAnswers) nếu có
+  if (section?.correctAnswers && qIdx !== undefined) {
+    const ans = section.correctAnswers[qIdx] ?? section.correctAnswers[String(qIdx)]
+    if (ans !== undefined && ans !== null) {
+      if (typeof ans === 'object' && !Array.isArray(ans)) {
+        const keys = Object.keys(ans)
+        if (keys.some((k) => ['a', 'b', 'c', 'd'].includes(k.toLowerCase()))) {
+          return 'true_false'
+        }
+      }
+      if (typeof ans === 'string') {
+        const trimmed = ans.trim()
+        if (/^[A-D]$/i.test(trimmed)) {
+          return 'single_choice'
+        }
+        if (/^[\d.,+-]+$/.test(trimmed) && trimmed.length > 0) {
+          return 'short_answer'
+        }
+        if (trimmed.length > 30) {
+          return 'essay'
+        }
+      }
+    }
+  }
+
+  let type = (rawType || section?.type || '').toString().toLowerCase().trim()
 
   if (
     type.includes('true') ||
@@ -107,6 +145,18 @@ function normalizeQuestionType(
     type.includes('luận') ||
     type.includes('tu_luan')
   ) {
+    return 'essay'
+  }
+
+  // 4. Nhận diện dự phòng từ tên phần thi
+  const secName = (section?.name || '').toLowerCase()
+  if (secName.includes('đúng') || secName.includes('sai') || secName.includes('phần ii') || secName.includes('phần 2')) {
+    return 'true_false'
+  }
+  if (secName.includes('ngắn') || secName.includes('điền số') || secName.includes('phần iii') || secName.includes('phần 3')) {
+    return 'short_answer'
+  }
+  if (secName.includes('tự luận')) {
     return 'essay'
   }
 
@@ -359,6 +409,89 @@ export default function SebAdminPage() {
       const next = [...prev]
       const sec = { ...next[secIdx] }
       sec.questionTypes = { ...sec.questionTypes, [qIdx]: type }
+      next[secIdx] = sec
+      return next
+    })
+  }
+
+  // Thêm một dải câu hỏi mới cho phần thi hỗn hợp
+  const handleAddMixedRange = (secIdx: number) => {
+    setExamSections((prev) => {
+      const next = [...prev]
+      const sec = { ...next[secIdx] }
+      const ranges = sec.mixedRanges ? [...sec.mixedRanges] : []
+      const lastEnd = ranges.length > 0 ? ranges[ranges.length - 1].end : 0
+      const totalQ = sec.questionCount || 10
+      const start = lastEnd + 1 <= totalQ ? lastEnd + 1 : totalQ
+      const end = Math.min(totalQ, start + 4)
+      ranges.push({
+        start,
+        end,
+        type: 'single_choice',
+        optionsCount: 4,
+      })
+      sec.mixedRanges = ranges
+      next[secIdx] = sec
+      return next
+    })
+  }
+
+  // Cập nhật một dải câu hỏi trong phần thi hỗn hợp
+  const handleUpdateMixedRange = (secIdx: number, rIdx: number, field: string, value: any) => {
+    setExamSections((prev) => {
+      const next = [...prev]
+      const sec = { ...next[secIdx] }
+      if (!sec.mixedRanges) return prev
+      const ranges = [...sec.mixedRanges]
+      ranges[rIdx] = { ...ranges[rIdx], [field]: value }
+      sec.mixedRanges = ranges
+      next[secIdx] = sec
+      return next
+    })
+  }
+
+  // Xóa một dải câu hỏi trong phần thi hỗn hợp
+  const handleRemoveMixedRange = (secIdx: number, rIdx: number) => {
+    setExamSections((prev) => {
+      const next = [...prev]
+      const sec = { ...next[secIdx] }
+      if (!sec.mixedRanges) return prev
+      const ranges = sec.mixedRanges.filter((_, idx) => idx !== rIdx)
+      sec.mixedRanges = ranges
+      next[secIdx] = sec
+      return next
+    })
+  }
+
+  // Áp dụng nhanh cấu trúc mẫu cho phần thi hỗn hợp
+  const handleApplyMixedPreset = (secIdx: number, preset: 'thptqg' | 'hsa' | 'tsa') => {
+    setExamSections((prev) => {
+      const next = [...prev]
+      const sec = { ...next[secIdx] }
+      if (preset === 'thptqg') {
+        sec.questionCount = 28
+        sec.totalPoints = 10
+        sec.mixedRanges = [
+          { start: 1, end: 18, type: 'single_choice', optionsCount: 4 },
+          { start: 19, end: 22, type: 'true_false', optionsCount: 4 },
+          { start: 23, end: 28, type: 'short_answer', optionsCount: 4 },
+        ]
+      } else if (preset === 'hsa') {
+        sec.questionCount = 50
+        sec.totalPoints = 50
+        sec.mixedRanges = [
+          { start: 1, end: 40, type: 'single_choice', optionsCount: 4 },
+          { start: 41, end: 50, type: 'short_answer', optionsCount: 4 },
+        ]
+      } else if (preset === 'tsa') {
+        sec.questionCount = 40
+        sec.totalPoints = 40
+        sec.mixedRanges = [
+          { start: 1, end: 30, type: 'single_choice', optionsCount: 4 },
+          { start: 31, end: 36, type: 'true_false', optionsCount: 4 },
+          { start: 37, end: 40, type: 'short_answer', optionsCount: 4 },
+        ]
+      }
       next[secIdx] = sec
       return next
     })
@@ -1422,11 +1555,28 @@ export default function SebAdminPage() {
                         <div className="space-y-1">
                           <label className="font-bold text-slate-600">Thể Loại Câu Hỏi</label>
                           <select
-                            value={section.questionTypeMode === 'custom' ? 'custom' : section.type}
+                            value={
+                              section.type === 'mixed' || section.questionTypeMode === 'mixed'
+                                ? 'mixed'
+                                : section.questionTypeMode === 'custom'
+                                ? 'custom'
+                                : section.type
+                            }
                             onChange={(e) => {
                               const val = e.target.value
                               if (val === 'custom') {
                                 handleUpdateSectionField(sIdx, 'questionTypeMode', 'custom')
+                              } else if (val === 'mixed') {
+                                handleUpdateSectionField(sIdx, 'questionTypeMode', 'mixed')
+                                handleUpdateSectionField(sIdx, 'type', 'mixed')
+                                const count = section.questionCount || 10
+                                if (!section.mixedRanges || section.mixedRanges.length === 0) {
+                                  const splitPoint = Math.max(1, Math.floor(count * 0.6))
+                                  handleUpdateSectionField(sIdx, 'mixedRanges', [
+                                    { start: 1, end: splitPoint, type: 'single_choice', optionsCount: 4 },
+                                    { start: splitPoint + 1, end: count, type: 'short_answer', optionsCount: 4 },
+                                  ])
+                                }
                               } else {
                                 handleUpdateSectionField(sIdx, 'questionTypeMode', 'uniform')
                                 handleUpdateSectionField(sIdx, 'type', val)
@@ -1434,14 +1584,120 @@ export default function SebAdminPage() {
                             }}
                             className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                           >
-                            <option value="single_choice">Trắc nghiệm 4 lựa chọn (A, B, C, D)</option>
-                            <option value="true_false">Trắc nghiệm Đúng / Sai (4 ý a, b, c, d)</option>
-                            <option value="short_answer">Trả lời ngắn / Điền số</option>
-                            <option value="essay">Tự luận</option>
-                            <option value="custom">-- Tùy chọn từng câu --</option>
+                            <option value="single_choice">🔵 Trắc nghiệm 4 lựa chọn (A, B, C, D)</option>
+                            <option value="true_false">🟢 Trắc nghiệm Đúng / Sai (4 ý a, b, c, d)</option>
+                            <option value="short_answer">🟠 Trả lời ngắn / Điền số</option>
+                            <option value="essay">🟣 Tự luận</option>
+                            <option value="mixed">🔀 Đề hỗn hợp (Theo dải câu / Nhiều dạng)</option>
+                            <option value="custom">⚙️ Tùy chọn từng câu</option>
                           </select>
                         </div>
                       </div>
+
+                      {/* Quản lý dải câu hỏi hỗn hợp (mixedRanges) */}
+                      {(section.type === 'mixed' || section.questionTypeMode === 'mixed') && (
+                        <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-200/60 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <Sliders className="h-4 w-4 text-indigo-600" />
+                              <span className="text-xs font-black text-indigo-950 uppercase tracking-wider">
+                                Phân Định Dải Câu Hỏi (Chế Độ Hỗn Hợp)
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleApplyMixedPreset(sIdx, 'thptqg')}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition shadow-2xs"
+                              >
+                                Preset THPTQG (18-4-6)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplyMixedPreset(sIdx, 'hsa')}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition shadow-2xs"
+                              >
+                                Preset HSA (40-10)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleApplyMixedPreset(sIdx, 'tsa')}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition shadow-2xs"
+                              >
+                                Preset TSA (30-6-4)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAddMixedRange(sIdx)}
+                                className="px-3 py-1 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs flex items-center gap-1 transition"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Thêm dải câu
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {(section.mixedRanges || []).map((range: any, rIdx: number) => (
+                              <div
+                                key={rIdx}
+                                className="flex flex-wrap items-center gap-3 p-2.5 rounded-xl bg-white border border-indigo-100 text-xs shadow-2xs"
+                              >
+                                <span className="text-indigo-900 font-black text-[11px]">Dải #{rIdx + 1}:</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-slate-600 text-[11px] font-semibold">Từ câu</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={range.start}
+                                    onChange={(e) =>
+                                      handleUpdateMixedRange(sIdx, rIdx, 'start', parseInt(e.target.value) || 1)
+                                    }
+                                    className="w-14 px-2 py-1 rounded-lg border border-slate-200 font-mono font-bold text-center text-xs"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-slate-600 text-[11px] font-semibold">đến</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={range.end}
+                                    onChange={(e) =>
+                                      handleUpdateMixedRange(sIdx, rIdx, 'end', parseInt(e.target.value) || 1)
+                                    }
+                                    className="w-14 px-2 py-1 rounded-lg border border-slate-200 font-mono font-bold text-center text-xs"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-slate-600 text-[11px] font-semibold">Dạng câu:</span>
+                                  <select
+                                    value={range.type}
+                                    onChange={(e) => handleUpdateMixedRange(sIdx, rIdx, 'type', e.target.value)}
+                                    className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold"
+                                  >
+                                    <option value="single_choice">🔵 Trắc nghiệm 4 lựa chọn (A, B, C, D)</option>
+                                    <option value="true_false">🟢 Đúng / Sai (4 ý a, b, c, d)</option>
+                                    <option value="short_answer">🟠 Điền số / Trả lời ngắn</option>
+                                    <option value="essay">🟣 Tự luận</option>
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMixedRange(sIdx, rIdx)}
+                                  className="ml-auto text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 transition"
+                                  title="Xóa dải câu này"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                            {(!section.mixedRanges || section.mixedRanges.length === 0) && (
+                              <p className="text-xs text-indigo-900/60 italic py-1">
+                                Chưa có dải câu nào được thiết lập. Hãy bấm "+ Thêm dải câu" hoặc chọn một mẫu Preset có sẵn ở trên.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Hướng Dẫn Tự Viết & Ảnh Minh Họa Cho Phần Này */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-slate-200/80">
@@ -1544,7 +1800,28 @@ export default function SebAdminPage() {
                                 className="p-3 rounded-2xl bg-white border border-slate-200 text-xs shadow-2xs space-y-2"
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="font-bold text-slate-600">Câu {qIdx + 1}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-600">Câu {qIdx + 1}</span>
+                                    <span
+                                      className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
+                                        qType === 'single_choice'
+                                          ? 'bg-blue-100 text-blue-700'
+                                          : qType === 'true_false'
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : qType === 'short_answer'
+                                          ? 'bg-amber-100 text-amber-700'
+                                          : 'bg-purple-100 text-purple-700'
+                                      }`}
+                                    >
+                                      {qType === 'single_choice'
+                                        ? 'TN'
+                                        : qType === 'true_false'
+                                        ? 'Đ/S'
+                                        : qType === 'short_answer'
+                                        ? 'Số'
+                                        : 'Luận'}
+                                    </span>
+                                  </div>
 
                                   {/* Điểm tùy chỉnh nếu bật custom_points */}
                                   {section.scoringMode === 'custom_points' ? (

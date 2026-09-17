@@ -48,23 +48,56 @@ interface AIQuestionState {
 }
 
 /**
- * Chuẩn hóa kiểu câu hỏi với cơ chế Fallback an toàn
+ * Chuẩn hóa kiểu câu hỏi với cơ chế Fallback và nhận diện thông minh
  */
 function normalizeQuestionType(
   rawType: any,
   section?: any,
   qIdx?: number
 ): 'single_choice' | 'true_false' | 'short_answer' | 'essay' {
-  let type = (rawType || '').toString().toLowerCase().trim()
-
-  if ((type === 'mixed' || !type) && section?.mixedRanges && Array.isArray(section.mixedRanges) && qIdx !== undefined) {
+  // 1. Kiểm tra dải câu hỏi hỗn hợp mixedRanges
+  if (section?.mixedRanges && Array.isArray(section.mixedRanges) && qIdx !== undefined) {
     const range = section.mixedRanges.find(
-      (r: any) => qIdx + 1 >= (r.start || 1) && qIdx + 1 <= (r.end || 999)
+      (r: any) => (qIdx + 1) >= (Number(r.start) || 1) && (qIdx + 1) <= (Number(r.end) || 999)
     )
     if (range?.type) {
-      type = range.type.toString().toLowerCase().trim()
+      return normalizeQuestionType(range.type)
     }
   }
+
+  // 2. Kiểm tra tùy biến từng câu (custom questionTypes)
+  if (section?.questionTypeMode === 'custom' && section?.questionTypes && qIdx !== undefined) {
+    if (section.questionTypes[qIdx]) {
+      return normalizeQuestionType(section.questionTypes[qIdx])
+    }
+  }
+
+  // 3. Tự động nhận diện từ đáp án đúng (correctAnswers) nếu có
+  if (section?.correctAnswers && qIdx !== undefined) {
+    const ca = section.correctAnswers[qIdx] ?? section.correctAnswers[String(qIdx)]
+    if (ca !== undefined && ca !== null) {
+      if (typeof ca === 'object' && !Array.isArray(ca)) {
+        const keys = Object.keys(ca)
+        if (keys.some((k) => ['a', 'b', 'c', 'd'].includes(k.toLowerCase()))) {
+          return 'true_false'
+        }
+      }
+      if (typeof ca === 'string') {
+        const trimmed = ca.trim()
+        if (/^[A-D]$/i.test(trimmed)) {
+          return 'single_choice'
+        }
+        if (/^[\d.,+-]+$/.test(trimmed) && trimmed.length > 0) {
+          return 'short_answer'
+        }
+        if (trimmed.length > 30) {
+          return 'essay'
+        }
+      }
+    }
+  }
+
+  let type = (rawType || section?.type || '').toString().toLowerCase().trim()
 
   if (
     type.includes('true') ||
@@ -80,7 +113,8 @@ function normalizeQuestionType(
     type.includes('ngắn') ||
     type.includes('ngan') ||
     type.includes('dien') ||
-    type.includes('fill')
+    type.includes('fill') ||
+    type === 'sa'
   ) {
     return 'short_answer'
   }
@@ -92,6 +126,19 @@ function normalizeQuestionType(
   ) {
     return 'essay'
   }
+
+  // 4. Dự phòng tên phần thi
+  const secName = (section?.name || '').toLowerCase()
+  if (secName.includes('đúng') || secName.includes('sai') || secName.includes('phần ii') || secName.includes('phần 2')) {
+    return 'true_false'
+  }
+  if (secName.includes('ngắn') || secName.includes('điền số') || secName.includes('phần iii') || secName.includes('phần 3')) {
+    return 'short_answer'
+  }
+  if (secName.includes('tự luận')) {
+    return 'essay'
+  }
+
   return 'single_choice'
 }
 

@@ -18,8 +18,11 @@ HÃY PHÂN TÍCH VÀ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON VỚI CÁC TR�
       "totalPoints": 4.0, // Tổng điểm của phần thi này (thường thang 10 toàn đề)
       "scoringMode": "auto_divide", // "auto_divide" (chia đều) hoặc "custom_points"
       "questionCount": 18, // Số lượng câu hỏi trong phần này
-      "questionTypeMode": "uniform", // "uniform" (cùng loại) hoặc "custom" (tùy ý từng câu)
-      "type": "single_choice", // "single_choice" | "true_false" | "short_answer" | "essay"
+      "questionTypeMode": "uniform", // "uniform" (cùng loại) hoặc "custom" (tùy ý từng câu) hoặc "mixed" (hỗn hợp theo dải câu)
+      "type": "single_choice", // "single_choice" | "true_false" | "short_answer" | "essay" | "mixed"
+      "mixedRanges": [ // Chỉ dùng khi type là "mixed": phân định dải câu hỏi
+        // {"start": 1, "end": 18, "type": "single_choice"}, {"start": 19, "end": 22, "type": "true_false"}, {"start": 23, "end": 28, "type": "short_answer"}
+      ],
       "instructions": "Nội dung hướng dẫn làm bài chi tiết cho phần thi này mà thí sinh cần đọc trước khi thi",
       "instructionImage": "", // Để trống nếu không có ảnh hướng dẫn
       "correctAnswers": {
@@ -212,6 +215,8 @@ ${
           normType = 'short_answer'
         } else if (rawT.includes('essay') || rawT.includes('luận')) {
           normType = 'essay'
+        } else if (rawT.includes('mixed') || rawT.includes('hỗn hợp')) {
+          normType = 'mixed'
         } else {
           normType = 'single_choice'
         }
@@ -222,8 +227,9 @@ ${
           totalPoints: Number(s.totalPoints) || (idx === 0 ? 4.5 : idx === 1 ? 4 : 1.5),
           scoringMode: s.scoringMode || 'auto_divide',
           questionCount: parseInt(s.questionCount) || 10,
-          questionTypeMode: s.questionTypeMode || 'uniform',
+          questionTypeMode: s.questionTypeMode || (normType === 'mixed' ? 'mixed' : 'uniform'),
           type: normType,
+          mixedRanges: Array.isArray(s.mixedRanges) ? s.mixedRanges : [],
           instructions: s.instructions || `Thí sinh đọc kỹ đề bài và hoàn thành câu hỏi của ${s.name || `Phần ${idx + 1}`}.`,
           instructionImage: s.instructionImage || '',
           correctAnswers: s.correctAnswers || {},
