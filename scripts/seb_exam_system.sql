@@ -7,11 +7,16 @@
 CREATE TABLE IF NOT EXISTS public.seb_folders (
   id text PRIMARY KEY DEFAULT ('fld_' || replace(gen_random_uuid()::text, '-', '')),
   name text NOT NULL,
+  description text DEFAULT '',
   parent_id text REFERENCES public.seb_folders(id) ON DELETE CASCADE,
   icon text DEFAULT 'folder',
   sort_order integer DEFAULT 0,
   created_at timestamptz DEFAULT now()
 );
+
+-- Đảm bảo bổ sung cột description nếu bảng đã tồn tại từ trước
+ALTER TABLE public.seb_folders 
+  ADD COLUMN IF NOT EXISTS description text DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_seb_folders_parent_id ON public.seb_folders(parent_id);
 

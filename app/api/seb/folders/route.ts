@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { action, folderId, name, parentId, sortOrder, icon, userRole, userEmail } = body
+    const { action, folderId, name, description, parentId, sortOrder, icon, userRole, userEmail } = body
 
     if (userRole === 'admin' || userRole === 'collab' || userEmail?.toLowerCase() === 'hoangbinhminh2508@gmail.com') {
       isUserAdmin = true
@@ -120,6 +120,7 @@ export async function POST(request: Request) {
       const { data, error } = await admin.from('seb_folders').insert({
         id: newId,
         name: name.trim(),
+        description: description?.trim() || '',
         parent_id: parentId || null,
         sort_order: Number(sortOrder) || 0,
         icon: icon || (parentId ? 'folder' : 'layers'),
@@ -133,6 +134,7 @@ export async function POST(request: Request) {
       if (!folderId) return NextResponse.json({ error: 'Thiếu folderId' }, { status: 400 })
       const { data, error } = await admin.from('seb_folders').update({
         name: name?.trim(),
+        description: description?.trim() || '',
         parent_id: parentId || null,
         sort_order: Number(sortOrder) || 0,
         icon: icon || 'folder',
