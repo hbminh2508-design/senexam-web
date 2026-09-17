@@ -217,12 +217,17 @@ export default function SebExamRoomPage() {
       offsets[section.id] = count
       const qCount = parseInt(section.questionCount) || 0
       for (let i = 0; i < qCount; i++) {
+        const qType =
+          section.questionTypeMode === 'custom' && section.questionTypes?.[i]
+            ? section.questionTypes[i]
+            : section.type || 'single_choice'
+
         flat.push({
           sectionId: section.id,
           qIdx: i,
           globalNum: count + i + 1,
           key: `${section.id}-${i}`,
-          type: section.type,
+          type: qType,
         })
       }
       count += qCount
@@ -251,7 +256,7 @@ export default function SebExamRoomPage() {
     setBookmarked((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
-  // Cập nhật câu trả lời trắc nghiệm đơn / ngắn
+  // Cập nhật câu trả lời trắc nghiệm đơn / ngắn / tự luận
   const handleAnswer = (key: string, val: any) => {
     setAnswers((prev) => ({ ...prev, [key]: val }))
   }
@@ -270,26 +275,32 @@ export default function SebExamRoomPage() {
     })
   }
 
-  // Chấm điểm bài thi
+  // Chấm điểm bài thi theo đúng cấu trúc từng phần thi và chế độ điểm
   const calculateScore = () => {
     let totalScore = 0
-    let maxExamPoints = 10
 
     activeSections.forEach((section: any) => {
       const qCount = parseInt(section.questionCount) || 0
       const correctMap = section.correctAnswers || {}
+      const isAutoDivide = section.scoringMode !== 'custom_points'
+      const defaultPointsPerQ = qCount > 0 ? (Number(section.totalPoints) || 0) / qCount : 0
 
-      if (section.type === 'single_choice') {
-        const pointsPerQ = 10 / (questionMeta.totalCount || 1)
-        for (let i = 0; i < qCount; i++) {
-          const key = `${section.id}-${i}`
+      for (let i = 0; i < qCount; i++) {
+        const key = `${section.id}-${i}`
+        const qType =
+          section.questionTypeMode === 'custom' && section.questionTypes?.[i]
+            ? section.questionTypes[i]
+            : section.type || 'single_choice'
+
+        const qPoint = isAutoDivide
+          ? defaultPointsPerQ
+          : Number(section.pointsPerQuestion?.[i]) ?? defaultPointsPerQ
+
+        if (qType === 'single_choice') {
           if (answers[key] && answers[key] === correctMap[i]) {
-            totalScore += pointsPerQ
+            totalScore += qPoint
           }
-        }
-      } else if (section.type === 'true_false') {
-        for (let i = 0; i < qCount; i++) {
-          const key = `${section.id}-${i}`
+        } else if (qType === 'true_false') {
           const userObj = answers[key] || {}
           const correctObj = correctMap[i] || {}
 
@@ -300,26 +311,28 @@ export default function SebExamRoomPage() {
             }
           })
 
-          // Thang điểm chuẩn Bộ GD&ĐT cho dạng Đúng/Sai (1 ý: 0.1đ, 2 ý: 0.25đ, 3 ý: 0.5đ, 4 ý: 1.0đ)
-          if (matchedSubCount === 1) totalScore += 0.1
-          else if (matchedSubCount === 2) totalScore += 0.25
-          else if (matchedSubCount === 3) totalScore += 0.5
-          else if (matchedSubCount === 4) totalScore += 1.0
-        }
-      } else if (section.type === 'short_answer') {
-        const pointsPerQ = 0.5
-        for (let i = 0; i < qCount; i++) {
-          const key = `${section.id}-${i}`
+          // Tỷ lệ chuẩn Bộ GD&ĐT: 1 ý: 10%, 2 ý: 25%, 3 ý: 50%, 4 ý: 100%
+          if (matchedSubCount === 4) totalScore += qPoint * 1.0
+          else if (matchedSubCount === 3) totalScore += qPoint * 0.5
+          else if (matchedSubCount === 2) totalScore += qPoint * 0.25
+          else if (matchedSubCount === 1) totalScore += qPoint * 0.1
+        } else if (qType === 'short_answer') {
           const userAns = (answers[key] || '').toString().trim().toLowerCase()
           const correctAns = (correctMap[i] || '').toString().trim().toLowerCase()
           if (userAns && userAns === correctAns) {
-            totalScore += pointsPerQ
+            totalScore += qPoint
+          }
+        } else if (qType === 'essay') {
+          const userAns = (answers[key] || '').toString().trim().toLowerCase()
+          const correctAns = (correctMap[i] || '').toString().trim().toLowerCase()
+          if (correctAns && userAns === correctAns) {
+            totalScore += qPoint
           }
         }
       }
     })
 
-    return Math.min(10, Math.round(totalScore * 100) / 100)
+    return Math.round(totalScore * 100) / 100
   }
 
   // Nộp bài thi
@@ -599,7 +612,7 @@ export default function SebExamRoomPage() {
               </div>
             </div>
 
-            {/* Hướng Dẫn Chi Tiết Các Phần Thi Được Admin Cấu Hình */}
+            {/* Hướng Dẫn Chi Tiết Các Phần Thi Do Admin Cấu Hình */}
             <div className="space-y-3">
               <h3
                 className="text-sm font-black text-slate-900 uppercase tracking-wider"
@@ -609,39 +622,53 @@ export default function SebExamRoomPage() {
               </h3>
 
               <div className="space-y-3 text-xs">
-                {/* Phần 1 */}
-                {instructionsConfig.part1 && (
-                  <div className="p-3.5 rounded-2xl bg-sky-50/60 border border-sky-100 space-y-1">
-                    <span className="font-bold text-sky-900 block">
-                      📌 Phần 1: Trắc nghiệm 4 phương án lựa chọn (A, B, C, D)
-                    </span>
-                    <p className="text-slate-600 leading-relaxed">
-                      Mỗi câu hỏi có 4 phương án trả lời, thí sinh chỉ chọn DUY NHẤT một phương án đúng. Mỗi câu trả lời đúng được tính điểm theo quy định.
-                    </p>
-                  </div>
-                )}
+                {activeSections.length > 0 ? (
+                  activeSections.map((sec: any, sIdx: number) => (
+                    <div
+                      key={sec.id || sIdx}
+                      className="p-4 rounded-2xl bg-sky-50/60 border border-sky-100 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sky-950 text-xs">
+                          📌 {sec.name || `Phần ${sIdx + 1}`}
+                        </span>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-sky-700">
+                          <span>{sec.questionCount} câu</span>
+                          <span>•</span>
+                          <span>{sec.totalPoints || 0} điểm</span>
+                        </div>
+                      </div>
 
-                {/* Phần 2 */}
-                {instructionsConfig.part2 && (
-                  <div className="p-3.5 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-1">
-                    <span className="font-bold text-indigo-900 block">
-                      📌 Phần 2: Trắc nghiệm Đúng / Sai (Gồm 4 ý a, b, c, d)
-                    </span>
-                    <p className="text-slate-600 leading-relaxed">
-                      Tại mỗi ý a, b, c, d của câu hỏi, thí sinh chọn ĐÚNG hoặc SAI. Điểm được tính lũy tiến theo số ý trả lời chính xác: 1 ý được 0.1đ; 2 ý được 0.25đ; 3 ý được 0.5đ; cả 4 ý đúng được trọn vẹn 1.0đ.
-                    </p>
-                  </div>
-                )}
+                      {sec.instructions ? (
+                        <p className="text-slate-700 leading-relaxed whitespace-pre-line">
+                          {sec.instructions}
+                        </p>
+                      ) : (
+                        <p className="text-slate-500 italic">
+                          Thí sinh đọc kỹ đề bài và hoàn thành các câu hỏi của phần này.
+                        </p>
+                      )}
 
-                {/* Phần 3 */}
-                {instructionsConfig.part3 && (
-                  <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
-                    <span className="font-bold text-emerald-900 block">
-                      📌 Phần 3: Trắc nghiệm trả lời ngắn / Điền số
-                    </span>
-                    <p className="text-slate-600 leading-relaxed">
-                      Thí sinh tự tính toán và nhập đáp số vào ô trống (dạng số nguyên hoặc số thập phân, ví dụ: 2.5 hoặc -4). Không ghi đơn vị vào ô đáp số.
-                    </p>
+                      {/* Hình ảnh hướng dẫn do Admin đính kèm */}
+                      {sec.instructionImage && (
+                        <div className="mt-2 pt-2 border-t border-sky-200/50">
+                          <span className="text-[10px] font-bold text-sky-800 uppercase block mb-1.5">
+                            Hình ảnh hướng dẫn:
+                          </span>
+                          <div className="rounded-xl overflow-hidden border border-sky-200 bg-white max-h-60 flex items-center justify-center p-1">
+                            <img
+                              src={sec.instructionImage}
+                              alt={`Hướng dẫn ${sec.name}`}
+                              className="max-h-60 w-auto object-contain rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-sky-50/60 border border-sky-100 text-slate-600">
+                    Thí sinh làm bài theo đúng thời gian quy định và nộp bài trước khi đồng hồ đếm ngược kết thúc.
                   </div>
                 )}
               </div>
@@ -900,7 +927,17 @@ export default function SebExamRoomPage() {
                       const globalNum = offset + qIdx + 1
                       const isMarked = bookmarked[key]
                       const currentAns = answers[key]
-                      const currentType = section.type || 'single_choice'
+                      const currentType =
+                        section.questionTypeMode === 'custom' && section.questionTypes?.[qIdx]
+                          ? section.questionTypes[qIdx]
+                          : section.type || 'single_choice'
+
+                      const qPoint =
+                        section.scoringMode === 'custom_points'
+                          ? section.pointsPerQuestion?.[qIdx]
+                          : section.totalPoints && section.questionCount
+                          ? section.totalPoints / section.questionCount
+                          : null
 
                       return (
                         <div
@@ -919,6 +956,11 @@ export default function SebExamRoomPage() {
                               </span>
                               <span className="text-xs font-bold text-slate-700">
                                 Câu hỏi {globalNum}
+                                {qPoint !== null && qPoint !== undefined && (
+                                  <span className="ml-1.5 text-[10px] text-sky-600 font-mono font-semibold">
+                                    ({Number(qPoint).toFixed(2)}đ)
+                                  </span>
+                                )}
                               </span>
                             </div>
 
@@ -1006,6 +1048,19 @@ export default function SebExamRoomPage() {
                                 onChange={(e) => handleAnswer(key, e.target.value)}
                                 placeholder="Nhập số hoặc đáp án của bạn..."
                                 className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                              />
+                            </div>
+                          )}
+
+                          {/* 4. Tự luận */}
+                          {currentType === 'essay' && (
+                            <div>
+                              <textarea
+                                value={currentAns || ''}
+                                onChange={(e) => handleAnswer(key, e.target.value)}
+                                placeholder="Nhập câu trả lời tự luận của bạn..."
+                                rows={4}
+                                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 leading-relaxed"
                               />
                             </div>
                           )}
