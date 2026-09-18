@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { GraduationCap, Building2, MapPin, User, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { GraduationCap, Building2, MapPin, User, CheckCircle2, AlertCircle, Loader2, Phone } from 'lucide-react'
 
 export default function ProfileCompletionModal() {
   const [isOpen, setIsOpen] = useState(false)
@@ -10,6 +10,7 @@ export default function ProfileCompletionModal() {
   const [currentUser, setCurrentUser] = useState<any>(null)
 
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [className, setClassName] = useState('')
   const [school, setSchool] = useState('')
   const [province, setProvince] = useState('')
@@ -27,13 +28,14 @@ export default function ProfileCompletionModal() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('full_name, class_name, school, province')
+          .select('full_name, class_name, school, province, phone_number, phone')
           .eq('id', user.id)
           .maybeSingle()
 
-        // Nếu người dùng chưa cập nhật lớp hoặc trường học, bật modal hoàn tất thông tin
-        if (profile && (!profile.school || !profile.class_name)) {
+        // Nếu người dùng chưa cập nhật lớp, trường học hoặc số điện thoại, bật modal hoàn tất thông tin
+        if (profile && (!profile.school || !profile.class_name || (!profile.phone_number && !profile.phone))) {
           setFullName(profile.full_name || user.user_metadata?.full_name || '')
+          setPhone(profile.phone_number || profile.phone || '')
           setClassName(profile.class_name || '')
           setSchool(profile.school || '')
           setProvince(profile.province || '')
@@ -55,8 +57,8 @@ export default function ProfileCompletionModal() {
     e.preventDefault()
     if (!currentUser) return
 
-    if (!fullName.trim() || !className.trim() || !school.trim() || !province.trim()) {
-      setErrorMsg('Vui lòng điền đầy đủ tất cả các trường thông tin để phân loại lớp.')
+    if (!fullName.trim() || !phone.trim() || !className.trim() || !school.trim() || !province.trim()) {
+      setErrorMsg('Vui lòng điền đầy đủ tất cả các trường thông tin (kèm số điện thoại).')
       return
     }
 
@@ -68,6 +70,8 @@ export default function ProfileCompletionModal() {
         .from('profiles')
         .update({
           full_name: fullName.trim(),
+          phone_number: phone.trim(),
+          phone: phone.trim(),
           class_name: className.trim(),
           school: school.trim(),
           province: province.trim(),
@@ -98,7 +102,7 @@ export default function ProfileCompletionModal() {
             Hoàn Tất Thông Tin Học Sinh
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Vui lòng điền thông tin trường lớp để thầy cô quản lý và theo dõi kết quả thi cử của bạn.
+            Vui lòng điền số điện thoại và thông tin trường lớp để thầy cô quản lý và theo dõi kết quả thi cử của bạn.
           </p>
         </div>
 
@@ -120,6 +124,21 @@ export default function ProfileCompletionModal() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Ví dụ: Nguyễn Văn An"
+              required
+              className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5 text-indigo-500" />
+              Số Điện Thoại
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Ví dụ: 0912345678"
               required
               className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-xs font-semibold outline-none focus:border-indigo-500"
             />
@@ -176,7 +195,7 @@ export default function ProfileCompletionModal() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 shadow"
+              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 shadow cursor-pointer"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               <span>Lưu Thông Tin & Tiếp Tục</span>

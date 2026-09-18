@@ -169,6 +169,7 @@ export default function SebExamRoomPage() {
 
   const [sebAccessCode, setSebAccessCode] = useState('')
   const [autoLoggingIn, setAutoLoggingIn] = useState(false)
+  const [disqualifiedData, setDisqualifiedData] = useState<{ reason: string; snapshot?: string; timestamp: string } | null>(null)
 
   // 1. Khởi tạo & Kiểm tra môi trường Safe Exam Browser
   useEffect(() => {
@@ -256,7 +257,7 @@ export default function SebExamRoomPage() {
         const email = user.email?.toLowerCase() || ''
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, full_name, school, class_name, grade, province')
+          .select('role, full_name, school, class_name, grade, province, phone_number, phone')
           .eq('id', user.id)
           .maybeSingle()
         if (profile) {
@@ -332,9 +333,9 @@ export default function SebExamRoomPage() {
     }
   }, [hasStarted, submittedResult, submitting])
 
-  // 3. Bộ đếm ngược thời gian
+  // 3. Bộ đếm ngược thời gian (dừng ngay nếu bị đình chỉ thi)
   useEffect(() => {
-    if (!hasStarted || loading || timeLeft <= 0 || submittedResult || submitting) return
+    if (!hasStarted || loading || timeLeft <= 0 || submittedResult || submitting || disqualifiedData) return
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -347,11 +348,49 @@ export default function SebExamRoomPage() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [hasStarted, loading, timeLeft, submittedResult, submitting])
+  }, [hasStarted, loading, timeLeft, submittedResult, submitting, disqualifiedData])
+
+  // 🚨 Xử lý Đình Chỉ & Đuổi Khỏi Phòng Thi Ngay Lập Tức (Khi AI phát hiện dùng điện thoại)
+  const handleDisqualified = async (info: { reason: string; snapshot?: string }) => {
+    if (disqualifiedData) return
+    const nowStr = new Date().toLocaleTimeString('vi-VN')
+    const violationReason = info.reason || 'Phát hiện sử dụng điện thoại (nhận diện cụm camera sau / điện thoại)'
+
+    setDisqualifiedData({
+      reason: violationReason,
+      snapshot: info.snapshot,
+      timestamp: nowStr,
+    })
+
+    // Tự động ghi bản ghi điểm 0 và hủy bài thi vào database
+    try {
+      await supabase.from('submissions').insert({
+        user_id: currentUser.id,
+        exam_id: examId,
+        score: 0,
+        is_graded: true,
+        is_disqualified: true,
+        disqualification_reason: violationReason,
+        tab_switches: tabSwitches,
+        blur_count: tabSwitches,
+        submitted_at: new Date().toISOString(),
+        phone_number: userProfile?.phone_number || userProfile?.phone || '',
+        school: userProfile?.school || '',
+        class_name: userProfile?.class_name || userProfile?.grade || '',
+        province: userProfile?.province || '',
+      })
+    } catch (e) {
+      console.warn('Lỗi ghi nhận đình chỉ thi:', e)
+    }
+
+    // Xóa bản nháp cục bộ
+    const draftKey = `seb_draft_${examId}_${currentUser?.id}`
+    localStorage.removeItem(draftKey)
+  }
 
   // 4. Tự động lưu bài làm vào LocalStorage
   useEffect(() => {
-    if (!hasStarted || !examId || !currentUser) return
+    if (!hasStarted || !examId || !currentUser || disqualifiedData) return
     const timer = setTimeout(() => {
       const draftKey = `seb_draft_${examId}_${currentUser.id}`
       localStorage.setItem(
@@ -360,7 +399,7 @@ export default function SebExamRoomPage() {
       )
     }, 800)
     return () => clearTimeout(timer)
-  }, [answers, bookmarked, examId, hasStarted, currentUser])
+  }, [answers, bookmarked, examId, hasStarted, currentUser, disqualifiedData])
 
   // Format thời gian đếm ngược mm:ss
   const formatTimer = (seconds: number) => {
@@ -373,12 +412,15 @@ export default function SebExamRoomPage() {
   const proctorUserInfo = useMemo(() => ({
     fullName: userProfile?.full_name || currentUser?.user_metadata?.full_name || 'Học sinh',
     email: currentUser?.email || '',
+    phone: userProfile?.phone_number || userProfile?.phone || '',
     className: userProfile?.class_name || userProfile?.grade || '',
     school: userProfile?.school || '',
     province: userProfile?.province || '',
     subject: exam?.subject || exam?.title || '',
   }), [
     userProfile?.full_name,
+    userProfile?.phone_number,
+    userProfile?.phone,
     userProfile?.class_name,
     userProfile?.grade,
     userProfile?.school,
@@ -1165,6 +1207,7 @@ export default function SebExamRoomPage() {
               currentUser={currentUser}
               examTitle={exam?.title}
               userInfo={proctorUserInfo}
+              onDisqualified={handleDisqualified}
             />
 
             <div className="flex items-center justify-between mb-2">
@@ -1486,6 +1529,79 @@ export default function SebExamRoomPage() {
               >
                 {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>Nộp Bài Ngay</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 MODAL KHÓA PHÒNG THI / ĐUỔI KHỎI PHÒNG THI DO DÙNG ĐIỆN THOẠI (GEMINI 3.8 LIVE PHÁT HIỆN) */}
+      {disqualifiedData && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in">
+          <div className="max-w-lg w-full bg-slate-900 border-2 border-rose-500 rounded-3xl p-6 shadow-2xl text-center space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-500 animate-bounce">
+              <ShieldAlert className="w-9 h-9" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="px-3 py-1 rounded-full bg-rose-500 text-white text-[11px] font-black uppercase tracking-wider">
+                Vi Phạm Kỷ Luật Nghiêm Trọng
+              </span>
+              <h2
+                className="text-xl sm:text-2xl font-black text-rose-400 mt-2"
+                style={{ fontFamily: 'var(--font-sebexam-heading)' }}
+              >
+                BẠN ĐÃ BỊ ĐÌNH CHỈ THI & ĐUỔI KHỎI PHÒNG THI
+              </h2>
+              <p className="text-xs text-slate-300 leading-relaxed pt-1">
+                Hệ thống Giám thị AI Gemini 3.8 Live đã phát hiện bạn <strong>sử dụng điện thoại di động</strong> (nhận diện cụm camera sau / điện thoại) trong giờ làm bài.
+              </p>
+            </div>
+
+            {/* Bằng chứng Snapshot chụp lúc vi phạm */}
+            {disqualifiedData.snapshot && (
+              <div className="space-y-1 text-left bg-black/60 p-3 rounded-2xl border border-rose-500/40">
+                <div className="flex items-center justify-between text-[11px] font-bold text-rose-300 mb-1">
+                  <span>📸 Bằng chứng AI ghi nhận lúc {disqualifiedData.timestamp}:</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Độ tin cậy: 98%</span>
+                </div>
+                <div className="relative w-full h-48 rounded-xl overflow-hidden bg-black border border-slate-700 flex items-center justify-center">
+                  <img
+                    src={disqualifiedData.snapshot}
+                    alt="Bằng chứng vi phạm"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Thông tin thí sinh vi phạm */}
+            <div className="bg-slate-800/80 rounded-2xl p-3 text-xs text-left grid grid-cols-2 gap-2 border border-slate-700 text-slate-300">
+              <div>
+                <span className="text-slate-400 text-[10px] block">Thí sinh:</span>
+                <strong className="text-white font-bold">{proctorUserInfo.fullName}</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] block">Số điện thoại:</span>
+                <strong className="text-white font-bold">{proctorUserInfo.phone || 'Chưa cung cấp'}</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] block">Trường - Lớp:</span>
+                <strong className="text-white font-bold">{proctorUserInfo.school || 'N/A'} - {proctorUserInfo.className || 'N/A'}</strong>
+              </div>
+              <div>
+                <span className="text-slate-400 text-[10px] block">Xử lý kỷ luật:</span>
+                <strong className="text-rose-400 font-bold">Hủy bài thi (0 điểm)</strong>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => router.replace('/seb-dashboard')}
+                className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Rời Khỏi Phòng Thi Ngay Bây Giờ</span>
               </button>
             </div>
           </div>

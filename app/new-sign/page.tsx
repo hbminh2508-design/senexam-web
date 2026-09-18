@@ -27,6 +27,7 @@ import {
   HelpCircle,
   Building2,
   MapPin,
+  Phone,
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, hexToRgba, getAccentHex } from '@/app/components/modernTheme'
@@ -52,6 +53,7 @@ export default function NewSignPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [className, setClassName] = useState('')
   const [school, setSchool] = useState('')
   const [province, setProvince] = useState('')
@@ -171,6 +173,9 @@ export default function NewSignPage() {
         if (!fullName.trim()) {
           throw new Error('Vui lòng nhập họ và tên của bạn.')
         }
+        if (!phone.trim()) {
+          throw new Error('Vui lòng nhập số điện thoại của bạn.')
+        }
         if (!className.trim()) {
           throw new Error('Vui lòng nhập lớp học của bạn (ví dụ: 12A1).')
         }
@@ -190,6 +195,8 @@ export default function NewSignPage() {
           options: {
             data: {
               full_name: fullName.trim(),
+              phone_number: phone.trim(),
+              phone: phone.trim(),
               class_name: className.trim(),
               school: school.trim(),
               province: province.trim(),
@@ -206,6 +213,8 @@ export default function NewSignPage() {
             .from('profiles')
             .update({
               full_name: fullName.trim(),
+              phone_number: phone.trim(),
+              phone: phone.trim(),
               class_name: className.trim(),
               school: school.trim(),
               province: province.trim(),
@@ -504,6 +513,18 @@ export default function NewSignPage() {
                         placeholder="Họ và tên của bạn"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
+                      />
+                    </div>
+
+                    <div className="relative group animate-in fade-in slide-in-from-top-2">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
+                      <input
+                        type="tel"
+                        placeholder="Số điện thoại của bạn (bắt buộc)"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                         required
                         className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
                       />

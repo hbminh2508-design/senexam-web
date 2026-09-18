@@ -15,12 +15,14 @@ interface SebProctorCameraProps {
   userInfo?: {
     fullName?: string
     email?: string
+    phone?: string
     className?: string
     school?: string
     province?: string
     subject?: string
   }
   onViolation?: (message: string) => void
+  onDisqualified?: (info: { reason: string; snapshot: string }) => void
   onNoCamera?: () => void
 }
 
@@ -30,6 +32,7 @@ export default function SebProctorCamera({
   examTitle,
   userInfo = {},
   onViolation,
+  onDisqualified,
   onNoCamera,
 }: SebProctorCameraProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -52,6 +55,9 @@ export default function SebProctorCamera({
 
   const onViolationRef = useRef(onViolation)
   onViolationRef.current = onViolation
+
+  const onDisqualifiedRef = useRef(onDisqualified)
+  onDisqualifiedRef.current = onDisqualified
 
   const onNoCameraRef = useRef(onNoCamera)
   onNoCameraRef.current = onNoCamera
@@ -84,6 +90,7 @@ export default function SebProctorCamera({
           userInfo: {
             fullName: uInfo.fullName || user?.user_metadata?.full_name || 'Học sinh',
             email: uInfo.email || user?.email || '',
+            phone: uInfo.phone || '',
             className: uInfo.className || '',
             school: uInfo.school || '',
             province: uInfo.province || '',
@@ -268,6 +275,7 @@ export default function SebProctorCamera({
           userInfo: {
             fullName: uInfo.fullName || user?.user_metadata?.full_name || 'Học sinh',
             email: uInfo.email || user?.email || '',
+            phone: uInfo.phone || '',
             className: uInfo.className || '',
             school: uInfo.school || '',
             province: uInfo.province || '',
@@ -288,6 +296,16 @@ export default function SebProctorCamera({
         if (onViolationRef.current) {
           onViolationRef.current(`⚠️ Giám thị AI: ${desc}`)
         }
+
+        // 🚨 NẾU PHÁT HIỆN SỬ DỤNG ĐIỆN THOẠI -> ĐÌNH CHỈ THI & ĐUỔI KHỎI PHÒNG THI NGAY LẬP TỨC!
+        if (result.phone_detected || result.rear_camera_detected || result.is_disqualified || result.violation_type === 'phone_detected') {
+          if (onDisqualifiedRef.current) {
+            onDisqualifiedRef.current({
+              reason: desc,
+              snapshot: base64Image,
+            })
+          }
+        }
       } else {
         setWarningMessage(null)
       }
@@ -299,18 +317,18 @@ export default function SebProctorCamera({
   }
 
   // 🌟 KHỞI ĐỘNG CAMERA 1 LẦN DUY NHẤT:
-  // Dependency rỗng [] là mấu chốt để camera không bao giờ bị re-render tắt đi bật lại theo timer
+  // Quét mỗi 2 GIÂY một lần (2000ms) để phát hiện kịp thời gian lận theo đúng yêu cầu
   useEffect(() => {
     let isMounted = true
 
     startCamera()
 
-    // Quét định kỳ 15 giây / 1 lần gửi frame tới Gemini Live Proctoring
+    // Quét định kỳ 2 giây / 1 lần gửi frame tới Gemini 3.8 Live Proctoring
     const scanInterval = setInterval(() => {
       if (isMounted) {
         captureAndAnalyzeFrame()
       }
-    }, 15000)
+    }, 2000)
 
     // Heartbeat mỗi 45 giây
     const heartbeatInterval = setInterval(() => {
@@ -319,12 +337,12 @@ export default function SebProctorCamera({
       }
     }, 45000)
 
-    // Quét lần đầu tiên sau 4 giây
+    // Quét lần đầu tiên sau 2 giây
     const firstScanTimer = setTimeout(() => {
       if (isMounted) {
         captureAndAnalyzeFrame()
       }
-    }, 4000)
+    }, 2000)
 
     return () => {
       isMounted = false
@@ -383,7 +401,7 @@ export default function SebProctorCamera({
           {/* Đèn báo trạng thái hoạt động LIVE */}
           <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-black/60 backdrop-blur-xs px-1.5 py-0.5 rounded-full text-[9px] font-bold text-emerald-400 z-10">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>LIVE</span>
+            <span>LIVE 2s</span>
           </div>
 
           {/* NÚT KÍCH HOẠT PHÁT HÌNH ẢNH NẾU BỊ TRÌNH DUYỆT CHẶN AUTOPLAY HOẶC MÀN HÌNH ĐEN */}
@@ -414,7 +432,7 @@ export default function SebProctorCamera({
           {isAnalyzing && (
             <div className="absolute inset-0 bg-sky-900/30 flex items-center justify-center pointer-events-none z-10">
               <span className="text-[9px] font-black text-sky-200 uppercase tracking-tighter bg-sky-950/80 px-1.5 py-0.5 rounded">
-                Gemini scan
+                Gemini 3.8
               </span>
             </div>
           )}
@@ -452,7 +470,7 @@ export default function SebProctorCamera({
           </div>
 
           <p className="text-[10px] text-slate-300 line-clamp-1 mt-0.5">
-            Giám sát camera chống che cam, điện thoại & tài liệu
+            Giám sát 2s/lần: Phát hiện camera sau điện thoại, che cam & phao
           </p>
 
           {/* Cảnh báo vi phạm nếu AI phát hiện */}
@@ -465,7 +483,7 @@ export default function SebProctorCamera({
             <div className="mt-1 flex items-center justify-between gap-1 text-[10px] font-semibold text-emerald-400">
               <div className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>{isPlaying ? 'Camera hoạt động bình thường' : 'Đang tải hình ảnh...'}</span>
+                <span>{isPlaying ? 'AI đang giám sát trực tiếp' : 'Đang tải hình ảnh...'}</span>
               </div>
             </div>
           )}

@@ -25,6 +25,7 @@ import {
   GraduationCap,
   Building2,
   MapPin,
+  Phone,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-seb-heading' })
@@ -36,6 +37,7 @@ export default function SebLoginPage() {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'quick_code'>('login')
   const [accountInput, setAccountInput] = useState('')
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [className, setClassName] = useState('')
   const [school, setSchool] = useState('')
   const [province, setProvince] = useState('')
@@ -212,6 +214,10 @@ export default function SebLoginPage() {
         setErrorMsg('Vui lòng nhập họ và tên của bạn!')
         return
       }
+      if (!phone.trim()) {
+        setErrorMsg('Vui lòng nhập số điện thoại của bạn!')
+        return
+      }
       if (!className.trim()) {
         setErrorMsg('Vui lòng nhập lớp học của bạn (ví dụ: 12A1)!')
         return
@@ -241,6 +247,8 @@ export default function SebLoginPage() {
           options: {
             data: {
               full_name: fullName.trim(),
+              phone_number: phone.trim(),
+              phone: phone.trim(),
               class_name: className.trim(),
               school: school.trim(),
               province: province.trim(),
@@ -255,6 +263,8 @@ export default function SebLoginPage() {
             .from('profiles')
             .update({
               full_name: fullName.trim(),
+              phone_number: phone.trim(),
+              phone: phone.trim(),
               class_name: className.trim(),
               school: school.trim(),
               province: province.trim(),
@@ -531,6 +541,22 @@ export default function SebLoginPage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Ví dụ: Nguyễn Văn An"
+                    className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+                    required
+                  />
+                </div>
+
+                {/* Số Điện Thoại */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5 text-sky-600" />
+                    Số Điện Thoại *
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Ví dụ: 0912345678"
                     className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
                     required
                   />

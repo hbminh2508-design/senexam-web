@@ -25,6 +25,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Eye,
+  Phone,
 } from 'lucide-react'
 
 interface ExamStudentProctorModalProps {
@@ -61,7 +62,7 @@ export default function ExamStudentProctorModal({
         // 1. Tải danh sách bài làm & thông tin học sinh
         const { data: subs } = await supabase
           .from('submissions')
-          .select('id, user_id, score, is_graded, created_at, profiles(id, full_name, email, school, class_name, grade, province)')
+          .select('id, user_id, score, is_graded, is_disqualified, disqualification_reason, phone_number, created_at, profiles(id, full_name, email, phone_number, phone, school, class_name, grade, province)')
           .eq('exam_id', exam.id)
           .order('created_at', { ascending: false })
 
@@ -101,12 +102,16 @@ export default function ExamStudentProctorModal({
       const sLogs = proctorLogs.filter((l) => l.user_id === sub.user_id)
       const evidenceList = sLogs.filter((l) => l.snapshot_url && l.violation_type !== 'none' && l.violation_type !== 'no_camera')
       const noCamLog = sLogs.find((l) => l.violation_type === 'no_camera' || l.has_camera === false)
+      const phone = sub.phone_number || p.phone_number || p.phone || sLogs.find((l) => l.user_phone)?.user_phone || ''
 
       studentMap.set(uId, {
         userId: sub.user_id,
         submissionId: sub.id,
         fullName: p.full_name || 'Học sinh',
         email: p.email || 'N/A',
+        phone: phone,
+        isDisqualified: Boolean(sub.is_disqualified || sLogs.some((l) => l.is_disqualified)),
+        disqualificationReason: sub.disqualification_reason || '',
         school: p.school?.trim() || 'Trường Khác (Chưa cập nhật)',
         className: p.class_name?.trim() || p.grade?.trim() || 'Lớp Khác',
         province: p.province?.trim() || 'Chưa rõ',
@@ -134,6 +139,9 @@ export default function ExamStudentProctorModal({
           submissionId: null,
           fullName: log.user_name || 'Học sinh đang thi',
           email: log.user_email || 'N/A',
+          phone: log.user_phone || '',
+          isDisqualified: Boolean(sLogs.some((l) => l.is_disqualified)),
+          disqualificationReason: '',
           school: log.school?.trim() || 'Trường Khác (Chưa cập nhật)',
           className: log.class_name?.trim() || 'Lớp Khác',
           province: log.province?.trim() || 'Chưa rõ',
@@ -160,6 +168,7 @@ export default function ExamStudentProctorModal({
       (s) =>
         s.fullName.toLowerCase().includes(q) ||
         s.email.toLowerCase().includes(q) ||
+        (s.phone && s.phone.toLowerCase().includes(q)) ||
         s.school.toLowerCase().includes(q) ||
         s.className.toLowerCase().includes(q)
     )
@@ -452,8 +461,19 @@ export default function ExamStudentProctorModal({
                                 <div className="font-bold text-slate-900 dark:text-white">
                                   {st.fullName}
                                 </div>
-                                <div className="text-[10px] text-slate-400 font-normal">
-                                  {st.email} • {st.province}
+                                <div className="text-[10px] text-slate-400 font-normal flex flex-wrap items-center gap-1.5 mt-0.5">
+                                  <span>{st.email}</span>
+                                  {st.phone && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                                        <Phone className="h-2.5 w-2.5" />
+                                        {st.phone}
+                                      </span>
+                                    </>
+                                  )}
+                                  <span>•</span>
+                                  <span>{st.province}</span>
                                 </div>
                               </td>
 
@@ -474,7 +494,16 @@ export default function ExamStudentProctorModal({
 
                               {/* Kiểm tra học sinh có làm bài nghiêm túc hay không */}
                               <td className="p-3.5">
-                                {st.noCameraReported ? (
+                                {st.isDisqualified ? (
+                                  <div className="space-y-0.5">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-600 text-white font-black text-[10px] shadow-sm animate-pulse">
+                                      <ShieldAlert className="h-3 w-3" /> ĐÃ ĐÌNH CHỈ THI (DÙNG ĐT)
+                                    </span>
+                                    <span className="block text-[9px] text-red-500 font-bold">
+                                      {st.disqualificationReason || 'Phát hiện camera điện thoại di động'}
+                                    </span>
+                                  </div>
+                                ) : st.noCameraReported ? (
                                   <div className="space-y-0.5">
                                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold text-[10px] border border-amber-500/30">
                                       <VideoOff className="h-3 w-3" /> Không có camera

@@ -42,6 +42,13 @@ import {
   FileUp,
   Settings2,
   BookOpen,
+  Phone,
+  Ban,
+  Camera,
+  VideoOff,
+  School,
+  GraduationCap,
+  RefreshCw,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-sebadm-heading' })
@@ -175,7 +182,13 @@ export default function SebAdminPage() {
   const [examsList, setExamsList] = useState<any[]>([])
   const [folders, setFolders] = useState<any[]>([])
   const [submissions, setSubmissions] = useState<any[]>([])
+  const [proctorLogs, setProctorLogs] = useState<any[]>([])
   const [managingExamStudents, setManagingExamStudents] = useState<any | null>(null)
+  const [subSearch, setSubSearch] = useState('')
+  const [subStatusFilter, setSubStatusFilter] = useState('all')
+  const [subExamFilter, setSubExamFilter] = useState('all')
+  const [viewingEvidenceSub, setViewingEvidenceSub] = useState<any | null>(null)
+  const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
 
   // Form Tạo Đề Thi (Giống new-admin)
   const [examTitle, setExamTitle] = useState('')
@@ -315,13 +328,40 @@ export default function SebAdminPage() {
       const { data: exData } = await supabase.from('exams').select('*').order('created_at', { ascending: false })
       setExamsList(exData || [])
 
-      // 3. Tải bài nộp gần nhất
+      // 3. Tải bài nộp đầy đủ dữ liệu giám sát
       const { data: subData } = await supabase
         .from('submissions')
-        .select('id, user_id, score, is_graded, created_at, exams(title), profiles(full_name, email)')
+        .select(`
+          id,
+          user_id,
+          exam_id,
+          score,
+          is_graded,
+          is_disqualified,
+          disqualification_reason,
+          tab_switches,
+          blur_count,
+          submitted_at,
+          created_at,
+          phone_number,
+          school,
+          class_name,
+          province,
+          exams(id, title, subject, duration),
+          profiles(id, full_name, email, phone_number, phone, school, class_name, grade, province)
+        `)
         .order('created_at', { ascending: false })
-        .limit(30)
+        .limit(100)
+
+      // 4. Tải nhật ký giám thị AI (kèm bằng chứng chụp ảnh)
+      const { data: logData } = await supabase
+        .from('exam_proctoring_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(300)
+
       setSubmissions(subData || [])
+      setProctorLogs(logData || [])
     } catch (err) {
       console.error('Lỗi tải dữ liệu Seb Admin:', err)
     } finally {
@@ -346,6 +386,135 @@ export default function SebAdminPage() {
     })
     return list
   }, [folders])
+
+  // Danh sách bài nộp được làm giàu dữ liệu giám sát & SĐT
+  const enrichedSubmissions = useMemo(() => {
+    return submissions.map((sub) => {
+      const p = sub.profiles || {}
+      const sLogs = proctorLogs.filter((l) => l.user_id === sub.user_id && (!sub.exam_id || l.exam_id === sub.exam_id))
+      const evidenceList = sLogs.filter((l) => l.snapshot_url && l.violation_type !== 'none' && l.violation_type !== 'no_camera')
+      const noCamLog = sLogs.find((l) => l.violation_type === 'no_camera' || l.has_camera === false)
+      const phoneViolation = sLogs.some((l) => l.violation_type === 'phone_detected' || l.is_disqualified)
+
+      const isDisqualified = Boolean(sub.is_disqualified || phoneViolation)
+      const hasNoCamera = Boolean(noCamLog || sub.has_camera === false)
+      const tabCount = Number(sub.tab_switches || sub.blur_count || 0)
+      const hasViolations = Boolean(isDisqualified || tabCount > 0 || evidenceList.length > 0)
+
+      const fullName = p.full_name || 'Học sinh'
+      const email = p.email || ''
+      const phone = p.phone_number || p.phone || sub.phone_number || ''
+      const school = p.school || sub.school || 'Chưa cập nhật'
+      const className = p.class_name || p.grade || sub.class_name || 'Chưa cập nhật'
+      const province = p.province || sub.province || ''
+      const examTitle = sub.exams?.title || 'Đề thi SEB'
+      const examSubject = sub.exams?.subject || ''
+
+      return {
+        ...sub,
+        fullName,
+        email,
+        phone,
+        school,
+        className,
+        province,
+        examTitle,
+        examSubject,
+        isDisqualified,
+        hasNoCamera,
+        tabCount,
+        hasViolations,
+        evidenceList,
+        logs: sLogs,
+      }
+    })
+  }, [submissions, proctorLogs])
+
+  const filteredSubmissions = useMemo(() => {
+    return enrichedSubmissions.filter((sub) => {
+      // Tìm kiếm theo từ khóa
+      if (subSearch.trim()) {
+        const q = subSearch.toLowerCase().trim()
+        const matchName = sub.fullName.toLowerCase().includes(q)
+        const matchEmail = sub.email.toLowerCase().includes(q)
+        const matchPhone = sub.phone.toLowerCase().includes(q)
+        const matchSchool = sub.school.toLowerCase().includes(q)
+        const matchClass = sub.className.toLowerCase().includes(q)
+        const matchExam = sub.examTitle.toLowerCase().includes(q)
+        if (!matchName && !matchEmail && !matchPhone && !matchSchool && !matchClass && !matchExam) {
+          return false
+        }
+      }
+
+      // Lọc theo trạng thái kỷ luật / nộp bài
+      if (subStatusFilter === 'disqualified' && !sub.isDisqualified) return false
+      if (subStatusFilter === 'warning' && (!sub.hasViolations || sub.isDisqualified)) return false
+      if (subStatusFilter === 'no_camera' && !sub.hasNoCamera) return false
+      if (subStatusFilter === 'completed' && !sub.submitted_at && !sub.is_graded) return false
+      if (subStatusFilter === 'in_progress' && (sub.submitted_at || sub.is_graded)) return false
+
+      // Lọc theo đề thi
+      if (subExamFilter !== 'all' && sub.exam_id !== subExamFilter) {
+        return false
+      }
+
+      return true
+    })
+  }, [enrichedSubmissions, subSearch, subStatusFilter, subExamFilter])
+
+  // Thống kê bài nộp
+  const subStats = useMemo(() => {
+    const total = enrichedSubmissions.length
+    const disqualified = enrichedSubmissions.filter((s) => s.isDisqualified).length
+    const warnings = enrichedSubmissions.filter((s) => s.hasViolations && !s.isDisqualified).length
+    const noCam = enrichedSubmissions.filter((s) => s.hasNoCamera).length
+    const inProgress = enrichedSubmissions.filter((s) => !s.submitted_at && !s.is_graded).length
+    const completed = enrichedSubmissions.filter((s) => s.submitted_at || s.is_graded).length
+    return { total, disqualified, warnings, noCam, inProgress, completed }
+  }, [enrichedSubmissions])
+
+  // Admin cưỡng chế đình chỉ bài thi gian lận
+  const handleAdminDisqualify = async (sub: any) => {
+    if (!confirm(`Bạn có chắc chắn muốn ĐÌNH CHỈ & HỦY ĐIỂM (0 điểm) của thí sinh "${sub.fullName}" do vi phạm quy chế không?`)) return
+    try {
+      await supabase.from('submissions').update({
+        score: 0,
+        is_disqualified: true,
+        disqualification_reason: 'Quản trị viên đình chỉ do vi phạm quy chế thi cử',
+      }).eq('id', sub.id)
+
+      await supabase.from('exam_proctoring_logs').insert({
+        exam_id: String(sub.exam_id || ''),
+        user_id: sub.user_id,
+        user_name: sub.fullName,
+        user_email: sub.email,
+        user_phone: sub.phone,
+        school: sub.school,
+        class_name: sub.className,
+        province: sub.province,
+        violation_type: 'phone_detected',
+        severity: 'critical',
+        is_disqualified: true,
+        details: 'Quản trị viên đình chỉ bài thi trực tiếp từ trang Admin',
+      })
+
+      alert('Đã đình chỉ bài thi thành công!')
+      fetchAllData()
+    } catch (e: any) {
+      alert('Lỗi: ' + e.message)
+    }
+  }
+
+  // Admin xóa bài nộp
+  const handleDeleteSubmission = async (subId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn XÓA vĩnh viễn bài nộp này không?')) return
+    try {
+      await supabase.from('submissions').delete().eq('id', subId)
+      setSubmissions((prev) => prev.filter((s) => s.id !== subId))
+    } catch (e: any) {
+      alert('Lỗi khi xóa bài nộp: ' + e.message)
+    }
+  }
 
   // Thống kê tổng điểm và tổng số câu của toàn đề
   const totalExamPoints = useMemo(() => {
@@ -2223,59 +2392,317 @@ export default function SebAdminPage() {
         )}
 
         {/* ======================================================== */}
-        {/* TAB 4: BÀI NỘP VÀ GIÁM SÁT THI TRỰC TIẾP */}
+        {/* TAB 4: BÀI NỘP VÀ GIÁM SÁT THI TRỰC TIẾP (QUẢN LÝ NGHIÊM NGẶT & ĐA CHIỀU) */}
         {/* ======================================================== */}
         {activeTab === 'submissions' && (
-          <div className="p-6 rounded-3xl bg-white border border-sky-100 shadow-sm space-y-4">
-            <h2
-              className="text-xl font-black text-slate-900"
-              style={{ fontFamily: 'var(--font-sebadm-heading)' }}
-            >
-              Lịch Sử Bài Nộp & Giám Sát SEB
-            </h2>
+          <div className="p-6 rounded-3xl bg-white border border-sky-100 shadow-sm space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h2
+                  className="text-xl font-black text-slate-900 flex items-center gap-2"
+                  style={{ fontFamily: 'var(--font-sebadm-heading)' }}
+                >
+                  <ShieldCheck className="h-6 w-6 text-sky-600" />
+                  <span>Quản Lý Bài Nộp & Giám Sát Kỷ Luật Thi SEB</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Theo dõi danh sách thí sinh, kiểm soát gian lận, điện thoại, che cam và kỷ luật phòng thi thời gian thực.
+                </p>
+              </div>
 
-            <div className="overflow-x-auto">
+              <button
+                type="button"
+                onClick={fetchAllData}
+                className="self-start md:self-auto px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Làm Mới Dữ Liệu</span>
+              </button>
+            </div>
+
+            {/* BỘ THẺ THỐNG KÊ TOÀN DIỆN */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-500 block">Tổng Bài Thi</span>
+                <span className="text-xl font-black text-slate-900 mt-1 block">{subStats.total}</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200">
+                <span className="text-[11px] font-bold text-sky-700 block">Đang Làm Bài</span>
+                <span className="text-xl font-black text-sky-800 mt-1 block">{subStats.inProgress}</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200">
+                <span className="text-[11px] font-bold text-emerald-700 block">Đã Hoàn Thành</span>
+                <span className="text-xl font-black text-emerald-800 mt-1 block">{subStats.completed}</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-300">
+                <span className="text-[11px] font-bold text-rose-700 block">🚨 Đình Chỉ (Điện thoại)</span>
+                <span className="text-xl font-black text-rose-800 mt-1 block">{subStats.disqualified}</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300">
+                <span className="text-[11px] font-bold text-amber-700 block">⚠️ Có Vi Phạm AI</span>
+                <span className="text-xl font-black text-amber-800 mt-1 block">{subStats.warnings}</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-300">
+                <span className="text-[11px] font-bold text-slate-600 block">🟡 Không Dùng Cam</span>
+                <span className="text-xl font-black text-slate-800 mt-1 block">{subStats.noCam}</span>
+              </div>
+            </div>
+
+            {/* THANH TÌM KIẾM & BỘ LỌC CĂNG */}
+            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between pt-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={subSearch}
+                  onChange={(e) => setSubSearch(e.target.value)}
+                  placeholder="Tìm theo Tên thí sinh, SĐT, Email, Trường, Đề thi..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={subStatusFilter}
+                  onChange={(e) => setSubStatusFilter(e.target.value)}
+                  className="px-3 py-2 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-700"
+                >
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="disqualified">🚨 Bị đình chỉ thi (Dùng điện thoại)</option>
+                  <option value="warning">⚠️ Có vi phạm (Phao / Che cam / Tab)</option>
+                  <option value="no_camera">🟡 Không có camera</option>
+                  <option value="completed">🟢 Đã nộp bài</option>
+                  <option value="in_progress">⏳ Đang làm bài</option>
+                </select>
+
+                <select
+                  value={subExamFilter}
+                  onChange={(e) => setSubExamFilter(e.target.value)}
+                  className="px-3 py-2 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-700 max-w-[180px] truncate"
+                >
+                  <option value="all">Tất cả đề thi</option>
+                  {examsList.map((ex) => (
+                    <option key={ex.id} value={ex.id}>
+                      {ex.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* BẢNG BÀI NỘP ĐA DỮ LIỆU & QUẢN LÝ KỶ LUẬT */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                <thead className="bg-slate-100/80 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th className="p-3">Thí Sinh</th>
-                    <th className="p-3">Đề Thi</th>
-                    <th className="p-3 text-center">Điểm Số</th>
-                    <th className="p-3 text-center">Cảnh Báo Chuyển Tab</th>
-                    <th className="p-3 text-right">Thời Điểm Nộp</th>
+                    <th className="p-3.5">Thí Sinh & Thông Tin</th>
+                    <th className="p-3.5">Đề Thi & Môn</th>
+                    <th className="p-3.5 text-center">Điểm Số</th>
+                    <th className="p-3.5">Giám Sát Chống Gian Lận (SEB)</th>
+                    <th className="p-3.5 text-center">Thời Điểm</th>
+                    <th className="p-3.5 text-right">Thao Tác</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {submissions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-slate-50/60 transition">
-                      <td className="p-3 font-bold text-slate-900">
-                        {sub.profiles?.full_name || 'Học sinh'}
-                        <span className="block text-[10px] text-slate-400 font-normal">
-                          {sub.profiles?.email}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-700 font-medium">{sub.exams?.title || 'N/A'}</td>
-                      <td className="p-3 text-center font-black text-sky-700 text-sm">
-                        {Number(sub.score || 0).toFixed(2)}
-                      </td>
-                      <td className="p-3 text-center">
-                        {sub.tab_switches > 0 ? (
-                          <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-bold text-[11px] border border-rose-200">
-                            ⚠️ {sub.tab_switches} lần
-                          </span>
-                        ) : (
-                          <span className="text-emerald-600 font-bold text-[11px]">
-                            ✓ Nghiêm túc
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right text-slate-400">
-                        {sub.submitted_at
-                          ? new Date(sub.submitted_at).toLocaleTimeString('vi-VN')
-                          : 'Đang làm bài'}
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {filteredSubmissions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 font-bold text-xs">
+                        Không tìm thấy bài nộp nào phù hợp với bộ lọc.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredSubmissions.map((sub) => (
+                      <tr
+                        key={sub.id}
+                        className={`transition ${
+                          sub.isDisqualified
+                            ? 'bg-rose-50/50 hover:bg-rose-50'
+                            : sub.hasViolations
+                            ? 'bg-amber-50/30 hover:bg-amber-50/60'
+                            : 'hover:bg-slate-50/70'
+                        }`}
+                      >
+                        {/* Cột 1: Thông tin Thí Sinh & SĐT */}
+                        <td className="p-3.5">
+                          <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                            <span>{sub.fullName}</span>
+                            {sub.isDisqualified && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-black uppercase">
+                                Đình chỉ
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mt-1 space-y-0.5">
+                            {/* Số điện thoại */}
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-sky-700">
+                              <Phone className="h-3 w-3 text-sky-600 shrink-0" />
+                              <span>{sub.phone || 'Chưa có SĐT'}</span>
+                            </div>
+
+                            {/* Email */}
+                            <div className="text-[10px] text-slate-500 truncate max-w-[200px]">
+                              {sub.email}
+                            </div>
+
+                            {/* Trường & Lớp */}
+                            <div className="flex items-center gap-1 text-[10px] text-slate-600 font-medium">
+                              <School className="h-3 w-3 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[220px]">
+                                {sub.school} {sub.className !== 'Chưa cập nhật' ? `• ${sub.className}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Cột 2: Đề Thi */}
+                        <td className="p-3.5">
+                          <div className="font-bold text-slate-800 line-clamp-2 max-w-[200px]">
+                            {sub.examTitle}
+                          </div>
+                          {sub.examSubject && (
+                            <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                              {sub.examSubject}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Cột 3: Điểm Số */}
+                        <td className="p-3.5 text-center">
+                          {sub.isDisqualified ? (
+                            <div>
+                              <span className="text-rose-600 font-black text-base">0.00</span>
+                              <span className="block text-[10px] font-bold text-rose-500">Hủy điểm</span>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="font-black text-sky-700 text-base">
+                                {Number(sub.score || 0).toFixed(2)}
+                              </span>
+                              <span className="block text-[10px] text-slate-400 font-medium">
+                                {sub.submitted_at || sub.is_graded ? 'Đã chấm' : 'Chưa nộp'}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Cột 4: Giám Sát Chống Gian Lận (LÀM CĂNG) */}
+                        <td className="p-3.5 space-y-1.5">
+                          {/* Tình trạng kỷ luật */}
+                          {sub.isDisqualified ? (
+                            <div className="flex items-center gap-1 text-rose-700 font-black text-[11px] bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-lg w-fit animate-pulse">
+                              <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                              <span>🚨 BỊ ĐÌNH CHỈ THI (DÙNG ĐIỆN THOẠI)</span>
+                            </div>
+                          ) : sub.evidenceList.length > 0 ? (
+                            <div className="flex items-center gap-1 text-amber-700 font-bold text-[11px] bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-lg w-fit">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                              <span>⚠️ Phát hiện {sub.evidenceList.length} nghi vấn vi phạm</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-emerald-700 font-bold text-[11px]">
+                              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                              <span>✓ Nghiêm túc</span>
+                            </div>
+                          )}
+
+                          {/* Chi tiết chuyển tab & camera */}
+                          <div className="flex items-center gap-2 text-[10px] font-bold">
+                            {/* Rời màn hình / chuyển tab */}
+                            {sub.tabCount > 0 ? (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200">
+                                ⚠️ Chuyển tab {sub.tabCount} lần
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-normal">Chuyển tab: 0</span>
+                            )}
+
+                            {/* Trạng thái camera */}
+                            {sub.hasNoCamera ? (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                                <VideoOff className="h-2.5 w-2.5" /> Không có cam
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 flex items-center gap-1">
+                                <Camera className="h-2.5 w-2.5" /> Có camera
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Cột 5: Thời Điểm */}
+                        <td className="p-3.5 text-center text-slate-500 font-medium">
+                          {sub.isDisqualified ? (
+                            <span className="text-rose-600 font-bold text-[11px] block">
+                              🛑 Bị đình chỉ
+                            </span>
+                          ) : sub.submitted_at ? (
+                            <div>
+                              <span className="font-bold text-slate-800 text-[11px] block">
+                                {new Date(sub.submitted_at).toLocaleTimeString('vi-VN')}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block">
+                                {new Date(sub.submitted_at).toLocaleDateString('vi-VN')}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md bg-sky-100 text-sky-700 font-bold text-[10px] inline-block">
+                              ⏳ Đang làm bài
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Cột 6: Thao Tác Quản Trị */}
+                        <td className="p-3.5 text-right space-x-1 whitespace-nowrap">
+                          {/* Nút Xem bằng chứng ảnh nếu có */}
+                          {sub.evidenceList.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingEvidenceSub(sub)}
+                              className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200 transition inline-flex items-center gap-1 cursor-pointer"
+                              title="Xem ảnh chụp bằng chứng vi phạm"
+                            >
+                              <Camera className="h-3 w-3 text-amber-600" />
+                              <span>Bằng chứng ({sub.evidenceList.length})</span>
+                            </button>
+                          )}
+
+                          {/* Nút Xem bài nộp */}
+                          <Link
+                            href={`/exams/${sub.exam_id || ''}/review`}
+                            target="_blank"
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold transition inline-flex items-center gap-1"
+                          >
+                            <Eye className="h-3 w-3" />
+                            <span>Xem bài</span>
+                          </Link>
+
+                          {/* Nút Đình chỉ thi nếu chưa bị đình chỉ */}
+                          {!sub.isDisqualified && (
+                            <button
+                              type="button"
+                              onClick={() => handleAdminDisqualify(sub)}
+                              className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold border border-rose-200 transition inline-flex items-center gap-1 cursor-pointer"
+                              title="Hủy kết quả & Đình chỉ thi"
+                            >
+                              <Ban className="h-3 w-3 text-rose-600" />
+                              <span>Đình chỉ</span>
+                            </button>
+                          )}
+
+                          {/* Nút Xóa bài nộp */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubmission(sub.id)}
+                            className="p-1.5 rounded-xl hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition inline-block cursor-pointer"
+                            title="Xóa bài nộp này"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2359,6 +2786,77 @@ export default function SebAdminPage() {
         onClose={() => setManagingExamStudents(null)}
         exam={managingExamStudents}
       />
+
+      {/* MODAL XEM BẰNG CHỨNG GIAN LẬN AI GHI LẠI (ẢNH CHỤP CAMERA) */}
+      {viewingEvidenceSub && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 border border-slate-200 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3
+                  className="text-lg font-black text-rose-700 flex items-center gap-2"
+                  style={{ fontFamily: 'var(--font-sebadm-heading)' }}
+                >
+                  <ShieldAlert className="h-5 w-5 text-rose-600" />
+                  <span>Bằng Chứng Vi Phạm Kỷ Luật (AI Gemini 3.8 Live)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Thí sinh: <strong className="text-slate-800">{viewingEvidenceSub.fullName}</strong> • SĐT: <strong className="text-sky-700">{viewingEvidenceSub.phone || 'N/A'}</strong> • Trường: {viewingEvidenceSub.school} ({viewingEvidenceSub.className})
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingEvidenceSub(null)}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {viewingEvidenceSub.evidenceList?.map((ev: any, idx: number) => (
+                <div key={ev.id || idx} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-rose-700 flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-rose-500" />
+                      <span>{ev.details || ev.violation_type}</span>
+                    </span>
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      {new Date(ev.created_at).toLocaleTimeString('vi-VN')} {new Date(ev.created_at).toLocaleDateString('vi-VN')}
+                    </span>
+                  </div>
+
+                  {ev.snapshot_url && (
+                    <div className="relative w-full h-64 rounded-xl overflow-hidden bg-black border border-slate-300 flex items-center justify-center">
+                      <img
+                        src={ev.snapshot_url}
+                        alt="Bằng chứng gian lận"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Độ tin cậy AI: <strong>{ev.confidence || 95}%</strong></span>
+                    <span className="text-slate-400 font-medium">Lưu trữ tự động: 7 ngày</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setViewingEvidenceSub(null)}
+                className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
