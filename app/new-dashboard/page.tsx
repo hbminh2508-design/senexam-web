@@ -52,6 +52,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
+import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
@@ -924,6 +925,9 @@ export default function NewDashboardPage() {
           }
         }
       `}</style>
+
+      {/* Modal Bổ Sung Hồ Sơ Học Sinh (Nếu Chưa Có Trường/Lớp) */}
+      <ProfileCompletionModal />
     </main>
   )
 }

@@ -7,6 +7,7 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import SebLogo from '@/components/SebLogo'
 import { isExamInFolder } from '@/lib/sebFolderUtils'
+import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 import {
   Folder,
   FolderOpen,
@@ -998,6 +999,9 @@ export default function SebDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Bổ Sung Hồ Sơ Học Sinh (Nếu Chưa Có Trường/Lớp) */}
+      <ProfileCompletionModal />
     </div>
   )
 }

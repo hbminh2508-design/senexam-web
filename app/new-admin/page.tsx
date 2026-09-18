@@ -10,6 +10,7 @@ import { getModernThemeVars } from '@/app/components/modernTheme'
 import { generateGiftCode, normalizeGiftCode, describeGiftReward } from '@/lib/giftCodes'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import { AnnouncementRenderer, CountdownTimer } from '@/app/new-announcement/page'
+import ExamStudentProctorModal from '@/app/components/ExamStudentProctorModal'
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -219,6 +220,7 @@ export default function NewAdminPage() {
   const [examsList, setExamsList] = useState<any[]>([])
   const [examSearch, setExamSearch] = useState('')
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null)
+  const [managingExamStudents, setManagingExamStudents] = useState<any | null>(null)
 
   // CREATE EXAM (PORTED FROM SEB-ADMIN WITH SEB TOGGLE)
   const [examTitle, setExamTitle] = useState('')
@@ -1566,7 +1568,16 @@ export default function NewAdminPage() {
                             </button>
                           </td>
                           <td className="py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => setManagingExamStudents(exam)}
+                                className="inline-flex items-center gap-1 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2.5 py-1.5 text-xs font-bold hover:bg-indigo-500/20 transition hover:scale-102"
+                                title="Quản lý học sinh theo trường/lớp & Giám sát AI"
+                              >
+                                <Users className="h-3.5 w-3.5" /> Quản lý học sinh
+                              </button>
+
                               <Link
                                 href={`/new-exams/${exam.id}`}
                                 className="inline-flex items-center gap-1 rounded-xl bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-xs font-bold hover:bg-black/10"
@@ -3083,6 +3094,13 @@ export default function NewAdminPage() {
             </div>
           </div>
         )}
+
+        {/* MODAL QUẢN LÝ HỌC SINH THEO TRƯỜNG / LỚP & GIÁM THỊ AI */}
+        <ExamStudentProctorModal
+          isOpen={Boolean(managingExamStudents)}
+          onClose={() => setManagingExamStudents(null)}
+          exam={managingExamStudents}
+        />
       </div>
     </main>
   )

@@ -7,6 +7,7 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import SebLogo from '@/components/SebLogo'
+import SebProctorCamera from '@/app/components/SebProctorCamera'
 import {
   Clock,
   ArrowLeft,
@@ -143,6 +144,7 @@ export default function SebExamRoomPage() {
   const [exam, setExam] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminBypassSeb, setAdminBypassSeb] = useState(false)
 
@@ -252,7 +254,14 @@ export default function SebExamRoomPage() {
         await ensureStudentProfile(user.id)
 
         const email = user.email?.toLowerCase() || ''
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, full_name, school, class_name, grade, province')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (profile) {
+          setUserProfile(profile)
+        }
         if (profile?.role === 'admin' || profile?.role === 'collab' || email === 'hoangbinhminh2508@gmail.com') {
           setIsAdmin(true)
         }
@@ -1130,6 +1139,21 @@ export default function SebExamRoomPage() {
         >
           {/* Palette Bảng Điều Hướng Câu Hỏi */}
           <div className="p-3.5 border-b border-slate-100 bg-slate-50/70">
+            {/* KHU VỰC CAMERA GIÁM THỊ AI GEMINI LIVE (TỰ BIẾN MẤT KHI KHÔNG CÓ CAMERA) */}
+            <SebProctorCamera
+              examId={examId}
+              currentUser={currentUser}
+              examTitle={exam?.title}
+              userInfo={{
+                fullName: userProfile?.full_name || currentUser?.user_metadata?.full_name || 'Học sinh',
+                email: currentUser?.email || '',
+                className: userProfile?.class_name || userProfile?.grade || '',
+                school: userProfile?.school || '',
+                province: userProfile?.province || '',
+                subject: exam?.subject || exam?.title || '',
+              }}
+            />
+
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-700">
                 Bảng Câu Hỏi ({answeredCount}/{questionMeta.totalCount})

@@ -25,6 +25,8 @@ import {
   Moon,
   Send,
   HelpCircle,
+  Building2,
+  MapPin,
 } from 'lucide-react'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, hexToRgba, getAccentHex } from '@/app/components/modernTheme'
@@ -50,6 +52,9 @@ export default function NewSignPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [className, setClassName] = useState('')
+  const [school, setSchool] = useState('')
+  const [province, setProvince] = useState('')
 
   // Trạng thái chờ xác nhận email thật
   const [verificationPending, setVerificationPending] = useState(false)
@@ -166,6 +171,15 @@ export default function NewSignPage() {
         if (!fullName.trim()) {
           throw new Error('Vui lòng nhập họ và tên của bạn.')
         }
+        if (!className.trim()) {
+          throw new Error('Vui lòng nhập lớp học của bạn (ví dụ: 12A1).')
+        }
+        if (!school.trim()) {
+          throw new Error('Vui lòng nhập tên trường học của bạn.')
+        }
+        if (!province.trim()) {
+          throw new Error('Vui lòng nhập tỉnh/thành phố bạn đang ở.')
+        }
         if (password.length < 6) {
           throw new Error('Mật khẩu phải chứa ít nhất 6 ký tự.')
         }
@@ -174,7 +188,12 @@ export default function NewSignPage() {
           email: email.trim(),
           password,
           options: {
-            data: { full_name: fullName.trim() },
+            data: {
+              full_name: fullName.trim(),
+              class_name: className.trim(),
+              school: school.trim(),
+              province: province.trim(),
+            },
             emailRedirectTo: redirectUrl,
           },
         })
@@ -183,10 +202,15 @@ export default function NewSignPage() {
 
         if (data.user) {
           await ensureStudentProfile(data.user.id)
-          // Cập nhật họ tên vào profiles nếu có
-          if (fullName.trim()) {
-            await supabase.from('profiles').update({ full_name: fullName.trim() }).eq('id', data.user.id)
-          }
+          await supabase
+            .from('profiles')
+            .update({
+              full_name: fullName.trim(),
+              class_name: className.trim(),
+              school: school.trim(),
+              province: province.trim(),
+            })
+            .eq('id', data.user.id)
         }
 
         // Kiểm tra xem hệ thống có yêu cầu xác thực email không
@@ -470,19 +494,59 @@ export default function NewSignPage() {
 
               {/* FORM NHẬP LIỆU */}
               <form onSubmit={handleSubmit} className="space-y-3.5">
-                {/* Họ và tên (chỉ hiện khi đăng ký) */}
+                {/* Thông tin học sinh (chỉ hiện khi đăng ký để phân loại) */}
                 {mode === 'signup' && (
-                  <div className="relative group animate-in fade-in slide-in-from-top-2">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
-                    <input
-                      type="text"
-                      placeholder="Họ và tên của bạn"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      required
-                      className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
-                    />
-                  </div>
+                  <>
+                    <div className="relative group animate-in fade-in slide-in-from-top-2">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
+                      <input
+                        type="text"
+                        placeholder="Họ và tên của bạn"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 animate-in fade-in slide-in-from-top-2">
+                      <div className="relative group">
+                        <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
+                        <input
+                          type="text"
+                          placeholder="Lớp (vd: 12A1, 12 Tin...)"
+                          value={className}
+                          onChange={(e) => setClassName(e.target.value)}
+                          required
+                          className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
+                        />
+                      </div>
+
+                      <div className="relative group">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
+                        <input
+                          type="text"
+                          placeholder="Tỉnh / Thành phố"
+                          value={province}
+                          onChange={(e) => setProvince(e.target.value)}
+                          required
+                          className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="relative group animate-in fade-in slide-in-from-top-2">
+                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280] dark:text-slate-400 group-focus-within:text-amber-500" />
+                      <input
+                        type="text"
+                        placeholder="Trường THPT / Đại học của bạn"
+                        value={school}
+                        onChange={(e) => setSchool(e.target.value)}
+                        required
+                        className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white/70 dark:bg-slate-800/70 py-3.5 pl-11 pr-4 text-xs sm:text-sm font-semibold outline-none transition focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20"
+                      />
+                    </div>
+                  </>
                 )}
 
                 {/* Email */}

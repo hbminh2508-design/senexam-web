@@ -22,6 +22,9 @@ import {
   Shield,
   HelpCircle,
   ExternalLink,
+  GraduationCap,
+  Building2,
+  MapPin,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-seb-heading' })
@@ -33,6 +36,9 @@ export default function SebLoginPage() {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'quick_code'>('login')
   const [accountInput, setAccountInput] = useState('')
   const [fullName, setFullName] = useState('')
+  const [className, setClassName] = useState('')
+  const [school, setSchool] = useState('')
+  const [province, setProvince] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -206,6 +212,18 @@ export default function SebLoginPage() {
         setErrorMsg('Vui lòng nhập họ và tên của bạn!')
         return
       }
+      if (!className.trim()) {
+        setErrorMsg('Vui lòng nhập lớp học của bạn (ví dụ: 12A1)!')
+        return
+      }
+      if (!school.trim()) {
+        setErrorMsg('Vui lòng nhập tên trường học của bạn!')
+        return
+      }
+      if (!province.trim()) {
+        setErrorMsg('Vui lòng nhập tỉnh/thành phố bạn đang ở!')
+        return
+      }
       if (!password || password.length < 6) {
         setErrorMsg('Mật khẩu cần tối thiểu 6 ký tự!')
         return
@@ -223,6 +241,9 @@ export default function SebLoginPage() {
           options: {
             data: {
               full_name: fullName.trim(),
+              class_name: className.trim(),
+              school: school.trim(),
+              province: province.trim(),
             },
           },
         })
@@ -230,6 +251,15 @@ export default function SebLoginPage() {
 
         if (data.user) {
           await ensureStudentProfile(data.user.id, fullName.trim())
+          await supabase
+            .from('profiles')
+            .update({
+              full_name: fullName.trim(),
+              class_name: className.trim(),
+              school: school.trim(),
+              province: province.trim(),
+            })
+            .eq('id', data.user.id)
         }
 
         setSuccessMsg('Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.')
@@ -488,22 +518,72 @@ export default function SebLoginPage() {
 
           {/* Main Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Full Name Input (Signup mode only) */}
+            {/* Full Name & Student Classification (Signup mode only) */}
             {mode === 'signup' && (
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <User className="h-3.5 w-3.5 text-sky-600" />
-                  Họ và Tên
-                </label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ví dụ: Nguyễn Văn An"
-                  className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
-                  required
-                />
-              </div>
+              <>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5 text-sky-600" />
+                    Họ và Tên
+                  </label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Ví dụ: Nguyễn Văn An"
+                    className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+                    required
+                  />
+                </div>
+
+                {/* Lớp & Trường học & Tỉnh thành */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <GraduationCap className="h-3.5 w-3.5 text-sky-600" />
+                      Lớp
+                    </label>
+                    <input
+                      type="text"
+                      value={className}
+                      onChange={(e) => setClassName(e.target.value)}
+                      placeholder="Ví dụ: 12A1, 12 Chuyên..."
+                      className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-sky-600" />
+                      Tỉnh / Thành Phố
+                    </label>
+                    <input
+                      type="text"
+                      value={province}
+                      onChange={(e) => setProvince(e.target.value)}
+                      placeholder="Ví dụ: Hà Nội, TP. HCM..."
+                      className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5 text-sky-600" />
+                    Trường Học
+                  </label>
+                  <input
+                    type="text"
+                    value={school}
+                    onChange={(e) => setSchool(e.target.value)}
+                    placeholder="Ví dụ: THPT Chuyên Hà Nội - Amsterdam"
+                    className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 text-slate-900 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+                    required
+                  />
+                </div>
+              </>
             )}
 
             {/* Account / Email Input with Auto @gmail.com completion */}

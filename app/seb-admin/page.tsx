@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabaseClient'
 import SebLogo from '@/components/SebLogo'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import { isExamInFolder } from '@/lib/sebFolderUtils'
+import ExamStudentProctorModal from '@/app/components/ExamStudentProctorModal'
 import {
   Folder,
   FolderPlus,
@@ -174,6 +175,7 @@ export default function SebAdminPage() {
   const [examsList, setExamsList] = useState<any[]>([])
   const [folders, setFolders] = useState<any[]>([])
   const [submissions, setSubmissions] = useState<any[]>([])
+  const [managingExamStudents, setManagingExamStudents] = useState<any | null>(null)
 
   // Form Tạo Đề Thi (Giống new-admin)
   const [examTitle, setExamTitle] = useState('')
@@ -969,23 +971,35 @@ export default function SebAdminPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <Link
-                      href={`/seb-exam/${exam.id}`}
-                      target="_blank"
-                      className="text-xs font-bold text-sky-600 hover:underline flex items-center gap-1"
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setManagingExamStudents(exam)}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-200 transition flex items-center gap-1 shadow-2xs hover:scale-102"
+                      title="Quản lý học sinh theo trường/lớp & Giám sát AI"
                     >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      <span>Thử làm đề</span>
-                    </Link>
+                      <Users className="h-3.5 w-3.5" />
+                      <span>Quản lý học sinh</span>
+                    </button>
 
-                    <a
-                      href={`/api/seb/config?examId=${exam.id}&download=1`}
-                      className="text-xs font-bold text-slate-600 hover:text-sky-700 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 transition"
-                      title="Tải cấu hình .seb cho đề thi này"
-                    >
-                      Tải .seb
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/seb-exam/${exam.id}`}
+                        target="_blank"
+                        className="text-xs font-bold text-sky-600 hover:underline flex items-center gap-1"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span>Thử làm đề</span>
+                      </Link>
+
+                      <a
+                        href={`/api/seb/config?examId=${exam.id}&download=1`}
+                        className="text-xs font-bold text-slate-600 hover:text-sky-700 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 transition"
+                        title="Tải cấu hình .seb cho đề thi này"
+                      >
+                        Tải .seb
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -2338,6 +2352,13 @@ export default function SebAdminPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL QUẢN LÝ HỌC SINH THEO TRƯỜNG / LỚP & GIÁM THỊ AI */}
+      <ExamStudentProctorModal
+        isOpen={Boolean(managingExamStudents)}
+        onClose={() => setManagingExamStudents(null)}
+        exam={managingExamStudents}
+      />
     </div>
   )
 }
