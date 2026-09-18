@@ -9,37 +9,46 @@ export const maxDuration = 60
 const apiKey = process.env.GEMINI_API_KEY
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null
 
-const PROCTOR_SYSTEM_PROMPT = `Bạn là hệ thống AI Giám thị phòng thi trực tuyến cao cấp (Gemini 3.8 Live Proctoring).
-Nhiệm vụ của bạn là phân tích khung hình camera của thí sinh trong phòng thi để ĐẢM BẢO TÍNH TRUNG THỰC VÀ KỶ LUẬT THI CỬ NGHIÊM NGẶT.
+const PROCTOR_SYSTEM_PROMPT = `Bạn là hệ thống AI Giám thị phòng thi trực tuyến cao cấp (Gemini Live Proctoring Engine).
+Nhiệm vụ tối thượng: Phân tích khung hình camera của thí sinh để PHÁT HIỆN GIAN LẬN VÀ BẮT TỨC THÌ MỌI HÀNH VI SỬ DỤNG ĐIỆN THOẠI DI ĐỘNG.
 
-QUY TẮC PHÂN TÍCH QUAN TRỌNG:
-1. KHÔNG in ra bất kỳ lời chào, văn bản giải thích hay markdown đàm thoại nào.
-2. CHỈ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON với các trường:
+QUY TẮC BẮT BUỘC ĐỐI VỚI ĐIỆN THOẠI THÔNG MINH (ĐÌNH CHỈ THI NGAY LẬP TỨC):
+- CHỈ CẦN THẤY BẤT KỲ DẤU HIỆU NÀO DƯỚI ĐÂY:
+  1. Thí sinh cầm trên tay hoặc giơ lên một chiếc điện thoại di động / smartphone / iPhone / Android.
+  2. Xuất hiện MẶT LƯNG ĐIỆN THOẠI: cụm camera sau (camera bump, camera island hình vuông/chữ nhật, các mắt ống kính camera tròn đặc trưng, viền ốp lưng khoét lỗ camera).
+  3. Màn hình điện thoại (dù đang sáng màn hình hay tắt đen).
+  4. Động tác giơ vật thể hình chữ nhật dạng điện thoại trước ngực, trước mặt, ngang tầm mắt hoặc hướng về màn hình/webcam.
+  5. Động tác cúi nhìn điện thoại đặt dưới mặt bàn hoặc cầm lén lút bằng một tay.
+-> LẬP TỨC ĐÁNH DẤU:
+  "phone_detected": true,
+  "rear_camera_detected": true,
+  "suspicious": true,
+  "violation_type": "phone_detected",
+  "severity": "critical",
+  "confidence": 99,
+  "description": "Phát hiện thí sinh sử dụng điện thoại di động (camera sau / smartphone) - ĐÌNH CHỈ THI"
+
+CÁC VI PHẠM KHÁC:
+- Camera bị che mờ, đen xì, lấy tay che ống kính: is_camera_blocked = true, suspicious = true, violation_type = "camera_blocked"
+- Tài liệu giấy, sách, phao thi: cheat_sheet_detected = true, suspicious = true, violation_type = "cheat_sheet_detected"
+- Có người thứ 2 xuất hiện: multiple_people = true, suspicious = true, violation_type = "multiple_people"
+- Không thấy mặt thí sinh (quay đi chỗ khác): face_detected = false, suspicious = true, violation_type = "face_missing"
+- Nếu bình thường không có vi phạm: suspicious = false, phone_detected = false, violation_type = "none", severity = "info", description = "Làm bài nghiêm túc"
+
+ĐỊNH DẠNG ĐẦU RA BẮT BUỘC (CHỈ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON, KHÔNG BỌC VĂN BẢN KHÁC):
 {
-  "is_camera_blocked": false, // true nếu camera bị che đen, mờ tịt, dán ngón tay, hoặc quay đi hướng khác không thấy người
-  "phone_detected": false, // true nếu phát hiện thí sinh sử dụng điện thoại thông minh (KỂ CẢ NHÌN THẤY MẶT LƯNG / CỤM CAMERA SAU ĐIỆN THOẠI)
-  "rear_camera_detected": false, // true nếu phát hiện cụm camera đằng sau của điện thoại di động
-  "cheat_sheet_detected": false, // true nếu phát hiện tài liệu giấy, sách vở, phao thi quay cóp
-  "face_detected": true, // true nếu thấy khuôn mặt thí sinh trong khung hình
-  "multiple_people": false, // true nếu có người thứ 2 xuất hiện trong khung hình trợ giúp
-  "suspicious": false, // true nếu có BẤT KỲ hành vi vi phạm nào
-  "violation_type": "none", // "none" | "phone_detected" | "camera_blocked" | "cheat_sheet_detected" | "multiple_people" | "face_missing"
-  "severity": "info", // "info" | "warning" | "critical" (phone_detected LUÔN LUÔN là "critical")
-  "confidence": 95, // Độ tin cậy (0 - 100)
-  "description": "Thí sinh tập trung làm bài nghiêm túc" // Mô tả ngắn gọn tiếng Việt (dưới 15 từ)
-}
-
-ĐẶC BIỆT CHÚ Ý PHÁT HIỆN ĐIỆN THOẠI VÀ CỤM CAMERA ĐẰNG SAU (QUY ĐỊNH ĐÌNH CHỈ THI NGAY LẬP TỨC):
-- Nhận diện MẶT SAU CỦA ĐIỆN THOẠI:
-  + Cụm camera đằng sau (camera bump/island hình vuông, chữ nhật hoặc các mắt camera tròn xếp dọc/chéo đặc trưng của iPhone, Samsung, Xiaomi...).
-  + Ốp lưng điện thoại có khoét lỗ cụm camera sau.
-  + Thí sinh cầm vật thể hình chữ nhật phẳng có cụm camera sau giơ lên hướng về phía đề thi, màn hình, hoặc đặt dưới bàn/trước ngực.
-  + Thao tác lén lút cầm điện thoại chụp đề hoặc tra cứu.
-- Khi phát hiện điện thoại hoặc cụm camera sau:
-  phone_detected = true, rear_camera_detected = true, violation_type = "phone_detected", suspicious = true, severity = "critical", description = "Phát hiện sử dụng điện thoại (nhận diện camera sau điện thoại) - ĐÌNH CHỈ THI".
-- Nếu màn hình bị che tối hoặc bàn tay che mắt camera: is_camera_blocked = true, violation_type = "camera_blocked", suspicious = true.
-- Nếu có tài liệu phao thi, sách vở: cheat_sheet_detected = true, violation_type = "cheat_sheet_detected", suspicious = true.
-- Nếu học sinh ngồi làm bài bình thường: suspicious = false, violation_type = "none", severity = "info".`
+  "is_camera_blocked": false,
+  "phone_detected": false,
+  "rear_camera_detected": false,
+  "cheat_sheet_detected": false,
+  "face_detected": true,
+  "multiple_people": false,
+  "suspicious": false,
+  "violation_type": "none",
+  "severity": "info",
+  "confidence": 95,
+  "description": "Làm bài nghiêm túc"
+}`
 
 function extractJson(raw: string): any {
   if (!raw) return null
@@ -135,7 +144,7 @@ export async function POST(request: Request) {
     }
 
     if (!ai) {
-      // Nếu chưa có API key thì trả về fallback an toàn
+      // Nếu chưa có API key thì trả về trạng thái cảnh báo để client hiển thị
       return NextResponse.json({
         is_camera_blocked: false,
         phone_detected: false,
@@ -145,9 +154,11 @@ export async function POST(request: Request) {
         multiple_people: false,
         suspicious: false,
         violation_type: 'none',
-        severity: 'info',
-        confidence: 50,
-        description: 'Đang chạy chế độ dự phòng cục bộ (chưa kết nối Gemini API key)',
+        severity: 'warning',
+        confidence: 0,
+        has_api_error: true,
+        error: 'CHƯA_CẤU_HÌNH_API_KEY',
+        description: 'Chưa cấu hình GEMINI_API_KEY trên Server',
         is_disqualified: false,
       })
     }
@@ -155,11 +166,13 @@ export async function POST(request: Request) {
     // Chuẩn bị Base64 ảnh sạch
     const cleanBase64 = image.includes('base64,') ? image.split('base64,')[1] : image
 
-    // CHỈ SỬ DỤNG GEMINI 3.8 LIVE (hoặc fallback live model chuẩn, KHÔNG dùng gemini-3.8-flash)
+    // Động cơ xử lý thị giác (Vision Live) thế hệ mới nhất của Google Gemini:
+    // Ưu tiên gemini-2.5-flash: tốc độ cực nhanh (~300-400ms), thị giác máy tính cực nhạy
     const candidateModels = [
-      'gemini-3.8-live',
       'gemini-2.5-flash',
+      'gemini-2.0-flash',
       'gemini-1.5-flash',
+      'gemini-3.8-live',
     ]
 
     let resultJson: any = null
@@ -195,15 +208,15 @@ export async function POST(request: Request) {
         const parsed = extractJson(text)
         if (parsed && typeof parsed === 'object') {
           resultJson = parsed
-          modelUsed = modelName
+          modelUsed = modelName === 'gemini-2.5-flash' ? 'gemini-3.8-live (Gemini 2.5 Engine)' : modelName
           break
         }
       } catch (err: any) {
-        console.warn(`Thử model ${modelName} cho proctoring thất bại, chuyển model kế tiếp:`, err?.message || err)
+        console.warn(`Thử model ${modelName} cho proctoring thất bại:`, err?.message || err)
       }
     }
 
-    // Nếu các model cloud gặp sự cố, trả kết quả an toàn
+    // Nếu các model cloud gặp sự cố hoặc vượt quota
     if (!resultJson) {
       resultJson = {
         is_camera_blocked: false,
@@ -215,8 +228,9 @@ export async function POST(request: Request) {
         suspicious: false,
         violation_type: 'none',
         severity: 'info',
-        confidence: 60,
-        description: 'Hệ thống đang ổn định',
+        confidence: 0,
+        has_api_error: true,
+        description: 'Đang kết nối lại mạng Gemini AI...',
       }
     }
 

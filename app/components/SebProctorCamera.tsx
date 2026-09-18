@@ -66,8 +66,10 @@ export default function SebProctorCamera({
   const [cameraState, setCameraState] = useState<'checking' | 'active' | 'no_camera'>('checking')
   const [isPlaying, setIsPlaying] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const isAnalyzingRef = useRef(false)
   const [lastCheckTime, setLastCheckTime] = useState<string>('')
   const [warningMessage, setWarningMessage] = useState<string | null>(null)
+  const [apiStatusMessage, setApiStatusMessage] = useState<string | null>(null)
   const [violationCount, setViolationCount] = useState(0)
 
   // Quản lý nhiều camera trên thiết bị (vd: Cam màu vs Cam hồng ngoại Windows Hello)
@@ -237,8 +239,11 @@ export default function SebProctorCamera({
     setSwitchingCamera(false)
   }
 
-  // Chụp một khung hình từ Video và gửi sang Gemini 3.8 Live Proctor API
+  // Chụp một khung hình từ Video và gửi sang Gemini Proctoring API
   const captureAndAnalyzeFrame = async () => {
+    // Nếu đang xử lý frame trước thì bỏ qua để tránh nghẽn mạng và dính lỗi 429
+    if (isAnalyzingRef.current) return
+
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas || !streamRef.current) return
@@ -251,6 +256,7 @@ export default function SebProctorCamera({
     }
 
     try {
+      isAnalyzingRef.current = true
       setIsAnalyzing(true)
       canvas.width = 400
       canvas.height = 300
@@ -289,6 +295,39 @@ export default function SebProctorCamera({
         new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       )
 
+      // Cảnh báo nếu server chưa có GEMINI_API_KEY hoặc lỗi kết nối AI
+      if (result?.has_api_error) {
+        setApiStatusMessage(result.description || 'Chưa cấu hình GEMINI_API_KEY')
+      } else {
+        setApiStatusMessage(null)
+      }
+
+      // 🚨 NẾU PHÁT HIỆN SỬ DỤNG ĐIỆN THOẠI (CAMERA SAU / SMARTPHONE)
+      // -> ĐÌNH CHỈ THI & ĐUỔI KHỎI PHÒNG THI NGAY LẬP TỨC!
+      const isPhoneDetected = Boolean(
+        result?.phone_detected ||
+        result?.rear_camera_detected ||
+        result?.is_disqualified ||
+        result?.violation_type === 'phone_detected'
+      )
+
+      if (isPhoneDetected) {
+        const desc = result.description || 'Phát hiện sử dụng điện thoại (nhận diện camera sau) - ĐÌNH CHỈ THI'
+        setWarningMessage(desc)
+        setViolationCount((c) => c + 1)
+        if (onViolationRef.current) {
+          onViolationRef.current(`🚨 ${desc}`)
+        }
+        if (onDisqualifiedRef.current) {
+          onDisqualifiedRef.current({
+            reason: desc,
+            snapshot: base64Image,
+          })
+        }
+        return
+      }
+
+      // Các vi phạm khác (che cam, phao thi...)
       if (result && result.suspicious && result.violation_type !== 'none') {
         const desc = result.description || 'Phát hiện nghi vấn vi phạm quy chế'
         setWarningMessage(desc)
@@ -296,22 +335,13 @@ export default function SebProctorCamera({
         if (onViolationRef.current) {
           onViolationRef.current(`⚠️ Giám thị AI: ${desc}`)
         }
-
-        // 🚨 NẾU PHÁT HIỆN SỬ DỤNG ĐIỆN THOẠI -> ĐÌNH CHỈ THI & ĐUỔI KHỎI PHÒNG THI NGAY LẬP TỨC!
-        if (result.phone_detected || result.rear_camera_detected || result.is_disqualified || result.violation_type === 'phone_detected') {
-          if (onDisqualifiedRef.current) {
-            onDisqualifiedRef.current({
-              reason: desc,
-              snapshot: base64Image,
-            })
-          }
-        }
       } else {
         setWarningMessage(null)
       }
     } catch (e) {
       console.warn('Lỗi khi gửi frame phân tích Gemini proctoring:', e)
     } finally {
+      isAnalyzingRef.current = false
       setIsAnalyzing(false)
     }
   }
@@ -473,11 +503,16 @@ export default function SebProctorCamera({
             Giám sát 2s/lần: Phát hiện camera sau điện thoại, che cam & phao
           </p>
 
-          {/* Cảnh báo vi phạm nếu AI phát hiện */}
+          {/* Cảnh báo vi phạm hoặc trạng thái API */}
           {warningMessage ? (
             <div className="mt-1 flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/40 text-rose-300 px-2 py-0.5 rounded-lg text-[10px] font-bold animate-pulse">
               <AlertTriangle className="h-3 w-3 text-rose-400 shrink-0" />
               <span className="truncate">{warningMessage}</span>
+            </div>
+          ) : apiStatusMessage ? (
+            <div className="mt-1 flex items-center gap-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg text-[9px] font-bold">
+              <AlertTriangle className="h-2.5 w-2.5 text-amber-400 shrink-0" />
+              <span className="truncate">{apiStatusMessage}</span>
             </div>
           ) : (
             <div className="mt-1 flex items-center justify-between gap-1 text-[10px] font-semibold text-emerald-400">
