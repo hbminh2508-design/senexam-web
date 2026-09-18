@@ -369,6 +369,26 @@ export default function SebExamRoomPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Thông tin thí sinh phục vụ giám sát Proctoring (memoized để tránh re-render)
+  const proctorUserInfo = useMemo(() => ({
+    fullName: userProfile?.full_name || currentUser?.user_metadata?.full_name || 'Học sinh',
+    email: currentUser?.email || '',
+    className: userProfile?.class_name || userProfile?.grade || '',
+    school: userProfile?.school || '',
+    province: userProfile?.province || '',
+    subject: exam?.subject || exam?.title || '',
+  }), [
+    userProfile?.full_name,
+    userProfile?.class_name,
+    userProfile?.grade,
+    userProfile?.school,
+    userProfile?.province,
+    currentUser?.email,
+    currentUser?.user_metadata?.full_name,
+    exam?.subject,
+    exam?.title,
+  ])
+
   // Danh sách các phần thi
   const activeSections: any[] = useMemo(() => {
     if (!exam?.exam_structure || !Array.isArray(exam.exam_structure)) return []
@@ -1144,14 +1164,7 @@ export default function SebExamRoomPage() {
               examId={examId}
               currentUser={currentUser}
               examTitle={exam?.title}
-              userInfo={{
-                fullName: userProfile?.full_name || currentUser?.user_metadata?.full_name || 'Học sinh',
-                email: currentUser?.email || '',
-                className: userProfile?.class_name || userProfile?.grade || '',
-                school: userProfile?.school || '',
-                province: userProfile?.province || '',
-                subject: exam?.subject || exam?.title || '',
-              }}
+              userInfo={proctorUserInfo}
             />
 
             <div className="flex items-center justify-between mb-2">

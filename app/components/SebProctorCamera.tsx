@@ -1,15 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ShieldCheck,
-  ShieldAlert,
   AlertTriangle,
   Play,
   RefreshCw,
-  VideoOff,
-  Camera,
-  Loader2,
 } from 'lucide-react'
 
 interface SebProctorCameraProps {
@@ -40,6 +36,26 @@ export default function SebProctorCamera({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
+  // 🌟 GIẢI PHÁP CHỐNG GIẬT / NHẤP NHÁY CAMERA:
+  // Lưu toàn bộ props vào Ref để camera không bao giờ bị khởi động lại khi component cha re-render (đếm ngược thời gian)
+  const userInfoRef = useRef(userInfo)
+  userInfoRef.current = userInfo
+
+  const currentUserRef = useRef(currentUser)
+  currentUserRef.current = currentUser
+
+  const examIdRef = useRef(examId)
+  examIdRef.current = examId
+
+  const examTitleRef = useRef(examTitle)
+  examTitleRef.current = examTitle
+
+  const onViolationRef = useRef(onViolation)
+  onViolationRef.current = onViolation
+
+  const onNoCameraRef = useRef(onNoCamera)
+  onNoCameraRef.current = onNoCamera
+
   // Trạng thái camera: 'checking' | 'active' | 'no_camera'
   const [cameraState, setCameraState] = useState<'checking' | 'active' | 'no_camera'>('checking')
   const [isPlaying, setIsPlaying] = useState(false)
@@ -54,47 +70,49 @@ export default function SebProctorCamera({
   const [switchingCamera, setSwitchingCamera] = useState(false)
 
   // Báo cáo về Admin khi học sinh không có camera
-  const reportNoCameraToAdmin = useCallback(async () => {
+  const reportNoCameraToAdmin = async () => {
     try {
+      const uInfo = userInfoRef.current || {}
+      const user = currentUserRef.current
       await fetch('/api/seb/proctor-live', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'report_no_camera',
-          examId,
-          userId: currentUser?.id,
+          examId: examIdRef.current,
+          userId: user?.id,
           userInfo: {
-            fullName: userInfo.fullName || currentUser?.user_metadata?.full_name || 'Học sinh',
-            email: userInfo.email || currentUser?.email || '',
-            className: userInfo.className || '',
-            school: userInfo.school || '',
-            province: userInfo.province || '',
-            subject: userInfo.subject || examTitle || '',
+            fullName: uInfo.fullName || user?.user_metadata?.full_name || 'Học sinh',
+            email: uInfo.email || user?.email || '',
+            className: uInfo.className || '',
+            school: uInfo.school || '',
+            province: uInfo.province || '',
+            subject: uInfo.subject || examTitleRef.current || '',
           },
         }),
       })
     } catch (err) {
       console.warn('Không thể gửi báo cáo no_camera:', err)
     }
-  }, [examId, currentUser, userInfo, examTitle])
+  }
 
   // Gửi heartbeat định kỳ xác nhận học sinh đang làm bài
-  const sendHeartbeat = useCallback(async () => {
+  const sendHeartbeat = async () => {
     try {
       await fetch('/api/seb/proctor-live', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'heartbeat',
-          examId,
-          userId: currentUser?.id,
+          examId: examIdRef.current,
+          userId: currentUserRef.current?.id,
         }),
       })
     } catch (e) {}
-  }, [examId, currentUser])
+  }
 
   // Khởi động Camera với cơ chế Fallback chống lỗi màn hình đen
-  const startCamera = useCallback(async (targetDeviceId?: string) => {
+  const startCamera = async (targetDeviceId?: string) => {
     try {
       if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Trình duyệt không hỗ trợ truy cập máy ảnh')
@@ -129,6 +147,7 @@ export default function SebProctorCamera({
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: {
+              facingMode: 'user',
               width: { ideal: 640, min: 320 },
               height: { ideal: 480, min: 240 },
             },
@@ -148,6 +167,14 @@ export default function SebProctorCamera({
       }
 
       streamRef.current = stream
+
+      const tracks = stream.getVideoTracks()
+      if (tracks.length > 0) {
+        const settings = tracks[0].getSettings()
+        if (settings.deviceId) {
+          setActiveDeviceId(settings.deviceId)
+        }
+      }
 
       // Lưu lại danh sách thiết bị camera để hỗ trợ đổi camera nếu bị đen
       try {
@@ -172,20 +199,21 @@ export default function SebProctorCamera({
       }
 
       setCameraState('active')
+      setIsPlaying(true)
     } catch (err: any) {
       console.warn('Lỗi khi mở camera hoặc học sinh không có camera:', err?.message || err)
       setCameraState('no_camera')
-      reportNoCameraToAdmin()
-      if (onNoCamera) onNoCamera()
+      await reportNoCameraToAdmin()
+      if (onNoCameraRef.current) onNoCameraRef.current()
     }
-  }, [reportNoCameraToAdmin, onNoCamera])
+  }
 
   // Chuyển đổi camera tiếp theo (dành cho máy tính có nhiều camera như Cam hồng ngoại và Cam màu)
   const handleSwitchCamera = async () => {
     if (videoDevices.length <= 1) {
       // Khởi động lại camera hiện tại
       setSwitchingCamera(true)
-      await startCamera(activeDeviceId)
+      await startCamera(activeDeviceId || undefined)
       setSwitchingCamera(false)
       return
     }
@@ -202,49 +230,16 @@ export default function SebProctorCamera({
     setSwitchingCamera(false)
   }
 
-  // Khởi động lần đầu
-  useEffect(() => {
-    let scanInterval: NodeJS.Timeout
-    let heartbeatInterval: NodeJS.Timeout
-
-    startCamera()
-
-    // Quét định kỳ 15 giây / 1 lần gửi frame tới Gemini Live Proctoring
-    scanInterval = setInterval(() => {
-      captureAndAnalyzeFrame()
-    }, 15000)
-
-    // Heartbeat mỗi 45 giây
-    heartbeatInterval = setInterval(() => {
-      sendHeartbeat()
-    }, 45000)
-
-    // Quét lần đầu tiên sau 4 giây
-    const firstScanTimer = setTimeout(() => {
-      captureAndAnalyzeFrame()
-    }, 4000)
-
-    return () => {
-      clearTimeout(firstScanTimer)
-      clearInterval(scanInterval)
-      clearInterval(heartbeatInterval)
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop())
-      }
-    }
-  }, [startCamera, sendHeartbeat])
-
   // Chụp một khung hình từ Video và gửi sang Gemini 3.8 Live Proctor API
   const captureAndAnalyzeFrame = async () => {
     const video = videoRef.current
     const canvas = canvasRef.current
-    if (!video || !canvas || cameraState !== 'active') return
+    if (!video || !canvas || !streamRef.current) return
 
     // Đảm bảo video đang thực sự chạy và có kích thước
     if (video.videoWidth === 0 || video.videoHeight === 0) {
-      // Nếu video chưa chạy, thử gọi play() lại
       video.muted = true
-      video.play().catch(() => {})
+      video.play().then(() => setIsPlaying(true)).catch(() => {})
       return
     }
 
@@ -259,21 +254,24 @@ export default function SebProctorCamera({
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const base64Image = canvas.toDataURL('image/jpeg', 0.65)
 
+      const uInfo = userInfoRef.current || {}
+      const user = currentUserRef.current
+
       const response = await fetch('/api/seb/proctor-live', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'analyze_frame',
           image: base64Image,
-          examId,
-          userId: currentUser?.id,
+          examId: examIdRef.current,
+          userId: user?.id,
           userInfo: {
-            fullName: userInfo.fullName || currentUser?.user_metadata?.full_name || 'Học sinh',
-            email: userInfo.email || currentUser?.email || '',
-            className: userInfo.className || '',
-            school: userInfo.school || '',
-            province: userInfo.province || '',
-            subject: userInfo.subject || examTitle || '',
+            fullName: uInfo.fullName || user?.user_metadata?.full_name || 'Học sinh',
+            email: uInfo.email || user?.email || '',
+            className: uInfo.className || '',
+            school: uInfo.school || '',
+            province: uInfo.province || '',
+            subject: uInfo.subject || examTitleRef.current || '',
           },
         }),
       })
@@ -287,8 +285,8 @@ export default function SebProctorCamera({
         const desc = result.description || 'Phát hiện nghi vấn vi phạm quy chế'
         setWarningMessage(desc)
         setViolationCount((c) => c + 1)
-        if (onViolation) {
-          onViolation(`⚠️ Giám thị AI: ${desc}`)
+        if (onViolationRef.current) {
+          onViolationRef.current(`⚠️ Giám thị AI: ${desc}`)
         }
       } else {
         setWarningMessage(null)
@@ -300,18 +298,57 @@ export default function SebProctorCamera({
     }
   }
 
-  // Gắn video DOM ref và đồng bộ stream
-  const handleVideoRef = (el: HTMLVideoElement | null) => {
-    videoRef.current = el
-    if (el && streamRef.current) {
-      if (el.srcObject !== streamRef.current) {
-        el.srcObject = streamRef.current
+  // 🌟 KHỞI ĐỘNG CAMERA 1 LẦN DUY NHẤT:
+  // Dependency rỗng [] là mấu chốt để camera không bao giờ bị re-render tắt đi bật lại theo timer
+  useEffect(() => {
+    let isMounted = true
+
+    startCamera()
+
+    // Quét định kỳ 15 giây / 1 lần gửi frame tới Gemini Live Proctoring
+    const scanInterval = setInterval(() => {
+      if (isMounted) {
+        captureAndAnalyzeFrame()
       }
-      el.muted = true
-      el.playsInline = true
-      el.play().then(() => setIsPlaying(true)).catch(() => {})
+    }, 15000)
+
+    // Heartbeat mỗi 45 giây
+    const heartbeatInterval = setInterval(() => {
+      if (isMounted) {
+        sendHeartbeat()
+      }
+    }, 45000)
+
+    // Quét lần đầu tiên sau 4 giây
+    const firstScanTimer = setTimeout(() => {
+      if (isMounted) {
+        captureAndAnalyzeFrame()
+      }
+    }, 4000)
+
+    return () => {
+      isMounted = false
+      clearTimeout(firstScanTimer)
+      clearInterval(scanInterval)
+      clearInterval(heartbeatInterval)
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
     }
-  }
+  }, []) // 🌟 ĐẢM BẢO DEPENDENCY LUÔN RỖNG []
+
+  // Đảm bảo video được gán stream khi videoRef sẵn sàng
+  useEffect(() => {
+    if (cameraState === 'active' && videoRef.current && streamRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current
+      }
+      videoRef.current.muted = true
+      videoRef.current.playsInline = true
+      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {})
+    }
+  }, [cameraState])
 
   // =======================================================================
   // KHI HỌC SINH KHÔNG CÓ CAMERA:
@@ -330,7 +367,7 @@ export default function SebProctorCamera({
         {/* KHUNG VIDEO CAMERA MINI (CHỐNG LỖI MÀN HÌNH ĐEN, CÓ NÚT KÍCH HOẠT THỦ CÔNG & ĐỔI CAMERA) */}
         <div className="relative w-28 sm:w-32 h-20 rounded-xl overflow-hidden bg-black border border-slate-700 shrink-0">
           <video
-            ref={handleVideoRef}
+            ref={videoRef}
             autoPlay
             muted
             playsInline
@@ -339,8 +376,7 @@ export default function SebProctorCamera({
               v.muted = true
               v.play().then(() => setIsPlaying(true)).catch(() => {})
             }}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
+            onPlaying={() => setIsPlaying(true)}
             className="w-full h-full object-cover transform scale-x-[-1]"
           />
 
@@ -429,7 +465,7 @@ export default function SebProctorCamera({
             <div className="mt-1 flex items-center justify-between gap-1 text-[10px] font-semibold text-emerald-400">
               <div className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>{isPlaying ? 'Camera hoạt động bình thường' : 'Đang chờ kích hoạt hình ảnh...'}</span>
+                <span>{isPlaying ? 'Camera hoạt động bình thường' : 'Đang tải hình ảnh...'}</span>
               </div>
             </div>
           )}
