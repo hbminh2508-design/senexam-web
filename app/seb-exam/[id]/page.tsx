@@ -169,7 +169,6 @@ export default function SebExamRoomPage() {
 
   const [sebAccessCode, setSebAccessCode] = useState('')
   const [autoLoggingIn, setAutoLoggingIn] = useState(false)
-  const [proctorViolationWarning, setProctorViolationWarning] = useState<string | null>(null)
 
   // 1. Khởi tạo & Kiểm tra môi trường Safe Exam Browser
   useEffect(() => {
@@ -333,9 +332,9 @@ export default function SebExamRoomPage() {
     }
   }, [hasStarted, submittedResult, submitting])
 
-  // 3. Bộ đếm ngược thời gian (dừng ngay nếu bị đình chỉ thi)
+  // 3. Bộ đếm ngược thời gian
   useEffect(() => {
-    if (!hasStarted || loading || timeLeft <= 0 || submittedResult || submitting || disqualifiedData) return
+    if (!hasStarted || loading || timeLeft <= 0 || submittedResult || submitting) return
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
