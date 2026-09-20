@@ -380,12 +380,24 @@ export default function ExamRoomPage() {
         })
       })
 
-      const finalScore = parseFloat(totalPoints.toFixed(2))
+      const rawScore = parseFloat(totalPoints.toFixed(2))
+      // Tự động chuẩn hóa về thang 10 nếu đề thi sử dụng thang điểm khác
+      const examMaxScore = Number(exam?.max_score ?? exam?.exam_structure?.[0]?.custom_max_score ?? exam?.exam_structure?.custom_max_score) || 10
+      const finalScore = (examMaxScore > 0 && examMaxScore !== 10)
+        ? parseFloat(((rawScore / examMaxScore) * 10).toFixed(2))
+        : rawScore
+
       await supabase.from('submissions').insert({
         exam_id: exam.id, user_id: user.id, answers: answers, score: finalScore, detailed_scores: detailedScores, is_graded: !hasEssay
       })
 
-      if (!isForced) alert(`Nộp bài thành công! Bạn đạt được: ${finalScore} điểm.`)
+      if (!isForced) {
+        if (examMaxScore > 0 && examMaxScore !== 10) {
+          alert(`Nộp bài thành công! Điểm số chuẩn hóa (thang 10): ${finalScore} điểm (Điểm gốc: ${rawScore}/${examMaxScore}).`)
+        } else {
+          alert(`Nộp bài thành công! Bạn đạt được: ${finalScore} điểm.`)
+        }
+      }
       router.push('/dashboard')
     } catch (err: any) { alert('Lỗi: ' + err.message) } 
     finally { setSubmitting(false) }

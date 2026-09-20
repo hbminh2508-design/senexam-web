@@ -303,6 +303,19 @@ export default function FepnMobileNav({
                     <span className="text-[10px] text-slate-400 font-medium">Slide, đề thi & bài tập</span>
                   </Link>
 
+                  {/* 1.1 Phòng Thi SEB Khảo thí trực tuyến */}
+                  <Link
+                    href="/seb-dashboard"
+                    onClick={() => setShowDrawer(false)}
+                    className="flex flex-col items-start p-3 rounded-2xl border transition group border-sky-500/30 bg-gradient-to-br from-sky-500/10 to-blue-500/10 hover:border-sky-500 hover:from-sky-500/20 hover:to-blue-500/20"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-600 text-white mb-1.5 group-hover:scale-105 transition shadow-sm">
+                      <ShieldCheck className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-black text-sky-700 dark:text-sky-300">Phòng Thi SEB</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Khảo thí bảo mật cao</span>
+                  </Link>
+
                   {/* 2. Lịch học & Thời khóa biểu */}
                   <Link
                     href="/fepn-schedule"

@@ -719,11 +719,11 @@ export default function DashboardPage() {
     { key: 'exams', label: 'Vào thi ngay', desc: 'Kho đề thi thử bám sát cấu trúc mới nhất.', icon: Target, color: 'indigo', onSelect: () => router.push('/exams') },
     {
       key: 'seb-security',
-      label: 'Thi Bảo mật cao',
+      label: 'Phòng Thi SEB',
       desc: 'Cổng thi bảo mật chống gian lận 100% qua Safe Exam Browser (SEB).',
       icon: ShieldCheck,
       color: 'sky',
-      onSelect: () => window.open('https://seb.thicu.tailieufepn.senexam.me', '_blank'),
+      onSelect: () => router.push('/seb-dashboard'),
     },
     { key: 'focus', label: 'Phòng Tập Trung', desc: 'Kỹ thuật Pomodoro & Lo-Fi Chill không quảng cáo.', icon: Music2, color: 'purple', onSelect: () => router.push('/focus') },
     { key: 'lab', label: 'Phòng Thí Nghiệm', desc: 'Mô phỏng vật lý trực quan tích hợp Gia sư SenAI.', icon: FlaskConical, color: 'emerald', onSelect: () => router.push('/phongthinghiem') },

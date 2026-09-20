@@ -194,6 +194,7 @@ export default function SebAdminPage() {
   const [examTitle, setExamTitle] = useState('')
   const [examTypeVal, setExamTypeVal] = useState('THPTQG')
   const [examDuration, setExamDuration] = useState('50')
+  const [examMaxScore, setExamMaxScore] = useState('10')
   const [maxAttempts, setMaxAttempts] = useState('1')
   const [examAllowReview, setExamAllowReview] = useState(true)
   const [examIsHidden, setExamIsHidden] = useState(false)
@@ -909,6 +910,7 @@ export default function SebAdminPage() {
         : null
 
       // Đồng bộ cấu trúc đề thi để cả SenExam lẫn SEB đều đọc được chuẩn xác
+      const parsedMaxScore = parseFloat(examMaxScore) || 10
       const synchronizedSections = examSections.map((s) => {
         const pts = Number(s.totalPoints) || 10
         return {
@@ -918,35 +920,49 @@ export default function SebAdminPage() {
           scoringMode: s.scoringMode || 'auto_divide',
           pointsPerQuestion: s.pointsPerQuestion || {},
           customPoints: s.pointsPerQuestion || {},
+          custom_max_score: parsedMaxScore,
         }
       })
 
-      const { data: newExam, error: examErr } = await supabase
+      const examPayload: any = {
+        title: examTitle.trim(),
+        exam_type: examTypeVal,
+        duration: parseInt(examDuration) || 50,
+        drive_file_id: driveFileId,
+        exam_structure: synchronizedSections,
+        allow_review: examAllowReview,
+        is_hidden: examIsHidden,
+        access_code: accessCode,
+        max_attempts: parseInt(maxAttempts) || 1,
+        folder_id: selectedFolderId || null,
+        require_seb: requireSeb,
+        part_instructions: examSections.map((s) => ({
+          id: s.id,
+          name: s.name,
+          instructions: s.instructions,
+          instructionImage: s.instructionImage,
+        })),
+        created_by: currentUserId,
+      }
+
+      let newExam: any = null
+      const { data: firstTryData, error: firstTryErr } = await supabase
         .from('exams')
-        .insert({
-          title: examTitle.trim(),
-          exam_type: examTypeVal,
-          duration: parseInt(examDuration) || 50,
-          drive_file_id: driveFileId,
-          exam_structure: synchronizedSections,
-          allow_review: examAllowReview,
-          is_hidden: examIsHidden,
-          access_code: accessCode,
-          max_attempts: parseInt(maxAttempts) || 1,
-          folder_id: selectedFolderId || null,
-          require_seb: requireSeb,
-          part_instructions: examSections.map((s) => ({
-            id: s.id,
-            name: s.name,
-            instructions: s.instructions,
-            instructionImage: s.instructionImage,
-          })),
-          created_by: currentUserId,
-        })
+        .insert({ ...examPayload, max_score: parsedMaxScore })
         .select('*')
         .single()
 
-      if (examErr) throw examErr
+      if (firstTryErr) {
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .from('exams')
+          .insert(examPayload)
+          .select('*')
+          .single()
+        if (fallbackErr) throw fallbackErr
+        newExam = fallbackData
+      } else {
+        newExam = firstTryData
+      }
 
       setExamsList([newExam, ...examsList])
       setExamTitle('')
@@ -1566,6 +1582,27 @@ export default function SebAdminPage() {
                     max={10}
                     required
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">Thang Điểm Đề Thi</label>
+                    <span className="text-[10px] text-sky-600 font-bold">Quy đổi chuẩn hóa về thang 10</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={examMaxScore}
+                    onChange={(e) => setExamMaxScore(e.target.value)}
+                    placeholder="Ví dụ: 10, 20, 50, 100..."
+                    className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition"
+                    min={1}
+                    max={1000}
+                    step="any"
+                    required
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Hệ thống sẽ tự động chuẩn hóa điểm bài làm của thí sinh về thang 10 để đồng bộ toàn hệ thống.
+                  </p>
                 </div>
 
                 {/* Chọn Thư Mục Con (Môn Thi) Cho Đề */}

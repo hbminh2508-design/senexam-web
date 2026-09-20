@@ -10,26 +10,33 @@ const apiKey = process.env.GEMINI_API_KEY
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null
 
 const PROCTOR_SYSTEM_PROMPT = `Bạn là hệ thống AI Giám thị phòng thi trực tuyến cao cấp (Gemini Live Proctoring Engine).
-Nhiệm vụ tối thượng: Phân tích khung hình camera của thí sinh để PHÁT HIỆN GIAN LẬN VÀ BẮT TỨC THÌ MỌI HÀNH VI SỬ DỤNG ĐIỆN THOẠI DI ĐỘNG.
+Nhiệm vụ: Phân tích khung hình camera của thí sinh để PHÁT HIỆN GIAN LẬN, ĐẶC BIỆT LÀ HÀNH VI SỬ DỤNG ĐIỆN THOẠI THÔNG MINH TRONG GIỜ THI.
 
-QUY TẮC BẮT BUỘC ĐỐI VỚI ĐIỆN THOẠI THÔNG MINH (ĐÌNH CHỈ THI NGAY LẬP TỨC):
-- CHỈ CẦN THẤY BẤT KỲ DẤU HIỆU NÀO DƯỚI ĐÂY:
-  1. Thí sinh cầm trên tay hoặc giơ lên một chiếc điện thoại di động / smartphone / iPhone / Android.
-  2. Xuất hiện MẶT LƯNG ĐIỆN THOẠI: cụm camera sau (camera bump, camera island hình vuông/chữ nhật, các mắt ống kính camera tròn đặc trưng, viền ốp lưng khoét lỗ camera).
-  3. Màn hình điện thoại (dù đang sáng màn hình hay tắt đen).
-  4. Động tác giơ vật thể hình chữ nhật dạng điện thoại trước ngực, trước mặt, ngang tầm mắt hoặc hướng về màn hình/webcam.
-  5. Động tác cúi nhìn điện thoại đặt dưới mặt bàn hoặc cầm lén lút bằng một tay.
--> LẬP TỨC ĐÁNH DẤU:
+PHÂN BIỆT RÕ RÀNG VỚI MÁY TÍNH CẦM TAY CASIO / VINACAL / MÁY TÍNH KHOA HỌC (DỤNG CỤ HỌC TẬP HỢP LỆ):
+- Máy tính cầm tay Casio (như FX-570, FX-580VNX, Vinacal...) có đặc điểm: thân máy bằng nhựa dày, có nhiều phím bấm vật lý bằng cao su/nhựa, màn hình LCD nhỏ đơn sắc ở nửa trên, nắp trượt nhựa ở lưng máy, KHÔNG CÓ CỤM CAMERA SAU BẰNG KÍNH, KHÔNG PHẢI MÀN HÌNH CẢM ỨNG LỚN.
+- ĐÂY LÀ DỤNG CỤ HỌC TẬP ĐƯỢC PHÉP 100% TRONG PHÒNG THI!
+- NẾU PHÁT HIỆN THÍ SINH CẦM/SỬ DỤNG MÁY TÍNH CẦM TAY CASIO / VINACAL HOẶC DỤNG CỤ HỌC TẬP: TUYỆT ĐỐI KHÔNG BÁO LỖI, KHÔNG PHÁT CẢNH BÁO, ĐẶT:
+  "phone_detected": false,
+  "rear_camera_detected": false,
+  "suspicious": false,
+  "violation_type": "none",
+  "severity": "info",
+  "description": "Sử dụng máy tính cầm tay hợp lệ"
+
+QUY TẮC PHÁT HIỆN ĐIỆN THOẠI THÔNG MINH (SMARTPHONE):
+- Nhận diện chính xác điện thoại thông minh: màn hình cảm ứng kính toàn phần phẳng, mặt lưng có cụm ống kính camera kính lồi/tròn (camera bump / camera island, ống kính kép/ba mắt tròn), viền kim loại/kính phẳng, không có hàng phím số cao su vật lý.
+- Động tác cầm giơ điện thoại ngang mặt hoặc hướng ống kính camera sau về màn hình/webcam.
+- Khi phát hiện điện thoại thông minh:
   "phone_detected": true,
   "rear_camera_detected": true,
   "suspicious": true,
   "violation_type": "phone_detected",
-  "severity": "critical",
-  "confidence": 99,
-  "description": "Phát hiện thí sinh sử dụng điện thoại di động (camera sau / smartphone) - ĐÌNH CHỈ THI"
+  "severity": "warning",
+  "confidence": 95,
+  "description": "Cảnh báo: Phát hiện thí sinh sử dụng điện thoại di động"
 
 CÁC VI PHẠM KHÁC:
-- Camera bị che mờ, đen xì, lấy tay che ống kính: is_camera_blocked = true, suspicious = true, violation_type = "camera_blocked"
+- Camera bị che mờ, đen xì, lấy tay hoặc vật thể che ống kính: is_camera_blocked = true, suspicious = true, violation_type = "camera_blocked"
 - Tài liệu giấy, sách, phao thi: cheat_sheet_detected = true, suspicious = true, violation_type = "cheat_sheet_detected"
 - Có người thứ 2 xuất hiện: multiple_people = true, suspicious = true, violation_type = "multiple_people"
 - Không thấy mặt thí sinh (quay đi chỗ khác): face_detected = false, suspicious = true, violation_type = "face_missing"
@@ -254,14 +261,14 @@ export async function POST(request: Request) {
           province: userInfo.province || '',
           subject: userInfo.subject || '',
           has_camera: true,
-          is_active: !isPhoneViolation,
-          is_disqualified: isPhoneViolation,
+          is_active: true,
+          is_disqualified: false,
           violation_type: isPhoneViolation ? 'phone_detected' : (resultJson.violation_type || 'suspicious_activity'),
-          severity: isPhoneViolation ? 'critical' : (resultJson.severity || 'warning'),
+          severity: isPhoneViolation ? 'warning' : (resultJson.severity || 'warning'),
           confidence: Number(resultJson.confidence) || 95,
           snapshot_url: snapshotUri,
           details: isPhoneViolation
-            ? 'Phát hiện sử dụng điện thoại (nhận diện cụm camera sau / điện thoại) - ĐÃ BỊ ĐÌNH CHỈ THI'
+            ? 'Cảnh báo: Phát hiện hình ảnh điện thoại (camera sau) - Đã lưu ảnh bằng chứng cho Quản trị viên'
             : (resultJson.description || 'Phát hiện hành vi nghi vấn gian lận thi cử'),
         })
       } catch (dbErr) {
@@ -271,7 +278,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ...resultJson,
-      is_disqualified: isPhoneViolation,
+      is_disqualified: false,
       modelUsed,
       timestamp: Date.now(),
     })

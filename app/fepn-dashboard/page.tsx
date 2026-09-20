@@ -1469,6 +1469,18 @@ export default function FepnDashboardMainPage() {
             {/* List tính năng */}
             <div className="grid grid-cols-2 gap-2.5 pt-1">
               <Link
+                href="/seb-dashboard"
+                onClick={() => setShowMobileMenu(false)}
+                className="flex flex-col items-start p-3.5 rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 to-blue-500/10 hover:border-sky-500 hover:from-sky-500/20 hover:to-blue-500/20 transition group"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white mb-2 group-hover:scale-105 transition shadow-sm">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-black text-sky-700 dark:text-sky-300">Phòng Thi SEB</span>
+                <span className="text-[10px] text-slate-400 font-medium">Khảo thí bảo mật cao</span>
+              </Link>
+
+              <Link
                 href="/fepn-schedule"
                 onClick={() => setShowMobileMenu(false)}
                 className="flex flex-col items-start p-3.5 rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-sky-500/10 hover:border-sky-500/30 transition group"

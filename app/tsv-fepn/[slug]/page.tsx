@@ -1290,6 +1290,17 @@ export default function FepnSubjectDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Nút sang SEB Exam làm bài kiểm tra */}
+                  <Link
+                    href="/seb-dashboard"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs shadow-sm shadow-sky-500/30 transition group"
+                    title="Truy cập phòng thi SEB để làm bài kiểm tra trực tuyến"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5 text-white group-hover:scale-110 transition" />
+                    <span className="hidden sm:inline">Làm bài thi SEB</span>
+                    <span className="sm:hidden">Thi SEB</span>
+                  </Link>
+
                   <a
                     href={selectedMaterial.file_url}
                     target="_blank"
@@ -1300,13 +1311,12 @@ export default function FepnSubjectDetailPage() {
                     <ExternalLink className="h-3.5 w-3.5" />
                   </a>
 
+                  {/* Nút tải tệp trực tiếp theo tên file định dạng ten-file-da-duoc-dat.<ext> không cần mở Google Drive */}
                   <a
-                    href={selectedMaterial.file_url}
+                    href={`/api/fepn-materials/download?url=${encodeURIComponent(selectedMaterial.file_url)}&title=${encodeURIComponent(selectedMaterial.title)}&type=${encodeURIComponent(selectedMaterial.file_type || '')}`}
                     download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 transition"
-                    title="Tải tệp về máy"
+                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-sky-500/20 bg-sky-500/5 hover:bg-sky-500/15 text-sky-600 dark:text-sky-400 transition"
+                    title="Tải tệp trực tiếp về máy"
                   >
                     <Download className="h-3.5 w-3.5" />
                   </a>

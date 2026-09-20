@@ -239,7 +239,11 @@ export default function SebProctorCamera({
     setSwitchingCamera(false)
   }
 
+  const tickCountRef = useRef(0)
+  const prevFrameAvgRef = useRef<number | null>(null)
+
   // Chụp một khung hình từ Video và gửi sang Gemini Proctoring API
+  // Tối ưu hóa: kiểm tra cục bộ trước, gửi Gemini mỗi 5 lần hoặc khi có nghi vấn (che cam, đổi góc)
   const captureAndAnalyzeFrame = async () => {
     // Nếu đang xử lý frame trước thì bỏ qua để tránh nghẽn mạng và dính lỗi 429
     if (isAnalyzingRef.current) return
@@ -256,15 +260,55 @@ export default function SebProctorCamera({
     }
 
     try {
-      isAnalyzingRef.current = true
-      setIsAnalyzing(true)
       canvas.width = 400
       canvas.height = 300
-      const ctx = canvas.getContext('2d')
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
       if (!ctx) return
 
-      // Vẽ hình ảnh từ video sang canvas (kèm lật ngang gương để chuẩn quan sát)
+      // Vẽ hình ảnh từ video sang canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      tickCountRef.current += 1
+      const currentTick = tickCountRef.current
+
+      // 🔍 1. PRE-CHECK CỤC BỘ TRÊN CANVAS (Chống tràn limit Gemini):
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const data = imgData.data
+      let totalLuminance = 0
+      const sampleStep = 16 // lấy mẫu 1/16 pixels để siêu nhanh không tốn CPU
+      let sampleCount = 0
+
+      for (let i = 0; i < data.length; i += sampleStep * 4) {
+        const r = data[i]
+        const g = data[i + 1]
+        const b = data[i + 2]
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b
+        totalLuminance += lum
+        sampleCount++
+      }
+
+      const avgLuminance = sampleCount > 0 ? totalLuminance / sampleCount : 0
+      const isCameraBlocked = avgLuminance < 12 // Quá tối hoặc lấy tay che camera
+
+      // Phát hiện thay đổi ánh sáng / vật thể đột ngột trước camera
+      let isMovementSuspicious = false
+      if (prevFrameAvgRef.current !== null) {
+        const lumDiff = Math.abs(avgLuminance - prevFrameAvgRef.current)
+        if (lumDiff > 28) {
+          isMovementSuspicious = true
+        }
+      }
+      prevFrameAvgRef.current = avgLuminance
+
+      // QUY TẮC: "để tránh việc tràn limit của gemini, mỗi 5 lần mới chụp một lần nhưng sẽ do hệ thống chụp trước nếu nghi ngờ đó là vật thể giống điện thoại thì mới chuyển qua cho gemini phân tích"
+      const shouldSendToGemini = (currentTick % 5 === 0) || isCameraBlocked || isMovementSuspicious
+
+      if (!shouldSendToGemini) {
+        // Hệ thống cục bộ kiểm soát tốt, bỏ qua gửi request lên Gemini
+        return
+      }
+
+      isAnalyzingRef.current = true
+      setIsAnalyzing(true)
       const base64Image = canvas.toDataURL('image/jpeg', 0.65)
 
       const uInfo = userInfoRef.current || {}
@@ -302,28 +346,21 @@ export default function SebProctorCamera({
         setApiStatusMessage(null)
       }
 
-      // 🚨 NẾU PHÁT HIỆN SỬ DỤNG ĐIỆN THOẠI (CAMERA SAU / SMARTPHONE)
-      // -> ĐÌNH CHỈ THI & ĐUỔI KHỎI PHÒNG THI NGAY LẬP TỨC!
+      // 🚨 CẢNH BÁO VI PHẠM (ĐÃ BỎ TÍNH NĂNG ĐUỔI RA KHỎI PHÒNG THI THEO YÊU CẦU)
       const isPhoneDetected = Boolean(
         result?.phone_detected ||
         result?.rear_camera_detected ||
-        result?.is_disqualified ||
         result?.violation_type === 'phone_detected'
       )
 
       if (isPhoneDetected) {
-        const desc = result.description || 'Phát hiện sử dụng điện thoại (nhận diện camera sau) - ĐÌNH CHỈ THI'
+        const desc = result.description || 'Cảnh báo: Phát hiện hình ảnh điện thoại di động! Bằng chứng đã được gửi về Quản trị viên.'
         setWarningMessage(desc)
         setViolationCount((c) => c + 1)
         if (onViolationRef.current) {
           onViolationRef.current(`🚨 ${desc}`)
         }
-        if (onDisqualifiedRef.current) {
-          onDisqualifiedRef.current({
-            reason: desc,
-            snapshot: base64Image,
-          })
-        }
+        // ĐÃ BỎ ĐUỔI KHỎI PHÒNG THI (Không gọi onDisqualified để học sinh tiếp tục làm bài)
         return
       }
 
@@ -431,7 +468,7 @@ export default function SebProctorCamera({
           {/* Đèn báo trạng thái hoạt động LIVE */}
           <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-black/60 backdrop-blur-xs px-1.5 py-0.5 rounded-full text-[9px] font-bold text-emerald-400 z-10">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>LIVE 2s</span>
+            <span>LIVE AI</span>
           </div>
 
           {/* NÚT KÍCH HOẠT PHÁT HÌNH ẢNH NẾU BỊ TRÌNH DUYỆT CHẶN AUTOPLAY HOẶC MÀN HÌNH ĐEN */}
