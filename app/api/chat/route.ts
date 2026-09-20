@@ -52,8 +52,8 @@ export async function POST(req: Request) {
     // 2. Khởi tạo Google SDK
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 3. Sử dụng mô hình gemini-3.5-flash theo yêu cầu
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' });
+    // 3. Sử dụng mô hình gemini-3.8-flash theo yêu cầu
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
 
     // 4. Phân tích dữ liệu từ Client gửi lên
     const { message, history, context, images } = await req.json();

@@ -458,11 +458,11 @@ export default function SebProctorCamera({
             </button>
           )}
 
-          {/* Hiệu ứng quét AI của Gemini */}
+          {/* Hiệu ứng quét AI của Gemini 3.5 Flash-Lite */}
           {isAnalyzing && (
             <div className="absolute inset-0 bg-sky-900/30 flex items-center justify-center pointer-events-none z-10">
               <span className="text-[9px] font-black text-sky-200 uppercase tracking-tighter bg-sky-950/80 px-1.5 py-0.5 rounded">
-                Gemini 3.8
+                Gemini 3.5 Lite
               </span>
             </div>
           )}
@@ -473,7 +473,7 @@ export default function SebProctorCamera({
           <div className="flex items-center justify-between gap-1">
             <span className="flex items-center gap-1 text-[11px] font-black text-sky-400 truncate">
               <ShieldCheck className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-              <span>Gemini 3.8 Live Proctor</span>
+              <span>Gemini 3.5 Flash-Lite Proctor</span>
             </span>
 
             <div className="flex items-center gap-1 shrink-0">

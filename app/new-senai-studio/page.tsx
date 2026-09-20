@@ -447,11 +447,11 @@ export default function NewSenAiStudioPage() {
                     )}
                     <BrainCircuit className={`h-4 w-4 ${deepThink ? 'text-amber-300 animate-pulse' : 'text-purple-500'}`} />
                   </div>
-                  <span>Deep Think 3.7</span>
+                  <span>Deep Think 3.8</span>
                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
                     deepThink ? 'bg-black/30 text-amber-200 border border-white/20' : 'bg-black/10 dark:bg-white/10 text-[#6B7280]'
                   }`}>
-                    {deepThink ? 'Bật (gemini-flash-3.7)' : 'Tắt'}
+                    {deepThink ? 'Bật (gemini-3.8-flash)' : 'Tắt'}
                   </span>
                 </button>
               </div>

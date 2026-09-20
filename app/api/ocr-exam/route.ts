@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const base64Image = buffer.toString('base64')
     const mimeType = imageFile.type || 'image/jpeg'
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' })
 
     if (mode === 'question') {
       // OCR CHO CÂU HỎI

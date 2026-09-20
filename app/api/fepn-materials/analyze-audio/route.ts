@@ -164,23 +164,23 @@ ${instructions ? `\nYêu cầu bổ sung: ${instructions}` : ''}
       usedModel = 'gemini-3.8-flash'
     } catch (e38: any) {
       console.warn('Không thể gọi gemini-3.8-flash, chuyển sang model dự phòng:', e38?.message)
-      // 2. Fallback sang gemini-2.5-flash
+      // 2. Fallback sang gemini-3.5-flash-lite
       try {
         const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
         const result = await model.generateContent(contentParts)
         analysisText = result.response.text()
-        usedModel = 'gemini-2.5-flash (tương thích cụm API hiện tại)'
-      } catch (e25: any) {
+        usedModel = 'gemini-3.5-flash-lite'
+      } catch (eLite: any) {
         // 3. Fallback sang @google/genai SDK
         try {
           const ai = new GoogleGenAI({ apiKey })
           const res = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-3.5-flash-lite',
             contents: contentParts.map((p) => p.text || '[Audio Content]').join('\n'),
           })
           analysisText = res.text ?? ''
-          usedModel = 'gemini-2.0-flash'
+          usedModel = 'gemini-3.5-flash-lite'
         } catch (eAll: any) {
           console.error('Tất cả model Gemini đều thất bại:', eAll)
           // Fallback có cấu trúc đầy đủ

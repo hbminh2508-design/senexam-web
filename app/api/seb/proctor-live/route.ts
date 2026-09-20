@@ -166,13 +166,11 @@ export async function POST(request: Request) {
     // Chuẩn bị Base64 ảnh sạch
     const cleanBase64 = image.includes('base64,') ? image.split('base64,')[1] : image
 
-    // Động cơ xử lý thị giác (Vision Live) thế hệ mới nhất của Google Gemini:
-    // Ưu tiên gemini-2.5-flash: tốc độ cực nhanh (~300-400ms), thị giác máy tính cực nhạy
+    // Động cơ xử lý phân tích camera thông thường: sử dụng chuẩn 'gemini-3.5-flash-lite'
+    // Lưu ý: Tuyệt đối không dùng 'gemini-2.5-flash' vì đã lỗi thời và ngừng hỗ trợ
     const candidateModels = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-3.8-live',
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
     ]
 
     let resultJson: any = null
@@ -208,7 +206,7 @@ export async function POST(request: Request) {
         const parsed = extractJson(text)
         if (parsed && typeof parsed === 'object') {
           resultJson = parsed
-          modelUsed = modelName === 'gemini-2.5-flash' ? 'gemini-3.8-live (Gemini 2.5 Engine)' : modelName
+          modelUsed = modelName
           break
         }
       } catch (err: any) {

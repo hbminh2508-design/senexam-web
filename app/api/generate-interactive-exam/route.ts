@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Chỉ hỗ trợ tối đa 2 tệp' }, { status: 400 })
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' })
 
     const pageImageParts = (pageImages || []).flatMap((base64, idx) => [
       { text: `Trang ${idx + 1} (ảnh chụp trang đề bài):` },

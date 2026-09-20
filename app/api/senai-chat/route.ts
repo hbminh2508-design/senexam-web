@@ -36,7 +36,7 @@ Quy tắc trả lời:
 - Trình bày mạch lạc, dễ hiểu, từng bước rõ ràng, giải thích vì sao đáp án đúng là chính xác và vì sao các phương án khác bị loại trừ.
 - Nếu là chế độ Deep Think, hãy suy luận logic nhiều bước sâu sắc và toàn diện.`
 
-    const modelName = requestedModel || (deepThink ? 'gemini-3.7-flash' : 'gemini-3.5-flash-lite')
+    const modelName = requestedModel || (deepThink ? 'gemini-3.8-flash' : 'gemini-3.5-flash-lite')
 
     let reply = ''
 
@@ -74,7 +74,7 @@ Quy tắc trả lời:
         try {
           const ai = new GoogleGenAI({ apiKey })
           const res = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.8-flash',
             contents: promptText,
           })
           reply = res.text ?? ''
