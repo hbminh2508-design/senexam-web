@@ -242,12 +242,13 @@ export default function SebProctorCamera({
 
   const tickCountRef = useRef(0)
   const prevFrameAvgRef = useRef<number | null>(null)
+  const prevRoiAvgRef = useRef<number | null>(null)
 
   // Chụp một khung hình từ Video và xử lý:
   // - 100% đánh giá cục bộ qua Canvas trước mà không cần Gemini
   // - Khi quá tối (avgLuminance < 25): thông báo học sinh cần nơi sáng hơn
-  // - Khi phát hiện vật thể che mặt học sinh (vùng trung tâm bị che / mất tương phản / che cam): mới gửi Gemini xử lý
-  // - Cứ 1 phút mỗi lần (60s) Gemini mới kiểm tra định kỳ (kiểm tra đột xuất)
+  // - Nhận diện vật lạ trên vùng mặt thí sinh (điện thoại, che mặt, thiết bị lạ, giấy tờ...)
+  // - Khi phát hiện vật thể lạ trên mặt hoặc đột xuất mỗi 1 phút: gửi frame sang Gemini xử lý
   // - Trên màn hình các em học sinh sẽ KHÔNG THẤY CẢNH BÁO GÌ (Silent Mode), hệ thống âm thầm ghi log bằng chứng cho Admin
   const captureAndAnalyzeFrame = async () => {
     // Nếu đang xử lý frame trước thì bỏ qua để tránh nghẽn mạng
@@ -299,12 +300,17 @@ export default function SebProctorCamera({
         setIsTooDark(false)
       }
 
-      // B. KIỂM TRA VẬT THỂ CHE MẶT HỌC SINH (Vùng trung tâm khuôn mặt x: [100..300], y: [60..240])
+      // B. KIỂM TRA VẬT THỂ LẠ TRÊN MẶT THÍ SINH (Vùng trung tâm khuôn mặt x: [110..290], y: [50..230])
       let roiLuminanceSum = 0
       let roiLumSqSum = 0
       let roiCount = 0
-      for (let y = 60; y < 240; y += 4) {
-        for (let x = 100; x < 300; x += 4) {
+      let skinCount = 0
+      let darkForeignCount = 0
+      let brightForeignCount = 0
+      let vibrantForeignCount = 0
+
+      for (let y = 50; y < 230; y += 4) {
+        for (let x = 110; x < 290; x += 4) {
           const idx = (y * 400 + x) * 4
           const r = data[idx]
           const g = data[idx + 1]
@@ -313,19 +319,90 @@ export default function SebProctorCamera({
           roiLuminanceSum += lum
           roiLumSqSum += lum * lum
           roiCount++
+
+          // 1. Nhận diện pixel màu da người (Human Skin Model)
+          const sumRGB = r + g + b
+          const nr = sumRGB > 0 ? r / sumRGB : 0
+          const ng = sumRGB > 0 ? g / sumRGB : 0
+          const isSkinPixel =
+            r > 65 &&
+            g > 35 &&
+            b > 20 &&
+            r > g &&
+            r - g >= 8 &&
+            r > b &&
+            nr >= 0.34 &&
+            nr <= 0.56 &&
+            ng >= 0.26 &&
+            ng <= 0.40
+
+          if (isSkinPixel) {
+            skinCount++
+          }
+
+          // 2. Nhận diện dị vật tối màu bất thường (cụm camera điện thoại, thân máy điện thoại đen, vật che tối)
+          if (r < 42 && g < 42 && b < 42) {
+            darkForeignCount++
+          }
+
+          // 3. Nhận diện dị vật phản quang / màn hình điện thoại phát sáng / phao thi giấy trắng
+          if (r > 210 && g > 210 && b > 210 && Math.abs(r - g) < 20 && Math.abs(g - b) < 20) {
+            brightForeignCount++
+          }
+
+          // 4. Nhận diện vật thể màu sắc lạ áp sát mặt (ốp điện thoại màu, vải che, sticker)
+          if ((b > r + 30 || (g > r + 25 && g > b + 25)) && sumRGB > 120) {
+            vibrantForeignCount++
+          }
         }
       }
+
       const roiAvg = roiCount > 0 ? roiLuminanceSum / roiCount : 0
       const roiVariance = roiCount > 0 ? (roiLumSqSum / roiCount) - (roiAvg * roiAvg) : 0
+      const skinRatio = roiCount > 0 ? skinCount / roiCount : 0
+      const darkRatio = roiCount > 0 ? darkForeignCount / roiCount : 0
+      const brightRatio = roiCount > 0 ? brightForeignCount / roiCount : 0
+      const vibrantRatio = roiCount > 0 ? vibrantForeignCount / roiCount : 0
 
-      // Phát hiện vật thể che mặt: vùng mặt quá tối (< 15) hoặc biến mất tương phản do vật thể phẳng che (< 36) khi ngoài phòng có sáng, hoặc che kín cam
-      const isFaceObstructed = (avgLuminance >= 25 && (roiAvg < 15 || roiVariance < 36)) || (avgLuminance < 12)
+      // Chênh lệch ánh sáng đột ngột trên vùng mặt giữa 2 frame (vật thể hoặc tay vừa giơ lên mặt)
+      let hasAbruptMotion = false
+      if (prevRoiAvgRef.current !== null) {
+        const delta = Math.abs(roiAvg - prevRoiAvgRef.current)
+        if (delta > 32) {
+          hasAbruptMotion = true
+        }
+      }
+      prevRoiAvgRef.current = roiAvg
+
+      // Phát hiện vật thể lạ trên vùng mặt:
+      // - Cụm vật thể màu tối chiếm diện tích trên mặt (thân/cụm camera điện thoại > 9%)
+      // - Màn hình điện thoại sáng / giấy tài liệu phao thi trắng (> 8%)
+      // - Dị vật màu sắc nổi bật áp sát mặt (> 8%)
+      // - Khuôn mặt bị che phủ khi phòng sáng (tỷ lệ da tụt dưới 15% khi avgLuminance >= 28)
+      // - Che hoàn toàn bằng vật phẳng (roiVariance < 36) hoặc che kín camera (avgLuminance < 12)
+      // - Chuyển động đột ngột đưa vật lạ lên mặt
+      const hasDarkForeignObject = darkRatio > 0.09
+      const hasBrightForeignObject = brightRatio > 0.08
+      const hasVibrantForeignObject = vibrantRatio > 0.08
+      const hasSkinDisrupted = avgLuminance >= 28 && skinRatio < 0.15
+      const isFlatOccluded = avgLuminance >= 25 && roiVariance < 36
+      const isCameraBlocked = avgLuminance < 12
+
+      const isForeignObjectOnFace =
+        hasDarkForeignObject ||
+        hasBrightForeignObject ||
+        hasVibrantForeignObject ||
+        hasSkinDisrupted ||
+        isFlatOccluded ||
+        isCameraBlocked ||
+        hasAbruptMotion
 
       // C. ĐIỀU KIỆN GỬI GEMINI:
-      // "nếu phát hiện vật thể che mặt học sinh thì mới đưa qua gemini xử lí tiếp tránh quá đầy và cứ 1 phút mỗi lần thì gemini mới kiểm tra (Cũng có thể coi là kiểm tra đột xuất)"
+      // - Khi phát hiện vật lạ trên mặt thí sinh (điện thoại, che mặt, dị vật, phao thi...)
+      // - HOẶC định kỳ cứ 1 phút một lần để kiểm tra đột xuất
       const now = Date.now()
       const isSurpriseAudit = (now - lastGeminiAuditTs.current) >= 60000 // Đúng 1 phút / 60s một lần
-      const shouldSendToGemini = isFaceObstructed || isSurpriseAudit
+      const shouldSendToGemini = isForeignObjectOnFace || isSurpriseAudit
 
       if (!shouldSendToGemini) {
         // Hệ thống cục bộ kiểm soát 100%, không gửi request lên Gemini

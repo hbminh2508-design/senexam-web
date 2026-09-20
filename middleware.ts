@@ -206,6 +206,22 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // 4.6 Kiểm tra nếu truy cập qua subdomain chat: chat.senexam.me hoặc chat.*, zalo.*
+  const isChatSubdomain =
+    hostname.startsWith('chat.senexam.') ||
+    hostname.startsWith('chat.') ||
+    hostname.startsWith('zalo.')
+
+  if (isChatSubdomain) {
+    if (pathname === '/' || pathname === '/login' || pathname === '/dashboard') {
+      url.pathname = '/chat'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/chat')) {
+      return applySecurityHeaders(NextResponse.next())
+    }
+  }
+
   // 5. Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
   const isFepnSubdomain =
     hostname.startsWith('tsv.fepn.') ||
@@ -274,7 +290,8 @@ export function middleware(request: NextRequest) {
       pathname.startsWith('/seb-') ||
       pathname.startsWith('/seb') ||
       pathname.startsWith('/new-') ||
-      pathname.startsWith('/exams')
+      pathname.startsWith('/exams') ||
+      pathname.startsWith('/chat')
     ) {
       return applySecurityHeaders(NextResponse.next())
     }
@@ -291,6 +308,8 @@ export function middleware(request: NextRequest) {
       'admin',
       'api',
       'auth',
+      'chat',
+      'zalo-chat',
       'reset-password',
       'fepn-reset-password',
       'seb-dashboard',

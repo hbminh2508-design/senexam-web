@@ -35,18 +35,22 @@ QUY TẮC PHÁT HIỆN ĐIỆN THOẠI THÔNG MINH (SMARTPHONE):
   "confidence": 95,
   "description": "Cảnh báo: Phát hiện thí sinh sử dụng điện thoại di động"
 
-CÁC VI PHẠM KHÁC:
+CÁC VI PHẠM KHÁC (ĐẶC BIỆT LÀ VẬT LẠ TRÊN MẶT THÍ SINH):
+- VẬT LẠ TRÊN MẶT HOẶC CHE MẶT THÍ SINH: Phát hiện bất kỳ vật lạ nào xuất hiện trên mặt thí sinh, vật che miệng/mắt/tai, vật thể lạ áp sát vào mặt, điện thoại áp sát mặt, tai nghe bluetooth/mic bất thường, khẩu trang che kín mặt đáng ngờ, tay cầm vật thể che mặt:
+  foreign_object_detected = true, face_obstructed = true, suspicious = true, violation_type = "foreign_object_on_face"
 - Camera bị che mờ, đen xì, lấy tay hoặc vật thể che ống kính: is_camera_blocked = true, suspicious = true, violation_type = "camera_blocked"
 - Tài liệu giấy, sách, phao thi: cheat_sheet_detected = true, suspicious = true, violation_type = "cheat_sheet_detected"
 - Có người thứ 2 xuất hiện: multiple_people = true, suspicious = true, violation_type = "multiple_people"
-- Không thấy mặt thí sinh (quay đi chỗ khác): face_detected = false, suspicious = true, violation_type = "face_missing"
-- Nếu bình thường không có vi phạm: suspicious = false, phone_detected = false, violation_type = "none", severity = "info", description = "Làm bài nghiêm túc"
+- Không thấy mặt thí sinh (quay đi chỗ khác / vắng mặt): face_detected = false, suspicious = true, violation_type = "face_missing"
+- Nếu bình thường không có vi phạm: suspicious = false, phone_detected = false, foreign_object_detected = false, face_obstructed = false, violation_type = "none", severity = "info", description = "Làm bài nghiêm túc"
 
 ĐỊNH DẠNG ĐẦU RA BẮT BUỘC (CHỈ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON, KHÔNG BỌC VĂN BẢN KHÁC):
 {
   "is_camera_blocked": false,
   "phone_detected": false,
   "rear_camera_detected": false,
+  "foreign_object_detected": false,
+  "face_obstructed": false,
   "cheat_sheet_detected": false,
   "face_detected": true,
   "multiple_people": false,
@@ -240,15 +244,33 @@ export async function POST(request: Request) {
     }
 
     const isPhoneViolation = Boolean(resultJson.phone_detected || resultJson.rear_camera_detected)
-    const isSuspicious = Boolean(resultJson.suspicious && resultJson.violation_type !== 'none')
+    const isForeignObjectViolation = Boolean(resultJson.foreign_object_detected || resultJson.face_obstructed)
+    const isSuspicious = Boolean(
+      (resultJson.suspicious && resultJson.violation_type !== 'none') ||
+      isForeignObjectViolation ||
+      resultJson.is_camera_blocked ||
+      resultJson.cheat_sheet_detected ||
+      resultJson.multiple_people
+    )
 
     // 4. NGUYÊN TẮC LƯU ẢNH BẰNG CHỨNG:
     // "nếu không phát hiện thì không cần lưu ảnh, còn có vi phạm mới lưu ảnh"
-    if (isSuspicious || isPhoneViolation) {
+    if (isSuspicious || isPhoneViolation || isForeignObjectViolation) {
       try {
         const snapshotUri = image.startsWith('data:image')
           ? image
           : `data:image/jpeg;base64,${cleanBase64}`
+
+        let vType = resultJson.violation_type || 'suspicious_activity'
+        if (isPhoneViolation) vType = 'phone_detected'
+        else if (isForeignObjectViolation) vType = 'foreign_object_on_face'
+
+        let vDetails = resultJson.description || 'Phát hiện hành vi nghi vấn gian lận thi cử'
+        if (isPhoneViolation) {
+          vDetails = 'Cảnh báo: Phát hiện hình ảnh điện thoại (camera sau) - Đã lưu ảnh bằng chứng cho Quản trị viên'
+        } else if (isForeignObjectViolation) {
+          vDetails = resultJson.description || 'Cảnh báo: Phát hiện vật lạ trên mặt / vật che mặt thí sinh'
+        }
 
         await db.from('exam_proctoring_logs').insert({
           exam_id: String(examId || ''),
@@ -263,13 +285,11 @@ export async function POST(request: Request) {
           has_camera: true,
           is_active: true,
           is_disqualified: false,
-          violation_type: isPhoneViolation ? 'phone_detected' : (resultJson.violation_type || 'suspicious_activity'),
-          severity: isPhoneViolation ? 'warning' : (resultJson.severity || 'warning'),
+          violation_type: vType,
+          severity: (isPhoneViolation || isForeignObjectViolation) ? 'warning' : (resultJson.severity || 'warning'),
           confidence: Number(resultJson.confidence) || 95,
           snapshot_url: snapshotUri,
-          details: isPhoneViolation
-            ? 'Cảnh báo: Phát hiện hình ảnh điện thoại (camera sau) - Đã lưu ảnh bằng chứng cho Quản trị viên'
-            : (resultJson.description || 'Phát hiện hành vi nghi vấn gian lận thi cử'),
+          details: vDetails,
         })
       } catch (dbErr) {
         console.error('Lỗi khi lưu bằng chứng vi phạm vào Supabase:', dbErr)
