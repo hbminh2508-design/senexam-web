@@ -330,6 +330,14 @@ export default function DashboardPage() {
 
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
+      // Chỉ Quản trị viên mới được ở lại giao diện cũ (Legacy Dashboard)
+      // Tất cả người dùng thông thường được chuyển hướng ngay sang New Dashboard để tránh xung đột
+      const isAdmin = profile?.role === 'admin' || profile?.role === 'collab' || user.email === 'hoangbinhminh2508@gmail.com'
+      if (!isAdmin) {
+        router.replace('/new-dashboard')
+        return
+      }
+
       if (profile) {
         setUserRole(profile.role || 'student')
         setIsVip(!!profile.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now())
@@ -719,8 +727,8 @@ export default function DashboardPage() {
     { key: 'exams', label: 'Vào thi ngay', desc: 'Kho đề thi thử bám sát cấu trúc mới nhất.', icon: Target, color: 'indigo', onSelect: () => router.push('/exams') },
     {
       key: 'seb-security',
-      label: 'Phòng Thi SEB',
-      desc: 'Cổng thi bảo mật chống gian lận 100% qua Safe Exam Browser (SEB).',
+      label: 'Sen Exam Canvas',
+      desc: 'Môi trường khảo thí bảo mật cao chống gian lận 100% qua Sen Exam Canvas.',
       icon: ShieldCheck,
       color: 'sky',
       onSelect: () => router.push('/seb-dashboard'),

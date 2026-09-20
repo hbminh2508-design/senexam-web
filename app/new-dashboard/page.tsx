@@ -106,11 +106,11 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
   {
     key: 'seb-security',
-    title: 'Thi Bảo mật cao',
-    description: 'Cổng thi bảo mật chống gian lận 100% qua Safe Exam Browser (SEB).',
+    title: 'Sen Exam Canvas',
+    description: 'Môi trường khảo thí trực tuyến bảo mật cao chống gian lận 100% qua Sen Exam Canvas.',
     href: 'https://seb.thicu.tailieufepn.senexam.me',
     tone: 'from-[#0EA5E9] via-[#0284C7] to-[#1D4ED8]',
-    badge: 'SEB',
+    badge: 'Canvas',
     icon: ShieldCheck,
   },
   {
@@ -234,6 +234,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#EF4444] via-[#DC2626] to-[#991B1B]',
     badge: 'Admin',
     icon: ShieldCheck,
+  },
+  {
+    key: 'legacy-dashboard',
+    title: 'Giao Diện Cũ (Legacy Dashboard)',
+    description: 'Quay lại giao diện cũ để quản lý một số tính năng legacy (Chỉ Quản trị viên nhìn thấy).',
+    href: '/dashboard?legacy_admin=1',
+    tone: 'from-[#64748B] via-[#475569] to-[#334155]',
+    badge: 'Admin Legacy',
+    icon: Settings,
   },
 ]
 
@@ -365,13 +374,14 @@ export default function NewDashboardPage() {
   }, [router, hookBeta])
 
   const filteredActions = useMemo(() => {
-    // Ẩn nút Admin & Teacher nếu user không có quyền
+    // Ẩn nút Admin & Teacher & Legacy Dashboard nếu user không có quyền
+    const isAdmin = userRole === 'admin' || userRole === 'collab' || userEmail === 'hoangbinhminh2508@gmail.com'
     const allowedActions = QUICK_ACTIONS.filter((item) => {
-      if (item.key === 'admin') {
-        return userRole === 'admin' || userRole === 'collab'
+      if (item.key === 'admin' || item.key === 'legacy-dashboard') {
+        return isAdmin
       }
       if (item.key === 'teacher') {
-        return userRole === 'teacher' || userRole === 'admin' || userRole === 'collab'
+        return userRole === 'teacher' || isAdmin
       }
       return true
     })
@@ -382,7 +392,7 @@ export default function NewDashboardPage() {
       const hay = `${item.title} ${item.description}`.toLowerCase()
       return hay.includes(normalized)
     })
-  }, [deferredQuery, userRole])
+  }, [deferredQuery, userRole, userEmail])
 
   const focusScore = useMemo(() => {
     const base = submissionCount * 12 + streakDays * 4

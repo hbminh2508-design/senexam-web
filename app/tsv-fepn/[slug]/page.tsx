@@ -1290,15 +1290,15 @@ export default function FepnSubjectDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Nút sang SEB Exam làm bài kiểm tra */}
+                  {/* Nút sang Sen Exam Canvas làm bài kiểm tra */}
                   <Link
                     href="/seb-dashboard"
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs shadow-sm shadow-sky-500/30 transition group"
-                    title="Truy cập phòng thi SEB để làm bài kiểm tra trực tuyến"
+                    title="Truy cập phòng thi Sen Exam Canvas để làm bài kiểm tra trực tuyến"
                   >
                     <ShieldCheck className="h-3.5 w-3.5 text-white group-hover:scale-110 transition" />
-                    <span className="hidden sm:inline">Làm bài thi SEB</span>
-                    <span className="sm:hidden">Thi SEB</span>
+                    <span className="hidden sm:inline">Làm bài thi Canvas</span>
+                    <span className="sm:hidden">Thi Canvas</span>
                   </Link>
 
                   <a

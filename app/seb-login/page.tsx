@@ -321,7 +321,7 @@ export default function SebLoginPage() {
 
         <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
           <ShieldCheck className="h-4 w-4 text-sky-600" />
-          <span className="hidden sm:inline">Môi Trường Khảo Thí An Toàn SEB</span>
+          <span className="hidden sm:inline">Môi Trường Khảo Thí Sen Exam Canvas</span>
         </div>
       </header>
 
@@ -351,7 +351,7 @@ export default function SebLoginPage() {
             </h1>
             <p className="text-xs text-slate-500 mt-1 font-medium">
               {mode === 'login'
-                ? 'Hệ thống thi cử trực tuyến tích hợp Safe Exam Browser'
+                ? 'Hệ thống thi cử trực tuyến tích hợp Sen Exam Canvas'
                 : mode === 'signup'
                 ? 'Tạo tài khoản nhanh chóng để tham gia các kỳ thi trực tuyến'
                 : mode === 'quick_code'

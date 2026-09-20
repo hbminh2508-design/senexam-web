@@ -68,7 +68,8 @@ export default function SebProctorCamera({
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const isAnalyzingRef = useRef(false)
   const [lastCheckTime, setLastCheckTime] = useState<string>('')
-  const [warningMessage, setWarningMessage] = useState<string | null>(null)
+  const [isTooDark, setIsTooDark] = useState(false)
+  const lastGeminiAuditTs = useRef<number>(Date.now())
   const [apiStatusMessage, setApiStatusMessage] = useState<string | null>(null)
   const [violationCount, setViolationCount] = useState(0)
 
@@ -242,10 +243,14 @@ export default function SebProctorCamera({
   const tickCountRef = useRef(0)
   const prevFrameAvgRef = useRef<number | null>(null)
 
-  // Chụp một khung hình từ Video và gửi sang Gemini Proctoring API
-  // Tối ưu hóa: kiểm tra cục bộ trước, gửi Gemini mỗi 5 lần hoặc khi có nghi vấn (che cam, đổi góc)
+  // Chụp một khung hình từ Video và xử lý:
+  // - 100% đánh giá cục bộ qua Canvas trước mà không cần Gemini
+  // - Khi quá tối (avgLuminance < 25): thông báo học sinh cần nơi sáng hơn
+  // - Khi phát hiện vật thể che mặt học sinh (vùng trung tâm bị che / mất tương phản / che cam): mới gửi Gemini xử lý
+  // - Cứ 1 phút mỗi lần (60s) Gemini mới kiểm tra định kỳ (kiểm tra đột xuất)
+  // - Trên màn hình các em học sinh sẽ KHÔNG THẤY CẢNH BÁO GÌ (Silent Mode), hệ thống âm thầm ghi log bằng chứng cho Admin
   const captureAndAnalyzeFrame = async () => {
-    // Nếu đang xử lý frame trước thì bỏ qua để tránh nghẽn mạng và dính lỗi 429
+    // Nếu đang xử lý frame trước thì bỏ qua để tránh nghẽn mạng
     if (isAnalyzingRef.current) return
 
     const video = videoRef.current
@@ -268,13 +273,12 @@ export default function SebProctorCamera({
       // Vẽ hình ảnh từ video sang canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       tickCountRef.current += 1
-      const currentTick = tickCountRef.current
 
-      // 🔍 1. PRE-CHECK CỤC BỘ TRÊN CANVAS (Chống tràn limit Gemini):
+      // 🔍 1. NHẬN DIỆN 100% CỤC BỘ QUA CANVAS (Không tốn quota Gemini):
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const data = imgData.data
       let totalLuminance = 0
-      const sampleStep = 16 // lấy mẫu 1/16 pixels để siêu nhanh không tốn CPU
+      const sampleStep = 8 // lấy mẫu dày hơn để đo độ sáng chính xác
       let sampleCount = 0
 
       for (let i = 0; i < data.length; i += sampleStep * 4) {
@@ -287,26 +291,48 @@ export default function SebProctorCamera({
       }
 
       const avgLuminance = sampleCount > 0 ? totalLuminance / sampleCount : 0
-      const isCameraBlocked = avgLuminance < 12 // Quá tối hoặc lấy tay che camera
 
-      // Phát hiện thay đổi ánh sáng / vật thể đột ngột trước camera
-      let isMovementSuspicious = false
-      if (prevFrameAvgRef.current !== null) {
-        const lumDiff = Math.abs(avgLuminance - prevFrameAvgRef.current)
-        if (lumDiff > 28) {
-          isMovementSuspicious = true
+      // A. KIỂM TRA ÁNH SÁNG: "khi nào phát hiện quá tối thì thông báo tới học sinh cần nơi sáng hơn"
+      if (avgLuminance < 25) {
+        setIsTooDark(true)
+      } else {
+        setIsTooDark(false)
+      }
+
+      // B. KIỂM TRA VẬT THỂ CHE MẶT HỌC SINH (Vùng trung tâm khuôn mặt x: [100..300], y: [60..240])
+      let roiLuminanceSum = 0
+      let roiLumSqSum = 0
+      let roiCount = 0
+      for (let y = 60; y < 240; y += 4) {
+        for (let x = 100; x < 300; x += 4) {
+          const idx = (y * 400 + x) * 4
+          const r = data[idx]
+          const g = data[idx + 1]
+          const b = data[idx + 2]
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b
+          roiLuminanceSum += lum
+          roiLumSqSum += lum * lum
+          roiCount++
         }
       }
-      prevFrameAvgRef.current = avgLuminance
+      const roiAvg = roiCount > 0 ? roiLuminanceSum / roiCount : 0
+      const roiVariance = roiCount > 0 ? (roiLumSqSum / roiCount) - (roiAvg * roiAvg) : 0
 
-      // QUY TẮC: "để tránh việc tràn limit của gemini, mỗi 5 lần mới chụp một lần nhưng sẽ do hệ thống chụp trước nếu nghi ngờ đó là vật thể giống điện thoại thì mới chuyển qua cho gemini phân tích"
-      const shouldSendToGemini = (currentTick % 5 === 0) || isCameraBlocked || isMovementSuspicious
+      // Phát hiện vật thể che mặt: vùng mặt quá tối (< 15) hoặc biến mất tương phản do vật thể phẳng che (< 36) khi ngoài phòng có sáng, hoặc che kín cam
+      const isFaceObstructed = (avgLuminance >= 25 && (roiAvg < 15 || roiVariance < 36)) || (avgLuminance < 12)
+
+      // C. ĐIỀU KIỆN GỬI GEMINI:
+      // "nếu phát hiện vật thể che mặt học sinh thì mới đưa qua gemini xử lí tiếp tránh quá đầy và cứ 1 phút mỗi lần thì gemini mới kiểm tra (Cũng có thể coi là kiểm tra đột xuất)"
+      const now = Date.now()
+      const isSurpriseAudit = (now - lastGeminiAuditTs.current) >= 60000 // Đúng 1 phút / 60s một lần
+      const shouldSendToGemini = isFaceObstructed || isSurpriseAudit
 
       if (!shouldSendToGemini) {
-        // Hệ thống cục bộ kiểm soát tốt, bỏ qua gửi request lên Gemini
+        // Hệ thống cục bộ kiểm soát 100%, không gửi request lên Gemini
         return
       }
 
+      lastGeminiAuditTs.current = now
       isAnalyzingRef.current = true
       setIsAnalyzing(true)
       const base64Image = canvas.toDataURL('image/jpeg', 0.65)
@@ -346,34 +372,11 @@ export default function SebProctorCamera({
         setApiStatusMessage(null)
       }
 
-      // 🚨 CẢNH BÁO VI PHẠM (ĐÃ BỎ TÍNH NĂNG ĐUỔI RA KHỎI PHÒNG THI THEO YÊU CẦU)
-      const isPhoneDetected = Boolean(
-        result?.phone_detected ||
-        result?.rear_camera_detected ||
-        result?.violation_type === 'phone_detected'
-      )
-
-      if (isPhoneDetected) {
-        const desc = result.description || 'Cảnh báo: Phát hiện hình ảnh điện thoại di động! Bằng chứng đã được gửi về Quản trị viên.'
-        setWarningMessage(desc)
+      // 🤫 CHẾ ĐỘ GIÁM SÁT THẦM LẶNG (SILENT PROCTORING):
+      // "Trên màn hình các em sẽ không thấy cảnh báo gì"
+      // Backend /api/seb/proctor-live đã tự động lưu ảnh vi phạm & chi tiết vào Supabase cho Quản trị viên
+      if (result?.phone_detected || result?.rear_camera_detected || (result?.suspicious && result?.violation_type !== 'none')) {
         setViolationCount((c) => c + 1)
-        if (onViolationRef.current) {
-          onViolationRef.current(`🚨 ${desc}`)
-        }
-        // ĐÃ BỎ ĐUỔI KHỎI PHÒNG THI (Không gọi onDisqualified để học sinh tiếp tục làm bài)
-        return
-      }
-
-      // Các vi phạm khác (che cam, phao thi...)
-      if (result && result.suspicious && result.violation_type !== 'none') {
-        const desc = result.description || 'Phát hiện nghi vấn vi phạm quy chế'
-        setWarningMessage(desc)
-        setViolationCount((c) => c + 1)
-        if (onViolationRef.current) {
-          onViolationRef.current(`⚠️ Giám thị AI: ${desc}`)
-        }
-      } else {
-        setWarningMessage(null)
       }
     } catch (e) {
       console.warn('Lỗi khi gửi frame phân tích Gemini proctoring:', e)
@@ -510,7 +513,7 @@ export default function SebProctorCamera({
           <div className="flex items-center justify-between gap-1">
             <span className="flex items-center gap-1 text-[11px] font-black text-sky-400 truncate">
               <ShieldCheck className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-              <span>Gemini 3.5 Flash-Lite Proctor</span>
+              <span>Sen Exam Canvas Proctor</span>
             </span>
 
             <div className="flex items-center gap-1 shrink-0">
@@ -536,15 +539,14 @@ export default function SebProctorCamera({
             </div>
           </div>
 
-          <p className="text-[10px] text-slate-300 line-clamp-1 mt-0.5">
-            Giám sát 2s/lần: Phát hiện camera sau điện thoại, che cam & phao
+          <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+            Hệ thống giám sát khảo thí trực tiếp
           </p>
 
-          {/* Cảnh báo vi phạm hoặc trạng thái API */}
-          {warningMessage ? (
-            <div className="mt-1 flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/40 text-rose-300 px-2 py-0.5 rounded-lg text-[10px] font-bold animate-pulse">
-              <AlertTriangle className="h-3 w-3 text-rose-400 shrink-0" />
-              <span className="truncate">{warningMessage}</span>
+          {/* Thông báo ánh sáng hoặc trạng thái giám sát (Silent Mode: Không hiển thị cảnh báo vi phạm tới học sinh) */}
+          {isTooDark ? (
+            <div className="mt-1 flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2 py-0.5 rounded-lg text-[10px] font-bold animate-pulse">
+              <span>💡 Cần nơi sáng hơn</span>
             </div>
           ) : apiStatusMessage ? (
             <div className="mt-1 flex items-center gap-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg text-[9px] font-bold">
@@ -555,7 +557,7 @@ export default function SebProctorCamera({
             <div className="mt-1 flex items-center justify-between gap-1 text-[10px] font-semibold text-emerald-400">
               <div className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span>{isPlaying ? 'AI đang giám sát trực tiếp' : 'Đang tải hình ảnh...'}</span>
+                <span>{isPlaying ? 'Hệ thống đang giám sát bài thi' : 'Đang kết nối camera...'}</span>
               </div>
             </div>
           )}

@@ -58,40 +58,27 @@ export default function LegacyUiSunsetModal() {
       if (user) {
         setUserId(user.id)
 
-        // Kiểm tra xem user đã xác nhận chuyển qua New Dashboard chưa
-        const localPref = localStorage.getItem('sen_prefer_new_ui')
-        if (localPref === 'true') {
-          // Tự động chuyển hướng ngay sang New Dashboard
-          const newPath = getNewEquivalentPath(pathname)
-          router.replace(newPath)
-          return
-        }
-
         const { data: profile } = await supabase
           .from('profiles')
-          .select('migrated_to_new_ui')
+          .select('role, migrated_to_new_ui')
           .eq('id', user.id)
           .single()
 
-        if (profile?.migrated_to_new_ui) {
-          localStorage.setItem('sen_prefer_new_ui', 'true')
-          const newPath = getNewEquivalentPath(pathname)
-          router.replace(newPath)
+        const isAdmin = profile?.role === 'admin' || profile?.role === 'collab' || user.email === 'hoangbinhminh2508@gmail.com'
+        if (isAdmin) {
+          // Admin được đặc quyền truy cập giao diện cũ để quản lý tính năng legacy: KHÔNG HIỆN THÔNG BÁO DỪNG HOẠT ĐỘNG
+          setIsOpen(false)
           return
         }
-      }
 
-      // Nếu đã quá hạn 31/08/2026 -> BẮT BUỘC hiện toàn màn hình
-      if (expired) {
-        setIsOpen(true)
+        // Với người dùng thông thường: chuyển hướng ngay sang New Dashboard để tránh xung đột
+        const newPath = getNewEquivalentPath(pathname)
+        router.replace(newPath)
         return
       }
 
-      // Nếu chưa quá hạn -> kiểm tra xem phiên này đã tắt modal chưa
-      const dismissed = sessionStorage.getItem('sen_sunset_notice_dismissed')
-      if (!dismissed) {
-        setIsOpen(true)
-      }
+      // Khách chưa đăng nhập: chuyển hướng sang New Dashboard
+      router.replace(getNewEquivalentPath(pathname))
     }
 
     checkMigrationStatus()

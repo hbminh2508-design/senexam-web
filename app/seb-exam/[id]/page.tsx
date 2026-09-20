@@ -350,9 +350,9 @@ export default function SebExamRoomPage() {
     return () => clearInterval(timer)
   }, [hasStarted, loading, timeLeft, submittedResult, submitting])
 
-  // ⚠️ Cảnh báo vi phạm quy chế thi (Đã bỏ đuổi khỏi phòng thi)
-  const handleViolationAlert = (message: string) => {
-    setProctorViolationWarning(message)
+  // 🤫 Chế độ giám sát thầm lặng (Silent Mode): Không hiển thị cảnh báo lên màn hình thí sinh
+  const handleViolationAlert = (_message: string) => {
+    // Giám sát ngầm: thông tin và ảnh bằng chứng tự động lưu cho Quản trị viên
   }
 
   // 4. Tự động lưu bài làm vào LocalStorage
@@ -1138,23 +1138,6 @@ export default function SebExamRoomPage() {
           </button>
         </div>
       </header>
-
-      {/* Cảnh báo Giám thị AI nếu phát hiện bất thường (Không đuổi khỏi phòng thi) */}
-      {proctorViolationWarning && (
-        <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-40 animate-in fade-in sticky top-14">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>{proctorViolationWarning}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setProctorViolationWarning(null)}
-            className="px-2 py-0.5 bg-black/20 hover:bg-black/30 rounded-md text-[11px] font-bold transition"
-          >
-            Đã hiểu
-          </button>
-        </div>
-      )}
 
       {/* Main Split: Left PDF (nhúng an toàn) / Right Answer Sheet (Phiếu làm bài) */}
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">

@@ -303,7 +303,7 @@ export default function FepnMobileNav({
                     <span className="text-[10px] text-slate-400 font-medium">Slide, đề thi & bài tập</span>
                   </Link>
 
-                  {/* 1.1 Phòng Thi SEB Khảo thí trực tuyến */}
+                  {/* 1.1 Phòng Thi Sen Exam Canvas Khảo thí trực tuyến */}
                   <Link
                     href="/seb-dashboard"
                     onClick={() => setShowDrawer(false)}
@@ -312,7 +312,7 @@ export default function FepnMobileNav({
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-600 text-white mb-1.5 group-hover:scale-105 transition shadow-sm">
                       <ShieldCheck className="h-4 w-4" />
                     </div>
-                    <span className="text-xs font-black text-sky-700 dark:text-sky-300">Phòng Thi SEB</span>
+                    <span className="text-xs font-black text-sky-700 dark:text-sky-300">Sen Exam Canvas</span>
                     <span className="text-[10px] text-slate-400 font-medium">Khảo thí bảo mật cao</span>
                   </Link>
 

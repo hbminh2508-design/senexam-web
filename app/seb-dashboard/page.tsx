@@ -352,13 +352,13 @@ export default function SebDashboardPage() {
               className="px-3 py-1.5 rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 text-xs font-bold transition flex items-center gap-1.5"
             >
               <Award className="h-3.5 w-3.5" />
-              <span>Quản Trị SEB</span>
+              <span>Quản Trị Canvas</span>
             </Link>
           )}
 
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-xs font-bold">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Môi trường bảo mật SEB sẵn sàng</span>
+            <span>Môi trường Sen Exam Canvas sẵn sàng</span>
           </div>
 
           <button
@@ -440,7 +440,7 @@ export default function SebDashboardPage() {
             >
               <div className="flex items-center gap-2 min-w-0">
                 <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
-                <span className="truncate">Tất Cả Đề Thi (SenExam & SEB)</span>
+                <span className="truncate">Tất Cả Đề Thi (SenExam & Canvas)</span>
               </div>
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
@@ -632,7 +632,7 @@ export default function SebDashboardPage() {
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           }`}
                         >
-                          {isSebRequired ? '🛡️ SEB' : '📘 SenExam'}
+                          {isSebRequired ? '🛡️ Canvas' : '📘 SenExam'}
                         </span>
                       </div>
 
@@ -730,7 +730,7 @@ export default function SebDashboardPage() {
                 <KeyRound className="h-7 w-7" />
               </div>
               <span className="text-[11px] font-black uppercase text-sky-600 tracking-wider">
-                Xác Nhận & Cấp Mã Phòng Thi SEB
+                Xác Nhận & Cấp Mã Phòng Thi Sen Exam Canvas
               </span>
               <h3
                 className="text-lg sm:text-xl font-black text-slate-900 mt-1 line-clamp-2"
