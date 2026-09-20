@@ -265,12 +265,16 @@ export function middleware(request: NextRequest) {
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
-    // 5.9 Các đường dẫn hệ thống đã có
+    // 5.9 Các đường dẫn hệ thống đã có (bao gồm các trang SEB / Sen Exam Canvas, không rewrite sang môn học)
     if (
       pathname.startsWith('/tsv-fepn') ||
       pathname.startsWith('/new-sign') ||
       pathname.startsWith('/fepn-reset-password') ||
-      pathname.startsWith('/sen-cap-lai-mat-khau')
+      pathname.startsWith('/sen-cap-lai-mat-khau') ||
+      pathname.startsWith('/seb-') ||
+      pathname.startsWith('/seb') ||
+      pathname.startsWith('/new-') ||
+      pathname.startsWith('/exams')
     ) {
       return applySecurityHeaders(NextResponse.next())
     }
@@ -289,8 +293,18 @@ export function middleware(request: NextRequest) {
       'auth',
       'reset-password',
       'fepn-reset-password',
+      'seb-dashboard',
+      'seb-login',
+      'seb-profile',
+      'seb-admin',
+      'seb-exam',
+      'seb-reviews',
     ]
-    if (RESERVED_SLUGS.includes(slug.toLowerCase())) {
+    if (
+      RESERVED_SLUGS.includes(slug.toLowerCase()) ||
+      slug.toLowerCase().startsWith('seb-') ||
+      slug.toLowerCase().startsWith('seb')
+    ) {
       if (slug === 'reset-password' || slug === 'fepn-reset-password') {
         url.pathname = '/fepn-reset-password'
         return applySecurityHeaders(NextResponse.rewrite(url))

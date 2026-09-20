@@ -751,6 +751,20 @@ export default function FepnDashboardMainPage() {
               </Link>
             )}
 
+            {/* Nút Sen Exam Canvas trên Top Bar */}
+            <a
+              href={
+                typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                  ? 'https://seb.thicu.tailieufepn.senexam.me'
+                  : '/seb-dashboard'
+              }
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-3 py-2 text-xs font-black transition shadow-sm shadow-sky-500/25 hover:scale-105 active:scale-95"
+              title="Cổng khảo thí bảo mật cao Sen Exam Canvas"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-white" />
+              <span>Sen Exam Canvas</span>
+            </a>
+
             <Link
               href="/fepn-recap"
               className="hidden md:inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-2 text-xs font-bold transition shadow-sm hover:scale-105"
@@ -1468,8 +1482,12 @@ export default function FepnDashboardMainPage() {
 
             {/* List tính năng */}
             <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <Link
-                href="/seb-dashboard"
+              <a
+                href={
+                  typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                    ? 'https://seb.thicu.tailieufepn.senexam.me'
+                    : '/seb-dashboard'
+                }
                 onClick={() => setShowMobileMenu(false)}
                 className="flex flex-col items-start p-3.5 rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 to-blue-500/10 hover:border-sky-500 hover:from-sky-500/20 hover:to-blue-500/20 transition group"
               >
@@ -1478,7 +1496,7 @@ export default function FepnDashboardMainPage() {
                 </div>
                 <span className="text-xs font-black text-sky-700 dark:text-sky-300">Sen Exam Canvas</span>
                 <span className="text-[10px] text-slate-400 font-medium">Khảo thí bảo mật cao</span>
-              </Link>
+              </a>
 
               <Link
                 href="/fepn-schedule"

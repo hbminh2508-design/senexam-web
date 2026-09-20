@@ -304,8 +304,12 @@ export default function FepnMobileNav({
                   </Link>
 
                   {/* 1.1 Phòng Thi Sen Exam Canvas Khảo thí trực tuyến */}
-                  <Link
-                    href="/seb-dashboard"
+                  <a
+                    href={
+                      typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                        ? 'https://seb.thicu.tailieufepn.senexam.me'
+                        : '/seb-dashboard'
+                    }
                     onClick={() => setShowDrawer(false)}
                     className="flex flex-col items-start p-3 rounded-2xl border transition group border-sky-500/30 bg-gradient-to-br from-sky-500/10 to-blue-500/10 hover:border-sky-500 hover:from-sky-500/20 hover:to-blue-500/20"
                   >
@@ -314,7 +318,7 @@ export default function FepnMobileNav({
                     </div>
                     <span className="text-xs font-black text-sky-700 dark:text-sky-300">Sen Exam Canvas</span>
                     <span className="text-[10px] text-slate-400 font-medium">Khảo thí bảo mật cao</span>
-                  </Link>
+                  </a>
 
                   {/* 2. Lịch học & Thời khóa biểu */}
                   <Link

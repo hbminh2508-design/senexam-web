@@ -1332,6 +1332,20 @@ export default function FepnRecapPage() {
               </button>
             </div>
 
+            {/* Sen Exam Canvas Link */}
+            <a
+              href={
+                typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                  ? 'https://seb.thicu.tailieufepn.senexam.me'
+                  : '/seb-dashboard'
+              }
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-3 py-2 text-xs font-black transition shadow-sm shadow-sky-500/25 hover:scale-105 active:scale-95"
+              title="Cổng khảo thí bảo mật cao Sen Exam Canvas"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-white" />
+              <span>Sen Exam Canvas</span>
+            </a>
+
             {/* FEPN GPA Link */}
             <Link
               href="/fepn-gpa"

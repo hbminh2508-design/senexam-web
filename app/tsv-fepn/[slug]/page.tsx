@@ -892,6 +892,20 @@ export default function FepnSubjectDetailPage() {
               </div>
             )}
 
+            {/* Nút Sen Exam Canvas trên Top Bar */}
+            <a
+              href={
+                typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                  ? 'https://seb.thicu.tailieufepn.senexam.me'
+                  : '/seb-dashboard'
+              }
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-3 py-1.5 text-xs font-black transition shadow-sm shadow-sky-500/25 hover:scale-105 active:scale-95"
+              title="Cổng khảo thí bảo mật cao Sen Exam Canvas"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-white" />
+              <span>Sen Exam Canvas</span>
+            </a>
+
             <Link
               href="/fepn-recap"
               className="hidden md:inline-flex items-center rounded-xl border border-sky-500/30 bg-sky-50 hover:bg-sky-100 text-sky-800 px-3 py-1.5 text-xs font-bold transition shadow-sm hover:scale-105"
@@ -1290,17 +1304,6 @@ export default function FepnSubjectDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Nút sang Sen Exam Canvas làm bài kiểm tra */}
-                  <Link
-                    href="/seb-dashboard"
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs shadow-sm shadow-sky-500/30 transition group"
-                    title="Truy cập phòng thi Sen Exam Canvas để làm bài kiểm tra trực tuyến"
-                  >
-                    <ShieldCheck className="h-3.5 w-3.5 text-white group-hover:scale-110 transition" />
-                    <span className="hidden sm:inline">Làm bài thi Canvas</span>
-                    <span className="sm:hidden">Thi Canvas</span>
-                  </Link>
-
                   <a
                     href={selectedMaterial.file_url}
                     target="_blank"
