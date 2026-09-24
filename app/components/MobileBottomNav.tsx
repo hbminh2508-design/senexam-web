@@ -290,17 +290,17 @@ export default function MobileBottomNav() {
 
   return (
     <>
-      {/* THANH BOTTOM NAV CỐ ĐỊNH Ở ĐÁY MÀN HÌNH (CHỈ HIỂN THỊ TRÊN MOBILE) */}
+      {/* THANH BOTTOM NAV DẠNG FLOATING PILL BO TRÒN GÓC THẨM MỸ (CHỈ HIỂN THỊ TRÊN MOBILE) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-black/10 dark:border-white/10 px-2.5 pt-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] select-none safe-area-bottom"
-        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))' }}
+        className="md:hidden fixed inset-x-3.5 z-40 max-w-md mx-auto rounded-full bg-white/92 dark:bg-slate-900/95 backdrop-blur-2xl border border-black/10 dark:border-white/15 px-3 py-1.5 shadow-[0_12px_36px_rgba(0,0,0,0.18)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.6)] select-none safe-area-bottom"
+        style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom, 0.75rem))' }}
       >
-        <div className="flex items-center justify-around gap-1 max-w-lg mx-auto">
+        <div className="flex items-center justify-between gap-1 w-full">
           {/* 1. Trang chủ */}
           <Link
             href="/new-dashboard"
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-full transition ${
               isHomeActive
                 ? 'text-pink-600 dark:text-pink-400 font-black'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
@@ -313,7 +313,7 @@ export default function MobileBottomNav() {
           {/* 2. Đề thi */}
           <Link
             href="/new-exams"
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-full transition ${
               isExamsActive
                 ? 'text-pink-600 dark:text-pink-400 font-black'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
@@ -327,7 +327,7 @@ export default function MobileBottomNav() {
           <button
             type="button"
             onClick={() => setShowAllFeatures(true)}
-            className="flex flex-col items-center justify-center flex-1 py-1 rounded-xl text-slate-700 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-400 transition"
+            className="flex flex-col items-center justify-center flex-1 py-1 rounded-full text-slate-700 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-400 transition"
           >
             <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20 shrink-0 aspect-square">
               <Compass className="h-4 w-4 shrink-0 aspect-square" />
@@ -338,7 +338,7 @@ export default function MobileBottomNav() {
           {/* 4. Thư viện */}
           <Link
             href="/new-library"
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-full transition ${
               isLibraryActive
                 ? 'text-pink-600 dark:text-pink-400 font-black'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
@@ -348,14 +348,15 @@ export default function MobileBottomNav() {
             <span className="text-[10px] mt-0.5 tracking-tight">Thư viện</span>
           </Link>
 
-          {/* 5. Nút SenAI ở cuối bên phải: Thiết kế giống nút cũ (Chữ SenAI) */}
+          {/* 5. Nút SenAI ở cuối bên phải: Thiết kế dạng HÌNH TRÒN ĐỘC ĐÁO */}
           <button
             type="button"
             onClick={handleToggleSenChat}
-            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white font-black shadow-md shadow-pink-500/25 active:scale-95 transition shrink-0"
+            aria-label="Mở SenAI Chat"
+            title="Mở SenAI Chat"
+            className="flex h-10 w-10 shrink-0 aspect-square items-center justify-center rounded-full bg-gradient-to-tr from-pink-500 via-purple-600 to-indigo-600 text-white shadow-md shadow-pink-500/35 hover:scale-105 active:scale-90 transition border border-white/25 ml-0.5"
           >
-            <Sparkles className="h-3.5 w-3.5 text-amber-300 animate-pulse shrink-0 aspect-square" />
-            <span className="text-[11px] font-black tracking-wider uppercase font-sans">SenAI</span>
+            <Sparkles className="h-5 w-5 text-amber-300 animate-pulse shrink-0 aspect-square" />
           </button>
         </div>
       </nav>
@@ -372,10 +373,10 @@ export default function MobileBottomNav() {
             </div>
 
             {/* Header Drawer */}
-            <div className="px-5 py-3 flex items-center justify-between border-b border-black/10 dark:border-white/10">
+            <div className="px-5 py-3 flex items-center justify-between border-b border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
               <div>
                 <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <Compass className="h-5 w-5 text-pink-500" />
+                  <Compass className="h-5 w-5 text-pink-500 shrink-0 aspect-square" />
                   Tất Cả Tính Năng SenExam
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -392,8 +393,8 @@ export default function MobileBottomNav() {
               </button>
             </div>
 
-            {/* Thanh tìm kiếm nhanh */}
-            <div className="px-4 py-3 border-b border-black/5 dark:border-white/5 bg-slate-50 dark:bg-slate-800/50">
+            {/* Thanh tìm kiếm nhanh - không autoFocus để tránh nhảy khung hình / zoom trên mobile */}
+            <div className="px-4 py-3 border-b border-black/5 dark:border-white/5 bg-slate-50 dark:bg-slate-800/60">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
@@ -401,8 +402,7 @@ export default function MobileBottomNav() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Tìm đề thi, đồ thị, phòng lab, AI..."
-                  className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 pl-9 pr-8 py-2.5 text-xs font-semibold outline-none focus:border-pink-500"
-                  autoFocus
+                  className="w-full rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 text-slate-900 dark:text-white pl-9 pr-8 py-2.5 text-[16px] sm:text-xs font-semibold outline-none focus:border-pink-500"
                 />
                 {searchQuery && (
                   <button
@@ -417,7 +417,7 @@ export default function MobileBottomNav() {
             </div>
 
             {/* Danh sách tính năng theo từng phân hệ cuộn mượt mà */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-10">
+            <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-28">
               {[
                 { key: 'study', title: 'Học tập & Luyện thi', icon: '📚', color: 'text-emerald-500' },
                 { key: 'math_exam', title: 'Toán học & Khảo thí', icon: '📐', color: 'text-sky-500' },
@@ -451,25 +451,25 @@ export default function MobileBottomNav() {
                             key={item.key}
                             href={item.href}
                             onClick={() => setShowAllFeatures(false)}
-                            className="group flex items-center justify-between p-3 rounded-2xl border border-black/8 dark:border-white/10 bg-white dark:bg-slate-800/80 active:bg-black/5 dark:active:bg-white/5 transition shadow-xs"
+                            className="group flex items-center justify-between p-3 rounded-2xl border border-black/8 dark:border-white/10 bg-white dark:bg-slate-800/90 active:bg-black/5 dark:active:bg-white/10 transition shadow-xs overflow-hidden"
                             {...extraProps}
                           >
-                            <div className="flex items-center gap-3 min-w-0 pr-2">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300 shrink-0">
-                                <Icon className="h-5 w-5" />
+                            <div className="flex items-center gap-3 min-w-0 pr-2 flex-1">
+                              <div className="flex h-10 w-10 shrink-0 aspect-square items-center justify-center rounded-xl bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                                <Icon className="h-5 w-5 shrink-0 aspect-square" />
                               </div>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   <h5 className="text-xs font-black text-slate-900 dark:text-white truncate">
                                     {item.title}
                                   </h5>
                                   {item.badge && (
-                                    <span className="rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1.5 py-0.2 text-[9px] font-black uppercase">
+                                    <span className="rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1.5 py-0.2 text-[9px] font-black uppercase shrink-0">
                                       {item.badge}
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-medium">
                                   {item.desc}
                                 </p>
                               </div>

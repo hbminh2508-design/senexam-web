@@ -48,6 +48,9 @@ const MALICIOUS_PATTERNS = [
   'zgrab',
   'shodan',
   'censys',
+  'nuclei',
+  'gobuster',
+  'ffuf',
 ]
 
 // Hàm gán các Security Headers chuẩn OWASP cho mọi response
@@ -57,8 +60,9 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.headers.set('X-XSS-Protection', '1; mode=block')
   res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
-  // Cho phép camera=(self) để hỗ trợ Proctoring thi cử và quét mã QR đăng nhập nội bộ, chặn microphone & geolocation
   res.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()')
+  res.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+  res.headers.set('X-Permitted-Cross-Domain-Policies', 'none')
   return res
 }
 
@@ -85,6 +89,22 @@ export function middleware(request: NextRequest) {
   const isMaliciousBot = MALICIOUS_PATTERNS.some((pattern) => userAgent.includes(pattern))
   if (isMaliciousBot) {
     return new NextResponse('Access Denied: Malicious activity detected.', { status: 403 })
+  }
+
+  // 1.5 Chặn quét các tệp nhạy cảm (Scanner & Exploit Probing)
+  const pathLower = pathname.toLowerCase()
+  if (
+    pathLower.endsWith('.env') ||
+    pathLower.endsWith('.git') ||
+    pathLower.endsWith('.bak') ||
+    pathLower.endsWith('.sql') ||
+    pathLower.includes('wp-admin') ||
+    pathLower.includes('phpmyadmin') ||
+    pathLower.includes('cgi-bin') ||
+    pathLower.includes('actuator') ||
+    pathLower.includes('/etc/passwd')
+  ) {
+    return new NextResponse('Access Denied: Security probe detected.', { status: 403 })
   }
 
   // 2. Chặn các query parameter chứa payload tấn công XSS / SQLi / Path Traversal rõ ràng
