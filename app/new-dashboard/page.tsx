@@ -56,6 +56,7 @@ import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 import { canAccessCategorizedDashboard } from '@/lib/roadmapSchedule'
+import FeatureIllustration from '@/app/components/FeatureIllustration'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
@@ -448,15 +449,7 @@ export default function NewDashboardPage() {
     })
   }, [deferredQuery, userRole, userEmail])
 
-  const [selectedCategory, setSelectedCategory] = useState<ActionCategory>('all')
-  const isCategorizedDashboardActive = canAccessCategorizedDashboard(isBetaTester)
-
-  const displayActions = useMemo(() => {
-    if (!isCategorizedDashboardActive || selectedCategory === 'all') {
-      return filteredActions
-    }
-    return filteredActions.filter((item) => item.category === selectedCategory)
-  }, [filteredActions, isCategorizedDashboardActive, selectedCategory])
+  const displayActions = filteredActions
 
   const focusScore = useMemo(() => {
     const base = submissionCount * 12 + streakDays * 4
@@ -671,65 +664,43 @@ export default function NewDashboardPage() {
               </div>
             </div>
 
-            {/* THANH CHỌN NHÓM CÔNG NĂNG (Q2 CẬP NHẬT - BETA TRẢI NGHIỆM NGAY) */}
-            {isCategorizedDashboardActive && (
-              <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                {ACTION_CATEGORIES.map((cat) => {
-                  const isSelected = selectedCategory === cat.key
-                  const count = cat.key === 'all'
-                    ? filteredActions.length
-                    : filteredActions.filter((a) => a.category === cat.key).length
-                  return (
-                    <button
-                      key={cat.key}
-                      type="button"
-                      onClick={() => setSelectedCategory(cat.key)}
-                      className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                        isSelected
-                          ? 'bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white shadow-sm scale-[1.02]'
-                          : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
-                      }`}
-                    >
-                      <span>{cat.icon}</span>
-                      <span>{cat.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-black/10 dark:bg-white/10 text-slate-500'}`}>
-                        {count}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* CÁC PHẦN CHIA NGANG THEO TÍNH NĂNG LIÊN QUAN (HẠN CHẾ ICON, GỌN & DỄ TÌM) */}
-            <div className="mt-5 space-y-4">
+            {/* CÁC PHẦN CHIA NGANG THEO TÍNH NĂNG LIÊN QUAN (MÀU SẮC ĐẬM ĐÀ, TRANH VẼ MINH HỌA THẬT SỰ) */}
+            <div className="mt-6 space-y-5">
               {ACTION_CATEGORIES.filter((c) => c.key !== 'all').map((cat) => {
-                if (selectedCategory !== 'all' && selectedCategory !== cat.key) return null
                 const groupItems = displayActions.filter((a) => a.category === cat.key)
                 if (groupItems.length === 0) return null
+
+                // Màu nền viền riêng biệt theo từng phân hệ
+                const catTheme =
+                  cat.key === 'study'
+                    ? { border: 'border-emerald-500/20 dark:border-emerald-500/20', bg: 'bg-emerald-500/[0.03] dark:bg-emerald-500/[0.04]', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' }
+                    : cat.key === 'math_exam'
+                    ? { border: 'border-sky-500/20 dark:border-sky-500/20', bg: 'bg-sky-500/[0.03] dark:bg-sky-500/[0.04]', badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20' }
+                    : cat.key === 'senai'
+                    ? { border: 'border-purple-500/20 dark:border-purple-500/20', bg: 'bg-purple-500/[0.03] dark:bg-purple-500/[0.04]', badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20' }
+                    : { border: 'border-rose-500/20 dark:border-rose-500/20', bg: 'bg-rose-500/[0.03] dark:bg-rose-500/[0.04]', badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' }
 
                 return (
                   <div
                     key={cat.key}
-                    className="rounded-2xl border border-black/8 dark:border-white/8 bg-black/[0.015] dark:bg-white/[0.02] p-3.5 sm:p-4 space-y-2.5 transition-all"
+                    className={`rounded-3xl border ${catTheme.border} ${catTheme.bg} p-4 sm:p-5 space-y-3.5 transition-all shadow-xs`}
                   >
-                    {/* Header Phần Chia Ngang */}
-                    <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2">
+                    {/* Header Phân Hệ Chia Ngang */}
+                    <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-base">{cat.icon}</span>
+                        <span className="text-lg">{cat.icon}</span>
                         <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                           {cat.label}
                         </h3>
-                        <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-black/5 dark:bg-white/10 text-slate-500">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${catTheme.badge}`}>
                           {groupItems.length}
                         </span>
                       </div>
                     </div>
 
-                    {/* Danh Sách Tính Năng Dạng Thẻ Ngang Gọn Gàng (Hạn Chế Icon To) */}
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {/* Danh Sách Thẻ Tính Năng Có Màu Sắc Và Tranh Vẽ Vector Tỉ Mỉ */}
+                    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                       {groupItems.map((item) => {
-                        const Icon = item.icon
                         const isExternal = item.href.startsWith('http')
                         const Wrapper = isExternal ? 'a' : Link
                         const extraProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}
@@ -738,31 +709,40 @@ export default function NewDashboardPage() {
                           <Wrapper
                             key={item.key}
                             href={item.href}
-                            className="group relative flex items-center justify-between rounded-xl border border-black/8 dark:border-white/8 bg-white/80 dark:bg-slate-800/80 p-2.5 transition-all duration-200 hover:border-black/20 dark:hover:border-white/20 hover:shadow-sm hover:scale-[1.01]"
+                            className="group relative flex items-center justify-between rounded-2xl border border-black/8 dark:border-white/10 bg-white/95 dark:bg-slate-800/95 p-3 overflow-hidden transition-all duration-200 hover:border-black/20 dark:hover:border-white/25 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/30 hover:-translate-y-0.5"
                             {...extraProps}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0 pr-1.5">
-                              {/* Icon mini gọn gàng */}
-                              <div className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition">
-                                <Icon className="h-3.5 w-3.5" />
-                              </div>
+                            {/* Dải màu rực rỡ trên đỉnh thẻ giữ lại cá tính riêng cho mỗi tính năng */}
+                            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${item.tone} opacity-90 group-hover:opacity-100 transition-opacity`} />
+
+                            <div className="flex items-center gap-3 min-w-0 pr-2">
+                              {/* Tranh vẽ vector SVG thủ công tỉ mỉ thay cho icon dây rẻ tiền */}
+                              <FeatureIllustration
+                                featureKey={item.key}
+                                className="w-11 h-11 shrink-0 drop-shadow-sm transition-transform duration-300 group-hover:scale-110"
+                              />
+
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                  <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">
                                     {item.title}
                                   </h4>
                                   {item.badge && (
-                                    <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.2 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    <span className={`shrink-0 rounded-md bg-gradient-to-r ${item.tone} px-1.5 py-0.2 text-[9px] font-black uppercase text-white shadow-xs`}>
                                       {item.badge}
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-[10px] text-[#6B7280] dark:text-slate-400 truncate max-w-[220px]">
+                                <p className="text-[11px] text-[#4B5563] dark:text-slate-300 truncate max-w-[210px] mt-0.5 font-medium">
                                   {item.description}
                                 </p>
                               </div>
                             </div>
-                            <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0 transition group-hover:translate-x-0.5 group-hover:text-pink-500" />
+
+                            {/* Nút mũi tên chuyển hướng đẹp mắt */}
+                            <div className="shrink-0 flex h-7 w-7 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-400 group-hover:text-pink-500 transition-all shadow-xs">
+                              <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                            </div>
                           </Wrapper>
                         )
                       })}
@@ -772,8 +752,8 @@ export default function NewDashboardPage() {
               })}
 
               {displayActions.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400">
-                  Không tìm thấy tính năng phù hợp trong mục này. Vui lòng chọn "Tất cả tính năng" hoặc thử từ khoá khác.
+                <div className="rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400 font-bold">
+                  Không tìm thấy tính năng nào khớp với từ khoá "{query}". Vui lòng thử từ khoá khác!
                 </div>
               )}
             </div>
