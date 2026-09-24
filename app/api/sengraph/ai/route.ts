@@ -126,7 +126,7 @@ export async function POST(req: Request) {
       parts.push({ text: fullPrompt })
 
       const res = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
+        model: 'gemini-3.5-flash-lite',
         contents: [
           {
             role: 'user',
@@ -136,10 +136,10 @@ export async function POST(req: Request) {
       })
       responseText = res.text ?? ''
     } catch (sdkErr: any) {
-      console.warn('Lỗi gọi SDK GoogleGenAI gemini-3.7-flash, thử fallback:', sdkErr?.message)
+      console.warn('Lỗi gọi SDK GoogleGenAI gemini-3.5-flash-lite, thử fallback:', sdkErr?.message)
       try {
         const legacyAI = new GoogleGenerativeAI(apiKey)
-        const model = legacyAI.getGenerativeModel({ model: 'gemini-3.7-flash' })
+        const model = legacyAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
         const legacyParts: any[] = []
         if (inlineDataPart) {
           legacyParts.push(inlineDataPart)
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
         const res = await model.generateContent(legacyParts)
         responseText = res.response.text()
       } catch (fallbackErr: any) {
-        throw new Error(`Không thể kết nối Gemini 3.7 Flash: ${fallbackErr.message || sdkErr.message}`)
+        throw new Error(`Không thể kết nối Gemini 3.5 Flash Lite: ${fallbackErr.message || sdkErr.message}`)
       }
     }
 
@@ -170,7 +170,7 @@ export async function POST(req: Request) {
       success: true,
       reply: responseText,
       extractedEquations,
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.5-flash-lite',
     })
   } catch (error: any) {
     console.error('Lỗi API SenGraph AI:', error)

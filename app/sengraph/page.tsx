@@ -161,7 +161,56 @@ function MathFormulaView({ expr, className = '' }: { expr: string; className?: s
 }
 
 // ==============================================================
-// 2. BỘ PHÂN TÍCH TOÁN HỌC AN TOÀN (SAFE MATH COMPILER)
+// 2. TẠO SPRITE NHÃN TRỤC 3D VÀ CHỮ SỐ
+// ==============================================================
+function createAxisSprite(text: string, color: string, isDark: boolean): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 128
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.beginPath()
+    ctx.arc(64, 64, 52, 0, Math.PI * 2)
+    ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)'
+    ctx.fill()
+    ctx.lineWidth = 6
+    ctx.strokeStyle = color
+    ctx.stroke()
+
+    ctx.font = 'bold 54px sans-serif'
+    ctx.fillStyle = color
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, 64, 64)
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false })
+  const sprite = new THREE.Sprite(mat)
+  sprite.scale.set(1.5, 1.5, 1)
+  return sprite
+}
+
+function createTickSprite(text: string, color: string): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 96
+  canvas.height = 96
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.font = 'bold 44px monospace'
+    ctx.fillStyle = color
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(text, 48, 48)
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false })
+  const sprite = new THREE.Sprite(mat)
+  sprite.scale.set(0.9, 0.9, 1)
+  return sprite
+}
+
+// ==============================================================
+// 3. BỘ PHÂN TÍCH TOÁN HỌC AN TOÀN (SAFE MATH COMPILER)
 // ==============================================================
 function compileExpression(rawExpr: string, is3D = false): ((x: number, y?: number) => number) | null {
   if (!rawExpr || !rawExpr.trim()) return null
@@ -317,7 +366,7 @@ export default function SenGraphPage() {
   const [wireframe3D, setWireframe3D] = useState(false)
   const [autoRotate3D, setAutoRotate3D] = useState(false)
 
-  // 🤖 Sen AI Drawer State
+  // 🤖 Sen AI Drawer State (Gemini 3.5 Flash Lite)
   const [showAiDrawer, setShowAiDrawer] = useState(false)
   const [aiMessages, setAiMessages] = useState<
     Array<{
@@ -334,7 +383,7 @@ export default function SenGraphPage() {
   >([
     {
       role: 'assistant',
-      text: 'Xin chào! Tôi là **Sen AI** — Trợ lý Toán học & Đồ thị cao cấp của **SenGraph** (chạy trên nền **Gemini 3.7 Flash**).\n\nBạn có thể **tải lên ảnh chụp đề bài, đề kiểm tra**, hoặc nhập câu hỏi — tôi sẽ giải chi tiết từng bước, hướng dẫn vẽ và tự động tạo phương trình chính xác để nạp ngay vào đồ thị 2D/3D!',
+      text: 'Xin chào! Tôi là **Sen AI** — Trợ lý Toán học & Đồ thị cao cấp của **SenGraph** (chạy trên nền **Gemini 3.5 Flash Lite**).\n\nBạn có thể **dán ảnh trực tiếp (Ctrl + V)** hoặc **tải lên ảnh chụp đề bài, đề kiểm tra** — tôi sẽ giải chi tiết từng bước, hướng dẫn vẽ và tự động tạo phương trình chính xác để nạp ngay vào đồ thị 2D/3D!',
     },
   ])
   const [aiInputText, setAiInputText] = useState('')
@@ -364,6 +413,7 @@ export default function SenGraphPage() {
     camera: THREE.PerspectiveCamera
     meshGroup: THREE.Group
     grid: THREE.GridHelper
+    axesGroup: THREE.Group
     reqId: number
     orbit: { isDragging: boolean; prevX: number; prevY: number; yaw: number; pitch: number; distance: number }
   } | null>(null)
@@ -417,7 +467,42 @@ export default function SenGraphPage() {
   }, [])
 
   // ==============================================================
-  // 3. CANVAS ENGINE 2D (CHỐNG CRASH KHI CHUYỂN ĐỔI 3D SANG 2D)
+  // 📸 3. TÍNH NĂNG DÁN ẢNH TỪ CLIPBOARD (CTRL + V) VÀO SEN AI
+  // ==============================================================
+  const handlePasteImage = useCallback((e: React.ClipboardEvent | ClipboardEvent) => {
+    const clipboardData = (e as React.ClipboardEvent).clipboardData || (e as ClipboardEvent).clipboardData
+    const items = clipboardData?.items
+    if (!items) return
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile()
+        if (file) {
+          e.preventDefault()
+          setAiAttachedImageMime(file.type || 'image/jpeg')
+          const reader = new FileReader()
+          reader.onload = () => {
+            setAiAttachedImage(reader.result as string)
+            setShowAiDrawer(true)
+          }
+          reader.readAsDataURL(file)
+          break
+        }
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const onGlobalPaste = (e: ClipboardEvent) => {
+      handlePasteImage(e)
+    }
+    window.addEventListener('paste', onGlobalPaste)
+    return () => window.removeEventListener('paste', onGlobalPaste)
+  }, [handlePasteImage])
+
+  // ==============================================================
+  // 4. CANVAS ENGINE 2D (ĐỊNH HƯỚNG RÕ TRỤC OX VÀ OY)
   // ==============================================================
   const draw2D = useCallback(() => {
     const canvas = canvas2dRef.current
@@ -486,7 +571,7 @@ export default function SenGraphPage() {
       ctx.stroke()
     }
 
-    // B. Trục tọa độ Ox và Oy
+    // B. Trục tọa độ Ox và Oy với Mũi Tên và Nhãn Rõ Ràng
     ctx.strokeStyle = isDark ? '#94a3b8' : '#475569'
     ctx.lineWidth = 2
 
@@ -496,11 +581,34 @@ export default function SenGraphPage() {
     ctx.lineTo(originX, h)
     ctx.stroke()
 
+    // Mũi tên và chữ y trên trục Oy
+    ctx.fillStyle = isDark ? '#38bdf8' : '#0284c7'
+    ctx.beginPath()
+    ctx.moveTo(originX, 2)
+    ctx.lineTo(originX - 6, 16)
+    ctx.lineTo(originX + 6, 16)
+    ctx.fill()
+    ctx.font = 'bold 14px sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText('y', originX + 10, 8)
+
     // Trục Ox (y = 0)
     ctx.beginPath()
     ctx.moveTo(0, originY)
     ctx.lineTo(w, originY)
     ctx.stroke()
+
+    // Mũi tên và chữ x trên trục Ox
+    ctx.fillStyle = isDark ? '#f87171' : '#dc2626'
+    ctx.beginPath()
+    ctx.moveTo(w - 2, originY)
+    ctx.lineTo(w - 16, originY - 6)
+    ctx.lineTo(w - 16, originY + 6)
+    ctx.fill()
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText('x', w - 10, originY - 8)
 
     // C. Đánh số tọa độ
     ctx.fillStyle = isDark ? '#cbd5e1' : '#64748b'
@@ -529,7 +637,8 @@ export default function SenGraphPage() {
     }
 
     // Gốc tọa độ O (0, 0)
-    ctx.fillText('0', originX - 6, originY + 6)
+    ctx.fillStyle = isDark ? '#94a3b8' : '#475569'
+    ctx.fillText('O', originX - 8, originY + 6)
 
     // D. Vẽ các hàm số 2D
     equations2D.forEach((eq) => {
@@ -573,7 +682,7 @@ export default function SenGraphPage() {
     })
   }, [equations2D, theme])
 
-  // Resize canvas 2D an toàn tuyệt đối
+  // Resize canvas 2D
   useEffect(() => {
     const canvas = canvas2dRef.current
     if (!canvas) return
@@ -679,7 +788,7 @@ export default function SenGraphPage() {
   }
 
   // ==============================================================
-  // 4. THREE.JS ENGINE 3D (SỬA LỖI TỰ XOAY & DUY TRÌ SCENE)
+  // 5. THREE.JS ENGINE 3D (ĐỊNH HƯỚNG CHUẨN X, Y, Z TOÁN HỌC)
   // ==============================================================
   useEffect(() => {
     const container = container3dRef.current
@@ -714,15 +823,66 @@ export default function SenGraphPage() {
     dirLight2.position.set(-10, -10, -15)
     scene.add(dirLight2)
 
-    // 3D Coordinate Grid & Axes
+    // 3D Lưới mặt đáy Oxy (z = 0)
     const gridColor1 = isDark ? 0x38bdf8 : 0x0284c7
     const gridColor2 = isDark ? 0x1e293b : 0xcbd5e1
     const grid = new THREE.GridHelper(16, 16, gridColor1, gridColor2)
     grid.position.y = 0
     scene.add(grid)
 
-    const axesHelper = new THREE.AxesHelper(8)
-    scene.add(axesHelper)
+    // 🌟 THIẾT LẬP HỆ TRỤC TOÁN HỌC OXYZ ĐÚNG CHUẨN VÀ RÕ RÀNG
+    const axesGroup = new THREE.Group()
+    scene.add(axesGroup)
+
+    // 1. Trục Ox (Trục Hoành x: Màu Đỏ #ef4444)
+    const arrowXPos = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 8.8, 0xef4444, 1.0, 0.5)
+    const arrowXNeg = new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 0), 8.8, 0xef4444, 0, 0)
+    axesGroup.add(arrowXPos)
+    axesGroup.add(arrowXNeg)
+    const labelX = createAxisSprite('x', '#ef4444', isDark)
+    labelX.position.set(9.8, 0, 0)
+    axesGroup.add(labelX)
+
+    // 2. Trục Oy (Trục Tung y Trên Mặt Đáy: Màu Xanh Lá #10b981 - Đi theo -Z Three.js)
+    const arrowYPos = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, 0), 8.8, 0x10b981, 1.0, 0.5)
+    const arrowYNeg = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 8.8, 0x10b981, 0, 0)
+    axesGroup.add(arrowYPos)
+    axesGroup.add(arrowYNeg)
+    const labelY = createAxisSprite('y', '#10b981', isDark)
+    labelY.position.set(0, 0, -9.8)
+    axesGroup.add(labelY)
+
+    // 3. Trục Oz (Trục Cao z Thẳng Đứng: Màu Xanh Dương #0284c7 - Đi theo +Y Three.js)
+    const arrowZPos = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 8.0, 0x0284c7, 1.0, 0.5)
+    const arrowZNeg = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 6.5, 0x0284c7, 0, 0)
+    axesGroup.add(arrowZPos)
+    axesGroup.add(arrowZNeg)
+    const labelZ = createAxisSprite('z', '#0284c7', isDark)
+    labelZ.position.set(0, 9.0, 0)
+    axesGroup.add(labelZ)
+
+    // Gốc tọa độ O
+    const labelO = createAxisSprite('O', isDark ? '#94a3b8' : '#475569', isDark)
+    labelO.scale.set(1.0, 1.0, 1)
+    labelO.position.set(-0.5, -0.5, 0.5)
+    axesGroup.add(labelO)
+
+    // Vạch chia số trên các trục x, y, z
+    const tickColor = isDark ? '#cbd5e1' : '#475569'
+    ;[-6, -4, -2, 2, 4, 6].forEach((val) => {
+      const tickX = createTickSprite(String(val), tickColor)
+      tickX.position.set(val, -0.3, 0)
+      axesGroup.add(tickX)
+
+      const tickY = createTickSprite(String(val), tickColor)
+      tickY.position.set(0, -0.3, -val)
+      axesGroup.add(tickY)
+    })
+    ;[-4, -2, 2, 4, 6].forEach((val) => {
+      const tickZ = createTickSprite(String(val), tickColor)
+      tickZ.position.set(0.3, val, 0)
+      axesGroup.add(tickZ)
+    })
 
     // Group chứa các bề mặt 3D
     const meshGroup = new THREE.Group()
@@ -747,7 +907,7 @@ export default function SenGraphPage() {
     }
     updateCamera()
 
-    // Animation Loop: đọc autoRotateRef để tránh bug phá hủy scene
+    // Animation Loop
     let reqId = 0
     const animate = () => {
       reqId = requestAnimationFrame(animate)
@@ -761,7 +921,7 @@ export default function SenGraphPage() {
     }
     animate()
 
-    threeSceneRef.current = { renderer, scene, camera, meshGroup, grid, reqId, orbit }
+    threeSceneRef.current = { renderer, scene, camera, meshGroup, grid, axesGroup, reqId, orbit }
 
     // Resize handler
     const handleResize3D = () => {
@@ -784,7 +944,7 @@ export default function SenGraphPage() {
     }
   }, [theme])
 
-  // Cập nhật các bề mặt 3D trong Scene (Không phá hủy Three.js)
+  // Cập nhật các bề mặt 3D trong Scene
   useEffect(() => {
     if (!threeSceneRef.current) return
     const { meshGroup } = threeSceneRef.current
@@ -814,9 +974,9 @@ export default function SenGraphPage() {
       const baseColor = new THREE.Color(eq.color)
 
       for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i)
-        const z = -pos.getZ(i)
-        const yVal = compiledFn(x, z)
+        const x = pos.getX(i) // Math x
+        const z = -pos.getZ(i) // Math y
+        const yVal = compiledFn(x, z) // Math z (độ cao z)
 
         const clampedY = isNaN(yVal) || !isFinite(yVal) ? 0 : Math.max(-6, Math.min(6, yVal))
         pos.setY(i, clampedY)
@@ -915,7 +1075,7 @@ export default function SenGraphPage() {
   }
 
   // ==============================================================
-  // 5. QUẢN LÝ PHƯƠNG TRÌNH & BÀN PHÍM TOÁN HỌC ẢO
+  // 6. QUẢN LÝ PHƯƠNG TRÌNH & BÀN PHÍM TOÁN HỌC ẢO
   // ==============================================================
   const handleAddEquation = (initialExpr?: string) => {
     const nextColor = EQUATION_COLORS[activeEquations.length % EQUATION_COLORS.length]
@@ -1018,7 +1178,7 @@ export default function SenGraphPage() {
   }
 
   // ==============================================================
-  // 6. TRỢ LÝ TOÁN HỌC SEN AI (GEMINI 3.7 FLASH) VỚI FILE/ẢNH & TỰ ĐỘNG VẼ
+  // 7. TRỢ LÝ TOÁN HỌC SEN AI (GEMINI 3.5 FLASH LITE)
   // ==============================================================
   const handleSelectImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1028,6 +1188,7 @@ export default function SenGraphPage() {
     const reader = new FileReader()
     reader.onload = () => {
       setAiAttachedImage(reader.result as string)
+      setShowAiDrawer(true)
     }
     reader.readAsDataURL(file)
   }
@@ -1430,7 +1591,7 @@ export default function SenGraphPage() {
 
         {/* CỘT PHẢI: KHÔNG GIAN ĐỒ HỌA (DUY TRÌ CẢ 2D VÀ 3D TRONG DOM ĐỂ KHÔNG BAO GIỜ BỊ CRASH) */}
         <div className="flex-1 h-full relative overflow-hidden flex flex-col">
-          {/* A. VIEW 2D (Ẩn/Hiện bằng CSS block/hidden để không bị hủy canvas) */}
+          {/* A. VIEW 2D */}
           <div
             className={`flex-1 relative w-full h-full cursor-grab active:cursor-grabbing ${
               mode === '2d' ? 'block' : 'hidden'
@@ -1447,7 +1608,7 @@ export default function SenGraphPage() {
             />
           </div>
 
-          {/* B. VIEW 3D (Ẩn/Hiện bằng CSS block/hidden để không bị crash WebGL) */}
+          {/* B. VIEW 3D */}
           <div
             className={`flex-1 relative w-full h-full cursor-grab active:cursor-grabbing ${
               mode === '3d' ? 'block' : 'hidden'
@@ -1459,6 +1620,26 @@ export default function SenGraphPage() {
             onWheel={handleWheel3D}
           >
             <div ref={container3dRef} className="w-full h-full block" />
+
+            {/* CHỈ BÁO HƯỚNG TỌA ĐỘ 3D (ORIENTATION COMPASS) */}
+            <div
+              className={`absolute bottom-5 right-5 px-3 py-1.5 rounded-xl border backdrop-blur-md shadow-xl text-[11px] flex items-center gap-3 font-bold select-none ${
+                isDark ? 'bg-slate-900/80 border-slate-700/80 text-slate-300' : 'bg-white/80 border-slate-200 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                <span>Trục x</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span>Trục y (Đáy)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
+                <span>Trục z (Đứng)</span>
+              </div>
+            </div>
           </div>
 
           {/* NÚT ĐIỀU KHIỂN PHÓNG TO / THU NHỎ / GỐC TỌA ĐỘ NỔI BẬT Ở GÓC PHẢI */}
@@ -1885,7 +2066,7 @@ export default function SenGraphPage() {
                     </div>
                   </div>
                 ) : (
-                  /* BỐ CỤC TOÁN HỌC 3 KHỐI CHUẨN VỚI KÝ HIỆU TOÁN HỌC CHUẨN (MŨ, TÍCH PHÂN, CĂN, PHÂN SỐ) */
+                  /* BỐ CỤC TOÁN HỌC 3 KHỐI CHUẨN VỚI KÝ HIỆU TOÁN HỌC CHUẨN */
                   <div className="flex flex-wrap sm:flex-nowrap gap-2 justify-center items-stretch">
                     {/* KHỐI 1 (TRÁI): BIẾN SỐ, SỐ MŨ, TÍCH PHÂN, CĂN BẬC */}
                     <div className="grid grid-cols-4 gap-1.5">
@@ -2120,9 +2301,10 @@ export default function SenGraphPage() {
           )}
         </div>
 
-        {/* 🌟 4. SEN AI TOÁN HỌC DRAWER (GEMINI 3.7 FLASH - GIẢI ĐỀ TỪ ẢNH & TỰ ĐỘNG VẼ) */}
+        {/* 🌟 4. SEN AI TOÁN HỌC DRAWER (GEMINI 3.5 FLASH LITE - DÁN ẢNH CTRL+V & GIẢI ĐỀ) */}
         {showAiDrawer && (
           <aside
+            onPaste={handlePasteImage}
             aria-label="Trợ lý toán học Sen AI"
             className={`w-80 sm:w-[420px] flex flex-col shrink-0 shadow-2xl z-40 animate-in slide-in-from-right duration-200 border-l ${
               isDark ? 'bg-[#0f172a] border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
@@ -2142,7 +2324,7 @@ export default function SenGraphPage() {
                 </div>
                 <div>
                   <h3 className="text-xs font-bold">Sen AI Toán Học</h3>
-                  <span className="text-[10px] text-sky-500 font-semibold">Gemini 3.7 Flash • Giải đề & Tự động vẽ</span>
+                  <span className="text-[10px] text-sky-500 font-semibold">Gemini 3.5 Flash Lite • Dán ảnh & Giải đề</span>
                 </div>
               </div>
               <button
@@ -2337,7 +2519,7 @@ export default function SenGraphPage() {
               {isAiLoading && (
                 <div className="flex items-center gap-2 text-xs text-sky-500 font-bold p-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Sen AI đang giải đề và phân tích phương trình...</span>
+                  <span>Sen AI (3.5 Flash Lite) đang phân tích toán học...</span>
                 </div>
               )}
               <div ref={aiChatEndRef} />
@@ -2357,7 +2539,7 @@ export default function SenGraphPage() {
                     className="w-10 h-10 object-cover rounded-lg border border-sky-400"
                   />
                   <div className="text-[11px]">
-                    <span className="font-bold text-sky-500">Đã đính kèm ảnh đề bài</span>
+                    <span className="font-bold text-sky-500">Đã dán/đính kèm ảnh đề bài</span>
                     <p className="text-[10px] text-slate-400">Sẵn sàng gửi cho Sen AI phân tích</p>
                   </div>
                 </div>
@@ -2393,7 +2575,7 @@ export default function SenGraphPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                title="Tải lên ảnh chụp đề bài hoặc bài tập"
+                title="Tải lên ảnh chụp đề bài hoặc bấm Ctrl+V để dán ảnh trực tiếp"
                 className={`p-2 rounded-xl border transition cursor-pointer ${
                   isDark
                     ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-sky-400'
@@ -2406,11 +2588,12 @@ export default function SenGraphPage() {
               <input
                 type="text"
                 value={aiInputText}
+                onPaste={handlePasteImage}
                 onChange={(e) => setAiInputText(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSendAi()
                 }}
-                placeholder="Hỏi Sen AI hoặc gửi ảnh đề bài..."
+                placeholder="Hỏi Sen AI hoặc dán ảnh (Ctrl+V)..."
                 className={`flex-1 px-3 py-2 rounded-xl text-xs focus:outline-none transition ${
                   isDark
                     ? 'bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 focus:border-sky-500'
