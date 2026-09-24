@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   Plus,
+  Minus,
   Trash2,
   Eye,
   EyeOff,
@@ -45,6 +46,8 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import * as THREE from 'three'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
 import { supabase } from '@/lib/supabaseClient'
 import SenGraphLogo from '@/components/SenGraphLogo'
 
@@ -87,7 +90,78 @@ const PRESETS_3D = [
 ]
 
 // ==============================================================
-// 1. BỘ PHÂN TÍCH TOÁN HỌC AN TOÀN (SAFE MATH COMPILER)
+// 1. CHUYỂN ĐỔI BIỂU THỨC SANG LATEX CHUẨN ĐỂ KATEX KẾT XUẤT
+// ==============================================================
+function formatToLatex(raw: string): string {
+  if (!raw || !raw.trim()) return ''
+  let s = raw.trim()
+
+  // Chuẩn hóa dấu phân số đơn giản: (A)/(B) -> \frac{A}{B}
+  s = s.replace(/\(([^()]+)\)\s*\/\s*\(([^()]+)\)/g, '\\frac{$1}{$2}')
+  s = s.replace(/([0-9a-zA-Z^]+)\s*\/\s*([0-9a-zA-Z^]+)/g, '\\frac{$1}{$2}')
+
+  // Chuẩn hóa dấu nhân: 2*x -> 2x, * -> \cdot
+  s = s.replace(/(\d+)\s*\*\s*([a-zA-Z])/g, '$1 $2')
+  s = s.replace(/\*/g, ' \\cdot ')
+
+  // Chuẩn hóa căn thức: sqrt(A) -> \sqrt{A}, cbrt(A) -> \sqrt[3]{A}
+  s = s.replace(/sqrt\(([^)]+)\)/g, '\\sqrt{$1}')
+  s = s.replace(/cbrt\(([^)]+)\)/g, '\\sqrt[3]{$1}')
+
+  // Chuẩn hóa các hàm lượng giác & giải tích
+  s = s.replace(/\bsin\b/g, '\\sin ')
+  s = s.replace(/\bcos\b/g, '\\cos ')
+  s = s.replace(/\btan\b/g, '\\tan ')
+  s = s.replace(/\bcot\b/g, '\\cot ')
+  s = s.replace(/\bsec\b/g, '\\sec ')
+  s = s.replace(/\bcsc\b/g, '\\csc ')
+  s = s.replace(/\basin\b/g, '\\arcsin ')
+  s = s.replace(/\bacos\b/g, '\\arccos ')
+  s = s.replace(/\batan\b/g, '\\arctan ')
+  s = s.replace(/\bln\b/g, '\\ln ')
+  s = s.replace(/\blog\b/g, '\\log ')
+  s = s.replace(/\bexp\b/g, '\\exp ')
+  s = s.replace(/\bpi\b/gi, '\\pi ')
+
+  // Chuẩn hóa số mũ: x^2 -> x^{2}, x^(expr) -> x^{expr}
+  s = s.replace(/\^([0-9a-zA-Z]+)/g, '^{$1}')
+  s = s.replace(/\^\(([^)]+)\)/g, '^{$1}')
+
+  // Chuẩn hóa tích phân: int -> \int
+  s = s.replace(/\bint\b/g, '\\int ')
+
+  // Chuẩn hóa so sánh
+  s = s.replace(/<=/g, '\\le ')
+  s = s.replace(/>=/g, '\\ge ')
+  s = s.replace(/!=/g, '\\neq ')
+
+  return s
+}
+
+// Component hiển thị công thức toán học chuẩn KaTeX
+function MathFormulaView({ expr, className = '' }: { expr: string; className?: string }) {
+  const html = useMemo(() => {
+    try {
+      const latex = formatToLatex(expr)
+      return katex.renderToString(latex, {
+        throwOnError: false,
+        displayMode: false,
+      })
+    } catch {
+      return expr
+    }
+  }, [expr])
+
+  return (
+    <span
+      className={`inline-block font-serif text-sm tracking-wide select-text ${className}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+}
+
+// ==============================================================
+// 2. BỘ PHÂN TÍCH TOÁN HỌC AN TOÀN (SAFE MATH COMPILER)
 // ==============================================================
 function compileExpression(rawExpr: string, is3D = false): ((x: number, y?: number) => number) | null {
   if (!rawExpr || !rawExpr.trim()) return null
@@ -100,6 +174,13 @@ function compileExpression(rawExpr: string, is3D = false): ((x: number, y?: numb
   } else {
     clean = clean.replace(/^(?:y|f\s*\(\s*x\s*\))\s*=\s*/i, '')
   }
+
+  // Khử các lệnh LaTeX nếu người dùng dán vào
+  clean = clean.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '(($1)/($2))')
+  clean = clean.replace(/\\sqrt\{([^}]+)\}/g, 'sqrt($1)')
+  clean = clean.replace(/\\cdot/g, '*')
+  clean = clean.replace(/\\([a-zA-Z]+)/g, '$1')
+  clean = clean.replace(/\{/g, '(').replace(/\}/g, ')')
 
   // Chuẩn hóa ký hiệu lũy thừa ^ thành **
   clean = clean.replace(/\^/g, '**')
@@ -229,7 +310,7 @@ export default function SenGraphPage() {
   const [showKeyboard, setShowKeyboard] = useState(true)
   const [keyboardMode, setKeyboardMode] = useState<'math' | 'abc'>('math')
   const [showFunctionsMenu, setShowFunctionsMenu] = useState(false)
-  const [functionsTab, setFunctionsTab] = useState<'theory' | 'trig' | 'calc' | 'stat' | 'adv'>('theory')
+  const [functionsTab, setFunctionsTab] = useState<'theory' | 'trig' | 'calc' | 'stat'>('theory')
   const [isShiftActive, setIsShiftActive] = useState(false)
 
   // 3D Visual Preferences
@@ -253,7 +334,7 @@ export default function SenGraphPage() {
   >([
     {
       role: 'assistant',
-      text: 'Xin chào! Tôi là **Sen AI** — Trợ lý Toán học & Đồ thị cao cấp của **SenGraph** (chạy trên nền **Gemini 3.8 Flash**).\n\nBạn có thể **tải lên ảnh chụp đề bài, đề kiểm tra**, hoặc nhập câu hỏi — tôi sẽ giải chi tiết từng bước, hướng dẫn vẽ và tự động tạo phương trình chính xác để nạp ngay vào đồ thị 2D/3D!',
+      text: 'Xin chào! Tôi là **Sen AI** — Trợ lý Toán học & Đồ thị cao cấp của **SenGraph** (chạy trên nền **Gemini 3.7 Flash**).\n\nBạn có thể **tải lên ảnh chụp đề bài, đề kiểm tra**, hoặc nhập câu hỏi — tôi sẽ giải chi tiết từng bước, hướng dẫn vẽ và tự động tạo phương trình chính xác để nạp ngay vào đồ thị 2D/3D!',
     },
   ])
   const [aiInputText, setAiInputText] = useState('')
@@ -267,6 +348,16 @@ export default function SenGraphPage() {
   // DOM Refs
   const canvas2dRef = useRef<HTMLCanvasElement>(null)
   const container3dRef = useRef<HTMLDivElement>(null)
+  const modeRef = useRef<'2d' | '3d'>('2d')
+  useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
+
+  const autoRotateRef = useRef(false)
+  useEffect(() => {
+    autoRotateRef.current = autoRotate3D
+  }, [autoRotate3D])
+
   const threeSceneRef = useRef<{
     renderer: THREE.WebGLRenderer
     scene: THREE.Scene
@@ -326,7 +417,7 @@ export default function SenGraphPage() {
   }, [])
 
   // ==============================================================
-  // 3. CANVAS ENGINE 2D (ĐỒNG BỘ DARK / LIGHT MODE)
+  // 3. CANVAS ENGINE 2D (CHỐNG CRASH KHI CHUYỂN ĐỔI 3D SANG 2D)
   // ==============================================================
   const draw2D = useCallback(() => {
     const canvas = canvas2dRef.current
@@ -338,6 +429,8 @@ export default function SenGraphPage() {
     const w = canvas.width
     const h = canvas.height
 
+    if (w <= 0 || h <= 0 || !scale || scale <= 0) return
+
     const isDark = theme === 'dark'
 
     // Xóa khung vẽ
@@ -347,7 +440,7 @@ export default function SenGraphPage() {
     ctx.fillStyle = isDark ? '#090d16' : '#ffffff'
     ctx.fillRect(0, 0, w, h)
 
-    // Xác định bước nhảy lưới (tự thích ứng khi phóng to/thu nhỏ)
+    // Bước nhảy lưới tự co giãn
     let unitStep = 1
     if (scale < 20) unitStep = 5
     else if (scale < 35) unitStep = 2
@@ -480,26 +573,31 @@ export default function SenGraphPage() {
     })
   }, [equations2D, theme])
 
-  // Resize canvas 2D
+  // Resize canvas 2D an toàn tuyệt đối
   useEffect(() => {
-    if (mode !== '2d') return
     const canvas = canvas2dRef.current
     if (!canvas) return
 
     const handleResize = () => {
       const rect = canvas.getBoundingClientRect()
-      canvas.width = rect.width
-      canvas.height = rect.height
-      if (view2DRef.current.originX === 0) {
-        view2DRef.current.originX = rect.width / 2
-        view2DRef.current.originY = rect.height / 2
+      if (rect.width > 0 && rect.height > 0) {
+        canvas.width = rect.width
+        canvas.height = rect.height
+        if (view2DRef.current.originX === 0) {
+          view2DRef.current.originX = rect.width / 2
+          view2DRef.current.originY = rect.height / 2
+        }
+        draw2D()
       }
-      draw2D()
     }
 
     handleResize()
+    const timer = setTimeout(handleResize, 50)
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', handleResize)
+    }
   }, [mode, draw2D])
 
   // Tương tác chuột 2D (Pan & Zoom)
@@ -556,6 +654,21 @@ export default function SenGraphPage() {
     draw2D()
   }
 
+  const handleZoom2D = (direction: 'in' | 'out') => {
+    const canvas = canvas2dRef.current
+    if (!canvas) return
+    const zoomFactor = direction === 'in' ? 1.25 : 0.8
+    const oldScale = view2DRef.current.scale
+    const newScale = Math.max(5, Math.min(1000, oldScale * zoomFactor))
+    const cx = canvas.width / 2
+    const cy = canvas.height / 2
+
+    view2DRef.current.originX = cx - (cx - view2DRef.current.originX) * (newScale / oldScale)
+    view2DRef.current.originY = cy - (cy - view2DRef.current.originY) * (newScale / oldScale)
+    view2DRef.current.scale = newScale
+    draw2D()
+  }
+
   const handleResetView2D = () => {
     const canvas = canvas2dRef.current
     if (!canvas) return
@@ -566,15 +679,14 @@ export default function SenGraphPage() {
   }
 
   // ==============================================================
-  // 4. THREE.JS ENGINE 3D (ĐỒNG BỘ DARK / LIGHT MODE)
+  // 4. THREE.JS ENGINE 3D (SỬA LỖI TỰ XOAY & DUY TRÌ SCENE)
   // ==============================================================
   useEffect(() => {
-    if (mode !== '3d') return
     const container = container3dRef.current
     if (!container) return
 
-    const width = container.clientWidth
-    const height = container.clientHeight
+    const width = container.clientWidth || 800
+    const height = container.clientHeight || 600
     const isDark = theme === 'dark'
 
     // Scene
@@ -635,15 +747,17 @@ export default function SenGraphPage() {
     }
     updateCamera()
 
-    // Animation Loop
+    // Animation Loop: đọc autoRotateRef để tránh bug phá hủy scene
     let reqId = 0
     const animate = () => {
       reqId = requestAnimationFrame(animate)
-      if (autoRotate3D) {
+      if (autoRotateRef.current && modeRef.current === '3d') {
         orbit.yaw += 0.005
         updateCamera()
       }
-      renderer.render(scene, camera)
+      if (modeRef.current === '3d') {
+        renderer.render(scene, camera)
+      }
     }
     animate()
 
@@ -654,9 +768,11 @@ export default function SenGraphPage() {
       if (!container) return
       const w = container.clientWidth
       const h = container.clientHeight
-      camera.aspect = w / h
-      camera.updateProjectionMatrix()
-      renderer.setSize(w, h)
+      if (w > 0 && h > 0) {
+        camera.aspect = w / h
+        camera.updateProjectionMatrix()
+        renderer.setSize(w, h)
+      }
     }
     window.addEventListener('resize', handleResize3D)
 
@@ -664,13 +780,13 @@ export default function SenGraphPage() {
       cancelAnimationFrame(reqId)
       window.removeEventListener('resize', handleResize3D)
       renderer.dispose()
-      if (container) container.innerHTML = ''
+      threeSceneRef.current = null
     }
-  }, [mode, autoRotate3D, theme])
+  }, [theme])
 
-  // Cập nhật các bề mặt 3D trong Scene
+  // Cập nhật các bề mặt 3D trong Scene (Không phá hủy Three.js)
   useEffect(() => {
-    if (mode !== '3d' || !threeSceneRef.current) return
+    if (!threeSceneRef.current) return
     const { meshGroup } = threeSceneRef.current
 
     // Dọn dẹp mesh cũ
@@ -726,7 +842,12 @@ export default function SenGraphPage() {
       const mesh = new THREE.Mesh(geom, mat)
       meshGroup.add(mesh)
     })
-  }, [mode, equations3D, wireframe3D])
+
+    if (threeSceneRef.current) {
+      const { renderer, scene, camera } = threeSceneRef.current
+      renderer.render(scene, camera)
+    }
+  }, [equations3D, wireframe3D])
 
   // Tương tác chuột 3D Orbit Controls
   const handleMouseDown3D = (e: React.MouseEvent) => {
@@ -770,6 +891,29 @@ export default function SenGraphPage() {
     camera.lookAt(0, 0, 0)
   }
 
+  const handleZoom3D = (direction: 'in' | 'out') => {
+    if (!threeSceneRef.current) return
+    const { orbit, camera } = threeSceneRef.current
+    orbit.distance += direction === 'in' ? -2.5 : 2.5
+    orbit.distance = Math.max(4, Math.min(50, orbit.distance))
+    camera.position.x = orbit.distance * Math.cos(orbit.pitch) * Math.sin(orbit.yaw)
+    camera.position.y = orbit.distance * Math.sin(orbit.pitch)
+    camera.position.z = orbit.distance * Math.cos(orbit.pitch) * Math.cos(orbit.yaw)
+    camera.lookAt(0, 0, 0)
+  }
+
+  const handleResetView3D = () => {
+    if (!threeSceneRef.current) return
+    const { orbit, camera } = threeSceneRef.current
+    orbit.yaw = 0.8
+    orbit.pitch = 0.5
+    orbit.distance = 18
+    camera.position.x = orbit.distance * Math.cos(orbit.pitch) * Math.sin(orbit.yaw)
+    camera.position.y = orbit.distance * Math.sin(orbit.pitch)
+    camera.position.z = orbit.distance * Math.cos(orbit.pitch) * Math.cos(orbit.yaw)
+    camera.lookAt(0, 0, 0)
+  }
+
   // ==============================================================
   // 5. QUẢN LÝ PHƯƠNG TRÌNH & BÀN PHÍM TOÁN HỌC ẢO
   // ==============================================================
@@ -779,6 +923,7 @@ export default function SenGraphPage() {
     const defaultExpr = initialExpr || (mode === '2d' ? 'y = ' : 'z = ')
     setActiveEquations([...activeEquations, { id: newId, expr: defaultExpr, color: nextColor, visible: true }])
     setActiveInputId(newId)
+    setShowKeyboard(true)
   }
 
   const handleRemoveEquation = (id: string) => {
@@ -806,7 +951,7 @@ export default function SenGraphPage() {
     }
   }
 
-  // Chèn ký tự thông minh vào vị trí con trỏ trong ô nhập
+  // Chèn ký tự vào vị trí con trỏ trong ô nhập
   const handleVirtualKey = (key: string) => {
     const eq = activeEquations.find((item) => item.id === activeInputId)
     if (!eq) return
@@ -873,7 +1018,7 @@ export default function SenGraphPage() {
   }
 
   // ==============================================================
-  // 6. TRỢ LÝ TOÁN HỌC SEN AI (GEMINI 3.8 FLASH) VỚI FILE/ẢNH & TỰ ĐỘNG VẼ
+  // 6. TRỢ LÝ TOÁN HỌC SEN AI (GEMINI 3.7 FLASH) VỚI FILE/ẢNH & TỰ ĐỘNG VẼ
   // ==============================================================
   const handleSelectImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -956,11 +1101,14 @@ export default function SenGraphPage() {
   }
 
   // Áp dụng các phương trình do AI đề xuất vào đồ thị SenGraph
-  const handleApplyExtractedEquations = (extracted: {
-    mode?: '2d' | '3d'
-    title?: string
-    equations?: string[]
-  }, replaceAll = true) => {
+  const handleApplyExtractedEquations = (
+    extracted: {
+      mode?: '2d' | '3d'
+      title?: string
+      equations?: string[]
+    },
+    replaceAll = true
+  ) => {
     if (!extracted.equations || extracted.equations.length === 0) return
 
     const targetMode = extracted.mode === '3d' ? '3d' : '2d'
@@ -1109,7 +1257,7 @@ export default function SenGraphPage() {
       <div className="flex-1 flex overflow-hidden relative">
         {/* CỘT TRÁI: QUẢN LÝ PHƯƠNG TRÌNH */}
         <div
-          className={`w-80 sm:w-96 flex flex-col shrink-0 shadow-sm z-20 border-r transition-colors duration-200 ${
+          className={`w-80 sm:w-[410px] flex flex-col shrink-0 shadow-sm z-20 border-r transition-colors duration-200 ${
             isDark ? 'bg-[#0f172a]/95 border-slate-800' : 'bg-white/95 border-slate-200'
           }`}
         >
@@ -1161,14 +1309,17 @@ export default function SenGraphPage() {
             </div>
           </div>
 
-          {/* Danh sách các phương trình */}
+          {/* Danh sách các phương trình với Hiển Thị Ký Hiệu Toán Học KaTeX Chuẩn */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {activeEquations.map((eq, index) => {
               const isSelected = eq.id === activeInputId
               return (
                 <div
                   key={eq.id}
-                  onClick={() => setActiveInputId(eq.id)}
+                  onClick={() => {
+                    setActiveInputId(eq.id)
+                    setShowKeyboard(true)
+                  }}
                   className={`p-2.5 rounded-2xl border transition-all ${
                     isSelected
                       ? isDark
@@ -1179,7 +1330,7 @@ export default function SenGraphPage() {
                       : 'bg-white border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 mb-1.5">
                     {/* Nút màu sắc & Ẩn/Hiện */}
                     <button
                       type="button"
@@ -1188,7 +1339,7 @@ export default function SenGraphPage() {
                         handleToggleVisibility(eq.id)
                       }}
                       title={eq.visible ? 'Ẩn phương trình' : 'Hiện phương trình'}
-                      className="w-7 h-7 rounded-xl flex items-center justify-center transition shrink-0 cursor-pointer shadow-sm"
+                      className="w-6 h-6 rounded-lg flex items-center justify-center transition shrink-0 cursor-pointer shadow-sm"
                       style={{
                         backgroundColor: eq.visible ? eq.color : isDark ? '#334155' : '#cbd5e1',
                         color: '#ffffff',
@@ -1198,22 +1349,16 @@ export default function SenGraphPage() {
                     </button>
 
                     {/* Số thứ tự */}
-                    <span className="text-xs font-bold text-slate-400 w-4">{index + 1}</span>
+                    <span className="text-xs font-bold text-slate-400 w-3">{index + 1}</span>
 
-                    {/* Ô nhập công thức */}
-                    <input
-                      id={`eq-input-${eq.id}`}
-                      type="text"
-                      value={eq.expr}
-                      onChange={(e) => handleUpdateExpr(eq.id, e.target.value)}
-                      onFocus={() => setActiveInputId(eq.id)}
-                      placeholder={mode === '2d' ? 'y = f(x)' : 'z = f(x, y)'}
-                      className={`flex-1 font-mono text-xs px-2.5 py-1.5 rounded-xl border focus:outline-none transition ${
-                        isDark
-                          ? 'bg-slate-900/80 border-slate-700 text-slate-100 focus:border-sky-400 placeholder-slate-500'
-                          : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-sky-500 focus:bg-white placeholder-slate-400'
+                    {/* Hiển thị Ký Hiệu Toán Học Chuẩn Sách Giáo Khoa (KaTeX) */}
+                    <div
+                      className={`flex-1 overflow-x-auto py-1 px-2.5 rounded-xl border text-xs sm:text-sm font-serif transition ${
+                        isDark ? 'bg-slate-900/90 border-slate-800 text-sky-300' : 'bg-slate-50 border-slate-200 text-sky-800'
                       }`}
-                    />
+                    >
+                      <MathFormulaView expr={eq.expr} />
+                    </div>
 
                     {/* Nút xóa */}
                     <button
@@ -1231,6 +1376,24 @@ export default function SenGraphPage() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+
+                  {/* Ô nhập liệu chỉnh sửa */}
+                  <input
+                    id={`eq-input-${eq.id}`}
+                    type="text"
+                    value={eq.expr}
+                    onChange={(e) => handleUpdateExpr(eq.id, e.target.value)}
+                    onFocus={() => {
+                      setActiveInputId(eq.id)
+                      setShowKeyboard(true)
+                    }}
+                    placeholder={mode === '2d' ? 'y = f(x)' : 'z = f(x, y)'}
+                    className={`w-full font-mono text-xs px-2.5 py-1.5 rounded-xl border focus:outline-none transition ${
+                      isDark
+                        ? 'bg-slate-900/60 border-slate-700/80 text-slate-200 focus:border-sky-400 placeholder-slate-500'
+                        : 'bg-white border-slate-200 text-slate-800 focus:border-sky-500 placeholder-slate-400'
+                    }`}
+                  />
                 </div>
               )
             })}
@@ -1265,108 +1428,93 @@ export default function SenGraphPage() {
           </div>
         </div>
 
-        {/* CỘT PHẢI: KHÔNG GIAN ĐỒ HỌA (CANVAS 2D HOẶC THREE.JS 3D) */}
+        {/* CỘT PHẢI: KHÔNG GIAN ĐỒ HỌA (DUY TRÌ CẢ 2D VÀ 3D TRONG DOM ĐỂ KHÔNG BAO GIỜ BỊ CRASH) */}
         <div className="flex-1 h-full relative overflow-hidden flex flex-col">
-          {/* A. VIEW 2D */}
-          {mode === '2d' && (
-            <div className="flex-1 relative w-full h-full cursor-grab active:cursor-grabbing">
-              <canvas
-                ref={canvas2dRef}
-                onMouseDown={handleMouseDown2D}
-                onMouseMove={handleMouseMove2D}
-                onMouseUp={handleMouseUp2D}
-                onMouseLeave={handleMouseUp2D}
-                onWheel={handleWheel2D}
-                className="w-full h-full block"
-              />
+          {/* A. VIEW 2D (Ẩn/Hiện bằng CSS block/hidden để không bị hủy canvas) */}
+          <div
+            className={`flex-1 relative w-full h-full cursor-grab active:cursor-grabbing ${
+              mode === '2d' ? 'block' : 'hidden'
+            }`}
+          >
+            <canvas
+              ref={canvas2dRef}
+              onMouseDown={handleMouseDown2D}
+              onMouseMove={handleMouseMove2D}
+              onMouseUp={handleMouseUp2D}
+              onMouseLeave={handleMouseUp2D}
+              onWheel={handleWheel2D}
+              className="w-full h-full block"
+            />
+          </div>
 
-              {/* Floating Controls 2D */}
-              <div
-                className={`absolute top-4 right-4 flex flex-col rounded-2xl shadow-xl border overflow-hidden backdrop-blur-md ${
-                  isDark ? 'bg-slate-900/85 border-slate-700 text-white' : 'bg-white/85 border-slate-200 text-slate-700'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    view2DRef.current.scale = Math.min(1000, view2DRef.current.scale * 1.25)
-                    draw2D()
-                  }}
-                  title="Phóng to"
-                  className={`p-2.5 transition cursor-pointer border-b ${
-                    isDark ? 'hover:bg-slate-800 border-slate-700' : 'hover:bg-slate-100 border-slate-200'
-                  }`}
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    view2DRef.current.scale = Math.max(5, view2DRef.current.scale * 0.8)
-                    draw2D()
-                  }}
-                  title="Thu nhỏ"
-                  className={`p-2.5 transition cursor-pointer border-b ${
-                    isDark ? 'hover:bg-slate-800 border-slate-700' : 'hover:bg-slate-100 border-slate-200'
-                  }`}
-                >
-                  <ZoomOut className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleResetView2D}
-                  title="Về gốc tọa độ (0, 0)"
-                  className={`p-2.5 transition cursor-pointer ${
-                    isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
-                  }`}
-                >
-                  <Home className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* B. VIEW 3D (Ẩn/Hiện bằng CSS block/hidden để không bị crash WebGL) */}
+          <div
+            className={`flex-1 relative w-full h-full cursor-grab active:cursor-grabbing ${
+              mode === '3d' ? 'block' : 'hidden'
+            }`}
+            onMouseDown={handleMouseDown3D}
+            onMouseMove={handleMouseMove3D}
+            onMouseUp={handleMouseUp3D}
+            onMouseLeave={handleMouseUp3D}
+            onWheel={handleWheel3D}
+          >
+            <div ref={container3dRef} className="w-full h-full block" />
+          </div>
 
-          {/* B. VIEW 3D */}
-          {mode === '3d' && (
+          {/* NÚT ĐIỀU KHIỂN PHÓNG TO / THU NHỎ / GỐC TỌA ĐỘ NỔI BẬT Ở GÓC PHẢI */}
+          <div className="absolute top-4 right-4 flex flex-col gap-2 z-20">
+            {/* Cụm Phóng to & Thu nhỏ */}
             <div
-              className="flex-1 relative w-full h-full cursor-grab active:cursor-grabbing"
-              onMouseDown={handleMouseDown3D}
-              onMouseMove={handleMouseMove3D}
-              onMouseUp={handleMouseUp3D}
-              onMouseLeave={handleMouseUp3D}
-              onWheel={handleWheel3D}
+              className={`flex flex-col rounded-2xl shadow-2xl border overflow-hidden backdrop-blur-xl ${
+                isDark ? 'bg-slate-900/90 border-slate-700 text-white' : 'bg-white/95 border-slate-200 text-slate-800'
+              }`}
             >
-              <div ref={container3dRef} className="w-full h-full block" />
-
-              {/* Floating Controls 3D */}
-              <div
-                className={`absolute top-4 right-4 flex flex-col gap-2 rounded-2xl shadow-2xl p-2 border backdrop-blur-md ${
-                  isDark ? 'bg-slate-900/90 border-slate-700 text-white' : 'bg-white/90 border-slate-200 text-slate-800'
+              <button
+                type="button"
+                onClick={() => (mode === '2d' ? handleZoom2D('in') : handleZoom3D('in'))}
+                title="Phóng to (+)"
+                className={`p-3 transition cursor-pointer border-b flex items-center justify-center font-bold text-base ${
+                  isDark ? 'hover:bg-slate-800 border-slate-700' : 'hover:bg-slate-100 border-slate-200'
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => setWireframe3D(!wireframe3D)}
-                  title="Chuyển chế độ khung dây"
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
-                    wireframe3D
-                      ? 'bg-sky-500 text-white border-sky-400'
-                      : isDark
-                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
-                      : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>{wireframe3D ? 'Bật Khung Dây' : 'Mặt Đặc'}</span>
-                </button>
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => (mode === '2d' ? handleZoom2D('out') : handleZoom3D('out'))}
+                title="Thu nhỏ (-)"
+                className={`p-3 transition cursor-pointer border-b flex items-center justify-center font-bold text-base ${
+                  isDark ? 'hover:bg-slate-800 border-slate-700' : 'hover:bg-slate-100 border-slate-200'
+                }`}
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => (mode === '2d' ? handleResetView2D() : handleResetView3D())}
+                title="Về gốc tọa độ (0, 0)"
+                className={`p-3 transition cursor-pointer flex items-center justify-center ${
+                  isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                }`}
+              >
+                <Home className="w-4 h-4" />
+              </button>
+            </div>
 
+            {/* Điều khiển bổ sung trong 3D */}
+            {mode === '3d' && (
+              <div
+                className={`flex flex-col gap-1.5 rounded-2xl shadow-2xl p-1.5 border backdrop-blur-xl ${
+                  isDark ? 'bg-slate-900/90 border-slate-700 text-white' : 'bg-white/95 border-slate-200 text-slate-800'
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => setAutoRotate3D(!autoRotate3D)}
-                  title="Tự động xoay không gian 3D"
+                  title="Bật/Tắt tự xoay không gian 3D"
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
                     autoRotate3D
-                      ? 'bg-indigo-600 text-white border-indigo-500'
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
                       : isDark
                       ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
                       : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
@@ -1375,11 +1523,27 @@ export default function SenGraphPage() {
                   {autoRotate3D ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                   <span>{autoRotate3D ? 'Dừng Xoay' : 'Tự Xoay'}</span>
                 </button>
-              </div>
-            </div>
-          )}
 
-          {/* 🌟 3. BÀN PHÍM ẢO TOÁN HỌC CAO CẤP (CHUẨN 3 KHỐI + QWERTY + THU GỌN) */}
+                <button
+                  type="button"
+                  onClick={() => setWireframe3D(!wireframe3D)}
+                  title="Chuyển chế độ khung dây / mặt đặc"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    wireframe3D
+                      ? 'bg-sky-500 text-white border-sky-400 shadow-md'
+                      : isDark
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                      : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>{wireframe3D ? 'Khung Dây' : 'Mặt Đặc'}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 🌟 3. BÀN PHÍM ẢO TOÁN HỌC CAO CẤP VỚI KÝ HIỆU TOÁN HỌC CHUẨN */}
           <div className="absolute bottom-3 left-3 z-30">
             {!showKeyboard && (
               <button
@@ -1387,7 +1551,7 @@ export default function SenGraphPage() {
                 onClick={() => setShowKeyboard(true)}
                 className={`px-3.5 py-2 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold transition cursor-pointer border ${
                   isDark
-                    ? 'bg-slate-900/90 border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-sky-500'
+                    ? 'bg-slate-900/95 border-slate-700 text-slate-200 hover:bg-slate-800 hover:border-sky-500'
                     : 'bg-white/95 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-sky-400'
                 }`}
               >
@@ -1409,7 +1573,7 @@ export default function SenGraphPage() {
                 <div className="flex items-center gap-2">
                   <KeyboardIcon className="w-4 h-4 text-sky-500" />
                   <span className="text-[11px] font-bold tracking-wide uppercase opacity-70">
-                    Bàn Phím Toán Học {keyboardMode === 'abc' ? '(Chữ Cái QWERTY)' : '(Toán Học & Số)'}
+                    Bàn Phím Toán Học {keyboardMode === 'abc' ? '(Chữ Cái QWERTY)' : '(Ký Hiệu Toán Học Chuẩn & Số)'}
                   </span>
                 </div>
 
@@ -1417,7 +1581,7 @@ export default function SenGraphPage() {
                   <button
                     type="button"
                     onClick={() => setShowKeyboard(false)}
-                    className={`px-2 py-0.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                    className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
                       isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                     }`}
                   >
@@ -1440,7 +1604,7 @@ export default function SenGraphPage() {
                   >
                     <div className="flex items-center justify-between pb-2 border-b border-slate-200/50 mb-2">
                       <span className="text-xs font-bold text-sky-500 uppercase tracking-wider">
-                        Danh Mục Chức Năng
+                        Danh Mục Chức Năng Toán Học
                       </span>
                       <button
                         type="button"
@@ -1478,7 +1642,7 @@ export default function SenGraphPage() {
                           functionsTab === 'calc' ? 'bg-sky-600 text-white' : 'hover:bg-slate-200/50'
                         }`}
                       >
-                        Giải Tích
+                        Giải Tích (Tích Phân, Mũ)
                       </button>
                       <button
                         type="button"
@@ -1545,7 +1709,7 @@ export default function SenGraphPage() {
                       {functionsTab === 'calc' && (
                         <>
                           {[
-                            'ln(', 'log(', 'exp(', 'abs(',
+                            'int(', 'ln(', 'log(', 'exp(', 'abs(',
                             'sqrt(', 'cbrt(', 'max(', 'min(',
                           ].map((fn) => (
                             <button
@@ -1561,7 +1725,7 @@ export default function SenGraphPage() {
                                   : 'bg-slate-50 border-slate-200 hover:bg-sky-50 text-slate-800'
                               }`}
                             >
-                              {fn}
+                              {fn === 'int(' ? '∫ (Tích phân)' : fn}
                             </button>
                           ))}
                         </>
@@ -1721,11 +1885,11 @@ export default function SenGraphPage() {
                     </div>
                   </div>
                 ) : (
-                  /* BỐ CỤC TOÁN HỌC 3 KHỐI CHUẨN GIỐNG HỆ THỐNG MẪU */
+                  /* BỐ CỤC TOÁN HỌC 3 KHỐI CHUẨN VỚI KÝ HIỆU TOÁN HỌC CHUẨN (MŨ, TÍCH PHÂN, CĂN, PHÂN SỐ) */
                   <div className="flex flex-wrap sm:flex-nowrap gap-2 justify-center items-stretch">
-                    {/* KHỐI 1 (TRÁI): BIẾN SỐ VÀ QUAN HỆ */}
+                    {/* KHỐI 1 (TRÁI): BIẾN SỐ, SỐ MŨ, TÍCH PHÂN, CĂN BẬC */}
                     <div className="grid grid-cols-4 gap-1.5">
-                      {/* Row 1 */}
+                      {/* Row 1: x, y, z, a^b */}
                       {['x', 'y', 'z', '^'].map((k) => (
                         <button
                           key={k}
@@ -1741,7 +1905,7 @@ export default function SenGraphPage() {
                         </button>
                       ))}
 
-                      {/* Row 2 */}
+                      {/* Row 2: ( ), <, > */}
                       {['(', ')', '<', '>'].map((k) => (
                         <button
                           key={k}
@@ -1757,7 +1921,7 @@ export default function SenGraphPage() {
                         </button>
                       ))}
 
-                      {/* Row 3 */}
+                      {/* Row 3: |a|, ,, ≤, ≥ */}
                       {['abs(', ',', '<=', '>='].map((k) => (
                         <button
                           key={k}
@@ -1773,7 +1937,7 @@ export default function SenGraphPage() {
                         </button>
                       ))}
 
-                      {/* Row 4 */}
+                      {/* Row 4: ABC, √, π, e */}
                       <button
                         type="button"
                         onClick={() => setKeyboardMode('abc')}
@@ -1956,7 +2120,7 @@ export default function SenGraphPage() {
           )}
         </div>
 
-        {/* 🌟 4. SEN AI TOÁN HỌC DRAWER (RIGHT PANEL CÓ GỬI ẢNH/FILE & TỰ ĐỘNG VẼ) */}
+        {/* 🌟 4. SEN AI TOÁN HỌC DRAWER (GEMINI 3.7 FLASH - GIẢI ĐỀ TỪ ẢNH & TỰ ĐỘNG VẼ) */}
         {showAiDrawer && (
           <aside
             aria-label="Trợ lý toán học Sen AI"
@@ -1978,7 +2142,7 @@ export default function SenGraphPage() {
                 </div>
                 <div>
                   <h3 className="text-xs font-bold">Sen AI Toán Học</h3>
-                  <span className="text-[10px] text-sky-500 font-semibold">Gemini 3.8 Flash • Giải đề & Vẽ hình</span>
+                  <span className="text-[10px] text-sky-500 font-semibold">Gemini 3.7 Flash • Giải đề & Tự động vẽ</span>
                 </div>
               </div>
               <button
@@ -2173,7 +2337,7 @@ export default function SenGraphPage() {
               {isAiLoading && (
                 <div className="flex items-center gap-2 text-xs text-sky-500 font-bold p-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Sen AI đang đọc đề và phân tích toán học...</span>
+                  <span>Sen AI đang giải đề và phân tích phương trình...</span>
                 </div>
               )}
               <div ref={aiChatEndRef} />
