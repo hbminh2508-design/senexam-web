@@ -46,6 +46,7 @@ import {
   ShieldCheck,
   Gem,
   GraduationCap,
+  Box,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
@@ -112,6 +113,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#0EA5E9] via-[#0284C7] to-[#1D4ED8]',
     badge: 'Canvas',
     icon: ShieldCheck,
+  },
+  {
+    key: 'sengraph',
+    title: 'SenGraph',
+    description: 'Vẽ đồ thị hàm số 2D và mô hình không gian 3D tương tác cao cấp, tích hợp Sen AI Toán học.',
+    href: 'https://sengraph.senexam.me',
+    tone: 'from-[#06B6D4] via-[#0284C7] to-[#4F46E5]',
+    badge: '2D & 3D',
+    icon: Box,
   },
   {
     key: 'library',

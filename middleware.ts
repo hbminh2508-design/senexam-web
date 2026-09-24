@@ -206,21 +206,23 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 4.6 Kiểm tra nếu truy cập qua subdomain chat: chat.senexam.me hoặc chat.*, zalo.*
-  const isChatSubdomain =
-    hostname.startsWith('chat.senexam.') ||
-    hostname.startsWith('chat.') ||
-    hostname.startsWith('zalo.')
+  // 4.6 Kiểm tra nếu truy cập qua subdomain SenGraph: sengraph.senexam.me hoặc sengraph.*, graph.*
+  const isSenGraphSubdomain =
+    hostname.startsWith('sengraph.senexam.') ||
+    hostname.startsWith('sengraph.') ||
+    hostname.startsWith('graph.')
 
-  if (isChatSubdomain) {
-    if (pathname === '/' || pathname === '/login' || pathname === '/dashboard') {
-      url.pathname = '/chat'
+  if (isSenGraphSubdomain) {
+    if (pathname === '/' || pathname === '/dashboard') {
+      url.pathname = '/sengraph'
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
-    if (pathname.startsWith('/chat')) {
+    if (pathname.startsWith('/sengraph')) {
       return applySecurityHeaders(NextResponse.next())
     }
   }
+
+  // (Lưu ý: Sen Chat tạm thời ẩn routing subdomain theo yêu cầu, xem SEN_CHAT_DOCUMENTATION.md)
 
   // 5. Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
   const isFepnSubdomain =
@@ -291,6 +293,7 @@ export function middleware(request: NextRequest) {
       pathname.startsWith('/seb') ||
       pathname.startsWith('/new-') ||
       pathname.startsWith('/exams') ||
+      pathname.startsWith('/sengraph') ||
       pathname.startsWith('/chat')
     ) {
       return applySecurityHeaders(NextResponse.next())
@@ -308,6 +311,7 @@ export function middleware(request: NextRequest) {
       'admin',
       'api',
       'auth',
+      'sengraph',
       'chat',
       'zalo-chat',
       'reset-password',
