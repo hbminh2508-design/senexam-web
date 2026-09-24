@@ -145,12 +145,86 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.next())
   }
 
-  // 3.5. Trang cấp lại mật khẩu đồng bộ FEPN
-  if (pathname === '/sen-cap-lai-mat-khau') {
-    return applySecurityHeaders(NextResponse.next())
+  // 4.5 Kiểm tra nếu truy cập qua các subdomain
+  const isSebSubdomain =
+    hostname.startsWith('seb.thicu.tailieufepn.') ||
+    hostname.startsWith('seb.') ||
+    hostname.startsWith('thicu.')
+
+  const isSenGraphSubdomain =
+    hostname.startsWith('sengraph.senexam.') ||
+    hostname.startsWith('sengraph.') ||
+    hostname.startsWith('graph.')
+
+  const isFepnSubdomain =
+    hostname.startsWith('tsv.fepn.') ||
+    hostname.startsWith('fepn.')
+
+  // 4.6 Chuyển hướng các đường dẫn cũ sang giao diện Mới (New UI) trên miền chính
+  if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain) {
+    if (pathname === '/admin') {
+      url.pathname = '/new-admin'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/announcements') {
+      url.pathname = '/new-announcement'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/exams' || pathname.startsWith('/exams/')) {
+      url.pathname = pathname.replace('/exams', '/new-exams')
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/exclusive-store') {
+      url.pathname = '/new-exclusive-store'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/focus') {
+      url.pathname = '/new-focus'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/library') {
+      url.pathname = '/new-library'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/senai-studio') {
+      url.pathname = '/new-senai-studio'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/submissions' || pathname.startsWith('/submissions/')) {
+      url.pathname = pathname.replace('/submissions', '/new-submissions')
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/vip') {
+      url.pathname = '/new-vip'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/tinhdiem') {
+      url.pathname = '/new-mark-calculate'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/phongthinghiem') {
+      url.pathname = '/new-labs'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/senvideo') {
+      url.pathname = '/new-video'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/sen-cap-lai-mat-khau') {
+      url.pathname = '/new-reset-password'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/vi-sen') {
+      url.pathname = '/new-sencash'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/forum' || pathname.startsWith('/forum/') || pathname === '/mes') {
+      url.pathname = '/new-media'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
   }
 
-  // 4. Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
+  // 4.7 Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
   if (pathname.startsWith('/fepn-')) {
     // fepn-login, fepn-dashboard, fepn-recap, fepn-admin, fepn-gpa, fepn-gift, fepn-schedule, fepn-reset-password là các trang độc lập có sẵn thư mục
     if (
@@ -169,12 +243,6 @@ export function middleware(request: NextRequest) {
     url.pathname = `/tsv-fepn/${pathname.slice(1)}`
     return applySecurityHeaders(NextResponse.rewrite(url))
   }
-
-  // 4.5 Kiểm tra nếu truy cập qua subdomain thi cử bảo mật SEB: seb.thicu.tailieufepn.senexam.com
-  const isSebSubdomain =
-    hostname.startsWith('seb.thicu.tailieufepn.') ||
-    hostname.startsWith('seb.') ||
-    hostname.startsWith('thicu.')
 
   if (isSebSubdomain) {
     if (pathname === '/' || pathname === '/dashboard') {
@@ -206,12 +274,6 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 4.6 Kiểm tra nếu truy cập qua subdomain SenGraph: sengraph.senexam.me hoặc sengraph.*, graph.*
-  const isSenGraphSubdomain =
-    hostname.startsWith('sengraph.senexam.') ||
-    hostname.startsWith('sengraph.') ||
-    hostname.startsWith('graph.')
-
   if (isSenGraphSubdomain) {
     if (pathname === '/' || pathname === '/dashboard') {
       url.pathname = '/sengraph'
@@ -225,10 +287,6 @@ export function middleware(request: NextRequest) {
   // (Lưu ý: Sen Chat tạm thời ẩn routing subdomain theo yêu cầu, xem SEN_CHAT_DOCUMENTATION.md)
 
   // 5. Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
-  const isFepnSubdomain =
-    hostname.startsWith('tsv.fepn.') ||
-    hostname.startsWith('fepn.')
-
   if (isFepnSubdomain) {
     // 5.1 Trang chủ subdomain -> Chuyển vào FEPN Dashboard
     if (pathname === '/' || pathname === '/dashboard') {
@@ -279,7 +337,7 @@ export function middleware(request: NextRequest) {
       pathname === '/sen-cap-lai-mat-khau' ||
       pathname === '/cap-lai-mat-khau'
     ) {
-      url.pathname = '/sen-cap-lai-mat-khau'
+      url.pathname = '/fepn-reset-password'
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
 
@@ -288,11 +346,11 @@ export function middleware(request: NextRequest) {
       pathname.startsWith('/tsv-fepn') ||
       pathname.startsWith('/new-sign') ||
       pathname.startsWith('/fepn-reset-password') ||
-      pathname.startsWith('/sen-cap-lai-mat-khau') ||
+      pathname.startsWith('/new-reset-password') ||
+      pathname.startsWith('/legacy-') ||
       pathname.startsWith('/seb-') ||
       pathname.startsWith('/seb') ||
       pathname.startsWith('/new-') ||
-      pathname.startsWith('/exams') ||
       pathname.startsWith('/sengraph') ||
       pathname.startsWith('/chat')
     ) {

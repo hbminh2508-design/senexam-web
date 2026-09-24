@@ -249,7 +249,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'legacy-dashboard',
     title: 'Giao Diện Cũ (Legacy Dashboard)',
     description: 'Quay lại giao diện cũ để quản lý một số tính năng legacy (Chỉ Quản trị viên nhìn thấy).',
-    href: '/dashboard?legacy_admin=1',
+    href: '/legacy-dashboard',
     tone: 'from-[#64748B] via-[#475569] to-[#334155]',
     badge: 'Admin Legacy',
     icon: Settings,

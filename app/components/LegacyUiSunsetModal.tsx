@@ -30,19 +30,42 @@ export default function LegacyUiSunsetModal() {
   const [userId, setUserId] = useState<string | null>(null)
   const [isMigrating, setIsMigrating] = useState(false)
 
-  // Map các trang cũ sang trang mới tương ứng
+  // Map các trang cũ và legacy-* sang trang mới tương ứng
   const getNewEquivalentPath = (path: string) => {
-    if (path.startsWith('/exams')) return '/new-exams'
-    if (path.startsWith('/history')) return '/new-history'
-    if (path.startsWith('/library')) return '/new-library'
-    if (path.startsWith('/forum') || path.startsWith('/mes')) return '/new-media'
-    if (path.startsWith('/vip')) return '/new-vip'
-    if (path.startsWith('/admin')) return '/new-admin'
-    if (path.startsWith('/phongthinghiem')) return '/new-labs'
-    if (path.startsWith('/tinhdiemthi')) return '/new-mark-calculate'
-    if (path.startsWith('/focus')) return '/new-focus'
-    if (path.startsWith('/senvideo')) return '/new-video'
-    if (path.startsWith('/codes')) return '/new-codes'
+    if (path.startsWith('/legacy-exams') || path.startsWith('/exams')) return '/new-exams'
+    if (path.startsWith('/legacy-history') || path.startsWith('/history')) return '/new-history'
+    if (path.startsWith('/legacy-library') || path.startsWith('/library')) return '/new-library'
+    if (
+      path.startsWith('/legacy-forum') ||
+      path.startsWith('/forum') ||
+      path.startsWith('/legacy-mes') ||
+      path.startsWith('/mes')
+    )
+      return '/new-media'
+    if (path.startsWith('/legacy-vip') || path.startsWith('/vip')) return '/new-vip'
+    if (path.startsWith('/legacy-admin') || path.startsWith('/admin')) return '/new-admin'
+    if (path.startsWith('/legacy-phongthinghiem') || path.startsWith('/phongthinghiem')) return '/new-labs'
+    if (
+      path.startsWith('/legacy-tinhdiem') ||
+      path.startsWith('/tinhdiemthi') ||
+      path.startsWith('/tinhdiem')
+    )
+      return '/new-mark-calculate'
+    if (path.startsWith('/legacy-focus') || path.startsWith('/focus')) return '/new-focus'
+    if (path.startsWith('/legacy-senvideo') || path.startsWith('/senvideo')) return '/new-video'
+    if (path.startsWith('/legacy-codes') || path.startsWith('/codes')) return '/new-codes'
+    if (path.startsWith('/legacy-senai-studio') || path.startsWith('/senai-studio')) return '/new-senai-studio'
+    if (path.startsWith('/legacy-submissions') || path.startsWith('/submissions')) return '/new-submissions'
+    if (path.startsWith('/legacy-exclusive-store') || path.startsWith('/exclusive-store'))
+      return '/new-exclusive-store'
+    if (path.startsWith('/legacy-announcements') || path.startsWith('/announcements'))
+      return '/new-announcement'
+    if (path.startsWith('/legacy-vi-sen') || path.startsWith('/vi-sen')) return '/new-sencash'
+    if (
+      path.startsWith('/legacy-sen-cap-lai-mat-khau') ||
+      path.startsWith('/sen-cap-lai-mat-khau')
+    )
+      return '/new-reset-password'
     return '/new-dashboard'
   }
 

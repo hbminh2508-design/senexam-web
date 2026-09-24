@@ -7,7 +7,7 @@ export default function FepnResetPasswordRedirect() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace('/sen-cap-lai-mat-khau')
+    router.replace('/new-reset-password')
   }, [router])
 
   return (
