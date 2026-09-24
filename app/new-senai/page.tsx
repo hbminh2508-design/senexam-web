@@ -20,6 +20,7 @@ import {
   isRoadmapDateReached,
   canAccessSenMaxPlan,
 } from '@/lib/roadmapSchedule'
+import RoadmapTimeline from '@/app/components/RoadmapTimeline'
 import {
   ArrowLeft,
   Sparkles,
@@ -324,65 +325,11 @@ export default function SenAiQuotaPage() {
               </h3>
             </div>
             <span className="text-[11px] font-bold text-slate-500">
-              {isBetaTester ? '⚡ Bạn đang truy cập qua Kênh Beta' : '🔒 Tự động hiển thị đúng ngày phát hành'}
+              {isBetaTester ? '⚡ Bạn đang truy cập qua Kênh Beta' : '🔒 Tự động kích hoạt đúng ngày phát hành'}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            {/* Q1 */}
-            <div className="rounded-2xl border border-pink-500/20 bg-pink-500/5 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-pink-600 dark:text-pink-400">
-                  Q1/2027 • 30/01/2027
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                  {isRoadmapDateReached('Q1_2027') ? 'Chính thức' : isBetaTester ? 'Beta Đã Mở' : '30/01/2027'}
-                </span>
-              </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                SenGraph, Sen Chat & Quota SenAI
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                SenGraph 2D/3D, Bong bóng chat Sen Chat tự lưu SenAI Studio và Trung tâm Quota SenAI.
-              </p>
-            </div>
-
-            {/* Q2 */}
-            <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-purple-600 dark:text-purple-400">
-                  Q2/2027 • 19/05/2027
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400">
-                  {isRoadmapDateReached('Q2_2027') ? 'Chính thức' : isBetaTester ? 'Beta Thử Nghiệm' : '19/05/2027'}
-                </span>
-              </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                Sen Exam Canvas & Phân Nhóm Dashboard
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                Môi trường thi chống gian lận Canvas và tái sắp xếp nút Dashboard theo nhóm công năng gọn gàng.
-              </p>
-            </div>
-
-            {/* Q4 */}
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase text-amber-600 dark:text-amber-400">
-                  Q4/2027 • 05/12/2027
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                  {isRoadmapDateReached('Q4_2027') ? 'Chính thức' : isBetaTester ? 'Beta Đặc Quyền' : '05/12/2027'}
-                </span>
-              </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                Gói Sen Max & Lộ Trình SenGraph 2.0
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                500 câu/ngày, giá x2 Ultra (318 SC), 15 câu SenGraph AI và giới thiệu thế hệ SenGraph 2.0.
-              </p>
-            </div>
-          </div>
+          <RoadmapTimeline isBetaTester={isBetaTester} initialQuarter="Q1_2027" />
         </div>
 
         {/* BẢNG SO SÁNH & DANH SÁCH GÓI CƯỚC SENAI */}

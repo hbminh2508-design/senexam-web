@@ -701,49 +701,81 @@ export default function NewDashboardPage() {
               </div>
             )}
 
-            {/* Quick Action Grid */}
-            <div className="mt-5 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-              {displayActions.map((item, index) => {
-                const Icon = item.icon
-                const isExternal = item.href.startsWith('http')
-                const Wrapper = isExternal ? 'a' : Link
-                const extraProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}
+            {/* CÁC PHẦN CHIA NGANG THEO TÍNH NĂNG LIÊN QUAN (HẠN CHẾ ICON, GỌN & DỄ TÌM) */}
+            <div className="mt-5 space-y-4">
+              {ACTION_CATEGORIES.filter((c) => c.key !== 'all').map((cat) => {
+                if (selectedCategory !== 'all' && selectedCategory !== cat.key) return null
+                const groupItems = displayActions.filter((a) => a.category === cat.key)
+                if (groupItems.length === 0) return null
+
                 return (
-                  <Wrapper
-                    key={item.key}
-                    href={item.href}
-                    className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-4 transition-all duration-200"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                    {...extraProps}
+                  <div
+                    key={cat.key}
+                    className="rounded-2xl border border-black/8 dark:border-white/8 bg-black/[0.015] dark:bg-white/[0.02] p-3.5 sm:p-4 space-y-2.5 transition-all"
                   >
-                    <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.tone}`} />
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="rounded-xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-700/80 p-2.5 shadow-sm">
-                        <Icon className="h-5 w-5 text-[#111827] dark:text-white" />
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        {item.badge && (
-                          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                            {item.badge}
-                          </span>
-                        )}
-                        <ArrowRight className="h-4 w-4 text-[#6B7280] dark:text-slate-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    {/* Header Phần Chia Ngang */}
+                    <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{cat.icon}</span>
+                        <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                          {cat.label}
+                        </h3>
+                        <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-black/5 dark:bg-white/10 text-slate-500">
+                          {groupItems.length}
+                        </span>
                       </div>
                     </div>
-                    <h3 className="mt-3 text-lg font-black leading-tight" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
-                      {item.title}
-                    </h3>
-                    <p className="mt-1 text-xs leading-relaxed text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
-                      {item.description}
-                    </p>
-                  </Wrapper>
+
+                    {/* Danh Sách Tính Năng Dạng Thẻ Ngang Gọn Gàng (Hạn Chế Icon To) */}
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {groupItems.map((item) => {
+                        const Icon = item.icon
+                        const isExternal = item.href.startsWith('http')
+                        const Wrapper = isExternal ? 'a' : Link
+                        const extraProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}
+
+                        return (
+                          <Wrapper
+                            key={item.key}
+                            href={item.href}
+                            className="group relative flex items-center justify-between rounded-xl border border-black/8 dark:border-white/8 bg-white/80 dark:bg-slate-800/80 p-2.5 transition-all duration-200 hover:border-black/20 dark:hover:border-white/20 hover:shadow-sm hover:scale-[1.01]"
+                            {...extraProps}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 pr-1.5">
+                              {/* Icon mini gọn gàng */}
+                              <div className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition">
+                                <Icon className="h-3.5 w-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                    {item.title}
+                                  </h4>
+                                  {item.badge && (
+                                    <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.2 text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                      {item.badge}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-[#6B7280] dark:text-slate-400 truncate max-w-[220px]">
+                                  {item.description}
+                                </p>
+                              </div>
+                            </div>
+                            <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0 transition group-hover:translate-x-0.5 group-hover:text-pink-500" />
+                          </Wrapper>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               })}
-              {displayActions.length === 0 ? (
-                <div className="col-span-full rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400">
+
+              {displayActions.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400">
                   Không tìm thấy tính năng phù hợp trong mục này. Vui lòng chọn "Tất cả tính năng" hoặc thử từ khoá khác.
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
 

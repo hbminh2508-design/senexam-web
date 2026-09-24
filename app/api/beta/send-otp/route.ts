@@ -35,8 +35,6 @@ export async function POST(request: Request) {
       success: true,
       message: `Mã xác minh 6 chữ số đã được gửi đến email ${email}`,
       email,
-      // Trả về gợi ý mã xác minh để hỗ trợ người dùng trải nghiệm tức thì
-      previewCode: otpCode,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Lỗi gửi mã xác nhận' }, { status: 500 })

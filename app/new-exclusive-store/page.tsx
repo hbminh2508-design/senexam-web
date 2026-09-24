@@ -158,12 +158,15 @@ export default function NewExclusiveStorePage() {
       })
 
       const json = await res.json()
-      if (!res.ok) {
+      if (!res.ok || json.error) {
         setErrorMsg(json.error || 'Không mua được gói')
         return
       }
 
       setInfoMsg(`🎉 Chúc mừng! Bạn đã nâng cấp lên ${SENAI_TIER_LABEL[plan.tier]}, chỉ với ${json.pricePaid} SenCash!`)
+      if (typeof json.remainingBalance === 'number') {
+        setSenCashBalance(json.remainingBalance)
+      }
       await refreshAfterPurchase()
     } catch (e: any) {
       setErrorMsg(e.message || 'Có lỗi xảy ra')
@@ -190,12 +193,15 @@ export default function NewExclusiveStorePage() {
       })
 
       const json = await res.json()
-      if (!res.ok) {
+      if (!res.ok || json.error) {
         setErrorMsg(json.error || 'Không mua được gói')
         return
       }
 
       setInfoMsg(`🔥 Săn thành công ưu đãi độc quyền! Chỉ ${json.pricePaid} SenCash.`)
+      if (typeof json.remainingBalance === 'number') {
+        setSenCashBalance(json.remainingBalance)
+      }
       await refreshAfterPurchase()
     } catch (e: any) {
       setErrorMsg(e.message || 'Có lỗi xảy ra')
