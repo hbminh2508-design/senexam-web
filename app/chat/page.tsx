@@ -402,7 +402,7 @@ export default function SenChatPage() {
         setCurrentUser(senexamProfileFound)
         setShowAuthModal(false)
       } else {
-        window.location.href = '/login?redirect=/chat'
+        window.location.href = '/new-sign?redirect=/chat'
       }
       return
     }
@@ -746,7 +746,7 @@ export default function SenChatPage() {
           ) : (
             <div className="space-y-3">
               <Link
-                href="/login?redirect=/chat"
+                href="/new-sign?redirect=/chat"
                 className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>Đăng Nhập Qua Cổng SenExam</span>

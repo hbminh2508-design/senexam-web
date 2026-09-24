@@ -1,4 +1,4 @@
-export type SenAiTierCode = 'free' | 'lite' | 'plus_lite' | 'plus' | 'ultra'
+export type SenAiTierCode = 'free' | 'lite' | 'plus_lite' | 'plus' | 'ultra' | 'max'
 export type SenAiPlanDuration = 'trial_3d' | 'monthly' | 'quarterly' | 'yearly' | 'permanent'
 
 export type SenAiPlan = {
@@ -10,14 +10,14 @@ export type SenAiPlan = {
   priceSenCash: number
 }
 
-// Hạn mức câu hỏi/ngày theo hạng — dùng để tính quota trong /api/chat và gate SenAI Studio (chỉ ultra)
-// Ultra 200 = 100 gốc + 100 phúc lợi cộng thêm dành riêng cho hạng Ultra.
+// Hạn mức câu hỏi/ngày theo hạng — dùng để tính quota trong /api/chat và gate SenAI Studio
 export const SENAI_TIER_DAILY_LIMIT: Record<SenAiTierCode, number> = {
   free: 10,
   lite: 20,
   plus_lite: 35,
   plus: 50,
   ultra: 200,
+  max: 500, // Sen Max: 500 câu hỏi 1 ngày
 }
 
 export const SENAI_TIER_LABEL: Record<SenAiTierCode, string> = {
@@ -26,6 +26,17 @@ export const SENAI_TIER_LABEL: Record<SenAiTierCode, string> = {
   plus_lite: 'SenAI Plus Lite',
   plus: 'SenAI Plus',
   ultra: 'SenAI Ultra',
+  max: 'Sen Max',
+}
+
+// Hạn mức câu hỏi SenGraph AI theo từng hạng
+export const SENGRAPH_AI_DAILY_LIMIT: Record<SenAiTierCode, number> = {
+  free: 0,
+  lite: 0,
+  plus_lite: 0,
+  plus: 1,
+  ultra: 5,
+  max: 15, // Sen Max: 15 lần hỏi AI trong SenAI Graph
 }
 
 // Danh mục gói SenAI — mua bằng SenCash. Gói năm luôn bằng 10 lần giá gói tháng cùng hạng.
@@ -38,13 +49,14 @@ export const SENAI_PLANS: SenAiPlan[] = [
   { code: 'plus_yearly', tier: 'plus', duration: 'yearly', durationDays: 365, label: 'SenAI Plus — 1 năm', priceSenCash: 1_000 },
   { code: 'plus_permanent', tier: 'plus', duration: 'permanent', durationDays: null, label: 'SenAI Plus — Vĩnh viễn', priceSenCash: 2_999 },
   { code: 'ultra_monthly', tier: 'ultra', duration: 'monthly', durationDays: 30, label: 'SenAI Ultra — 1 tháng', priceSenCash: 159 },
-  // Gói 3 tháng — thêm để làm giá gốc cho ưu đãi Black Friday tại Cửa hàng cao cấp (xem lib/exclusiveStore.ts)
   { code: 'ultra_quarterly', tier: 'ultra', duration: 'quarterly', durationDays: 90, label: 'SenAI Ultra — 3 tháng', priceSenCash: 449 },
   { code: 'ultra_yearly', tier: 'ultra', duration: 'yearly', durationDays: 365, label: 'SenAI Ultra — 1 năm', priceSenCash: 1_590 },
+  // 🌟 Gói Sen Max: Bản cao cấp nhất (500 câu hỏi/ngày, giá x2 Ultra 318 SC/tháng, 15 lần hỏi SenGraph)
+  { code: 'max_monthly', tier: 'max', duration: 'monthly', durationDays: 30, label: 'Sen Max — 1 tháng (500 câu/ngày)', priceSenCash: 318 },
+  { code: 'max_quarterly', tier: 'max', duration: 'quarterly', durationDays: 90, label: 'Sen Max — 3 tháng', priceSenCash: 898 },
+  { code: 'max_yearly', tier: 'max', duration: 'yearly', durationDays: 365, label: 'Sen Max — 1 năm', priceSenCash: 3_180 },
 ]
 
-// SenAI Ultra tặng thẳng hạn mức tải tài liệu VIP/ngày cao hơn cả VIP thường — dùng trong
-// /api/drive/stream để mở khoá quyền tải ngay cả khi chưa có gói membership VIP/Premium nào.
 export const SENAI_ULTRA_DAILY_DOWNLOAD_BONUS = 50
 
 export function getSenAiPlan(code: string): SenAiPlan | undefined {

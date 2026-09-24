@@ -68,8 +68,8 @@ export async function GET(req: Request) {
       profile?.email === 'hoangbinhminh2508@gmail.com'
 
     const tier: SenAiTierCode = getEffectiveSenaiTier(profile)
-    const eligible = isAdmin || tier === 'plus' || tier === 'ultra'
-    const dailyLimit = isAdmin ? 9999 : tier === 'ultra' ? 5 : tier === 'plus' ? 1 : 0
+    const eligible = isAdmin || tier === 'plus' || tier === 'ultra' || tier === 'max'
+    const dailyLimit = isAdmin ? 9999 : tier === 'max' ? 15 : tier === 'ultra' ? 5 : tier === 'plus' ? 1 : 0
 
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
@@ -144,11 +144,11 @@ export async function POST(req: Request) {
     const tier: SenAiTierCode = getEffectiveSenaiTier(profile)
 
     // Chỉ người dùng SenAI Plus trở lên (hoặc Admin) mới được sử dụng
-    if (!isAdmin && tier !== 'plus' && tier !== 'ultra') {
+    if (!isAdmin && tier !== 'plus' && tier !== 'ultra' && tier !== 'max') {
       return NextResponse.json(
         {
           error: 'TIER_REQUIRED',
-          reply: `🔒 **Nâng cấp gói để sử dụng Sen AI Toán Học**\n\nHiện tại tài khoản của bạn đang ở gói: **${SENAI_TIER_LABEL[tier] || 'Miễn phí'}**.\n\nTheo quy định hệ thống, công cụ phân tích giải đề & dựng đồ thị Sen AI chỉ mở cho:\n- ⭐ **SenAI Plus**: **1 câu hỏi / ngày**\n- 💎 **SenAI Ultra**: **5 câu hỏi / ngày**\n- 👑 **Admin / Collab**: Không giới hạn\n\nVui lòng nâng cấp gói tại [Ví Sen](/new-sencash) để kích hoạt ngay!`,
+          reply: `🔒 **Nâng cấp gói để sử dụng Sen AI Toán Học**\n\nHiện tại tài khoản của bạn đang ở gói: **${SENAI_TIER_LABEL[tier] || 'Miễn phí'}**.\n\nTheo quy định hệ thống, công cụ phân tích giải đề & dựng đồ thị Sen AI chỉ mở cho:\n- ⭐ **SenAI Plus**: **1 câu hỏi / ngày**\n- 💎 **SenAI Ultra**: **5 câu hỏi / ngày**\n- 👑 **Sen Max**: **15 câu hỏi / ngày**\n- 👑 **Admin / Collab**: Không giới hạn\n\nVui lòng nâng cấp gói tại [Ví Sen](/new-sencash) để kích hoạt ngay!`,
           tier,
         },
         { status: 403 }
@@ -156,7 +156,7 @@ export async function POST(req: Request) {
     }
 
     // Xác định hạn mức câu hỏi trong ngày
-    const dailyLimit = isAdmin ? 9999 : tier === 'ultra' ? 5 : 1
+    const dailyLimit = isAdmin ? 9999 : tier === 'max' ? 15 : tier === 'ultra' ? 5 : 1
 
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)

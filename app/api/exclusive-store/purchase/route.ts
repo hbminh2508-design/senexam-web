@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
     if (dealType === 'monthly_flash') {
       plan = getSenAiPlan(planCode)
-      if (!plan || (plan.tier !== 'plus' && plan.tier !== 'ultra') || plan.duration === 'trial_3d') {
+      if (!plan || (plan.tier !== 'plus' && plan.tier !== 'ultra' && plan.tier !== 'max') || plan.duration === 'trial_3d') {
         return NextResponse.json({ error: 'Gói không hợp lệ cho ưu đãi này' }, { status: 400 })
       }
 

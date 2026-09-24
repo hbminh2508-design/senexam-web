@@ -47,6 +47,7 @@ import {
   Gem,
   GraduationCap,
   Box,
+  Brain,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
@@ -54,9 +55,20 @@ import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
+import { canAccessCategorizedDashboard } from '@/lib/roadmapSchedule'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
+
+export type ActionCategory = 'all' | 'study' | 'math_exam' | 'senai' | 'community'
+
+export const ACTION_CATEGORIES: { key: ActionCategory; label: string; icon: string }[] = [
+  { key: 'all', label: 'Tất cả tính năng', icon: '⚡' },
+  { key: 'study', label: 'Học tập & Luyện thi', icon: '📚' },
+  { key: 'math_exam', label: 'Toán học & Khảo thí', icon: '📐' },
+  { key: 'senai', label: 'SenAI & Quota', icon: '🤖' },
+  { key: 'community', label: 'Cộng đồng & Tiện ích', icon: '🌐' },
+]
 
 type QuickAction = {
   key: string
@@ -66,6 +78,7 @@ type QuickAction = {
   tone: string
   badge?: string
   icon: ComponentType<{ className?: string }>
+  category: 'study' | 'math_exam' | 'senai' | 'community'
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
@@ -77,6 +90,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#FFD166] via-[#F9A03F] to-[#EF476F]',
     badge: 'Mới',
     icon: Rocket,
+    category: 'study',
   },
   {
     key: 'new-history',
@@ -86,6 +100,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     badge: 'Hồ sơ',
     icon: BadgeCheck,
+    category: 'study',
   },
   {
     key: 'senai',
@@ -95,6 +110,17 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#3DA9FC] via-[#00C2A8] to-[#5EEAD4]',
     badge: 'AI 2.0',
     icon: Sparkles,
+    category: 'senai',
+  },
+  {
+    key: 'senai-quota',
+    title: 'Quản Lý Quota SenAI',
+    description: 'Bảng theo dõi hạn mức câu hỏi ngày, gói cước SenAI và quyền lợi Sen Max.',
+    href: '/new-senai',
+    tone: 'from-[#EC4899] via-[#A855F7] to-[#6366F1]',
+    badge: 'Q1 Quota',
+    icon: Brain,
+    category: 'senai',
   },
   {
     key: 'submissions',
@@ -104,6 +130,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#6366F1] via-[#8B5CF6] to-[#EC4899]',
     badge: 'Mới',
     icon: FileCheck,
+    category: 'study',
   },
   {
     key: 'seb-security',
@@ -113,6 +140,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#0EA5E9] via-[#0284C7] to-[#1D4ED8]',
     badge: 'Canvas',
     icon: ShieldCheck,
+    category: 'math_exam',
   },
   {
     key: 'sengraph',
@@ -122,6 +150,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#06B6D4] via-[#0284C7] to-[#4F46E5]',
     badge: '2D & 3D',
     icon: Box,
+    category: 'math_exam',
   },
   {
     key: 'library',
@@ -130,6 +159,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     href: '/new-library',
     tone: 'from-[#95D5B2] via-[#52B788] to-[#2D6A4F]',
     icon: BookOpen,
+    category: 'study',
   },
   {
     key: 'senvideo',
@@ -139,6 +169,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#F472B6] via-[#EC4899] to-[#DB2777]',
     badge: 'Mới',
     icon: Video,
+    category: 'study',
   },
   {
     key: 'media',
@@ -148,6 +179,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#818CF8] via-[#6366F1] to-[#38BDF8]',
     badge: 'Media',
     icon: MessageSquare,
+    category: 'community',
   },
   {
     key: 'schedule',
@@ -157,6 +189,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
     badge: 'Mới',
     icon: Calendar,
+    category: 'community',
   },
   {
     key: 'focus',
@@ -165,15 +198,17 @@ const QUICK_ACTIONS: QuickAction[] = [
     href: '/new-focus',
     tone: 'from-[#F9C74F] via-[#F9844A] to-[#F3722C]',
     icon: Gauge,
+    category: 'study',
   },
   {
     key: 'beta',
     title: 'Kênh Thử Nghiệm Beta',
-    description: 'Trải nghiệm sớm các tính năng tương lai 2026, xem roadmap cập nhật và quản lý tham gia.',
+    description: 'Trải nghiệm sớm các tính năng tương lai 2027, xem roadmap cập nhật và quản lý tham gia.',
     href: '/new-beta',
     tone: 'from-[#EC4899] via-[#8B5CF6] to-[#6366F1]',
     badge: 'Beta',
     icon: Sparkles,
+    category: 'community',
   },
   {
     key: 'tinhdiem',
@@ -182,6 +217,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     href: '/new-mark-calculate',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     icon: TrendingUp,
+    category: 'math_exam',
   },
   {
     key: 'student',
@@ -191,6 +227,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
     badge: 'Lớp học',
     icon: GraduationCap,
+    category: 'study',
   },
   {
     key: 'phongthinghiem',
@@ -199,6 +236,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     href: '/new-labs',
     tone: 'from-[#A78BFA] via-[#8B5CF6] to-[#7C3AED]',
     icon: FlaskConical,
+    category: 'math_exam',
   },
   {
     key: 'exclusive_store',
@@ -208,6 +246,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#EC4899] via-[#D946EF] to-[#8B5CF6]',
     badge: 'Hot Deal',
     icon: Gem,
+    category: 'senai',
   },
   {
     key: 'vip',
@@ -217,6 +256,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#FBBF24] via-[#F59E0B] to-[#D97706]',
     badge: 'Ưu đãi',
     icon: Crown,
+    category: 'senai',
   },
   {
     key: 'teacher',
@@ -226,6 +266,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#0284C7]',
     badge: 'Teacher',
     icon: School,
+    category: 'community',
   },
   {
     key: 'codes',
@@ -235,6 +276,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#F472B6] via-[#EC4899] to-[#BE185D]',
     badge: 'Code',
     icon: Gift,
+    category: 'community',
   },
   {
     key: 'admin',
@@ -244,6 +286,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#EF4444] via-[#DC2626] to-[#991B1B]',
     badge: 'Admin',
     icon: ShieldCheck,
+    category: 'community',
   },
   {
     key: 'legacy-dashboard',
@@ -253,6 +296,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#64748B] via-[#475569] to-[#334155]',
     badge: 'Admin Legacy',
     icon: Settings,
+    category: 'community',
   },
 ]
 
@@ -403,6 +447,16 @@ export default function NewDashboardPage() {
       return hay.includes(normalized)
     })
   }, [deferredQuery, userRole, userEmail])
+
+  const [selectedCategory, setSelectedCategory] = useState<ActionCategory>('all')
+  const isCategorizedDashboardActive = canAccessCategorizedDashboard(isBetaTester)
+
+  const displayActions = useMemo(() => {
+    if (!isCategorizedDashboardActive || selectedCategory === 'all') {
+      return filteredActions
+    }
+    return filteredActions.filter((item) => item.category === selectedCategory)
+  }, [filteredActions, isCategorizedDashboardActive, selectedCategory])
 
   const focusScore = useMemo(() => {
     const base = submissionCount * 12 + streakDays * 4
@@ -592,9 +646,16 @@ export default function NewDashboardPage() {
           <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/75 dark:bg-slate-900/75 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
-                  Không gian học tập & Tính năng
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    Không gian học tập & Tính năng
+                  </h2>
+                  {isCategorizedDashboardActive && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                      <Sparkles className="h-3 w-3" /> Q2 Phân nhóm công năng
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
                   Tìm nhanh phòng thi, tài liệu hoặc công cụ luyện tập mong muốn.
                 </p>
@@ -610,9 +671,39 @@ export default function NewDashboardPage() {
               </div>
             </div>
 
+            {/* THANH CHỌN NHÓM CÔNG NĂNG (Q2 CẬP NHẬT - BETA TRẢI NGHIỆM NGAY) */}
+            {isCategorizedDashboardActive && (
+              <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {ACTION_CATEGORIES.map((cat) => {
+                  const isSelected = selectedCategory === cat.key
+                  const count = cat.key === 'all'
+                    ? filteredActions.length
+                    : filteredActions.filter((a) => a.category === cat.key).length
+                  return (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat.key)}
+                      className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white shadow-sm scale-[1.02]'
+                          : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      <span>{cat.icon}</span>
+                      <span>{cat.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-black/10 dark:bg-white/10 text-slate-500'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
             {/* Quick Action Grid */}
             <div className="mt-5 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredActions.map((item, index) => {
+              {displayActions.map((item, index) => {
                 const Icon = item.icon
                 const isExternal = item.href.startsWith('http')
                 const Wrapper = isExternal ? 'a' : Link
@@ -648,9 +739,9 @@ export default function NewDashboardPage() {
                   </Wrapper>
                 )
               })}
-              {filteredActions.length === 0 ? (
+              {displayActions.length === 0 ? (
                 <div className="col-span-full rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400">
-                  Không tìm thấy tính năng phù hợp. Vui lòng thử từ khoá khác ngắn gọn hơn.
+                  Không tìm thấy tính năng phù hợp trong mục này. Vui lòng chọn "Tất cả tính năng" hoặc thử từ khoá khác.
                 </div>
               ) : null}
             </div>

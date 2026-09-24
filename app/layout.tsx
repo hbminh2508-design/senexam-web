@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import ClientErrorReporter from "./components/ClientErrorReporter";
+import SenChatFloatingBubble from "./components/SenChatFloatingBubble";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body className="app-shell min-h-screen flex flex-col bg-background text-foreground">
         <ClientErrorReporter />
         {children}
+        <SenChatFloatingBubble />
       </body>
     </html>
   );

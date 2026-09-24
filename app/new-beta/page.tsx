@@ -32,7 +32,11 @@ import {
   Calendar,
   Swords,
   BookOpen,
+  Box,
+  MessageCircle,
+  Crown,
 } from 'lucide-react'
+import { isRoadmapDateReached } from '@/lib/roadmapSchedule'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newbeta-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newbeta-body' })
@@ -357,129 +361,181 @@ export default function NewBetaPage() {
           </div>
         </div>
 
-        {/* ROADMAP 2026: TƯƠNG LAI CÁC BẢN CẬP NHẬT SẮP TỚI */}
+        {/* ROADMAP 2027: LỘ TRÌNH VÀ CÁC BẢN CẬP NHẬT TƯƠNG LAI */}
         <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-6">
-          <div className="flex items-center gap-2.5 pb-3 border-b border-black/10 dark:border-white/10">
-            <Rocket className="h-6 w-6 text-purple-500" />
-            <div>
-              <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
-                Lộ Trình & Tương Lai Các Bản Cập Nhật 2026 (Roadmap)
-              </h3>
-              <p className="text-xs text-[#6B7280] dark:text-slate-400">
-                Các tính năng đột phá đang được phát triển độc quyền cho thành viên thử nghiệm:
-              </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-black/10 dark:border-white/10">
+            <div className="flex items-center gap-2.5">
+              <Rocket className="h-6 w-6 text-purple-500" />
+              <div>
+                <h3 className="text-lg font-black" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
+                  Lộ Trình & Bản Cập Nhật Năm 2027 (Roadmap 2027)
+                </h3>
+                <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                  Hệ thống tự động kích hoạt cho bản chính thức đúng ngày. Thành viên Beta được tiếp cận sớm ngay hôm nay:
+                </p>
+              </div>
             </div>
+
+            <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 self-start sm:self-auto">
+              {isBetaTester ? '⚡ Bạn đang có quyền truy cập sớm' : '🔒 Tự động mở đúng ngày'}
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             
-            {/* Roadmap 1 */}
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 space-y-3 transition hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 font-bold">
-                  <FlaskConical className="h-5 w-5" />
+            {/* GIAI ĐOẠN Q1/2027 */}
+            <div className="rounded-2xl border-2 border-pink-500/30 bg-pink-500/5 dark:bg-pink-500/10 p-5 space-y-4 transition hover:shadow-lg relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/15 text-pink-600 dark:text-pink-400 border border-pink-500/30 font-bold">
+                    <Box className="h-5 w-5" />
+                  </div>
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md ${
+                    isRoadmapDateReached('Q1_2027')
+                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                      : isBetaTester
+                      ? 'bg-pink-500/20 text-pink-600 dark:text-pink-400'
+                      : 'bg-black/10 dark:bg-white/10 text-slate-500'
+                  }`}>
+                    {isRoadmapDateReached('Q1_2027') ? '✅ Đã Phát Hành' : isBetaTester ? '⚡ Beta Trải Nghiệm' : 'Q1 • 30/01/2027'}
+                  </span>
                 </div>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                  Q4/2026
+
+                <div>
+                  <span className="text-[11px] font-black text-pink-600 dark:text-pink-400 uppercase tracking-wider block">
+                    Giai đoạn 1 • Tự động: 30/01/2027
+                  </span>
+                  <h4 className="text-base font-black text-slate-900 dark:text-white mt-0.5" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
+                    SenGraph & Bong Bóng Chat Sen Chat
+                  </h4>
+                </div>
+
+                <ul className="text-xs text-[#4B5563] dark:text-slate-300 space-y-2 leading-relaxed font-medium">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-pink-500 shrink-0 mt-0.5" />
+                    <span><strong>SenGraph:</strong> Vẽ đồ thị 2D & mô hình không gian 3D tương tác, tích hợp Sen AI Toán học giải bài từ ảnh đề thi.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-pink-500 shrink-0 mt-0.5" />
+                    <span><strong>Bong bóng chat Sen Chat:</strong> Nổi góc màn hình tiện lợi, tự động lưu trữ và đồng bộ phiên trò chuyện về SenAI Studio.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-pink-500 shrink-0 mt-0.5" />
+                    <span><strong>Quản lý Quota SenAI:</strong> Bảng theo dõi hạn mức câu hỏi ngày tại <Link href="/new-senai" className="font-bold underline text-pink-600 dark:text-pink-400">/new-senai</Link>.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-2 border-t border-pink-500/20 flex items-center justify-between text-[11px]">
+                <span className="text-slate-500">Trạng thái:</span>
+                <span className="font-bold text-pink-600 dark:text-pink-400">
+                  {isRoadmapDateReached('Q1_2027') ? 'Chính thức khả dụng' : 'Khởi chạy 30/01/2027'}
                 </span>
               </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                Phòng Thí Nghiệm Ảo 3D WebGL
-              </h4>
-              <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                Mô phỏng không gian 3D tương tác thực tế ảo với trường điện từ, con lắc vướng víu và chuỗi phản ứng hữu cơ hoá học trực quan.
-              </p>
             </div>
 
-            {/* Roadmap 2 */}
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 space-y-3 transition hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold">
-                  <Brain className="h-5 w-5" />
+            {/* GIAI ĐOẠN Q2/2027 */}
+            <div className="rounded-2xl border-2 border-purple-500/30 bg-purple-500/5 dark:bg-purple-500/10 p-5 space-y-4 transition hover:shadow-lg relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md ${
+                    isRoadmapDateReached('Q2_2027')
+                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                      : isBetaTester
+                      ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                      : 'bg-black/10 dark:bg-white/10 text-slate-500'
+                  }`}>
+                    {isRoadmapDateReached('Q2_2027') ? '✅ Đã Phát Hành' : isBetaTester ? '⚡ Beta Có Sẵn Ngay' : 'Q2 • 19/05/2027'}
+                  </span>
                 </div>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400">
-                  Sắp Ra Mắt
+
+                <div>
+                  <span className="text-[11px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
+                    Giai đoạn 2 • Tự động: 19/05/2027
+                  </span>
+                  <h4 className="text-base font-black text-slate-900 dark:text-white mt-0.5" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
+                    Sen Exam Canvas & Phân Nhóm Dashboard
+                  </h4>
+                </div>
+
+                <ul className="text-xs text-[#4B5563] dark:text-slate-300 space-y-2 leading-relaxed font-medium">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-purple-500 shrink-0 mt-0.5" />
+                    <span><strong>Sen Exam Canvas:</strong> Môi trường thi bảo mật cao chống gian lận 100%, khóa màn hình và chống chuyển tab.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-purple-500 shrink-0 mt-0.5" />
+                    <span><strong>Dashboard theo nhóm công năng:</strong> Tái tổ chức nút tính năng theo 4 nhóm (Học tập, Toán & Khảo thí, SenAI, Tiện ích) tránh bị loạn giao diện.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-purple-500 shrink-0 mt-0.5" />
+                    <span><strong>Đặc quyền Beta:</strong> Thành viên Beta được trải nghiệm bố cục công năng này <em>ngay hôm nay trên Dashboard</em>.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-2 border-t border-purple-500/20 flex items-center justify-between text-[11px]">
+                <span className="text-slate-500">Trạng thái:</span>
+                <span className="font-bold text-purple-600 dark:text-purple-400">
+                  {isRoadmapDateReached('Q2_2027') ? 'Chính thức khả dụng' : 'Khởi chạy 19/05/2027'}
                 </span>
               </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                Chấm Tự Luận Bằng Ảnh Viết Tay
-              </h4>
-              <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                Chụp ảnh bài làm tự luận môn Toán, Văn hoặc Lý trên giấy, SenAI Vision sẽ đọc chữ viết tay và chấm điểm từng bước chi tiết.
-              </p>
             </div>
 
-            {/* Roadmap 3 */}
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 space-y-3 transition hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-bold">
-                  <Swords className="h-5 w-5" />
+            {/* GIAI ĐOẠN Q4/2027 */}
+            <div className="rounded-2xl border-2 border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 p-5 space-y-4 transition hover:shadow-lg relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold">
+                    <Crown className="h-5 w-5" />
+                  </div>
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md ${
+                    isRoadmapDateReached('Q4_2027')
+                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                      : isBetaTester
+                      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                      : 'bg-black/10 dark:bg-white/10 text-slate-500'
+                  }`}>
+                    {isRoadmapDateReached('Q4_2027') ? '✅ Đã Phát Hành' : isBetaTester ? '⚡ Beta Đặc Quyền' : 'Q4 • 05/12/2027'}
+                  </span>
                 </div>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                  Đang Thử Nghiệm
+
+                <div>
+                  <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider block">
+                    Giai đoạn 3 • Tự động: 05/12/2027
+                  </span>
+                  <h4 className="text-base font-black text-slate-900 dark:text-white mt-0.5" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
+                    Gói Sen Max & Lộ Trình SenGraph 2.0
+                  </h4>
+                </div>
+
+                <ul className="text-xs text-[#4B5563] dark:text-slate-300 space-y-2 leading-relaxed font-medium">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <span><strong>Gói Sen Max:</strong> Bản cao cấp nhất trong hệ sinh thái SenAI với <strong>500 câu hỏi/ngày</strong>.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <span><strong>Giá cước & Đặc quyền:</strong> Giá 318 SenCash/tháng (gấp đôi gói Ultra) và được <strong>15 lượt hỏi AI trong SenAI Graph</strong>.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <span><strong>Giới thiệu SenGraph 2.0:</strong> Công bố kiến trúc thế hệ tiếp theo của SenGraph (các tính năng chi tiết sẽ được cập nhật sau).</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between text-[11px]">
+                <span className="text-slate-500">Trạng thái:</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">
+                  {isRoadmapDateReached('Q4_2027') ? 'Chính thức khả dụng' : 'Khởi chạy 05/12/2027'}
                 </span>
               </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                Đấu Trường Đối Kháng 1v1 Realtime
-              </h4>
-              <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                Ghép trận trực tiếp cùng sĩ tử toàn quốc giải 10 câu hỏi trắc nghiệm tốc độ cao theo thể thức leo Rank xếp hạng mùa giải.
-              </p>
             </div>
 
-            {/* Roadmap 4 */}
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 space-y-3 transition hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
-                  <BookOpen className="h-5 w-5" />
-                </div>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400">
-                  Q1/2026
-                </span>
-              </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                Flashcard Lặp Lại Ngắt Quãng
-              </h4>
-              <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                Thuật toán ghi nhớ Spaced Repetition tự động nhắc lại từ vựng Tiếng Anh và công thức vào đúng thời điểm chuẩn bị quên.
-              </p>
-            </div>
-
-            {/* Roadmap 5 */}
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 space-y-3 transition hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold">
-                  <Award className="h-5 w-5" />
-                </div>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                  Độc Quyền
-                </span>
-              </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                Bộ Đề Dự Đoán THPT 2026 Chuẩn Hóa
-              </h4>
-              <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                Đề thi được biên soạn theo đúng ma trận cấu trúc mới 3 phần thi của Bộ GD&ĐT với mức độ phân hóa cao cho mục tiêu 9+.
-              </p>
-            </div>
-
-            {/* Roadmap 6 */}
-            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 space-y-3 transition hover:shadow-md">
-              <div className="flex items-center justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-bold">
-                  <Bot className="h-5 w-5" />
-                </div>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                  Sắp Cập Nhật
-                </span>
-              </div>
-              <h4 className="text-sm font-black text-slate-900 dark:text-white">
-                SenAI Trợ Lý Cá Nhân Hóa (Tutor)
-              </h4>
-              <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                Tự động phân tích điểm yếu qua các bài thi thử đã làm và lập lộ trình ôn tập cá nhân hóa riêng biệt cho từng bạn.
-              </p>
-            </div>
           </div>
         </div>
 

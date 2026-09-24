@@ -1740,7 +1740,7 @@ export default function SenGraphPage() {
             </div>
           ) : (
             <Link
-              href="/login?redirect=/sengraph"
+              href="/new-sign?redirect=/sengraph"
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
                 isDark
                   ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
@@ -2829,7 +2829,7 @@ export default function SenGraphPage() {
                   <span className="text-[11px] font-medium">Đăng nhập để sử dụng Sen AI</span>
                 </div>
                 <Link
-                  href="/login?redirect=/sengraph"
+                  href="/new-sign?redirect=/sengraph"
                   className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] transition shrink-0"
                 >
                   Đăng nhập

@@ -399,6 +399,12 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Tự động chuyển hướng /login sang /new-sign trên domain chính
+  if (pathname === '/login') {
+    url.pathname = '/new-sign'
+    return applySecurityHeaders(NextResponse.redirect(url))
+  }
+
   return applySecurityHeaders(NextResponse.next())
 }
 

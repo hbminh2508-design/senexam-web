@@ -42,7 +42,7 @@ const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--fon
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newstore-body' })
 
 const ELIGIBLE_PLANS = SENAI_PLANS.filter(
-  (p) => (p.tier === 'plus' || p.tier === 'ultra') && p.duration !== 'trial_3d'
+  (p) => (p.tier === 'plus' || p.tier === 'ultra' || p.tier === 'max') && p.duration !== 'trial_3d'
 )
 
 export default function NewExclusiveStorePage() {

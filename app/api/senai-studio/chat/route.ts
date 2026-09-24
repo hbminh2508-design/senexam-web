@@ -18,8 +18,9 @@ export async function POST(req: Request) {
       .select('senai_tier, senai_tier_expires_at, senai_tier_permanent')
       .eq('id', user.id)
       .maybeSingle()
-    if (getEffectiveSenaiTier(profile) !== 'ultra') {
-      return NextResponse.json({ error: 'SenAI Studio chỉ dành cho thành viên SenAI Ultra' }, { status: 403 })
+    const tier = getEffectiveSenaiTier(profile)
+    if (tier !== 'ultra' && tier !== 'max') {
+      return NextResponse.json({ error: 'SenAI Studio chỉ dành cho thành viên SenAI Ultra hoặc Sen Max' }, { status: 403 })
     }
 
     const { sessionId, message, attachments, deepThink } = (await req.json()) as {
