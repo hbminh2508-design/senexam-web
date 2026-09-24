@@ -55,8 +55,6 @@ import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
-import { canAccessCategorizedDashboard } from '@/lib/roadmapSchedule'
-import FeatureIllustration from '@/app/components/FeatureIllustration'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
@@ -639,16 +637,9 @@ export default function NewDashboardPage() {
           <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/75 dark:bg-slate-900/75 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
-                    Không gian học tập & Tính năng
-                  </h2>
-                  {isCategorizedDashboardActive && (
-                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                      <Sparkles className="h-3 w-3" /> Q2 Phân nhóm công năng
-                    </span>
-                  )}
-                </div>
+                <h2 className="text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  Không gian học tập & Tính năng
+                </h2>
                 <p className="text-sm text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
                   Tìm nhanh phòng thi, tài liệu hoặc công cụ luyện tập mong muốn.
                 </p>
@@ -664,30 +655,27 @@ export default function NewDashboardPage() {
               </div>
             </div>
 
-            {/* CÁC PHẦN CHIA NGANG THEO TÍNH NĂNG LIÊN QUAN (MÀU SẮC ĐẬM ĐÀ, TRANH VẼ MINH HỌA THẬT SỰ) */}
-            <div className="mt-6 space-y-5">
+            {/* CÁC PHẦN CHIA NGANG (VẼ ĐƯỜNG CHIA NGHỆ THUẬT, ICON TRONG GIỮ NGUYÊN BẢN KHÔNG BETA) */}
+            <div className="mt-4 space-y-6">
               {ACTION_CATEGORIES.filter((c) => c.key !== 'all').map((cat) => {
                 const groupItems = displayActions.filter((a) => a.category === cat.key)
                 if (groupItems.length === 0) return null
 
-                // Màu nền viền riêng biệt theo từng phân hệ
+                // Màu đường nét vẽ chia nghệ thuật cho từng phân hệ
                 const catTheme =
                   cat.key === 'study'
-                    ? { border: 'border-emerald-500/20 dark:border-emerald-500/20', bg: 'bg-emerald-500/[0.03] dark:bg-emerald-500/[0.04]', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' }
+                    ? { line: 'from-emerald-500/50 via-emerald-500/20 to-transparent', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' }
                     : cat.key === 'math_exam'
-                    ? { border: 'border-sky-500/20 dark:border-sky-500/20', bg: 'bg-sky-500/[0.03] dark:bg-sky-500/[0.04]', badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20' }
+                    ? { line: 'from-sky-500/50 via-sky-500/20 to-transparent', badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20' }
                     : cat.key === 'senai'
-                    ? { border: 'border-purple-500/20 dark:border-purple-500/20', bg: 'bg-purple-500/[0.03] dark:bg-purple-500/[0.04]', badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20' }
-                    : { border: 'border-rose-500/20 dark:border-rose-500/20', bg: 'bg-rose-500/[0.03] dark:bg-rose-500/[0.04]', badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' }
+                    ? { line: 'from-purple-500/50 via-purple-500/20 to-transparent', badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20' }
+                    : { line: 'from-rose-500/50 via-rose-500/20 to-transparent', badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' }
 
                 return (
-                  <div
-                    key={cat.key}
-                    className={`rounded-3xl border ${catTheme.border} ${catTheme.bg} p-4 sm:p-5 space-y-3.5 transition-all shadow-xs`}
-                  >
-                    {/* Header Phân Hệ Chia Ngang */}
-                    <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2.5">
-                      <div className="flex items-center gap-2">
+                  <div key={cat.key} className="space-y-3">
+                    {/* VẼ ĐƯỜNG CHIA PHÂN HỆ NGHỆ THUẬT */}
+                    <div className="relative flex items-center gap-3 pt-3 pb-1">
+                      <div className="flex items-center gap-2.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-800/90 px-3.5 py-1.5 shadow-xs">
                         <span className="text-lg">{cat.icon}</span>
                         <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                           {cat.label}
@@ -696,11 +684,14 @@ export default function NewDashboardPage() {
                           {groupItems.length}
                         </span>
                       </div>
+                      {/* Đường kẻ chia nghệ thuật kéo dài sang ngang */}
+                      <div className={`flex-1 h-0.5 rounded-full bg-gradient-to-r ${catTheme.line}`} />
                     </div>
 
-                    {/* Danh Sách Thẻ Tính Năng Có Màu Sắc Và Tranh Vẽ Vector Tỉ Mỉ */}
-                    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                      {groupItems.map((item) => {
+                    {/* CÁC THẺ TÍNH NĂNG GIỮ NGUYÊN ICON VÀ CARD NHƯ BẢN KHÔNG BETA */}
+                    <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+                      {groupItems.map((item, index) => {
+                        const Icon = item.icon
                         const isExternal = item.href.startsWith('http')
                         const Wrapper = isExternal ? 'a' : Link
                         const extraProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}
@@ -709,40 +700,35 @@ export default function NewDashboardPage() {
                           <Wrapper
                             key={item.key}
                             href={item.href}
-                            className="group relative flex items-center justify-between rounded-2xl border border-black/8 dark:border-white/10 bg-white/95 dark:bg-slate-800/95 p-3 overflow-hidden transition-all duration-200 hover:border-black/20 dark:hover:border-white/25 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/30 hover:-translate-y-0.5"
+                            className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-4 transition-all duration-200"
+                            style={{ animationDelay: `${index * 50}ms` }}
                             {...extraProps}
                           >
-                            {/* Dải màu rực rỡ trên đỉnh thẻ giữ lại cá tính riêng cho mỗi tính năng */}
-                            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${item.tone} opacity-90 group-hover:opacity-100 transition-opacity`} />
+                            {/* Dải gradient nhận diện trên đỉnh thẻ */}
+                            <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.tone}`} />
 
-                            <div className="flex items-center gap-3 min-w-0 pr-2">
-                              {/* Tranh vẽ vector SVG thủ công tỉ mỉ thay cho icon dây rẻ tiền */}
-                              <FeatureIllustration
-                                featureKey={item.key}
-                                className="w-11 h-11 shrink-0 drop-shadow-sm transition-transform duration-300 group-hover:scale-110"
-                              />
+                            <div className="flex items-start justify-between gap-3">
+                              {/* Icon giữ nguyên như bản không beta */}
+                              <span className="rounded-xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-700/80 p-2.5 shadow-sm group-hover:scale-105 transition-transform">
+                                <Icon className="h-5 w-5 text-[#111827] dark:text-white" />
+                              </span>
 
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">
-                                    {item.title}
-                                  </h4>
-                                  {item.badge && (
-                                    <span className={`shrink-0 rounded-md bg-gradient-to-r ${item.tone} px-1.5 py-0.2 text-[9px] font-black uppercase text-white shadow-xs`}>
-                                      {item.badge}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[11px] text-[#4B5563] dark:text-slate-300 truncate max-w-[210px] mt-0.5 font-medium">
-                                  {item.description}
-                                </p>
+                              <div className="flex items-center gap-1.5">
+                                {item.badge && (
+                                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    {item.badge}
+                                  </span>
+                                )}
+                                <ArrowRight className="h-4 w-4 text-[#6B7280] dark:text-slate-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                               </div>
                             </div>
 
-                            {/* Nút mũi tên chuyển hướng đẹp mắt */}
-                            <div className="shrink-0 flex h-7 w-7 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-400 group-hover:text-pink-500 transition-all shadow-xs">
-                              <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
-                            </div>
+                            <h3 className="mt-3 text-base sm:text-lg font-black leading-tight text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                              {item.title}
+                            </h3>
+                            <p className="mt-1 text-xs leading-relaxed text-[#4B5563] dark:text-slate-300 font-medium" style={{ fontFamily: 'var(--font-newdash-body)' }}>
+                              {item.description}
+                            </p>
                           </Wrapper>
                         )
                       })}
