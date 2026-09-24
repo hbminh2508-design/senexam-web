@@ -293,7 +293,8 @@ export default function MobileBottomNav() {
       {/* THANH BOTTOM NAV CỐ ĐỊNH Ở ĐÁY MÀN HÌNH (CHỈ HIỂN THỊ TRÊN MOBILE) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-black/10 dark:border-white/10 px-2 py-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] select-none safe-area-bottom"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-black/10 dark:border-white/10 px-2.5 pt-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] select-none safe-area-bottom"
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))' }}
       >
         <div className="flex items-center justify-around gap-1 max-w-lg mx-auto">
           {/* 1. Trang chủ */}
@@ -305,7 +306,7 @@ export default function MobileBottomNav() {
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <Home className="h-5 w-5" />
+            <Home className="h-5 w-5 shrink-0 aspect-square" />
             <span className="text-[10px] mt-0.5 tracking-tight">Trang chủ</span>
           </Link>
 
@@ -318,7 +319,7 @@ export default function MobileBottomNav() {
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <FileText className="h-5 w-5" />
+            <FileText className="h-5 w-5 shrink-0 aspect-square" />
             <span className="text-[10px] mt-0.5 tracking-tight">Kho đề</span>
           </Link>
 
@@ -328,8 +329,8 @@ export default function MobileBottomNav() {
             onClick={() => setShowAllFeatures(true)}
             className="flex flex-col items-center justify-center flex-1 py-1 rounded-xl text-slate-700 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-400 transition"
           >
-            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
-              <Compass className="h-4 w-4" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20 shrink-0 aspect-square">
+              <Compass className="h-4 w-4 shrink-0 aspect-square" />
             </div>
             <span className="text-[10px] font-bold mt-0.5 tracking-tight">Tính năng</span>
           </button>
@@ -343,7 +344,7 @@ export default function MobileBottomNav() {
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <BookOpen className="h-5 w-5" />
+            <BookOpen className="h-5 w-5 shrink-0 aspect-square" />
             <span className="text-[10px] mt-0.5 tracking-tight">Thư viện</span>
           </Link>
 
@@ -351,9 +352,9 @@ export default function MobileBottomNav() {
           <button
             type="button"
             onClick={handleToggleSenChat}
-            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white font-black shadow-md shadow-pink-500/25 active:scale-95 transition"
+            className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white font-black shadow-md shadow-pink-500/25 active:scale-95 transition shrink-0"
           >
-            <Sparkles className="h-3.5 w-3.5 text-amber-300 animate-pulse" />
+            <Sparkles className="h-3.5 w-3.5 text-amber-300 animate-pulse shrink-0 aspect-square" />
             <span className="text-[11px] font-black tracking-wider uppercase font-sans">SenAI</span>
           </button>
         </div>

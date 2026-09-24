@@ -55,6 +55,7 @@ import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
+import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
@@ -307,6 +308,7 @@ export default function NewDashboardPage() {
 
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
+  const [isEcoMode, setIsEcoMode] = useState(false)
   const [isBetaTester, setIsBetaTester] = useState(false)
   const [query, setQuery] = useState('')
   const [streakDays, setStreakDays] = useState(0)
@@ -344,6 +346,7 @@ export default function NewDashboardPage() {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
+    setIsEcoMode(isEcoModeActive())
 
     const init = async () => {
       const { data: auth } = await supabase.auth.getUser()
@@ -486,6 +489,13 @@ export default function NewDashboardPage() {
       document.documentElement.classList.remove('dark')
       localStorage.setItem('theme', 'light')
     }
+  }
+
+  // Chuyển đổi Chế độ Siêu Mượt & Tiết Kiệm Pin (Eco Mode)
+  const toggleEcoMode = () => {
+    const next = !isEcoMode
+    setIsEcoMode(next)
+    setEcoModeActive(next)
   }
 
   // Liên kết tài khoản Google
@@ -818,6 +828,33 @@ export default function NewDashboardPage() {
               >
                 {isDark ? <Sun className="h-3.5 w-3.5 text-amber-400" /> : <Moon className="h-3.5 w-3.5 text-indigo-500" />}
                 <span>{isDark ? 'Giao diện Tối' : 'Giao diện Sáng'}</span>
+              </button>
+            </div>
+
+            {/* Chế độ Độc Quyền Mobile: Siêu Mượt, Ít Trong Suốt & Tiết Kiệm Pin */}
+            <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10">
+              <div className="pr-2">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">Siêu Mượt & Tiết Kiệm Pin:</p>
+                  <span className="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.2 text-[9px] font-black uppercase">
+                    Mobile
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Ít trong suốt & tối giản hơn để giảm lag GPU, tránh nóng máy & tiết kiệm pin dưới nền
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleEcoMode}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                  isEcoMode
+                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Zap className={`h-3.5 w-3.5 ${isEcoMode ? 'text-emerald-500 fill-emerald-500' : 'text-slate-400'}`} />
+                <span>{isEcoMode ? 'Bật' : 'Tắt'}</span>
               </button>
             </div>
 
@@ -1273,6 +1310,33 @@ export default function NewDashboardPage() {
                 >
                   {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />}
                   {isDark ? 'Giao diện Tối' : 'Giao diện Sáng'}
+                </button>
+              </div>
+
+              {/* Chế độ Siêu Mượt & Tiết Kiệm Pin (Eco Mode) */}
+              <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10">
+                <div className="pr-2">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold">Siêu Mượt & Tiết Kiệm Pin:</p>
+                    <span className="rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.2 text-[9px] font-black uppercase">
+                      Tối giản
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                    Ít trong suốt hơn để giảm tải GPU, tiết kiệm pin và tránh nóng máy khi chạy ngầm
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleEcoMode}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                    isEcoMode
+                      ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10'
+                  }`}
+                >
+                  <Zap className={`h-3.5 w-3.5 ${isEcoMode ? 'text-emerald-500 fill-emerald-500' : 'text-slate-400'}`} />
+                  <span>{isEcoMode ? 'Đang Bật' : 'Đang Tắt'}</span>
                 </button>
               </div>
 

@@ -80,22 +80,19 @@ export default function NewCodesPage() {
     }
   }
 
-  // Tự động định dạng mã 16 chữ số dạng XXXX-XXXX-XXXX-XXXX
+  // Hỗ trợ nhập mã quà tặng (tự động viết hoa, hỗ trợ cả mã 16 ký tự lẫn mã ưu đãi sự kiện)
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let raw = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
-    if (raw.length > 16) raw = raw.slice(0, 16)
-
-    // Nhóm thành các cụm 4 ký tự
-    const parts = raw.match(/.{1,4}/g) || []
-    setCode(parts.join('-'))
+    let raw = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '')
+    if (raw.length > 24) raw = raw.slice(0, 24)
+    setCode(raw)
     setErrorMsg(null)
   }
 
   const handleRedeem = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanCode = code.trim().replace(/-/g, '')
-    if (cleanCode.length < 8) {
-      setErrorMsg('Vui lòng nhập đúng định dạng mã quà tặng (16 ký tự).')
+    if (cleanCode.length < 4) {
+      setErrorMsg('Vui lòng nhập đúng mã quà tặng hợp lệ (tối thiểu 4 ký tự).')
       return
     }
 

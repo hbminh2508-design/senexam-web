@@ -14,12 +14,13 @@ export async function POST(request: Request) {
     const { code } = await request.json()
     if (!code || typeof code !== 'string') return NextResponse.json({ error: 'Thiếu mã' }, { status: 400 })
     const normalized = normalizeGiftCode(code)
+    const withoutHyphens = normalized.replace(/-/g, '')
 
     const supabaseAdmin = getSupabaseAdmin()
     const { data: giftCode, error: fetchErr } = await supabaseAdmin
       .from('gift_codes')
       .select('*')
-      .eq('code', normalized)
+      .or(`code.eq.${normalized},code.eq.${withoutHyphens}`)
       .maybeSingle()
 
     if (fetchErr) throw fetchErr

@@ -463,3 +463,86 @@
     display: none !important;
   }
 }
+
+/* ========================================================================= */
+/* CHẾ ĐỘ ĐỘC QUYỀN MOBILE: SIÊU MƯỢT, ÍT TRONG SUỐT & TIẾT KIỆM PIN         */
+/* Giảm tải GPU, triệt tiêu giật lag trên điện thoại, kiểm soát chạy nền     */
+/* ========================================================================= */
+
+[data-eco-mode="true"] {
+  --glass-blur: 0px !important;
+}
+
+/* 1. Tắt toàn bộ backdrop-filter mờ nặng nề trên màn hình */
+[data-eco-mode="true"] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 2. Thay nền mờ bằng nền bán đục cao cấp để giữ nguyên thẩm mỹ mà không lag GPU */
+[data-eco-mode="true"] .backdrop-blur-xl,
+[data-eco-mode="true"] .backdrop-blur-2xl,
+[data-eco-mode="true"] .backdrop-blur-md,
+[data-eco-mode="true"] .backdrop-blur-sm,
+[data-eco-mode="true"] .backdrop-blur-lg {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-eco-mode="true"] .bg-white\/75,
+[data-eco-mode="true"] .bg-white\/80,
+[data-eco-mode="true"] .bg-white\/85,
+[data-eco-mode="true"] .bg-white\/90 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.dark[data-eco-mode="true"] .bg-slate-900\/75,
+.dark[data-eco-mode="true"] .bg-slate-900\/80,
+.dark[data-eco-mode="true"] .bg-slate-900\/85,
+.dark[data-eco-mode="true"] .bg-slate-900\/90,
+.dark[data-eco-mode="true"] .bg-slate-800\/80,
+[data-eco-mode="true"] .dark .bg-slate-900\/75,
+[data-eco-mode="true"] .dark .bg-slate-900\/80,
+[data-eco-mode="true"] .dark .bg-slate-900\/85,
+[data-eco-mode="true"] .dark .bg-slate-900\/90,
+[data-eco-mode="true"] .dark .bg-slate-800\/80 {
+  background-color: rgba(15, 23, 42, 0.96) !important;
+}
+
+/* 3. Tắt các quầng sáng mờ cực đại (blur-3xl, blur-2xl) - nguyên nhân chính gây nóng máy hao pin */
+[data-eco-mode="true"] .blur-3xl,
+[data-eco-mode="true"] .blur-2xl,
+[data-eco-mode="true"] .aurora-bg::before,
+[data-eco-mode="true"] .aurora-bg::after {
+  display: none !important;
+}
+
+/* 4. Tắt animation lặp vô tận khi ở Eco Mode hoặc khi chuyển tab ngầm */
+[data-eco-mode="true"] .animate-pulse,
+[data-eco-mode="true"] .animate-spin-slow,
+[data-app-hidden="true"] * {
+  animation-play-state: paused !important;
+}
+
+/* ========================================================================= */
+/* TỐI ƯU TỶ LỆ KHUNG HÌNH (ASPECT RATIO) & CHỐNG LỆCH TRÀN TRÊN MOBILE      */
+/* ========================================================================= */
+@media (max-width: 768px) {
+  /* Chống tràn ngang tuyệt đối trên thiết bị di động */
+  html, body {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    position: relative;
+  }
+
+  /* Khóa tỉ lệ khung hình chuẩn cho avatar, biểu tượng */
+  .aspect-square {
+    aspect-ratio: 1 / 1 !important;
+  }
+
+  /* Tránh co bóp méo icon trong flex row */
+  .mobile-icon-fixed {
+    flex-shrink: 0 !important;
+    aspect-ratio: 1 / 1 !important;
+  }
+}
