@@ -48,6 +48,10 @@ import Link from 'next/link'
 import * as THREE from 'three'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import remarkGfm from 'remark-gfm'
 import { supabase } from '@/lib/supabaseClient'
 import SenGraphLogo from '@/components/SenGraphLogo'
 
@@ -158,6 +162,25 @@ function MathFormulaView({ expr, className = '' }: { expr: string; className?: s
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )
+}
+
+// Hàm tiền xử lý văn bản toán học để ReactMarkdown và KaTeX kết xuất ký hiệu chuẩn xác
+function preprocessMathForMarkdown(text: string): string {
+  if (!text) return ''
+  // 1. Ẩn khối mã máy sen-graph-equations hoặc json cấu hình (vì đã có thẻ hành động đồ thị riêng ở dưới)
+  let clean = text.replace(/```(?:sen-graph-equations|json)\s*\{[\s\S]*?\}\s*```/gi, '').trim()
+  if (!clean) clean = text
+
+  // 2. Chuyển đổi khối công thức \[ ... \] thành $$ ... $$
+  clean = clean.replace(/\\\[([\s\S]*?)\\\]/g, (_m, eq) => `\n\n$$\n${eq.trim()}\n$$\n\n`)
+
+  // 3. Chuyển đổi công thức nội dòng \( ... \) thành $ ... $
+  clean = clean.replace(/\\\(([\s\S]*?)\\\)/g, (_m, eq) => `$${eq.trim()}$`)
+
+  // 4. Chuẩn hóa nếu có khối $$ ... $$ dính liền với chữ không có dòng trống
+  clean = clean.replace(/(?:^|\n)\s*\$\$([\s\S]+?)\$\$\s*(?:\n|$)/g, (_m, eq) => `\n\n$$\n${eq.trim()}\n$$\n\n`)
+
+  return clean
 }
 
 // ==============================================================
@@ -2439,23 +2462,128 @@ export default function SenGraphPage() {
                     </div>
                   )}
 
-                  {/* Bong bóng tin nhắn */}
+                  {/* Bong bóng tin nhắn (Hỗ trợ Markdown & Ký hiệu Toán học KaTeX chuẩn) */}
                   <div
-                    className={`rounded-2xl p-3 text-xs leading-relaxed max-w-[92%] shadow-sm ${
+                    className={`rounded-2xl p-3.5 text-xs leading-relaxed max-w-[95%] shadow-sm overflow-x-auto [&_.katex-display]:overflow-x-auto [&_.katex-display]:py-1 [&_.katex-display]:my-1.5 [&_.katex]:text-inherit ${
                       msg.role === 'user'
                         ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-br-none'
                         : isDark
-                        ? 'bg-slate-800/90 text-slate-100 border border-slate-700 rounded-bl-none whitespace-pre-wrap'
-                        : 'bg-slate-100 text-slate-800 border border-slate-200 rounded-bl-none whitespace-pre-wrap'
+                        ? 'bg-slate-800/95 text-slate-100 border border-slate-700/80 rounded-bl-none'
+                        : 'bg-slate-50 text-slate-800 border border-slate-200/90 rounded-bl-none shadow-sm'
                     }`}
                   >
-                    {msg.text}
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath, remarkGfm]}
+                      rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+                      components={{
+                        p: ({ node, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+                        h1: ({ node, ...props }: any) => <h1 className="text-sm font-bold my-2 text-sky-500" {...props} />,
+                        h2: ({ node, ...props }: any) => <h2 className="text-xs font-bold my-1.5 text-sky-500" {...props} />,
+                        h3: ({ node, ...props }: any) => (
+                          <h3
+                            className={`text-xs font-bold my-1.5 ${
+                              msg.role === 'user' ? 'text-white' : isDark ? 'text-sky-400' : 'text-sky-600'
+                            }`}
+                            {...props}
+                          />
+                        ),
+                        h4: ({ node, ...props }: any) => (
+                          <h4
+                            className={`text-xs font-semibold my-1 ${
+                              msg.role === 'user' ? 'text-white' : isDark ? 'text-sky-300' : 'text-sky-700'
+                            }`}
+                            {...props}
+                          />
+                        ),
+                        ul: ({ node, ...props }: any) => <ul className="list-disc pl-4 my-1.5 space-y-0.5" {...props} />,
+                        ol: ({ node, ...props }: any) => <ol className="list-decimal pl-4 my-1.5 space-y-0.5" {...props} />,
+                        li: ({ node, ...props }: any) => <li className="my-0.5" {...props} />,
+                        strong: ({ node, ...props }: any) => (
+                          <strong
+                            className={`font-bold ${
+                              msg.role === 'user' ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'
+                            }`}
+                            {...props}
+                          />
+                        ),
+                        hr: ({ node, ...props }: any) => (
+                          <hr
+                            className={`my-2 border-t ${
+                              msg.role === 'user'
+                                ? 'border-white/20'
+                                : isDark
+                                ? 'border-slate-700/60'
+                                : 'border-slate-200'
+                            }`}
+                            {...props}
+                          />
+                        ),
+                        code: ({ node, inline, ...props }: any) =>
+                          inline ? (
+                            <code
+                              className={`px-1.5 py-0.5 rounded font-mono text-[11px] ${
+                                msg.role === 'user'
+                                  ? 'bg-black/20 text-white'
+                                  : isDark
+                                  ? 'bg-slate-900 text-sky-300'
+                                  : 'bg-slate-200 text-sky-800'
+                              }`}
+                              {...props}
+                            />
+                          ) : (
+                            <div
+                              className={`p-2 rounded-lg my-1.5 font-mono text-[11px] overflow-x-auto ${
+                                msg.role === 'user'
+                                  ? 'bg-black/30 text-white border border-white/20'
+                                  : isDark
+                                  ? 'bg-slate-950 text-slate-200 border border-slate-800'
+                                  : 'bg-slate-100 text-slate-800 border border-slate-200'
+                              }`}
+                            >
+                              <code {...props} />
+                            </div>
+                          ),
+                        table: ({ node, ...props }: any) => (
+                          <div className="overflow-x-auto my-2">
+                            <table className="min-w-full text-[11px] border-collapse" {...props} />
+                          </div>
+                        ),
+                        th: ({ node, ...props }: any) => (
+                          <th
+                            className={`border px-2 py-1 font-bold text-left ${
+                              isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-100'
+                            }`}
+                            {...props}
+                          />
+                        ),
+                        td: ({ node, ...props }: any) => (
+                          <td
+                            className={`border px-2 py-1 ${isDark ? 'border-slate-700' : 'border-slate-200'}`}
+                            {...props}
+                          />
+                        ),
+                        blockquote: ({ node, ...props }: any) => (
+                          <blockquote
+                            className={`border-l-2 pl-2.5 my-1.5 italic ${
+                              msg.role === 'user'
+                                ? 'border-white/50 text-white/90'
+                                : isDark
+                                ? 'border-sky-500 text-slate-300'
+                                : 'border-sky-600 text-slate-600'
+                            }`}
+                            {...props}
+                          />
+                        ),
+                      }}
+                    >
+                      {preprocessMathForMarkdown(msg.text)}
+                    </ReactMarkdown>
                   </div>
 
                   {/* THẺ HÀNH ĐỘNG: ĐỀ XUẤT ĐỒ THỊ TỰ ĐỘNG TỪ BÀI GIẢI */}
                   {msg.extractedEquations && msg.extractedEquations.equations && (
                     <div
-                      className={`mt-2 p-3 rounded-2xl border w-full max-w-[92%] shadow-lg ${
+                      className={`mt-2 p-3 rounded-2xl border w-full max-w-[95%] shadow-lg ${
                         isDark
                           ? 'bg-sky-950/40 border-sky-800 text-slate-100'
                           : 'bg-sky-50/80 border-sky-200 text-slate-900'
@@ -2478,12 +2606,15 @@ export default function SenGraphPage() {
                         {msg.extractedEquations.equations.map((eqStr, i) => (
                           <div
                             key={i}
-                            className={`px-2 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 ${
+                            className={`px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between gap-2 ${
                               isDark ? 'bg-slate-900/80 text-sky-300' : 'bg-white text-sky-700 shadow-sm'
                             }`}
                           >
-                            <span className="w-2 h-2 rounded-full bg-sky-500" />
-                            <span>{eqStr}</span>
+                            <div className="flex items-center gap-2 overflow-x-auto">
+                              <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0" />
+                              <MathFormulaView expr={eqStr} className="text-xs font-medium" />
+                            </div>
+                            <span className="text-[10px] opacity-60 font-mono shrink-0">{eqStr}</span>
                           </div>
                         ))}
                       </div>
