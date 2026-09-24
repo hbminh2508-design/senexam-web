@@ -389,8 +389,25 @@ export default function SenGraphPage() {
   const [wireframe3D, setWireframe3D] = useState(false)
   const [autoRotate3D, setAutoRotate3D] = useState(false)
 
+  // 🌟 3D Mặt cắt & Dựng hình khối (Cross-Sections & Solid Reconstruction)
+  const [showCrossSection, setShowCrossSection] = useState(false)
+  const [sliceZ, setSliceZ] = useState(0)
+  const [isLofted, setIsLofted] = useState(false)
+  const [isAutoSweeping, setIsAutoSweeping] = useState(false)
+
   // 🤖 Sen AI Drawer State (Gemini 3.5 Flash Lite)
   const [showAiDrawer, setShowAiDrawer] = useState(false)
+  const [aiQuota, setAiQuota] = useState<{
+    authenticated: boolean
+    tier: string
+    tierLabel: string
+    dailyLimit: number
+    usedToday: number
+    remaining: number
+    isAdmin: boolean
+    eligible: boolean
+  } | null>(null)
+  const [isCheckingQuota, setIsCheckingQuota] = useState(false)
   const [aiMessages, setAiMessages] = useState<
     Array<{
       role: 'user' | 'assistant'
@@ -435,8 +452,10 @@ export default function SenGraphPage() {
     scene: THREE.Scene
     camera: THREE.PerspectiveCamera
     meshGroup: THREE.Group
+    crossSectionGroup: THREE.Group
     grid: THREE.GridHelper
     axesGroup: THREE.Group
+    ambientLight: THREE.AmbientLight
     reqId: number
     orbit: { isDragging: boolean; prevX: number; prevY: number; yaw: number; pitch: number; distance: number }
   } | null>(null)
@@ -469,7 +488,27 @@ export default function SenGraphPage() {
     localStorage.setItem('sengraph_theme', next)
   }
 
-  // 2. Kiểm tra trạng thái đăng nhập SenExam
+  // 2. Kiểm tra hạn mức SenAI & Trạng thái đăng nhập
+  const fetchAiQuota = useCallback(async () => {
+    try {
+      setIsCheckingQuota(true)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const res = await fetch('/api/sengraph/ai', { headers })
+      if (res.ok) {
+        const data = await res.json()
+        setAiQuota(data)
+      }
+    } catch (err) {
+      console.error('Error fetching AI quota:', err)
+    } finally {
+      setIsCheckingQuota(false)
+    }
+  }, [])
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
@@ -484,37 +523,117 @@ export default function SenGraphPage() {
               name: profile?.full_name || data.user.user_metadata?.full_name || 'Học viên SenExam',
               avatar: profile?.avatar_url || '',
             })
+            fetchAiQuota()
           })
       }
     })
-  }, [])
+  }, [fetchAiQuota])
+
+  useEffect(() => {
+    if (showAiDrawer) {
+      fetchAiQuota()
+    }
+  }, [showAiDrawer, fetchAiQuota])
+
+  // Tự động quét mặt cắt z (Sweep animation)
+  useEffect(() => {
+    if (!isAutoSweeping || !showCrossSection) return
+    let forward = true
+    const interval = setInterval(() => {
+      setSliceZ((prev) => {
+        let next = forward ? prev + 0.1 : prev - 0.1
+        if (next >= 4.5) {
+          next = 4.5
+          forward = false
+        } else if (next <= -4.5) {
+          next = -4.5
+          forward = true
+        }
+        return Math.round(next * 10) / 10
+      })
+    }, 45)
+    return () => clearInterval(interval)
+  }, [isAutoSweeping, showCrossSection])
+
+  // ==============================================================
+  // 📸 NÉN ẢNH ĐỀ BÀI CLIENT-SIDE ĐỂ TIẾT KIỆM TỐI ĐA TOKEN AI
+  // ==============================================================
+  const compressImageForAi = useCallback(
+    (fileOrDataUrl: File | string): Promise<{ base64: string; mimeType: string }> => {
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.onload = () => {
+          const maxDim = 800
+          let w = img.naturalWidth || img.width
+          let h = img.naturalHeight || img.height
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w)
+              w = maxDim
+            } else {
+              w = Math.round((w * maxDim) / h)
+              h = maxDim
+            }
+          }
+          const canvas = document.createElement('canvas')
+          canvas.width = Math.max(1, w)
+          canvas.height = Math.max(1, h)
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(0, 0, w, h)
+            ctx.drawImage(img, 0, 0, w, h)
+          }
+          const compressed = canvas.toDataURL('image/jpeg', 0.72)
+          resolve({ base64: compressed, mimeType: 'image/jpeg' })
+        }
+        img.onerror = () => {
+          resolve({
+            base64: typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '',
+            mimeType: 'image/jpeg',
+          })
+        }
+        if (typeof fileOrDataUrl === 'string') {
+          img.src = fileOrDataUrl
+        } else {
+          const reader = new FileReader()
+          reader.onload = () => {
+            img.src = reader.result as string
+          }
+          reader.readAsDataURL(fileOrDataUrl)
+        }
+      })
+    },
+    []
+  )
 
   // ==============================================================
   // 📸 3. TÍNH NĂNG DÁN ẢNH TỪ CLIPBOARD (CTRL + V) VÀO SEN AI
   // ==============================================================
-  const handlePasteImage = useCallback((e: React.ClipboardEvent | ClipboardEvent) => {
-    const clipboardData = (e as React.ClipboardEvent).clipboardData || (e as ClipboardEvent).clipboardData
-    const items = clipboardData?.items
-    if (!items) return
+  const handlePasteImage = useCallback(
+    async (e: React.ClipboardEvent | ClipboardEvent) => {
+      const clipboardData = (e as React.ClipboardEvent).clipboardData || (e as ClipboardEvent).clipboardData
+      const items = clipboardData?.items
+      if (!items) return
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      if (item.type.indexOf('image') !== -1) {
-        const file = item.getAsFile()
-        if (file) {
-          e.preventDefault()
-          setAiAttachedImageMime(file.type || 'image/jpeg')
-          const reader = new FileReader()
-          reader.onload = () => {
-            setAiAttachedImage(reader.result as string)
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile()
+          if (file) {
+            e.preventDefault()
+            const { base64, mimeType } = await compressImageForAi(file)
+            setAiAttachedImage(base64)
+            setAiAttachedImageMime(mimeType)
             setShowAiDrawer(true)
+            break
           }
-          reader.readAsDataURL(file)
-          break
         }
       }
-    }
-  }, [])
+    },
+    [compressImageForAi]
+  )
 
   useEffect(() => {
     const onGlobalPaste = (e: ClipboardEvent) => {
@@ -911,6 +1030,10 @@ export default function SenGraphPage() {
     const meshGroup = new THREE.Group()
     scene.add(meshGroup)
 
+    // Group chứa mặt cắt và tái tạo hình khối
+    const crossSectionGroup = new THREE.Group()
+    scene.add(crossSectionGroup)
+
     // Orbit state
     const orbit = {
       isDragging: false,
@@ -934,17 +1057,17 @@ export default function SenGraphPage() {
     let reqId = 0
     const animate = () => {
       reqId = requestAnimationFrame(animate)
-      if (autoRotateRef.current && modeRef.current === '3d') {
-        orbit.yaw += 0.005
-        updateCamera()
-      }
       if (modeRef.current === '3d') {
+        if (autoRotateRef.current) {
+          orbit.yaw += 0.005
+          updateCamera()
+        }
         renderer.render(scene, camera)
       }
     }
     animate()
 
-    threeSceneRef.current = { renderer, scene, camera, meshGroup, grid, axesGroup, reqId, orbit }
+    threeSceneRef.current = { renderer, scene, camera, meshGroup, crossSectionGroup, grid, axesGroup, ambientLight, reqId, orbit }
 
     // Resize handler
     const handleResize3D = () => {
@@ -965,12 +1088,22 @@ export default function SenGraphPage() {
       renderer.dispose()
       threeSceneRef.current = null
     }
-  }, [theme])
+  }, []) // 🌟 MOUNT ONCE: KHÔNG PHỤ THUỘC THEME ĐỂ TRÁNH MẤT HÌNH KHI ĐỔI GIAO DIỆN
 
-  // Cập nhật các bề mặt 3D trong Scene
+  // 🌟 CẬP NHẬT THEME CHO THREE.JS KHÔNG HỦY KHÔNG GIAN 3D HAY MESH ĐÃ DỰNG
   useEffect(() => {
     if (!threeSceneRef.current) return
-    const { meshGroup } = threeSceneRef.current
+    const { scene, ambientLight, renderer, camera } = threeSceneRef.current
+    const isDark = theme === 'dark'
+    scene.background = new THREE.Color(isDark ? '#090d16' : '#f8fafc')
+    if (ambientLight) ambientLight.intensity = isDark ? 0.7 : 0.9
+    renderer.render(scene, camera)
+  }, [theme])
+
+  // Cập nhật các bề mặt 3D và Mặt Cắt / Dựng Khối trong Scene
+  useEffect(() => {
+    if (!threeSceneRef.current) return
+    const { meshGroup, crossSectionGroup, renderer, scene, camera } = threeSceneRef.current
 
     // Dọn dẹp mesh cũ
     while (meshGroup.children.length > 0) {
@@ -978,6 +1111,16 @@ export default function SenGraphPage() {
       obj.geometry?.dispose()
       obj.material?.dispose()
       meshGroup.remove(obj)
+    }
+
+    // Dọn dẹp crossSectionGroup cũ
+    if (crossSectionGroup) {
+      while (crossSectionGroup.children.length > 0) {
+        const obj: any = crossSectionGroup.children[0]
+        obj.geometry?.dispose()
+        obj.material?.dispose()
+        crossSectionGroup.remove(obj)
+      }
     }
 
     // Dựng lại từng bề mặt z = f(x, y)
@@ -1020,17 +1163,151 @@ export default function SenGraphPage() {
         metalness: 0.15,
         side: THREE.DoubleSide,
         wireframe: wireframe3D,
+        transparent: isLofted,
+        opacity: isLofted ? 0.78 : 1.0,
       })
 
       const mesh = new THREE.Mesh(geom, mat)
       meshGroup.add(mesh)
+
+      // ==============================================================
+      // 🌟 MẶT CẮT & DỰNG HÌNH KHỐI (CROSS-SECTIONS & LOFT RECONSTRUCTION)
+      // ==============================================================
+      if (showCrossSection && crossSectionGroup) {
+        if (!isLofted) {
+          // 1. Chế độ lát cắt đơn: Vẽ mặt phẳng cắt z = sliceZ
+          const planeGeo = new THREE.PlaneGeometry(13, 13)
+          planeGeo.rotateX(-Math.PI / 2)
+          const planeMat = new THREE.MeshBasicMaterial({
+            color: 0x06b6d4, // Neon cyan
+            transparent: true,
+            opacity: 0.2,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          })
+          const planeMesh = new THREE.Mesh(planeGeo, planeMat)
+          planeMesh.position.y = sliceZ
+          crossSectionGroup.add(planeMesh)
+
+          // Viền mặt cắt
+          const edgeGeo = new THREE.EdgesGeometry(planeGeo)
+          const edgeMat = new THREE.LineBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.7 })
+          const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat)
+          edgeLines.position.y = sliceZ
+          crossSectionGroup.add(edgeLines)
+
+          // Tính toán các điểm trên đường đồng mức f(x, y) = sliceZ
+          const N = 51
+          const xMin = -6, xMax = 6
+          const step = (xMax - xMin) / (N - 1)
+          const vals = new Float32Array(N * N)
+          for (let i = 0; i < N; i++) {
+            const x = xMin + i * step
+            for (let j = 0; j < N; j++) {
+              const y = xMin + j * step
+              const zVal = compiledFn(x, y)
+              vals[i * N + j] = isNaN(zVal) || !isFinite(zVal) ? 9999 : zVal - sliceZ
+            }
+          }
+          const pts: THREE.Vector3[] = []
+          for (let i = 0; i < N - 1; i++) {
+            for (let j = 0; j < N; j++) {
+              const v1 = vals[i * N + j]
+              const v2 = vals[(i + 1) * N + j]
+              if ((v1 <= 0 && v2 > 0) || (v1 > 0 && v2 <= 0)) {
+                const t = Math.abs(v1) / (Math.abs(v1) + Math.abs(v2) + 1e-9)
+                const x = xMin + i * step + t * step
+                const y = xMin + j * step
+                pts.push(new THREE.Vector3(x, sliceZ + 0.03, -y))
+              }
+            }
+          }
+          for (let i = 0; i < N; i++) {
+            for (let j = 0; j < N - 1; j++) {
+              const v1 = vals[i * N + j]
+              const v2 = vals[i * N + (j + 1)]
+              if ((v1 <= 0 && v2 > 0) || (v1 > 0 && v2 <= 0)) {
+                const t = Math.abs(v1) / (Math.abs(v1) + Math.abs(v2) + 1e-9)
+                const x = xMin + i * step
+                const y = xMin + j * step + t * step
+                pts.push(new THREE.Vector3(x, sliceZ + 0.03, -y))
+              }
+            }
+          }
+          if (pts.length > 0) {
+            const contourGeo = new THREE.BufferGeometry().setFromPoints(pts)
+            const contourMat = new THREE.PointsMaterial({
+              color: 0xfacc15, // Golden glowing contour
+              size: 0.25,
+              transparent: true,
+              opacity: 0.95,
+            })
+            const contourPoints = new THREE.Points(contourGeo, contourMat)
+            crossSectionGroup.add(contourPoints)
+          }
+        } else {
+          // 2. Chế độ DỰNG HÌNH KHỐI TỪ CÁC MẶT CẮT (Loft Solid)
+          // Xếp chồng các tầng mặt cắt liên tiếp từ z = -4 đến z = 4
+          const sliceLevels = [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+          const N = 41
+          const xMin = -5.5, xMax = 5.5
+          const step = (xMax - xMin) / (N - 1)
+
+          sliceLevels.forEach((levelZ, sliceIdx) => {
+            const vals = new Float32Array(N * N)
+            for (let i = 0; i < N; i++) {
+              const x = xMin + i * step
+              for (let j = 0; j < N; j++) {
+                const y = xMin + j * step
+                const zVal = compiledFn(x, y)
+                vals[i * N + j] = isNaN(zVal) || !isFinite(zVal) ? 9999 : zVal - levelZ
+              }
+            }
+            const levelPts: THREE.Vector3[] = []
+            for (let i = 0; i < N - 1; i++) {
+              for (let j = 0; j < N; j++) {
+                const v1 = vals[i * N + j]
+                const v2 = vals[(i + 1) * N + j]
+                if ((v1 <= 0 && v2 > 0) || (v1 > 0 && v2 <= 0)) {
+                  const t = Math.abs(v1) / (Math.abs(v1) + Math.abs(v2) + 1e-9)
+                  const x = xMin + i * step + t * step
+                  const y = xMin + j * step
+                  levelPts.push(new THREE.Vector3(x, levelZ, -y))
+                }
+              }
+            }
+            for (let i = 0; i < N; i++) {
+              for (let j = 0; j < N - 1; j++) {
+                const v1 = vals[i * N + j]
+                const v2 = vals[i * N + (j + 1)]
+                if ((v1 <= 0 && v2 > 0) || (v1 > 0 && v2 <= 0)) {
+                  const t = Math.abs(v1) / (Math.abs(v1) + Math.abs(v2) + 1e-9)
+                  const x = xMin + i * step
+                  const y = xMin + j * step + t * step
+                  levelPts.push(new THREE.Vector3(x, levelZ, -y))
+                }
+              }
+            }
+
+            if (levelPts.length > 0) {
+              const levelGeo = new THREE.BufferGeometry().setFromPoints(levelPts)
+              const sliceColor = new THREE.Color().setHSL(0.55 + (sliceIdx / sliceLevels.length) * 0.35, 0.9, 0.55)
+              const levelMat = new THREE.PointsMaterial({
+                color: sliceColor,
+                size: 0.24,
+                transparent: true,
+                opacity: 0.9,
+              })
+              const levelMesh = new THREE.Points(levelGeo, levelMat)
+              crossSectionGroup.add(levelMesh)
+            }
+          })
+        }
+      }
     })
 
-    if (threeSceneRef.current) {
-      const { renderer, scene, camera } = threeSceneRef.current
-      renderer.render(scene, camera)
-    }
-  }, [equations3D, wireframe3D])
+    renderer.render(scene, camera)
+  }, [equations3D, wireframe3D, showCrossSection, sliceZ, isLofted])
 
   // Tương tác chuột 3D Orbit Controls
   const handleMouseDown3D = (e: React.MouseEvent) => {
@@ -1203,22 +1480,42 @@ export default function SenGraphPage() {
   // ==============================================================
   // 7. TRỢ LÝ TOÁN HỌC SEN AI (GEMINI 3.5 FLASH LITE)
   // ==============================================================
-  const handleSelectImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelectImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    setAiAttachedImageMime(file.type || 'image/jpeg')
-    const reader = new FileReader()
-    reader.onload = () => {
-      setAiAttachedImage(reader.result as string)
-      setShowAiDrawer(true)
-    }
-    reader.readAsDataURL(file)
+    const { base64, mimeType } = await compressImageForAi(file)
+    setAiAttachedImage(base64)
+    setAiAttachedImageMime(mimeType)
+    setShowAiDrawer(true)
   }
 
   const handleSendAi = async (customPrompt?: string) => {
     const text = (customPrompt || aiInputText).trim()
     if (!text && activeEquations.length === 0 && !aiAttachedImage) return
+
+    // Kiểm tra nhanh hạn mức trước khi gửi nếu đã có thông tin
+    if (aiQuota && !aiQuota.eligible) {
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `🔒 **Nâng cấp gói để sử dụng Sen AI Toán Học**\n\nGói hiện tại của bạn: **${aiQuota.tierLabel}**.\n\nTheo quy định hệ thống, công cụ phân tích giải đề & xuất phương trình chỉ mở cho thành viên **SenAI Plus** (1 câu / ngày) hoặc **SenAI Ultra** (5 câu / ngày).\n\nVui lòng nâng cấp tại [Ví Sen](/new-sencash) để kích hoạt ngay!`,
+        },
+      ])
+      return
+    }
+
+    if (aiQuota && !aiQuota.isAdmin && aiQuota.remaining <= 0) {
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `⏳ **Bạn đã sử dụng hết lượt hỏi hôm nay (${aiQuota.dailyLimit}/${aiQuota.dailyLimit} câu)**\n\nLượt hỏi của gói **${aiQuota.tierLabel}** sẽ tự động được làm mới vào lúc **00:00** ngày mai.`,
+        },
+      ])
+      return
+    }
 
     const userMsg =
       text ||
@@ -1245,12 +1542,23 @@ export default function SenGraphPage() {
     setIsAiLoading(true)
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      // Tối ưu hóa token: Chỉ gửi tối đa 5 phương trình đang hiển thị, cắt ngắn nếu quá dài
+      const compactEquations = activeEquations
+        .filter((e) => e.visible)
+        .map((e) => e.expr.trim().slice(0, 80))
+        .slice(0, 5)
+
       const res = await fetch('/api/sengraph/ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          message: userMsg,
-          equations: activeEquations.filter((e) => e.visible).map((e) => e.expr),
+          message: userMsg.slice(0, 1000),
+          equations: compactEquations,
           mode,
           imageBase64: imageToSend,
           imageMimeType: mimeToSend,
@@ -1259,6 +1567,15 @@ export default function SenGraphPage() {
       })
 
       const data = await res.json()
+      if (data.quota) {
+        setAiQuota((prev) => ({
+          ...prev,
+          ...data.quota,
+          authenticated: true,
+          eligible: data.quota.isAdmin || data.quota.tier === 'plus' || data.quota.tier === 'ultra',
+        }))
+      }
+
       if (data.reply) {
         setAiMessages((prev) => [
           ...prev,
@@ -1663,6 +1980,112 @@ export default function SenGraphPage() {
                 <span>Trục z (Đứng)</span>
               </div>
             </div>
+
+            {/* BẢNG ĐIỀU KHIỂN MẶT CẮT & DỰNG HÌNH KHỐI 3D */}
+            {showCrossSection && (
+              <div
+                className={`absolute top-4 left-4 z-20 w-80 sm:w-88 rounded-2xl shadow-2xl border p-3.5 backdrop-blur-xl animate-in fade-in slide-in-from-top-2 ${
+                  isDark
+                    ? 'bg-slate-900/90 border-cyan-500/40 text-slate-100 shadow-cyan-950/30'
+                    : 'bg-white/95 border-cyan-400/40 text-slate-800 shadow-cyan-100'
+                }`}
+              >
+                {/* Header panel */}
+                <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-cyan-500/20">
+                  <div className="flex items-center gap-2 text-cyan-500 font-black text-xs uppercase tracking-wide">
+                    <Layers className="w-4 h-4" />
+                    <span>Mặt Cắt & Dựng Khối 3D</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCrossSection(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Slider điều chỉnh độ cao mặt cắt z = c */}
+                <div className="space-y-1.5 mb-3">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-400 font-sans text-[11px]">Cao độ lát cắt (z):</span>
+                    <span className="font-bold text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-lg border border-cyan-800/40">
+                      z = {sliceZ >= 0 ? `+${sliceZ.toFixed(1)}` : sliceZ.toFixed(1)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-5"
+                    max="5"
+                    step="0.1"
+                    value={sliceZ}
+                    onChange={(e) => {
+                      setSliceZ(parseFloat(e.target.value))
+                      setIsLofted(false)
+                    }}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 font-mono">
+                    <span>z = -5.0</span>
+                    <span>z = 0.0 (Mặt Oxy)</span>
+                    <span>z = +5.0</span>
+                  </div>
+                </div>
+
+                {/* Nút hành động */}
+                <div className="flex flex-col gap-2">
+                  {/* Nút Tự động quét mặt cắt */}
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoSweeping(!isAutoSweeping)}
+                    className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+                      isAutoSweeping
+                        ? 'bg-amber-600 text-white border-amber-500 shadow-md'
+                        : isDark
+                        ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                        : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {isAutoSweeping ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    <span>{isAutoSweeping ? 'Dừng Quét Mặt Cắt' : 'Tự Động Quét Mặt Cắt (Sweep)'}</span>
+                  </button>
+
+                  {/* 🌟 NÚT DỰNG HÌNH KHỐI TỪ CÁC MẶT CẮT (LOFT RECONSTRUCTION) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLofted(!isLofted)
+                      setIsAutoSweeping(false)
+                    }}
+                    className={`w-full py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition cursor-pointer shadow-lg ${
+                      isLofted
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-950/40 ring-2 ring-emerald-400/50'
+                        : 'bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-600 hover:to-indigo-700 text-white shadow-cyan-950/40'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{isLofted ? '✓ Đang Dựng Khối Hoàn Chỉnh' : 'Dựng Hình Khối Từ Các Mặt Cắt'}</span>
+                  </button>
+                </div>
+
+                {/* Chú thích sư phạm toán học */}
+                <div
+                  className={`mt-2.5 p-2 rounded-xl text-[11px] leading-relaxed border ${
+                    isDark ? 'bg-cyan-950/30 border-cyan-900/40 text-cyan-200' : 'bg-cyan-50 border-cyan-200 text-cyan-800'
+                  }`}
+                >
+                  <p className="font-semibold flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    <span>Bản chất hình học:</span>
+                  </p>
+                  <p className="mt-0.5 text-[10px] opacity-90">
+                    {isLofted
+                      ? 'Các lát cắt thiết diện z = c (đường đồng mức) được xếp chồng liên tục từ đáy lên đỉnh để dựng thành bề mặt và thể tích khối 3D.'
+                      : 'Mặt phẳng cắt ngang z = c làm lộ rõ thiết diện (đường tròn, elip, hoặc hyperbol) tại từng độ cao cụ thể.'}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* NÚT ĐIỀU KHIỂN PHÓNG TO / THU NHỎ / GỐC TỌA ĐỘ NỔI BẬT Ở GÓC PHẢI */}
@@ -1712,6 +2135,22 @@ export default function SenGraphPage() {
                   isDark ? 'bg-slate-900/90 border-slate-700 text-white' : 'bg-white/95 border-slate-200 text-slate-800'
                 }`}
               >
+                <button
+                  type="button"
+                  onClick={() => setShowCrossSection(!showCrossSection)}
+                  title="Bật/Tắt chế độ xem mặt cắt & tái tạo khối 3D"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    showCrossSection
+                      ? 'bg-gradient-to-r from-cyan-500 to-sky-600 text-white border-cyan-400 shadow-md'
+                      : isDark
+                      ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                      : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Mặt Cắt & Dựng Hình</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setAutoRotate3D(!autoRotate3D)}
@@ -2346,7 +2785,30 @@ export default function SenGraphPage() {
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold">Sen AI Toán Học</h3>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-xs font-bold">Sen AI Toán Học</h3>
+                    {aiQuota && (
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                          aiQuota.isAdmin
+                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                            : aiQuota.tier === 'ultra'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : aiQuota.tier === 'plus'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}
+                      >
+                        {aiQuota.isAdmin
+                          ? '👑 Admin'
+                          : aiQuota.tier === 'ultra'
+                          ? `💎 Ultra (${aiQuota.remaining}/5)`
+                          : aiQuota.tier === 'plus'
+                          ? `⭐ Plus (${aiQuota.remaining}/1)`
+                          : 'Free (Khóa)'}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] text-sky-500 font-semibold">Gemini 3.5 Flash Lite • Dán ảnh & Giải đề</span>
                 </div>
               </div>
@@ -2358,6 +2820,52 @@ export default function SenGraphPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Thông báo kiểm tra hạn mức & Nâng cấp gói */}
+            {aiQuota && !aiQuota.authenticated && (
+              <div className="p-2.5 px-3 bg-amber-500/10 border-b border-amber-500/30 text-amber-500 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 shrink-0" />
+                  <span className="text-[11px] font-medium">Đăng nhập để sử dụng Sen AI</span>
+                </div>
+                <Link
+                  href="/login?redirect=/sengraph"
+                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] transition shrink-0"
+                >
+                  Đăng nhập
+                </Link>
+              </div>
+            )}
+
+            {aiQuota?.authenticated && !aiQuota.eligible && (
+              <div className="p-3 bg-gradient-to-r from-sky-500/10 via-indigo-500/10 to-amber-500/10 border-b border-sky-500/30 text-xs flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-sky-500 font-bold">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Yêu cầu gói SenAI Plus trở lên</span>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-400 font-mono">
+                    {aiQuota.tierLabel}
+                  </span>
+                </div>
+                <p className="text-[11px] opacity-80 leading-relaxed">
+                  Công cụ giải đề & dựng đồ thị chỉ mở cho <strong>SenAI Plus</strong> (1 câu / ngày) hoặc <strong>SenAI Ultra</strong> (5 câu / ngày).
+                </p>
+                <Link
+                  href="/new-sencash"
+                  className="mt-1 w-full py-1.5 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-bold rounded-xl text-[11px] text-center transition shadow-sm"
+                >
+                  Nâng Cấp Tại Ví Sen Ngay
+                </Link>
+              </div>
+            )}
+
+            {aiQuota?.authenticated && aiQuota.eligible && !aiQuota.isAdmin && aiQuota.remaining <= 0 && (
+              <div className="p-2.5 px-3 bg-slate-500/10 border-b border-slate-500/30 text-[11px] text-slate-400 flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>Bạn đã hết {aiQuota.dailyLimit}/{aiQuota.dailyLimit} câu hỏi hôm nay ({aiQuota.tierLabel}). Lượt hỏi sẽ tự động làm mới vào 00:00 ngày mai.</span>
+              </div>
+            )}
 
             {/* Chế độ vẽ ưu tiên (Option pills) */}
             <div
@@ -2688,58 +3196,72 @@ export default function SenGraphPage() {
             )}
 
             {/* Ô nhập câu hỏi và nút gửi ảnh cho AI */}
-            <div
-              className={`p-2.5 border-t flex items-center gap-1.5 ${
-                isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'
-              }`}
-            >
-              {/* Input file ẩn */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,.pdf,.txt"
-                onChange={handleSelectImage}
-                className="hidden"
-              />
+            {(() => {
+              const isBlocked = Boolean(aiQuota && (!aiQuota.eligible || (!aiQuota.isAdmin && aiQuota.remaining <= 0)))
+              return (
+                <div
+                  className={`p-2.5 border-t flex items-center gap-1.5 ${
+                    isDark ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  {/* Input file ẩn */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf,.txt"
+                    onChange={handleSelectImage}
+                    disabled={isBlocked || isAiLoading}
+                    className="hidden"
+                  />
 
-              {/* Nút chọn ảnh / file */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                title="Tải lên ảnh chụp đề bài hoặc bấm Ctrl+V để dán ảnh trực tiếp"
-                className={`p-2 rounded-xl border transition cursor-pointer ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-sky-400'
-                    : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-sky-600'
-                }`}
-              >
-                <ImageIcon className="w-4 h-4" />
-              </button>
+                  {/* Nút chọn ảnh / file */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isBlocked || isAiLoading}
+                    title="Tải lên ảnh chụp đề bài hoặc bấm Ctrl+V để dán ảnh trực tiếp"
+                    className={`p-2 rounded-xl border transition disabled:opacity-40 cursor-pointer ${
+                      isDark
+                        ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-sky-400'
+                        : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-sky-600'
+                    }`}
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
 
-              <input
-                type="text"
-                value={aiInputText}
-                onPaste={handlePasteImage}
-                onChange={(e) => setAiInputText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSendAi()
-                }}
-                placeholder="Hỏi Sen AI hoặc dán ảnh (Ctrl+V)..."
-                className={`flex-1 px-3 py-2 rounded-xl text-xs focus:outline-none transition ${
-                  isDark
-                    ? 'bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 focus:border-sky-500'
-                    : 'bg-slate-100 border border-slate-200 text-slate-800 placeholder-slate-400 focus:bg-white focus:border-sky-500'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => handleSendAi()}
-                disabled={isAiLoading || (!aiInputText.trim() && !aiAttachedImage)}
-                className="p-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white transition disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
+                  <input
+                    type="text"
+                    value={aiInputText}
+                    onPaste={handlePasteImage}
+                    disabled={isBlocked || isAiLoading}
+                    onChange={(e) => setAiInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSendAi()
+                    }}
+                    placeholder={
+                      isBlocked
+                        ? aiQuota && !aiQuota.eligible
+                          ? `Gói ${aiQuota.tierLabel} - Nâng cấp để hỏi...`
+                          : 'Đã hết lượt hỏi hôm nay...'
+                        : 'Hỏi Sen AI hoặc dán ảnh (Ctrl+V)...'
+                    }
+                    className={`flex-1 px-3 py-2 rounded-xl text-xs focus:outline-none transition disabled:opacity-50 ${
+                      isDark
+                        ? 'bg-slate-900 border border-slate-800 text-slate-100 placeholder-slate-500 focus:border-sky-500'
+                        : 'bg-slate-100 border border-slate-200 text-slate-800 placeholder-slate-400 focus:bg-white focus:border-sky-500'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSendAi()}
+                    disabled={isAiLoading || isBlocked || (!aiInputText.trim() && !aiAttachedImage)}
+                    className="p-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white transition disabled:opacity-40 cursor-pointer shadow-sm"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              )
+            })()}
           </aside>
         )}
       </div>
