@@ -468,6 +468,13 @@ export default function NewDashboardPage() {
     return 'Chào buổi tối'
   }, [])
 
+  const greetingSubtext = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Khởi đầu ngày mới tràn đầy năng lượng ôn thi nhé!'
+    if (hour < 18) return 'Duy trì phong độ học tập bứt phá buổi chiều nào!'
+    return 'Ôn luyện lại kiến thức và hoàn thành mục tiêu hôm nay thôi!'
+  }, [])
+
   // Chuyển đổi Dark Mode
   const toggleDarkMode = () => {
     const nextDark = !isDark
@@ -548,7 +555,336 @@ export default function NewDashboardPage() {
           : 'radial-gradient(circle at 12% 8%, rgba(255, 187, 120, 0.45), transparent 35%), radial-gradient(circle at 88% 12%, rgba(94, 234, 212, 0.34), transparent 28%), radial-gradient(circle at 80% 75%, rgba(129, 140, 248, 0.32), transparent 32%), var(--bg)',
       }}
     >
-      <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-6 sm:px-6 lg:px-8">
+      <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+        
+        {/* ========================================================================= */}
+        {/* GIAO DIỆN MOBILE TỐI ƯU CHO ĐIỆN THOẠI (block md:hidden)                 */}
+        {/* Chỉ hiển thị: Top-right VIP & SC, Ô chào buổi, Thanh tiến trình mobile,   */}
+        {/* Nút liên kết Google & Cài đặt web. Tính năng xem qua Bottom Navbar.      */}
+        {/* ========================================================================= */}
+        <div className="block md:hidden space-y-4 pb-6">
+          
+          {/* 1. Header Mobile: Góc trên bên trái là Hồ sơ, GÓC TRÊN BÊN PHẢI HIỂN THỊ VIP GÌ VÀ SỐ SC */}
+          <div className="flex items-center justify-between gap-2 pt-1 pb-1">
+            <Link href="/new-profile" className="flex items-center gap-2.5 group min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 text-white font-black text-sm shadow-md group-hover:scale-105 transition">
+                <User className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-black text-slate-900 dark:text-white block truncate max-w-[130px]" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  {fullName}
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block truncate">
+                  {userRole === 'admin' ? 'Quản trị viên' : userRole === 'teacher' ? 'Giáo viên' : 'Học sinh'}
+                </span>
+              </div>
+            </Link>
+
+            {/* GÓC TRÊN BÊN PHẢI: VIP GÌ VÀ SỐ SC */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* VIP Label Badge */}
+              <Link
+                href="/new-vip"
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-600 dark:text-amber-400 shadow-xs active:scale-95 transition"
+                title={vipLabel}
+              >
+                <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span className="max-w-[85px] truncate font-sans">{vipUntil ? 'VIP' : 'Gói Miễn phí'}</span>
+              </Link>
+
+              {/* SenCash Balance */}
+              <Link
+                href="/new-sencash"
+                className="inline-flex items-center gap-1 rounded-full border border-pink-500/30 bg-pink-500/10 px-2.5 py-1 text-[11px] font-black text-pink-600 dark:text-pink-400 shadow-xs active:scale-95 transition"
+                title={`${senCash.toLocaleString('vi-VN')} SenCash`}
+              >
+                <CreditCard className="h-3.5 w-3.5 text-pink-500 shrink-0" />
+                <span className="font-sans">{senCash.toLocaleString('vi-VN')} SC</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* 2. Ô Chào Các Buổi */}
+          <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-rose-400/25 dark:bg-rose-500/20 blur-2xl pointer-events-none" />
+            <div className="absolute -left-8 bottom-0 h-28 w-28 rounded-full bg-teal-400/25 dark:bg-teal-500/20 blur-2xl pointer-events-none" />
+
+            <div className="relative">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                  <Zap className="h-3 w-3" /> SenExam
+                </span>
+                {isBetaTester && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <Sparkles className="h-2.5 w-2.5" /> Beta Member
+                  </span>
+                )}
+              </div>
+
+              <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-white leading-tight" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                {greeting}, {fullName}! 👋
+              </h2>
+              <p className="mt-1 text-xs text-[#4B5563] dark:text-slate-300 font-medium leading-relaxed" style={{ fontFamily: 'var(--font-newdash-body)' }}>
+                {greetingSubtext}
+              </p>
+
+              {(school || province) && (
+                <div className="mt-2.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-semibold truncate pt-1 border-t border-black/5 dark:border-white/5">
+                  {school && <span className="truncate">🏫 {school}</span>}
+                  {school && province && <span>•</span>}
+                  {province && <span>📍 {province}</span>}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 3. Thanh Tiến Trình Được Thiết Kế Lại Cho Mobile */}
+          <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-xs">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    Tiến Độ & Năng Lượng Học Tập
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                    Đồng bộ thời gian thực
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                {focusScore}% Focus
+              </span>
+            </div>
+
+            {/* 3 Chỉ Số Nhỏ Gọn */}
+            <div className="mt-3.5 grid grid-cols-3 gap-2">
+              <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-amber-500/10 dark:bg-amber-500/15 p-2.5 text-center">
+                <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                  <Flame className="h-3 w-3 text-amber-500" /> Chuỗi
+                </div>
+                <p className="mt-1 text-base font-black text-amber-900 dark:text-amber-200" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  {streakDays} ngày
+                </p>
+              </div>
+
+              <Link
+                href="/new-history"
+                className="rounded-2xl border border-black/5 dark:border-white/5 bg-teal-500/10 dark:bg-teal-500/15 p-2.5 text-center active:scale-95 transition"
+              >
+                <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300">
+                  <BadgeCheck className="h-3 w-3 text-teal-500" /> Đã thi
+                </div>
+                <p className="mt-1 text-base font-black text-teal-900 dark:text-teal-200" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  {submissionCount} đề
+                </p>
+              </Link>
+
+              <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-indigo-500/10 dark:bg-indigo-500/15 p-2.5 text-center">
+                <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                  <Zap className="h-3 w-3 text-indigo-500" /> Điểm Focus
+                </div>
+                <p className="mt-1 text-base font-black text-indigo-900 dark:text-indigo-200" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  {focusScore} pts
+                </p>
+              </div>
+            </div>
+
+            {/* Thanh Progress Bar Phát Sáng */}
+            <div className="mt-3.5 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold">
+                <span className="text-slate-600 dark:text-slate-400">Chỉ số hoàn thành mục tiêu</span>
+                <span className="text-pink-600 dark:text-pink-400 font-black">{focusScore}%</span>
+              </div>
+              <div className="relative h-3 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10 p-0.5">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-amber-500 via-pink-500 to-indigo-600 shadow-[0_0_12px_rgba(236,72,153,0.5)] transition-all duration-700 ease-out"
+                  style={{ width: `${Math.max(8, focusScore)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
+                <Link href="/new-history" className="text-teal-600 dark:text-teal-400 font-bold hover:underline">
+                  Xem chi tiết lịch sử bài làm →
+                </Link>
+                <span className="font-semibold">
+                  {focusScore >= 80 ? '⚡ Phong độ đỉnh cao!' : focusScore >= 50 ? '🚀 Tiến độ rất tốt!' : '🌱 Hãy làm thêm đề!'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Banner Tiện Lợi: Mở Drawer Khám Phá Tất Cả Tính Năng Web */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('open-all-features'))
+              }
+            }}
+            className="w-full flex items-center justify-between p-3.5 rounded-[22px] bg-gradient-to-r from-purple-500/15 via-pink-500/15 to-amber-500/15 border border-pink-500/20 text-slate-900 dark:text-white shadow-xs active:scale-[0.99] transition text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-pink-500 to-purple-600 text-white shadow-sm shrink-0">
+                <Compass className="h-5 w-5 animate-spin-slow" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  Xem Tất Cả 22 Tính Năng Web
+                </h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Đề thi, phòng lab, SenGraph 3D, SenAI... Nhấn để mở Drawer
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-pink-500 shrink-0" />
+          </button>
+
+          {/* 5. Nút / Thẻ Liên Kết Google Trên Mobile */}
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <h3 className="font-black text-xs text-slate-900 dark:text-white">Tài khoản Google</h3>
+              </div>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${linkedGoogle ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+                {linkedGoogle ? '✓ Đã liên kết' : 'Chưa liên kết'}
+              </span>
+            </div>
+
+            <p className="mt-2 text-[11px] text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
+              {linkedGoogle
+                ? 'Đã kết nối tài khoản Google. Bạn có thể đăng nhập 1-chạm an toàn mọi lúc mọi nơi.'
+                : 'Liên kết Google để đăng nhập tức thì chỉ 1 click, không lo quên mật khẩu.'}
+            </p>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLinkGoogle}
+                disabled={googleLinkingLoading || linkedGoogle}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-2 text-xs font-black shadow-xs transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+              >
+                {googleLinkingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : linkedGoogle ? 'Đã liên kết Google' : 'Liên kết tài khoản Google'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGoogleGuide(!showGoogleGuide)}
+                title="Lợi ích bảo mật"
+                className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
+            </div>
+
+            {showGoogleGuide && (
+              <div className="mt-2.5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-[#4B5563] dark:text-slate-300 space-y-1 animate-in fade-in">
+                <p className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Lợi ích liên kết Google:
+                </p>
+                <ul className="list-disc pl-3.5 space-y-0.5 text-[10px]">
+                  <li>Đăng nhập nhanh 1-chạm không cần nhớ mật khẩu.</li>
+                  <li>Bảo mật tài khoản chuẩn xác thực Google Security.</li>
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* 6. Thẻ Cài Đặt Web Trên Mobile */}
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Settings className="h-3.5 w-3.5 text-amber-500" /> Cài đặt & Tiện ích Web
+              </h3>
+              {savingSettings && <Loader2 className="h-3 w-3 animate-spin text-amber-500" />}
+            </div>
+
+            {/* Chế độ Sáng / Tối */}
+            <div className="flex items-center justify-between pt-1">
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Giao diện:</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Chế độ sáng hoặc tối</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-3 py-1.5 text-xs font-bold transition hover:bg-black/10"
+              >
+                {isDark ? <Sun className="h-3.5 w-3.5 text-amber-400" /> : <Moon className="h-3.5 w-3.5 text-indigo-500" />}
+                <span>{isDark ? 'Giao diện Tối' : 'Giao diện Sáng'}</span>
+              </button>
+            </div>
+
+            {/* Đổi mật khẩu toggle */}
+            <div className="pt-2 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setShowPasswordChange(!showPasswordChange)}
+                className="w-full flex items-center justify-between text-xs font-bold text-[#4B5563] dark:text-slate-300"
+              >
+                <span className="flex items-center gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5" /> Đổi mật khẩu tài khoản
+                </span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+
+              {showPasswordChange && (
+                <form onSubmit={handleChangePassword} className="mt-2.5 space-y-2 animate-in fade-in">
+                  <div className="relative">
+                    <input
+                      type={showPasswordText ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Mật khẩu mới (≥ 6 ký tự)"
+                      className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-2 pl-3 pr-8 text-xs outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordText(!showPasswordText)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                    >
+                      {showPasswordText ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                  {passwordMsg && (
+                    <p className={`text-[10px] font-bold ${passwordMsg.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {passwordMsg.text}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={savingSettings || !newPassword}
+                    className="w-full rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-2 text-xs font-bold transition disabled:opacity-50"
+                  >
+                    {savingSettings ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* Nút Đăng xuất */}
+            <div className="pt-2 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-2 text-xs font-bold transition border border-rose-500/20"
+              >
+                <LogOut className="h-3.5 w-3.5" /> Đăng xuất khỏi tài khoản
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* GIAO DIỆN DESKTOP TOÀN DIỆN (hidden md:block)                             */}
+        {/* ========================================================================= */}
+        <div className="hidden md:block">
         
         {/* Banner Chào Mừng & Thống Kê Tổng Quan */}
         <div className="relative overflow-hidden rounded-[30px] border border-black/10 dark:border-white/10 bg-white/75 dark:bg-slate-900/75 p-6 shadow-[0_20px_45px_rgba(16,24,40,0.1)] dark:shadow-[0_20px_45px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-8">
@@ -999,6 +1335,7 @@ export default function NewDashboardPage() {
               </div>
             </div>
           </aside>
+        </div>
         </div>
       </section>
 

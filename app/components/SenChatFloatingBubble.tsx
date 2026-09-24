@@ -55,6 +55,17 @@ export default function SenChatFloatingBubble() {
     }
   }, [messages, isOpen])
 
+  useEffect(() => {
+    const handleOpen = () => setIsOpen(true)
+    const handleToggle = () => setIsOpen((prev) => !prev)
+    window.addEventListener('open-sen-chat', handleOpen)
+    window.addEventListener('toggle-sen-chat', handleToggle)
+    return () => {
+      window.removeEventListener('open-sen-chat', handleOpen)
+      window.removeEventListener('toggle-sen-chat', handleToggle)
+    }
+  }, [])
+
   if (isSebExam) return null
 
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -130,10 +141,10 @@ export default function SenChatFloatingBubble() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 select-none">
+    <>
       {/* CỬA SỔ CHAT MINI (KHI MỞ) */}
       {isOpen && (
-        <div className="mb-3 w-[calc(100vw-2.5rem)] sm:w-[380px] h-[520px] max-h-[82vh] rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-16 md:bottom-20 right-3 md:right-6 z-50 w-[calc(100vw-1.5rem)] sm:w-[380px] h-[520px] max-h-[75vh] sm:max-h-[82vh] rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200 select-none">
           
           {/* Header */}
           <div className="px-4 py-3.5 border-b border-black/10 dark:border-white/10 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-indigo-500/10 dark:from-pink-500/20 dark:to-indigo-500/20 flex items-center justify-between">
@@ -305,31 +316,30 @@ export default function SenChatFloatingBubble() {
         </div>
       )}
 
-      {/* NÚT BONG BÓNG TRÒN NỔI (FLOATING BUTTON) */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="Mở Sen Chat"
-        className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-pink-500 via-purple-600 to-indigo-600 text-white shadow-[0_10px_25px_rgba(236,72,153,0.4)] transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-[0_15px_30px_rgba(236,72,153,0.5)]"
-      >
-        <span className="absolute inset-0 rounded-full bg-pink-400 opacity-20 animate-ping" />
-        
-        {isOpen ? (
-          <X className="h-6 w-6 transition group-hover:rotate-90 duration-200" />
-        ) : (
-          <div className="relative flex items-center justify-center">
-            <span className="text-xl">🌸</span>
-            <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900" />
-          </div>
-        )}
-
-        {/* Tooltip khi hover */}
-        {!isOpen && (
-          <span className="pointer-events-none absolute right-16 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-xl bg-slate-900/90 text-white px-3 py-1.5 text-xs font-bold opacity-0 transition group-hover:opacity-100 shadow-lg backdrop-blur-sm">
-            Sen Chat (Tự lưu Studio) 🌸
-          </span>
-        )}
-      </button>
-    </div>
+      {/* NÚT SENAI TRÊN DESKTOP: Dạng Capsule Pill chữ "SenAI", thích ứng để tránh che các nút */}
+      <div className="hidden md:block fixed bottom-6 right-6 z-40 select-none">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Mở SenAI Chat"
+          className="group relative inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:to-indigo-700 text-white shadow-[0_8px_25px_rgba(236,72,153,0.35)] transition-all duration-300 hover:scale-105 active:scale-95 border border-white/20 select-none"
+        >
+          {isOpen ? (
+            <>
+              <X className="h-4 w-4 transition group-hover:rotate-90 duration-200" />
+              <span className="text-xs font-black uppercase tracking-wider font-sans">Đóng</span>
+            </>
+          ) : (
+            <>
+              <div className="relative flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-amber-300 animate-pulse" />
+                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900" />
+              </div>
+              <span className="text-xs font-black uppercase tracking-wider font-sans">SenAI</span>
+            </>
+          )}
+        </button>
+      </div>
+    </>
   )
 }
