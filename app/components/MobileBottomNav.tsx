@@ -261,8 +261,9 @@ export default function MobileBottomNav() {
   const [showAllFeatures, setShowAllFeatures] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Không hiển thị trên trang thi bảo mật SEB hoặc ứng dụng riêng BREATHE U
-  if (pathname?.startsWith('/seb-exam') || pathname?.startsWith('/breathe-u')) {
+  // Không hiển thị trên trang thi bảo mật SEB hoặc ứng dụng riêng BREATHE U (cả pathname lẫn subdomain)
+  const isBreatheHost = typeof window !== 'undefined' && (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
+  if (pathname?.startsWith('/seb-exam') || pathname?.startsWith('/breathe-u') || isBreatheHost) {
     return null
   }
 

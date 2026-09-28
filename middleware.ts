@@ -180,8 +180,14 @@ export function middleware(request: NextRequest) {
     hostname.startsWith('tsv.fepn.') ||
     hostname.startsWith('fepn.')
 
+  const isBreatheUSubdomain =
+    hostname.startsWith('breathu.') ||
+    hostname.startsWith('breatheu.') ||
+    hostname.includes('breathu.senexam.') ||
+    hostname.includes('breatheu.senexam.')
+
   // 4.6 Chuyển hướng các đường dẫn cũ sang giao diện Mới (New UI) trên miền chính
-  if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain) {
+  if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain) {
     if (pathname === '/admin') {
       url.pathname = '/new-admin'
       return applySecurityHeaders(NextResponse.redirect(url))
@@ -304,6 +310,85 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // 4.9 Kiểm tra nếu truy cập qua subdomain breathu.senexam.me hoặc breatheu.senexam.me
+  if (isBreatheUSubdomain) {
+    if (pathname === '/' || pathname === '/dashboard') {
+      url.pathname = '/breathe-u'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/login') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '2_login')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/register' || pathname === '/signup') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '3_register')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/home') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '4_home')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/knowledge' || pathname === '/articles') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '5_knowledge')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/article') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '6_article')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/challenge' || pathname === '/challenges') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '7_challenge')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/commitment' || pathname === '/cam-ket') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '8_commitment')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/report' || pathname === '/phan-anh') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '9_report')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/community' || pathname === '/cong-dong') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '10_community')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/map' || pathname === '/ban-do') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '11_map')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/profile' || pathname === '/me' || pathname === '/ca-nhan') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '12_profile')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/achievements' || pathname === '/rank' || pathname === '/thanh-tich') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '13_achievement')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/settings' || pathname === '/cai-dat') {
+      url.pathname = '/breathe-u'
+      url.searchParams.set('screen', '14_settings')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/breathe-u')) {
+      return applySecurityHeaders(NextResponse.next())
+    }
+    // Mặc định mọi path khác trên subdomain breathu.senexam.me đều rewrite về /breathe-u
+    url.pathname = '/breathe-u'
+    return applySecurityHeaders(NextResponse.rewrite(url))
+  }
+
   // (Lưu ý: Sen Chat tạm thời ẩn routing subdomain theo yêu cầu, xem SEN_CHAT_DOCUMENTATION.md)
 
   // 5. Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
@@ -420,7 +505,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Tự động chuyển hướng /login sang /new-sign trên domain chính
-  if (pathname === '/login') {
+  if (!isBreatheUSubdomain && pathname === '/login') {
     url.pathname = '/new-sign'
     return applySecurityHeaders(NextResponse.redirect(url))
   }

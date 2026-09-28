@@ -169,6 +169,21 @@ export default function BreatheUApplication() {
   // State cài đặt
   const [notiEnabled, setNotiEnabled] = useState(true)
 
+  // Khởi tạo màn hình theo query param ?screen= nếu có (ví dụ khi truy cập từ subdomain breathu.senexam.me/login)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const screenParam = params.get('screen') as ScreenId | null
+        if (screenParam && SCREEN_NAMES[screenParam]) {
+          setCurrentScreen(screenParam)
+        }
+      } catch (err) {
+        console.error('Error reading screen query param:', err)
+      }
+    }
+  }, [])
+
   // Hàm điều hướng
   const navigateTo = (screen: ScreenId) => {
     setHistory((prev) => [...prev, currentScreen])

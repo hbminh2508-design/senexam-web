@@ -47,8 +47,9 @@ export default function SenChatFloatingBubble() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Không hiển thị bong bóng chat trên trang thi bảo mật SEB hoặc ứng dụng riêng BREATHE U
-  const isExcluded = pathname?.startsWith('/seb-exam') || pathname?.startsWith('/breathe-u')
+  // Không hiển thị bong bóng chat trên trang thi bảo mật SEB hoặc ứng dụng riêng BREATHE U (cả pathname lẫn subdomain)
+  const isBreatheHost = typeof window !== 'undefined' && (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
+  const isExcluded = pathname?.startsWith('/seb-exam') || pathname?.startsWith('/breathe-u') || isBreatheHost
 
   useEffect(() => {
     if (isOpen) {
