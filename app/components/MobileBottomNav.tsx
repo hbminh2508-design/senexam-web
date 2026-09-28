@@ -261,8 +261,8 @@ export default function MobileBottomNav() {
   const [showAllFeatures, setShowAllFeatures] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Không hiển thị trên trang thi bảo mật SEB
-  if (pathname?.startsWith('/seb-exam')) {
+  // Không hiển thị trên trang thi bảo mật SEB hoặc ứng dụng riêng BREATHE U
+  if (pathname?.startsWith('/seb-exam') || pathname?.startsWith('/breathe-u')) {
     return null
   }
 

@@ -47,8 +47,8 @@ export default function SenChatFloatingBubble() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Không hiển thị bong bóng chat trên trang thi bảo mật SEB để tránh vi phạm quy chế
-  const isSebExam = pathname?.startsWith('/seb-exam')
+  // Không hiển thị bong bóng chat trên trang thi bảo mật SEB hoặc ứng dụng riêng BREATHE U
+  const isExcluded = pathname?.startsWith('/seb-exam') || pathname?.startsWith('/breathe-u')
 
   useEffect(() => {
     if (isOpen) {
@@ -67,7 +67,7 @@ export default function SenChatFloatingBubble() {
     }
   }, [])
 
-  if (isSebExam) return null
+  if (isExcluded) return null
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
