@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getEffectiveSenaiTier } from '@/lib/senaiTiers'
+import { getEffectiveDailyLimit, getEffectiveSenaiTier } from '@/lib/senaiTiers'
+import { getEffectivePlanTier, getTotalSenaiDailyLimit } from '@/lib/vipMembership'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,13 +16,37 @@ export async function POST(req: Request) {
     const supabaseAdmin = getSupabaseAdmin()
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('senai_tier, senai_tier_expires_at, senai_tier_permanent')
+      .select('senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at, plan_tier')
       .eq('id', user.id)
       .maybeSingle()
     const tier = getEffectiveSenaiTier(profile)
     if (tier !== 'ultra' && tier !== 'max') {
       return NextResponse.json({ error: 'SenAI Studio chỉ dành cho thành viên SenAI Ultra hoặc Sen Max' }, { status: 403 })
     }
+
+    const tierDailyLimit = getEffectiveDailyLimit(profile)
+    const planTier = getEffectivePlanTier(profile)
+    const dailyLimit = getTotalSenaiDailyLimit(tierDailyLimit, planTier)
+
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const { count } = await supabaseAdmin
+      .from('senai_question_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('asked_at', startOfToday.toISOString())
+
+    const currentCount = count || 0
+    if (currentCount >= dailyLimit) {
+      return NextResponse.json(
+        {
+          error: `Bạn đã dùng hết ${dailyLimit} lượt hỏi SenAI hôm nay. Nâng cấp gói tại Quản lý Quota (/new-senai) để hỏi thêm.`,
+        },
+        { status: 429 }
+      )
+    }
+
+    await supabaseAdmin.from('senai_question_log').insert({ user_id: user.id })
 
     const { sessionId, message, attachments, deepThink } = (await req.json()) as {
       sessionId?: string
@@ -96,7 +121,13 @@ export async function POST(req: Request) {
     })
     await supabaseAdmin.from('senai_studio_sessions').update({ updated_at: new Date().toISOString() }).eq('id', activeSessionId)
 
-    return NextResponse.json({ text: responseText, sessionId: activeSessionId })
+    return NextResponse.json({
+      text: responseText,
+      sessionId: activeSessionId,
+      used: currentCount + 1,
+      limit: dailyLimit,
+      remaining: Math.max(0, dailyLimit - currentCount - 1),
+    })
   } catch (e) {
     console.error('SenAI Studio error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Đã có lỗi xảy ra' }, { status: 500 })

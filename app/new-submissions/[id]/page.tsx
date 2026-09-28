@@ -114,17 +114,38 @@ export default function NewSubmissionReviewPage() {
   const handleAskAiExplain = async (key: string, questionLabel: string, studentAns: any, correctAns: any) => {
     setAiLoadingKey(key)
     try {
+      let token: string | null = null
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        token = session?.access_token || null
+      } catch (authErr) {
+        console.warn('Lỗi lấy session:', authErr)
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch('/api/senai-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: `Hãy giải thích chi tiết phương pháp giải cho ${questionLabel} trong bài thi "${submission.exams?.title}". Đáp án đúng là "${JSON.stringify(correctAns)}". Học sinh đã chọn "${JSON.stringify(studentAns)}". Hãy giải thích từng bước rõ ràng, ngắn gọn và chỉ ra vì sao đáp án đúng là như vậy.`,
         }),
       })
 
       const data = await res.json()
-      if (data.reply || data.text) {
+      if (!res.ok || data.error) {
+        setAiExplains((prev) => ({ ...prev, [key]: `⚠️ ${data.error || 'SenAI chưa thể phân tích câu hỏi này ngay bây giờ.'}` }))
+      } else if (data.reply || data.text) {
         setAiExplains((prev) => ({ ...prev, [key]: data.reply || data.text }))
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('senai-quota-updated', { detail: data }))
+          try {
+            localStorage.setItem('senai_quota_updated_at', Date.now().toString())
+          } catch {}
+        }
       } else {
         setAiExplains((prev) => ({ ...prev, [key]: 'SenAI chưa thể phân tích câu hỏi này ngay bây giờ.' }))
       }

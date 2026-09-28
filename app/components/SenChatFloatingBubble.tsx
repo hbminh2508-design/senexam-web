@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import { supabase } from '@/lib/supabaseClient'
 import {
   MessageCircle,
   X,
@@ -85,9 +86,24 @@ export default function SenChatFloatingBubble() {
     setLoading(true)
 
     try {
+      let token: string | null = null
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        token = session?.access_token || null
+      } catch (authErr) {
+        console.warn('Lỗi lấy session:', authErr)
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
       const res = await fetch('/api/sen-chat-bubble', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: text,
           sessionId: sessionId || undefined,
@@ -120,6 +136,14 @@ export default function SenChatFloatingBubble() {
             timestamp: new Date(),
           },
         ])
+
+        // Phát sự kiện đồng bộ hạn mức Quota SenAI cho toàn bộ trang web
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('senai-quota-updated', { detail: data }))
+          try {
+            localStorage.setItem('senai_quota_updated_at', Date.now().toString())
+          } catch {}
+        }
       }
     } catch (err: any) {
       setMessages((prev) => [

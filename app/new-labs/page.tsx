@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
   FlaskConical,
@@ -964,16 +965,39 @@ export default function NewLabsPage() {
     setIsAiLoading(true)
 
     try {
+      let token: string | null = null
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        token = session?.access_token || null
+      } catch (authErr) {
+        console.warn('Lỗi lấy session:', authErr)
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch('/api/senai-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: `Tôi đang làm thí nghiệm ảo môn "${activeExp}" với các thông số: ${JSON.stringify(params)}. Câu hỏi của tôi: "${q}". Hãy giải thích chi tiết bản chất vật lý / hóa học của hiện tượng này.`,
           deepThink: true,
         }),
       })
       const data = await res.json()
-      setAiMessages((prev) => [...prev, { role: 'model', text: data.reply || data.text || 'SenAI đã ghi nhận câu hỏi.' }])
+      if (!res.ok || data.error) {
+        setAiMessages((prev) => [...prev, { role: 'model', text: `⚠️ ${data.error || 'SenAI chưa thể phân tích lúc này.'}` }])
+      } else {
+        setAiMessages((prev) => [...prev, { role: 'model', text: data.reply || data.text || 'SenAI đã ghi nhận câu hỏi.' }])
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('senai-quota-updated', { detail: data }))
+          try {
+            localStorage.setItem('senai_quota_updated_at', Date.now().toString())
+          } catch {}
+        }
+      }
     } catch (e: any) {
       setAiMessages((prev) => [...prev, { role: 'model', text: `Lỗi: ${e.message}` }])
     } finally {

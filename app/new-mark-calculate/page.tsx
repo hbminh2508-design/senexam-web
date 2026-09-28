@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
   Calculator,
@@ -159,14 +160,37 @@ export default function NewMarkCalculatePage() {
   const handleConsultAi = async () => {
     setIsAiLoading(true)
     try {
+      let token: string | null = null
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        token = session?.access_token || null
+      } catch (authErr) {
+        console.warn('Lỗi lấy session:', authErr)
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const prompt = `Tôi vừa tính điểm thi Đại học khối ${selectedBlock} được ${uniCalcResult.finalTotal} điểm (Điểm 3 môn: ${scores.s1}, ${scores.s2}, ${scores.s3}, điểm ưu tiên: ${uniCalcResult.finalPriority}). Hãy phân tích các nhóm ngành, trường đại học Top và cơ hội xét tuyển phù hợp nhất cho mức điểm này.`
       const res = await fetch('/api/senai-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ message: prompt }),
       })
       const data = await res.json()
-      setAiAdvice(data.reply || data.text || 'SenAI đã tiếp nhận thông tin.')
+      if (!res.ok || data.error) {
+        setAiAdvice(`⚠️ ${data.error || 'SenAI chưa thể tư vấn lúc này.'}`)
+      } else {
+        setAiAdvice(data.reply || data.text || 'SenAI đã tiếp nhận thông tin.')
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('senai-quota-updated', { detail: data }))
+          try {
+            localStorage.setItem('senai_quota_updated_at', Date.now().toString())
+          } catch {}
+        }
+      }
     } catch (e: any) {
       setAiAdvice(`Lỗi tư vấn: ${e.message}`)
     } finally {

@@ -15,6 +15,7 @@ import {
   getEffectiveSenaiTier,
   type SenAiTierCode,
 } from '@/lib/senaiTiers'
+import { getEffectivePlanTier, getTotalSenaiDailyLimit } from '@/lib/vipMembership'
 import {
   ROADMAP_ITEMS_2027,
   isRoadmapDateReached,
@@ -43,6 +44,7 @@ import {
   ShieldCheck,
   Star,
   Lock,
+  RefreshCw,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-quota-heading' })
@@ -51,12 +53,90 @@ const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-qu
 export default function SenAiQuotaPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [isDark, setIsDark] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [profile, setProfile] = useState<any>(null)
   const [isBetaTester, setIsBetaTester] = useState(false)
   const [todayQuestionsCount, setTodayQuestionsCount] = useState(0)
   const [todaySenGraphAiCount, setTodaySenGraphAiCount] = useState(0)
+
+  const fetchQuotaData = async (isManual = false) => {
+    if (isManual) setRefreshing(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const uid = session?.user?.id || userId
+      if (!uid) return
+
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      // 1. Lấy dữ liệu quota từ API service role
+      try {
+        const res = await fetch('/api/senai/quota', { headers, cache: 'no-store' })
+        if (res.ok) {
+          const qData = await res.json()
+          setTodayQuestionsCount(qData.used ?? 0)
+          if (qData.graphUsed !== undefined) {
+            setTodaySenGraphAiCount(qData.graphUsed)
+          }
+        } else {
+          // Fallback trực tiếp qua Supabase client
+          const startOfToday = new Date()
+          startOfToday.setHours(0, 0, 0, 0)
+          const { count: qCount } = await supabase
+            .from('senai_question_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', uid)
+            .gte('asked_at', startOfToday.toISOString())
+          setTodayQuestionsCount(qCount || 0)
+        }
+      } catch (qErr) {
+        console.warn('Lỗi gọi /api/senai/quota, fallback client:', qErr)
+        const startOfToday = new Date()
+        startOfToday.setHours(0, 0, 0, 0)
+        const { count: qCount } = await supabase
+          .from('senai_question_log')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', uid)
+          .gte('asked_at', startOfToday.toISOString())
+        setTodayQuestionsCount(qCount || 0)
+      }
+
+      // 2. Lấy quota SenGraph nếu chưa có
+      try {
+        const gRes = await fetch('/api/sengraph/ai', { headers, cache: 'no-store' })
+        if (gRes.ok) {
+          const gData = await gRes.json()
+          setTodaySenGraphAiCount(gData.usedToday ?? gData.usedCount ?? 0)
+        }
+      } catch (gErr) {
+        console.warn('Lỗi tải quota SenGraph:', gErr)
+      }
+
+      // 3. Tải lại profile mới nhất để đồng bộ số dư SenCash và hạn dùng
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role, is_beta_tester, sencash_balance, senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at, plan_tier')
+        .eq('id', uid)
+        .single()
+
+      if (prof) {
+        setProfile(prof)
+        const isBeta = prof.is_beta_tester === true || (localStorage.getItem('senexam_beta_tester') === '1')
+        setIsBetaTester(isBeta)
+      }
+    } catch (err) {
+      console.warn('Lỗi fetchQuotaData:', err)
+    } finally {
+      if (isManual) {
+        setTimeout(() => setRefreshing(false), 500)
+      }
+    }
+  }
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -73,43 +153,32 @@ export default function SenAiQuotaPage() {
 
       setUserId(user.id)
       await ensureStudentProfile(user.id)
-
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, role, is_beta_tester, sencash_balance, senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at, plan_tier')
-        .eq('id', user.id)
-        .single()
-
-      setProfile(prof || null)
-      const isBeta = prof ? prof.is_beta_tester === true : (localStorage.getItem('senexam_beta_tester') === '1')
-      setIsBetaTester(isBeta)
-
-      // Đếm số câu hỏi SenAI đã dùng hôm nay
-      const startOfToday = new Date()
-      startOfToday.setHours(0, 0, 0, 0)
-      const { count: qCount } = await supabase
-        .from('senai_question_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .gte('asked_at', startOfToday.toISOString())
-
-      setTodayQuestionsCount(qCount || 0)
-
-      // Kiểm tra hạn mức SenGraph AI hôm nay
-      try {
-        const res = await fetch('/api/sengraph/ai', { method: 'GET' })
-        if (res.ok) {
-          const gData = await res.json()
-          setTodaySenGraphAiCount(gData.usedCount || 0)
-        }
-      } catch (err) {
-        console.warn('Lỗi tải quota SenGraph:', err)
-      }
-
+      await fetchQuotaData(false)
       setLoading(false)
     }
 
     init()
+
+    // Lắng nghe sự kiện câu hỏi mới từ Bong bóng chat và Studio
+    const handleQuotaUpdated = () => fetchQuotaData(false)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'senai_quota_updated_at') fetchQuotaData(false)
+    }
+    const handleFocus = () => fetchQuotaData(false)
+
+    window.addEventListener('senai-quota-updated', handleQuotaUpdated)
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener('focus', handleFocus)
+
+    // Tự động đồng bộ mỗi 15 giây nếu trang đang mở
+    const interval = setInterval(() => fetchQuotaData(false), 15000)
+
+    return () => {
+      window.removeEventListener('senai-quota-updated', handleQuotaUpdated)
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('focus', handleFocus)
+      clearInterval(interval)
+    }
   }, [router])
 
   const toggleDarkMode = () => {
@@ -129,8 +198,12 @@ export default function SenAiQuotaPage() {
     return getEffectiveSenaiTier(profile)
   }, [profile])
 
+  const planTier = useMemo(() => getEffectivePlanTier(profile), [profile])
+
   const tierLabel = SENAI_TIER_LABEL[effectiveTier] || 'SenAI'
-  const dailyQuestionLimit = SENAI_TIER_DAILY_LIMIT[effectiveTier] || 10
+  const dailyQuestionLimit = useMemo(() => {
+    return getTotalSenaiDailyLimit(SENAI_TIER_DAILY_LIMIT[effectiveTier] || 10, planTier)
+  }, [effectiveTier, planTier])
   const dailyGraphAiLimit = SENGRAPH_AI_DAILY_LIMIT[effectiveTier] || 0
 
   const remainingQuestions = Math.max(0, dailyQuestionLimit - todayQuestionsCount)
@@ -205,6 +278,16 @@ export default function SenAiQuotaPage() {
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300">
                   {tierLabel}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => fetchQuotaData(true)}
+                  disabled={refreshing}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-black/10 dark:border-white/10 transition shadow-sm"
+                  title="Làm mới số liệu Quota tức thì"
+                >
+                  <RefreshCw className={`h-3 w-3 text-pink-500 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span>{refreshing ? 'Đang cập nhật...' : 'Làm mới'}</span>
+                </button>
               </div>
 
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-quota-heading)' }}>

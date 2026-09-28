@@ -133,6 +133,19 @@ export default function NewHistorySubmissionReviewPage() {
 
     setAiLoadingKey(key)
     try {
+      let token: string | null = null
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        token = session?.access_token || null
+      } catch (authErr) {
+        console.warn('Lỗi lấy session:', authErr)
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const fullMessage = `Hãy giải thích chi tiết phương pháp giải cho ${questionLabel} trong bài thi "${submission.exams?.title || 'Đề thi'}".
 Nội dung câu hỏi: "${userPrompt || '(Xem hình ảnh đính kèm)'}".
 Đáp án đúng: "${typeof correctAns === 'object' ? JSON.stringify(correctAns) : correctAns}".
@@ -141,7 +154,7 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
 
       const res = await fetch('/api/senai-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: fullMessage,
           image: userImg,
@@ -151,8 +164,16 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
       })
 
       const data = await res.json()
-      if (data.reply || data.text) {
+      if (!res.ok || data.error) {
+        setAiExplains((prev) => ({ ...prev, [key]: `⚠️ ${data.error || 'SenAI chưa thể phân tích câu hỏi này ngay bây giờ.'}` }))
+      } else if (data.reply || data.text) {
         setAiExplains((prev) => ({ ...prev, [key]: data.reply || data.text }))
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('senai-quota-updated', { detail: data }))
+          try {
+            localStorage.setItem('senai_quota_updated_at', Date.now().toString())
+          } catch {}
+        }
       } else {
         setAiExplains((prev) => ({ ...prev, [key]: 'SenAI chưa thể phân tích câu hỏi này ngay bây giờ.' }))
       }

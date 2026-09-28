@@ -21,6 +21,7 @@ import {
   Paperclip,
   X,
   BrainCircuit,
+  Brain,
   Crown,
   MessageSquare,
   Copy,
@@ -168,18 +169,34 @@ export default function NewSenAiStudioPage() {
       }
 
       // Lưu user message
-      if (currentSession) {
+      if (currentSession && userId) {
         await supabase.from('senai_studio_messages').insert({
           session_id: currentSession,
+          user_id: userId,
           role: 'user',
           content: text,
         })
       }
 
+      let token: string | null = null
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        token = session?.access_token || null
+      } catch (authErr) {
+        console.warn('Lỗi lấy session:', authErr)
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
       // Gọi API SenAI Chat
       const res = await fetch('/api/senai-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: text,
           deepThink: deepThink,
@@ -187,18 +204,37 @@ export default function NewSenAiStudioPage() {
       })
 
       const data = await res.json()
-      const replyContent = data.reply || data.text || 'Xin lỗi, SenAI không thể xử lý yêu cầu lúc này.'
+
+      if (!res.ok || data.error) {
+        const errText = data.error || 'Xin lỗi, SenAI không thể xử lý yêu cầu lúc này.'
+        setMessages((prev) => [
+          ...prev,
+          { id: (Date.now() + 1).toString(), role: 'model', content: `⚠️ ${errText}` },
+        ])
+        return
+      }
+
+      const replyContent = data.reply || data.text || 'Đã nhận câu hỏi.'
 
       const modelMsg: Message = { id: (Date.now() + 1).toString(), role: 'model', content: replyContent }
       setMessages((prev) => [...prev, modelMsg])
 
       // Lưu model message
-      if (currentSession) {
+      if (currentSession && userId) {
         await supabase.from('senai_studio_messages').insert({
           session_id: currentSession,
+          user_id: userId,
           role: 'model',
           content: replyContent,
         })
+      }
+
+      // Phát sự kiện đồng bộ hạn mức Quota SenAI cho toàn bộ trang web
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('senai-quota-updated', { detail: data }))
+        try {
+          localStorage.setItem('senai_quota_updated_at', Date.now().toString())
+        } catch {}
       }
     } catch (err: any) {
       setMessages((prev) => [
@@ -260,6 +296,14 @@ export default function NewSenAiStudioPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/new-senai"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-pink-500/20 bg-pink-500/10 dark:bg-pink-500/15 px-3 py-2 text-xs font-bold text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 transition shadow-sm"
+            title="Xem hạn mức Quota SenAI"
+          >
+            <Brain className="h-3.5 w-3.5 text-pink-500" />
+            <span>Quota SenAI</span>
+          </Link>
           <button
             type="button"
             onClick={toggleDarkMode}

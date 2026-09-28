@@ -30,6 +30,9 @@ export async function POST(req: Request) {
     const supabaseAdmin = getSupabaseAdmin()
     let activeSessionId = sessionId
 
+    let userLimit = 0
+    let userUsed = 0
+
     // Kiểm tra quota nếu đã đăng nhập
     if (user) {
       const { data: profile } = await supabaseAdmin
@@ -41,6 +44,7 @@ export async function POST(req: Request) {
       const tierDailyLimit = getEffectiveDailyLimit(profile)
       const planTier = getEffectivePlanTier(profile)
       const dailyLimit = getTotalSenaiDailyLimit(tierDailyLimit, planTier)
+      userLimit = dailyLimit
 
       const startOfToday = new Date()
       startOfToday.setHours(0, 0, 0, 0)
@@ -50,7 +54,8 @@ export async function POST(req: Request) {
         .eq('user_id', user.id)
         .gte('asked_at', startOfToday.toISOString())
 
-      if ((count || 0) >= dailyLimit) {
+      const currentCount = count || 0
+      if (currentCount >= dailyLimit) {
         return NextResponse.json(
           {
             error: `Bạn đã dùng hết ${dailyLimit} lượt hỏi SenAI hôm nay. Nâng cấp gói tại Quản lý Quota (/new-senai) để hỏi thêm.`,
@@ -89,6 +94,7 @@ export async function POST(req: Request) {
 
       // Ghi nhận lượt hỏi
       await supabaseAdmin.from('senai_question_log').insert({ user_id: user.id })
+      userUsed = currentCount + 1
     }
 
     // Khởi tạo Gemini
@@ -130,6 +136,9 @@ Nhiệm vụ:
       reply: replyText,
       sessionId: activeSessionId || null,
       savedToStudio: !!(user && activeSessionId),
+      used: userUsed,
+      limit: userLimit,
+      remaining: user ? Math.max(0, userLimit - userUsed) : null,
     })
   } catch (error: any) {
     console.error('Sen Chat Bubble API error:', error)
