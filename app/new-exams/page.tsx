@@ -47,6 +47,8 @@ type ExamItem = {
   access_code?: string | null
   is_vip?: boolean | null
   require_seb?: boolean | null
+  created_by?: string | null
+  format?: string | null
 }
 
 const EXAM_TYPES = ['Tất cả', 'THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL']
@@ -59,6 +61,8 @@ export default function NewExamsPage() {
   const [userSubmissions, setUserSubmissions] = useState<{ exam_id: string }[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedType, setSelectedType] = useState('Tất cả')
+
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Nhập mã truy cập đề riêng tư
   const [accessCode, setAccessCode] = useState('')
@@ -84,6 +88,7 @@ export default function NewExamsPage() {
         return
       }
 
+      setCurrentUserId(user.id)
       await ensureStudentProfile(user.id)
 
       // 1. Lấy danh sách toàn bộ đề thi từ hệ thống
@@ -101,17 +106,19 @@ export default function NewExamsPage() {
       if (examsError) {
         console.error('Error fetching exams:', examsError)
       } else {
-        // Lọc hiển thị đề công khai:
+        // Lọc hiển thị đề:
+        // - Đề do chính học sinh/người dùng tạo ra (created_by === user.id) thì luôn thấy (Chế độ ngầm)
         // - Không bị đặt cờ ẩn (is_hidden !== true)
         // - Không phải đề riêng của lớp (không có mã 12 số định danh lớp)
-        const publicExams = (examsData || []).filter((ex: any) => {
+        const visibleExams = (examsData || []).filter((ex: any) => {
+          if (ex.created_by && ex.created_by === user.id) return true
           if (ex.is_hidden === true) return false
           const code = String(ex.exam_code || ex.access_code || '')
           const is12DigitClassExam = code.length === 12 && /^\d{12}$/.test(code)
           if (is12DigitClassExam) return false
           return true
         })
-        setExams(publicExams)
+        setExams(visibleExams)
       }
 
       setUserSubmissions(submissionsData || [])
@@ -237,6 +244,12 @@ export default function NewExamsPage() {
             >
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>
+            <Link
+              href="/new-setup-course"
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-black text-white shadow-md transition hover:scale-105"
+            >
+              <Sparkles className="h-4 w-4" /> Soạn Đề KaTeX / Quản Lý
+            </Link>
             <Link
               href="/new-history"
               className="inline-flex items-center gap-2 rounded-2xl border border-black/10 dark:border-white/15 bg-white/80 dark:bg-slate-800/80 px-4 py-2.5 text-xs font-bold shadow-sm transition hover:bg-black/5"
@@ -364,7 +377,17 @@ export default function NewExamsPage() {
                           {exam.exam_type}
                         </span>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {exam.created_by && exam.created_by === currentUserId && (
+                            <span className="flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-2 py-0.5 text-[10px] font-black uppercase shadow-2xs">
+                              🎯 Của bạn
+                            </span>
+                          )}
+                          {!exam.pdf_url && (
+                            <span className="flex items-center gap-1 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 px-2 py-0.5 text-[10px] font-bold">
+                              ✨ KaTeX
+                            </span>
+                          )}
                           {exam.require_seb && (
                             <span className="flex items-center gap-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-2 py-0.5 text-[10px] font-black uppercase shadow-2xs">
                               🛡️ SEB
