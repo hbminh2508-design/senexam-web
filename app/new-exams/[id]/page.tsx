@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useMemo } from 'react'
+import React, { useEffect, useState, useRef, useMemo, Component } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -10,7 +10,78 @@ import { getModernThemeVars } from '@/app/components/modernTheme'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
+
+interface ErrorBoundaryProps {
+  fallback?: React.ReactNode
+  children: React.ReactNode
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+}
+
+class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: any) {
+    console.warn('LaTeX Markdown render error in exam room:', error)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        this.props.fallback || (
+          <span className="text-rose-500 text-xs italic">[Lỗi hiển thị công thức toán]</span>
+        )
+      )
+    }
+    return this.props.children
+  }
+}
+
+const SafeMathRenderer = React.memo(
+  ({
+    content,
+    className,
+    gfm = true,
+  }: {
+    content: string
+    className?: string
+    gfm?: boolean
+  }) => {
+    const remarkPlugins = gfm ? [remarkMath, remarkGfm] : [remarkMath]
+    const rehypePlugins: any[] = [
+      [
+        rehypeKatex,
+        {
+          throwOnError: false,
+          errorColor: '#ef4444',
+          strict: false,
+        },
+      ],
+    ]
+
+    return (
+      <MarkdownErrorBoundary fallback={<span className="text-xs font-mono">{content}</span>}>
+        <div className={className}>
+          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+            {content}
+          </ReactMarkdown>
+        </div>
+      </MarkdownErrorBoundary>
+    )
+  }
+)
+SafeMathRenderer.displayName = 'SafeMathRenderer'
 import {
   Clock,
   ArrowLeft,
@@ -51,7 +122,7 @@ const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-ne
 export default function NewExamRoomPage() {
   const params = useParams()
   const router = useRouter()
-  const examId = params.id as string
+  const examId = (params?.id as string) || ''
 
   const [exam, setExam] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -228,19 +299,33 @@ export default function NewExamRoomPage() {
         struct = []
       }
     }
-    if (!Array.isArray(struct)) return []
-    return struct.filter((s: any) => s && ((s.questionCount || 0) > 0 || (s.questions && s.questions.length > 0)))
+    if (!Array.isArray(struct)) {
+      if (struct && typeof struct === 'object' && Array.isArray(struct.sections)) {
+        struct = struct.sections
+      } else {
+        return []
+      }
+    }
+    return struct.filter(
+      (s: any) =>
+        s &&
+        ((parseInt(s?.questionCount) || 0) > 0 || (Array.isArray(s?.questions) && s.questions.length > 0))
+    )
   }, [exam])
 
   // Offset câu hỏi toàn cục theo từng phần
   const computedOffsets = useMemo(() => {
     const offsets: Record<string, number> = {}
     let running = 0
-    activeSections.forEach((section: any) => {
-      offsets[section.id] = running
-      const qCount = section.questionCount || (section.questions?.length) || 0
-      running += qCount
-    })
+    if (Array.isArray(activeSections)) {
+      activeSections.forEach((section: any) => {
+        if (!section?.id) return
+        offsets[section.id] = running
+        const qCount =
+          parseInt(section.questionCount) || (Array.isArray(section.questions) ? section.questions.length : 0) || 0
+        running += qCount
+      })
+    }
     return offsets
   }, [activeSections])
 
@@ -248,13 +333,13 @@ export default function NewExamRoomPage() {
   const isKatexExam = useMemo(() => {
     if (!exam) return false
     if (exam.format === 'katex') return true
-    const hasQuestionsInStructure = exam.exam_structure?.some(
-      (s: any) => Array.isArray(s.questions) && s.questions.length > 0
-    )
+    const hasQuestionsInStructure =
+      Array.isArray(activeSections) &&
+      activeSections.some((s: any) => Array.isArray(s?.questions) && s.questions.length > 0)
     if (hasQuestionsInStructure) return true
     if (!exam.drive_file_id && !exam.pdf_url) return true
     return false
-  }, [exam])
+  }, [exam, activeSections])
 
   // Tính toán danh sách phẳng các câu hỏi để hiển thị Question Map Palette & KaTeX Stepper
   const flatQuestions = useMemo(() => {
@@ -270,20 +355,26 @@ export default function NewExamRoomPage() {
       type: string
     }> = []
 
+    if (!Array.isArray(activeSections)) return list
+
     activeSections.forEach((section: any, sIdx: number) => {
-      const qCount = section.questionCount || (section.questions?.length) || 0
-      const offset = computedOffsets[section.id] || 0
+      if (!section) return
+      const qCount =
+        parseInt(section.questionCount) || (Array.isArray(section.questions) ? section.questions.length : 0) || 0
+      const offset = (computedOffsets && computedOffsets[section.id]) || 0
       for (let i = 0; i < qCount; i++) {
-        const key = `${section.id}-${i}`
-        const qData = section.questions?.[i] || null
+        const key = `${section.id || sIdx}-${i}`
+        const qData = Array.isArray(section.questions) ? section.questions[i] : null
         let qType = qData?.type || section.type || 'single_choice'
         if (section.type === 'mixed' && section.mixedRanges && Array.isArray(section.mixedRanges)) {
-          const range = section.mixedRanges.find((r: any) => i + 1 >= r.start && i + 1 <= r.end)
-          if (range) qType = range.type || 'single_choice'
+          const range = section.mixedRanges.find(
+            (r: any) => i + 1 >= (Number(r?.start) || 0) && i + 1 <= (Number(r?.end) || 999)
+          )
+          if (range?.type) qType = range.type
         }
         list.push({
           key,
-          sectionId: section.id,
+          sectionId: section.id || `sec-${sIdx}`,
           sectionName: section.name || section.title || `Phần ${sIdx + 1}`,
           sectionTotalPoints: section.totalPoints,
           qIdx: i,
@@ -508,7 +599,7 @@ export default function NewExamRoomPage() {
                 </span>
               )}
               <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-3 py-1 text-xs font-bold border border-indigo-500/20">
-                {exam.exam_type}
+                {exam?.exam_type || 'Đề thi'}
               </span>
             </div>
           </div>
@@ -518,10 +609,10 @@ export default function NewExamRoomPage() {
               <FileQuestion className="h-8 w-8" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-black" style={{ fontFamily: 'var(--font-newroom-heading)' }}>
-              {exam.title}
+              {exam?.title || 'Đề thi SenExam'}
             </h1>
             <p className="mt-2 text-xs text-[#6B7280] dark:text-slate-400 font-semibold">
-              Thời gian: <strong>{exam.duration || 50} phút</strong> • Tổng số câu: <strong>{questionMeta.totalCount} câu</strong>
+              Thời gian: <strong>{exam?.duration || 50} phút</strong> • Tổng số câu: <strong>{questionMeta.totalCount} câu</strong>
             </p>
           </div>
 
@@ -598,10 +689,10 @@ export default function NewExamRoomPage() {
           </Link>
           <div className="truncate">
             <h2 className="text-sm sm:text-base font-black truncate" style={{ fontFamily: 'var(--font-newroom-heading)' }}>
-              {exam.title}
+              {exam?.title || 'Đề thi'}
             </h2>
             <div className="flex items-center gap-2 text-[10px] text-[#6B7280] dark:text-slate-400 font-bold uppercase tracking-wider">
-              <span>{exam.exam_type}</span>
+              <span>{exam?.exam_type || 'THPT'}</span>
               <span>•</span>
               <span>Đã làm {answeredCount}/{flatQuestions.length} câu</span>
               {isKatexExam && <span className="text-emerald-500 font-black">KaTeX Live</span>}
@@ -668,9 +759,10 @@ export default function NewExamRoomPage() {
         {/* CỘT TRÁI: ĐỀ THI & LỰA CHỌN ĐÁP ÁN (KATEX HOẶC PDF) */}
         {/* ======================================================== */}
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50 dark:bg-slate-950/40 border-r border-black/10 dark:border-white/10">
-          {isKatexExam && currentQ ? (
-            /* GIAO DIỆN THI KATEX TRỰC TIẾP */
-            <div className="flex-1 flex flex-col overflow-hidden">
+          {isKatexExam ? (
+            currentQ ? (
+              /* GIAO DIỆN THI KATEX TRỰC TIẾP */
+              <div className="flex-1 flex flex-col overflow-hidden">
               {/* Stepper Top Bar */}
               <div className="h-12 shrink-0 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 px-4 sm:px-6 flex items-center justify-between backdrop-blur-md">
                 <div className="flex items-center gap-2">
@@ -749,9 +841,9 @@ export default function NewExamRoomPage() {
                   </div>
 
                   <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-sans select-text">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {currentQ.qData?.content || `Câu hỏi số ${currentQ.globalNum}`}
-                    </ReactMarkdown>
+                    <SafeMathRenderer
+                      content={currentQ.qData?.text || currentQ.qData?.content || `Câu hỏi số ${currentQ.globalNum}`}
+                    />
                   </div>
                 </div>
 
@@ -842,9 +934,7 @@ export default function NewExamRoomPage() {
                               )}
                             </span>
                             <div className="flex-1 pt-1 prose prose-sm dark:prose-invert max-w-none text-sm font-semibold text-slate-800 dark:text-slate-200">
-                              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                {optContent}
-                              </ReactMarkdown>
+                              <SafeMathRenderer content={optContent} gfm={false} />
                             </div>
                           </button>
                         )
@@ -875,9 +965,7 @@ export default function NewExamRoomPage() {
                                   {sub}
                                 </span>
                                 <div className="prose prose-sm dark:prose-invert max-w-none text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {subContent}
-                                  </ReactMarkdown>
+                                  <SafeMathRenderer content={subContent} gfm={false} />
                                 </div>
                               </div>
 
@@ -1029,9 +1117,7 @@ export default function NewExamRoomPage() {
                                   </span>
                                 </div>
                                 <div className="prose prose-sm dark:prose-invert max-w-none text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-sans select-text">
-                                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {currentQ.qData.explanation}
-                                  </ReactMarkdown>
+                                  <SafeMathRenderer content={currentQ.qData.explanation} />
                                 </div>
                               </div>
                             ) : (
@@ -1048,7 +1134,14 @@ export default function NewExamRoomPage() {
               </div>
             </div>
           ) : (
-            /* GIAO DIỆN XEM PDF NẾU ĐỀ THI LÀ PDF */
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
+              <FileQuestion className="h-12 w-12 text-slate-400 mb-3 opacity-60" />
+              <h3 className="font-bold text-base text-slate-700 dark:text-slate-300">Đề thi chưa có câu hỏi</h3>
+              <p className="text-xs text-slate-500 mt-1">Đề thi này chưa được cấu hình câu hỏi KaTeX hoặc đang cập nhật.</p>
+            </div>
+          )
+        ) : (
+          /* GIAO DIỆN XEM PDF NẾU ĐỀ THI LÀ PDF */
             <div className="flex-1 flex flex-col bg-slate-900 relative">
               {cachedPdfUrl ? (
                 <div className="relative w-full h-full flex flex-col">
