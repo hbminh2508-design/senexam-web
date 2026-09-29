@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, Component } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -58,6 +58,129 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
+
+interface ErrorBoundaryProps {
+  fallback?: React.ReactNode
+  children: React.ReactNode
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+}
+
+class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: any) {
+    console.warn('LaTeX Markdown render error caught:', error)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        this.props.fallback || (
+          <span className="text-rose-500 text-xs italic">[Lỗi hiển thị công thức toán]</span>
+        )
+      )
+    }
+    return this.props.children
+  }
+}
+
+export const SafeMathRenderer = React.memo(
+  ({
+    content,
+    className,
+    gfm = true,
+  }: {
+    content: string
+    className?: string
+    gfm?: boolean
+  }) => {
+    const remarkPlugins = gfm ? [remarkMath, remarkGfm] : [remarkMath]
+    const rehypePlugins: any[] = [
+      [
+        rehypeKatex,
+        {
+          throwOnError: false,
+          errorColor: '#ef4444',
+          strict: false,
+        },
+      ],
+    ]
+
+    return (
+      <MarkdownErrorBoundary fallback={<span className="text-xs font-mono">{content}</span>}>
+        <div className={className}>
+          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+            {content}
+          </ReactMarkdown>
+        </div>
+      </MarkdownErrorBoundary>
+    )
+  }
+)
+SafeMathRenderer.displayName = 'SafeMathRenderer'
+
+export const MathKeyButton = React.memo(
+  ({ k, onInsert }: { k: any; onInsert: (val: string) => void }) => {
+    return (
+      <button
+        type="button"
+        onClick={() => onInsert(k.insert)}
+        className="h-10 min-w-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:border-indigo-400 text-xs font-bold transition flex items-center justify-center shadow-sm active:scale-95 cursor-pointer"
+        title={`Chèn: ${k.insert}`}
+      >
+        <SafeMathRenderer content={`$${k.display}$`} gfm={false} />
+      </button>
+    )
+  }
+)
+MathKeyButton.displayName = 'MathKeyButton'
+
+export function getExamQuestionCount(exam: any): number {
+  if (!exam) return 0
+  try {
+    let struct = exam.exam_structure
+    if (typeof struct === 'string') {
+      try {
+        struct = JSON.parse(struct)
+      } catch {
+        struct = []
+      }
+    }
+    if (Array.isArray(struct)) {
+      return struct.reduce((acc: number, s: any) => {
+        const count =
+          parseInt(s?.questionCount) ||
+          (Array.isArray(s?.questions) ? s.questions.length : 0) ||
+          0
+        return acc + count
+      }, 0)
+    }
+    if (struct && typeof struct === 'object') {
+      if (Array.isArray(struct.sections)) {
+        return struct.sections.reduce((acc: number, s: any) => {
+          const count =
+            parseInt(s?.questionCount) ||
+            (Array.isArray(s?.questions) ? s.questions.length : 0) ||
+            0
+          return acc + count
+        }, 0)
+      }
+    }
+  } catch {
+    return 0
+  }
+  return 0
+}
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-setup-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-setup-body' })
@@ -419,37 +542,60 @@ export default function NewSetupCoursePage() {
 
   // Thống kê tổng điểm và tổng số câu của toàn đề
   const totalExamPoints = useMemo(() => {
-    return examSections.reduce((acc, sec) => acc + (Number(sec.totalPoints) || 0), 0)
+    if (!Array.isArray(examSections)) return 0
+    return examSections.reduce((acc, sec) => acc + (Number(sec?.totalPoints) || 0), 0)
   }, [examSections])
 
   const totalQuestionCount = useMemo(() => {
-    return examSections.reduce((acc, sec) => acc + (parseInt(String(sec.questionCount)) || 0), 0)
+    if (!Array.isArray(examSections)) return 0
+    return examSections.reduce((acc, sec) => acc + (parseInt(String(sec?.questionCount)) || 0), 0)
   }, [examSections])
 
   const themeVars = useMemo(() => getModernThemeVars('emerald', isDark), [isDark])
 
   // Kiểm tra quyền và tải danh sách đề
   useEffect(() => {
-    const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
-    if (dark) document.documentElement.classList.add('dark')
-    setIsDark(dark)
+    let isMounted = true
+
+    const dark =
+      typeof window !== 'undefined' &&
+      (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark')
+    if (dark && typeof document !== 'undefined') document.documentElement.classList.add('dark')
+    setIsDark(Boolean(dark))
 
     const initPage = async () => {
       try {
-        const { data: auth } = await supabase.auth.getUser()
-        const user = auth.user
-        if (!user) {
+        const { data: auth, error: authErr } = await supabase.auth.getUser()
+        if (authErr || !auth?.user) {
           router.replace('/new-sign')
           return
         }
 
-        await ensureStudentProfile(user.id)
+        const user = auth.user
+        if (!isMounted) return
         setCurrentUser(user)
 
-        // Kiểm tra role người dùng
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-        const role = (profile?.role || 'student') as 'admin' | 'collab' | 'teacher' | 'student'
-        setUserRole(role)
+        try {
+          await ensureStudentProfile(user.id)
+        } catch (e) {
+          console.warn('ensureStudentProfile warning:', e)
+        }
+
+        // Kiểm tra role người dùng an toàn (tránh văng lỗi single())
+        let role: 'admin' | 'collab' | 'teacher' | 'student' = 'student'
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle()
+          if (profile?.role) {
+            role = profile.role as 'admin' | 'collab' | 'teacher' | 'student'
+          }
+        } catch (e) {
+          console.warn('Lỗi lấy role profile:', e)
+        }
+        if (isMounted) setUserRole(role)
 
         // Tải danh sách đề thi:
         // - Admin/Colab/Teacher: tải toàn bộ đề thi trong hệ thống
@@ -460,8 +606,12 @@ export default function NewSetupCoursePage() {
         }
 
         const { data: exData, error: exErr } = await query
-        if (!exErr && exData) {
-          setExamsList(exData)
+        if (isMounted) {
+          if (!exErr && Array.isArray(exData)) {
+            setExamsList(exData)
+          } else {
+            setExamsList([])
+          }
         }
 
         // Tải danh sách thư mục SEB
@@ -469,7 +619,9 @@ export default function NewSetupCoursePage() {
           const fRes = await fetch('/api/seb/folders')
           if (fRes.ok) {
             const fData = await fRes.json()
-            if (fData?.folders && Array.isArray(fData.folders)) setFolders(fData.folders)
+            if (isMounted && fData?.folders && Array.isArray(fData.folders)) {
+              setFolders(fData.folders)
+            }
           }
         } catch (e) {
           console.warn('Lỗi tải folders:', e)
@@ -477,23 +629,29 @@ export default function NewSetupCoursePage() {
       } catch (err) {
         console.error('Lỗi khởi tạo Setup Course:', err)
       } finally {
-        setLoading(false)
+        if (isMounted) setLoading(false)
       }
     }
 
     initPage()
+
+    return () => {
+      isMounted = false
+    }
   }, [router])
 
-  // Lọc đề thi hiển thị
+  // Lọc đề thi hiển thị an toàn
   const filteredExams = useMemo(() => {
+    if (!Array.isArray(examsList)) return []
     const q = examSearch.trim().toLowerCase()
     if (!q) return examsList
-    return examsList.filter(
-      (e) =>
-        e.title?.toLowerCase().includes(q) ||
-        e.exam_type?.toLowerCase().includes(q) ||
-        e.access_code?.toLowerCase().includes(q)
-    )
+    return examsList.filter((e) => {
+      if (!e) return false
+      const titleMatch = e.title ? String(e.title).toLowerCase().includes(q) : false
+      const typeMatch = e.exam_type ? String(e.exam_type).toLowerCase().includes(q) : false
+      const codeMatch = e.access_code ? String(e.access_code).toLowerCase().includes(q) : false
+      return titleMatch || typeMatch || codeMatch
+    })
   }, [examsList, examSearch])
 
   // Toggle Dark Mode
@@ -1120,7 +1278,7 @@ export default function NewSetupCoursePage() {
     setExamSections((prev) => {
       const next = [...prev]
       const targetSec = { ...next[secIdx] }
-      const currentQ = { ...(targetSec.correctAnswers[qIdx] || {}) }
+      const currentQ = { ...(targetSec.correctAnswers?.[qIdx] || {}) }
       currentQ[subLabel] = val
       targetSec.correctAnswers = { ...targetSec.correctAnswers, [qIdx]: currentQ }
       next[secIdx] = targetSec
@@ -1478,18 +1636,15 @@ export default function NewSetupCoursePage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredExams.map((exam) => {
+                {filteredExams.map((exam, idx) => {
+                  if (!exam) return null
                   const isKatexFormat = !exam.drive_file_id && !exam.pdf_url
-                  const questionCount =
-                    exam.exam_structure?.reduce(
-                      (acc: number, s: any) => acc + (s.questions?.length || s.questionCount || 0),
-                      0
-                    ) || 0
+                  const questionCount = getExamQuestionCount(exam)
 
                   return (
                     <div
-                      key={exam.id}
-                      className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                      key={exam.id || `exam-${idx}`}
+                      className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between transform-gpu"
                     >
                       <div>
                         {/* Tags */}
@@ -1762,17 +1917,11 @@ export default function NewSetupCoursePage() {
               {/* Lưới các nút phím render bằng KaTeX chuẩn xịn */}
               <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
                 {MATH_KEYBOARD_TABS.find((t) => t.id === activeKeyboardTab)?.keys.map((k, kIdx) => (
-                  <button
-                    key={kIdx}
-                    type="button"
-                    onClick={() => handleInsertMathKey(k.insert)}
-                    className="h-10 min-w-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:border-indigo-400 text-xs font-bold transition flex items-center justify-center shadow-sm active:scale-95"
-                    title={`Chèn: ${k.insert}`}
-                  >
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {`$${k.display}$`}
-                    </ReactMarkdown>
-                  </button>
+                  <MathKeyButton
+                    key={k.insert + '-' + kIdx}
+                    k={k}
+                    onInsert={handleInsertMathKey}
+                  />
                 ))}
               </div>
             </div>
@@ -1886,9 +2035,7 @@ export default function NewSetupCoursePage() {
                         <Eye className="h-3 w-3" /> Xem trước KaTeX trực tiếp
                       </div>
                       <div className="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed">
-                        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
-                          {q.text || '*(Chưa có nội dung câu hỏi)*'}
-                        </ReactMarkdown>
+                        <SafeMathRenderer content={q.text || '*(Chưa có nội dung câu hỏi)*'} />
                       </div>
                     </div>
                   </div>
@@ -1951,9 +2098,7 @@ export default function NewSetupCoursePage() {
 
                                 {optText && (
                                   <div className="mt-1 text-[11px] text-slate-600 dark:text-slate-300 border-t border-black/5 dark:border-white/5 pt-1">
-                                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                      {optText}
-                                    </ReactMarkdown>
+                                    <SafeMathRenderer content={optText} gfm={false} />
                                   </div>
                                 )}
                               </div>
@@ -1990,9 +2135,7 @@ export default function NewSetupCoursePage() {
                         <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 block mb-1">
                           Xem trước lời giải:
                         </span>
-                        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
-                          {q.explanation}
-                        </ReactMarkdown>
+                        <SafeMathRenderer content={q.explanation} />
                       </div>
                     )}
                   </div>
@@ -2941,7 +3084,7 @@ export default function NewSetupCoursePage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                           {Array.from({ length: qCount }).map((_, qIdx) => {
-                            const ans = section.correctAnswers[qIdx]
+                            const ans = section.correctAnswers?.[qIdx]
                             const rawQType =
                               section.questionTypeMode === 'custom' && section.questionTypes?.[qIdx]
                                 ? section.questionTypes[qIdx]

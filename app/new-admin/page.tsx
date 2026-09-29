@@ -310,11 +310,13 @@ export default function NewAdminPage() {
 
   // Thống kê tổng điểm và tổng số câu của toàn đề
   const totalExamPoints = useMemo(() => {
-    return examSections.reduce((acc, sec) => acc + (Number(sec.totalPoints) || 0), 0)
+    if (!Array.isArray(examSections)) return 0
+    return examSections.reduce((acc, sec) => acc + (Number(sec?.totalPoints) || 0), 0)
   }, [examSections])
 
   const totalQuestionCount = useMemo(() => {
-    return examSections.reduce((acc, sec) => acc + (parseInt(String(sec.questionCount)) || 0), 0)
+    if (!Array.isArray(examSections)) return 0
+    return examSections.reduce((acc, sec) => acc + (parseInt(String(sec?.questionCount)) || 0), 0)
   }, [examSections])
 
   // ANNOUNCEMENTS MANAGER

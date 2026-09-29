@@ -120,7 +120,7 @@ export default function NewExamRoomPage() {
         grade: pData?.grade || '12',
       })
 
-      const { data, error } = await supabase.from('exams').select('*').eq('id', examId).single()
+      const { data, error } = await supabase.from('exams').select('*').eq('id', examId).maybeSingle()
       if (error || !data) {
         alert('Không tìm thấy đề thi hoặc đề thi đã bị xóa!')
         router.replace('/new-exams')
@@ -219,8 +219,17 @@ export default function NewExamRoomPage() {
 
   // Chỉ lấy các phần có câu hỏi
   const activeSections = useMemo(() => {
-    if (!exam?.exam_structure || !Array.isArray(exam.exam_structure)) return []
-    return exam.exam_structure.filter((s: any) => s && ((s.questionCount || 0) > 0 || (s.questions && s.questions.length > 0)))
+    if (!exam?.exam_structure) return []
+    let struct = exam.exam_structure
+    if (typeof struct === 'string') {
+      try {
+        struct = JSON.parse(struct)
+      } catch {
+        struct = []
+      }
+    }
+    if (!Array.isArray(struct)) return []
+    return struct.filter((s: any) => s && ((s.questionCount || 0) > 0 || (s.questions && s.questions.length > 0)))
   }, [exam])
 
   // Offset câu hỏi toàn cục theo từng phần
