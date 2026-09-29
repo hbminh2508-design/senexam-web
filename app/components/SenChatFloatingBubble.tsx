@@ -47,9 +47,52 @@ export default function SenChatFloatingBubble() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Không hiển thị bong bóng chat trên trang thi bảo mật SEB hoặc ứng dụng riêng BREATHE U (cả pathname lẫn subdomain)
-  const isBreatheHost = typeof window !== 'undefined' && (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
-  const isExcluded = pathname?.startsWith('/seb-exam') || pathname?.startsWith('/breathe-u') || isBreatheHost
+  // Không hiển thị bong bóng chat Sen AI ở các nơi quan trọng:
+  // 1. Tất cả các phòng thi & làm bài thi (chống gian lận, bảo mật thi cử và tránh che khuất đề thi):
+  //    - /new-exams/[id] (phòng thi mới)
+  //    - /legacy-exams/[id] (phòng thi cũ)
+  //    - /seb-exam (phòng thi bảo mật Safe Exam Browser)
+  // 2. Chế độ học tập trung (Pomodoro / Focus mode - chống xao nhãng):
+  //    - /new-focus, /legacy-focus
+  // 3. Phòng thí nghiệm ảo (Virtual Labs - toàn màn hình mô phỏng):
+  //    - /new-labs, /legacy-phongthinghiem
+  // 4. Các trang xác thực & đăng nhập:
+  //    - /new-sign, /login, /seb-login, /fepn-login, /new-reset-password, /fepn-reset-password
+  // 5. Chính trang SenAI Studio (đã có khung chat toàn màn hình):
+  //    - /new-senai-studio, /legacy-senai-studio, /senai-studio
+  // 6. Cổng thiết lập khóa học & soạn đề KaTeX (tránh che bàn phím ảo toán học):
+  //    - /new-setup-course
+  // 7. Ứng dụng riêng BREATHE U (cả pathname lẫn subdomain):
+  //    - /breathe-u, breathu.senexam.me, breatheu.senexam.me
+  const isBreatheHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
+
+  const isExamRoom = Boolean(
+    (pathname?.startsWith('/new-exams/') && pathname !== '/new-exams') ||
+    (pathname?.startsWith('/legacy-exams/') && pathname !== '/legacy-exams') ||
+    pathname?.startsWith('/seb-exam')
+  )
+
+  const isExcluded = Boolean(
+    isBreatheHost ||
+    isExamRoom ||
+    pathname?.startsWith('/new-focus') ||
+    pathname?.startsWith('/legacy-focus') ||
+    pathname?.startsWith('/new-labs') ||
+    pathname?.startsWith('/legacy-phongthinghiem') ||
+    pathname?.startsWith('/new-senai-studio') ||
+    pathname?.startsWith('/legacy-senai-studio') ||
+    pathname?.startsWith('/senai-studio') ||
+    pathname?.startsWith('/new-setup-course') ||
+    pathname?.startsWith('/new-sign') ||
+    pathname?.startsWith('/login') ||
+    pathname?.startsWith('/seb-login') ||
+    pathname?.startsWith('/fepn-login') ||
+    pathname?.startsWith('/new-reset-password') ||
+    pathname?.startsWith('/fepn-reset-password') ||
+    pathname?.startsWith('/breathe-u')
+  )
 
   useEffect(() => {
     if (isOpen) {
