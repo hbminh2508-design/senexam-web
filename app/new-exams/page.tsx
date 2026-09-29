@@ -244,12 +244,7 @@ export default function NewExamsPage() {
             >
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>
-            <Link
-              href="/new-setup-course"
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-black text-white shadow-md transition hover:scale-105"
-            >
-              <Sparkles className="h-4 w-4" /> Soạn Đề KaTeX / Quản Lý
-            </Link>
+
             <Link
               href="/new-history"
               className="inline-flex items-center gap-2 rounded-2xl border border-black/10 dark:border-white/15 bg-white/80 dark:bg-slate-800/80 px-4 py-2.5 text-xs font-bold shadow-sm transition hover:bg-black/5"

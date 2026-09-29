@@ -55,6 +55,16 @@ const ALL_FEATURES: FeatureItem[] = [
     category: 'study',
   },
   {
+    key: 'setup-course',
+    title: 'Soạn đề & Khóa học',
+    desc: 'Soạn đề KaTeX, tải đề PDF & SEB, quản lý thí sinh làm bài.',
+    href: '/new-setup-course',
+    tone: 'from-emerald-400 to-teal-600',
+    badge: 'Mới',
+    icon: Sparkles,
+    category: 'study',
+  },
+  {
     key: 'history',
     title: 'Lịch sử bài thi',
     desc: 'Tra cứu bảng điểm, xem lại lời giải chi tiết và tải đề thi PDF.',

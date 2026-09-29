@@ -93,6 +93,16 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'study',
   },
   {
+    key: 'setup-course',
+    title: 'Soạn Đề & Khóa Học',
+    description: 'Soạn đề KaTeX trực tiếp, tải đề PDF & SEB, cấu hình kỳ thi và quản lý thí sinh.',
+    href: '/new-setup-course',
+    tone: 'from-[#10B981] via-[#059669] to-[#047857]',
+    badge: 'Mới',
+    icon: Sparkles,
+    category: 'study',
+  },
+  {
     key: 'new-history',
     title: 'Lịch sử bài thi',
     description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết và tải đề thi PDF.',
@@ -1208,8 +1218,8 @@ export default function NewDashboardPage() {
                 </Link>
               </div>
 
-              {/* Lối tắt: Lịch sử làm bài, Kho đề thi mới & Hồ sơ cá nhân */}
-              <div className="mt-3 grid grid-cols-3 gap-2">
+              {/* Lối tắt: Lịch sử làm bài, Kho đề, Soạn đề & Hồ sơ cá nhân */}
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Link
                   href="/new-history"
                   className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
@@ -1221,6 +1231,12 @@ export default function NewDashboardPage() {
                   className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
                 >
                   <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề
+                </Link>
+                <Link
+                  href="/new-setup-course"
+                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 py-2 px-1.5 text-[11px] font-bold transition hover:bg-emerald-500/20 text-center"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Soạn đề
                 </Link>
                 <Link
                   href="/new-profile"

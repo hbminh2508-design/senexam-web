@@ -296,11 +296,12 @@ export default function NewAdminPage() {
 
   // Danh sách các Thư Mục Con để gán đề
   const allChildFolders = useMemo(() => {
+    if (!Array.isArray(folders)) return []
     const list: any[] = []
     folders.forEach((parent: any) => {
-      if (parent.children) {
+      if (parent && Array.isArray(parent.children)) {
         parent.children.forEach((child: any) => {
-          list.push({ ...child, parentName: parent.name })
+          list.push({ ...child, parentName: parent.name || 'Thư mục' })
         })
       }
     })
@@ -356,102 +357,109 @@ export default function NewAdminPage() {
     const uptimeTimer = setInterval(() => setUptimeSeconds((u) => u + 1), 1000)
 
     const initAdmin = async () => {
-      const { data: auth } = await supabase.auth.getUser()
-      const user = auth.user
-      if (!user) {
-        router.replace('/new-sign')
-        return
-      }
-
-      await ensureStudentProfile(user.id)
-      setCurrentUserId(user.id)
-
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      const role = profile?.role || 'student'
-      setUserRole(role)
-
-      if (role !== 'admin' && role !== 'collab') {
-        alert('Bạn không có quyền truy cập vào cổng quản trị!')
-        router.replace('/new-dashboard')
-        return
-      }
-
-      setIsAdmin(true)
-
-      // Fetch 100% REAL DATA from Supabase
-      const [
-        usersCount,
-        subsCount,
-        examsCount,
-        codesData,
-        examsData,
-        usersData,
-        announcementsData,
-        feedbackData,
-        recentSubsData,
-        activeProfilesData,
-      ] = await Promise.all([
-        supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('submissions').select('id', { count: 'exact', head: true }),
-        supabase.from('exams').select('id', { count: 'exact', head: true }),
-        supabase.from('gift_codes').select('*').order('created_at', { ascending: false }).limit(100),
-        supabase.from('exams').select('*').order('created_at', { ascending: false }).limit(100),
-        supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(100),
-        supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(50),
-        supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(50),
-        supabase
-          .from('submissions')
-          .select('id, user_id, exam_id, score, is_completed, submitted_at, created_at, tab_switches, blur_count, exams(title), profiles(full_name, email)')
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('profiles')
-          .select('id, updated_at')
-          .gte('updated_at', new Date(Date.now() - 30 * 60 * 1000).toISOString()),
-      ])
-
-      setStats({
-        totalUsers: usersCount.count || 0,
-        totalSubmissions: subsCount.count || 0,
-        totalExams: examsCount.count || 0,
-        totalCodes: codesData.data?.length || 0,
-        totalAnnouncements: announcementsData.data?.length || 0,
-        totalFeedback: feedbackData.data?.length || 0,
-      })
-
-      setGiftCodes(codesData.data || [])
-      setExamsList(examsData.data || [])
-      setUsersList(usersData.data || [])
-      setAnnouncementsList(announcementsData.data || [])
-      setFeedbackList(feedbackData.data || [])
-      setOnlineCount(Math.max(1, activeProfilesData.data?.length || 1))
-
-      // Fetch folders for exam categories
       try {
-        const fRes = await fetch('/api/seb/folders')
-        const fData = await fRes.json()
-        if (fData?.folders) setFolders(fData.folders)
-      } catch (e) {
-        console.warn('Lỗi tải folders:', e)
-      }
-
-      // Parse real examinees from recent submissions
-      const examinees = (recentSubsData.data || []).map((sub: any) => {
-        const switches = sub.tab_switches || sub.blur_count || 0
-        return {
-          id: sub.id,
-          name: sub.profiles?.full_name || 'Học sinh',
-          email: sub.profiles?.email || 'N/A',
-          examTitle: sub.exams?.title || 'Đề thi',
-          timeElapsed: sub.submitted_at ? new Date(sub.submitted_at).toLocaleTimeString('vi-VN') : 'Đang làm bài',
-          tabSwitches: switches,
-          status: sub.is_completed ? 'Đã hoàn thành' : switches > 2 ? '⚠️ Thoát tab nhiều lần' : 'Đang thi',
-          score: sub.score,
+        const { data: auth } = await supabase.auth.getUser()
+        const user = auth.user
+        if (!user) {
+          router.replace('/new-sign')
+          return
         }
-      })
-      setRealLiveExaminees(examinees)
 
-      setLoading(false)
+        await ensureStudentProfile(user.id)
+        setCurrentUserId(user.id)
+
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        const role = profile?.role || 'student'
+        setUserRole(role)
+
+        if (role !== 'admin' && role !== 'collab') {
+          router.replace('/new-dashboard')
+          return
+        }
+
+        setIsAdmin(true)
+
+        // Fetch 100% REAL DATA from Supabase
+        const [
+          usersCount,
+          subsCount,
+          examsCount,
+          codesData,
+          examsData,
+          usersData,
+          announcementsData,
+          feedbackData,
+          recentSubsData,
+          activeProfilesData,
+        ] = await Promise.all([
+          supabase.from('profiles').select('id', { count: 'exact', head: true }),
+          supabase.from('submissions').select('id', { count: 'exact', head: true }),
+          supabase.from('exams').select('id', { count: 'exact', head: true }),
+          supabase.from('gift_codes').select('*').order('created_at', { ascending: false }).limit(100),
+          supabase.from('exams').select('*').order('created_at', { ascending: false }).limit(100),
+          supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(100),
+          supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(50),
+          supabase.from('feedback').select('*').order('created_at', { ascending: false }).limit(50),
+          supabase
+            .from('submissions')
+            .select('id, user_id, exam_id, score, is_completed, submitted_at, created_at, tab_switches, blur_count, exams(title), profiles(full_name, email)')
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabase
+            .from('profiles')
+            .select('id, created_at')
+            .limit(100),
+        ])
+
+        setStats({
+          totalUsers: usersCount.count || 0,
+          totalSubmissions: subsCount.count || 0,
+          totalExams: examsCount.count || 0,
+          totalCodes: codesData.data?.length || 0,
+          totalAnnouncements: announcementsData.data?.length || 0,
+          totalFeedback: feedbackData.data?.length || 0,
+        })
+
+        setGiftCodes(codesData.data || [])
+        setExamsList(examsData.data || [])
+        setUsersList(usersData.data || [])
+        setAnnouncementsList(announcementsData.data || [])
+        setFeedbackList(feedbackData.data || [])
+        setOnlineCount(Math.max(1, activeProfilesData.data?.length || 1))
+
+        // Fetch folders for exam categories
+        try {
+          const fRes = await fetch('/api/seb/folders')
+          if (fRes.ok) {
+            const fData = await fRes.json()
+            if (fData?.folders && Array.isArray(fData.folders)) setFolders(fData.folders)
+          }
+        } catch (e) {
+          console.warn('Lỗi tải folders:', e)
+        }
+
+        // Parse real examinees from recent submissions
+        const examinees = (recentSubsData.data || []).map((sub: any) => {
+          const switches = sub.tab_switches || sub.blur_count || 0
+          const examName = Array.isArray(sub.exams) ? sub.exams[0]?.title : sub.exams?.title
+          const prof = Array.isArray(sub.profiles) ? sub.profiles[0] : sub.profiles
+          return {
+            id: sub.id,
+            name: prof?.full_name || 'Học sinh',
+            email: prof?.email || 'N/A',
+            examTitle: examName || 'Đề thi',
+            timeElapsed: sub.submitted_at ? new Date(sub.submitted_at).toLocaleTimeString('vi-VN') : 'Đang làm bài',
+            tabSwitches: switches,
+            status: sub.is_completed ? 'Đã hoàn thành' : switches > 2 ? '⚠️ Thoát tab nhiều lần' : 'Đang thi',
+            score: sub.score,
+          }
+        })
+        setRealLiveExaminees(examinees)
+      } catch (err) {
+        console.error('Lỗi khởi tạo Admin:', err)
+      } finally {
+        setLoading(false)
+      }
     }
 
     initAdmin()

@@ -405,11 +405,12 @@ export default function NewSetupCoursePage() {
 
   // Danh sách các Thư Mục Con để gán đề
   const allChildFolders = useMemo(() => {
+    if (!Array.isArray(folders)) return []
     const list: any[] = []
     folders.forEach((parent: any) => {
-      if (parent.children) {
+      if (parent && Array.isArray(parent.children)) {
         parent.children.forEach((child: any) => {
-          list.push({ ...child, parentName: parent.name })
+          list.push({ ...child, parentName: parent.name || 'Thư mục' })
         })
       }
     })
@@ -464,8 +465,15 @@ export default function NewSetupCoursePage() {
         }
 
         // Tải danh sách thư mục SEB
-        const { data: fData } = await supabase.from('seb_folders').select('*, children:seb_subfolders(*)').order('created_at', { ascending: true })
-        if (fData) setFolders(fData)
+        try {
+          const fRes = await fetch('/api/seb/folders')
+          if (fRes.ok) {
+            const fData = await fRes.json()
+            if (fData?.folders && Array.isArray(fData.folders)) setFolders(fData.folders)
+          }
+        } catch (e) {
+          console.warn('Lỗi tải folders:', e)
+        }
       } catch (err) {
         console.error('Lỗi khởi tạo Setup Course:', err)
       } finally {
@@ -1357,12 +1365,19 @@ export default function NewSetupCoursePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {userRole === 'admin' && (
+          <Link
+            href="/new-dashboard"
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Trang chủ</span>
+          </Link>
+
+          {(userRole === 'admin' || userRole === 'collab') && (
             <Link
               href="/new-admin"
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
-              <LayoutDashboard className="h-3.5 w-3.5" /> Về Admin Portal
+              <LayoutDashboard className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Admin Portal</span>
             </Link>
           )}
 
@@ -1378,11 +1393,11 @@ export default function NewSetupCoursePage() {
 
       {/* SUB-NAV TABS */}
       <div className="border-b border-black/5 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 px-4 sm:px-8 py-2">
-        <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div className="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
           <button
             type="button"
             onClick={() => setActiveTab('manage')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 active:scale-95 ${
               activeTab === 'manage'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
@@ -1394,7 +1409,7 @@ export default function NewSetupCoursePage() {
           <button
             type="button"
             onClick={() => setActiveTab('create_katex')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 active:scale-95 ${
               activeTab === 'create_katex'
                 ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
@@ -1406,7 +1421,7 @@ export default function NewSetupCoursePage() {
           <button
             type="button"
             onClick={() => setActiveTab('create_pdf')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 active:scale-95 ${
               activeTab === 'create_pdf'
                 ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
@@ -1531,13 +1546,25 @@ export default function NewSetupCoursePage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="mt-5 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2">
-                        <Link
-                          href={`/new-exams/${exam.id}`}
-                          className="inline-flex items-center gap-1 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline"
-                        >
-                          <Eye className="h-3.5 w-3.5" /> Xem đề thi
-                        </Link>
+                      <div className="mt-5 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/new-exams/${exam.id}`}
+                            className="inline-flex items-center gap-1 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> Xem đề thi
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => setManagingExamStudents(exam)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold transition shadow-xs cursor-pointer active:scale-95"
+                            title="Quản lý học sinh làm bài & Giám sát vi phạm"
+                          >
+                            <Users className="h-3.5 w-3.5" />
+                            <span>Thí sinh</span>
+                          </button>
+                        </div>
 
                         <div className="flex items-center gap-1">
                           <button
@@ -3239,6 +3266,16 @@ export default function NewSetupCoursePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL QUẢN LÝ HỌC SINH & GIÁM SÁT VI PHẠM THI CỬ */}
+      {managingExamStudents && (
+        <ExamStudentProctorModal
+          isOpen={Boolean(managingExamStudents)}
+          onClose={() => setManagingExamStudents(null)}
+          exam={managingExamStudents}
+        />
       )}
     </main>
   )
