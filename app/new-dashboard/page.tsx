@@ -56,6 +56,8 @@ import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 import DailyStreakModal from '@/app/components/DailyStreakModal'
+import SenHeartAdminWidget from '@/app/components/SenHeartAdminWidget'
+import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
 import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 
@@ -316,6 +318,8 @@ const clampPercent = (value: number) => Math.max(0, Math.min(100, value))
 
 export default function NewDashboardPage() {
   const router = useRouter()
+  // Tích hợp luồng độc lập Sen Heart 1.0
+  useSenHeartThread('dashboard')
   const { isBetaTester: hookBeta } = useNewUiPrefs()
 
   const [loading, setLoading] = useState(true)
@@ -662,9 +666,9 @@ export default function NewDashboardPage() {
             <div className="relative">
               <div className="flex items-center gap-1.5">
                 {isVipUser ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 via-yellow-400/20 to-amber-500/20 text-amber-300 border border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
-                    <Crown className="h-3 w-3 text-amber-400 animate-pulse" />
-                    <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent font-black">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-amber-300/35 to-yellow-400/25 dark:from-amber-500/20 dark:via-yellow-400/20 dark:to-amber-500/20 text-amber-950 dark:text-amber-300 border border-amber-600/40 dark:border-amber-400/50 shadow-[0_2px_8px_rgba(217,119,6,0.18)] dark:shadow-[0_0_12px_rgba(245,158,11,0.25)]">
+                    <Crown className="h-3 w-3 text-amber-800 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
+                    <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400 bg-clip-text text-transparent font-black">
                       PREMIUM
                     </span>
                   </span>
@@ -981,9 +985,9 @@ export default function NewDashboardPage() {
         <div className="mb-3.5 flex items-center justify-between px-2">
           <div className="flex items-center gap-2.5">
             {isVipUser ? (
-              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 via-yellow-400/20 to-amber-500/20 border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)] text-amber-400 backdrop-blur-md">
-                <Crown className="h-4 w-4 text-amber-400 animate-pulse" />
-                <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent font-black tracking-widest">
+              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-amber-300/35 to-yellow-400/25 dark:from-amber-500/20 dark:via-yellow-400/20 dark:to-amber-500/20 border border-amber-600/40 dark:border-amber-400/50 shadow-[0_2px_12px_rgba(217,119,6,0.2)] dark:shadow-[0_0_20px_rgba(245,158,11,0.25)] text-amber-950 dark:text-amber-400 backdrop-blur-md">
+                <Crown className="h-4 w-4 text-amber-800 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
+                <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400 bg-clip-text text-transparent font-black tracking-widest">
                   PREMIUM
                 </span>
               </span>
@@ -1554,6 +1558,9 @@ export default function NewDashboardPage() {
                 </button>
               </div>
             </div>
+
+            {/* Thanh Sen Heart 1.0 (Chỉ Quản trị viên nhìn thấy) */}
+            <SenHeartAdminWidget userRole={userRole} />
           </aside>
         </div>
         </div>

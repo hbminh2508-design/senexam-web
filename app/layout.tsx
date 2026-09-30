@@ -6,6 +6,7 @@ import SenChatFloatingBubble from "./components/SenChatFloatingBubble";
 import MobileBottomNav from "./components/MobileBottomNav";
 import MobileBatteryManager from "./components/MobileBatteryManager";
 import ExamOrientationPrompt from "./components/ExamOrientationPrompt";
+import SenHeartProvider from "./components/SenHeartProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -53,6 +54,7 @@ export default function RootLayout({
         />
       </head>
       <body className="app-shell min-h-screen flex flex-col bg-background text-foreground pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+        <SenHeartProvider />
         <ClientErrorReporter />
         <MobileBatteryManager />
         <ExamOrientationPrompt />

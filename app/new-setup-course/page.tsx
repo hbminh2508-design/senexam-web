@@ -9,6 +9,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import ExamStudentProctorModal from '@/app/components/ExamStudentProctorModal'
+import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -447,6 +448,8 @@ class PageErrorBoundary extends Component<
 
 function SetupCourseMainContent() {
   const router = useRouter()
+  // Tích hợp luồng độc lập Sen Heart 1.0 - Tự động ngắt khi thoát trang
+  useSenHeartThread('setup_course')
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)

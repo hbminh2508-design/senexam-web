@@ -1293,6 +1293,9 @@ export default function NewAdminPage() {
                 <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 text-[10px] font-bold">
                   {userRole.toUpperCase()}
                 </span>
+                <span className="rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-ping" /> Sen Heart 1.0 Active
+                </span>
               </div>
               <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newadm-heading)' }}>
                 Bảng Điều Khiển Hệ Thống & Giám Sát Real-time
