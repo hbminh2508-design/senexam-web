@@ -58,6 +58,7 @@ import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 import DailyStreakModal from '@/app/components/DailyStreakModal'
 import SenHeartAdminWidget from '@/app/components/SenHeartAdminWidget'
 import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
+import { dataDispatcher } from '@/lib/senheart'
 import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 
@@ -396,19 +397,25 @@ export default function NewDashboardPage() {
       await ensureStudentProfile(user.id)
 
       const [profileRes, submissionsRes, announcementsRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date')
-          .eq('id', user.id)
-          .single(),
-        supabase
-          .from('submissions')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id),
-        supabase
-          .from('announcements')
-          .select('id')
-          .order('created_at', { ascending: false }),
+        dataDispatcher.fetchShared(`profile_${user.id}`, () =>
+          supabase
+            .from('profiles')
+            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date')
+            .eq('id', user.id)
+            .single()
+        ),
+        dataDispatcher.fetchShared(`subs_count_${user.id}`, () =>
+          supabase
+            .from('submissions')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+        ),
+        dataDispatcher.fetchShared('announcements_head', () =>
+          supabase
+            .from('announcements')
+            .select('id')
+            .order('created_at', { ascending: false })
+        ),
       ])
 
       const profile = profileRes.data
@@ -659,9 +666,9 @@ export default function NewDashboardPage() {
           </div>
 
           {/* 2. Ô Chào Các Buổi */}
-          <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl">
-            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-rose-400/25 dark:bg-rose-500/20 blur-2xl pointer-events-none" />
-            <div className="absolute -left-8 bottom-0 h-28 w-28 rounded-full bg-teal-400/25 dark:bg-teal-500/20 blur-2xl pointer-events-none" />
+          <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(244,63,94,0.3)_0%,transparent_70%)]" />
+            <div className="absolute -left-8 bottom-0 h-28 w-28 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(20,184,166,0.25)_0%,transparent_70%)]" />
 
             <div className="relative">
               <div className="flex items-center gap-1.5">
@@ -702,7 +709,7 @@ export default function NewDashboardPage() {
           </div>
 
           {/* 3. Thanh Tiến Trình Được Thiết Kế Lại Cho Mobile */}
-          <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+          <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-xs">
@@ -810,7 +817,7 @@ export default function NewDashboardPage() {
           </button>
 
           {/* 5. Nút / Thẻ Liên Kết Google Trên Mobile */}
-          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -865,7 +872,7 @@ export default function NewDashboardPage() {
           </div>
 
           {/* 6. Thẻ Cài Đặt Web Trên Mobile */}
-          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-4.5 shadow-[0_10px_25px_rgba(0,0,0,0.05)] dark:shadow-[0_10px_25px_rgba(0,0,0,0.3)] backdrop-blur-xl space-y-3.5">
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm space-y-3.5">
             <div className="flex items-center justify-between">
               <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
                 <Settings className="h-3.5 w-3.5 text-amber-500" /> Cài đặt & Tiện ích Web
@@ -1034,9 +1041,9 @@ export default function NewDashboardPage() {
         )}
 
         {/* Banner Chào Mừng & Thống Kê Tổng Quan */}
-        <div className="relative overflow-hidden rounded-[30px] border border-black/10 dark:border-white/10 bg-white/75 dark:bg-slate-900/75 p-6 shadow-[0_20px_45px_rgba(16,24,40,0.1)] dark:shadow-[0_20px_45px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-8">
-          <div className="absolute -right-10 -top-16 h-48 w-48 rounded-full bg-rose-400/30 dark:bg-rose-500/20 blur-3xl" />
-          <div className="absolute -left-12 bottom-0 h-40 w-40 rounded-full bg-teal-400/30 dark:bg-teal-500/20 blur-3xl" />
+        <div className="relative overflow-hidden rounded-[30px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-6 shadow-sm sm:p-8">
+          <div className="absolute -right-10 -top-16 h-48 w-48 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(244,63,94,0.3)_0%,transparent_70%)]" />
+          <div className="absolute -left-12 bottom-0 h-40 w-40 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(20,184,166,0.25)_0%,transparent_70%)]" />
 
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -1118,8 +1125,8 @@ export default function NewDashboardPage() {
 
         {/* BANNER QUẢNG CÁO GÓI VIP CHO NGƯỜI DÙNG MIỄN PHÍ */}
         {!isVipUser && (
-          <div className="relative mt-6 overflow-hidden rounded-[28px] border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-rose-500/15 p-6 shadow-[0_15px_35px_rgba(245,158,11,0.12)] backdrop-blur-xl">
-            <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-amber-400/20 blur-3xl pointer-events-none" />
+          <div className="relative mt-6 overflow-hidden rounded-[28px] border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-rose-500/10 bg-white/95 dark:bg-slate-900/95 p-6 shadow-sm">
+            <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(245,158,11,0.3)_0%,transparent_70%)]" />
             <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -1156,7 +1163,7 @@ export default function NewDashboardPage() {
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
           
           {/* CỘT TRÁI: Playground Điều Hướng Tính Năng */}
-          <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/75 dark:bg-slate-900/75 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl sm:p-6">
+          <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
@@ -1226,8 +1233,7 @@ export default function NewDashboardPage() {
                           <Wrapper
                             key={item.key}
                             href={item.href}
-                            className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-4 transition-all duration-200"
-                            style={{ animationDelay: `${index * 50}ms` }}
+                            className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 p-4"
                             {...extraProps}
                           >
                             {/* Dải gradient nhận diện trên đỉnh thẻ */}
@@ -1275,7 +1281,7 @@ export default function NewDashboardPage() {
           <aside className="space-y-5">
             
             {/* Card 1: Thông tin cá nhân & Ví Sen / VIP */}
-            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm">
               <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
                 <Link href="/new-profile" className="flex items-center gap-3 group transition">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-md transition group-hover:scale-105">
@@ -1392,7 +1398,7 @@ export default function NewDashboardPage() {
             </div>
 
             {/* Card 2: Liên kết tài khoản Google */}
-            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -1449,7 +1455,7 @@ export default function NewDashboardPage() {
             </div>
 
             {/* Card 3: Cài đặt hệ thống & Tiện ích Web */}
-            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_40px_rgba(0,0,0,0.3)] backdrop-blur-xl space-y-4">
+            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm flex items-center gap-2">
                   <Settings className="h-4 w-4 text-amber-500" /> Cài đặt & Tiện ích Web
@@ -1568,34 +1574,12 @@ export default function NewDashboardPage() {
 
       <style jsx>{`
         .newdash-card {
-          animation: rise-in 420ms ease both;
-          will-change: transform;
+          transition: transform 150ms ease, box-shadow 150ms ease;
         }
 
         .newdash-card:hover {
-          transform: translateY(-4px) scale(1.01);
-          box-shadow: 0 18px 32px rgba(2, 6, 23, 0.12);
-        }
-
-        @keyframes rise-in {
-          from {
-            opacity: 0;
-            transform: translateY(10px) scale(0.99);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .newdash-card {
-            animation: none;
-          }
-
-          .newdash-card:hover {
-            transform: none;
-          }
+          transform: translateY(-3px);
+          box-shadow: 0 10px 22px rgba(2, 6, 23, 0.08);
         }
       `}</style>
 
@@ -1609,6 +1593,7 @@ export default function NewDashboardPage() {
         onRewardClaimed={(newBalance, newStreak) => {
           setSenCash(newBalance)
           setStreakDays(newStreak)
+          dataDispatcher.invalidate(`profile_${userId}`)
         }}
       />
 

@@ -56,16 +56,18 @@ class SenHeartCacheTrimmer {
           continue
         }
 
-        // Kiểm tra các cache có gắn TTL JSON
-        try {
-          const raw = localStorage.getItem(key)
-          if (raw && (raw.startsWith('{') || raw.startsWith('['))) {
-            const parsed = JSON.parse(raw)
-            if (parsed && typeof parsed === 'object' && parsed._expiresAt && Number(parsed._expiresAt) < now) {
-              keysToEvict.push(key)
+        // Kiểm tra các cache có gắn TTL JSON (chỉ quét các key mang tiền tố cache để không block thread)
+        if (key.startsWith('sen_') || key.startsWith('cache_')) {
+          try {
+            const raw = localStorage.getItem(key)
+            if (raw && raw.length < 4096 && raw.startsWith('{')) {
+              const parsed = JSON.parse(raw)
+              if (parsed && typeof parsed === 'object' && parsed._expiresAt && Number(parsed._expiresAt) < now) {
+                keysToEvict.push(key)
+              }
             }
-          }
-        } catch {}
+          } catch {}
+        }
       }
 
       // Tiến hành xóa các key đã chọn

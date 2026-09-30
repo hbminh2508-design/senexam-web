@@ -103,25 +103,24 @@
     inset: auto;
     border-radius: 9999px;
     pointer-events: none;
-    filter: blur(80px);
-    opacity: 0.72;
+    opacity: 0.65;
     z-index: 0;
   }
 
   .app-shell::before {
     top: -8rem;
     left: -7rem;
-    width: 22rem;
-    height: 22rem;
-    background: rgba(59, 130, 246, 0.16);
+    width: 24rem;
+    height: 24rem;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
   }
 
   .app-shell::after {
     right: -7rem;
     bottom: -8rem;
-    width: 24rem;
-    height: 24rem;
-    background: rgba(168, 85, 247, 0.12);
+    width: 26rem;
+    height: 26rem;
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.12) 0%, transparent 70%);
   }
 
   .liquid-panel {
@@ -528,21 +527,50 @@ html.dark[data-eco-mode="true"] .dark\:bg-slate-800\/90 {
 }
 
 /* ========================================================================= */
-/* TỐI ƯU HIỆU NĂNG CHO MÁY TÍNH (PC ANTI-LAG & HARDWARE ACCELERATION)       */
+/* SEN HEART 1.0 - ULTRA-LIGHT GPU PERFORMANCE ENGINE (ANTI-LAG ZERO COST)   */
 /* ========================================================================= */
+
+/* 1. Tối ưu hóa backdrop-filter toàn trang: giới hạn blur nhẹ nhàng, chống drop-frame */
+.backdrop-blur-3xl,
+.backdrop-blur-2xl,
+.backdrop-blur-xl {
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.backdrop-blur-lg,
+.backdrop-blur-md {
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+}
+
+/* 2. Loại bỏ hoàn toàn bộ lọc Gaussian Blur nặng trên các quầng sáng (blur-3xl, blur-2xl) */
+.blur-3xl,
+.blur-2xl {
+  filter: none !important;
+  background: radial-gradient(circle, currentColor 0%, transparent 70%) !important;
+  opacity: 0.2 !important;
+}
+
+/* 3. Tối ưu hóa mượt mà cho PC & Desktop */
 @media (min-width: 769px) {
-  /* Tăng tốc phần cứng cho các thẻ tương tác trên PC */
   .newdash-card,
   .liquid-panel {
     transform: translateZ(0);
-    will-change: transform, box-shadow;
     backface-visibility: hidden;
   }
+}
 
-  /* Kích hoạt content-visibility để trình duyệt bỏ qua việc render thẻ nằm ngoài màn hình */
-  .newdash-card {
-    content-visibility: auto;
-    contain-intrinsic-size: 180px;
+/* 4. Tắt backdrop-filter trên Mobile để cuộn trang mượt mà 120 FPS không giật lag */
+@media (max-width: 768px) {
+  .backdrop-blur-3xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-xl,
+  .backdrop-blur-lg,
+  .backdrop-blur-md,
+  .backdrop-blur-sm {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 

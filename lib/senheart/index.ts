@@ -147,6 +147,7 @@ class SenHeartCoreEngine {
   }
 
   private broadcastTelemetry() {
+    if (this.telemetrySubscribers.length === 0) return
     const data = this.getTelemetry()
     this.telemetrySubscribers.forEach((cb) => {
       try {
