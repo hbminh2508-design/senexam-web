@@ -1326,6 +1326,7 @@ export default function NewAdminPage() {
           </button>
           <Link
             href="/new-setup-course"
+            prefetch={false}
             className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md hover:scale-105"
           >
             <Sparkles className="h-4 w-4" /> Thiết Lập Khóa Học & Soạn Đề KaTeX (Trang Mới)
@@ -1505,6 +1506,7 @@ export default function NewAdminPage() {
             </p>
             <Link
               href="/new-setup-course"
+              prefetch={false}
               className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 text-white px-6 py-3 text-xs font-black uppercase tracking-wider shadow-lg hover:scale-105 transition"
             >
               Mở Cổng Thiết Lập Khóa Học & Quản Lý Đề <ChevronRight className="h-4 w-4" />

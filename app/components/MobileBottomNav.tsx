@@ -493,8 +493,11 @@ export default function MobileBottomNav() {
                       {items.map((item) => {
                         const Icon = item.icon
                         const isExternal = item.href.startsWith('http')
-                        const Wrapper = isExternal ? 'a' : Link
-                        const extraProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}
+                        const extraProps = isExternal
+                          ? { target: '_blank', rel: 'noopener noreferrer' }
+                          : item.href === '/new-setup-course'
+                          ? { prefetch: false }
+                          : {}
 
                         return (
                           <Wrapper

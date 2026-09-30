@@ -55,6 +55,8 @@ import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
+import DailyStreakModal from '@/app/components/DailyStreakModal'
+import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
@@ -326,6 +328,8 @@ export default function NewDashboardPage() {
   const [activeAnnouncements, setActiveAnnouncements] = useState(0)
   const [vipUntil, setVipUntil] = useState<string | null>(null)
   const [bootTs] = useState<number>(() => Date.now())
+  const [showDailyStreakModal, setShowDailyStreakModal] = useState(false)
+  const [autoRenewMessage, setAutoRenewMessage] = useState<string | null>(null)
 
   // User profile state
   const [fullName, setFullName] = useState('')
@@ -390,7 +394,7 @@ export default function NewDashboardPage() {
       const [profileRes, submissionsRes, announcementsRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, target_exams, school, province, sencash_balance, role')
+          .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date')
           .eq('id', user.id)
           .single(),
         supabase
@@ -426,9 +430,28 @@ export default function NewDashboardPage() {
         const unreadCount = (announcementsRes.data || []).filter((a) => !readIds.includes(a.id)).length
         setActiveAnnouncements(unreadCount)
 
-        const examsLen = Array.isArray(profile?.target_exams) ? profile.target_exams.length : 0
-        setStreakDays(Math.max(2, Math.min(28, (submissionsRes.count || 0) + examsLen * 3)))
+        setStreakDays(profile?.streak_days || 1)
         setLoading(false)
+
+        // Tự động kiểm tra gia hạn VIP/Sen AI bằng SC (tự hủy nếu không đủ tiền)
+        try {
+          processAutoRenew(user.id).then((autoRenewRes) => {
+            if (autoRenewRes.messages.length > 0 && !disposed) {
+              setAutoRenewMessage(autoRenewRes.messages.join(' • '))
+              supabase
+                .from('profiles')
+                .select('sencash_balance, vip_expires_at')
+                .eq('id', user.id)
+                .maybeSingle()
+                .then(({ data: updatedP }) => {
+                  if (updatedP && !disposed) {
+                    setSenCash(updatedP.sencash_balance || 0)
+                    setVipUntil(updatedP.vip_expires_at || null)
+                  }
+                })
+            }
+          }).catch(() => {})
+        } catch {}
       }
     }
 
@@ -473,6 +496,13 @@ export default function NewDashboardPage() {
     if (Number.isNaN(expires.getTime()) || expires.getTime() < bootTs) return 'Gói Miễn phí'
     return `VIP đến ${expires.toLocaleDateString('vi-VN')}`
   }, [bootTs, vipUntil])
+
+  const isVipUser = useMemo(() => {
+    if (userRole === 'admin' || userRole === 'collab') return true
+    if (!vipUntil) return false
+    const expires = new Date(vipUntil)
+    return !Number.isNaN(expires.getTime()) && expires.getTime() >= bootTs
+  }, [userRole, vipUntil, bootTs])
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
@@ -631,9 +661,18 @@ export default function NewDashboardPage() {
 
             <div className="relative">
               <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                  <Zap className="h-3 w-3" /> SenExam
-                </span>
+                {isVipUser ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 via-yellow-400/20 to-amber-500/20 text-amber-300 border border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.25)]">
+                    <Crown className="h-3 w-3 text-amber-400 animate-pulse" />
+                    <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent font-black">
+                      PREMIUM
+                    </span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                    <Zap className="h-3 w-3" /> SenExam
+                  </span>
+                )}
                 {isBetaTester && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                     <Sparkles className="h-2.5 w-2.5" /> Beta Member
@@ -681,14 +720,19 @@ export default function NewDashboardPage() {
 
             {/* 3 Chỉ Số Nhỏ Gọn */}
             <div className="mt-3.5 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl border border-black/5 dark:border-white/5 bg-amber-500/10 dark:bg-amber-500/15 p-2.5 text-center">
+              <button
+                type="button"
+                onClick={() => setShowDailyStreakModal(true)}
+                className="rounded-2xl border border-amber-500/25 bg-amber-500/10 dark:bg-amber-500/15 p-2.5 text-center active:scale-95 transition cursor-pointer group"
+                title="Bấm để nhận quà điểm danh hàng ngày"
+              >
                 <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                  <Flame className="h-3 w-3 text-amber-500" /> Chuỗi
+                  <Flame className="h-3 w-3 text-amber-500 animate-bounce" /> Chuỗi
                 </div>
                 <p className="mt-1 text-base font-black text-amber-900 dark:text-amber-200" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                   {streakDays} ngày
                 </p>
-              </div>
+              </button>
 
               <Link
                 href="/new-history"
@@ -933,6 +977,58 @@ export default function NewDashboardPage() {
         {/* ========================================================================= */}
         <div className="hidden md:block">
         
+        {/* BRANDING NHẬN DIỆN THƯƠNG HIỆU & HẠNG THÀNH VIÊN ĐẶT NGOÀI KHUNG THẺ */}
+        <div className="mb-3.5 flex items-center justify-between px-2">
+          <div className="flex items-center gap-2.5">
+            {isVipUser ? (
+              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 via-yellow-400/20 to-amber-500/20 border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)] text-amber-400 backdrop-blur-md">
+                <Crown className="h-4 w-4 text-amber-400 animate-pulse" />
+                <span className="bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 bg-clip-text text-transparent font-black tracking-widest">
+                  PREMIUM
+                </span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shadow-xs">
+                <Zap className="h-3.5 w-3.5" /> SenExam
+              </span>
+            )}
+
+            {isBetaTester && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <Sparkles className="h-3 w-3" /> Beta Member
+              </span>
+            )}
+          </div>
+
+          {/* Lối tắt Admin & Thử nghiệm Sen 3.0 */}
+          {(userRole === 'admin' || userRole === 'collab') && (
+            <Link
+              href="/new-ui-testing"
+              prefetch={false}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition shadow-xs"
+            >
+              <Sparkles className="h-3 w-3 text-indigo-400" /> Sen 3.0 Lab (Admin)
+            </Link>
+          )}
+        </div>
+
+        {/* Thông Báo Tự Động Gia Hạn SC */}
+        {autoRenewMessage && (
+          <div className="mb-4 flex items-center justify-between rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-700 dark:text-amber-300 animate-in fade-in slide-in-from-top-2">
+            <span className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+              {autoRenewMessage}
+            </span>
+            <button
+              type="button"
+              onClick={() => setAutoRenewMessage(null)}
+              className="ml-3 rounded-lg p-1 text-amber-600 hover:bg-amber-500/20 transition cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Banner Chào Mừng & Thống Kê Tổng Quan */}
         <div className="relative overflow-hidden rounded-[30px] border border-black/10 dark:border-white/10 bg-white/75 dark:bg-slate-900/75 p-6 shadow-[0_20px_45px_rgba(16,24,40,0.1)] dark:shadow-[0_20px_45px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-8">
           <div className="absolute -right-10 -top-16 h-48 w-48 rounded-full bg-rose-400/30 dark:bg-rose-500/20 blur-3xl" />
@@ -940,17 +1036,7 @@ export default function NewDashboardPage() {
 
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                  <Zap className="h-3.5 w-3.5" /> SenExam
-                </span>
-                {isBetaTester && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                    <Sparkles className="h-3 w-3" /> Beta Member
-                  </span>
-                )}
-              </div>
-              <h1 className="mt-2 text-balance text-3xl font-black leading-tight sm:text-4xl lg:text-5xl" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+              <h1 className="text-balance text-3xl font-black leading-tight sm:text-4xl lg:text-5xl" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                 {greeting}, {fullName}! 👋
               </h1>
               <p className="mt-2 text-sm text-[#4B5563] dark:text-slate-300 sm:text-base" style={{ fontFamily: 'var(--font-newdash-body)' }}>
@@ -960,12 +1046,25 @@ export default function NewDashboardPage() {
 
             {/* Quick Metrics */}
             <div className="grid grid-cols-2 gap-3 sm:min-w-[300px]">
-              <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-3.5 shadow-sm">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  <Flame className="h-4 w-4" /> Chuỗi học tập
+              <button
+                type="button"
+                onClick={() => setShowDailyStreakModal(true)}
+                className="rounded-2xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/15 p-3.5 shadow-sm text-left hover:scale-[1.03] active:scale-95 transition cursor-pointer group"
+                title="Bấm để mở Lịch nhận quà & Giữ chuỗi học tập"
+              >
+                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  <span className="flex items-center gap-1.5">
+                    <Flame className="h-4 w-4 text-amber-500 animate-bounce" /> Chuỗi học tập
+                  </span>
+                  <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 underline group-hover:scale-105 transition">
+                    Nhận SC →
+                  </span>
                 </div>
-                <p className="mt-1 text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>{streakDays} ngày</p>
-              </div>
+                <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  {streakDays} ngày
+                </p>
+              </button>
+
               <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-3.5 shadow-sm">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                   <Crown className="h-4 w-4" /> Trạng thái
@@ -1012,6 +1111,42 @@ export default function NewDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* BANNER QUẢNG CÁO GÓI VIP CHO NGƯỜI DÙNG MIỄN PHÍ */}
+        {!isVipUser && (
+          <div className="relative mt-6 overflow-hidden rounded-[28px] border border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-rose-500/15 p-6 shadow-[0_15px_35px_rgba(245,158,11,0.12)] backdrop-blur-xl">
+            <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-amber-400/20 blur-3xl pointer-events-none" />
+            <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500 text-black shadow-sm">
+                    <Crown className="h-3.5 w-3.5 fill-black" /> Đặc Quyền Sen VIP
+                  </span>
+                  <span className="text-xs font-black text-amber-600 dark:text-amber-400">
+                    Bứt phá điểm số cùng SenExam
+                  </span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  Nâng Cấp VIP — Mở Khóa Toàn Diện Hệ Thống
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed" style={{ fontFamily: 'var(--font-newdash-body)' }}>
+                  • Mở khóa 100% kho đề khảo thí đặc quyền & Đề thi thử đại học chuẩn Bộ GD&ĐT<br/>
+                  • Không giới hạn lượt hỏi đáp và giải chi tiết từng bước cùng Trợ lý Sen AI 24/7<br/>
+                  • Tải đề thi PDF & Bản thi bảo mật SEB tốc độ cao • Tặng ngay 50 SC vào ví Sen khi đăng ký!
+                </p>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-3">
+                <Link
+                  href="/new-vip"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 hover:scale-105 active:scale-95 transition"
+                >
+                  <Sparkles className="h-4 w-4" /> Nâng Cấp VIP Ngay
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 2-Column Main Layout */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
@@ -1077,7 +1212,11 @@ export default function NewDashboardPage() {
                         const Icon = item.icon
                         const isExternal = item.href.startsWith('http')
                         const Wrapper = isExternal ? 'a' : Link
-                        const extraProps = isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}
+                        const extraProps = isExternal
+                          ? { target: '_blank', rel: 'noopener noreferrer' }
+                          : item.href === '/new-setup-course'
+                          ? { prefetch: false }
+                          : {}
 
                         return (
                           <Wrapper
@@ -1234,6 +1373,7 @@ export default function NewDashboardPage() {
                 </Link>
                 <Link
                   href="/new-setup-course"
+                  prefetch={false}
                   className="inline-flex items-center justify-center gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 py-2 px-1.5 text-[11px] font-bold transition hover:bg-emerald-500/20 text-center"
                 >
                   <Sparkles className="h-3.5 w-3.5" /> Soạn đề
@@ -1451,6 +1591,19 @@ export default function NewDashboardPage() {
           }
         }
       `}</style>
+
+      {/* Modal Điểm Danh Nhận SC & Giữ Chuỗi Học Tập */}
+      <DailyStreakModal
+        isOpen={showDailyStreakModal}
+        onClose={() => setShowDailyStreakModal(false)}
+        userId={userId}
+        currentStreak={streakDays}
+        senCashBalance={senCash}
+        onRewardClaimed={(newBalance, newStreak) => {
+          setSenCash(newBalance)
+          setStreakDays(newStreak)
+        }}
+      />
 
       {/* Modal Bổ Sung Hồ Sơ Học Sinh (Nếu Chưa Có Trường/Lớp) */}
       <ProfileCompletionModal />

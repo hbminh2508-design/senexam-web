@@ -94,7 +94,7 @@ class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryS
   }
 }
 
-export const SafeMathRenderer = React.memo(
+const SafeMathRenderer = React.memo(
   ({
     content,
     className,
@@ -129,7 +129,7 @@ export const SafeMathRenderer = React.memo(
 )
 SafeMathRenderer.displayName = 'SafeMathRenderer'
 
-export const MathKeyButton = React.memo(
+const MathKeyButton = React.memo(
   ({ k, onInsert }: { k: any; onInsert: (val: string) => void }) => {
     return (
       <button
@@ -145,7 +145,7 @@ export const MathKeyButton = React.memo(
 )
 MathKeyButton.displayName = 'MathKeyButton'
 
-export function getExamQuestionCount(exam: any): number {
+function getExamQuestionCount(exam: any): number {
   if (!exam) return 0
   try {
     let struct = exam.exam_structure
@@ -185,7 +185,7 @@ export function getExamQuestionCount(exam: any): number {
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-setup-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-setup-body' })
 
-export interface KatexQuestion {
+interface KatexQuestion {
   id: string
   type: 'single_choice' | 'true_false' | 'short_answer' | 'essay'
   text: string
@@ -397,7 +397,55 @@ const MATH_KEYBOARD_TABS = [
   },
 ]
 
-export default function NewSetupCoursePage() {
+class PageErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: any }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: any, info: any) {
+    console.error('Lỗi giao diện Cổng Thiết Lập Khóa Học:', error, info)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#F4F7FA] dark:bg-[#080D1A] p-6 text-center">
+          <div className="max-w-md w-full rounded-3xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-8 shadow-2xl backdrop-blur-xl space-y-4">
+            <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
+              <AlertCircle className="h-7 w-7" />
+            </div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">Không thể tải Cổng Soạn Đề</h2>
+            <p className="text-xs text-slate-500">Đã xảy ra sự cố kỹ thuật khi khởi tạo giao diện. Bạn có thể tải lại trang hoặc quay về Dashboard.</p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { this.setState({ hasError: false }); window.location.reload() }}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm hover:bg-emerald-700 transition cursor-pointer"
+              >
+                Tải lại trang
+              </button>
+              <Link
+                href="/new-dashboard"
+                prefetch={false}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-center transition cursor-pointer"
+              >
+                Về Dashboard
+              </Link>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function SetupCourseMainContent() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
@@ -1495,6 +1543,7 @@ export default function NewSetupCoursePage() {
         <div className="flex items-center gap-3">
           <Link
             href="/new-dashboard"
+            prefetch={false}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm transition hover:scale-105"
             title="Quay lại Dashboard"
           >
@@ -1525,6 +1574,7 @@ export default function NewSetupCoursePage() {
         <div className="flex items-center gap-2">
           <Link
             href="/new-dashboard"
+            prefetch={false}
             className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Trang chủ</span>
@@ -1533,6 +1583,7 @@ export default function NewSetupCoursePage() {
           {(userRole === 'admin' || userRole === 'collab') && (
             <Link
               href="/new-admin"
+              prefetch={false}
               className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               <LayoutDashboard className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Admin Portal</span>
@@ -1705,6 +1756,7 @@ export default function NewSetupCoursePage() {
                         <div className="flex items-center gap-2">
                           <Link
                             href={`/new-exams/${exam.id}`}
+                            prefetch={false}
                             className="inline-flex items-center gap-1 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline"
                           >
                             <Eye className="h-3.5 w-3.5" /> Xem đề thi
@@ -3421,5 +3473,13 @@ export default function NewSetupCoursePage() {
         />
       )}
     </main>
+  )
+}
+
+export default function NewSetupCoursePage() {
+  return (
+    <PageErrorBoundary>
+      <SetupCourseMainContent />
+    </PageErrorBoundary>
   )
 }
