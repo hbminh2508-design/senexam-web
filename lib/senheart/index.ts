@@ -157,11 +157,21 @@ class SenHeartCoreEngine {
   private broadcastTelemetry() {
     if (this.telemetrySubscribers.length === 0) return
     const data = this.getTelemetry()
-    this.telemetrySubscribers.forEach((cb) => {
-      try {
-        cb(data)
-      } catch {}
-    })
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        this.telemetrySubscribers.forEach((cb) => {
+          try {
+            cb(data)
+          } catch {}
+        })
+      }, 0)
+    } else {
+      this.telemetrySubscribers.forEach((cb) => {
+        try {
+          cb(data)
+        } catch {}
+      })
+    }
   }
 }
 

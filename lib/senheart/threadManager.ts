@@ -176,11 +176,21 @@ class SenHeartThreadManager {
   }
 
   private notifyListeners() {
-    this.listeners.forEach((l) => {
-      try {
-        l()
-      } catch {}
-    })
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        this.listeners.forEach((l) => {
+          try {
+            l()
+          } catch {}
+        })
+      }, 0)
+    } else {
+      this.listeners.forEach((l) => {
+        try {
+          l()
+        } catch {}
+      })
+    }
   }
 }
 

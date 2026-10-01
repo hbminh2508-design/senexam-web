@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, Component } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -9,7 +10,6 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { signInWithGoogle } from '@/lib/authHelper'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getAccentHex } from '@/app/components/modernTheme'
-import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
 import {
   Mail,
   Lock,
@@ -49,12 +49,51 @@ const LOCKOUT_SECONDS = 60
 
 type IdpMode = 'login' | 'signup' | 'forgot' | 'magic-link' | 'grant'
 
-export default function IdpAuthPage() {
+class PageErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: any }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: any, info: any) {
+    console.warn('IDP UI boundary caught error:', error, info)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-[#F4F7FB] dark:bg-[#080D1A] text-slate-800 dark:text-slate-100 font-sans">
+          <div className="max-w-md w-full rounded-3xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-8 shadow-2xl backdrop-blur-xl text-center space-y-4">
+            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">Cổng Xác Thực Sẵn Sàng</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Đang khởi tạo lại phiên đăng nhập bảo mật...</p>
+            <button
+              type="button"
+              onClick={() => {
+                this.setState({ hasError: false })
+                if (typeof window !== 'undefined') window.location.reload()
+              }}
+              className="w-full py-3 rounded-2xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition cursor-pointer"
+            >
+              Tiếp tục Đăng nhập
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function IdpAuthContent() {
   const router = useRouter()
   const { themeColor } = useNewUiPrefs()
-
-  // Phân luồng độc lập Sen Heart 1.0.2 - Tiêu hủy sạch luồng khi rời trang
-  useSenHeartThread('idp_auth')
 
   const [mode, setMode] = useState<IdpMode>('login')
   const [loading, setLoading] = useState(false)
@@ -110,84 +149,103 @@ export default function IdpAuthPage() {
   const [grantSenCash, setGrantSenCash] = useState('0')
   const [grantLoading, setGrantLoading] = useState(false)
 
-  // Khởi tạo giao diện, nhận diện bối cảnh FEPN / SEB & Kiểm tra Brute-Force lockout
+  // Khởi tạo giao diện, nhận diện bối cảnh FEPN / SEB & Kiểm tra Brute-Force lockout an toàn
   useEffect(() => {
+    let isMounted = true
+
     const dark =
       typeof window !== 'undefined' &&
       (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark')
     if (dark && typeof document !== 'undefined') document.documentElement.classList.add('dark')
-    setIsDark(Boolean(dark))
+    if (isMounted) setIsDark(Boolean(dark))
 
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const serviceParam = (params.get('service') || '').toLowerCase()
-      const fromParam = (params.get('from') || '').toLowerCase()
-      const targetParam = (params.get('target') || '').toLowerCase()
-      const nextParam = params.get('next') || params.get('redirect') || ''
-      const host = window.location.hostname.toLowerCase()
-      const ref = (document.referrer || '').toLowerCase()
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const serviceParam = (params.get('service') || '').toLowerCase()
+        const fromParam = (params.get('from') || '').toLowerCase()
+        const targetParam = (params.get('target') || '').toLowerCase()
+        const nextParam = params.get('next') || params.get('redirect') || ''
+        const host = window.location.hostname.toLowerCase()
+        const ref = (document.referrer || '').toLowerCase()
 
-      // Hệ thống nhận diện bối cảnh FEPN thông minh
-      const detectedFepn =
-        serviceParam === 'fepn' ||
-        fromParam === 'fepn' ||
-        targetParam === 'fepn' ||
-        nextParam.includes('fepn') ||
-        host.includes('fepn.') ||
-        ref.includes('fepn')
+        // Hệ thống nhận diện bối cảnh FEPN thông minh
+        const detectedFepn =
+          serviceParam === 'fepn' ||
+          fromParam === 'fepn' ||
+          targetParam === 'fepn' ||
+          nextParam.includes('fepn') ||
+          host.includes('fepn.') ||
+          ref.includes('fepn')
 
-      if (detectedFepn) {
-        setIsFepnContext(true)
-        setTargetService('fepn')
-      } else if (serviceParam === 'seb' || nextParam.includes('seb')) {
-        setTargetService('seb')
-      } else {
-        setTargetService('senexam')
-      }
+        if (isMounted) {
+          if (detectedFepn) {
+            setIsFepnContext(true)
+            setTargetService('fepn')
+          } else if (serviceParam === 'seb' || nextParam.includes('seb')) {
+            setTargetService('seb')
+          } else {
+            setTargetService('senexam')
+          }
 
-      if (nextParam) {
-        setRedirectPath(nextParam)
-      }
+          if (nextParam) {
+            setRedirectPath(nextParam)
+          }
 
-      const err = params.get('error_description') || params.get('error')
-      if (err) {
-        setErrorMsg(
-          err.includes('bad_oauth_state') || err.includes('OAuth state')
-            ? 'Phiên đăng nhập Google đã hết hạn hoặc bị gián đoạn. Vui lòng thử lại.'
-            : decodeURIComponent(err)
-        )
-      }
+          const err = params.get('error_description') || params.get('error')
+          if (err) {
+            setErrorMsg(
+              err.includes('bad_oauth_state') || err.includes('OAuth state')
+                ? 'Phiên đăng nhập Google đã hết hạn hoặc bị gián đoạn. Vui lòng thử lại.'
+                : decodeURIComponent(err)
+            )
+          }
 
-      // Kiểm tra lockout còn hiệu lực không
-      const lockoutUntil = parseInt(localStorage.getItem('idp_lockout_until') || '0', 10)
-      const now = Date.now()
-      if (lockoutUntil > now) {
-        setLockoutTimer(Math.ceil((lockoutUntil - now) / 1000))
+          // Kiểm tra lockout còn hiệu lực không
+          const lockoutUntil = parseInt(localStorage.getItem('idp_lockout_until') || '0', 10)
+          const now = Date.now()
+          if (lockoutUntil > now) {
+            setLockoutTimer(Math.ceil((lockoutUntil - now) / 1000))
+          }
+        }
+      } catch (paramErr) {
+        console.warn('Lỗi đọc tham số IDP:', paramErr)
       }
     }
 
     // Kiểm tra xem phiên hiện tại có phải Admin không để kích hoạt Tab 4
     const checkAdminSession = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .maybeSingle()
-          if (profile?.role === 'admin' || profile?.role === 'collab') {
-            setIsAdminUser(true)
+        const { data: sessionRes } = await supabase.auth.getSession()
+        const user = sessionRes?.session?.user
+        if (user && isMounted) {
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', user.id)
+              .maybeSingle()
+            if (isMounted && (profile?.role === 'admin' || profile?.role === 'collab')) {
+              setIsAdminUser(true)
+            }
+          } catch (e) {
+            console.warn('Lỗi đọc role profile:', e)
           }
         }
       } catch (e) {
         console.warn('Lỗi kiểm tra session admin IDP:', e)
       } finally {
-        setAdminCheckDone(true)
+        if (isMounted) {
+          setAdminCheckDone(true)
+        }
       }
     }
 
     checkAdminSession()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   // Đếm ngược mở khóa Brute-force
@@ -196,8 +254,10 @@ export default function IdpAuthPage() {
     const interval = setInterval(() => {
       setLockoutTimer((prev) => {
         if (prev <= 1) {
-          localStorage.removeItem('idp_lockout_until')
-          localStorage.setItem('idp_failed_attempts', '0')
+          try {
+            localStorage.removeItem('idp_lockout_until')
+            localStorage.setItem('idp_failed_attempts', '0')
+          } catch {}
           return 0
         }
         return prev - 1
@@ -218,10 +278,10 @@ export default function IdpAuthPage() {
     setIsDark(next)
     if (next) {
       document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
+      try { localStorage.setItem('theme', 'dark') } catch {}
     } else {
       document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
+      try { localStorage.setItem('theme', 'light') } catch {}
     }
   }
 
@@ -243,20 +303,24 @@ export default function IdpAuthPage() {
 
   // Ghi nhận lần nhập sai để chống Brute-force
   const recordFailedAttempt = () => {
-    const current = parseInt(localStorage.getItem('idp_failed_attempts') || '0', 10) + 1
-    localStorage.setItem('idp_failed_attempts', String(current))
-    if (current >= MAX_FAILED_ATTEMPTS) {
-      const lockUntil = Date.now() + LOCKOUT_SECONDS * 1000
-      localStorage.setItem('idp_lockout_until', String(lockUntil))
-      setLockoutTimer(LOCKOUT_SECONDS)
-      setErrorMsg(`Hệ thống bảo vệ Sen Heart đã tạm khóa do nhập sai liên tiếp ${MAX_FAILED_ATTEMPTS} lần. Vui lòng chờ 60 giây.`)
-    }
+    try {
+      const current = parseInt(localStorage.getItem('idp_failed_attempts') || '0', 10) + 1
+      localStorage.setItem('idp_failed_attempts', String(current))
+      if (current >= MAX_FAILED_ATTEMPTS) {
+        const lockUntil = Date.now() + LOCKOUT_SECONDS * 1000
+        localStorage.setItem('idp_lockout_until', String(lockUntil))
+        setLockoutTimer(LOCKOUT_SECONDS)
+        setErrorMsg(`Hệ thống bảo vệ Sen Heart đã tạm khóa do nhập sai liên tiếp ${MAX_FAILED_ATTEMPTS} lần. Vui lòng chờ 60 giây.`)
+      }
+    } catch {}
   }
 
   const clearFailedAttempts = () => {
-    localStorage.removeItem('idp_failed_attempts')
-    localStorage.removeItem('idp_lockout_until')
-    setLockoutTimer(0)
+    try {
+      localStorage.removeItem('idp_failed_attempts')
+      localStorage.removeItem('idp_lockout_until')
+      setLockoutTimer(0)
+    } catch {}
   }
 
   // Điều hướng sau khi đăng nhập thành công
@@ -346,7 +410,9 @@ export default function IdpAuthPage() {
         }
 
         if (data.user) {
-          await ensureStudentProfile(data.user.id)
+          try {
+            await ensureStudentProfile(data.user.id)
+          } catch {}
         }
         navigatePostLogin(data.user?.email || email.trim())
       } else if (mode === 'signup') {
@@ -377,18 +443,20 @@ export default function IdpAuthPage() {
         if (error) throw error
 
         if (data.user) {
-          await ensureStudentProfile(data.user.id)
-          await supabase
-            .from('profiles')
-            .update({
-              full_name: fullName.trim(),
-              phone_number: phone.trim(),
-              phone: phone.trim(),
-              class_name: className.trim(),
-              school: school.trim(),
-              province: province.trim(),
-            })
-            .eq('id', data.user.id)
+          try {
+            await ensureStudentProfile(data.user.id)
+            await supabase
+              .from('profiles')
+              .update({
+                full_name: fullName.trim(),
+                phone_number: phone.trim(),
+                phone: phone.trim(),
+                class_name: className.trim(),
+                school: school.trim(),
+                province: province.trim(),
+              })
+              .eq('id', data.user.id)
+          } catch {}
         }
 
         if (data.user && !data.session) {
@@ -1260,97 +1328,27 @@ export default function IdpAuthPage() {
           </div>
         </div>
       </div>
-
-      {/* 🌟 CSS ANIMATIONS KEYFRAMES TỪ NEW-SIGN */}
-      <style jsx>{`
-        .bg-anim-container {
-          perspective: 1000px;
-        }
-
-        .anim-blob {
-          will-change: transform;
-        }
-
-        .blob-1 {
-          width: 550px;
-          height: 550px;
-          top: -15%;
-          left: -10%;
-          animation: float-1 18s ease-in-out infinite alternate;
-        }
-
-        .blob-2 {
-          width: 480px;
-          height: 480px;
-          bottom: -15%;
-          right: -10%;
-          animation: float-2 22s ease-in-out infinite alternate;
-        }
-
-        .blob-3 {
-          width: 400px;
-          height: 400px;
-          top: 40%;
-          left: 60%;
-          animation: float-3 16s ease-in-out infinite alternate;
-        }
-
-        .blob-4 {
-          width: 420px;
-          height: 420px;
-          bottom: 20%;
-          left: -10%;
-          animation: float-4 20s ease-in-out infinite alternate;
-        }
-
-        @keyframes float-1 {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          50% {
-            transform: translate(80px, 60px) scale(1.15) rotate(20deg);
-          }
-          100% {
-            transform: translate(-40px, 120px) scale(0.9) rotate(-15deg);
-          }
-        }
-
-        @keyframes float-2 {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          50% {
-            transform: translate(-100px, -80px) scale(1.2) rotate(-25deg);
-          }
-          100% {
-            transform: translate(50px, -40px) scale(0.95) rotate(15deg);
-          }
-        }
-
-        @keyframes float-3 {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          50% {
-            transform: translate(-60px, 80px) scale(0.9) rotate(30deg);
-          }
-          100% {
-            transform: translate(60px, -60px) scale(1.1) rotate(-20deg);
-          }
-        }
-
-        @keyframes float-4 {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          50% {
-            transform: translate(90px, -70px) scale(1.1) rotate(-15deg);
-          }
-          100% {
-            transform: translate(-30px, 50px) scale(0.95) rotate(25deg);
-          }
-        }
-      `}</style>
     </div>
+  )
+}
+
+const ClientOnlyIdpAuth = dynamic(
+  () => Promise.resolve(IdpAuthContent),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F4F7FB] dark:bg-[#080D1A] text-slate-600 dark:text-slate-300">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mb-3" />
+        <p className="text-xs font-bold font-mono">Đang kết nối Cổng Xác Thực Tập Trung...</p>
+      </div>
+    ),
+  }
+)
+
+export default function IdpAuthPage() {
+  return (
+    <PageErrorBoundary>
+      <ClientOnlyIdpAuth />
+    </PageErrorBoundary>
   )
 }

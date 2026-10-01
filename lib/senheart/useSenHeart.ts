@@ -11,19 +11,27 @@ import { senHeart } from './index'
 export function useSenHeartThread(threadName: string, onCleanup?: () => void) {
   const signalRef = useRef<AbortSignal | null>(null)
   const threadIdRef = useRef<string>('')
+  const cleanupRef = useRef<(() => void) | undefined>(onCleanup)
+  cleanupRef.current = onCleanup
 
   useEffect(() => {
     const threadId = `page_${threadName.replace(/[^a-zA-Z0-9]/g, '_')}_${Math.random().toString(36).slice(2, 7)}`
     threadIdRef.current = threadId
 
-    const signal = senHeart.registerThread(threadId, threadName, onCleanup)
+    const signal = senHeart.registerThread(threadId, threadName, () => {
+      try {
+        if (cleanupRef.current) cleanupRef.current()
+      } catch (e) {
+        console.warn('Error in thread cleanup:', e)
+      }
+    })
     signalRef.current = signal
 
     return () => {
       // Khi rời trang, Sen Heart lập tức tiêu hủy luồng và gọi cleanup
       senHeart.killThread(threadId)
     }
-  }, [threadName, onCleanup])
+  }, [threadName])
 
   return {
     getSignal: () => signalRef.current,

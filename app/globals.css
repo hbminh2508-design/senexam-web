@@ -602,3 +602,94 @@ html.dark[data-eco-mode="true"] .dark\:bg-slate-800\/90 {
     touch-action: manipulation;
   }
 }
+
+/* ========================================================================= */
+/* SENEXAM IDP & AUTH FLOATING BLOBS ANIMATIONS                              */
+/* ========================================================================= */
+.bg-anim-container {
+  perspective: 1000px;
+}
+
+.anim-blob {
+  will-change: transform;
+}
+
+.blob-1 {
+  width: 550px;
+  height: 550px;
+  top: -15%;
+  left: -10%;
+  animation: idp-float-1 18s ease-in-out infinite alternate;
+}
+
+.blob-2 {
+  width: 480px;
+  height: 480px;
+  bottom: -15%;
+  right: -10%;
+  animation: idp-float-2 22s ease-in-out infinite alternate;
+}
+
+.blob-3 {
+  width: 400px;
+  height: 400px;
+  top: 40%;
+  left: 60%;
+  animation: idp-float-3 16s ease-in-out infinite alternate;
+}
+
+.blob-4 {
+  width: 420px;
+  height: 420px;
+  bottom: 20%;
+  left: -10%;
+  animation: idp-float-4 20s ease-in-out infinite alternate;
+}
+
+@keyframes idp-float-1 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(80px, 60px) scale(1.15) rotate(20deg);
+  }
+  100% {
+    transform: translate(-40px, 120px) scale(0.9) rotate(-15deg);
+  }
+}
+
+@keyframes idp-float-2 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-100px, -80px) scale(1.2) rotate(-25deg);
+  }
+  100% {
+    transform: translate(50px, -40px) scale(0.95) rotate(15deg);
+  }
+}
+
+@keyframes idp-float-3 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-60px, 80px) scale(0.9) rotate(30deg);
+  }
+  100% {
+    transform: translate(60px, -60px) scale(1.1) rotate(-20deg);
+  }
+}
+
+@keyframes idp-float-4 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(90px, -70px) scale(1.1) rotate(-15deg);
+  }
+  100% {
+    transform: translate(-30px, 50px) scale(0.95) rotate(25deg);
+  }
+}
