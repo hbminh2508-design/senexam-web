@@ -375,7 +375,7 @@ export default function NewDashboardPage() {
       const { data: auth } = await supabase.auth.getUser()
       const user = auth.user
       if (!user) {
-        router.replace('/new-sign')
+        router.replace('/idp')
         return
       }
 
@@ -638,7 +638,7 @@ export default function NewDashboardPage() {
   // Đăng xuất
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push('/new-sign')
+    router.push('/idp')
   }
 
   if (loading) {
@@ -722,8 +722,7 @@ export default function NewDashboardPage() {
               <div className="flex items-center gap-1.5">
                 {isVipUser ? (
                   planTier === 'sen_one' ? (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 text-amber-950 dark:text-amber-200 border border-amber-500/40 shadow-[0_2px_12px_rgba(245,158,11,0.25)]">
-                      <Sparkles className="h-3 w-3 text-amber-500 animate-spin" />
+                    <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 text-amber-950 dark:text-amber-200 border border-amber-500/40 shadow-[0_2px_12px_rgba(245,158,11,0.25)]">
                       <span className="bg-gradient-to-r from-amber-700 via-rose-600 to-indigo-600 dark:from-amber-300 dark:via-rose-300 dark:to-indigo-300 bg-clip-text text-transparent font-black">
                         SEN ONE
                       </span>
@@ -1093,8 +1092,7 @@ export default function NewDashboardPage() {
           <div className="flex items-center gap-2.5">
             {isVipUser ? (
               planTier === 'sen_one' ? (
-                <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 border border-amber-500/40 shadow-[0_2px_14px_rgba(245,158,11,0.25)] text-amber-950 dark:text-amber-200 backdrop-blur-md">
-                  <Sparkles className="h-4 w-4 text-amber-500 animate-spin" />
+                <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 border border-amber-500/40 shadow-[0_2px_14px_rgba(245,158,11,0.25)] text-amber-950 dark:text-amber-200 backdrop-blur-md">
                   <span className="bg-gradient-to-r from-amber-700 via-rose-600 to-indigo-600 dark:from-amber-300 dark:via-rose-300 dark:to-indigo-300 bg-clip-text text-transparent font-black tracking-widest">
                     SEN ONE
                   </span>

@@ -22,7 +22,7 @@ export async function signInWithGoogle(nextPath: string = '/new-dashboard') {
       host.startsWith('fepn.') ||
       nextPath.includes('fepn'))
 
-  const source = isSeb ? 'seb' : isFepn ? 'fepn' : 'new-sign'
+  const source = isSeb ? 'seb' : isFepn ? 'fepn' : 'idp'
 
   // Nếu đang ở FEPN hoặc redirect tới FEPN, callbackUrl trỏ về subdomain FEPN
   if (isFepn && host !== 'localhost') {

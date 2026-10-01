@@ -27,7 +27,7 @@ export default function SetupCourseError({
             Không thể tải Cổng Soạn đề
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-            Hệ thống phát hiện lỗi khi đồng bộ danh sách đề thi hoặc quyền tài khoản.
+            Hệ thống đã tự động ngắt kết nối an toàn để bảo vệ tiến trình học tập của bạn.
           </p>
           {error?.message && (
             <p className="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] font-mono text-amber-800 dark:text-amber-200 break-words text-left">
@@ -40,13 +40,14 @@ export default function SetupCourseError({
           <button
             type="button"
             onClick={() => reset()}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-white py-3 text-xs font-black shadow-md hover:bg-emerald-700 transition active:scale-95"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-white py-3 text-xs font-black shadow-md hover:bg-emerald-700 transition active:scale-95 cursor-pointer"
           >
-            <RotateCcw className="h-3.5 w-3.5" /> Tải lại trang
+            <RotateCcw className="h-3.5 w-3.5" /> Thử lại
           </button>
           <Link
             href="/new-dashboard"
-            className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 py-3 text-xs font-black text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition active:scale-95"
+            prefetch={false}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 py-3 text-xs font-black text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition active:scale-95 text-center cursor-pointer"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
           </Link>

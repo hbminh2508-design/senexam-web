@@ -97,10 +97,11 @@ function CallbackHandler() {
           if (active) {
             setErrorMsg(`Đăng nhập Google không thành công: ${detail}`)
           }
-          const failRedirect = isSebFlow ? '/seb-login' : isFepnFlow ? '/fepn-login' : '/new-sign'
+          const failRedirect = isSebFlow ? '/idp?service=seb' : isFepnFlow ? '/idp?service=fepn' : '/idp'
           setTimeout(() => {
             if (active) {
-              router.replace(`${failRedirect}?error=${encodeURIComponent(detail)}`)
+              const separator = failRedirect.includes('?') ? '&' : '?'
+              router.replace(`${failRedirect}${separator}error=${encodeURIComponent(detail)}`)
             }
           }, 3000)
           return
@@ -235,7 +236,7 @@ function CallbackHandler() {
       } catch (err: any) {
         if (active) {
           setErrorMsg(err.message || 'Không thể thiết lập phiên đăng nhập.')
-          setTimeout(() => router.replace('/new-sign'), 3000)
+          setTimeout(() => router.replace('/idp'), 3000)
         }
       }
     }

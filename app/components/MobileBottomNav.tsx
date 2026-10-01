@@ -303,6 +303,7 @@ export default function MobileBottomNav() {
     pathname?.startsWith('/legacy-senai-studio') ||
     pathname?.startsWith('/senai-studio') ||
     pathname?.startsWith('/new-setup-course') ||
+    pathname?.startsWith('/idp') ||
     pathname?.startsWith('/new-sign') ||
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/seb-login') ||

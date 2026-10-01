@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef, Component } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -63,6 +64,7 @@ import 'katex/dist/katex.min.css'
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
   children: React.ReactNode
+  resetKey?: any
 }
 
 interface ErrorBoundaryState {
@@ -81,6 +83,12 @@ class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryS
 
   componentDidCatch(error: any) {
     console.warn('LaTeX Markdown render error caught:', error)
+  }
+
+  componentDidUpdate(prevProps: ErrorBoundaryProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false })
+    }
   }
 
   render() {
@@ -105,6 +113,7 @@ const SafeMathRenderer = React.memo(
     className?: string
     gfm?: boolean
   }) => {
+    const safeContent = typeof content === 'string' ? content : String(content ?? '')
     const remarkPlugins = gfm ? [remarkMath, remarkGfm] : [remarkMath]
     const rehypePlugins: any[] = [
       [
@@ -118,10 +127,10 @@ const SafeMathRenderer = React.memo(
     ]
 
     return (
-      <MarkdownErrorBoundary fallback={<span className="text-xs font-mono">{content}</span>}>
+      <MarkdownErrorBoundary resetKey={safeContent} fallback={<span className="text-xs font-mono">{safeContent}</span>}>
         <div className={className}>
           <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
-            {content}
+            {safeContent}
           </ReactMarkdown>
         </div>
       </MarkdownErrorBoundary>
@@ -617,13 +626,14 @@ function SetupCourseMainContent() {
     const initPage = async () => {
       try {
         const { data: auth, error: authErr } = await supabase.auth.getUser()
+        if (!isMounted) return
+
         if (authErr || !auth?.user) {
-          router.replace('/new-sign')
+          router.replace('/idp')
           return
         }
 
         const user = auth.user
-        if (!isMounted) return
         setCurrentUser(user)
 
         try {
@@ -631,6 +641,7 @@ function SetupCourseMainContent() {
         } catch (e) {
           console.warn('ensureStudentProfile warning:', e)
         }
+        if (!isMounted) return
 
         // Kiểm tra role người dùng an toàn (tránh văng lỗi single())
         let role: 'admin' | 'collab' | 'teacher' | 'student' = 'student'
@@ -646,7 +657,8 @@ function SetupCourseMainContent() {
         } catch (e) {
           console.warn('Lỗi lấy role profile:', e)
         }
-        if (isMounted) setUserRole(role)
+        if (!isMounted) return
+        setUserRole(role)
 
         // Tải danh sách đề thi:
         // - Admin/Colab/Teacher: tải toàn bộ đề thi trong hệ thống
@@ -656,14 +668,19 @@ function SetupCourseMainContent() {
           query = query.eq('created_by', user.id)
         }
 
-        const { data: exData, error: exErr } = await query
-        if (isMounted) {
-          if (!exErr && Array.isArray(exData)) {
-            setExamsList(exData)
-          } else {
-            setExamsList([])
+        try {
+          const { data: exData, error: exErr } = await query
+          if (isMounted) {
+            if (!exErr && Array.isArray(exData)) {
+              setExamsList(exData)
+            } else {
+              setExamsList([])
+            }
           }
+        } catch (e) {
+          if (isMounted) setExamsList([])
         }
+        if (!isMounted) return
 
         // Tải danh sách thư mục SEB
         try {
@@ -677,7 +694,8 @@ function SetupCourseMainContent() {
         } catch (e) {
           console.warn('Lỗi tải folders:', e)
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || String(err).includes('aborted')) return
         console.error('Lỗi khởi tạo Setup Course:', err)
       } finally {
         if (isMounted) setLoading(false)
@@ -3479,10 +3497,23 @@ function SetupCourseMainContent() {
   )
 }
 
+const ClientOnlySetupCourse = dynamic(
+  () => Promise.resolve(SetupCourseMainContent),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500 mb-3" />
+        <p className="text-sm font-bold">Đang tải Cổng Thiết lập Khóa học & Soạn đề KaTeX...</p>
+      </div>
+    ),
+  }
+)
+
 export default function NewSetupCoursePage() {
   return (
     <PageErrorBoundary>
-      <SetupCourseMainContent />
+      <ClientOnlySetupCourse />
     </PageErrorBoundary>
   )
 }
