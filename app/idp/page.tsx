@@ -104,9 +104,8 @@ function IdpAuthContent() {
   const [successMsg, setSuccessMsg] = useState('')
   const [isDark, setIsDark] = useState(false)
 
-  // Hệ thống nhận diện bối cảnh: FEPN, SEB, hoặc SenExam mặc định
-  const [isFepnContext, setIsFepnContext] = useState(false)
-  const [targetService, setTargetService] = useState<'senexam' | 'seb' | 'fepn'>('senexam')
+  // Hệ thống nhận diện bối cảnh dịch vụ: SEB hoặc SenExam mặc định
+  const [targetService, setTargetService] = useState<'senexam' | 'seb'>('senexam')
   const [redirectPath, setRedirectPath] = useState<string>('')
 
   // Kiểm tra quyền Admin / Collab của người dùng hiện tại (nếu đã đăng nhập để mở tab 4)
@@ -169,7 +168,7 @@ function IdpAuthContent() {
         const host = window.location.hostname.toLowerCase()
         const ref = (document.referrer || '').toLowerCase()
 
-        // Hệ thống nhận diện bối cảnh FEPN thông minh
+        // Nếu phát hiện yêu cầu từ FEPN: Chuyển hướng ngay sang Cổng Đăng Nhập FEPN độc lập
         const detectedFepn =
           serviceParam === 'fepn' ||
           fromParam === 'fepn' ||
@@ -178,11 +177,13 @@ function IdpAuthContent() {
           host.includes('fepn.') ||
           ref.includes('fepn')
 
+        if (detectedFepn) {
+          router.replace(`/fepn-login${window.location.search || ''}`)
+          return
+        }
+
         if (isMounted) {
-          if (detectedFepn) {
-            setIsFepnContext(true)
-            setTargetService('fepn')
-          } else if (serviceParam === 'seb' || nextParam.includes('seb')) {
+          if (serviceParam === 'seb' || nextParam.includes('seb')) {
             setTargetService('seb')
           } else {
             setTargetService('senexam')
@@ -344,7 +345,7 @@ function IdpAuthContent() {
       return
     }
 
-    if (targetService === 'fepn' || isVnu || isFepnContext) {
+    if (isVnu) {
       if (typeof window !== 'undefined') {
         if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
           router.push('/fepn-dashboard')
@@ -361,7 +362,7 @@ function IdpAuthContent() {
       return
     }
 
-    router.push('/new-dashboard')
+    router.push(redirectPath || '/new-dashboard')
   }
 
   // Đăng nhập bằng Google OAuth
@@ -370,7 +371,7 @@ function IdpAuthContent() {
     setGoogleLoading(true)
     setErrorMsg('')
     try {
-      const dest = redirectPath || (isFepnContext || targetService === 'fepn' ? '/fepn-dashboard' : targetService === 'seb' ? '/seb-dashboard' : '/new-dashboard')
+      const dest = redirectPath || (targetService === 'seb' ? '/seb-dashboard' : '/new-dashboard')
       await signInWithGoogle(dest)
     } catch (err: any) {
       setErrorMsg(
@@ -641,24 +642,20 @@ function IdpAuthContent() {
       {/* Main Container */}
       <div className="relative z-10 w-full max-w-[500px] flex flex-col items-center">
         
-        {/* BRAND HEADER: TỰ ĐỘNG NHẬN DIỆN FEPN (TUYỆT ĐỐI KHÔNG HIỆN "IDP" NẾU LÀ FEPN) */}
+        {/* BRAND HEADER: SENEXAM IDP & SEB EXAM IDP */}
         <div className="text-center space-y-2 mb-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl">
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>
-              {isFepnContext
-                ? 'Hệ Thống Khảo Thí FEPN • VNU'
-                : 'Cổng Định Danh Tập Trung • Sen Heart 1.0.2'}
-            </span>
+            <span>Cổng Định Danh Tập Trung • Sen Heart 1.0.2</span>
           </div>
 
           <h1
             className="text-3xl sm:text-5xl font-black tracking-tight leading-tight"
             style={{ fontFamily: 'var(--font-idp-heading)' }}
           >
-            {isFepnContext ? (
+            {targetService === 'seb' ? (
               <>
-                FEPN <span style={{ color: accent }}>Đăng nhập / Đăng ký</span>
+                SEB Exam<span style={{ color: accent }}> IDP</span>
               </>
             ) : (
               <>
@@ -668,9 +665,7 @@ function IdpAuthContent() {
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-sm mx-auto" style={{ fontFamily: 'var(--font-idp-body)' }}>
-            {isFepnContext
-              ? 'Chuyên trang Đào tạo & Khảo thí FEPN — Dành riêng cho sinh viên & cán bộ VNU.'
-              : targetService === 'seb'
+            {targetService === 'seb'
               ? 'Cổng Xác Thực Safe Exam Browser — Khảo thí an toàn & chống gian lận.'
               : 'Cổng Định Danh Tập Trung — Một tài khoản cho toàn bộ hệ sinh thái SenExam.'}
           </p>
@@ -1201,9 +1196,7 @@ function IdpAuthContent() {
                     {/* Hướng dẫn khi ở mode Quên mật khẩu */}
                     {mode === 'forgot' && (
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
-                        {isFepnContext
-                          ? 'Nhập địa chỉ email tài khoản của bạn. FEPN sẽ gửi liên kết bảo mật để bạn thiết lập mật khẩu mới ngay lập tức.'
-                          : 'Nhập địa chỉ email tài khoản của bạn. SenExam IDP sẽ gửi liên kết bảo mật để bạn thiết lập mật khẩu mới ngay lập tức.'}
+                        Nhập địa chỉ email tài khoản của bạn. SenExam IDP sẽ gửi liên kết bảo mật để bạn thiết lập mật khẩu mới ngay lập tức.
                       </p>
                     )}
 
@@ -1236,9 +1229,7 @@ function IdpAuthContent() {
                             {mode === 'login'
                               ? 'Đăng Nhập Ngay'
                               : mode === 'signup'
-                              ? isFepnContext
-                                ? 'Tạo Tài Khoản FEPN'
-                                : 'Tạo Tài Khoản IDP'
+                              ? 'Tạo Tài Khoản IDP'
                               : mode === 'forgot'
                               ? 'Gửi Link Đặt Lại Mật Khẩu'
                               : 'Gửi Mã Xác Thực'}
@@ -1312,13 +1303,9 @@ function IdpAuthContent() {
           )}
         </div>
 
-        {/* Chân trang IDP / FEPN */}
+        {/* Chân trang IDP */}
         <div className="mt-6 text-center text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-          <p>
-            {isFepnContext
-              ? '© 2026 Chuyên Trang Khảo Thí FEPN • Đại học Quốc gia Hà Nội.'
-              : '© 2026 SenExam Identity Provider. Mọi quyền được bảo lưu.'}
-          </p>
+          <p>© 2026 SenExam Identity Provider • Sen Heart Security Platform</p>
           <div className="flex items-center justify-center gap-3 font-semibold text-[10px]">
             <Link href="/home" className="hover:underline">Giới thiệu</Link>
             <span>•</span>

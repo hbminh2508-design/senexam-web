@@ -97,7 +97,7 @@ function CallbackHandler() {
           if (active) {
             setErrorMsg(`Đăng nhập Google không thành công: ${detail}`)
           }
-          const failRedirect = isSebFlow ? '/idp?service=seb' : isFepnFlow ? '/idp?service=fepn' : '/idp'
+          const failRedirect = isSebFlow ? '/idp?service=seb' : isFepnFlow ? '/fepn-login' : '/idp'
           setTimeout(() => {
             if (active) {
               const separator = failRedirect.includes('?') ? '&' : '?'
@@ -236,7 +236,8 @@ function CallbackHandler() {
       } catch (err: any) {
         if (active) {
           setErrorMsg(err.message || 'Không thể thiết lập phiên đăng nhập.')
-          setTimeout(() => router.replace('/idp'), 3000)
+          const fallbackUrl = isSebFlow ? '/idp?service=seb' : isFepnFlow ? '/fepn-login' : '/idp'
+          setTimeout(() => router.replace(fallbackUrl), 3000)
         }
       }
     }
