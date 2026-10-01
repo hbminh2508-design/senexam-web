@@ -404,7 +404,7 @@ export default function NewDashboardPage() {
         dataDispatcher.fetchShared(`profile_${user.id}`, () =>
           supabase
             .from('profiles')
-            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date')
+            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date, chat_bubble_disabled')
             .eq('id', user.id)
             .single()
         ),
@@ -440,6 +440,19 @@ export default function NewDashboardPage() {
         setVipUntil(profile?.vip_expires_at || null)
         setPlanTier(profile?.plan_tier || null)
         setSubmissionCount(submissionsRes.count || 0)
+
+        // Đồng bộ cài đặt bong bóng chat từ Supabase Cloud
+        if (typeof profile?.chat_bubble_disabled === 'boolean') {
+          const isOff = profile.chat_bubble_disabled
+          setChatBubbleEnabled(!isOff)
+          if (typeof window !== 'undefined') {
+            if (isOff) {
+              localStorage.setItem('sen_chat_bubble_disabled', '1')
+            } else {
+              localStorage.removeItem('sen_chat_bubble_disabled')
+            }
+          }
+        }
         
         // Tính thông báo chưa đọc của riêng user này
         const readIds: string[] = JSON.parse(localStorage.getItem(`sen_read_announcements_${user.id}`) || '[]')
@@ -572,6 +585,15 @@ export default function NewDashboardPage() {
       window.dispatchEvent(
         new CustomEvent('sen-chat-bubble-setting-changed', { detail: { enabled: nextVal } })
       )
+    }
+    // Đồng bộ lên Supabase Cloud cho tài khoản người dùng
+    if (userId) {
+      supabase
+        .from('profiles')
+        .update({ chat_bubble_disabled: !nextVal })
+        .eq('id', userId)
+        .then(() => {})
+        .catch(() => {})
     }
   }
 
