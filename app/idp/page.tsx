@@ -53,7 +53,7 @@ export default function IdpAuthPage() {
   const router = useRouter()
   const { themeColor } = useNewUiPrefs()
 
-  // Phân luồng độc lập Sen Heart 1.0 - Tiêu hủy sạch khi rời trang
+  // Phân luồng độc lập Sen Heart 1.0.2 - Tiêu hủy sạch luồng khi rời trang
   useSenHeartThread('idp_auth')
 
   const [mode, setMode] = useState<IdpMode>('login')
@@ -65,7 +65,8 @@ export default function IdpAuthPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [isDark, setIsDark] = useState(false)
 
-  // Phát hiện dịch vụ gọi đến (service: fepn, seb, hoặc senexam)
+  // Hệ thống nhận diện bối cảnh: FEPN, SEB, hoặc SenExam mặc định
+  const [isFepnContext, setIsFepnContext] = useState(false)
   const [targetService, setTargetService] = useState<'senexam' | 'seb' | 'fepn'>('senexam')
   const [redirectPath, setRedirectPath] = useState<string>('')
 
@@ -109,7 +110,7 @@ export default function IdpAuthPage() {
   const [grantSenCash, setGrantSenCash] = useState('0')
   const [grantLoading, setGrantLoading] = useState(false)
 
-  // Khởi tạo giao diện, đọc Query Params & Kiểm tra Brute-Force lockout
+  // Khởi tạo giao diện, nhận diện bối cảnh FEPN / SEB & Kiểm tra Brute-Force lockout
   useEffect(() => {
     const dark =
       typeof window !== 'undefined' &&
@@ -119,13 +120,27 @@ export default function IdpAuthPage() {
 
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
-      const serviceParam = params.get('service')
-      const nextParam = params.get('next') || params.get('redirect')
+      const serviceParam = (params.get('service') || '').toLowerCase()
+      const fromParam = (params.get('from') || '').toLowerCase()
+      const targetParam = (params.get('target') || '').toLowerCase()
+      const nextParam = params.get('next') || params.get('redirect') || ''
+      const host = window.location.hostname.toLowerCase()
+      const ref = (document.referrer || '').toLowerCase()
 
-      if (serviceParam === 'seb' || nextParam?.includes('seb')) {
-        setTargetService('seb')
-      } else if (serviceParam === 'fepn' || nextParam?.includes('fepn') || window.location.hostname.includes('fepn.')) {
+      // Hệ thống nhận diện bối cảnh FEPN thông minh
+      const detectedFepn =
+        serviceParam === 'fepn' ||
+        fromParam === 'fepn' ||
+        targetParam === 'fepn' ||
+        nextParam.includes('fepn') ||
+        host.includes('fepn.') ||
+        ref.includes('fepn')
+
+      if (detectedFepn) {
+        setIsFepnContext(true)
         setTargetService('fepn')
+      } else if (serviceParam === 'seb' || nextParam.includes('seb')) {
+        setTargetService('seb')
       } else {
         setTargetService('senexam')
       }
@@ -223,7 +238,7 @@ export default function IdpAuthPage() {
 
     if (s <= 2) return { score: 1, label: 'Mật khẩu yếu', color: 'bg-rose-500' }
     if (s <= 3) return { score: 2, label: 'Mật khẩu trung bình', color: 'bg-amber-500' }
-    return { score: 3, label: 'Mật khẩu mạnh & bảo mật', color: 'bg-emerald-500' }
+    return { score: 3, label: 'Mật khẩu mạnh & an toàn', color: 'bg-emerald-500' }
   }, [password, grantPassword, mode])
 
   // Ghi nhận lần nhập sai để chống Brute-force
@@ -234,7 +249,7 @@ export default function IdpAuthPage() {
       const lockUntil = Date.now() + LOCKOUT_SECONDS * 1000
       localStorage.setItem('idp_lockout_until', String(lockUntil))
       setLockoutTimer(LOCKOUT_SECONDS)
-      setErrorMsg(`Hệ thống bảo vệ Sen Heart đã tạm khóa thao tác do đăng nhập sai liên tiếp ${MAX_FAILED_ATTEMPTS} lần. Vui lòng chờ 60 giây.`)
+      setErrorMsg(`Hệ thống bảo vệ Sen Heart đã tạm khóa do nhập sai liên tiếp ${MAX_FAILED_ATTEMPTS} lần. Vui lòng chờ 60 giây.`)
     }
   }
 
@@ -265,7 +280,7 @@ export default function IdpAuthPage() {
       return
     }
 
-    if (targetService === 'fepn' || isVnu) {
+    if (targetService === 'fepn' || isVnu || isFepnContext) {
       if (typeof window !== 'undefined') {
         if (window.location.hostname.startsWith('tsv.fepn.') || window.location.hostname.startsWith('fepn.')) {
           router.push('/fepn-dashboard')
@@ -291,7 +306,7 @@ export default function IdpAuthPage() {
     setGoogleLoading(true)
     setErrorMsg('')
     try {
-      const dest = redirectPath || (targetService === 'seb' ? '/seb-dashboard' : targetService === 'fepn' ? '/fepn-dashboard' : '/new-dashboard')
+      const dest = redirectPath || (isFepnContext || targetService === 'fepn' ? '/fepn-dashboard' : targetService === 'seb' ? '/seb-dashboard' : '/new-dashboard')
       await signInWithGoogle(dest)
     } catch (err: any) {
       setErrorMsg(
@@ -449,39 +464,40 @@ export default function IdpAuthPage() {
     setSuccessMsg('')
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData?.session?.access_token
-      if (!token) {
-        throw new Error('Phiên quản trị viên không hợp lệ. Vui lòng đăng nhập lại.')
+      if (!grantEmail.trim() || !grantPassword || !grantFullName.trim()) {
+        throw new Error('Vui lòng điền đầy đủ Họ tên, Email và Mật khẩu khởi tạo.')
+      }
+
+      if (grantPassword.length < 6) {
+        throw new Error('Mật khẩu phải từ 6 ký tự trở lên.')
       }
 
       const res = await fetch('/api/admin/provision-user', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: grantEmail.trim(),
           password: grantPassword,
           fullName: grantFullName.trim(),
           role: grantRole,
-          phone: grantPhone.trim(),
-          className: grantClass.trim(),
-          school: grantSchool.trim(),
-          province: grantProvince.trim(),
+          phone: grantPhone.trim() || undefined,
+          className: grantClass.trim() || undefined,
+          school: grantSchool.trim() || undefined,
+          province: grantProvince.trim() || undefined,
           planTier: grantPlanTier,
-          vipDays: parseInt(grantVipDays, 10) || 30,
-          senCash: parseInt(grantSenCash, 10) || 0,
+          vipDays: grantPlanTier !== 'free' ? parseInt(grantVipDays || '30', 10) : undefined,
+          sencashBalance: parseInt(grantSenCash || '0', 10),
         }),
       })
 
-      const json = await res.json()
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Lỗi cấp tài khoản từ máy chủ.')
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Cấp tài khoản thất bại.')
       }
 
-      setSuccessMsg(`🎉 Cấp tài khoản thành công cho [${json.user.email}] với vai trò "${json.user.role.toUpperCase()}"!`)
+      setSuccessMsg(
+        `✓ Đã cấp tài khoản thành công cho: ${data.data.email} (Vai trò: ${data.data.role}, Gói: ${data.data.plan_tier}). Người dùng có thể đăng nhập ngay!`
+      )
       // Reset form
       setGrantEmail('')
       setGrantPassword('')
@@ -492,7 +508,7 @@ export default function IdpAuthPage() {
       setGrantProvince('')
       setGrantSenCash('0')
     } catch (err: any) {
-      setErrorMsg(err.message || 'Không thể cấp tài khoản cho người dùng.')
+      setErrorMsg(err.message || 'Lỗi cấp tài khoản hệ thống.')
     } finally {
       setGrantLoading(false)
     }
@@ -506,20 +522,27 @@ export default function IdpAuthPage() {
       className={`${headingFont.variable} ${bodyFont.variable} relative min-h-screen flex items-center justify-center p-4 sm:p-6 overflow-hidden transition-colors duration-500 font-sans`}
       style={{
         ...vars,
-        backgroundColor: isDark ? '#070A11' : '#F3F6FA',
+        backgroundColor: isDark ? '#080C14' : '#F4F7FB',
         color: 'var(--text)',
       }}
     >
-      {/* 🔮 ANIMATED AMBIENT BACKGROUND */}
+      {/* 🔮 ANIMATED BACKGROUND: Các khối cầu phát sáng chuyển động mượt mà 60fps từ new-sign */}
       <div className="bg-anim-container pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
         <div
-          className="anim-blob blob-1 fixed rounded-full blur-[90px] sm:blur-[120px] opacity-40 dark:opacity-20"
+          className="anim-blob blob-1 fixed rounded-full blur-[90px] sm:blur-[120px] opacity-40 dark:opacity-25"
           style={{ backgroundColor: accent }}
         />
-        <div className="anim-blob blob-2 fixed rounded-full blur-[100px] sm:blur-[140px] opacity-40 dark:opacity-20 bg-amber-400 dark:bg-amber-600" />
-        <div className="anim-blob blob-3 fixed rounded-full blur-[90px] sm:blur-[130px] opacity-35 dark:opacity-15 bg-rose-500 dark:bg-rose-700" />
-        <div className="anim-blob blob-4 fixed rounded-full blur-[110px] sm:blur-[150px] opacity-35 dark:opacity-15 bg-indigo-500 dark:bg-indigo-600" />
+        <div
+          className="anim-blob blob-2 fixed rounded-full blur-[100px] sm:blur-[140px] opacity-40 dark:opacity-25 bg-amber-400 dark:bg-amber-500"
+        />
+        <div
+          className="anim-blob blob-3 fixed rounded-full blur-[90px] sm:blur-[130px] opacity-35 dark:opacity-20 bg-rose-500 dark:bg-rose-600"
+        />
+        <div
+          className="anim-blob blob-4 fixed rounded-full blur-[110px] sm:blur-[150px] opacity-35 dark:opacity-20 bg-teal-400 dark:bg-teal-500"
+        />
 
+        {/* Lớp lưới tinh tế overlay */}
         <div
           className="fixed inset-0 opacity-[0.03] dark:opacity-[0.05]"
           style={{
@@ -529,8 +552,14 @@ export default function IdpAuthPage() {
         />
       </div>
 
-      {/* Top Controls: Dark Mode Toggle & Return to Home */}
+      {/* Top right quick controls: Dark Mode & Home */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-30 flex items-center gap-2">
+        <Link
+          href="/home"
+          className="px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 shadow-sm backdrop-blur-xl transition hover:scale-105"
+        >
+          Giới thiệu
+        </Link>
         <button
           type="button"
           onClick={toggleDarkMode}
@@ -542,40 +571,46 @@ export default function IdpAuthPage() {
       </div>
 
       {/* Main Container */}
-      <div className="relative z-10 w-full max-w-[540px] flex flex-col items-center py-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-2.5 mb-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl">
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>IDP Central Armor • Sen Heart 1.0.2</span>
+      <div className="relative z-10 w-full max-w-[500px] flex flex-col items-center">
+        
+        {/* BRAND HEADER: TỰ ĐỘNG NHẬN DIỆN FEPN (TUYỆT ĐỐI KHÔNG HIỆN "IDP" NẾU LÀ FEPN) */}
+        <div className="text-center space-y-2 mb-6">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>
+              {isFepnContext
+                ? 'Hệ Thống Khảo Thí FEPN • VNU'
+                : 'Cổng Định Danh Tập Trung • Sen Heart 1.0.2'}
+            </span>
           </div>
 
           <h1
             className="text-3xl sm:text-5xl font-black tracking-tight leading-tight"
             style={{ fontFamily: 'var(--font-idp-heading)' }}
           >
-            SenExam<span style={{ color: accent }}> IDP</span>
+            {isFepnContext ? (
+              <>
+                FEPN <span style={{ color: accent }}>Đăng nhập / Đăng ký</span>
+              </>
+            ) : (
+              <>
+                SenExam<span style={{ color: accent }}> IDP</span>
+              </>
+            )}
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-sm mx-auto" style={{ fontFamily: 'var(--font-idp-body)' }}>
-            {targetService === 'seb'
+            {isFepnContext
+              ? 'Chuyên trang Đào tạo & Khảo thí FEPN — Dành riêng cho sinh viên & cán bộ VNU.'
+              : targetService === 'seb'
               ? 'Cổng Xác Thực Safe Exam Browser — Khảo thí an toàn & chống gian lận.'
-              : targetService === 'fepn'
-              ? 'Cổng Xác Thực Chuyên Trang Đào Tạo FEPN — Dành riêng cho sinh viên & giảng viên.'
               : 'Cổng Định Danh Tập Trung — Một tài khoản cho toàn bộ hệ sinh thái SenExam.'}
           </p>
-
-          {/* Service badge if targeted */}
-          {targetService !== 'senexam' && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-              <Zap className="h-3.5 w-3.5" />
-              <span>Chế độ kết nối: {targetService.toUpperCase()}</span>
-            </div>
-          )}
         </div>
 
         {/* Card Form */}
         <div className="w-full rounded-[32px] border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-900/90 p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_rgba(0,0,0,0.5)] backdrop-blur-2xl transition-all duration-300">
+          
           {/* CẢNH BÁO BRUTE-FORCE LOCKOUT (NẾU ĐANG BỊ KHÓA) */}
           {lockoutTimer > 0 && (
             <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-bold space-y-2 animate-in fade-in zoom-in-95">
@@ -960,7 +995,7 @@ export default function IdpAuthPage() {
                   )}
 
                   <form onSubmit={handleSubmit} className="space-y-3.5">
-                    {/* Thông tin học sinh khi đăng ký mới */}
+                    {/* Thông tin học sinh khi đăng ký mới (đầy đủ các trường từ new-sign) */}
                     {mode === 'signup' && (
                       <>
                         <div className="relative group animate-in fade-in slide-in-from-top-2">
@@ -1098,7 +1133,9 @@ export default function IdpAuthPage() {
                     {/* Hướng dẫn khi ở mode Quên mật khẩu */}
                     {mode === 'forgot' && (
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
-                        Nhập địa chỉ email tài khoản của bạn. SenExam IDP sẽ gửi liên kết bảo mật để bạn thiết lập mật khẩu mới ngay lập tức.
+                        {isFepnContext
+                          ? 'Nhập địa chỉ email tài khoản của bạn. FEPN sẽ gửi liên kết bảo mật để bạn thiết lập mật khẩu mới ngay lập tức.'
+                          : 'Nhập địa chỉ email tài khoản của bạn. SenExam IDP sẽ gửi liên kết bảo mật để bạn thiết lập mật khẩu mới ngay lập tức.'}
                       </p>
                     )}
 
@@ -1131,7 +1168,9 @@ export default function IdpAuthPage() {
                             {mode === 'login'
                               ? 'Đăng Nhập Ngay'
                               : mode === 'signup'
-                              ? 'Tạo Tài Khoản IDP'
+                              ? isFepnContext
+                                ? 'Tạo Tài Khoản FEPN'
+                                : 'Tạo Tài Khoản IDP'
                               : mode === 'forgot'
                               ? 'Gửi Link Đặt Lại Mật Khẩu'
                               : 'Gửi Mã Xác Thực'}
@@ -1141,6 +1180,19 @@ export default function IdpAuthPage() {
                       )}
                     </button>
                   </form>
+
+                  {/* Đồng ý điều khoản & bảo mật */}
+                  <p className="mt-3 text-[11px] text-center text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+                    Bằng cách tiếp tục, bạn đồng ý với{' '}
+                    <Link href="/terms" target="_blank" className="font-bold underline hover:text-indigo-600 dark:hover:text-indigo-400">
+                      Điều khoản dịch vụ
+                    </Link>{' '}
+                    và{' '}
+                    <Link href="/privacy" target="_blank" className="font-bold underline hover:text-indigo-600 dark:hover:text-indigo-400">
+                      Chính sách bảo mật
+                    </Link>{' '}
+                    của chúng tôi.
+                  </p>
 
                   {/* Extra Links: Magic Link & Trợ giúp học sinh */}
                   <div className="mt-4 flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400">
@@ -1170,15 +1222,18 @@ export default function IdpAuthPage() {
                       <p className="font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5 text-sm">
                         <Sparkles className="h-4 w-4 text-amber-500" /> Hướng Dẫn & Trợ Giúp Học Sinh:
                       </p>
-                      <ul className="space-y-1.5 list-disc pl-4 text-[11px] leading-relaxed">
+                      <ul className="space-y-1.5 list-disc pl-4 text-[11px] leading-relaxed font-semibold">
                         <li>
-                          <strong>Chưa nhận được email xác thực:</strong> Hãy kiểm tra thêm mục <em>Thư rác (Spam)</em> hoặc <em>Quảng cáo</em> trong Gmail.
+                          <strong>Chưa nhận được email xác thực:</strong> Hãy kiểm tra thêm mục <em>Thư rác (Spam)</em> hoặc <em>Quảng cáo</em> trong Gmail của bạn.
                         </li>
                         <li>
-                          <strong>Đăng nhập nhanh 1-chạm:</strong> Sử dụng nút Google phía trên để đăng nhập tự động mà không cần ghi nhớ mật khẩu.
+                          <strong>Đăng nhập nhanh 1-chạm:</strong> Sử dụng nút <em>"Tiếp tục với Google"</em> phía trên để đăng nhập tự động bằng Gmail trường hoặc cá nhân.
                         </li>
                         <li>
-                          <strong>Đăng nhập FEPN & SEB:</strong> Cổng IDP hỗ trợ xác thực chung cho Safe Exam Browser và tài khoản Đại học Quốc gia.
+                          <strong>Sinh viên ĐHQGHN:</strong> Sử dụng email đuôi <code>@vnu.edu.vn</code> để được tự động kết nối thẳng vào hệ thống FEPN Dashboard.
+                        </li>
+                        <li>
+                          <strong>Quên mật khẩu:</strong> Chọn tab <em>"Quên MK"</em> để nhận liên kết khôi phục mật khẩu trực tiếp trong vòng 60 giây.
                         </li>
                       </ul>
                     </div>
@@ -1189,11 +1244,15 @@ export default function IdpAuthPage() {
           )}
         </div>
 
-        {/* Chân trang IDP */}
+        {/* Chân trang IDP / FEPN */}
         <div className="mt-6 text-center text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-          <p>© 2026 SenExam Identity Provider. Mọi quyền được bảo lưu.</p>
+          <p>
+            {isFepnContext
+              ? '© 2026 Chuyên Trang Khảo Thí FEPN • Đại học Quốc gia Hà Nội.'
+              : '© 2026 SenExam Identity Provider. Mọi quyền được bảo lưu.'}
+          </p>
           <div className="flex items-center justify-center gap-3 font-semibold text-[10px]">
-            <Link href="/new-dashboard" className="hover:underline">Trang chủ</Link>
+            <Link href="/home" className="hover:underline">Giới thiệu</Link>
             <span>•</span>
             <Link href="/terms" className="hover:underline">Điều khoản</Link>
             <span>•</span>
@@ -1201,6 +1260,97 @@ export default function IdpAuthPage() {
           </div>
         </div>
       </div>
+
+      {/* 🌟 CSS ANIMATIONS KEYFRAMES TỪ NEW-SIGN */}
+      <style jsx>{`
+        .bg-anim-container {
+          perspective: 1000px;
+        }
+
+        .anim-blob {
+          will-change: transform;
+        }
+
+        .blob-1 {
+          width: 550px;
+          height: 550px;
+          top: -15%;
+          left: -10%;
+          animation: float-1 18s ease-in-out infinite alternate;
+        }
+
+        .blob-2 {
+          width: 480px;
+          height: 480px;
+          bottom: -15%;
+          right: -10%;
+          animation: float-2 22s ease-in-out infinite alternate;
+        }
+
+        .blob-3 {
+          width: 400px;
+          height: 400px;
+          top: 40%;
+          left: 60%;
+          animation: float-3 16s ease-in-out infinite alternate;
+        }
+
+        .blob-4 {
+          width: 420px;
+          height: 420px;
+          bottom: 20%;
+          left: -10%;
+          animation: float-4 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes float-1 {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          50% {
+            transform: translate(80px, 60px) scale(1.15) rotate(20deg);
+          }
+          100% {
+            transform: translate(-40px, 120px) scale(0.9) rotate(-15deg);
+          }
+        }
+
+        @keyframes float-2 {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          50% {
+            transform: translate(-100px, -80px) scale(1.2) rotate(-25deg);
+          }
+          100% {
+            transform: translate(50px, -40px) scale(0.95) rotate(15deg);
+          }
+        }
+
+        @keyframes float-3 {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          50% {
+            transform: translate(-60px, 80px) scale(0.9) rotate(30deg);
+          }
+          100% {
+            transform: translate(60px, -60px) scale(1.1) rotate(-20deg);
+          }
+        }
+
+        @keyframes float-4 {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          50% {
+            transform: translate(90px, -70px) scale(1.1) rotate(-15deg);
+          }
+          100% {
+            transform: translate(-30px, 50px) scale(0.95) rotate(25deg);
+          }
+        }
+      `}</style>
     </div>
   )
 }

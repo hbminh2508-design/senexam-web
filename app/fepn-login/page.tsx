@@ -18,7 +18,7 @@ export default function FepnLoginRedirectPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#F3F6FA] dark:bg-[#070A11] text-slate-600 dark:text-slate-300">
       <div className="text-center space-y-3">
         <div className="h-8 w-8 mx-auto border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs font-bold font-mono">Đang chuyển hướng FEPN Portal đến SenExam IDP...</p>
+        <p className="text-xs font-bold font-mono">Đang kết nối Cổng Đăng nhập FEPN...</p>
       </div>
     </div>
   )

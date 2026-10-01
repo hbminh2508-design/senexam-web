@@ -625,15 +625,21 @@ function SetupCourseMainContent() {
 
     const initPage = async () => {
       try {
-        const { data: auth, error: authErr } = await supabase.auth.getUser()
+        const { data: sessionRes } = await supabase.auth.getSession()
+        let user = sessionRes?.session?.user || null
+        if (!user) {
+          try {
+            const { data: authData } = await supabase.auth.getUser()
+            user = authData?.user || null
+          } catch {}
+        }
         if (!isMounted) return
 
-        if (authErr || !auth?.user) {
+        if (!user) {
           router.replace('/idp')
           return
         }
 
-        const user = auth.user
         setCurrentUser(user)
 
         try {
@@ -1989,7 +1995,7 @@ function SetupCourseMainContent() {
 
               {/* Lưới các nút phím render bằng KaTeX chuẩn xịn */}
               <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
-                {MATH_KEYBOARD_TABS.find((t) => t.id === activeKeyboardTab)?.keys.map((k, kIdx) => (
+                {(MATH_KEYBOARD_TABS.find((t) => t.id === activeKeyboardTab)?.keys || []).map((k, kIdx) => (
                   <MathKeyButton
                     key={k.insert + '-' + kIdx}
                     k={k}
@@ -2003,7 +2009,7 @@ function SetupCourseMainContent() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-black uppercase tracking-wider text-slate-400" style={{ fontFamily: 'var(--font-setup-heading)' }}>
-                  2. Danh sách câu hỏi ({katexQuestions.length} câu)
+                  2. Danh sách câu hỏi ({katexQuestions?.length || 0} câu)
                 </h2>
 
                 <button
@@ -2029,7 +2035,7 @@ function SetupCourseMainContent() {
                 </button>
               </div>
 
-              {katexQuestions.map((q, qIdx) => (
+              {(katexQuestions || []).map((q, qIdx) => (
                 <div
                   key={q.id}
                   className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-6 shadow-sm space-y-4"
@@ -2835,7 +2841,7 @@ function SetupCourseMainContent() {
 
               {/* Danh sách các phần thi */}
               <div className="space-y-6">
-                {examSections.map((section, sIdx) => {
+                {(examSections || []).map((section, sIdx) => {
                   const qCount = parseInt(String(section.questionCount)) || 0
                   const pointsPerQ = section.totalPoints / (qCount || 1)
 

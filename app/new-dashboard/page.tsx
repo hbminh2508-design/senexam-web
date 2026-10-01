@@ -372,115 +372,141 @@ export default function NewDashboardPage() {
     setChatBubbleEnabled(localStorage.getItem('sen_chat_bubble_disabled') !== '1')
 
     const init = async () => {
-      const { data: auth } = await supabase.auth.getUser()
-      const user = auth.user
-      if (!user) {
-        router.replace('/idp')
-        return
-      }
-
-      // Nếu là sinh viên / cán bộ VNU, tự động chuyển về FEPN Dashboard
-      if (user.email?.toLowerCase().endsWith('@vnu.edu.vn')) {
-        if (typeof window !== 'undefined') {
-          if (window.location.hostname === 'localhost') {
-            router.replace('/fepn-dashboard')
-          } else {
-            window.location.href = 'https://tsv.fepn.senexam.me/fepn-dashboard'
+      try {
+        const { data: auth, error: authErr } = await supabase.auth.getUser()
+        if (authErr || !auth?.user) {
+          // Thử kiểm tra thêm session nếu getUser đang đồng bộ
+          const { data: sessData } = await supabase.auth.getSession()
+          if (!sessData?.session?.user) {
+            router.replace('/idp')
+            return
           }
+        }
+
+        const user = auth?.user || (await supabase.auth.getUser()).data?.user
+        if (!user) {
+          router.replace('/idp')
           return
         }
-      }
 
-      if (!disposed) {
-        setUserEmail(user.email || '')
-        setUserId(user.id)
-        const isGoogle = user.app_metadata?.provider === 'google' || user.identities?.some((id) => id.provider === 'google')
-        setLinkedGoogle(!!isGoogle)
-      }
-
-      await ensureStudentProfile(user.id)
-
-      const [profileRes, submissionsRes, announcementsRes] = await Promise.all([
-        dataDispatcher.fetchShared(`profile_${user.id}`, () =>
-          supabase
-            .from('profiles')
-            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date, chat_bubble_disabled')
-            .eq('id', user.id)
-            .single()
-        ),
-        dataDispatcher.fetchShared(`subs_count_${user.id}`, () =>
-          supabase
-            .from('submissions')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-        ),
-        dataDispatcher.fetchShared('announcements_head', () =>
-          supabase
-            .from('announcements')
-            .select('id')
-            .order('created_at', { ascending: false })
-        ),
-      ])
-
-      const profile = profileRes.data
-      const beta = profile ? profile.is_beta_tester === true : (localStorage.getItem('senexam_beta_tester') === '1')
-
-      if (!disposed) {
-        setIsBetaTester(beta)
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('senexam_beta_tester', beta ? '1' : '0')
-        }
-        setFullName(profile?.full_name?.trim() || user.user_metadata?.full_name || 'Bạn')
-        setSchool(profile?.school || '')
-        setProvince(profile?.province || '')
-        setTargetExams(Array.isArray(profile?.target_exams) ? profile.target_exams : [])
-        setSenCash(profile?.sencash_balance || 0)
-        const role = profile?.role || 'student'
-        setUserRole(role)
-        setVipUntil(profile?.vip_expires_at || null)
-        setPlanTier(profile?.plan_tier || null)
-        setSubmissionCount(submissionsRes.count || 0)
-
-        // Đồng bộ cài đặt bong bóng chat từ Supabase Cloud
-        if (typeof profile?.chat_bubble_disabled === 'boolean') {
-          const isOff = profile.chat_bubble_disabled
-          setChatBubbleEnabled(!isOff)
+        // Nếu là sinh viên / cán bộ VNU, tự động chuyển về FEPN Dashboard
+        if (user.email?.toLowerCase().endsWith('@vnu.edu.vn')) {
           if (typeof window !== 'undefined') {
-            if (isOff) {
-              localStorage.setItem('sen_chat_bubble_disabled', '1')
+            if (window.location.hostname === 'localhost') {
+              router.replace('/fepn-dashboard')
             } else {
-              localStorage.removeItem('sen_chat_bubble_disabled')
+              window.location.href = 'https://tsv.fepn.senexam.me/fepn-dashboard'
             }
+            return
           }
         }
-        
-        // Tính thông báo chưa đọc của riêng user này
-        const readIds: string[] = JSON.parse(localStorage.getItem(`sen_read_announcements_${user.id}`) || '[]')
-        const unreadCount = (announcementsRes.data || []).filter((a) => !readIds.includes(a.id)).length
-        setActiveAnnouncements(unreadCount)
 
-        setStreakDays(profile?.streak_days || 1)
-        setLoading(false)
+        if (!disposed) {
+          setUserEmail(user.email || '')
+          setUserId(user.id)
+          const isGoogle = user.app_metadata?.provider === 'google' || user.identities?.some((id) => id.provider === 'google')
+          setLinkedGoogle(!!isGoogle)
+        }
 
-        // Tự động kiểm tra gia hạn VIP/Sen AI bằng SC (tự hủy nếu không đủ tiền)
         try {
-          processAutoRenew(user.id).then((autoRenewRes) => {
-            if (autoRenewRes.messages.length > 0 && !disposed) {
-              setAutoRenewMessage(autoRenewRes.messages.join(' • '))
-              supabase
-                .from('profiles')
-                .select('sencash_balance, vip_expires_at')
-                .eq('id', user.id)
-                .maybeSingle()
-                .then(({ data: updatedP }) => {
-                  if (updatedP && !disposed) {
-                    setSenCash(updatedP.sencash_balance || 0)
-                    setVipUntil(updatedP.vip_expires_at || null)
-                  }
-                })
+          await ensureStudentProfile(user.id)
+        } catch (e) {
+          console.warn('ensureStudentProfile delay in dashboard:', e)
+        }
+
+        const [profileRes, submissionsRes, announcementsRes] = await Promise.all([
+          dataDispatcher.fetchShared(`profile_${user.id}`, () =>
+            supabase
+              .from('profiles')
+              .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date, chat_bubble_disabled')
+              .eq('id', user.id)
+              .maybeSingle()
+          ),
+          dataDispatcher.fetchShared(`subs_count_${user.id}`, () =>
+            supabase
+              .from('submissions')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', user.id)
+          ),
+          dataDispatcher.fetchShared('announcements_head', () =>
+            supabase
+              .from('announcements')
+              .select('id')
+              .order('created_at', { ascending: false })
+          ),
+        ])
+
+        const profile = profileRes?.data || null
+        const beta = profile ? profile.is_beta_tester === true : (localStorage.getItem('senexam_beta_tester') === '1')
+
+        if (!disposed) {
+          setIsBetaTester(beta)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('senexam_beta_tester', beta ? '1' : '0')
+          }
+          setFullName(profile?.full_name?.trim() || user.user_metadata?.full_name || 'Bạn')
+          setSchool(profile?.school || '')
+          setProvince(profile?.province || '')
+          setTargetExams(Array.isArray(profile?.target_exams) ? profile.target_exams : [])
+          setSenCash(profile?.sencash_balance || 0)
+          const role = profile?.role || 'student'
+          setUserRole(role)
+          setVipUntil(profile?.vip_expires_at || null)
+          setPlanTier(profile?.plan_tier || null)
+          setSubmissionCount(submissionsRes?.count || 0)
+
+          // Đồng bộ cài đặt bong bóng chat từ Supabase Cloud
+          if (typeof profile?.chat_bubble_disabled === 'boolean') {
+            const isOff = profile.chat_bubble_disabled
+            setChatBubbleEnabled(!isOff)
+            if (typeof window !== 'undefined') {
+              if (isOff) {
+                localStorage.setItem('sen_chat_bubble_disabled', '1')
+              } else {
+                localStorage.removeItem('sen_chat_bubble_disabled')
+              }
             }
-          }).catch(() => {})
-        } catch {}
+          }
+
+          // Tính thông báo chưa đọc an toàn
+          let readIds: string[] = []
+          try {
+            readIds = JSON.parse(localStorage.getItem(`sen_read_announcements_${user.id}`) || '[]')
+            if (!Array.isArray(readIds)) readIds = []
+          } catch {
+            readIds = []
+          }
+          const unreadCount = (Array.isArray(announcementsRes?.data) ? announcementsRes.data : []).filter((a: any) => a?.id && !readIds.includes(a.id)).length
+          setActiveAnnouncements(unreadCount)
+
+          setStreakDays(profile?.streak_days || 1)
+
+          // Tự động kiểm tra gia hạn VIP/Sen AI bằng SC (tự hủy nếu không đủ tiền)
+          try {
+            processAutoRenew(user.id).then((autoRenewRes) => {
+              if (autoRenewRes.messages.length > 0 && !disposed) {
+                setAutoRenewMessage(autoRenewRes.messages.join(' • '))
+                supabase
+                  .from('profiles')
+                  .select('sencash_balance, vip_expires_at')
+                  .eq('id', user.id)
+                  .maybeSingle()
+                  .then(({ data: updatedP }) => {
+                    if (updatedP && !disposed) {
+                      setSenCash(updatedP.sencash_balance || 0)
+                      setVipUntil(updatedP.vip_expires_at || null)
+                    }
+                  })
+              }
+            }).catch(() => {})
+          } catch {}
+        }
+      } catch (initErr) {
+        console.warn('Lỗi khởi tạo Dashboard:', initErr)
+      } finally {
+        if (!disposed) {
+          setLoading(false)
+        }
       }
     }
 

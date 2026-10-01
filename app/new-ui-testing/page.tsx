@@ -234,7 +234,7 @@ export default function NewUiTestingPage() {
       try {
         const { data: auth } = await supabase.auth.getUser()
         if (!auth?.user) {
-          router.replace('/new-sign')
+          router.replace('/idp')
           return
         }
 

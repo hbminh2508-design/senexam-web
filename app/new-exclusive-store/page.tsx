@@ -96,7 +96,7 @@ export default function NewExclusiveStorePage() {
         data: { user },
       } = await supabase.auth.getUser()
       if (!user) {
-        router.replace('/new-sign')
+        router.replace('/idp')
         return
       }
 
@@ -147,7 +147,7 @@ export default function NewExclusiveStorePage() {
     try {
       const token = await getToken()
       if (!token) {
-        router.replace('/new-sign')
+        router.replace('/idp')
         return
       }
 
@@ -182,7 +182,7 @@ export default function NewExclusiveStorePage() {
     try {
       const token = await getToken()
       if (!token) {
-        router.replace('/new-sign')
+        router.replace('/idp')
         return
       }
 

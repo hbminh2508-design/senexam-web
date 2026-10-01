@@ -122,7 +122,7 @@ export default function NewSchedulePage() {
       const { data: auth } = await supabase.auth.getUser()
       const user = auth.user
       if (!user) {
-        router.replace('/new-sign')
+        router.replace('/idp')
         return
       }
 
