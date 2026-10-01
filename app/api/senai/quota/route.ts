@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     graphUsed = 0
   }
 
-  const graphLimit = SENGRAPH_AI_DAILY_LIMIT[effectiveTier] || 0
+  const graphLimit = (SENGRAPH_AI_DAILY_LIMIT[effectiveTier] || 0) + (planTier === 'sen_one' ? 15 : 0)
 
   return NextResponse.json({
     used,

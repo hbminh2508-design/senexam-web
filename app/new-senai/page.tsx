@@ -204,7 +204,7 @@ export default function SenAiQuotaPage() {
   const dailyQuestionLimit = useMemo(() => {
     return getTotalSenaiDailyLimit(SENAI_TIER_DAILY_LIMIT[effectiveTier] || 10, planTier)
   }, [effectiveTier, planTier])
-  const dailyGraphAiLimit = SENGRAPH_AI_DAILY_LIMIT[effectiveTier] || 0
+  const dailyGraphAiLimit = (SENGRAPH_AI_DAILY_LIMIT[effectiveTier] || 0) + (planTier === 'sen_one' ? 15 : 0)
 
   const remainingQuestions = Math.max(0, dailyQuestionLimit - todayQuestionsCount)
   const remainingGraphQuestions = Math.max(0, dailyGraphAiLimit - todaySenGraphAiCount)

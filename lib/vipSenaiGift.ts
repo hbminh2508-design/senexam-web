@@ -60,3 +60,28 @@ export async function applyPremiumPurchasePerks(supabaseAdmin: SupabaseClient, u
   const gift = PREMIUM_PLAN_SENAI_GIFT[planCode]
   if (gift) await grantSenaiTierIfBetter(supabaseAdmin, userId, gift.tier, vipExpiresAt)
 }
+
+// Mua Premium+: theo tháng tặng SenAI Plus, theo quý tặng SenAI Ultra, theo năm tặng thẳng Sen Max
+export const PREMIUM_PLUS_PLAN_SENAI_GIFT: Partial<Record<VipPlanCode, { tier: SenAiTierCode }>> = {
+  monthly: { tier: 'plus' },
+  quarterly: { tier: 'ultra' },
+  yearly: { tier: 'max' },
+}
+
+export async function applyPremiumPlusPurchasePerks(supabaseAdmin: SupabaseClient, userId: string, planCode: VipPlanCode, vipExpiresAt: string) {
+  await supabaseAdmin.from('profiles').update({ is_vip_premium_plus: true }).eq('id', userId)
+  const gift = PREMIUM_PLUS_PLAN_SENAI_GIFT[planCode]
+  if (gift) await grantSenaiTierIfBetter(supabaseAdmin, userId, gift.tier, vipExpiresAt)
+}
+
+// Gói Sen One: bao gồm Gói Sen Max (500 câu/ngày, 15 SenGraph) + VIP Premium+
+export async function applySenOnePurchasePerks(supabaseAdmin: SupabaseClient, userId: string, vipExpiresAt: string) {
+  await supabaseAdmin.from('profiles').update({ is_vip_premium_plus: true }).eq('id', userId)
+  await grantSenaiTierIfBetter(supabaseAdmin, userId, 'max', vipExpiresAt)
+}
+
+// Gói Sen One Lite: bao gồm Gói SenAI Plus + VIP cơ bản
+export async function applySenOneLitePurchasePerks(supabaseAdmin: SupabaseClient, userId: string, vipExpiresAt: string) {
+  await grantSenaiTierIfBetter(supabaseAdmin, userId, 'plus', vipExpiresAt)
+}
+

@@ -36,6 +36,34 @@ async function checkVipDownloadGate(request: NextRequest, documentId: string | n
   const isSenaiUltra = getEffectiveSenaiTier(profile) === 'ultra'
   if (!planTier && !isSenaiUltra) return new NextResponse('Tài liệu này chỉ dành cho thành viên VIP hoặc SenAI Ultra', { status: 403 })
 
+  // 1. Gói Sen One: Miễn phí không giới hạn tải file độc quyền VIP từ Thứ 6 tới Chủ Nhật hàng tuần
+  if (planTier === 'sen_one') {
+    const nowVn = new Date(Date.now() + 7 * 60 * 60 * 1000)
+    const vnDay = nowVn.getUTCDay() // 0 = Chủ Nhật, 5 = Thứ 6, 6 = Thứ 7
+    if (vnDay === 0 || vnDay === 5 || vnDay === 6) {
+      await supabaseAdmin.from('vip_document_downloads').insert({ user_id: user.id, document_id: documentId })
+      return null
+    }
+  }
+
+  // 2. Gói Sen One Lite: 10 lần tải tài liệu miễn phí ở Thư viện VIP mỗi tháng
+  if (planTier === 'sen_one_lite') {
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    const { count: monthlyCount } = await supabaseAdmin
+      .from('vip_document_downloads')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('paid_with_sencash', false)
+      .gte('downloaded_at', startOfMonth.toISOString())
+
+    if ((monthlyCount || 0) < 10) {
+      await supabaseAdmin.from('vip_document_downloads').insert({ user_id: user.id, document_id: documentId })
+      return null
+    }
+  }
+
   // Gói Lite không có hạn mức tải miễn phí (0/ngày); SenAI Ultra tặng thẳng 50 lượt/ngày, lấy max
   // với hạn mức theo gói membership (không cộng dồn hai nguồn)
   const dailyFreeLimit = Math.max(planTier ? DOWNLOAD_LIMIT_BY_TIER[planTier] : 0, isSenaiUltra ? SENAI_ULTRA_DAILY_DOWNLOAD_BONUS : 0)

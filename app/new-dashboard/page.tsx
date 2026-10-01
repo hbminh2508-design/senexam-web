@@ -332,6 +332,7 @@ export default function NewDashboardPage() {
   const [submissionCount, setSubmissionCount] = useState(0)
   const [activeAnnouncements, setActiveAnnouncements] = useState(0)
   const [vipUntil, setVipUntil] = useState<string | null>(null)
+  const [planTier, setPlanTier] = useState<string | null>(null)
   const [bootTs] = useState<number>(() => Date.now())
   const [showDailyStreakModal, setShowDailyStreakModal] = useState(false)
   const [autoRenewMessage, setAutoRenewMessage] = useState<string | null>(null)
@@ -400,7 +401,7 @@ export default function NewDashboardPage() {
         dataDispatcher.fetchShared(`profile_${user.id}`, () =>
           supabase
             .from('profiles')
-            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date')
+            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date')
             .eq('id', user.id)
             .single()
         ),
@@ -434,6 +435,7 @@ export default function NewDashboardPage() {
         const role = profile?.role || 'student'
         setUserRole(role)
         setVipUntil(profile?.vip_expires_at || null)
+        setPlanTier(profile?.plan_tier || null)
         setSubmissionCount(submissionsRes.count || 0)
         
         // Tính thông báo chưa đọc của riêng user này
@@ -673,12 +675,33 @@ export default function NewDashboardPage() {
             <div className="relative">
               <div className="flex items-center gap-1.5">
                 {isVipUser ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-amber-300/35 to-yellow-400/25 dark:from-amber-500/20 dark:via-yellow-400/20 dark:to-amber-500/20 text-amber-950 dark:text-amber-300 border border-amber-600/40 dark:border-amber-400/50 shadow-[0_2px_8px_rgba(217,119,6,0.18)] dark:shadow-[0_0_12px_rgba(245,158,11,0.25)]">
-                    <Crown className="h-3 w-3 text-amber-800 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
-                    <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400 bg-clip-text text-transparent font-black">
-                      PREMIUM
+                  planTier === 'sen_one' ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 text-amber-950 dark:text-amber-200 border border-amber-500/40 shadow-[0_2px_12px_rgba(245,158,11,0.25)]">
+                      <Sparkles className="h-3 w-3 text-amber-500 animate-spin" />
+                      <span className="bg-gradient-to-r from-amber-700 via-rose-600 to-indigo-600 dark:from-amber-300 dark:via-rose-300 dark:to-indigo-300 bg-clip-text text-transparent font-black">
+                        SEN ONE
+                      </span>
                     </span>
-                  </span>
+                  ) : planTier === 'premium_plus' ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/25 via-yellow-400/35 to-amber-500/25 dark:from-amber-500/25 dark:via-yellow-400/25 dark:to-amber-500/25 text-amber-950 dark:text-amber-200 border border-amber-500/50 shadow-[0_2px_10px_rgba(217,119,6,0.22)]">
+                      <Crown className="h-3 w-3 text-amber-700 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
+                      <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-200 dark:via-yellow-100 dark:to-amber-300 bg-clip-text text-transparent font-black">
+                        PREMIUM+
+                      </span>
+                    </span>
+                  ) : planTier === 'premium' ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-amber-300/35 to-yellow-400/25 dark:from-amber-500/20 dark:via-yellow-400/20 dark:to-amber-500/20 text-amber-950 dark:text-amber-300 border border-amber-600/40 dark:border-amber-400/50 shadow-[0_2px_8px_rgba(217,119,6,0.18)] dark:shadow-[0_0_12px_rgba(245,158,11,0.25)]">
+                      <Crown className="h-3 w-3 text-amber-800 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
+                      <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400 bg-clip-text text-transparent font-black">
+                        PREMIUM
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/30">
+                      <Crown className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                      <span className="font-black">SEN VIP</span>
+                    </span>
+                  )
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
                     <Zap className="h-3 w-3" /> SenExam

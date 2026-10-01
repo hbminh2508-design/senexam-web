@@ -31,6 +31,45 @@ export function getPremiumPlan(code: string): VipPlan | undefined {
   return PREMIUM_PLANS.find(p => p.code === code)
 }
 
+// Gói Premium+ — giá gấp 1.5 lần Premium, mở khóa tính năng thử nghiệm tương lai vượt trội hơn cả kênh Beta
+export const PREMIUM_PLUS_PLANS: VipPlan[] = [
+  { code: 'daily', name: 'Theo ngày (Premium+)', priceVnd: 14_000, durationDays: 1 },
+  { code: 'weekly', name: 'Theo tuần (Premium+)', priceVnd: 68_000, durationDays: 7 },
+  { code: 'monthly', name: 'Theo tháng (Premium+)', priceVnd: 175_000, durationDays: 30 },
+  { code: 'quarterly', name: '3 tháng (Premium+)', priceVnd: 445_000, durationDays: 90 },
+  { code: 'yearly', name: 'Theo năm (Premium+)', priceVnd: 1_755_000, durationDays: 365 },
+]
+
+export function getPremiumPlusPlan(code: string): VipPlan | undefined {
+  return PREMIUM_PLUS_PLANS.find(p => p.code === code)
+}
+
+// Gói Sen One — Hệ sinh thái All-in-One: VIP Premium+ + Sen Max + Unlimited tải VIP cuối tuần (T6-CN) + 15 lần SenGraph AI
+export type SenOnePlanCode = 'monthly' | 'quarterly' | 'yearly'
+
+export const SEN_ONE_PLANS: { code: SenOnePlanCode; name: string; priceVnd: number; durationDays: number }[] = [
+  { code: 'monthly', name: 'Sen One — 1 Tháng', priceVnd: 219_000, durationDays: 30 },
+  { code: 'quarterly', name: 'Sen One — 3 Tháng', priceVnd: 599_000, durationDays: 90 },
+  { code: 'yearly', name: 'Sen One — 1 Năm (+1 Tháng Miễn Phí)', priceVnd: 2_190_000, durationDays: 395 }, // 365 + 30 ngày
+]
+
+export function getSenOnePlan(code: string): (typeof SEN_ONE_PLANS)[number] | undefined {
+  return SEN_ONE_PLANS.find(p => p.code === code)
+}
+
+// Gói Sen One Lite — VIP cơ bản + SenAI Plus + 10 lượt tải tài liệu VIP/tháng
+export type SenOneLitePlanCode = 'monthly' | 'quarterly' | 'yearly'
+
+export const SEN_ONE_LITE_PLANS: { code: SenOneLitePlanCode; name: string; priceVnd: number; durationDays: number }[] = [
+  { code: 'monthly', name: 'Sen One Lite — 1 Tháng', priceVnd: 49_000, durationDays: 30 },
+  { code: 'quarterly', name: 'Sen One Lite — 3 Tháng', priceVnd: 109_000, durationDays: 90 },
+  { code: 'yearly', name: 'Sen One Lite — 1 Năm (+10 Ngày Sử Dụng)', priceVnd: 490_000, durationDays: 375 }, // 365 + 10 ngày
+]
+
+export function getSenOneLitePlan(code: string): (typeof SEN_ONE_LITE_PLANS)[number] | undefined {
+  return SEN_ONE_LITE_PLANS.find(p => p.code === code)
+}
+
 // Gói Lite — rẻ hơn, không có đặc quyền SenAI/tải VIP, quảng cáo vẫn hiển thị (chỉ giãn tần suất
 // hiện lại sau khi đóng — xem AdBanner.tsx). Mốc thời hạn khác VIP nên khai báo mã riêng.
 export type LitePlanCode = 'trial3d' | 'monthly' | 'quarterly' | 'yearly'
@@ -46,13 +85,18 @@ export function getLitePlan(code: string): (typeof LITE_PLANS)[number] | undefin
   return LITE_PLANS.find(p => p.code === code)
 }
 
-// Nhóm gói — 'vip' giữ nguyên mã cũ (daily/weekly/monthly/quarterly/yearly) để tương thích ngược,
-// 'premium' dùng chung mã đó (giá x3), 'lite' có mã thời hạn riêng.
-export type PlanGroup = 'lite' | 'vip' | 'premium'
+// Nhóm gói — mở rộng hỗ trợ premium_plus, sen_one, sen_one_lite
+export type PlanGroup = 'lite' | 'vip' | 'premium' | 'premium_plus' | 'sen_one' | 'sen_one_lite'
 
-export function getPlanByGroup(group: PlanGroup, code: string): VipPlan | (typeof LITE_PLANS)[number] | undefined {
+export function getPlanByGroup(
+  group: PlanGroup,
+  code: string
+): VipPlan | (typeof LITE_PLANS)[number] | (typeof SEN_ONE_PLANS)[number] | (typeof SEN_ONE_LITE_PLANS)[number] | undefined {
   if (group === 'vip') return getVipPlan(code)
   if (group === 'premium') return getPremiumPlan(code)
+  if (group === 'premium_plus') return getPremiumPlusPlan(code)
+  if (group === 'sen_one') return getSenOnePlan(code)
+  if (group === 'sen_one_lite') return getSenOneLitePlan(code)
   return getLitePlan(code)
 }
 
@@ -75,8 +119,10 @@ export const ORDER_TTL_MINUTES = 15
 
 // Nhúng vào nội dung chuyển khoản (addInfo) — ngắn, dễ đọc qua sao kê ngân hàng.
 // Tiền tố phân biệt loại đơn khi webhook SePay đối soát (SENVIP = mua VIP, SENCASH = nạp ví,
-// SENPREM = mua Premium, SENLITE = mua Lite).
-export function generateOrderCode(prefix: 'SENVIP' | 'SENCASH' | 'SENPREM' | 'SENLITE'): string {
+// SENPREM = mua Premium, SENLITE = mua Lite, SENPLUS = Premium+, SENONE = Sen One, SENONEL = Sen One Lite).
+export function generateOrderCode(
+  prefix: 'SENVIP' | 'SENCASH' | 'SENPREM' | 'SENLITE' | 'SENPLUS' | 'SENONE' | 'SENONEL'
+): string {
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
   return `${prefix}${rand}`
 }
@@ -129,28 +175,43 @@ export const VIP_SENAI_DAILY_BONUS = 50
 
 // Hạng gói hiện có hiệu lực (đọc từ profiles.plan_tier + vip_expires_at). Cột plan_tier mới thêm
 // nên hồ sơ VIP tạo trước đó chưa có giá trị — coi như 'vip' để không phá vỡ hành vi cũ.
-export type PlanTier = 'lite' | 'vip' | 'premium'
+export type PlanTier = 'lite' | 'vip' | 'premium' | 'premium_plus' | 'sen_one' | 'sen_one_lite'
 
 export function getEffectivePlanTier(
   profile: { vip_expires_at?: string | null; plan_tier?: string | null } | null | undefined
 ): PlanTier | null {
   if (!isVipActive(profile)) return null
   const tier = profile?.plan_tier
-  return tier === 'lite' || tier === 'premium' ? tier : 'vip'
+  if (
+    tier === 'lite' ||
+    tier === 'premium' ||
+    tier === 'premium_plus' ||
+    tier === 'sen_one' ||
+    tier === 'sen_one_lite'
+  ) {
+    return tier
+  }
+  return 'vip'
 }
 
-// Lite không có đặc quyền SenAI/tải VIP; Premium ở mức sàn ngang VIP cho các gói ngắn (dưới 3 tháng)
-// — gói từ 3 tháng trở lên còn được NÂNG HẲN lên hạng SenAI Plus/Ultra thật, xem vipSenaiGift.ts.
+// Hạn mức câu hỏi SenAI tặng thêm theo gói
 export const SENAI_DAILY_BONUS_BY_TIER: Record<PlanTier, number> = {
   lite: 0,
   vip: VIP_SENAI_DAILY_BONUS,
   premium: VIP_SENAI_DAILY_BONUS,
+  premium_plus: 100,
+  sen_one: 200,
+  sen_one_lite: VIP_SENAI_DAILY_BONUS,
 }
 
+// Hạn mức tải file VIP theo gói (Sen One: không giới hạn T6-CN, Sen One Lite: 10 lượt/tháng)
 export const DOWNLOAD_LIMIT_BY_TIER: Record<PlanTier, number> = {
   lite: 0,
   vip: VIP_DAILY_DOWNLOAD_LIMIT,
   premium: VIP_DAILY_DOWNLOAD_LIMIT,
+  premium_plus: 15,
+  sen_one: 9999, // Không giới hạn cuối tuần, ngày thường tải tự do
+  sen_one_lite: 10,
 }
 
 // Tổng hạn mức câu hỏi SenAI/ngày thực tế: hạn mức của gói SenAI đang có CỘNG THẲNG với phần

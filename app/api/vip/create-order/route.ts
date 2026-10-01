@@ -6,10 +6,13 @@ export const dynamic = 'force-dynamic'
 
 const ORDER_TTL_MINUTES = 15
 
-const ORDER_CODE_PREFIX: Record<PlanGroup, 'SENVIP' | 'SENPREM' | 'SENLITE'> = {
+const ORDER_CODE_PREFIX: Record<PlanGroup, 'SENVIP' | 'SENPREM' | 'SENLITE' | 'SENPLUS' | 'SENONE' | 'SENONEL'> = {
   vip: 'SENVIP',
   premium: 'SENPREM',
   lite: 'SENLITE',
+  premium_plus: 'SENPLUS',
+  sen_one: 'SENONE',
+  sen_one_lite: 'SENONEL',
 }
 
 export async function POST(request: Request) {
@@ -18,7 +21,8 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
 
     const { planCode, planGroup } = await request.json()
-    const group: PlanGroup = planGroup === 'premium' || planGroup === 'lite' ? planGroup : 'vip'
+    const validGroups: PlanGroup[] = ['vip', 'premium', 'lite', 'premium_plus', 'sen_one', 'sen_one_lite']
+    const group: PlanGroup = validGroups.includes(planGroup) ? planGroup : 'vip'
     const plan = getPlanByGroup(group, planCode)
     if (!plan) return NextResponse.json({ error: 'Gói không hợp lệ' }, { status: 400 })
 

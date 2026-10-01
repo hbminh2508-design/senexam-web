@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { getPlanByGroup, extendVipExpiry, type PlanGroup, type VipPlanCode } from '@/lib/vipMembership'
-import { applyVipPurchasePerks, applyPremiumPurchasePerks } from '@/lib/vipSenaiGift'
+import {
+  applyVipPurchasePerks,
+  applyPremiumPurchasePerks,
+  applyPremiumPlusPurchasePerks,
+  applySenOnePurchasePerks,
+  applySenOneLitePurchasePerks,
+} from '@/lib/vipSenaiGift'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +22,7 @@ type SepayPayload = {
   id?: number | string
 }
 
-const ORDER_CODE_RE = /(SENVIP|SENCASH|SENPREM|SENLITE)[A-Z0-9]{6}/
+const ORDER_CODE_RE = /(SENVIP|SENCASH|SENPREM|SENLITE|SENONEL|SENONE|SENPLUS)[A-Z0-9]{6}/
 
 async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>, orderCode: string, payload: SepayPayload) {
   const { data: order, error: fetchErr } = await supabaseAdmin
@@ -56,6 +62,9 @@ async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>
 
   if (planGroup === 'vip') await applyVipPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode, newExpiresAt)
   else if (planGroup === 'premium') await applyPremiumPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode, newExpiresAt)
+  else if (planGroup === 'premium_plus') await applyPremiumPlusPurchasePerks(supabaseAdmin, order.user_id, plan.code as VipPlanCode, newExpiresAt)
+  else if (planGroup === 'sen_one') await applySenOnePurchasePerks(supabaseAdmin, order.user_id, newExpiresAt)
+  else if (planGroup === 'sen_one_lite') await applySenOneLitePurchasePerks(supabaseAdmin, order.user_id, newExpiresAt)
 
   return { success: true }
 }

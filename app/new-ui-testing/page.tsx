@@ -80,7 +80,15 @@ export default function NewUiTestingPage() {
         if (profile) {
           setUserProfile(profile)
           setUserRole(profile.role || 'student')
-          setHasVipPremiumPlus(Boolean(profile.is_vip_premium_plus || profile.role === 'admin' || profile.role === 'collab'))
+          setHasVipPremiumPlus(
+            Boolean(
+              profile.is_vip_premium_plus ||
+              profile.plan_tier === 'premium_plus' ||
+              profile.plan_tier === 'sen_one' ||
+              profile.role === 'admin' ||
+              profile.role === 'collab'
+            )
+          )
           setAutoRenewVip(Boolean(profile.auto_renew_vip))
           setAutoRenewSenAi(Boolean(profile.auto_renew_senai))
 

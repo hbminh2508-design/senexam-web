@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getEffectiveSenaiTier, SENAI_TIER_LABEL, type SenAiTierCode } from '@/lib/senaiTiers'
+import { getEffectivePlanTier } from '@/lib/vipMembership'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
     const supabaseAdmin = getSupabaseAdmin()
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('role, email, senai_tier, senai_tier_expires_at, senai_tier_permanent')
+      .select('role, email, senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at, plan_tier')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -68,8 +69,13 @@ export async function GET(req: Request) {
       profile?.email === 'hoangbinhminh2508@gmail.com'
 
     const tier: SenAiTierCode = getEffectiveSenaiTier(profile)
-    const eligible = isAdmin || tier === 'plus' || tier === 'ultra' || tier === 'max'
-    const dailyLimit = isAdmin ? 9999 : tier === 'max' ? 15 : tier === 'ultra' ? 5 : tier === 'plus' ? 1 : 0
+    const planTier = getEffectivePlanTier(profile)
+    const isSenOne = planTier === 'sen_one'
+    const eligible = isAdmin || tier === 'plus' || tier === 'ultra' || tier === 'max' || isSenOne
+    let dailyLimit = isAdmin ? 9999 : tier === 'max' ? 15 : tier === 'ultra' ? 5 : tier === 'plus' ? 1 : 0
+    if (!isAdmin && isSenOne) {
+      dailyLimit += 15
+    }
 
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
@@ -132,7 +138,7 @@ export async function POST(req: Request) {
     const supabaseAdmin = getSupabaseAdmin()
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('role, email, senai_tier, senai_tier_expires_at, senai_tier_permanent')
+      .select('role, email, senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at, plan_tier')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -142,21 +148,26 @@ export async function POST(req: Request) {
       profile?.email === 'hoangbinhminh2508@gmail.com'
 
     const tier: SenAiTierCode = getEffectiveSenaiTier(profile)
+    const planTier = getEffectivePlanTier(profile)
+    const isSenOne = planTier === 'sen_one'
 
-    // Chỉ người dùng SenAI Plus trở lên (hoặc Admin) mới được sử dụng
-    if (!isAdmin && tier !== 'plus' && tier !== 'ultra' && tier !== 'max') {
+    // Chỉ người dùng SenAI Plus trở lên, Sen One (hoặc Admin) mới được sử dụng
+    if (!isAdmin && tier !== 'plus' && tier !== 'ultra' && tier !== 'max' && !isSenOne) {
       return NextResponse.json(
         {
           error: 'TIER_REQUIRED',
-          reply: `🔒 **Nâng cấp gói để sử dụng Sen AI Toán Học**\n\nHiện tại tài khoản của bạn đang ở gói: **${SENAI_TIER_LABEL[tier] || 'Miễn phí'}**.\n\nTheo quy định hệ thống, công cụ phân tích giải đề & dựng đồ thị Sen AI chỉ mở cho:\n- ⭐ **SenAI Plus**: **1 câu hỏi / ngày**\n- 💎 **SenAI Ultra**: **5 câu hỏi / ngày**\n- 👑 **Sen Max**: **15 câu hỏi / ngày**\n- 👑 **Admin / Collab**: Không giới hạn\n\nVui lòng nâng cấp gói tại [Ví Sen](/new-sencash) để kích hoạt ngay!`,
+          reply: `🔒 **Nâng cấp gói để sử dụng Sen AI Toán Học**\n\nHiện tại tài khoản của bạn đang ở gói: **${SENAI_TIER_LABEL[tier] || 'Miễn phí'}**.\n\nTheo quy định hệ thống, công cụ phân tích giải đề & dựng đồ thị Sen AI chỉ mở cho:\n- 🚀 **Gói Sen One**: **30 câu hỏi / ngày** (+15 câu độc quyền)\n- 👑 **Sen Max**: **15 câu hỏi / ngày**\n- 💎 **SenAI Ultra**: **5 câu hỏi / ngày**\n- ⭐ **SenAI Plus**: **1 câu hỏi / ngày**\n- 👑 **Admin / Collab**: Không giới hạn\n\nVui lòng nâng cấp gói tại [Ví Sen](/new-sencash) hoặc [Nâng cấp VIP](/new-vip) để kích hoạt ngay!`,
           tier,
         },
         { status: 403 }
       )
     }
 
-    // Xác định hạn mức câu hỏi trong ngày
-    const dailyLimit = isAdmin ? 9999 : tier === 'max' ? 15 : tier === 'ultra' ? 5 : 1
+    // Xác định hạn mức câu hỏi trong ngày (Gói Sen One được tự động cộng thêm +15 lần hỏi trong Sen Graph)
+    let dailyLimit = isAdmin ? 9999 : tier === 'max' ? 15 : tier === 'ultra' ? 5 : tier === 'plus' ? 1 : 0
+    if (!isAdmin && isSenOne) {
+      dailyLimit += 15
+    }
 
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)

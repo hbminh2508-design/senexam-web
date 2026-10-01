@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getPlanByGroup, extendVipExpiry, type PlanGroup, type VipPlanCode } from '@/lib/vipMembership'
 import { vndToSenCash } from '@/lib/senCash'
-import { applyVipPurchasePerks, applyPremiumPurchasePerks } from '@/lib/vipSenaiGift'
+import {
+  applyVipPurchasePerks,
+  applyPremiumPurchasePerks,
+  applyPremiumPlusPurchasePerks,
+  applySenOnePurchasePerks,
+  applySenOneLitePurchasePerks,
+} from '@/lib/vipSenaiGift'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +18,8 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
 
     const { planCode, planGroup } = await request.json()
-    const group: PlanGroup = planGroup === 'premium' || planGroup === 'lite' ? planGroup : 'vip'
+    const validGroups: PlanGroup[] = ['vip', 'premium', 'lite', 'premium_plus', 'sen_one', 'sen_one_lite']
+    const group: PlanGroup = validGroups.includes(planGroup) ? planGroup : 'vip'
     const plan = getPlanByGroup(group, planCode)
     if (!plan) return NextResponse.json({ error: 'Gói không hợp lệ' }, { status: 400 })
 
@@ -59,6 +66,9 @@ export async function POST(request: Request) {
     await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code, plan_tier: group }).eq('id', user.id)
     if (group === 'vip') await applyVipPurchasePerks(supabaseAdmin, user.id, plan.code as VipPlanCode, newExpiresAt)
     else if (group === 'premium') await applyPremiumPurchasePerks(supabaseAdmin, user.id, plan.code as VipPlanCode, newExpiresAt)
+    else if (group === 'premium_plus') await applyPremiumPlusPurchasePerks(supabaseAdmin, user.id, plan.code as VipPlanCode, newExpiresAt)
+    else if (group === 'sen_one') await applySenOnePurchasePerks(supabaseAdmin, user.id, newExpiresAt)
+    else if (group === 'sen_one_lite') await applySenOneLitePurchasePerks(supabaseAdmin, user.id, newExpiresAt)
 
     return NextResponse.json({ success: true, vipExpiresAt: newExpiresAt })
   } catch (e) {

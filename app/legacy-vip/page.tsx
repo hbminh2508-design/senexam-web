@@ -17,13 +17,15 @@ import { ArrowLeft, Crown, Gem, Zap, Check, Loader2, Copy, CheckCircle2, XCircle
 
 type PlanOption = { code: string; name: string; priceVnd: number; durationDays: number }
 
-const GROUP_META: Record<PlanGroup, { label: string; icon: typeof Crown; accent: string; plans: PlanOption[] }> = {
+type LegacyPlanGroup = 'lite' | 'vip' | 'premium'
+
+const GROUP_META: Record<LegacyPlanGroup, { label: string; icon: typeof Crown; accent: string; plans: PlanOption[] }> = {
   lite: { label: 'Lite', icon: Zap, accent: '#0284C7', plans: LITE_PLANS },
   vip: { label: 'VIP', icon: Crown, accent: '#D97706', plans: VIP_PLANS },
   premium: { label: 'Premium', icon: Gem, accent: '#7C3AED', plans: PREMIUM_PLANS },
 }
 
-const GROUP_PERKS: Record<PlanGroup, string[]> = {
+const GROUP_PERKS: Record<LegacyPlanGroup, string[]> = {
   lite: [
     'Mở khoá xem kho tài liệu VIP (tải thêm cần trả bằng SenCash, không có lượt miễn phí/ngày)',
     'Không có gói SenAI tặng kèm, không cộng thêm câu hỏi SenAI/ngày',
@@ -57,7 +59,7 @@ export default function VipPage() {
   const [currentTier, setCurrentTier] = useState<PlanGroup | null>(null)
   const [senCashBalance, setSenCashBalance] = useState(0)
 
-  const [activeGroup, setActiveGroup] = useState<PlanGroup>('vip')
+  const [activeGroup, setActiveGroup] = useState<LegacyPlanGroup>('vip')
   const [selectedPlan, setSelectedPlan] = useState<PlanOption>(VIP_PLANS[2])
   const [creating, setCreating] = useState(false)
   const [redeemingPlan, setRedeemingPlan] = useState<string | null>(null)
@@ -89,7 +91,7 @@ export default function VipPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [router])
 
-  const switchGroup = (group: PlanGroup) => {
+  const switchGroup = (group: LegacyPlanGroup) => {
     setActiveGroup(group)
     const plans = GROUP_META[group].plans
     setSelectedPlan(plans[Math.min(2, plans.length - 1)])
@@ -229,7 +231,7 @@ export default function VipPage() {
 
         {/* Bộ chọn nhóm gói */}
         <div className="grid grid-cols-3 gap-2 mb-6">
-          {(Object.keys(GROUP_META) as PlanGroup[]).map(group => {
+          {(Object.keys(GROUP_META) as LegacyPlanGroup[]).map(group => {
             const m = GROUP_META[group]
             const Icon = m.icon
             const active = activeGroup === group
