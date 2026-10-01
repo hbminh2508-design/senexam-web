@@ -194,6 +194,25 @@ export function getEffectivePlanTier(
   return 'vip'
 }
 
+export function getPlanTierName(tier: PlanTier | string | null | undefined): string {
+  switch (tier) {
+    case 'sen_one':
+      return 'Gói Sen One'
+    case 'premium_plus':
+      return 'Gói VIP Premium+'
+    case 'premium':
+      return 'Gói Premium'
+    case 'sen_one_lite':
+      return 'Gói Sen One Lite'
+    case 'lite':
+      return 'Gói VIP Lite'
+    case 'vip':
+      return 'Gói Sen VIP'
+    default:
+      return 'Gói Miễn phí'
+  }
+}
+
 // Hạn mức câu hỏi SenAI tặng thêm theo gói
 export const SENAI_DAILY_BONUS_BY_TIER: Record<PlanTier, number> = {
   lite: 0,

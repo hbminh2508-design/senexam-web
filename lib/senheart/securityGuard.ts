@@ -10,14 +10,16 @@ class SenHeartSecurityGuard {
   private lastStatus: SecurityStatus = {
     status: 'secure',
     lastVerifiedAt: Date.now(),
-    protocolVersion: 'Sen-Shield-2026.1-LTS',
+    protocolVersion: 'Sen-Heart-Shield-1.0.2',
     activeGuards: [
       'Token Integrity Guard',
+      'Anti-Tamper Signature Guard',
       'XSS DOM Sanitizer',
       'Route Sandbox Isolation',
       'Anti-Zombie Process Breaker',
+      'Sen Heart 1.0.2 Micro-Kernel Isolation',
     ],
-    details: 'Toàn bộ các luồng ứng dụng và phiên đăng nhập đều được bảo vệ trong sandbox an toàn.',
+    details: 'Toàn bộ các luồng ứng dụng và phiên đăng nhập đều được bảo vệ trong sandbox an toàn chuẩn Sen Heart 1.0.2.',
   }
 
   /**

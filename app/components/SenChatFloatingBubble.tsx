@@ -94,6 +94,29 @@ export default function SenChatFloatingBubble() {
     pathname?.startsWith('/breathe-u')
   )
 
+  const [disabledBySetting, setDisabledBySetting] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const checkSetting = () => {
+      setDisabledBySetting(localStorage.getItem('sen_chat_bubble_disabled') === '1')
+    }
+    checkSetting()
+
+    const handleSettingChange = (e: any) => {
+      if (typeof e?.detail?.enabled === 'boolean') {
+        setDisabledBySetting(!e.detail.enabled)
+      } else {
+        checkSetting()
+      }
+    }
+
+    window.addEventListener('sen-chat-bubble-setting-changed', handleSettingChange)
+    return () => {
+      window.removeEventListener('sen-chat-bubble-setting-changed', handleSettingChange)
+    }
+  }, [])
+
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -206,6 +229,10 @@ export default function SenChatFloatingBubble() {
 
   const handleQuickPrompt = (promptText: string) => {
     setInput(promptText)
+  }
+
+  if (isExcluded || disabledBySetting) {
+    return null
   }
 
   return (

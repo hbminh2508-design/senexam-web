@@ -12,8 +12,8 @@ import { SenHeartTelemetry } from './types'
  * ==============================================================================
  */
 class SenHeartCoreEngine {
-  public readonly version = '1.0.4-LTS'
-  public readonly buildSignature = 'SEN-HEART-ARMOR-2026-X'
+  public readonly version = '1.0.2'
+  public readonly buildSignature = 'SEN-HEART-ARMOR-1.0.2-SECURE'
   private lastOptimization: number | null = null
   private initialized = false
   private telemetrySubscribers: Array<(t: SenHeartTelemetry) => void> = []
@@ -34,6 +34,14 @@ class SenHeartCoreEngine {
     setTimeout(() => {
       this.trimCache()
     }, 4000)
+
+    // Tự động dọn dẹp các luồng mồ côi (zombie threads) định kỳ 20 giây một lần
+    setInterval(() => {
+      threadManager.pruneZombieThreads()
+      if (typeof document !== 'undefined' && document.hidden) {
+        this.trimCache()
+      }
+    }, 20000)
 
     // Lắng nghe thay đổi luồng để cập nhật telemetry cho Admin
     threadManager.subscribe(() => {

@@ -255,7 +255,7 @@ export default function DailyStreakModal({
         {/* Header Chuỗi & Số dư SC */}
         <div className="flex items-center gap-3.5">
           <div className="h-13 w-13 rounded-2xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-500 shadow-sm shrink-0">
-            <Flame className="h-7 w-7 animate-bounce" />
+            <Flame className="h-7 w-7 text-amber-500" />
           </div>
           <div>
             <div className="flex items-center gap-2">

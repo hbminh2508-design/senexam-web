@@ -136,6 +136,24 @@ class SenHeartThreadManager {
     toKill.forEach((id) => this.killThread(id))
   }
 
+  /**
+   * Sen Heart 1.0.2: Tự động dọn dẹp các tiến trình mồ côi hoặc bị hủy nhưng chưa giải phóng
+   */
+  public pruneZombieThreads() {
+    const now = Date.now()
+    const toKill: string[] = []
+    this.threads.forEach((t, id) => {
+      if (!id.startsWith('core:')) {
+        if (t.controller.signal.aborted || (now - t.startedAt > 15 * 60 * 1000)) {
+          toKill.push(id)
+        }
+      }
+    })
+    if (toKill.length > 0) {
+      toKill.forEach((id) => this.killThread(id))
+    }
+  }
+
   public getActiveCount(): number {
     return this.threads.size
   }

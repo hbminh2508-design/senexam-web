@@ -61,6 +61,7 @@ import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
 import { dataDispatcher } from '@/lib/senheart'
 import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
+import { getPlanTierName } from '@/lib/vipMembership'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
@@ -358,6 +359,7 @@ export default function NewDashboardPage() {
   const [showPasswordText, setShowPasswordText] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [chatBubbleEnabled, setChatBubbleEnabled] = useState(true)
 
   const deferredQuery = useDeferredValue(query)
 
@@ -367,6 +369,7 @@ export default function NewDashboardPage() {
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
     setIsEcoMode(isEcoModeActive())
+    setChatBubbleEnabled(localStorage.getItem('sen_chat_bubble_disabled') !== '1')
 
     const init = async () => {
       const { data: auth } = await supabase.auth.getUser()
@@ -517,6 +520,11 @@ export default function NewDashboardPage() {
     return !Number.isNaN(expires.getTime()) && expires.getTime() >= bootTs
   }, [userRole, vipUntil, bootTs])
 
+  const vipPlanName = useMemo(() => {
+    if (!isVipUser) return 'Gói Miễn phí'
+    return getPlanTierName(planTier)
+  }, [isVipUser, planTier])
+
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
     if (hour < 12) return 'Chào buổi sáng'
@@ -549,6 +557,22 @@ export default function NewDashboardPage() {
     const next = !isEcoMode
     setIsEcoMode(next)
     setEcoModeActive(next)
+  }
+
+  // Tắt / Bật SenAI Bong bóng chat nổi
+  const toggleChatBubble = () => {
+    const nextVal = !chatBubbleEnabled
+    setChatBubbleEnabled(nextVal)
+    if (nextVal) {
+      localStorage.removeItem('sen_chat_bubble_disabled')
+    } else {
+      localStorage.setItem('sen_chat_bubble_disabled', '1')
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('sen-chat-bubble-setting-changed', { detail: { enabled: nextVal } })
+      )
+    }
   }
 
   // Liên kết tài khoản Google
@@ -649,10 +673,10 @@ export default function NewDashboardPage() {
               <Link
                 href="/new-vip"
                 className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-600 dark:text-amber-400 shadow-xs active:scale-95 transition"
-                title={vipLabel}
+                title={`${vipPlanName} • ${vipLabel}`}
               >
                 <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                <span className="max-w-[85px] truncate font-sans">{vipUntil ? 'VIP' : 'Gói Miễn phí'}</span>
+                <span className="max-w-[95px] truncate font-sans">{vipPlanName}</span>
               </Link>
 
               {/* SenCash Balance */}
@@ -685,8 +709,8 @@ export default function NewDashboardPage() {
                   ) : planTier === 'premium_plus' ? (
                     <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/25 via-yellow-400/35 to-amber-500/25 dark:from-amber-500/25 dark:via-yellow-400/25 dark:to-amber-500/25 text-amber-950 dark:text-amber-200 border border-amber-500/50 shadow-[0_2px_10px_rgba(217,119,6,0.22)]">
                       <Crown className="h-3 w-3 text-amber-700 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
-                      <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-200 dark:via-yellow-100 dark:to-amber-300 bg-clip-text text-transparent font-black">
-                        PREMIUM+
+                      <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-200 dark:via-yellow-100 dark:to-amber-300 bg-clip-text text-transparent font-black flex items-center">
+                        PREMIUM<span className="text-amber-600 dark:text-yellow-300 font-black ml-0.5 text-xs drop-shadow-[0_0_8px_rgba(245,158,11,0.9)]">+</span>
                       </span>
                     </span>
                   ) : planTier === 'premium' ? (
@@ -761,7 +785,7 @@ export default function NewDashboardPage() {
                 title="Bấm để nhận quà điểm danh hàng ngày"
               >
                 <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">
-                  <Flame className="h-3 w-3 text-amber-500 animate-bounce" /> Chuỗi
+                  <Flame className="h-3 w-3 text-amber-500" /> Chuỗi
                 </div>
                 <p className="mt-1 text-base font-black text-amber-900 dark:text-amber-200" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                   {streakDays} ngày
@@ -946,6 +970,37 @@ export default function NewDashboardPage() {
               </button>
             </div>
 
+            {/* Tắt / Bật SenAI Bong bóng chat */}
+            <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10">
+              <div className="pr-2">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">SenAI Bong bóng chat:</p>
+                  <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                    chatBubbleEnabled 
+                      ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400' 
+                      : 'bg-slate-500/15 text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {chatBubbleEnabled ? 'Đang hiện' : 'Đã ẩn'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Ẩn hoặc hiện bong bóng trợ lý SenAI nổi ở góc dưới màn hình
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleChatBubble}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                  chatBubbleEnabled
+                    ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                <MessageCircle className={`h-3.5 w-3.5 ${chatBubbleEnabled ? 'text-indigo-500' : 'text-slate-400'}`} />
+                <span>{chatBubbleEnabled ? 'Bật' : 'Tắt'}</span>
+              </button>
+            </div>
+
             {/* Đổi mật khẩu toggle */}
             <div className="pt-2 border-t border-black/10 dark:border-white/10">
               <button
@@ -1015,12 +1070,35 @@ export default function NewDashboardPage() {
         <div className="mb-3.5 flex items-center justify-between px-2">
           <div className="flex items-center gap-2.5">
             {isVipUser ? (
-              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-amber-300/35 to-yellow-400/25 dark:from-amber-500/20 dark:via-yellow-400/20 dark:to-amber-500/20 border border-amber-600/40 dark:border-amber-400/50 shadow-[0_2px_12px_rgba(217,119,6,0.2)] dark:shadow-[0_0_20px_rgba(245,158,11,0.25)] text-amber-950 dark:text-amber-400 backdrop-blur-md">
-                <Crown className="h-4 w-4 text-amber-800 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
-                <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400 bg-clip-text text-transparent font-black tracking-widest">
-                  PREMIUM
+              planTier === 'sen_one' ? (
+                <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 border border-amber-500/40 shadow-[0_2px_14px_rgba(245,158,11,0.25)] text-amber-950 dark:text-amber-200 backdrop-blur-md">
+                  <Sparkles className="h-4 w-4 text-amber-500 animate-spin" />
+                  <span className="bg-gradient-to-r from-amber-700 via-rose-600 to-indigo-600 dark:from-amber-300 dark:via-rose-300 dark:to-indigo-300 bg-clip-text text-transparent font-black tracking-widest">
+                    SEN ONE
+                  </span>
                 </span>
-              </span>
+              ) : planTier === 'premium_plus' ? (
+                <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/30 via-yellow-300/40 to-amber-500/30 dark:from-amber-500/25 dark:via-yellow-400/25 dark:to-amber-500/25 border border-amber-500/50 shadow-[0_2px_14px_rgba(217,119,6,0.3)] text-amber-950 dark:text-amber-300 backdrop-blur-md">
+                  <Crown className="h-4 w-4 text-amber-800 dark:text-amber-300 fill-amber-500/40 animate-pulse" />
+                  <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-200 dark:via-yellow-100 dark:to-amber-300 bg-clip-text text-transparent font-black tracking-widest flex items-center">
+                    PREMIUM<span className="text-amber-600 dark:text-yellow-300 font-black ml-0.5 text-sm drop-shadow-[0_0_8px_rgba(245,158,11,0.9)]">+</span>
+                  </span>
+                </span>
+              ) : planTier === 'premium' ? (
+                <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-amber-300/35 to-yellow-400/25 dark:from-amber-500/20 dark:via-yellow-400/20 dark:to-amber-500/20 border border-amber-600/40 dark:border-amber-400/50 shadow-[0_2px_12px_rgba(217,119,6,0.2)] dark:shadow-[0_0_20px_rgba(245,158,11,0.25)] text-amber-950 dark:text-amber-400 backdrop-blur-md">
+                  <Crown className="h-4 w-4 text-amber-800 dark:text-amber-400 fill-amber-500/30 animate-pulse" />
+                  <span className="bg-gradient-to-r from-amber-950 via-amber-800 to-yellow-900 dark:from-amber-300 dark:via-yellow-200 dark:to-amber-400 bg-clip-text text-transparent font-black tracking-widest">
+                    PREMIUM
+                  </span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/15 dark:bg-amber-500/20 border border-amber-500/30 text-amber-900 dark:text-amber-300 backdrop-blur-md">
+                  <Crown className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <span className="font-black tracking-widest">
+                    SEN VIP
+                  </span>
+                </span>
+              )
             ) : (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shadow-xs">
                 <Zap className="h-3.5 w-3.5" /> SenExam
@@ -1088,7 +1166,7 @@ export default function NewDashboardPage() {
               >
                 <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                   <span className="flex items-center gap-1.5">
-                    <Flame className="h-4 w-4 text-amber-500 animate-bounce" /> Chuỗi học tập
+                    <Flame className="h-4 w-4 text-amber-500" /> Chuỗi học tập
                   </span>
                   <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 underline group-hover:scale-105 transition">
                     Nhận SC →
@@ -1103,7 +1181,12 @@ export default function NewDashboardPage() {
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                   <Crown className="h-4 w-4" /> Trạng thái
                 </div>
-                <p className="mt-1 text-lg font-black truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>{vipLabel}</p>
+                <p className="mt-1 text-lg font-black truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  {vipPlanName}
+                </p>
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">
+                  {vipLabel}
+                </p>
               </div>
             </div>
           </div>
@@ -1526,6 +1609,37 @@ export default function NewDashboardPage() {
                 >
                   <Zap className={`h-3.5 w-3.5 ${isEcoMode ? 'text-emerald-500 fill-emerald-500' : 'text-slate-400'}`} />
                   <span>{isEcoMode ? 'Đang Bật' : 'Đang Tắt'}</span>
+                </button>
+              </div>
+
+              {/* Tắt / Bật SenAI Bong bóng chat */}
+              <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10">
+                <div className="pr-2">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold">SenAI Bong bóng chat:</p>
+                    <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                      chatBubbleEnabled 
+                        ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400' 
+                        : 'bg-slate-500/15 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {chatBubbleEnabled ? 'Đang hiện' : 'Đã ẩn'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                    Ẩn hoặc hiện biểu tượng trợ lý SenAI nổi ở góc dưới màn hình
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleChatBubble}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                    chatBubbleEnabled
+                      ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10'
+                  }`}
+                >
+                  <MessageCircle className={`h-3.5 w-3.5 ${chatBubbleEnabled ? 'text-indigo-500' : 'text-slate-400'}`} />
+                  <span>{chatBubbleEnabled ? 'Đang Bật' : 'Đang Tắt'}</span>
                 </button>
               </div>
 
