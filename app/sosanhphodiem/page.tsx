@@ -197,13 +197,14 @@ export default function UnifiedKhaoThiPage() {
 
   // Khởi tạo thông tin hệ thống
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then((res) => {
+      const user = res?.data?.user
       if (user) {
-        supabase.from('profiles').select('full_name').eq('id', user.id).single().then(({ data }) => {
-          if (data) setUserName(data.full_name)
-        })
+        supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle().then(({ data }) => {
+          if (data?.full_name) setUserName(data.full_name)
+        }).catch(() => {})
       }
-    })
+    }).catch(() => {})
     if (document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark') {
       setIsDark(true); document.documentElement.classList.add('dark')
     }

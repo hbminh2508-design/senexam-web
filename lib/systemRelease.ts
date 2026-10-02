@@ -29,13 +29,16 @@ export async function fetchSystemRelease(): Promise<SystemRelease | null> {
 }
 
 export async function logReleaseAction(action: ReleaseLogAction, version?: string, note?: string) {
-  const { data: { user } } = await supabase.auth.getUser()
-  await supabase.from('release_log').insert({
-    actor_id: user?.id ?? null,
-    action,
-    version: version ?? null,
-    note: note ?? null,
-  })
+  try {
+    const { data } = await supabase.auth.getUser()
+    const user = data?.user
+    await supabase.from('release_log').insert({
+      actor_id: user?.id ?? null,
+      action,
+      version: version ?? null,
+      note: note ?? null,
+    })
+  } catch {}
 }
 
 // So sánh 2 chuỗi semver dạng "x.y.z" — trả về true nếu `latest` mới hơn `current`

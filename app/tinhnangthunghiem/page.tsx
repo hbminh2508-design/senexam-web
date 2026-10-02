@@ -173,8 +173,9 @@ export default function TrialFeaturePage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      const { data } = await supabase.auth.getUser()
+      const user = data?.user
+      if (!user) { router.push('/idp'); return }
       setLoadingUser(false)
       await fetchExams()
     }
@@ -229,8 +230,9 @@ export default function TrialFeaturePage() {
         ),
       }))
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      const { data: authData } = await supabase.auth.getUser()
+      const user = authData?.user
+      if (!user) { router.push('/idp'); return }
 
       const sourceNames = files.map(f => f.name)
       const { error: insertError } = await supabase.from('ai_trial_exams').insert({

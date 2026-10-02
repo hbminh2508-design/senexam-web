@@ -154,7 +154,8 @@ export default function NewVipPage() {
     setIsDark(dark)
 
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data } = await supabase.auth.getUser()
+      const user = data?.user
       if (!user) { router.replace('/idp'); return }
       await ensureStudentProfile(user.id)
       await refreshStatus(user.id)
@@ -207,7 +208,8 @@ export default function NewVipPage() {
         setOrder(json.order)
         if (json.order.status === 'paid') {
           stopPolling()
-          const { data: { user } } = await supabase.auth.getUser()
+          const { data } = await supabase.auth.getUser()
+          const user = data?.user
           if (user) await refreshStatus(user.id)
         } else if (json.order.status === 'expired' || json.order.status === 'cancelled') {
           stopPolling()
@@ -257,7 +259,8 @@ export default function NewVipPage() {
       const json = await res.json()
       if (!res.ok) { setErrorMsg(json.error || 'Không đổi được VIP'); return }
       setInfoMsg(`Đã đổi thành công ${vndToSenCash(plan.priceVnd)} SenCash lấy ${plan.name}!`)
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data } = await supabase.auth.getUser()
+      const user = data?.user
       if (user) await refreshStatus(user.id)
     } catch (e: any) {
       setErrorMsg(e.message || 'Có lỗi xảy ra')

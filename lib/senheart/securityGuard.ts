@@ -32,7 +32,9 @@ class SenHeartSecurityGuard {
 
     try {
       // 1. Kiểm tra phiên Supabase
-      const { data: { session }, error } = await supabase.auth.getSession()
+      const sessionRes = await supabase.auth.getSession()
+      const session = sessionRes?.data?.session
+      const error = sessionRes?.error
 
       if (error) {
         this.lastStatus = {

@@ -9,11 +9,6 @@ interface SenHeartAdminWidgetProps {
 }
 
 export default function SenHeartAdminWidget({ userRole }: SenHeartAdminWidgetProps) {
-  // Chỉ hiển thị cho Quản trị viên (Admin / Collab), ẩn hoàn toàn với học sinh
-  if (userRole !== 'admin' && userRole !== 'collab') {
-    return null
-  }
-
   const [telemetry, setTelemetry] = useState<SenHeartTelemetry>(() => senHeart.getTelemetry())
   const [optimizing, setOptimizing] = useState(false)
   const [optResult, setOptResult] = useState<string | null>(null)
@@ -27,6 +22,11 @@ export default function SenHeartAdminWidget({ userRole }: SenHeartAdminWidgetPro
       unsubscribe()
     }
   }, [])
+
+  // Chỉ hiển thị cho Quản trị viên (Admin / Collab), ẩn hoàn toàn với học sinh
+  if (userRole !== 'admin' && userRole !== 'collab') {
+    return null
+  }
 
   const handleManualOptimize = async () => {
     if (optimizing) return

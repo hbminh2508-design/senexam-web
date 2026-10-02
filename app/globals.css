@@ -693,3 +693,12 @@ html.dark[data-eco-mode="true"] .dark\:bg-slate-800\/90 {
     transform: translate(-30px, 50px) scale(0.95) rotate(25deg);
   }
 }
+
+.newdash-card {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.newdash-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.08);
+}

@@ -16,16 +16,19 @@ export default function ClientErrorReporter() {
     const report = (message: string, stack?: string) => {
       if (reportCount >= MAX_REPORTS_PER_SESSION) return
       reportCount++
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        supabase.from('client_error_log').insert({
-          user_id: user?.id ?? null,
-          message: message.slice(0, 2000),
-          stack: stack?.slice(0, 4000) ?? null,
-          url: window.location.href,
-          user_agent: navigator.userAgent,
-          app_version: CURRENT_APP_VERSION,
-        }).then(() => {}, () => {})
-      }).catch(() => {})
+      try {
+        supabase.auth.getSession().then((sessionRes) => {
+          const userId = sessionRes?.data?.session?.user?.id ?? null
+          supabase.from('client_error_log').insert({
+            user_id: userId,
+            message: String(message || 'Unknown error').slice(0, 2000),
+            stack: stack ? String(stack).slice(0, 4000) : null,
+            url: typeof window !== 'undefined' ? window.location.href : '',
+            user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+            app_version: CURRENT_APP_VERSION,
+          }).then(() => {}, () => {})
+        }).catch(() => {})
+      } catch {}
     }
 
     const handleError = (event: ErrorEvent) => {

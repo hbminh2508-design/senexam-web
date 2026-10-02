@@ -1,5 +1,7 @@
 'use client'
 
+import React, { Component } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -318,10 +320,55 @@ const QUICK_ACTIONS: QuickAction[] = [
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value))
 
-export default function NewDashboardPage() {
+class PageErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: any }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: any, info: any) {
+    console.error('Lỗi giao diện New Dashboard:', error, info)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDF6EC] dark:bg-[#0F172A] p-6 text-center">
+          <div className="max-w-md w-full rounded-3xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-8 shadow-2xl backdrop-blur-xl space-y-4">
+            <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">Không thể tải Dashboard</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Đã xảy ra sự cố khi đồng bộ phiên làm việc. Vui lòng bấm thử lại để tiếp tục.</p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { this.setState({ hasError: false }); window.location.reload() }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-bold text-xs shadow-sm hover:bg-amber-600 transition cursor-pointer"
+              >
+                Tải lại trang
+              </button>
+              <Link
+                href="/idp"
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-center transition cursor-pointer flex items-center justify-center"
+              >
+                Về Cổng IDP
+              </Link>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function NewDashboardContent() {
   const router = useRouter()
-  // Tích hợp luồng độc lập Sen Heart 1.0
-  useSenHeartThread('dashboard')
   const { isBetaTester: hookBeta } = useNewUiPrefs()
 
   const [loading, setLoading] = useState(true)
@@ -373,17 +420,17 @@ export default function NewDashboardPage() {
 
     const init = async () => {
       try {
-        const { data: auth, error: authErr } = await supabase.auth.getUser()
-        if (authErr || !auth?.user) {
-          // Thử kiểm tra thêm session nếu getUser đang đồng bộ
-          const { data: sessData } = await supabase.auth.getSession()
-          if (!sessData?.session?.user) {
-            router.replace('/idp')
-            return
-          }
+        const { data: sessData } = await supabase.auth.getSession()
+        let user = sessData?.session?.user || null
+        if (!user) {
+          try {
+            const { data: authData } = await supabase.auth.getUser()
+            user = authData?.user || null
+          } catch {}
         }
 
-        const user = auth?.user || (await supabase.auth.getUser()).data?.user
+        if (disposed) return
+
         if (!user) {
           router.replace('/idp')
           return
@@ -1749,22 +1796,13 @@ export default function NewDashboardPage() {
             </div>
 
             {/* Thanh Sen Heart 1.0 (Chỉ Quản trị viên nhìn thấy) */}
-            <SenHeartAdminWidget userRole={userRole} />
+            {(userRole === 'admin' || userRole === 'collab') && (
+              <SenHeartAdminWidget userRole={userRole} />
+            )}
           </aside>
         </div>
         </div>
       </section>
-
-      <style jsx>{`
-        .newdash-card {
-          transition: transform 150ms ease, box-shadow 150ms ease;
-        }
-
-        .newdash-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 10px 22px rgba(2, 6, 23, 0.08);
-        }
-      `}</style>
 
       {/* Modal Điểm Danh Nhận SC & Giữ Chuỗi Học Tập */}
       <DailyStreakModal
@@ -1783,5 +1821,28 @@ export default function NewDashboardPage() {
       {/* Modal Bổ Sung Hồ Sơ Học Sinh (Nếu Chưa Có Trường/Lớp) */}
       <ProfileCompletionModal />
     </main>
+  )
+}
+
+const ClientOnlyDashboard = dynamic(
+  () => Promise.resolve(NewDashboardContent),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#0F172A] text-[#2B2B2B] dark:text-slate-100">
+        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
+          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
+          <span className="font-bold text-base">Đang tải SenExam Dashboard...</span>
+        </div>
+      </div>
+    ),
+  }
+)
+
+export default function NewDashboardPage() {
+  return (
+    <PageErrorBoundary>
+      <ClientOnlyDashboard />
+    </PageErrorBoundary>
   )
 }
