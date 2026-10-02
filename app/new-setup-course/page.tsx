@@ -430,7 +430,7 @@ class PageErrorBoundary extends Component<
               <AlertCircle className="h-7 w-7" />
             </div>
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Không thể tải Cổng Soạn Đề</h2>
-            <p className="text-xs text-slate-500">Đang phục hồi phiên làm việc bảo mật Sen Heart 1.1...</p>
+            <p className="text-xs text-slate-500">Đang phục hồi phiên làm việc bảo mật Sen Heart 1.2.1...</p>
             <div className="flex gap-2 pt-2">
               <button
                 type="button"

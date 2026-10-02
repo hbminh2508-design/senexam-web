@@ -15,11 +15,20 @@ function checkRateLimit(key: string, maxRequests: number, windowMs: number): boo
   const now = Date.now()
   const record = rateLimitStore.get(key)
 
-  // Dọn dẹp định kỳ nếu store phình to để bảo vệ RAM
-  if (rateLimitStore.size > 2000) {
+  // Dọn dẹp định kỳ để bảo vệ RAM máy chủ lưu trữ (chống tràn RAM ở quy mô lớn)
+  if (rateLimitStore.size > 800) {
     rateLimitStore.forEach((val, k) => {
       if (now > val.resetTime) rateLimitStore.delete(k)
     })
+    // Nếu vẫn vượt quá 800 mục sau khi xóa hết hạn, thu hồi 200 mục đầu tiên
+    if (rateLimitStore.size > 800) {
+      let evicted = 0
+      for (const k of rateLimitStore.keys()) {
+        rateLimitStore.delete(k)
+        evicted++
+        if (evicted >= 200) break
+      }
+    }
   }
 
   if (!record || now > record.resetTime) {

@@ -5,7 +5,7 @@ import { senHeart } from './index'
 import { ThreadPriority } from './types'
 
 /**
- * Hook quản lý luồng trang web thông qua Sen Heart 1.1.
+ * Hook quản lý luồng trang web thông qua Sen Heart 1.2.1.
  * Tự động đăng ký luồng với độ ưu tiên (Thread Priority) khi component mount
  * và tiêu hủy sạch sẽ (kill thread, clear memory) khi người dùng thoát ra khỏi trang.
  */

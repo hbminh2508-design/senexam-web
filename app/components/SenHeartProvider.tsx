@@ -5,9 +5,10 @@ import { usePathname } from 'next/navigation'
 import { senHeart } from '@/lib/senheart'
 
 /**
- * Sen Heart 1.0 - Global Silent Provider
- * Được nhúng ngầm tại RootLayout, quản lý toàn bộ quá trình chuyển trang,
- * tự động ngắt các luồng chạy ngầm của trang cũ và định kỳ dọn dẹp cache cho người dùng.
+ * Sen Heart 1.2.1 - Global Silent Provider
+ * Được nhúng ngầm tại RootLayout, quản lý toàn bộ quá trình chuyển trang an toàn,
+ * điều phối hàng đợi FIFO 5 tác vụ ngầm, tạm hoãn dọn cache khi chuyển giao session,
+ * và định kỳ giải phóng RAM & Cache rác cho người dùng và máy chủ lưu trữ.
  * Hoàn toàn tàng hình, không tạo DOM và không ảnh hưởng đến trải nghiệm người dùng.
  */
 export default function SenHeartProvider() {
@@ -15,7 +16,7 @@ export default function SenHeartProvider() {
   const prevPathnameRef = useRef<string>(pathname)
 
   useEffect(() => {
-    // 1. Khởi động hạt nhân Sen Heart 1.0
+    // 1. Khởi động hạt nhân Sen Heart 1.2.1
     senHeart.init()
 
     // 2. Thiết lập chu kỳ định kỳ tự động giảm thiểu cache (10 phút / lần)

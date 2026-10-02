@@ -1,8 +1,8 @@
 import { CacheCleanReport } from './types'
 
 /**
- * Sen Heart 1.1 - Cache Trimmer
- * Thường xuyên quét và giảm thiểu cache rác, giải phóng RAM và LocalStorage cho người dùng.
+ * Sen Heart 1.2.1 - Cache Trimmer (Ultra Lean Storage)
+ * Thường xuyên quét và giảm thiểu cache rác, giải phóng RAM và LocalStorage cho người dùng và máy chủ.
  * Tích hợp cơ chế tạm hoãn thông minh (Smart Pause) khi đang đăng nhập hoặc chuyển trang,
  * bảo vệ tuyệt đối tất cả các token xác thực và cấu hình giao diện.
  */

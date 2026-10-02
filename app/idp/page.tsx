@@ -73,7 +73,7 @@ class PageErrorBoundary extends Component<
               <AlertCircle className="h-6 w-6" />
             </div>
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Cổng Xác Thực Sẵn Sàng</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Đang đồng bộ hóa phiên bảo mật Sen Heart 1.1...</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Đang đồng bộ hóa phiên bảo mật Sen Heart 1.2.1...</p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -671,7 +671,7 @@ function IdpAuthContent() {
         <div className="text-center space-y-2 mb-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl">
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>Cổng Định Danh Tập Trung • Sen Heart 1.1</span>
+            <span>Cổng Định Danh Tập Trung • Sen Heart 1.2.1</span>
           </div>
 
           <h1

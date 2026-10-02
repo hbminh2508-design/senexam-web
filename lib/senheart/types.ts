@@ -1,7 +1,7 @@
 /**
- * Sen Heart 1.1 - Core System Types & Interfaces
- * Kiến trúc quản lý tập trung luồng trang web, phân cấp ưu tiên luồng,
- * triệt tiêu crash (Crash Shield) và tối ưu hóa hiệu năng toàn diện.
+ * Sen Heart 1.2.1 - Core System Types & Interfaces
+ * Kiến trúc quản lý tập trung luồng trang web, cơ chế điều phối hàng đợi FIFO 5 tác vụ ngầm,
+ * lá chắn triệt tiêu crash (Crash Shield Sandbox) và tối ưu hóa RAM & máy chủ lưu trữ siêu nhẹ.
  */
 
 export type ThreadPriority = 'critical' | 'high' | 'normal' | 'background'
@@ -38,6 +38,9 @@ export interface SenHeartTelemetry {
   buildSignature: string
   activeThreads: number
   criticalThreadsCount: number
+  backgroundThreadsCount: number
+  maxBackgroundConcurrency: number
+  evictionCount: number
   threadList: Array<{
     id: string
     name: string
@@ -49,5 +52,7 @@ export interface SenHeartTelemetry {
   totalCleanups: number
   securityStatus: SecurityStatus
   memoryHealth: 'optimal' | 'moderate' | 'high'
+  ramOptimizationScore: number
   lastOptimizationAt: number | null
 }
+
