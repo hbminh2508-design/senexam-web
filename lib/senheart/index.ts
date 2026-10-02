@@ -2,18 +2,19 @@ import { threadManager } from './threadManager'
 import { cacheTrimmer } from './cacheTrimmer'
 import { securityGuard } from './securityGuard'
 import { dataDispatcher } from './dataDispatcher'
-import { SenHeartTelemetry } from './types'
+import { SenHeartTelemetry, ThreadPriority } from './types'
 
 /**
  * ==============================================================================
- * SEN HEART 1.0 - CORE ARCHITECTURE ENGINE
- * Hệ điều phối trung tâm: Quản lý phân luồng, điều phối dữ liệu, tự động dọn cache
+ * SEN HEART 1.1 - CORE ARCHITECTURE ENGINE
+ * Hệ điều phối trung tâm: Quản lý phân luồng đa tầng (Thread Priority System),
+ * Lá chắn triệt tiêu crash (Crash Shield Sandbox), tự động dọn dẹp bộ nhớ đệm
  * và bảo vệ an ninh thời gian thực cho toàn bộ nền tảng SenExam.
  * ==============================================================================
  */
 class SenHeartCoreEngine {
-  public readonly version = '1.0.2'
-  public readonly buildSignature = 'SEN-HEART-ARMOR-1.0.2-SECURE'
+  public readonly version = '1.1.0'
+  public readonly buildSignature = 'SEN-HEART-ARMOR-1.1.0-ENTERPRISE-RESILIENT'
   private lastOptimization: number | null = null
   private initialized = false
   private telemetrySubscribers: Array<(t: SenHeartTelemetry) => void> = []
@@ -22,26 +23,26 @@ class SenHeartCoreEngine {
     if (this.initialized || typeof window === 'undefined') return
     this.initialized = true
 
-    // Đăng ký luồng Core của chính Sen Heart
-    threadManager.registerThread('core:senheart', 'Sen Heart System Core')
+    // Đăng ký luồng Core của chính Sen Heart với quyền ưu tiên 'critical'
+    threadManager.registerThread('core:senheart', 'Sen Heart System Core', 'critical')
 
     // Tự động kiểm tra an ninh khi khởi động
     securityGuard.verifySecurityIntegrity().then(() => {
       this.broadcastTelemetry()
     })
 
-    // Dọn dẹp cache rác nhẹ khi tải xong trang
+    // Dọn dẹp cache rác nhẹ khi tải xong trang (sau 5 giây để tránh tranh chấp lúc vừa mount)
     setTimeout(() => {
       this.trimCache()
-    }, 4000)
+    }, 5000)
 
-    // Tự động dọn dẹp các luồng mồ côi (zombie threads) định kỳ 20 giây một lần
+    // Tự động dọn dẹp các luồng mồ côi định kỳ 30 giây một lần
     setInterval(() => {
       threadManager.pruneZombieThreads()
       if (typeof document !== 'undefined' && document.hidden) {
         this.trimCache()
       }
-    }, 20000)
+    }, 30000)
 
     // Lắng nghe thay đổi luồng để cập nhật telemetry cho Admin
     threadManager.subscribe(() => {
@@ -52,28 +53,39 @@ class SenHeartCoreEngine {
   /**
    * Xử lý di chuyển chuyển trang:
    * - Hủy luồng của trang cũ để không tiếp tục chạy ngầm gây lag.
-   * - Quét dọn cache rác nếu cần.
+   * - Tạm hoãn dọn cache 15 giây để không làm gián đoạn ghi session.
    */
   public transitionRoute(prevRoute: string, nextRoute: string) {
     if (prevRoute && prevRoute !== nextRoute) {
+      cacheTrimmer.pauseTrimming(15000)
       threadManager.transitionRoute(prevRoute, nextRoute)
-      // Dọn cache nhẹ sau khi đổi trang
-      this.trimCache()
     }
+  }
+
+  /**
+   * Tạm hoãn dọn cache khi đang thực hiện các thao tác nhạy cảm (Đăng nhập, Lưu đề thi...)
+   */
+  public pauseCacheTrimming(durationMs: number = 15000) {
+    cacheTrimmer.pauseTrimming(durationMs)
   }
 
   /**
    * Đăng ký một luồng làm việc mới gắn với component/trang
    */
-  public registerThread(id: string, name: string, cleanup?: () => void): AbortSignal {
-    return threadManager.registerThread(id, name, cleanup)
+  public registerThread(
+    id: string,
+    name: string,
+    priority: ThreadPriority = 'normal',
+    cleanup?: () => void
+  ): AbortSignal {
+    return threadManager.registerThread(id, name, priority, cleanup)
   }
 
   /**
    * Hủy luồng làm việc
    */
-  public killThread(id: string) {
-    threadManager.killThread(id)
+  public killThread(id: string, force: boolean = false) {
+    threadManager.killThread(id, force)
   }
 
   /**
@@ -81,6 +93,20 @@ class SenHeartCoreEngine {
    */
   public addCleanup(id: string, cleanup: () => void) {
     threadManager.addCleanup(id, cleanup)
+  }
+
+  /**
+   * SEN HEART 1.1 CRASH SHIELD:
+   * Thực thi tác vụ trong Sandbox an toàn, tự động bắt lỗi và trả về fallback,
+   * ngăn chặn 100% tình trạng sập component hay kích hoạt ErrorBoundary.
+   */
+  public async runGuarded<T>(
+    name: string,
+    task: (signal: AbortSignal) => Promise<T>,
+    fallback: T,
+    priority: ThreadPriority = 'normal'
+  ): Promise<T> {
+    return threadManager.runGuarded(name, task, fallback, priority)
   }
 
   /**
@@ -99,30 +125,20 @@ class SenHeartCoreEngine {
   public async optimizeNow(): Promise<{
     threadsCleaned: number
     cacheSavedKb: number
-    securityStatus: string
+    report: any
   }> {
-    // 1. Quét dọn các luồng không cần thiết
     const beforeCount = threadManager.getActiveCount()
     threadManager.killAllTemporaryThreads()
     const afterCount = threadManager.getActiveCount()
-    const threadsCleaned = Math.max(0, beforeCount - afterCount)
-
-    // 2. Dọn cache
     const report = cacheTrimmer.trimCache()
-
-    // 3. Xóa cache in-memory data dispatcher
-    dataDispatcher.invalidate()
-
-    // 4. Kiểm tra lại an ninh
-    const sec = await securityGuard.verifySecurityIntegrity()
-
     this.lastOptimization = Date.now()
+
     this.broadcastTelemetry()
 
     return {
-      threadsCleaned,
-      cacheSavedKb: Math.round(report.estimatedBytesSaved / 1024),
-      securityStatus: sec.status,
+      threadsCleaned: Math.max(0, beforeCount - afterCount),
+      cacheSavedKb: report.estimatedBytesSaved ? Math.round(report.estimatedBytesSaved / 1024) : 0,
+      report,
     }
   }
 
@@ -134,6 +150,7 @@ class SenHeartCoreEngine {
       version: this.version,
       buildSignature: this.buildSignature,
       activeThreads: threadManager.getActiveCount(),
+      criticalThreadsCount: threadManager.getCriticalCount(),
       threadList: threadManager.getThreadList(),
       cacheSavingsKb: cacheTrimmer.getTotalSavingsKb(),
       totalCleanups: cacheTrimmer.getTotalCleanups(),

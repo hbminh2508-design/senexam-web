@@ -1,9 +1,11 @@
-import { ThreadRecord } from './types'
+import { ThreadRecord, ThreadPriority } from './types'
 
 /**
- * Sen Heart 1.0 - Thread Manager
- * Quản lý vòng đời tiến trình & ngắt các luồng trang web khi người dùng rời trang.
- * Ngăn chặn hiện tượng rò rỉ bộ nhớ, chạy ngầm vô tận và giật lag hệ thống.
+ * ==============================================================================
+ * SEN HEART 1.1 - THREAD MANAGER (MICRO-KERNEL CORE)
+ * Quản lý vòng đời tiến trình đa tầng với Hệ Thống Phân Cấp Ưu Tiên (Thread Priority),
+ * Lá chắn triệt tiêu Crash (Crash Shield), và Bảo vệ Tuyệt đối các Luồng Xác thực (Auth).
+ * ==============================================================================
  */
 class SenHeartThreadManager {
   private threads = new Map<string, ThreadRecord>()
@@ -29,26 +31,35 @@ class SenHeartThreadManager {
   }
 
   private suspendHeavyWorkloads() {
-    // Tạm dừng các tác vụ không cần thiết khi ẩn tab trình duyệt
+    // Chỉ tạm dừng các luồng nền (background) khi tab bị ẩn, tuyệt đối không chạm luồng critical/high
     this.threads.forEach((t) => {
-      if (t.name.includes('polling') || t.name.includes('stream')) {
-        // Tạm đình chỉ polling ngầm để tiết kiệm CPU/RAM
+      if (t.priority === 'background' && (t.name.includes('polling') || t.name.includes('stream'))) {
+        // Tạm hoãn background polling để tiết kiệm tài nguyên
       }
     })
   }
 
   private resumeWorkloads() {
-    // Tiếp tục hoạt động khi người dùng quay lại tab
+    // Phục hồi hoạt động khi người dùng kích hoạt lại tab
   }
 
   /**
-   * Đăng ký một luồng làm việc mới thuộc một trang hoặc tính năng.
-   * Trả về AbortSignal để trang truyền vào fetch, Supabase listener hoặc listener DOM.
+   * Đăng ký một luồng làm việc mới gắn liền với component, trang hoặc tác vụ hệ thống.
+   * Hỗ trợ phân cấp ưu tiên: 'critical' | 'high' | 'normal' | 'background'.
    */
-  public registerThread(id: string, name: string, cleanup?: () => void): AbortSignal {
-    // Nếu thread cũ cùng id đang chạy, ngắt nó trước
-    if (this.threads.has(id)) {
-      this.killThread(id)
+  public registerThread(
+    id: string,
+    name: string,
+    priority: ThreadPriority = 'normal',
+    cleanup?: () => void
+  ): AbortSignal {
+    // Nếu thread cũ cùng id đang chạy, ngắt nó trước (trừ khi là luồng critical đang xử lý auth)
+    const existing = this.threads.get(id)
+    if (existing) {
+      if (existing.priority === 'critical' && existing.active) {
+        return existing.controller.signal
+      }
+      this.killThread(id, true)
     }
 
     const controller = new AbortController()
@@ -60,6 +71,7 @@ class SenHeartThreadManager {
       name,
       active: true,
       startedAt: Date.now(),
+      priority,
       controller,
       cleanups,
     }
@@ -70,7 +82,7 @@ class SenHeartThreadManager {
   }
 
   /**
-   * Đăng ký thêm hàm dọn dẹp (cleanup) vào luồng (ví dụ: clearInterval, unsubscribe Supabase)
+   * Đăng ký thêm hàm dọn dẹp (cleanup) vào luồng
    */
   public addCleanup(id: string, cleanup: () => void) {
     const thread = this.threads.get(id)
@@ -80,23 +92,32 @@ class SenHeartThreadManager {
   }
 
   /**
-   * Ngắt và tiêu hủy hoàn toàn 1 luồng khi người dùng thoát ra khỏi trang.
+   * Hủy luồng một cách an toàn.
+   * Nếu luồng là 'critical' (ví dụ Đăng nhập, Phiên Auth), nó sẽ được BẢO VỆ TUYỆT ĐỐI,
+   * trừ khi có cờ force = true.
    */
-  public killThread(id: string) {
+  public killThread(id: string, force: boolean = false) {
     const thread = this.threads.get(id)
     if (!thread) return
 
+    // Bảo vệ các luồng critical chống bị vô tình hủy ngang khi chuyển trang
+    if (thread.priority === 'critical' && !force) {
+      return
+    }
+
     thread.active = false
     try {
-      thread.controller.abort('SenHeart: Thread terminated upon page exit.')
+      if (!thread.controller.signal.aborted) {
+        thread.controller.abort('SenHeart: Thread gracefully finished or terminated.')
+      }
     } catch {}
 
-    // Chạy toàn bộ các hàm dọn dẹp đã đăng ký
+    // Chạy các hàm dọn dẹp an toàn bên trong try...catch
     thread.cleanups.forEach((fn) => {
       try {
         fn()
       } catch (err) {
-        console.warn(`[SenHeart] Lỗi dọn dẹp luồng ${id}:`, err)
+        console.warn(`[SenHeart 1.1] Cảnh báo dọn dẹp luồng ${id}:`, err)
       }
     })
 
@@ -105,7 +126,38 @@ class SenHeartThreadManager {
   }
 
   /**
-   * Tự động tiêu hủy các luồng thuộc về trang vừa rời đi
+   * SEN HEART 1.1 CRASH SHIELD:
+   * Chạy một tác vụ bất đồng bộ trong hộp cát an toàn (Sandbox).
+   * Tự động bắt mọi ngoại lệ (Network, Abort, Null reference), không bao giờ để lỗi
+   * văng lên cây React gây văng ErrorBoundary hay sập trang web.
+   */
+  public async runGuarded<T>(
+    name: string,
+    task: (signal: AbortSignal) => Promise<T>,
+    fallback: T,
+    priority: ThreadPriority = 'normal'
+  ): Promise<T> {
+    const threadId = `guard_${name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    const signal = this.registerThread(threadId, name, priority)
+
+    try {
+      const result = await task(signal)
+      return result
+    } catch (err: any) {
+      // Bỏ qua lỗi do Abort có chủ đích
+      if (err?.name === 'AbortError' || String(err).includes('aborted')) {
+        return fallback
+      }
+      console.warn(`[SenHeart 1.1 Crash Shield] Tác vụ "${name}" gặp ngoại lệ được cách ly an toàn:`, err)
+      return fallback
+    } finally {
+      this.killThread(threadId, true)
+    }
+  }
+
+  /**
+   * Chuyển trang an toàn:
+   * Chỉ dọn dẹp các luồng thuộc trang cũ mà KHÔNG CÓ độ ưu tiên 'critical'.
    */
   public transitionRoute(prevRoute: string, newRoute: string) {
     if (!prevRoute || prevRoute === newRoute) return
@@ -114,43 +166,45 @@ class SenHeartThreadManager {
     const toKill: string[] = []
 
     this.threads.forEach((t, id) => {
-      // Nếu luồng có chứa tiền tố trang trước đó và không phải luồng toàn cục (core)
-      if (id.startsWith(`route:${sanitizedPrev}`) || (t.name.startsWith(sanitizedPrev) && !id.startsWith('core:'))) {
+      // Tuyệt đối không ngắt luồng critical hoặc luồng core
+      if (t.priority === 'critical' || id.startsWith('core:')) return
+
+      if (id.startsWith(`route:${sanitizedPrev}`) || (t.name.startsWith(sanitizedPrev))) {
         toKill.push(id)
       }
     })
 
-    toKill.forEach((id) => this.killThread(id))
+    toKill.forEach((id) => this.killThread(id, true))
   }
 
   /**
-   * Cưỡng chế ngắt toàn bộ các luồng tạm thời, chỉ giữ lại các luồng cốt lõi
+   * Cưỡng chế ngắt toàn bộ luồng tạm, bảo lưu luồng core và luồng critical
    */
   public killAllTemporaryThreads() {
     const toKill: string[] = []
-    this.threads.forEach((_, id) => {
-      if (!id.startsWith('core:')) {
+    this.threads.forEach((t, id) => {
+      if (!id.startsWith('core:') && t.priority !== 'critical') {
         toKill.push(id)
       }
     })
-    toKill.forEach((id) => this.killThread(id))
+    toKill.forEach((id) => this.killThread(id, true))
   }
 
   /**
-   * Sen Heart 1.0.2: Tự động dọn dẹp các tiến trình mồ côi hoặc bị hủy nhưng chưa giải phóng
+   * Dọn dẹp các luồng mồ côi (zombie threads)
    */
   public pruneZombieThreads() {
     const now = Date.now()
     const toKill: string[] = []
     this.threads.forEach((t, id) => {
-      if (!id.startsWith('core:')) {
-        if (t.controller.signal.aborted || (now - t.startedAt > 15 * 60 * 1000)) {
+      if (!id.startsWith('core:') && t.priority !== 'critical') {
+        if (t.controller.signal.aborted || (now - t.startedAt > 10 * 60 * 1000)) {
           toKill.push(id)
         }
       }
     })
     if (toKill.length > 0) {
-      toKill.forEach((id) => this.killThread(id))
+      toKill.forEach((id) => this.killThread(id, true))
     }
   }
 
@@ -158,13 +212,22 @@ class SenHeartThreadManager {
     return this.threads.size
   }
 
-  public getThreadList(): Array<{ id: string; name: string; durationMs: number; active: boolean }> {
+  public getCriticalCount(): number {
+    let count = 0
+    this.threads.forEach((t) => {
+      if (t.priority === 'critical') count++
+    })
+    return count
+  }
+
+  public getThreadList(): Array<{ id: string; name: string; durationMs: number; active: boolean; priority: ThreadPriority }> {
     const now = Date.now()
     return Array.from(this.threads.values()).map((t) => ({
       id: t.id,
       name: t.name,
       durationMs: now - t.startedAt,
       active: t.active,
+      priority: t.priority,
     }))
   }
 

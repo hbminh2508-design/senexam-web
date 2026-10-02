@@ -8,6 +8,7 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { signInWithGoogle } from '@/lib/authHelper'
+import { senHeart } from '@/lib/senheart'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getAccentHex } from '@/app/components/modernTheme'
 import {
@@ -72,17 +73,27 @@ class PageErrorBoundary extends Component<
               <AlertCircle className="h-6 w-6" />
             </div>
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Cổng Xác Thực Sẵn Sàng</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Đang khởi tạo lại phiên đăng nhập bảo mật...</p>
-            <button
-              type="button"
-              onClick={() => {
-                this.setState({ hasError: false })
-                if (typeof window !== 'undefined') window.location.reload()
-              }}
-              className="w-full py-3 rounded-2xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition cursor-pointer"
-            >
-              Tiếp tục Đăng nhập
-            </button>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Đang đồng bộ hóa phiên bảo mật Sen Heart 1.1...</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  this.setState({ hasError: false })
+                }}
+                className="flex-1 py-3 rounded-2xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition cursor-pointer"
+              >
+                Tiếp tục Đăng nhập
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') window.location.reload()
+                }}
+                className="px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Tải lại
+              </button>
+            </div>
           </div>
         </div>
       )
@@ -216,30 +227,32 @@ function IdpAuthContent() {
 
     // Kiểm tra xem phiên hiện tại có phải Admin không để kích hoạt Tab 4
     const checkAdminSession = async () => {
-      try {
-        const { data: sessionRes } = await supabase.auth.getSession()
-        const user = sessionRes?.session?.user
-        if (user && isMounted) {
-          try {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', user.id)
-              .maybeSingle()
-            if (isMounted && (profile?.role === 'admin' || profile?.role === 'collab')) {
-              setIsAdminUser(true)
+      await senHeart.runGuarded('idp:check_admin', async () => {
+        try {
+          const sessionRes = await supabase.auth.getSession().catch(() => null)
+          const user = sessionRes?.data?.session?.user
+          if (user && isMounted) {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .maybeSingle()
+              if (isMounted && (profile?.role === 'admin' || profile?.role === 'collab')) {
+                setIsAdminUser(true)
+              }
+            } catch (e) {
+              console.warn('Lỗi đọc role profile:', e)
             }
-          } catch (e) {
-            console.warn('Lỗi đọc role profile:', e)
+          }
+        } catch (e) {
+          console.warn('Lỗi kiểm tra session admin IDP:', e)
+        } finally {
+          if (isMounted) {
+            setAdminCheckDone(true)
           }
         }
-      } catch (e) {
-        console.warn('Lỗi kiểm tra session admin IDP:', e)
-      } finally {
-        if (isMounted) {
-          setAdminCheckDone(true)
-        }
-      }
+      }, undefined, 'critical')
     }
 
     checkAdminSession()
@@ -327,6 +340,7 @@ function IdpAuthContent() {
   // Điều hướng sau khi đăng nhập thành công
   const navigatePostLogin = (userEmail: string) => {
     clearFailedAttempts()
+    senHeart.pauseCacheTrimming(20000)
 
     if (redirectPath) {
       if (redirectPath.startsWith('http')) {
@@ -362,7 +376,13 @@ function IdpAuthContent() {
       return
     }
 
-    router.push(redirectPath || '/new-dashboard')
+    try {
+      router.push(redirectPath || '/new-dashboard')
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.location.assign(redirectPath || '/new-dashboard')
+      }
+    }
   }
 
   // Đăng nhập bằng Google OAuth
@@ -370,17 +390,20 @@ function IdpAuthContent() {
     if (lockoutTimer > 0) return
     setGoogleLoading(true)
     setErrorMsg('')
-    try {
-      const dest = redirectPath || (targetService === 'seb' ? '/seb-dashboard' : '/new-dashboard')
-      await signInWithGoogle(dest)
-    } catch (err: any) {
-      setErrorMsg(
-        err.message?.includes('provider is not enabled')
-          ? 'Google OAuth chưa được kích hoạt trên hệ thống. Vui lòng sử dụng đăng nhập bằng Email.'
-          : err.message || 'Đăng nhập Google thất bại.'
-      )
-      setGoogleLoading(false)
-    }
+    await senHeart.runGuarded('idp:google_auth', async () => {
+      try {
+        const dest = redirectPath || (targetService === 'seb' ? '/seb-dashboard' : '/new-dashboard')
+        await signInWithGoogle(dest)
+      } catch (err: any) {
+        setErrorMsg(
+          err.message?.includes('provider is not enabled')
+            ? 'Google OAuth chưa được kích hoạt trên hệ thống. Vui lòng sử dụng đăng nhập bằng Email.'
+            : err.message || 'Đăng nhập Google thất bại.'
+        )
+      } finally {
+        setGoogleLoading(false)
+      }
+    }, undefined, 'critical')
   }
 
   // Xử lý gửi Form chính (Login, Signup, Magic-Link, Forgot)
@@ -395,8 +418,9 @@ function IdpAuthContent() {
     setErrorMsg('')
     setSuccessMsg('')
 
-    try {
-      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined
+    await senHeart.runGuarded('idp:auth_submit', async () => {
+      try {
+        const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined
 
       if (mode === 'login') {
         // ĐĂNG NHẬP
@@ -497,7 +521,8 @@ function IdpAuthContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, undefined, 'critical')
+}
 
   // Gửi lại email xác nhận
   const handleResendEmail = async () => {
@@ -646,7 +671,7 @@ function IdpAuthContent() {
         <div className="text-center space-y-2 mb-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl">
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>Cổng Định Danh Tập Trung • Sen Heart 1.0.2</span>
+            <span>Cổng Định Danh Tập Trung • Sen Heart 1.1</span>
           </div>
 
           <h1

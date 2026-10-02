@@ -1,8 +1,8 @@
 /**
- * Sen Heart 1.0 - Data Dispatcher
+ * Sen Heart 1.1 - Data Dispatcher
  * Phân bố và chia sẻ dữ liệu tập trung giữa các trang và component.
- * Ngăn chặn hiện tượng gửi trùng lặp yêu cầu mạng (Request Duplication) và giật lag
- * khi chuyển trang hoặc tải nhiều thành phần cùng lúc.
+ * Tích hợp cơ chế gộp yêu cầu mạng (Coalescing), Bộ đệm mềm TTL và
+ * Tự động phục hồi lỗi (Error Isolation & Safe Fallback) để không làm sập Promise.all.
  */
 
 interface CacheEntry<T> {
@@ -17,11 +17,13 @@ class SenHeartDataDispatcher {
 
   /**
    * Gọi dữ liệu qua Sen Heart Dispatcher với cơ chế gộp yêu cầu (Coalescing) & TTL cache.
+   * Nếu request bị lỗi mạng, tự động thử lại 1 lần và trả về fallback an toàn thay vì ném unhandled error.
    */
   public async fetchShared<T>(
     key: string,
     fetcher: () => Promise<T>,
-    ttlMs: number = this.DEFAULT_TTL_MS
+    ttlMs: number = this.DEFAULT_TTL_MS,
+    fallback: T = null as any
   ): Promise<T> {
     const now = Date.now()
 
@@ -36,15 +38,33 @@ class SenHeartDataDispatcher {
       return this.inFlight.get(key) as Promise<T>
     }
 
-    // 3. Thực thi request mới và lưu vào in-flight map
+    // 3. Thực thi request mới với cơ chế bảo vệ cách ly lỗi
     const promise = (async () => {
       try {
-        const result = await fetcher()
-        this.cache.set(key, {
-          data: result,
-          expiresAt: Date.now() + ttlMs,
-        })
+        let result: T
+        try {
+          result = await fetcher()
+        } catch (firstErr) {
+          // Thử lại 1 lần với độ trễ 250ms nếu mạng chập chờn
+          await new Promise((r) => setTimeout(r, 250))
+          try {
+            result = await fetcher()
+          } catch (secondErr) {
+            console.warn(`[SenHeart 1.1 Dispatcher] Truy vấn "${key}" lỗi, dùng fallback:`, secondErr)
+            return fallback
+          }
+        }
+
+        if (result !== undefined) {
+          this.cache.set(key, {
+            data: result,
+            expiresAt: Date.now() + ttlMs,
+          })
+        }
         return result
+      } catch (fatalErr) {
+        console.warn(`[SenHeart 1.1 Dispatcher] Lỗi ngoại lệ tại "${key}":`, fatalErr)
+        return fallback
       } finally {
         this.inFlight.delete(key)
       }
@@ -55,7 +75,7 @@ class SenHeartDataDispatcher {
   }
 
   /**
-   * Xóa một key khỏi bộ đệm khi dữ liệu vừa được cập nhật (ví dụ: vừa điểm danh hoặc đổi điểm)
+   * Xóa một key khỏi bộ đệm khi dữ liệu vừa được cập nhật
    */
   public invalidate(keyPrefix?: string) {
     if (!keyPrefix) {

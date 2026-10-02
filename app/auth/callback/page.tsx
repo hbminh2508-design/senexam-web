@@ -108,7 +108,9 @@ function CallbackHandler() {
         }
 
         // Kiểm tra session hiện tại (Supabase client tự động lấy token từ URL hash hoặc PKCE code)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        const sessionRes = await supabase.auth.getSession().catch(() => null)
+        const session = sessionRes?.data?.session || null
+        const sessionError = sessionRes?.error || null
 
         const handleRedirect = (currentUser: any) => {
           // Dọn dẹp cookie và storage tạm thời
@@ -203,7 +205,7 @@ function CallbackHandler() {
         }
 
         // Lắng nghe sự kiện đăng nhập khi Supabase client hoàn thành xử lý background
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        const authChangeRes = supabase.auth.onAuthStateChange(async (event, newSession) => {
           if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && newSession?.user) {
             await ensureStudentProfile(newSession.user.id)
             if (active) {
@@ -211,6 +213,7 @@ function CallbackHandler() {
             }
           }
         })
+        const subscription = authChangeRes?.data?.subscription
 
         // Safety fallback timeout
         const timer = setTimeout(() => {
@@ -230,7 +233,9 @@ function CallbackHandler() {
         }, 3500)
 
         return () => {
-          subscription.unsubscribe()
+          try {
+            subscription?.unsubscribe?.()
+          } catch {}
           clearTimeout(timer)
         }
       } catch (err: any) {

@@ -59,8 +59,7 @@ import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 import DailyStreakModal from '@/app/components/DailyStreakModal'
 import SenHeartAdminWidget from '@/app/components/SenHeartAdminWidget'
-import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
-import { dataDispatcher } from '@/lib/senheart'
+import { senHeart, dataDispatcher } from '@/lib/senheart'
 import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 import { getPlanTierName } from '@/lib/vipMembership'
@@ -347,6 +346,13 @@ class PageErrorBoundary extends Component<
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
+                onClick={() => this.setState({ hasError: false, error: null })}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition cursor-pointer"
+              >
+                Khôi phục luồng
+              </button>
+              <button
+                type="button"
                 onClick={() => { this.setState({ hasError: false }); window.location.reload() }}
                 className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-bold text-xs shadow-sm hover:bg-amber-600 transition cursor-pointer"
               >
@@ -354,7 +360,7 @@ class PageErrorBoundary extends Component<
               </button>
               <Link
                 href="/idp"
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-center transition cursor-pointer flex items-center justify-center"
+                className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-center transition cursor-pointer flex items-center justify-center"
               >
                 Về Cổng IDP
               </Link>
@@ -419,7 +425,7 @@ function NewDashboardContent() {
     setChatBubbleEnabled(localStorage.getItem('sen_chat_bubble_disabled') !== '1')
 
     const init = async () => {
-      try {
+      await senHeart.runGuarded('dashboard:init', async () => {
         const { data: sessData } = await supabase.auth.getSession()
         let user = sessData?.session?.user || null
         if (!user) {
@@ -548,12 +554,10 @@ function NewDashboardContent() {
             }).catch(() => {})
           } catch {}
         }
-      } catch (initErr) {
-        console.warn('Lỗi khởi tạo Dashboard:', initErr)
-      } finally {
-        if (!disposed) {
-          setLoading(false)
-        }
+      }, undefined, 'high')
+
+      if (!disposed) {
+        setLoading(false)
       }
     }
 

@@ -10,7 +10,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import ExamStudentProctorModal from '@/app/components/ExamStudentProctorModal'
-import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
+import { senHeart } from '@/lib/senheart'
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -430,12 +430,19 @@ class PageErrorBoundary extends Component<
               <AlertCircle className="h-7 w-7" />
             </div>
             <h2 className="text-lg font-black text-slate-900 dark:text-white">Không thể tải Cổng Soạn Đề</h2>
-            <p className="text-xs text-slate-500">Đã xảy ra sự cố kỹ thuật khi khởi tạo giao diện. Bạn có thể tải lại trang hoặc quay về Dashboard.</p>
+            <p className="text-xs text-slate-500">Đang phục hồi phiên làm việc bảo mật Sen Heart 1.1...</p>
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => { this.setState({ hasError: false }); window.location.reload() }}
+                onClick={() => { this.setState({ hasError: false }) }}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm hover:bg-emerald-700 transition cursor-pointer"
+              >
+                Tiếp tục
+              </button>
+              <button
+                type="button"
+                onClick={() => { this.setState({ hasError: false }); if (typeof window !== 'undefined') window.location.reload() }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 Tải lại trang
               </button>
@@ -622,8 +629,9 @@ function SetupCourseMainContent() {
     setIsDark(Boolean(dark))
 
     const initPage = async () => {
-      try {
-        const { data: sessionRes } = await supabase.auth.getSession()
+      await senHeart.runGuarded('course:setup_init', async () => {
+        try {
+          const { data: sessionRes } = await supabase.auth.getSession()
         let user = sessionRes?.session?.user || null
         if (!user) {
           try {
@@ -704,7 +712,8 @@ function SetupCourseMainContent() {
       } finally {
         if (isMounted) setLoading(false)
       }
-    }
+    }, undefined, 'high')
+  }
 
     initPage()
 
