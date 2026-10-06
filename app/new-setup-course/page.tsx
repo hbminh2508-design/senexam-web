@@ -629,9 +629,8 @@ function SetupCourseMainContent() {
     setIsDark(Boolean(dark))
 
     const initPage = async () => {
-      await senHeart.runGuarded('course:setup_init', async () => {
-        try {
-          const { data: sessionRes } = await supabase.auth.getSession()
+      try {
+        const { data: sessionRes } = await supabase.auth.getSession()
         let user = sessionRes?.session?.user || null
         if (!user) {
           try {
@@ -712,8 +711,7 @@ function SetupCourseMainContent() {
       } finally {
         if (isMounted) setLoading(false)
       }
-    }, undefined, 'high')
-  }
+    }
 
     initPage()
 
@@ -3525,9 +3523,5 @@ export default function NewSetupCoursePage() {
     )
   }
 
-  return (
-    <PageErrorBoundary>
-      <SetupCourseMainContent />
-    </PageErrorBoundary>
-  )
+  return <SetupCourseMainContent />
 }

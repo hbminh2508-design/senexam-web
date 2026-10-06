@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
-import { useSenHeartThread } from '@/lib/senheart/useSenHeart'
 import {
   ArrowLeft,
   Search,
@@ -56,8 +55,6 @@ const EXAM_TYPES = ['Tất cả', 'THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL']
 
 export default function NewExamsPage() {
   const router = useRouter()
-  // Tích hợp luồng độc lập Sen Heart 1.0
-  useSenHeartThread('exams_hub')
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
   const [exams, setExams] = useState<ExamItem[]>([])

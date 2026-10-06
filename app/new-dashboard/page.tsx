@@ -425,7 +425,7 @@ function NewDashboardContent() {
     setChatBubbleEnabled(localStorage.getItem('sen_chat_bubble_disabled') !== '1')
 
     const init = async () => {
-      await senHeart.runGuarded('dashboard:init', async () => {
+      try {
         const { data: sessData } = await supabase.auth.getSession()
         let user = sessData?.session?.user || null
         if (!user) {
@@ -554,10 +554,13 @@ function NewDashboardContent() {
             }).catch(() => {})
           } catch {}
         }
-      }, undefined, 'high')
-
-      if (!disposed) {
-        setLoading(false)
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || String(err).includes('aborted')) return
+        console.error('Lỗi khởi tạo Dashboard:', err)
+      } finally {
+        if (!disposed) {
+          setLoading(false)
+        }
       }
     }
 
@@ -1798,11 +1801,6 @@ function NewDashboardContent() {
                 </button>
               </div>
             </div>
-
-            {/* Thanh Sen Heart 1.0 (Chỉ Quản trị viên nhìn thấy) */}
-            {(userRole === 'admin' || userRole === 'collab') && (
-              <SenHeartAdminWidget userRole={userRole} />
-            )}
           </aside>
         </div>
         </div>
@@ -1845,9 +1843,5 @@ export default function NewDashboardPage() {
     )
   }
 
-  return (
-    <PageErrorBoundary>
-      <NewDashboardContent />
-    </PageErrorBoundary>
-  )
+  return <NewDashboardContent />
 }

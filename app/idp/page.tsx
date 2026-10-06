@@ -8,7 +8,6 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { signInWithGoogle } from '@/lib/authHelper'
-import { senHeart } from '@/lib/senheart'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getAccentHex } from '@/app/components/modernTheme'
 import {
@@ -49,58 +48,6 @@ const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_SECONDS = 60
 
 type IdpMode = 'login' | 'signup' | 'forgot' | 'magic-link' | 'grant'
-
-class PageErrorBoundary extends Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error?: any }
-> {
-  constructor(props: any) {
-    super(props)
-    this.state = { hasError: false }
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error }
-  }
-  componentDidCatch(error: any, info: any) {
-    console.warn('IDP UI boundary caught error:', error, info)
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-[#F4F7FB] dark:bg-[#080D1A] text-slate-800 dark:text-slate-100 font-sans">
-          <div className="max-w-md w-full rounded-3xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-8 shadow-2xl backdrop-blur-xl text-center space-y-4">
-            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
-              <AlertCircle className="h-6 w-6" />
-            </div>
-            <h2 className="text-lg font-black text-slate-900 dark:text-white">Cổng Xác Thực Sẵn Sàng</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Đang đồng bộ hóa phiên bảo mật Sen Heart 1.2.1...</p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  this.setState({ hasError: false })
-                }}
-                className="flex-1 py-3 rounded-2xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition cursor-pointer"
-              >
-                Tiếp tục Đăng nhập
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof window !== 'undefined') window.location.reload()
-                }}
-                className="px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              >
-                Tải lại
-              </button>
-            </div>
-          </div>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
 
 function IdpAuthContent() {
   const router = useRouter()
@@ -227,32 +174,30 @@ function IdpAuthContent() {
 
     // Kiểm tra xem phiên hiện tại có phải Admin không để kích hoạt Tab 4
     const checkAdminSession = async () => {
-      await senHeart.runGuarded('idp:check_admin', async () => {
-        try {
-          const sessionRes = await supabase.auth.getSession().catch(() => null)
-          const user = sessionRes?.data?.session?.user
-          if (user && isMounted) {
-            try {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .maybeSingle()
-              if (isMounted && (profile?.role === 'admin' || profile?.role === 'collab')) {
-                setIsAdminUser(true)
-              }
-            } catch (e) {
-              console.warn('Lỗi đọc role profile:', e)
+      try {
+        const sessionRes = await supabase.auth.getSession().catch(() => null)
+        const user = sessionRes?.data?.session?.user
+        if (user && isMounted) {
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', user.id)
+              .maybeSingle()
+            if (isMounted && (profile?.role === 'admin' || profile?.role === 'collab')) {
+              setIsAdminUser(true)
             }
-          }
-        } catch (e) {
-          console.warn('Lỗi kiểm tra session admin IDP:', e)
-        } finally {
-          if (isMounted) {
-            setAdminCheckDone(true)
+          } catch (e) {
+            console.warn('Lỗi đọc role profile:', e)
           }
         }
-      }, undefined, 'critical')
+      } catch (e) {
+        console.warn('Lỗi kiểm tra session admin IDP:', e)
+      } finally {
+        if (isMounted) {
+          setAdminCheckDone(true)
+        }
+      }
     }
 
     checkAdminSession()
@@ -340,7 +285,6 @@ function IdpAuthContent() {
   // Điều hướng sau khi đăng nhập thành công
   const navigatePostLogin = (userEmail: string) => {
     clearFailedAttempts()
-    senHeart.pauseCacheTrimming(20000)
 
     if (redirectPath) {
       if (redirectPath.startsWith('http')) {
@@ -390,20 +334,18 @@ function IdpAuthContent() {
     if (lockoutTimer > 0) return
     setGoogleLoading(true)
     setErrorMsg('')
-    await senHeart.runGuarded('idp:google_auth', async () => {
-      try {
-        const dest = redirectPath || (targetService === 'seb' ? '/seb-dashboard' : '/new-dashboard')
-        await signInWithGoogle(dest)
-      } catch (err: any) {
-        setErrorMsg(
-          err.message?.includes('provider is not enabled')
-            ? 'Google OAuth chưa được kích hoạt trên hệ thống. Vui lòng sử dụng đăng nhập bằng Email.'
-            : err.message || 'Đăng nhập Google thất bại.'
-        )
-      } finally {
-        setGoogleLoading(false)
-      }
-    }, undefined, 'critical')
+    try {
+      const dest = redirectPath || (targetService === 'seb' ? '/seb-dashboard' : '/new-dashboard')
+      await signInWithGoogle(dest)
+    } catch (err: any) {
+      setErrorMsg(
+        err.message?.includes('provider is not enabled')
+          ? 'Google OAuth chưa được kích hoạt trên hệ thống. Vui lòng sử dụng đăng nhập bằng Email.'
+          : err.message || 'Đăng nhập Google thất bại.'
+      )
+    } finally {
+      setGoogleLoading(false)
+    }
   }
 
   // Xử lý gửi Form chính (Login, Signup, Magic-Link, Forgot)
@@ -418,9 +360,8 @@ function IdpAuthContent() {
     setErrorMsg('')
     setSuccessMsg('')
 
-    await senHeart.runGuarded('idp:auth_submit', async () => {
-      try {
-        const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined
+    try {
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/new-dashboard` : undefined
 
       if (mode === 'login') {
         // ĐĂNG NHẬP
@@ -521,8 +462,7 @@ function IdpAuthContent() {
     } finally {
       setLoading(false)
     }
-  }, undefined, 'critical')
-}
+  }
 
   // Gửi lại email xác nhận
   const handleResendEmail = async () => {
@@ -620,23 +560,8 @@ function IdpAuthContent() {
         color: 'var(--text)',
       }}
     >
-      {/* 🔮 ANIMATED BACKGROUND: Các khối cầu phát sáng chuyển động mượt mà 60fps từ new-sign */}
-      <div className="bg-anim-container pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
-        <div
-          className="anim-blob blob-1 fixed rounded-full blur-[90px] sm:blur-[120px] opacity-40 dark:opacity-25"
-          style={{ backgroundColor: accent }}
-        />
-        <div
-          className="anim-blob blob-2 fixed rounded-full blur-[100px] sm:blur-[140px] opacity-40 dark:opacity-25 bg-amber-400 dark:bg-amber-500"
-        />
-        <div
-          className="anim-blob blob-3 fixed rounded-full blur-[90px] sm:blur-[130px] opacity-35 dark:opacity-20 bg-rose-500 dark:bg-rose-600"
-        />
-        <div
-          className="anim-blob blob-4 fixed rounded-full blur-[110px] sm:blur-[150px] opacity-35 dark:opacity-20 bg-teal-400 dark:bg-teal-500"
-        />
-
-        {/* Lớp lưới tinh tế overlay */}
+      {/* Tinh chỉnh nền nhẹ - GlobalCanvasEngine đã đảm nhận hạt và hiệu ứng động */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
         <div
           className="fixed inset-0 opacity-[0.03] dark:opacity-[0.05]"
           style={{
@@ -1359,9 +1284,5 @@ export default function IdpAuthPage() {
     )
   }
 
-  return (
-    <PageErrorBoundary>
-      <IdpAuthContent />
-    </PageErrorBoundary>
-  )
+  return <IdpAuthContent />
 }
