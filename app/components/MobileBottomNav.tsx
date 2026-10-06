@@ -58,7 +58,7 @@ const ALL_FEATURES: FeatureItem[] = [
     key: 'setup-course',
     title: 'Soạn đề & Khóa học',
     desc: 'Soạn đề KaTeX, tải đề PDF & SEB, quản lý thí sinh làm bài.',
-    href: '/new-setup-course',
+    href: '/new-setup-courses',
     tone: 'from-emerald-400 to-teal-600',
     badge: 'Mới',
     icon: Sparkles,
@@ -303,7 +303,7 @@ export default function MobileBottomNav() {
     pathname?.startsWith('/legacy-senai-studio') ||
     pathname?.startsWith('/senai-studio') ||
     pathname?.startsWith('/new-setup-course') ||
-    pathname?.startsWith('/idp') ||
+    pathname?.startsWith('/new-idp') ||
     pathname?.startsWith('/new-sign') ||
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/seb-login') ||

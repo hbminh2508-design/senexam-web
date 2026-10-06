@@ -100,7 +100,7 @@ export default function NewSenCashPage() {
       const { data: auth } = await supabase.auth.getUser()
       const user = auth.user
       if (!user) {
-        router.replace('/idp')
+        router.replace('/new-idp')
         return
       }
 
@@ -167,7 +167,7 @@ export default function NewSenCashPage() {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
       if (!token) {
-        router.replace('/idp')
+        router.replace('/new-idp')
         return
       }
 

@@ -85,6 +85,8 @@ export default function SenChatFloatingBubble() {
     pathname?.startsWith('/legacy-senai-studio') ||
     pathname?.startsWith('/senai-studio') ||
     pathname?.startsWith('/new-setup-course') ||
+    pathname?.startsWith('/new-setup-courses') ||
+    pathname?.startsWith('/new-idp') ||
     pathname?.startsWith('/idp') ||
     pathname?.startsWith('/new-sign') ||
     pathname?.startsWith('/login') ||

@@ -9,7 +9,7 @@ export default function LoginRedirectPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const search = window.location.search || ''
-      router.replace(`/idp${search}`)
+      router.replace(`/new-idp${search}`)
     }
   }, [router])
 

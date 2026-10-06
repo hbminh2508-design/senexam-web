@@ -83,7 +83,7 @@ export default function NewSubmissionsPage() {
       const { data: auth } = await supabase.auth.getUser()
       const user = auth.user
       if (!user) {
-        router.replace('/idp')
+        router.replace('/new-idp')
         return
       }
 

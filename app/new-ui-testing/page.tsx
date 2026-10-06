@@ -82,7 +82,7 @@ const SEN_30_FEATURES: SenUiFeature[] = [
     title: 'Soạn Đề & Khoá Học KaTeX',
     subtitle: 'Bộ công cụ sáng tạo câu hỏi chuyên nghiệp',
     description: 'Thiết kế đề thi tương tác với bàn phím công thức toán KaTeX thông minh, chèn hình ảnh kéo thả, chia thang điểm linh hoạt và xuất đề định dạng chuẩn.',
-    href: '/new-setup-course',
+    href: '/new-setup-courses',
     badge: 'Creator Studio',
     icon: Layers,
     category: 'exam',
@@ -234,7 +234,7 @@ export default function NewUiTestingPage() {
       try {
         const { data: auth } = await supabase.auth.getUser()
         if (!auth?.user) {
-          router.replace('/idp')
+          router.replace('/new-idp')
           return
         }
 

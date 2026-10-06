@@ -119,14 +119,14 @@ export default function HomePage() {
             </button>
 
             <Link
-              href="/idp"
+              href="/new-idp"
               className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5 transition"
             >
               Đăng nhập
             </Link>
 
             <Link
-              href="/idp"
+              href="/new-idp"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-md shadow-indigo-500/25 hover:scale-[1.02] active:scale-[0.98] transition cursor-pointer"
             >
               <span>Vào Cổng IDP</span>
@@ -171,7 +171,7 @@ export default function HomePage() {
           </Link>
 
           <Link
-            href="/idp"
+            href="/new-idp"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl border border-black/10 dark:border-white/15 bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs shadow-xs backdrop-blur-xl hover:scale-105 active:scale-95 transition"
           >
             <span>Cổng Định Danh IDP</span>
@@ -366,7 +366,7 @@ export default function HomePage() {
             <Link href="/new-exams" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">
               Đề thi
             </Link>
-            <Link href="/idp" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">
+            <Link href="/new-idp" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">
               Cổng IDP
             </Link>
             <Link href="/terms" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">

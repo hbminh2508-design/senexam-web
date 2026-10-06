@@ -100,7 +100,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'setup-course',
     title: 'Soạn Đề & Khóa Học',
     description: 'Soạn đề KaTeX trực tiếp, tải đề PDF & SEB, cấu hình kỳ thi và quản lý thí sinh.',
-    href: '/new-setup-course',
+    href: '/new-setup-courses',
     tone: 'from-[#10B981] via-[#059669] to-[#047857]',
     badge: 'Mới',
     icon: Sparkles,
@@ -381,7 +381,7 @@ function NewDashboardContent() {
         if (disposed) return
 
         if (!user) {
-          router.replace('/idp')
+          router.replace('/new-idp')
           return
         }
 
@@ -655,7 +655,7 @@ function NewDashboardContent() {
   // Đăng xuất
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push('/idp')
+    router.push('/new-idp')
   }
 
   if (loading) {
@@ -1368,7 +1368,7 @@ function NewDashboardContent() {
                         const Wrapper = isExternal ? 'a' : Link
                         const extraProps = isExternal
                           ? { target: '_blank', rel: 'noopener noreferrer' }
-                          : item.href === '/new-setup-course'
+                          : item.href === '/new-setup-courses' || item.href === '/new-setup-course'
                           ? { prefetch: false }
                           : {}
 
@@ -1525,7 +1525,7 @@ function NewDashboardContent() {
                   <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề
                 </Link>
                 <Link
-                  href="/new-setup-course"
+                  href="/new-setup-courses"
                   prefetch={false}
                   className="inline-flex items-center justify-center gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 py-2 px-1.5 text-[11px] font-bold transition hover:bg-emerald-500/20 text-center"
                 >

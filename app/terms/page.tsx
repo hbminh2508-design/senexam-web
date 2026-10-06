@@ -68,7 +68,7 @@ export default function TermsOfServicePage() {
       <header className="sticky top-0 z-30 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link
-            href="/idp"
+            href="/new-idp"
             className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
           >
             <ArrowLeft className="h-4 w-4" /> Quay lại Đăng nhập
@@ -227,7 +227,7 @@ export default function TermsOfServicePage() {
             <span>•</span>
             <Link href="/home" className="hover:underline text-indigo-600 dark:hover:text-indigo-400">Giới thiệu SenExam</Link>
             <span>•</span>
-            <Link href="/idp" className="hover:underline text-indigo-600 dark:hover:text-indigo-400">Cổng IDP</Link>
+            <Link href="/new-idp" className="hover:underline text-indigo-600 dark:hover:text-indigo-400">Cổng IDP</Link>
           </div>
         </div>
       </main>

@@ -156,7 +156,7 @@ export default function NewVipPage() {
     const init = async () => {
       const { data } = await supabase.auth.getUser()
       const user = data?.user
-      if (!user) { router.replace('/idp'); return }
+      if (!user) { router.replace('/new-idp'); return }
       await ensureStudentProfile(user.id)
       await refreshStatus(user.id)
       setLoading(false)
@@ -226,7 +226,7 @@ export default function NewVipPage() {
     setActivePayingPlan(plan)
     try {
       const token = await getToken()
-      if (!token) { router.replace('/idp'); return }
+      if (!token) { router.replace('/new-idp'); return }
       const res = await fetch('/api/vip/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -250,7 +250,7 @@ export default function NewVipPage() {
     setInfoMsg('')
     try {
       const token = await getToken()
-      if (!token) { router.replace('/idp'); return }
+      if (!token) { router.replace('/new-idp'); return }
       const res = await fetch('/api/vip/redeem-sencash', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

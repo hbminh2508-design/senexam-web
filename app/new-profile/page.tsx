@@ -96,7 +96,7 @@ export default function NewProfilePage() {
       const { data: auth } = await supabase.auth.getUser()
       const u = auth.user
       if (!u) {
-        router.replace('/idp')
+        router.replace('/new-idp')
         return
       }
 
@@ -264,7 +264,7 @@ export default function NewProfilePage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.replace('/idp')
+    router.replace('/new-idp')
   }
 
   const themeVars = getModernThemeVars('indigo', isDark)

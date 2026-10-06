@@ -363,7 +363,7 @@ export default function NewAdminPage() {
         const { data: auth } = await supabase.auth.getUser()
         const user = auth.user
         if (!user) {
-          router.replace('/idp')
+          router.replace('/new-idp')
           return
         }
 
@@ -1328,7 +1328,7 @@ export default function NewAdminPage() {
             <Activity className="h-4 w-4 text-emerald-500" /> Giám Sát Trực Tiếp
           </button>
           <Link
-            href="/new-setup-course"
+            href="/new-setup-courses"
             prefetch={false}
             className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-wider transition bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md hover:scale-105"
           >
@@ -1508,7 +1508,7 @@ export default function NewAdminPage() {
               Toàn bộ tính năng Quản lý đề thi, Soạn đề thi (SEB & KaTeX trực tiếp) đã được chuyển sang Cổng Thiết Lập Khóa Học độc lập.
             </p>
             <Link
-              href="/new-setup-course"
+              href="/new-setup-courses"
               prefetch={false}
               className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 text-white px-6 py-3 text-xs font-black uppercase tracking-wider shadow-lg hover:scale-105 transition"
             >

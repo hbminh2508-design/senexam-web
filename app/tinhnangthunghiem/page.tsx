@@ -175,7 +175,7 @@ export default function TrialFeaturePage() {
     const init = async () => {
       const { data } = await supabase.auth.getUser()
       const user = data?.user
-      if (!user) { router.push('/idp'); return }
+      if (!user) { router.push('/new-idp'); return }
       setLoadingUser(false)
       await fetchExams()
     }
@@ -232,7 +232,7 @@ export default function TrialFeaturePage() {
 
       const { data: authData } = await supabase.auth.getUser()
       const user = authData?.user
-      if (!user) { router.push('/idp'); return }
+      if (!user) { router.push('/new-idp'); return }
 
       const sourceNames = files.map(f => f.name)
       const { error: insertError } = await supabase.from('ai_trial_exams').insert({
