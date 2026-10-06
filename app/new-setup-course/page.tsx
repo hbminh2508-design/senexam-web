@@ -21,6 +21,7 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
+  X,
   Plus,
   Copy,
   Check,

@@ -126,14 +126,13 @@ function IdpAuthContent() {
         const host = window.location.hostname.toLowerCase()
         const ref = (document.referrer || '').toLowerCase()
 
-        // Nếu phát hiện yêu cầu từ FEPN: Chuyển hướng ngay sang Cổng Đăng Nhập FEPN độc lập
+        // Nếu phát hiện yêu cầu rõ ràng từ FEPN qua query hoặc subdomain: Chuyển hướng sang Cổng Đăng Nhập FEPN độc lập
         const detectedFepn =
           serviceParam === 'fepn' ||
           fromParam === 'fepn' ||
           targetParam === 'fepn' ||
-          nextParam.includes('fepn') ||
-          host.includes('fepn.') ||
-          ref.includes('fepn')
+          host.startsWith('fepn.') ||
+          host.startsWith('tsv.fepn.')
 
         if (detectedFepn) {
           router.replace(`/fepn-login${window.location.search || ''}`)
