@@ -1344,23 +1344,24 @@ function IdpAuthContent() {
   )
 }
 
-const ClientOnlyIdpAuth = dynamic(
-  () => Promise.resolve(IdpAuthContent),
-  {
-    ssr: false,
-    loading: () => (
+export default function IdpAuthPage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F4F7FB] dark:bg-[#080D1A] text-slate-600 dark:text-slate-300">
         <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mb-3" />
         <p className="text-xs font-bold font-mono">Đang kết nối Cổng Xác Thực Tập Trung...</p>
       </div>
-    ),
+    )
   }
-)
 
-export default function IdpAuthPage() {
   return (
     <PageErrorBoundary>
-      <ClientOnlyIdpAuth />
+      <IdpAuthContent />
     </PageErrorBoundary>
   )
 }

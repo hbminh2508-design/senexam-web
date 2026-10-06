@@ -1828,25 +1828,26 @@ function NewDashboardContent() {
   )
 }
 
-const ClientOnlyDashboard = dynamic(
-  () => Promise.resolve(NewDashboardContent),
-  {
-    ssr: false,
-    loading: () => (
+export default function NewDashboardPage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
       <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#0F172A] text-[#2B2B2B] dark:text-slate-100">
         <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
           <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
           <span className="font-bold text-base">Đang tải SenExam Dashboard...</span>
         </div>
       </div>
-    ),
+    )
   }
-)
 
-export default function NewDashboardPage() {
   return (
     <PageErrorBoundary>
-      <ClientOnlyDashboard />
+      <NewDashboardContent />
     </PageErrorBoundary>
   )
 }

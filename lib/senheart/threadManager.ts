@@ -210,7 +210,12 @@ class SenHeartThreadManager {
       console.warn(`[SenHeart 1.2.1 Crash Shield] Tác vụ "${name}" gặp ngoại lệ được cách ly an toàn:`, err)
       return fallback
     } finally {
-      this.killThread(threadId, true)
+      const t = this.threads.get(threadId)
+      if (t) {
+        t.active = false
+        this.threads.delete(threadId)
+        this.notifyListeners()
+      }
     }
   }
 

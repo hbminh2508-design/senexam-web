@@ -33,24 +33,7 @@ class SenHeartSecurityGuard {
   private readonly MAX_BURST_REQUESTS = 25
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      this.initStorageProtection()
-    }
-  }
-
-  /**
-   * Giám sát bảo vệ vùng nhớ nhạy cảm chống lại các script bên ngoài xâm nhập
-   */
-  private initStorageProtection() {
-    window.addEventListener('storage', (e) => {
-      if (e.key && (e.key.startsWith('sb-') || e.key.includes('auth.token'))) {
-        // Kiểm tra tính toàn vẹn token
-        if (e.newValue === null && e.oldValue !== null) {
-          // Token bị xóa đột ngột từ tab khác
-          this.verifySecurityIntegrity()
-        }
-      }
-    })
+    // Không can thiệp lắng nghe storage để đảm bảo tính tương thích 100% với Supabase WebLocks
   }
 
   /**

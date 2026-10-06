@@ -3510,23 +3510,24 @@ function SetupCourseMainContent() {
   )
 }
 
-const ClientOnlySetupCourse = dynamic(
-  () => Promise.resolve(SetupCourseMainContent),
-  {
-    ssr: false,
-    loading: () => (
+export default function NewSetupCoursePage() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-500 mb-3" />
         <p className="text-sm font-bold">Đang tải Cổng Thiết lập Khóa học & Soạn đề KaTeX...</p>
       </div>
-    ),
+    )
   }
-)
 
-export default function NewSetupCoursePage() {
   return (
     <PageErrorBoundary>
-      <ClientOnlySetupCourse />
+      <SetupCourseMainContent />
     </PageErrorBoundary>
   )
 }
