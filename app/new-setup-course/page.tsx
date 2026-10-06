@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef, Component } from 'react'
-import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -10,7 +9,6 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import ExamStudentProctorModal from '@/app/components/ExamStudentProctorModal'
-import { senHeart } from '@/lib/senheart'
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -406,61 +404,6 @@ const MATH_KEYBOARD_TABS = [
     ],
   },
 ]
-
-class PageErrorBoundary extends Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error?: any }
-> {
-  constructor(props: any) {
-    super(props)
-    this.state = { hasError: false }
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error }
-  }
-  componentDidCatch(error: any, info: any) {
-    console.error('Lỗi giao diện Cổng Thiết Lập Khóa Học:', error, info)
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-[#F4F7FA] dark:bg-[#080D1A] p-6 text-center">
-          <div className="max-w-md w-full rounded-3xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-8 shadow-2xl backdrop-blur-xl space-y-4">
-            <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
-              <AlertCircle className="h-7 w-7" />
-            </div>
-            <h2 className="text-lg font-black text-slate-900 dark:text-white">Không thể tải Cổng Soạn Đề</h2>
-            <p className="text-xs text-slate-500">Đang phục hồi phiên làm việc bảo mật Sen Heart 1.2.1...</p>
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => { this.setState({ hasError: false }) }}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm hover:bg-emerald-700 transition cursor-pointer"
-              >
-                Tiếp tục
-              </button>
-              <button
-                type="button"
-                onClick={() => { this.setState({ hasError: false }); if (typeof window !== 'undefined') window.location.reload() }}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-              >
-                Tải lại trang
-              </button>
-              <Link
-                href="/new-dashboard"
-                prefetch={false}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-center transition cursor-pointer"
-              >
-                Về Dashboard
-              </Link>
-            </div>
-          </div>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
 
 function SetupCourseMainContent() {
   const router = useRouter()

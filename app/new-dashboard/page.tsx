@@ -1,7 +1,6 @@
 'use client'
 
 import React, { Component } from 'react'
-import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -58,8 +57,6 @@ import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 import DailyStreakModal from '@/app/components/DailyStreakModal'
-import SenHeartAdminWidget from '@/app/components/SenHeartAdminWidget'
-import { senHeart, dataDispatcher } from '@/lib/senheart'
 import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 import { getPlanTierName } from '@/lib/vipMembership'
@@ -319,60 +316,6 @@ const QUICK_ACTIONS: QuickAction[] = [
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value))
 
-class PageErrorBoundary extends Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error?: any }
-> {
-  constructor(props: any) {
-    super(props)
-    this.state = { hasError: false }
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error }
-  }
-  componentDidCatch(error: any, info: any) {
-    console.error('Lỗi giao diện New Dashboard:', error, info)
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDF6EC] dark:bg-[#0F172A] p-6 text-center">
-          <div className="max-w-md w-full rounded-3xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-8 shadow-2xl backdrop-blur-xl space-y-4">
-            <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
-              <Sparkles className="h-7 w-7" />
-            </div>
-            <h2 className="text-lg font-black text-slate-900 dark:text-white">Không thể tải Dashboard</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Đã xảy ra sự cố khi đồng bộ phiên làm việc. Vui lòng bấm thử lại để tiếp tục.</p>
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => this.setState({ hasError: false, error: null })}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition cursor-pointer"
-              >
-                Khôi phục luồng
-              </button>
-              <button
-                type="button"
-                onClick={() => { this.setState({ hasError: false }); window.location.reload() }}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-bold text-xs shadow-sm hover:bg-amber-600 transition cursor-pointer"
-              >
-                Tải lại trang
-              </button>
-              <Link
-                href="/idp"
-                className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 text-center transition cursor-pointer flex items-center justify-center"
-              >
-                Về Cổng IDP
-              </Link>
-            </div>
-          </div>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
-
 function NewDashboardContent() {
   const router = useRouter()
   const { isBetaTester: hookBeta } = useNewUiPrefs()
@@ -468,25 +411,19 @@ function NewDashboardContent() {
         }
 
         const [profileRes, submissionsRes, announcementsRes] = await Promise.all([
-          dataDispatcher.fetchShared(`profile_${user.id}`, () =>
-            supabase
-              .from('profiles')
-              .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date, chat_bubble_disabled')
-              .eq('id', user.id)
-              .maybeSingle()
-          ),
-          dataDispatcher.fetchShared(`subs_count_${user.id}`, () =>
-            supabase
-              .from('submissions')
-              .select('id', { count: 'exact', head: true })
-              .eq('user_id', user.id)
-          ),
-          dataDispatcher.fetchShared('announcements_head', () =>
-            supabase
-              .from('announcements')
-              .select('id')
-              .order('created_at', { ascending: false })
-          ),
+          supabase
+            .from('profiles')
+            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date, chat_bubble_disabled')
+            .eq('id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('submissions')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          supabase
+            .from('announcements')
+            .select('id')
+            .order('created_at', { ascending: false }),
         ])
 
         const profile = profileRes?.data || null
@@ -1816,7 +1753,6 @@ function NewDashboardContent() {
         onRewardClaimed={(newBalance, newStreak) => {
           setSenCash(newBalance)
           setStreakDays(newStreak)
-          dataDispatcher.invalidate(`profile_${userId}`)
         }}
       />
 
