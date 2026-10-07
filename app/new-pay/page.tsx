@@ -151,7 +151,7 @@ const VIP_PERKS: Record<'vip' | 'premium' | 'premium_plus' | 'lite', string[]> =
   premium_plus: [
     'Bao gồm mọi quyền lợi cao cấp nhất của VIP và Premium',
     'Trải nghiệm trước toàn bộ các tính năng và giao diện học tập mới nhất',
-    'Mở khóa cổng thử nghiệm Sen 3.0 Core siêu tốc độ (/new-ui-testing)',
+    'Mở khóa công nghệ khảo thí và học tập thế hệ mới SenExam 2.0 Core',
     'Tải đề thi & tài liệu ôn tập tốc độ cao: 15 lượt tải mỗi ngày',
     'Tặng thêm +100 lượt hỏi bài giải đề thông minh mỗi ngày',
     'Huy hiệu VIP Premium+ Vàng Ánh Kim phát sáng độc quyền trên Dashboard',

@@ -129,22 +129,12 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'senai',
   },
   {
-    key: 'senai-quota',
-    title: 'Hạn Mức & Gói Hỏi Bài',
-    description: 'Bảng theo dõi hạn mức câu hỏi giải bài học tập và quản lý các gói hỏi bài thông minh.',
-    href: '/new-pay?tab=quota',
-    tone: 'from-[#EC4899] via-[#A855F7] to-[#6366F1]',
-    badge: 'Hạn mức',
-    icon: Brain,
-    category: 'senai',
-  },
-  {
     key: 'sen-store',
     title: 'Cửa Hàng Sen',
-    description: 'Nạp SenCash, nâng cấp Hội viên VIP không quảng cáo và kích hoạt các đặc quyền học tập.',
-    href: '/new-pay?tab=vip',
+    description: 'Trung tâm mua sắm 5-in-1: Nâng cấp Hội viên VIP, Gói SenAI & Quota, Ví SenCash, Ưu đãi độc quyền và Đổi Gift Code.',
+    href: '/new-pay',
     tone: 'from-[#6366F1] via-[#8B5CF6] to-[#EC4899]',
-    badge: 'Cửa hàng',
+    badge: 'Cửa hàng 5-in-1',
     icon: Crown,
     category: 'senai',
   },
@@ -255,26 +245,6 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'math_exam',
   },
   {
-    key: 'exclusive_store',
-    title: 'Cửa Hàng Độc Quyền',
-    description: 'Ưu đãi Flash Sale giảm 30% nâng cấp SenAI Plus/Ultra dành riêng cho VIP & SenCash.',
-    href: '/new-pay?tab=exclusive',
-    tone: 'from-[#EC4899] via-[#D946EF] to-[#8B5CF6]',
-    badge: 'Hot Deal',
-    icon: Gem,
-    category: 'senai',
-  },
-  {
-    key: 'vip',
-    title: 'Gói nâng cấp VIP',
-    description: 'Mở khoá trọn vẹn đặc quyền AI, đề độc quyền và hỗ trợ 24/7.',
-    href: '/new-pay?tab=vip',
-    tone: 'from-[#FBBF24] via-[#F59E0B] to-[#D97706]',
-    badge: 'Ưu đãi',
-    icon: Crown,
-    category: 'senai',
-  },
-  {
     key: 'teacher',
     title: 'Cổng Giảng Viên',
     description: 'Soạn đề thi, quản lý lớp học, cấp mã mời và giám sát vi phạm thi cử.',
@@ -282,16 +252,6 @@ const QUICK_ACTIONS: QuickAction[] = [
     tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#0284C7]',
     badge: 'Teacher',
     icon: School,
-    category: 'community',
-  },
-  {
-    key: 'codes',
-    title: 'Đổi Mã Quà Tặng',
-    description: 'Nhập mã Gift Code 16 chữ số để nhận quà SenCash và ngày VIP.',
-    href: '/new-pay?tab=giftcode',
-    tone: 'from-[#F472B6] via-[#EC4899] to-[#BE185D]',
-    badge: 'Code',
-    icon: Gift,
     category: 'community',
   },
   {
@@ -1365,17 +1325,6 @@ function NewDashboardContent() {
               </span>
             )}
           </div>
-
-          {/* Lối tắt Admin & Thử nghiệm Sen 3.0 */}
-          {(userRole === 'admin' || userRole === 'collab') && (
-            <Link
-              href="/new-ui-testing"
-              prefetch={false}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition shadow-xs"
-            >
-              <Sparkles className="h-3 w-3 text-indigo-400" /> Sen 3.0 Lab (Admin)
-            </Link>
-          )}
         </div>
 
         {/* Thông Báo Tự Động Gia Hạn SC */}

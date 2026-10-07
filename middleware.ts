@@ -293,6 +293,10 @@ export function middleware(request: NextRequest) {
       url.pathname = '/new-setup-courses'
       return applySecurityHeaders(NextResponse.redirect(url))
     }
+    if (pathname === '/new-ui-testing') {
+      url.pathname = '/new-dashboard'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
   }
 
   // 4.7 Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)

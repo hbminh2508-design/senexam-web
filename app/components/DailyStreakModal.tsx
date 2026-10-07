@@ -50,6 +50,7 @@ export default function DailyStreakModal({
   const [loading, setLoading] = useState(true)
   const [claiming, setClaiming] = useState(false)
   const [claimedToday, setClaimedToday] = useState(false)
+  const [claimedDates, setClaimedDates] = useState<Set<string>>(new Set())
   const [weekendMissionClaimed, setWeekendMissionClaimed] = useState(false)
   const [hasDoneExamToday, setHasDoneExamToday] = useState(false)
   const [randomExamId, setRandomExamId] = useState<string | null>(null)
@@ -60,6 +61,17 @@ export default function DailyStreakModal({
   const dayOfWeek = today.getDay() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
   const todayReward = isWeekend ? 3 : 2
+
+  // Tính ngày Thứ 2 và Chủ Nhật của tuần hiện tại
+  const dayOffsetFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+  const mondayDate = new Date(today)
+  mondayDate.setDate(today.getDate() - dayOffsetFromMonday)
+  mondayDate.setHours(0, 0, 0, 0)
+  const mondayStr = `${mondayDate.getFullYear()}-${String(mondayDate.getMonth() + 1).padStart(2, '0')}-${String(mondayDate.getDate()).padStart(2, '0')}`
+
+  const sundayDate = new Date(mondayDate)
+  sundayDate.setDate(mondayDate.getDate() + 6)
+  const sundayStr = `${sundayDate.getFullYear()}-${String(sundayDate.getMonth() + 1).padStart(2, '0')}-${String(sundayDate.getDate()).padStart(2, '0')}`
 
   useEffect(() => {
     if (!isOpen || !userId) return
@@ -75,21 +87,66 @@ export default function DailyStreakModal({
           .eq('id', userId)
           .maybeSingle()
 
-        if (profile && isMounted) {
-          if (profile.last_checkin_date === todayStr) {
+        const checkedSet = new Set<string>()
+
+        // 2. Lấy danh sách điểm danh tuần này từ daily_checkins
+        try {
+          const { data: checkinRows } = await supabase
+            .from('daily_checkins')
+            .select('checkin_date')
+            .eq('user_id', userId)
+            .gte('checkin_date', mondayStr)
+            .lte('checkin_date', sundayStr)
+
+          if (checkinRows && checkinRows.length > 0) {
+            checkinRows.forEach((row: any) => {
+              if (row.checkin_date) {
+                checkedSet.add(String(row.checkin_date).slice(0, 10))
+              }
+            })
+          }
+        } catch {}
+
+        // 3. Fallback: Lấy thêm từ sencash_transactions
+        try {
+          const { data: txRows } = await supabase
+            .from('sencash_transactions')
+            .select('created_at')
+            .eq('user_id', userId)
+            .eq('transaction_type', 'daily_checkin')
+            .gte('created_at', mondayDate.toISOString())
+
+          if (txRows && txRows.length > 0) {
+            txRows.forEach((tx: any) => {
+              if (tx.created_at) {
+                const d = new Date(tx.created_at)
+                const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                checkedSet.add(ymd)
+              }
+            })
+          }
+        } catch {}
+
+        if (profile?.last_checkin_date) {
+          checkedSet.add(profile.last_checkin_date)
+        }
+
+        if (isMounted) {
+          setClaimedDates(checkedSet)
+          if (checkedSet.has(todayStr) || profile?.last_checkin_date === todayStr) {
             setClaimedToday(true)
           } else {
             setClaimedToday(false)
           }
 
-          if (profile.weekend_mission_claimed_date === todayStr) {
+          if (profile?.weekend_mission_claimed_date === todayStr) {
             setWeekendMissionClaimed(true)
           } else {
             setWeekendMissionClaimed(false)
           }
         }
 
-        // 2. Nếu là cuối tuần, kiểm tra xem hôm nay user đã nộp ít nhất 1 bài thi chưa
+        // 4. Nếu là cuối tuần, kiểm tra xem hôm nay user đã nộp ít nhất 1 bài thi chưa
         if (isWeekend) {
           const startOfToday = new Date()
           startOfToday.setHours(0, 0, 0, 0)
@@ -106,7 +163,7 @@ export default function DailyStreakModal({
           }
         }
 
-        // 3. Tải 1 đề thi ngẫu nhiên để chuẩn bị sẵn cho nhiệm vụ
+        // 5. Tải 1 đề thi ngẫu nhiên để chuẩn bị sẵn cho nhiệm vụ
         const { data: exList } = await supabase
           .from('exams')
           .select('id')
@@ -128,20 +185,44 @@ export default function DailyStreakModal({
     return () => {
       isMounted = false
     }
-  }, [isOpen, userId, todayStr, isWeekend])
+  }, [isOpen, userId, todayStr, isWeekend, mondayStr, sundayStr])
 
   if (!isOpen) return null
 
   // Tạo danh sách 7 ngày trong tuần hiện tại (Thứ 2 -> Chủ Nhật)
-  const weekDays: WeekDayItem[] = [
-    { dayName: 'Thứ 2', dayIndex: 1, reward: 2, isToday: dayOfWeek === 1, isPast: dayOfWeek > 1 || dayOfWeek === 0, isClaimed: dayOfWeek > 1 || (dayOfWeek === 1 && claimedToday) },
-    { dayName: 'Thứ 3', dayIndex: 2, reward: 2, isToday: dayOfWeek === 2, isPast: dayOfWeek > 2 || dayOfWeek === 0, isClaimed: dayOfWeek > 2 || (dayOfWeek === 2 && claimedToday) },
-    { dayName: 'Thứ 4', dayIndex: 3, reward: 2, isToday: dayOfWeek === 3, isPast: dayOfWeek > 3 || dayOfWeek === 0, isClaimed: dayOfWeek > 3 || (dayOfWeek === 3 && claimedToday) },
-    { dayName: 'Thứ 5', dayIndex: 4, reward: 2, isToday: dayOfWeek === 4, isPast: dayOfWeek > 4 || dayOfWeek === 0, isClaimed: dayOfWeek > 4 || (dayOfWeek === 4 && claimedToday) },
-    { dayName: 'Thứ 6', dayIndex: 5, reward: 2, isToday: dayOfWeek === 5, isPast: dayOfWeek > 5 || dayOfWeek === 0, isClaimed: dayOfWeek > 5 || (dayOfWeek === 5 && claimedToday) },
-    { dayName: 'Thứ 7', dayIndex: 6, reward: 3, isToday: dayOfWeek === 6, isPast: dayOfWeek === 0, isClaimed: dayOfWeek === 0 || (dayOfWeek === 6 && claimedToday) },
-    { dayName: 'Chủ Nhật', dayIndex: 0, reward: 3, isToday: dayOfWeek === 0, isPast: false, isClaimed: dayOfWeek === 0 && claimedToday },
-  ]
+  const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật']
+
+  const weekDays = dayNames.map((name, idx) => {
+    const curDate = new Date(mondayDate)
+    curDate.setDate(mondayDate.getDate() + idx)
+    const y = curDate.getFullYear()
+    const m = String(curDate.getMonth() + 1).padStart(2, '0')
+    const dt = String(curDate.getDate()).padStart(2, '0')
+    const dateStr = `${y}-${m}-${dt}`
+
+    const isWeekendDay = idx >= 5
+    const reward = isWeekendDay ? 3 : 2
+
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+    const curTime = new Date(curDate.getFullYear(), curDate.getMonth(), curDate.getDate()).getTime()
+
+    const isToday = curTime === todayStart
+    const isPast = curTime < todayStart
+    const isFuture = curTime > todayStart
+    const isClaimed = claimedDates.has(dateStr) || (isToday && claimedToday)
+    const isMissed = isPast && !isClaimed
+
+    return {
+      dayName: name,
+      dateStr,
+      reward,
+      isToday,
+      isPast,
+      isFuture,
+      isClaimed,
+      isMissed,
+    }
+  })
 
   // Xử lý điểm danh nhận SC hôm nay
   const handleClaimDailyReward = async () => {
@@ -180,6 +261,17 @@ export default function DailyStreakModal({
         })
         .eq('id', userId)
 
+      // Ghi nhận vào daily_checkins
+      try {
+        await supabase.from('daily_checkins').insert({
+          user_id: userId,
+          checkin_date: todayStr,
+          reward_sc: todayReward,
+        })
+      } catch (checkinErr) {
+        console.warn('daily_checkins insert warning:', checkinErr)
+      }
+
       // Ghi lịch sử giao dịch
       try {
         await supabase.from('sencash_transactions').insert({
@@ -191,6 +283,7 @@ export default function DailyStreakModal({
       } catch {}
 
       setClaimedToday(true)
+      setClaimedDates((prev) => new Set([...prev, todayStr]))
       setSuccessMsg(`🎉 Điểm danh thành công! Bạn nhận được +${todayReward} SC và nâng chuỗi lên ${newStreak} ngày!`)
       onRewardClaimed(newBalance, newStreak)
     } catch (e: any) {
@@ -293,36 +386,63 @@ export default function DailyStreakModal({
 
           <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
             {weekDays.map((d, idx) => {
-              const isClaimedState = d.isClaimed || (d.isToday && claimedToday)
               return (
                 <div
                   key={idx}
                   className={`flex flex-col items-center justify-between p-2 rounded-2xl border text-center transition-all ${
                     d.isToday
-                      ? 'border-amber-500/60 bg-gradient-to-b from-amber-500/15 to-transparent shadow-md scale-105'
-                      : isClaimedState
-                      ? 'border-emerald-500/30 bg-emerald-500/10 opacity-90'
+                      ? d.isClaimed
+                        ? 'border-emerald-500/60 bg-emerald-500/15 shadow-md scale-105'
+                        : 'border-amber-500/70 bg-gradient-to-b from-amber-500/20 to-transparent shadow-lg scale-105 ring-2 ring-amber-500/40'
+                      : d.isClaimed
+                      ? 'border-emerald-500/40 bg-emerald-500/10 opacity-95'
+                      : d.isMissed
+                      ? 'border-rose-500/40 bg-rose-500/10 dark:bg-rose-500/15'
                       : 'border-slate-200 dark:border-white/10 bg-black/5 dark:bg-white/5 opacity-60'
                   }`}
                 >
-                  <span className={`text-[10px] font-black truncate ${d.isToday ? 'text-amber-500 font-black' : 'text-slate-500'}`}>
+                  <span className={`text-[10px] font-black truncate ${
+                    d.isToday
+                      ? 'text-amber-500'
+                      : d.isMissed
+                      ? 'text-rose-500'
+                      : d.isClaimed
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-slate-500'
+                  }`}>
                     {d.dayName}
                   </span>
 
                   <div className="my-1.5">
-                    {isClaimedState ? (
-                      <div className="h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-xs">
+                    {d.isClaimed ? (
+                      <div className="h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-xs" title="Đã điểm danh thành công">
                         <Check className="h-3.5 w-3.5 stroke-[3]" />
                       </div>
-                    ) : (
-                      <div className={`h-6 w-6 rounded-full flex items-center justify-center mx-auto ${d.isToday ? 'bg-amber-500 text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'}`}>
+                    ) : d.isMissed ? (
+                      <div className="h-6 w-6 rounded-full bg-rose-500 text-white flex items-center justify-center mx-auto shadow-xs" title="Chưa điểm danh (Bỏ lỡ)">
+                        <X className="h-3.5 w-3.5 stroke-[3]" />
+                      </div>
+                    ) : d.isToday ? (
+                      <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center mx-auto shadow-sm animate-bounce" title="Hôm nay - Nhấn để điểm danh!">
                         <Gift className="h-3.5 w-3.5" />
+                      </div>
+                    ) : (
+                      <div className="h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-400 flex items-center justify-center mx-auto" title="Chưa tới ngày">
+                        <Clock className="h-3 w-3" />
                       </div>
                     )}
                   </div>
 
-                  <span className={`text-[11px] font-black ${d.isToday ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}>
-                    +{d.reward}
+                  <span className={`text-[10px] font-black ${
+                    d.isClaimed
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : d.isMissed
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : d.isToday
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {d.isMissed ? '✕ Bỏ lỡ' : d.isClaimed ? '✓ Nhận' : `+${d.reward}`}
                   </span>
                 </div>
               )
