@@ -119,6 +119,16 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'study',
   },
   {
+    key: 'sen-read',
+    title: 'Phòng Đọc SenRead',
+    description: 'Không gian đọc sách & bản thảo Canvas siêu nhẹ 60FPS, AI chia chương, dịch thuật song ngữ và giọng đọc Google.',
+    href: '/read',
+    tone: 'from-[#059669] via-[#10B981] to-[#34D399]',
+    badge: 'Mới',
+    icon: BookOpen,
+    category: 'study',
+  },
+  {
     key: 'senai',
     title: 'SenAI Studio',
     description: 'Xưởng AI cá nhân hoá để tạo đề, chấm bài và giải thích chi tiết.',
