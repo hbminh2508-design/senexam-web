@@ -224,6 +224,8 @@ export default function SenReadPage() {
   >([])
   const [isDeepThink, setIsDeepThink] = useState<boolean>(false)
   const [lastAiModelUsed, setLastAiModelUsed] = useState<string | null>(null)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [isExtractingPdf, setIsExtractingPdf] = useState<boolean>(false)
 
   // Image Insert / Edit Modal on Canvas
   const [imageModalData, setImageModalData] = useState<{
@@ -261,7 +263,11 @@ export default function SenReadPage() {
     // Init TTS Engine
     const engine = new GoogleTtsEngine()
     ttsEngineRef.current = engine
-    setAvailableVoices(engine.getAvailableVoices('vi'))
+    engine.setOnVoicesLoaded((voices) => {
+      setAvailableVoices(voices)
+      const best = engine.getPreferredVoice()
+      if (best) setSelectedVoiceName(best.name)
+    })
 
     const init = async () => {
       try {
@@ -519,6 +525,62 @@ export default function SenReadPage() {
     }
   }
 
+  // Xử lý nạp File (PDF, TXT, MD)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!bookTitle) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '')
+      setBookTitle(cleanName)
+    }
+
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      setPdfFile(file)
+      setIsExtractingPdf(true)
+      try {
+        const pdfjsLib = await import('pdfjs-dist')
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+        }
+        const buffer = await file.arrayBuffer()
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+        let fullText = ''
+        const maxPages = Math.min(pdf.numPages, 100)
+        for (let i = 1; i <= maxPages; i++) {
+          const page = await pdf.getPage(i)
+          const textContent = await page.getTextContent()
+          const pageText = textContent.items.map((item: any) => item.str).join(' ')
+          if (pageText.trim()) {
+            fullText += `[Trang ${i}]\n` + pageText + '\n\n'
+          }
+        }
+        if (fullText.trim()) {
+          setRawManuscript(fullText.trim())
+        } else {
+          alert('Không thể trích xuất trực tiếp văn bản từ file PDF này (có thể là file dạng ảnh scan). Bạn có thể sao chép văn bản và dán vào ô bên dưới.')
+        }
+      } catch (err: any) {
+        console.warn('PDF extraction error:', err)
+        alert('Lỗi đọc file PDF: ' + (err?.message || 'Vui lòng kiểm tra lại file.'))
+      } finally {
+        setIsExtractingPdf(false)
+      }
+      return
+    }
+
+    // File Text / Markdown thông thường
+    setPdfFile(null)
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result
+      if (typeof text === 'string') {
+        setRawManuscript(text)
+      }
+    }
+    reader.readAsText(file)
+  }
+
   // AI Segment Manuscript into Chapters
   const handleRunAiSegmentation = async () => {
     if (!rawManuscript.trim()) {
@@ -760,25 +822,6 @@ export default function SenReadPage() {
 
           {/* Right Action Bar */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* VIP Status Badge */}
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
-              {isPremiumOrAbove ? (
-                <>
-                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                  <span className="text-amber-600 dark:text-amber-400">Sen Premium AI</span>
-                </>
-              ) : isVipLiteOrAbove ? (
-                <>
-                  <Crown className="h-3.5 w-3.5 text-emerald-500" />
-                  <span className="text-emerald-600 dark:text-emerald-400">VIP Lite</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="h-3.5 w-3.5 text-slate-400" />
-                  <span className="text-slate-500">Thành viên Miễn phí</span>
-                </>
-              )}
-            </div>
 
             {/* Dark Mode Toggle */}
             <button
@@ -812,27 +855,6 @@ export default function SenReadPage() {
       {/* MAIN CONTAINER */}
       {/* ============================================================== */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Banner Giới thiệu Phòng Đọc Thông Minh */}
-        <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 border border-emerald-500/20">
-          <div className="relative z-10 max-w-3xl space-y-2.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Công nghệ đọc sách không dùng DOM - 60FPS mượt mà</span>
-            </div>
-            <h2
-              className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white"
-              style={{ fontFamily: 'var(--font-read-heading)' }}
-            >
-              Không Gian Đọc Sách & Soạn Thảo Bản Thảo AI
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              Trải nghiệm đọc và sáng tác hoàn toàn mới: Công nghệ vẽ trực tiếp trên HTML5 Canvas siêu nhẹ, tích hợp trí
-              tuệ nhân tạo tự động nhận diện chia chương, chừa vị trí tranh minh họa, dịch thuật song ngữ Anh - Việt và
-              đọc truyện bằng giọng Google sinh động.
-            </p>
-          </div>
-        </div>
-
         {/* Tab Selection: Không gian chung vs Không gian riêng */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-4">
           <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 w-fit">
@@ -1130,12 +1152,12 @@ export default function SenReadPage() {
           </div>
 
           {/* Bottom Floating Google TTS Player Controls */}
-          <div className="h-16 px-4 sm:px-8 border-t border-white/10 bg-slate-950/95 text-white flex items-center justify-between gap-4 shrink-0 shadow-2xl">
-            <div className="flex items-center gap-3">
+          <div className="h-auto py-2.5 px-3 sm:px-6 border-t border-white/10 bg-slate-950/95 text-white flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xl">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Play / Pause Button */}
               <button
                 onClick={handleToggleTts}
-                className="h-10 w-10 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all hover:scale-105"
+                className="h-10 w-10 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all hover:scale-105 shrink-0"
                 title={isPlayingTts && !isPausedTts ? 'Tạm dừng đọc' : 'Bắt đầu đọc bằng giọng Google'}
               >
                 {isPlayingTts && !isPausedTts ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
@@ -1145,15 +1167,101 @@ export default function SenReadPage() {
               {isPlayingTts && (
                 <button
                   onClick={handleStopTts}
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-all"
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-all shrink-0"
                   title="Dừng đọc"
                 >
                   <Square className="h-4 w-4" />
                 </button>
               )}
 
+              {/* Prev / Next Sentence Buttons */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => ttsEngineRef.current?.prevSentence()}
+                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-all"
+                  title="Lùi lại 1 câu"
+                >
+                  <Rewind className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => ttsEngineRef.current?.nextSentence()}
+                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-all"
+                  title="Tiến lên 1 câu"
+                >
+                  <FastForward className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Language Switcher for TTS (VI vs EN) */}
+              <div className="flex items-center p-0.5 rounded-xl bg-white/10 border border-white/15 text-xs font-bold shrink-0">
+                <button
+                  onClick={() => {
+                    setDisplayedLang('vi')
+                    if (ttsEngineRef.current) {
+                      ttsEngineRef.current.setLanguage('vi')
+                      const vList = ttsEngineRef.current.getAvailableVoices('vi')
+                      setAvailableVoices(vList)
+                      const best = ttsEngineRef.current.getPreferredVoice()
+                      if (best) setSelectedVoiceName(best.name)
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                    displayedLang === 'vi' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Đọc bằng Tiếng Việt"
+                >
+                  <span>🇻🇳 Tiếng Việt</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setDisplayedLang('en')
+                    if (ttsEngineRef.current) {
+                      ttsEngineRef.current.setLanguage('en')
+                      const vList = ttsEngineRef.current.getAvailableVoices('en')
+                      setAvailableVoices(vList)
+                      const best = ttsEngineRef.current.getPreferredVoice()
+                      if (best) setSelectedVoiceName(best.name)
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                    displayedLang === 'en' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Đọc bằng Tiếng Anh (English)"
+                >
+                  <span>🇺🇸 English</span>
+                </button>
+              </div>
+
+              {/* Voice Dropdown Selector */}
+              <div className="flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-xl px-2.5 py-1 text-xs text-white shrink-0">
+                <Volume2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                <select
+                  value={selectedVoiceName}
+                  onChange={(e) => {
+                    const vName = e.target.value
+                    setSelectedVoiceName(vName)
+                    if (ttsEngineRef.current) {
+                      ttsEngineRef.current.setPreferredVoiceByName(vName)
+                    }
+                  }}
+                  className="bg-transparent text-white text-xs font-medium focus:outline-none max-w-[150px] sm:max-w-[200px] truncate cursor-pointer"
+                >
+                  {availableVoices.length === 0 ? (
+                    <option value="" className="bg-slate-900 text-white">
+                      Giọng tự nhiên mặc định
+                    </option>
+                  ) : (
+                    availableVoices.map((v) => (
+                      <option key={v.name} value={v.name} className="bg-slate-900 text-white">
+                        {v.isGoogle ? '🌟 [Google] ' : ''}{v.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
               {/* Speed Controller */}
-              <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1 text-xs font-bold">
+              <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1 text-xs font-bold shrink-0">
                 {[0.75, 1.0, 1.25, 1.5].map((rate) => (
                   <button
                     key={rate}
@@ -1169,12 +1277,12 @@ export default function SenReadPage() {
             </div>
 
             {/* Speaking Status / Hint */}
-            <div className="text-xs text-slate-400 hidden md:flex items-center gap-2">
+            <div className="text-xs text-slate-400 hidden xl:flex items-center gap-2">
               <Volume2 className="h-4 w-4 text-emerald-400" />
               <span>
                 {isPlayingTts
-                  ? `Đang đọc (${displayedLang === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh'}) • Bấm vào câu bất kỳ để nhảy giọng`
-                  : 'Sẵn sàng đọc bằng giọng Google tự nhiên • Bấm Play để nghe'}
+                  ? `Đang đọc (${displayedLang === 'vi' ? '🇻🇳 Tiếng Việt' : '🇺🇸 Tiếng Anh'}) • Bấm vào câu bất kỳ trên Canvas để nhảy giọng`
+                  : `Sẵn sàng phát giọng đọc (${displayedLang === 'vi' ? 'Tiếng Việt' : 'Tiếng Anh'}) • Bấm Play để nghe`}
               </span>
             </div>
           </div>
@@ -1369,6 +1477,42 @@ export default function SenReadPage() {
                     className="w-full p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   />
                 </div>
+              </div>
+
+              {/* Tải tệp truyện (Hỗ trợ PDF, Text, Markdown) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Tải tệp truyện (Hỗ trợ file PDF, Text, Markdown)
+                  </label>
+                  {pdfFile && (
+                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      ✓ Đã nạp: {pdfFile.name} ({(pdfFile.size / (1024 * 1024)).toFixed(2)} MB)
+                    </span>
+                  )}
+                </div>
+
+                <label className="relative flex items-center justify-center p-3.5 rounded-2xl border-2 border-dashed border-black/15 dark:border-white/15 hover:border-emerald-500/50 bg-black/[0.02] dark:bg-white/[0.02] cursor-pointer transition-all hover:bg-emerald-500/5 group">
+                  <input
+                    type="file"
+                    accept=".pdf,.txt,.md,text/plain,application/pdf"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-xl bg-red-500/10 text-red-500 dark:bg-red-500/20 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {isExtractingPdf ? '⏳ Đang đọc và trích xuất nội dung từ PDF...' : 'Bấm vào đây để chọn tệp PDF hoặc Text / Markdown'}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Hệ thống tự động đọc nội dung PDF và đưa vào ô bản thảo bên dưới để AI phân tích chia chương
+                      </p>
+                    </div>
+                  </div>
+                </label>
               </div>
 
               {/* Bản thảo nội dung */}

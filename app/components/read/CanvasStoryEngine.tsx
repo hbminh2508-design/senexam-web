@@ -231,7 +231,18 @@ export default function CanvasStoryEngine({
         illustrationCounter++
         const prompt = illustrationMatch[1]?.trim() || 'Hình minh họa'
         const existingData = illustrations[prompt] || illustrations[String(illustrationCounter)]
-        const cardHeight = existingData?.imageUrl ? 320 : 130
+        
+        let cardHeight = 140
+        if (existingData?.imageUrl) {
+          const cachedImg = imageCacheRef.current.get(existingData.imageUrl)
+          if (cachedImg && cachedImg.naturalWidth && cachedImg.naturalHeight) {
+            const aspect = cachedImg.naturalWidth / cachedImg.naturalHeight
+            const renderH = Math.min(Math.round(contentWidth / aspect), 600)
+            cardHeight = renderH + 36
+          } else {
+            cardHeight = 320
+          }
+        }
 
         layouts.push({
           text: `[Minh họa #${illustrationCounter}]: ${prompt}`,
@@ -254,6 +265,7 @@ export default function CanvasStoryEngine({
           img.src = existingData.imageUrl
           img.onload = () => {
             imageCacheRef.current.set(existingData.imageUrl!, img)
+            calculateLayout()
             requestAnimationFrame(draw)
           }
         }
@@ -367,19 +379,44 @@ export default function CanvasStoryEngine({
         const isHovered = hoveredIllustrationIndex === line.illustrationIndex
 
         if (line.imageUrl && imageCacheRef.current.has(line.imageUrl)) {
-          // Vẽ hình ảnh minh họa thật
+          // Vẽ hình ảnh minh họa thật - GIỮ NGUYÊN TỶ LỆ GỐC CỦA ẢNH, KHÔNG BỊ MÉO
           const img = imageCacheRef.current.get(line.imageUrl)!
+          const imgW = img.naturalWidth || img.width || 1
+          const imgH = img.naturalHeight || img.height || 1
+          const imgAspect = imgW / imgH
+
+          const maxAreaW = line.width
+          const maxAreaH = line.height - 34
+          const boxAspect = maxAreaW / maxAreaH
+
+          let drawW = maxAreaW
+          let drawH = maxAreaH
+          let drawX = line.x
+          let drawYOffset = drawY
+
+          if (imgAspect > boxAspect) {
+            // Ảnh ngang hơn khung -> Canh theo chiều ngang
+            drawW = maxAreaW
+            drawH = maxAreaW / imgAspect
+            drawYOffset = drawY + (maxAreaH - drawH) / 2
+          } else {
+            // Ảnh dọc hơn khung -> Canh theo chiều dọc
+            drawH = maxAreaH
+            drawW = maxAreaH * imgAspect
+            drawX = line.x + (maxAreaW - drawW) / 2
+          }
+
           ctx.save()
           ctx.beginPath()
-          ctx.roundRect(line.x, drawY, line.width, line.height - 30, 12)
+          ctx.roundRect(drawX, drawYOffset, drawW, drawH, 12)
           ctx.clip()
-          ctx.drawImage(img, line.x, drawY, line.width, line.height - 30)
+          ctx.drawImage(img, drawX, drawYOffset, drawW, drawH)
           ctx.restore()
 
-          // Khung viền tinh tế
+          // Khung viền tinh tế bám sát tỷ lệ thực của ảnh
           ctx.strokeStyle = isHovered ? '#10b981' : themeColors.cardBorder
           ctx.lineWidth = isHovered ? 2 : 1
-          ctx.strokeRect(line.x, drawY, line.width, line.height - 30)
+          ctx.strokeRect(drawX, drawYOffset, drawW, drawH)
 
           // Chú thích tranh bên dưới
           ctx.font = metaFont
