@@ -2061,7 +2061,7 @@ function PayContent() {
                               {item.code || item.gift_codes?.code || 'MÃ QUÀ TẶNG'}
                             </p>
                             <p className="text-[10px] text-slate-500">
-                              {new Date(item.redeemed_at).toLocaleString('vi-VN')}
+                              {new Date(item.redeemed_at || item.created_at || Date.now()).toLocaleString('vi-VN')}
                             </p>
                           </div>
                         </div>
