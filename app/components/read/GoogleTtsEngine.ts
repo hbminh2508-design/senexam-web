@@ -1,12 +1,15 @@
 // Google Text-To-Speech (TTS) Engine for SenRead
-// Hỗ trợ giọng đọc Google Tiếng Việt (vi-VN) và Google US/UK English (en-US)
-// Hỗ trợ chọn giọng chính xác, tự động phát hiện giọng Google và đồng bộ Canvas
+// Hỗ trợ đồng thời 2 chế độ:
+// 1. Google Cloud Voice Trực Tuyến (Online Google TTS qua /api/read/tts) - Chuẩn Google 100% trên mọi thiết bị và hệ điều hành (không phụ thuộc vào voice cài sẵn trên Windows/Mac/Linux)
+// 2. Browser Web Speech API (Giọng Google Tiếng Việt / Google US English cục bộ của trình duyệt nếu có)
 
 export interface SpeechVoiceOption {
-  voice: SpeechSynthesisVoice
+  id: string
   name: string
-  lang: string
+  lang: 'vi' | 'en'
   isGoogle: boolean
+  isOnline: boolean
+  voice?: SpeechSynthesisVoice
 }
 
 export function splitTextIntoSentences(rawText: string): string[] {
@@ -22,11 +25,29 @@ export function splitTextIntoSentences(rawText: string): string[] {
   for (const part of rawParts) {
     const trimmed = part.trim()
     if (trimmed.length > 0) {
-      if (trimmed.length > 250) {
-        const subParts = trimmed.split(/(?<=[,;])\s+/)
+      if (trimmed.length > 180) {
+        // Tách nhỏ hơn theo dấu phẩy, chấm phẩy, hai chấm hoặc gạch ngang để đọc ngắt nghỉ tự nhiên
+        const subParts = trimmed.split(/(?<=[,;:—])\s+/)
         for (const sub of subParts) {
           const sTrim = sub.trim()
-          if (sTrim.length > 0) results.push(sTrim)
+          if (sTrim.length > 0) {
+            if (sTrim.length > 180) {
+              // Cắt theo từ nếu câu không có dấu
+              const words = sTrim.split(/\s+/)
+              let chunk = ''
+              for (const w of words) {
+                if ((chunk + ' ' + w).length > 150) {
+                  if (chunk.trim()) results.push(chunk.trim())
+                  chunk = w
+                } else {
+                  chunk += (chunk ? ' ' : '') + w
+                }
+              }
+              if (chunk.trim()) results.push(chunk.trim())
+            } else {
+              results.push(sTrim)
+            }
+          }
         }
       } else {
         results.push(trimmed)
@@ -45,128 +66,197 @@ export class GoogleTtsEngine {
   private pitch: number = 1.0
   private isPlaying: boolean = false
   private isPaused: boolean = false
+
+  // Selected Voice: either online ID ('google-online-vi' / 'google-online-en') or browser voice name
+  private selectedVoiceId: string = 'google-online-vi'
+  private selectedBrowserVoice: SpeechSynthesisVoice | null = null
+
+  // Audio element for online Google TTS streaming
+  private currentAudio: HTMLAudioElement | null = null
+
+  // Utterance for browser SpeechSynthesis
   private currentUtterance: SpeechSynthesisUtterance | null = null
+
+  // Callbacks
   private onSentenceChange: ((index: number, sentence: string) => void) | null = null
   private onFinished: (() => void) | null = null
-  private preferredVoice: SpeechSynthesisVoice | null = null
   private onVoicesLoadedCallback: ((voices: SpeechVoiceOption[]) => void) | null = null
 
   constructor() {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      // Chrome/Edge/Safari tải danh sách voice bất đồng bộ
-      const load = () => {
-        const list = this.getAvailableVoices(this.lang)
-        if (this.onVoicesLoadedCallback) {
-          this.onVoicesLoadedCallback(list)
-        }
-      }
+    this.initBrowserVoices()
+  }
 
-      window.speechSynthesis.onvoiceschanged = load
-      setTimeout(load, 250)
+  private initBrowserVoices() {
+    if (typeof window === 'undefined') return
+
+    const notify = () => {
+      if (this.onVoicesLoadedCallback) {
+        this.onVoicesLoadedCallback(this.getAvailableVoices(this.lang))
+      }
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.addEventListener('voiceschanged', notify)
+      window.speechSynthesis.onvoiceschanged = notify
+
+      // Thử gọi nhiều lần khi trình duyệt tải dữ liệu voice ngầm
+      setTimeout(notify, 100)
+      setTimeout(notify, 400)
+      setTimeout(notify, 1200)
     }
   }
 
   public setOnVoicesLoaded(cb: (voices: SpeechVoiceOption[]) => void) {
     this.onVoicesLoadedCallback = cb
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      cb(this.getAvailableVoices(this.lang))
-    }
+    cb(this.getAvailableVoices(this.lang))
   }
 
-  // Lọc và xếp hạng danh sách giọng đọc theo ngôn ngữ (Ưu tiên Google Voices lên hàng đầu)
-  public getAvailableVoices(lang?: 'vi' | 'en'): SpeechVoiceOption[] {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return []
-    const all = window.speechSynthesis.getVoices()
-    const target = lang || this.lang
+  // Danh sách các giọng khả dụng cho ngôn ngữ hiện tại
+  public getAvailableVoices(targetLang?: 'vi' | 'en'): SpeechVoiceOption[] {
+    const lang = targetLang || this.lang
+    const results: SpeechVoiceOption[] = []
 
-    const isMatchLang = (v: SpeechSynthesisVoice, l: 'vi' | 'en') => {
-      const vLang = v.lang.toLowerCase()
-      const vName = v.name.toLowerCase()
-      if (l === 'vi') {
+    // 1. Luôn có giọng Google Trực Tuyến chất lượng cao
+    if (lang === 'vi') {
+      results.push({
+        id: 'google-online-vi',
+        name: '🌟 Google Tiếng Việt (Trực Tuyến - Chuẩn Nhất)',
+        lang: 'vi',
+        isGoogle: true,
+        isOnline: true,
+      })
+    } else {
+      results.push({
+        id: 'google-online-en',
+        name: '🌟 Google English (Online - Natural)',
+        lang: 'en',
+        isGoogle: true,
+        isOnline: true,
+      })
+    }
+
+    // 2. Thêm các giọng có sẵn từ trình duyệt nếu hỗ trợ Web Speech API
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const all = window.speechSynthesis.getVoices()
+
+      const isMatchLang = (v: SpeechSynthesisVoice, l: 'vi' | 'en') => {
+        const vLang = v.lang.toLowerCase().replace(/_/g, '-')
+        const vName = v.name.toLowerCase()
+        if (l === 'vi') {
+          return (
+            vLang.startsWith('vi') ||
+            vLang === 'vie' ||
+            vName.includes('vietnam') ||
+            vName.includes('việt nam') ||
+            vName.includes('tiếng việt') ||
+            vName.includes('vietnamese') ||
+            vName.includes('hoaimy') ||
+            vName.includes('namminh') ||
+            vName.includes('an - vietnamese')
+          )
+        }
         return (
-          vLang.startsWith('vi') ||
-          vLang.includes('vi-vn') ||
-          vLang.includes('vi_vn') ||
-          vName.includes('vietnam') ||
-          vName.includes('tiếng việt')
+          vLang.startsWith('en') ||
+          vName.includes('english') ||
+          vName.includes('united states') ||
+          vName.includes('united kingdom') ||
+          vName.includes('us') ||
+          vName.includes('uk')
         )
       }
-      return (
-        vLang.startsWith('en') ||
-        vName.includes('english') ||
-        vName.includes('united states') ||
-        vName.includes('united kingdom')
-      )
+
+      const browserMatches = all
+        .filter((v) => isMatchLang(v, lang))
+        .map((v) => {
+          const isG = v.name.toLowerCase().includes('google')
+          let displayName = v.name
+          if (isG) displayName = `🌟 [Google] ${v.name}`
+          else if (v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('neural')) {
+            displayName = `✨ [Natural] ${v.name}`
+          }
+
+          return {
+            id: v.name,
+            name: displayName,
+            lang: lang,
+            isGoogle: isG,
+            isOnline: false,
+            voice: v,
+          }
+        })
+        .sort((a, b) => {
+          if (a.isGoogle && !b.isGoogle) return -1
+          if (!a.isGoogle && b.isGoogle) return 1
+          return a.name.localeCompare(b.name)
+        })
+
+      results.push(...browserMatches)
     }
 
-    const filtered = all
-      .filter((v) => isMatchLang(v, target))
-      .map((v) => ({
-        voice: v,
-        name: v.name,
-        lang: v.lang,
-        isGoogle: v.name.toLowerCase().includes('google'),
-      }))
-
-    // Sắp xếp: Giọng Google lên đầu -> Sau đó đến Natural/Online -> Sau đó theo tên
-    return filtered.sort((a, b) => {
-      if (a.isGoogle && !b.isGoogle) return -1
-      if (!a.isGoogle && b.isGoogle) return 1
-      const aNat = a.name.toLowerCase().includes('natural') || a.name.toLowerCase().includes('neural')
-      const bNat = b.name.toLowerCase().includes('natural') || b.name.toLowerCase().includes('neural')
-      if (aNat && !bNat) return -1
-      if (!aNat && bNat) return 1
-      return a.name.localeCompare(b.name)
-    })
+    return results
   }
 
-  // Tìm giọng tốt nhất cho ngôn ngữ
-  public getBestVoiceFor(lang: 'vi' | 'en'): SpeechSynthesisVoice | null {
-    const list = this.getAvailableVoices(lang)
-    if (list.length > 0) return list[0].voice
-    return null
+  public getSelectedVoiceId(): string {
+    return this.selectedVoiceId
   }
 
+  // Đổi ngôn ngữ đọc (vi hoặc en)
   public setLanguage(newLang: 'vi' | 'en') {
-    this.lang = newLang
-    // Tự động tìm giọng phù hợp nhất cho ngôn ngữ mới
-    const best = this.getBestVoiceFor(newLang)
-    if (best) {
-      this.preferredVoice = best
+    if (this.lang === newLang && this.selectedVoiceId.startsWith(`google-online-${newLang}`)) {
+      return
     }
-    // Nếu đang phát, đọc lại câu hiện tại bằng ngôn ngữ & giọng mới
+
+    this.lang = newLang
+
+    // Tự động gán giọng mặc định Google Online cho ngôn ngữ đó
+    if (newLang === 'vi') {
+      this.selectedVoiceId = 'google-online-vi'
+      this.selectedBrowserVoice = null
+    } else {
+      this.selectedVoiceId = 'google-online-en'
+      this.selectedBrowserVoice = null
+    }
+
+    // Nếu đang phát, đọc lại câu hiện tại bằng ngôn ngữ và giọng mới
     if (this.isPlaying && !this.isPaused) {
       this.playSentenceAt(this.currentIndex)
     }
   }
 
-  public setPreferredVoiceByName(voiceName: string) {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    const all = window.speechSynthesis.getVoices()
-    const found = all.find((v) => v.name === voiceName)
-    if (found) {
-      this.preferredVoice = found
-      if (this.isPlaying && !this.isPaused) {
-        this.playSentenceAt(this.currentIndex)
+  // Đổi giọng đọc cụ thể theo voiceId
+  public setSelectedVoice(voiceId: string) {
+    this.selectedVoiceId = voiceId
+
+    if (voiceId === 'google-online-vi') {
+      this.lang = 'vi'
+      this.selectedBrowserVoice = null
+    } else if (voiceId === 'google-online-en') {
+      this.lang = 'en'
+      this.selectedBrowserVoice = null
+    } else if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const all = window.speechSynthesis.getVoices()
+      const found = all.find((v) => v.name === voiceId)
+      if (found) {
+        this.selectedBrowserVoice = found
+        if (found.lang.toLowerCase().startsWith('en')) {
+          this.lang = 'en'
+        } else if (found.lang.toLowerCase().startsWith('vi')) {
+          this.lang = 'vi'
+        }
       }
     }
-  }
 
-  public setPreferredVoice(voice: SpeechSynthesisVoice | null) {
-    this.preferredVoice = voice
     if (this.isPlaying && !this.isPaused) {
       this.playSentenceAt(this.currentIndex)
     }
-  }
-
-  public getPreferredVoice(): SpeechSynthesisVoice | null {
-    if (this.preferredVoice) return this.preferredVoice
-    return this.getBestVoiceFor(this.lang)
   }
 
   public setRate(newRate: number) {
     this.rate = Math.max(0.5, Math.min(2.5, newRate))
-    if (this.isPlaying && !this.isPaused) {
+    if (this.currentAudio) {
+      this.currentAudio.playbackRate = this.rate
+    }
+    if (this.isPlaying && !this.isPaused && this.selectedBrowserVoice) {
       this.playSentenceAt(this.currentIndex)
     }
   }
@@ -182,23 +272,16 @@ export class GoogleTtsEngine {
     onSentenceChange?: (index: number, sentence: string) => void,
     onFinished?: () => void
   ) {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      alert('Trình duyệt của bạn không hỗ trợ tính năng chuyển văn bản thành giọng nói (Web Speech API).')
-      return
-    }
-
     this.stop()
     this.sentences = sentences
     this.currentIndex = Math.max(0, Math.min(startIndex, sentences.length - 1))
-    this.lang = lang
     this.onSentenceChange = onSentenceChange || null
     this.onFinished = onFinished || null
     this.isPlaying = true
     this.isPaused = false
 
-    // Đảm bảo có voice đúng ngôn ngữ
-    if (!this.preferredVoice || !this.preferredVoice.lang.toLowerCase().startsWith(this.lang)) {
-      this.preferredVoice = this.getBestVoiceFor(lang)
+    if (this.lang !== lang) {
+      this.setLanguage(lang)
     }
 
     if (this.sentences.length > 0) {
@@ -222,21 +305,72 @@ export class GoogleTtsEngine {
       this.onSentenceChange(index, sentence)
     }
 
+    // Dọn dẹp phiên âm trước đó
+    if (this.currentAudio) {
+      this.currentAudio.pause()
+      this.currentAudio.src = ''
+      this.currentAudio = null
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+
+    // Kiểm tra chế độ phát: Google Online Stream hay Browser Voice
+    const isOnline = this.selectedVoiceId.startsWith('google-online') || !this.selectedBrowserVoice
+
+    if (isOnline) {
+      this.playWithOnlineAudio(sentence)
+    } else {
+      this.playWithWebSpeech(sentence)
+    }
+  }
+
+  // Chế độ 1: Phát âm bằng Google Cloud TTS Online
+  private playWithOnlineAudio(sentence: string) {
+    const audioUrl = `/api/read/tts?text=${encodeURIComponent(sentence)}&lang=${this.lang}`
+    const audio = new Audio(audioUrl)
+    audio.playbackRate = this.rate
+    this.currentAudio = audio
+
+    audio.onended = () => {
+      if (this.isPlaying && !this.isPaused) {
+        if (this.currentIndex + 1 < this.sentences.length) {
+          this.playSentenceAt(this.currentIndex + 1)
+        } else {
+          this.isPlaying = false
+          if (this.onFinished) this.onFinished()
+        }
+      }
+    }
+
+    audio.onerror = (e) => {
+      console.warn('Google Online TTS stream warning, attempting fallback:', e)
+      // Nếu mạng có vấn đề, fallback sang Web Speech API
+      this.playWithWebSpeech(sentence)
+    }
+
+    audio.play().catch((err) => {
+      console.warn('Audio play error:', err)
+      // Nếu bị chặn autoplay hoặc mạng lỗi, thử qua Web Speech
+      this.playWithWebSpeech(sentence)
+    })
+  }
+
+  // Chế độ 2: Phát âm bằng Web Speech API
+  private playWithWebSpeech(sentence: string) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+
     window.speechSynthesis.cancel()
+    window.speechSynthesis.resume()
 
     const utter = new SpeechSynthesisUtterance(sentence)
     utter.rate = this.rate
     utter.pitch = this.pitch
     utter.lang = this.lang === 'vi' ? 'vi-VN' : 'en-US'
 
-    // Gán giọng đọc phù hợp
-    let voiceToUse = this.preferredVoice
-    if (!voiceToUse || !voiceToUse.lang.toLowerCase().startsWith(this.lang)) {
-      voiceToUse = this.getBestVoiceFor(this.lang)
-    }
-
-    if (voiceToUse) {
-      utter.voice = voiceToUse
+    if (this.selectedBrowserVoice) {
+      utter.voice = this.selectedBrowserVoice
+      utter.lang = this.selectedBrowserVoice.lang || utter.lang
     }
 
     utter.onend = () => {
@@ -252,7 +386,7 @@ export class GoogleTtsEngine {
 
     utter.onerror = (e) => {
       if (e.error === 'interrupted' || e.error === 'canceled') return
-      console.warn('TTS error on sentence:', e)
+      console.warn('WebSpeech error:', e)
       if (this.isPlaying && !this.isPaused && this.currentIndex + 1 < this.sentences.length) {
         this.playSentenceAt(this.currentIndex + 1)
       }
@@ -265,18 +399,36 @@ export class GoogleTtsEngine {
   public pause() {
     if (!this.isPlaying || this.isPaused) return
     this.isPaused = true
-    window.speechSynthesis.pause()
+
+    if (this.currentAudio) {
+      this.currentAudio.pause()
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.pause()
+    }
   }
 
   public resume() {
     if (!this.isPlaying || !this.isPaused) return
     this.isPaused = false
-    window.speechSynthesis.resume()
+
+    if (this.currentAudio) {
+      this.currentAudio.play().catch(() => {})
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.resume()
+    }
   }
 
   public stop() {
     this.isPlaying = false
     this.isPaused = false
+
+    if (this.currentAudio) {
+      this.currentAudio.pause()
+      this.currentAudio.src = ''
+      this.currentAudio = null
+    }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel()
     }

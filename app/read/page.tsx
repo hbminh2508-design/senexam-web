@@ -207,7 +207,7 @@ export default function SenReadPage() {
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState<number | null>(null)
   const [ttsRate, setTtsRate] = useState<number>(1.0)
   const [availableVoices, setAvailableVoices] = useState<SpeechVoiceOption[]>([])
-  const [selectedVoiceName, setSelectedVoiceName] = useState<string>('')
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('google-online-vi')
 
   // Upload & Publish Book Modal
   const [showPublishModal, setShowPublishModal] = useState<boolean>(false)
@@ -265,8 +265,7 @@ export default function SenReadPage() {
     ttsEngineRef.current = engine
     engine.setOnVoicesLoaded((voices) => {
       setAvailableVoices(voices)
-      const best = engine.getPreferredVoice()
-      if (best) setSelectedVoiceName(best.name)
+      setSelectedVoiceId(engine.getSelectedVoiceId())
     })
 
     const init = async () => {
@@ -449,6 +448,17 @@ export default function SenReadPage() {
     setCurrentSentenceIndex(null)
   }
 
+  // Chuyển đổi ngôn ngữ đọc và đồng bộ giọng Google tương ứng
+  const handleSwitchLanguage = (lang: 'vi' | 'en') => {
+    setDisplayedLang(lang)
+    if (ttsEngineRef.current) {
+      ttsEngineRef.current.setLanguage(lang)
+      const vList = ttsEngineRef.current.getAvailableVoices(lang)
+      setAvailableVoices(vList)
+      setSelectedVoiceId(ttsEngineRef.current.getSelectedVoiceId())
+    }
+  }
+
   const handleTtsRateChange = (newRate: number) => {
     setTtsRate(newRate)
     if (ttsEngineRef.current) {
@@ -516,7 +526,7 @@ export default function SenReadPage() {
           updatedChapters[activeChapterIndex].translation_vi = data.translated_text
         }
         setReadingBook({ ...readingBook, chapters: updatedChapters })
-        setDisplayedLang(targetLang)
+        handleSwitchLanguage(targetLang)
       }
     } catch (e: any) {
       alert('Lỗi dịch thuật: ' + (e.message || 'Vui lòng thử lại sau.'))
@@ -541,7 +551,7 @@ export default function SenReadPage() {
       try {
         const pdfjsLib = await import('pdfjs-dist')
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
         }
         const buffer = await file.arrayBuffer()
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
@@ -550,7 +560,9 @@ export default function SenReadPage() {
         for (let i = 1; i <= maxPages; i++) {
           const page = await pdf.getPage(i)
           const textContent = await page.getTextContent()
-          const pageText = textContent.items.map((item: any) => item.str).join(' ')
+          const pageText = textContent.items
+            .map((item: any) => ('str' in item ? item.str : ''))
+            .join(' ')
           if (pageText.trim()) {
             fullText += `[Trang ${i}]\n` + pageText + '\n\n'
           }
@@ -1076,10 +1088,11 @@ export default function SenReadPage() {
                 <div className="h-3 w-px bg-white/20" />
 
                 <button
-                  onClick={() => setDisplayedLang('vi')}
+                  onClick={() => handleSwitchLanguage('vi')}
                   className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all ${
                     displayedLang === 'vi' ? 'bg-emerald-500 text-white' : 'text-slate-300 hover:text-white'
                   }`}
+                  title="Chuyển sang Tiếng Việt & Giọng Google Tiếng Việt"
                 >
                   VI
                 </button>
@@ -1088,13 +1101,14 @@ export default function SenReadPage() {
                     if (!activeChapter.translation_en) {
                       handleTranslateChapter('en')
                     } else {
-                      setDisplayedLang('en')
+                      handleSwitchLanguage('en')
                     }
                   }}
                   disabled={isTranslating}
                   className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
                     displayedLang === 'en' ? 'bg-emerald-500 text-white' : 'text-slate-300 hover:text-white'
                   }`}
+                  title="Chuyển sang Tiếng Anh & Giọng Google English"
                 >
                   <Languages className="h-3 w-3" />
                   <span>{isTranslating ? 'Đang dịch...' : 'EN'}</span>
@@ -1195,38 +1209,26 @@ export default function SenReadPage() {
               {/* Language Switcher for TTS (VI vs EN) */}
               <div className="flex items-center p-0.5 rounded-xl bg-white/10 border border-white/15 text-xs font-bold shrink-0">
                 <button
-                  onClick={() => {
-                    setDisplayedLang('vi')
-                    if (ttsEngineRef.current) {
-                      ttsEngineRef.current.setLanguage('vi')
-                      const vList = ttsEngineRef.current.getAvailableVoices('vi')
-                      setAvailableVoices(vList)
-                      const best = ttsEngineRef.current.getPreferredVoice()
-                      if (best) setSelectedVoiceName(best.name)
-                    }
-                  }}
+                  onClick={() => handleSwitchLanguage('vi')}
                   className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
                     displayedLang === 'vi' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                   }`}
-                  title="Đọc bằng Tiếng Việt"
+                  title="Đọc bằng Tiếng Việt (Giọng Google Tiếng Việt)"
                 >
                   <span>🇻🇳 Tiếng Việt</span>
                 </button>
                 <button
                   onClick={() => {
-                    setDisplayedLang('en')
-                    if (ttsEngineRef.current) {
-                      ttsEngineRef.current.setLanguage('en')
-                      const vList = ttsEngineRef.current.getAvailableVoices('en')
-                      setAvailableVoices(vList)
-                      const best = ttsEngineRef.current.getPreferredVoice()
-                      if (best) setSelectedVoiceName(best.name)
+                    if (!activeChapter.translation_en) {
+                      handleTranslateChapter('en')
+                    } else {
+                      handleSwitchLanguage('en')
                     }
                   }}
                   className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
                     displayedLang === 'en' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                   }`}
-                  title="Đọc bằng Tiếng Anh (English)"
+                  title="Đọc bằng Tiếng Anh (Giọng Google English)"
                 >
                   <span>🇺🇸 English</span>
                 </button>
@@ -1236,15 +1238,15 @@ export default function SenReadPage() {
               <div className="flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-xl px-2.5 py-1 text-xs text-white shrink-0">
                 <Volume2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                 <select
-                  value={selectedVoiceName}
+                  value={selectedVoiceId}
                   onChange={(e) => {
-                    const vName = e.target.value
-                    setSelectedVoiceName(vName)
+                    const vId = e.target.value
+                    setSelectedVoiceId(vId)
                     if (ttsEngineRef.current) {
-                      ttsEngineRef.current.setPreferredVoiceByName(vName)
+                      ttsEngineRef.current.setSelectedVoice(vId)
                     }
                   }}
-                  className="bg-transparent text-white text-xs font-medium focus:outline-none max-w-[150px] sm:max-w-[200px] truncate cursor-pointer"
+                  className="bg-transparent text-white text-xs font-medium focus:outline-none max-w-[170px] sm:max-w-[240px] truncate cursor-pointer"
                 >
                   {availableVoices.length === 0 ? (
                     <option value="" className="bg-slate-900 text-white">
@@ -1252,8 +1254,8 @@ export default function SenReadPage() {
                     </option>
                   ) : (
                     availableVoices.map((v) => (
-                      <option key={v.name} value={v.name} className="bg-slate-900 text-white">
-                        {v.isGoogle ? '🌟 [Google] ' : ''}{v.name}
+                      <option key={v.id} value={v.id} className="bg-slate-900 text-white">
+                        {v.name}
                       </option>
                     ))
                   )}
