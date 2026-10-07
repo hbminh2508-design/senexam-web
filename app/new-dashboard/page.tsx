@@ -59,7 +59,9 @@ import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
 import DailyStreakModal from '@/app/components/DailyStreakModal'
 import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
-import { getPlanTierName } from '@/lib/vipMembership'
+import { getPlanTierName, getTotalSenaiDailyLimit } from '@/lib/vipMembership'
+import { getEffectiveSenaiTier, SENAI_TIER_LABEL, SENAI_TIER_DAILY_LIMIT, type SenAiTierCode } from '@/lib/senaiTiers'
+import DashboardSenAiStudio from '@/app/components/DashboardSenAiStudio'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
@@ -256,7 +258,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'exclusive_store',
     title: 'Cửa Hàng Độc Quyền',
     description: 'Ưu đãi Flash Sale giảm 30% nâng cấp SenAI Plus/Ultra dành riêng cho VIP & SenCash.',
-    href: '/new-exclusive-store',
+    href: '/new-pay?tab=exclusive',
     tone: 'from-[#EC4899] via-[#D946EF] to-[#8B5CF6]',
     badge: 'Hot Deal',
     icon: Gem,
@@ -286,7 +288,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'codes',
     title: 'Đổi Mã Quà Tặng',
     description: 'Nhập mã Gift Code 16 chữ số để nhận quà SenCash và ngày VIP.',
-    href: '/new-codes',
+    href: '/new-pay?tab=giftcode',
     tone: 'from-[#F472B6] via-[#EC4899] to-[#BE185D]',
     badge: 'Code',
     icon: Gift,
@@ -344,6 +346,14 @@ function NewDashboardContent() {
   const [userEmail, setUserEmail] = useState<string>('')
   const [userId, setUserId] = useState<string>('')
 
+  // SenAI Tier & Quota state
+  const [senaiTier, setSenaiTier] = useState<string>('free')
+  const [senaiTierExpiresAt, setSenaiTierExpiresAt] = useState<string | null>(null)
+  const [senaiTierPermanent, setSenaiTierPermanent] = useState<boolean>(false)
+  const [senaiQuotaUsed, setSenaiQuotaUsed] = useState<number>(0)
+  const [senaiQuotaLimit, setSenaiQuotaLimit] = useState<number>(10)
+  const [dashboardStudioEnabled, setDashboardStudioEnabled] = useState<boolean>(true)
+
   // Google link state
   const [linkedGoogle, setLinkedGoogle] = useState(false)
   const [googleLinkingLoading, setGoogleLinkingLoading] = useState(false)
@@ -366,6 +376,7 @@ function NewDashboardContent() {
     setIsDark(dark)
     setIsEcoMode(isEcoModeActive())
     setChatBubbleEnabled(localStorage.getItem('sen_chat_bubble_disabled') !== '1')
+    setDashboardStudioEnabled(localStorage.getItem('sen_dashboard_studio_disabled') !== '1')
 
     const init = async () => {
       try {
@@ -413,7 +424,7 @@ function NewDashboardContent() {
         const [profileRes, submissionsRes, announcementsRes] = await Promise.all([
           supabase
             .from('profiles')
-            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date, chat_bubble_disabled')
+            .select('is_beta_tester, full_name, theme_color, ui_mode, vip_expires_at, plan_tier, target_exams, school, province, sencash_balance, role, streak_days, last_checkin_date, chat_bubble_disabled, senai_tier, senai_tier_expires_at, senai_tier_permanent')
             .eq('id', user.id)
             .maybeSingle(),
           supabase
@@ -444,6 +455,23 @@ function NewDashboardContent() {
           setVipUntil(profile?.vip_expires_at || null)
           setPlanTier(profile?.plan_tier || null)
           setSubmissionCount(submissionsRes?.count || 0)
+
+          // Cập nhật hạng SenAI & thời hạn
+          setSenaiTier(profile?.senai_tier || 'free')
+          setSenaiTierExpiresAt(profile?.senai_tier_expires_at || null)
+          setSenaiTierPermanent(!!profile?.senai_tier_permanent)
+
+          // Lấy hạn mức Quota SenAI hôm nay
+          try {
+            const qRes = await fetch('/api/senai/quota')
+            if (qRes.ok) {
+              const qData = await qRes.json()
+              if (!disposed && typeof qData.used === 'number') {
+                setSenaiQuotaUsed(qData.used)
+                if (typeof qData.limit === 'number') setSenaiQuotaLimit(qData.limit)
+              }
+            }
+          } catch {}
 
           // Đồng bộ cài đặt bong bóng chat từ Supabase Cloud
           if (typeof profile?.chat_bubble_disabled === 'boolean') {
@@ -503,8 +531,23 @@ function NewDashboardContent() {
 
     init()
 
+    const onQuotaChanged = async () => {
+      try {
+        const qRes = await fetch('/api/senai/quota')
+        if (qRes.ok) {
+          const qData = await qRes.json()
+          if (!disposed && typeof qData.used === 'number') {
+            setSenaiQuotaUsed(qData.used)
+            if (typeof qData.limit === 'number') setSenaiQuotaLimit(qData.limit)
+          }
+        }
+      } catch {}
+    }
+    window.addEventListener('senai-quota-updated', onQuotaChanged)
+
     return () => {
       disposed = true
+      window.removeEventListener('senai-quota-updated', onQuotaChanged)
     }
   }, [router, hookBeta])
 
@@ -554,6 +597,42 @@ function NewDashboardContent() {
     if (!isVipUser) return 'Gói Miễn phí'
     return getPlanTierName(planTier)
   }, [isVipUser, planTier])
+
+  const effectiveSenaiTier = useMemo(() => {
+    return getEffectiveSenaiTier({
+      senai_tier: senaiTier,
+      senai_tier_expires_at: senaiTierExpiresAt,
+      senai_tier_permanent: senaiTierPermanent,
+    })
+  }, [senaiTier, senaiTierExpiresAt, senaiTierPermanent])
+
+  const senaiTierLabel = useMemo(() => {
+    return SENAI_TIER_LABEL[effectiveSenaiTier] || 'SenAI'
+  }, [effectiveSenaiTier])
+
+  const effectiveDailyLimit = useMemo(() => {
+    const baseLimit = SENAI_TIER_DAILY_LIMIT[effectiveSenaiTier] || 10
+    return getTotalSenaiDailyLimit(baseLimit, planTier as any)
+  }, [effectiveSenaiTier, planTier])
+
+  const remainingSenaiQuestions = useMemo(() => {
+    return Math.max(0, effectiveDailyLimit - senaiQuotaUsed)
+  }, [effectiveDailyLimit, senaiQuotaUsed])
+
+  const canUseSenAiStudio = useMemo(() => {
+    if (userRole === 'admin' || userRole === 'collab' || userEmail === 'hoangbinhminh2508@gmail.com') return true
+    return effectiveSenaiTier === 'ultra' || effectiveSenaiTier === 'max'
+  }, [userRole, userEmail, effectiveSenaiTier])
+
+  const toggleDashboardStudio = () => {
+    const nextVal = !dashboardStudioEnabled
+    setDashboardStudioEnabled(nextVal)
+    if (nextVal) {
+      localStorage.removeItem('sen_dashboard_studio_disabled')
+    } else {
+      localStorage.setItem('sen_dashboard_studio_disabled', '1')
+    }
+  }
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours()
@@ -793,6 +872,67 @@ function NewDashboardContent() {
             </div>
           </div>
 
+          {/* 3 Quick Cards: Ví Sen, Sen VIP, SenAI Quota */}
+          <div className="grid grid-cols-3 gap-2">
+            <Link
+              href="/new-pay?tab=wallet"
+              className="rounded-2xl border border-amber-500/25 bg-amber-500/10 dark:bg-amber-500/15 p-2.5 text-center active:scale-95 transition"
+            >
+              <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                <CreditCard className="h-3 w-3 text-amber-500" /> Ví Sen
+              </div>
+              <p className="mt-1 text-xs font-black text-amber-900 dark:text-amber-200 truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                {senCash.toLocaleString('vi-VN')} SC
+              </p>
+            </Link>
+
+            <Link
+              href="/new-pay?tab=vip"
+              className="rounded-2xl border border-rose-500/25 bg-rose-500/10 dark:bg-rose-500/15 p-2.5 text-center active:scale-95 transition"
+            >
+              <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-rose-700 dark:text-rose-300">
+                <Crown className="h-3 w-3 text-rose-500" /> Sen VIP
+              </div>
+              <p className="mt-1 text-xs font-black text-rose-900 dark:text-rose-200 truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                {isVipUser ? vipPlanName : 'Miễn phí'}
+              </p>
+            </Link>
+
+            <Link
+              href="/new-pay?tab=quota"
+              className="rounded-2xl border border-purple-500/25 bg-purple-500/10 dark:bg-purple-500/15 p-2.5 text-center active:scale-95 transition"
+            >
+              <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-purple-700 dark:text-purple-300">
+                <Brain className="h-3 w-3 text-purple-500" /> SenAI
+              </div>
+              <p className="mt-1 text-xs font-black text-purple-900 dark:text-purple-200 truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                {remainingSenaiQuestions}/{effectiveDailyLimit}
+              </p>
+            </Link>
+          </div>
+
+          {/* SenAI Studio Quick Workspace trên Mobile (Thành viên SenAI Ultra / Max) */}
+          {canUseSenAiStudio && dashboardStudioEnabled && (
+            <div className="pt-1">
+              <DashboardSenAiStudio
+                userId={userId}
+                tierLabel={senaiTierLabel}
+                effectiveTier={effectiveSenaiTier}
+                remainingQuestions={remainingSenaiQuestions}
+                dailyLimit={effectiveDailyLimit}
+                onQuotaUpdated={() => {
+                  fetch('/api/senai/quota')
+                    .then(r => r.json())
+                    .then(q => {
+                      if (typeof q.used === 'number') setSenaiQuotaUsed(q.used)
+                      if (typeof q.limit === 'number') setSenaiQuotaLimit(q.limit)
+                    })
+                    .catch(() => {})
+                }}
+              />
+            </div>
+          )}
+
           {/* 3. Thanh Tiến Trình Được Thiết Kế Lại Cho Mobile */}
           <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
             <div className="flex items-center justify-between">
@@ -900,6 +1040,50 @@ function NewDashboardContent() {
             </div>
             <ArrowRight className="h-4 w-4 text-pink-500 shrink-0" />
           </button>
+
+          {/* Card Chuỗi Học Tập Trên Mobile: Đặt giữa Khám phá tính năng và Liên kết Google */}
+          <div className="rounded-[26px] border border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-pink-500/10 dark:from-amber-500/15 dark:via-orange-500/10 dark:to-pink-500/15 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-xs">
+                  <Flame className="h-4 w-4 fill-white" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    Chuỗi Học Tập Bền Bỉ
+                  </h3>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold">
+                    Duy trì phong độ mỗi ngày
+                  </p>
+                </div>
+              </div>
+              <span className="text-base font-black text-amber-900 dark:text-amber-200" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                {streakDays} ngày 🔥
+              </span>
+            </div>
+
+            <p className="mt-2 text-[11px] text-[#4B5563] dark:text-slate-300 font-medium leading-relaxed">
+              {streakDays >= 7
+                ? 'Tuyệt vời! Bạn đang duy trì chuỗi học tập rất đều đặn. Nhấn nhận quà để tích lũy SenCash!'
+                : 'Điểm danh và làm bài mỗi ngày để tích lũy chuỗi học tập và nhận thưởng SenCash miễn phí.'}
+            </p>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDailyStreakModal(true)}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 text-white px-3 py-2 text-xs font-black shadow-xs active:scale-95 transition cursor-pointer"
+              >
+                <Gift className="h-3.5 w-3.5" /> Điểm Danh Nhận Quà SC
+              </button>
+              <Link
+                href="/new-history-submissions"
+                className="inline-flex items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold transition"
+              >
+                Lịch sử →
+              </Link>
+            </div>
+          </div>
 
           {/* 5. Nút / Thẻ Liên Kết Google Trên Mobile */}
           <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
@@ -1038,6 +1222,39 @@ function NewDashboardContent() {
                 <span>{chatBubbleEnabled ? 'Bật' : 'Tắt'}</span>
               </button>
             </div>
+
+            {/* Bật / Tắt SenAI Studio Ngoài Dashboard Trên Mobile */}
+            {canUseSenAiStudio && (
+              <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10">
+                <div className="pr-2">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">SenAI Studio Dashboard:</p>
+                    <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                      dashboardStudioEnabled 
+                        ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400' 
+                        : 'bg-slate-500/15 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {dashboardStudioEnabled ? 'Đang mở' : 'Đã ẩn'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Hiển thị xưởng hỏi bài SenAI Studio nhanh ngay tại Dashboard
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleDashboardStudio}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                    dashboardStudioEnabled
+                      ? 'border-purple-500/40 bg-purple-500/15 text-purple-600 dark:text-purple-400 shadow-xs'
+                      : 'border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  <Sparkles className={`h-3.5 w-3.5 ${dashboardStudioEnabled ? 'text-purple-500' : 'text-slate-400'}`} />
+                  <span>{dashboardStudioEnabled ? 'Bật' : 'Tắt'}</span>
+                </button>
+              </div>
+            )}
 
             {/* Đổi mật khẩu toggle */}
             <div className="pt-2 border-t border-black/10 dark:border-white/10">
@@ -1302,6 +1519,28 @@ function NewDashboardContent() {
           </div>
         )}
 
+        {/* SENAI STUDIO WORKSPACE CHO THÀNH VIÊN SENAI ULTRA / SEN MAX */}
+        {canUseSenAiStudio && dashboardStudioEnabled && (
+          <div className="mt-6">
+            <DashboardSenAiStudio
+              userId={userId}
+              tierLabel={senaiTierLabel}
+              effectiveTier={effectiveSenaiTier}
+              remainingQuestions={remainingSenaiQuestions}
+              dailyLimit={effectiveDailyLimit}
+              onQuotaUpdated={() => {
+                fetch('/api/senai/quota')
+                  .then((r) => r.json())
+                  .then((q) => {
+                    if (typeof q.used === 'number') setSenaiQuotaUsed(q.used)
+                    if (typeof q.limit === 'number') setSenaiQuotaLimit(q.limit)
+                  })
+                  .catch(() => {})
+              }}
+            />
+          </div>
+        )}
+
         {/* 2-Column Main Layout */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
           
@@ -1471,40 +1710,58 @@ function NewDashboardContent() {
                 )}
               </div>
 
-              {/* 2 Nút Hành Động Lớn: Ví Sen & Sen VIP */}
-              <div className="mt-4 grid grid-cols-2 gap-2.5 pt-3 border-t border-black/10 dark:border-white/10">
+              {/* 3 Nút Hành Động Nhanh: Ví Sen, Sen VIP & SenAI Quota */}
+              <div className="mt-4 grid grid-cols-3 gap-2 pt-3 border-t border-black/10 dark:border-white/10">
                 <Link
                   href="/new-pay?tab=wallet"
-                  className="flex flex-col justify-between rounded-2xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-3 transition hover:scale-[1.02] group"
+                  className="flex flex-col justify-between rounded-2xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-2.5 transition hover:scale-[1.02] group"
                 >
                   <div className="flex items-center justify-between text-amber-700 dark:text-amber-300">
                     <CreditCard className="h-4 w-4 text-amber-500" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Ví Sen</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider">Ví Sen</span>
                   </div>
                   <div className="mt-2">
-                    <strong className="text-base font-black text-amber-900 dark:text-amber-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    <strong className="text-sm font-black text-amber-900 dark:text-amber-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                       {senCash.toLocaleString('vi-VN')} SC
                     </strong>
-                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">
-                      Nạp thêm SenCash →
+                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">
+                      Nạp thêm →
                     </span>
                   </div>
                 </Link>
 
                 <Link
                   href="/new-pay?tab=vip"
-                  className="flex flex-col justify-between rounded-2xl border border-rose-500/20 bg-rose-500/10 dark:bg-rose-500/15 p-3 transition hover:scale-[1.02] group"
+                  className="flex flex-col justify-between rounded-2xl border border-rose-500/20 bg-rose-500/10 dark:bg-rose-500/15 p-2.5 transition hover:scale-[1.02] group"
                 >
                   <div className="flex items-center justify-between text-rose-700 dark:text-rose-300">
                     <Crown className="h-4 w-4 text-rose-500" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Sen VIP</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider">Sen VIP</span>
                   </div>
                   <div className="mt-2">
-                    <strong className="text-base font-black text-rose-900 dark:text-rose-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
-                      {vipUntil ? 'VIP Active' : 'Chưa kích hoạt'}
+                    <strong className="text-sm font-black text-rose-900 dark:text-rose-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                      {isVipUser ? vipPlanName : 'Miễn phí'}
                     </strong>
-                    <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 group-hover:underline">
-                      Nâng cấp VIP ngay →
+                    <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 group-hover:underline truncate block">
+                      {isVipUser ? 'Quản lý →' : 'Nâng cấp →'}
+                    </span>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/new-pay?tab=quota"
+                  className="flex flex-col justify-between rounded-2xl border border-purple-500/20 bg-purple-500/10 dark:bg-purple-500/15 p-2.5 transition hover:scale-[1.02] group"
+                >
+                  <div className="flex items-center justify-between text-purple-700 dark:text-purple-300">
+                    <Brain className="h-4 w-4 text-purple-500" />
+                    <span className="text-[9px] font-bold uppercase tracking-wider">SenAI</span>
+                  </div>
+                  <div className="mt-2">
+                    <strong className="text-sm font-black text-purple-900 dark:text-purple-200 block truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                      {remainingSenaiQuestions}/{effectiveDailyLimit} câu
+                    </strong>
+                    <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 group-hover:underline truncate block">
+                      {senaiTierLabel} →
                     </span>
                   </div>
                 </Link>
@@ -1536,6 +1793,50 @@ function NewDashboardContent() {
                   className="inline-flex items-center justify-center gap-1 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 py-2 px-1.5 text-[11px] font-bold transition hover:bg-indigo-500/20 text-center"
                 >
                   <User className="h-3.5 w-3.5" /> Hồ sơ
+                </Link>
+              </div>
+            </div>
+
+            {/* Card Chuỗi Học Tập Bền Bỉ: Đặt giữa Hồ sơ và Liên kết Google */}
+            <div className="rounded-[28px] border border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-pink-500/10 dark:from-amber-500/15 dark:via-orange-500/10 dark:to-pink-500/15 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-md">
+                    <Flame className="h-5 w-5 fill-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                      Chuỗi Học Tập Bền Bỉ
+                    </h3>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 font-semibold">
+                      Duy trì phong độ mỗi ngày
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xl font-black text-amber-900 dark:text-amber-200" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  {streakDays} ngày 🔥
+                </span>
+              </div>
+
+              <p className="mt-2.5 text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
+                {streakDays >= 7
+                  ? 'Tuyệt vời! Bạn đang duy trì chuỗi học tập rất đều đặn. Tiếp tục làm đề để nhận quà SenCash nhé!'
+                  : 'Điểm danh và làm bài thi mỗi ngày để tích lũy chuỗi học tập và nhận thưởng SenCash miễn phí.'}
+              </p>
+
+              <div className="mt-3.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDailyStreakModal(true)}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 text-white px-3 py-2 text-xs font-black shadow-md hover:opacity-95 active:scale-95 transition cursor-pointer"
+                >
+                  <Gift className="h-3.5 w-3.5" /> Điểm Danh & Nhận Quà SC
+                </button>
+                <Link
+                  href="/new-history-submissions"
+                  className="inline-flex items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-3 py-2 text-xs font-bold transition hover:bg-black/5"
+                >
+                  Lịch sử →
                 </Link>
               </div>
             </div>
@@ -1679,6 +1980,39 @@ function NewDashboardContent() {
                   <span>{chatBubbleEnabled ? 'Đang Bật' : 'Đang Tắt'}</span>
                 </button>
               </div>
+
+              {/* Bật / Tắt SenAI Studio Ngoài Dashboard (Chỉ hiện nếu có quyền SenAI Studio) */}
+              {canUseSenAiStudio && (
+                <div className="flex items-center justify-between pt-2 border-t border-black/10 dark:border-white/10">
+                  <div className="pr-2">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold">SenAI Studio Dashboard:</p>
+                      <span className={`rounded-full px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                        dashboardStudioEnabled 
+                          ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400' 
+                          : 'bg-slate-500/15 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {dashboardStudioEnabled ? 'Đang mở' : 'Đã ẩn'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                      Hiển thị xưởng hỏi bài SenAI Studio nhanh ngay tại trang Dashboard chính
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleDashboardStudio}
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shrink-0 ${
+                      dashboardStudioEnabled
+                        ? 'border-purple-500/40 bg-purple-500/15 text-purple-600 dark:text-purple-400 shadow-xs'
+                        : 'border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10'
+                    }`}
+                  >
+                    <Sparkles className={`h-3.5 w-3.5 ${dashboardStudioEnabled ? 'text-purple-500' : 'text-slate-400'}`} />
+                    <span>{dashboardStudioEnabled ? 'Đang Bật' : 'Đang Tắt'}</span>
+                  </button>
+                </div>
+              )}
 
               {/* Đổi mật khẩu toggle */}
               <div className="pt-2 border-t border-black/10 dark:border-white/10">

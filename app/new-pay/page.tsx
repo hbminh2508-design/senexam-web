@@ -41,6 +41,12 @@ import {
   type SenAiPlan,
 } from '@/lib/senaiTiers'
 import { canAccessSenMaxPlan } from '@/lib/roadmapSchedule'
+import {
+  canAccessExclusiveStore,
+  MONTHLY_FLASH_SALE_DISCOUNT_PERCENT,
+  MONTHLY_FLASH_SALE_QUOTA,
+  applyDiscount,
+} from '@/lib/exclusiveStore'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import {
   ArrowLeft,
@@ -73,13 +79,15 @@ import {
   Box,
   RefreshCw,
   Tag,
+  ShoppingBag,
   ExternalLink,
+  History,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newpay-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newpay-body' })
 
-type TabKey = 'wallet' | 'vip' | 'quota'
+type TabKey = 'wallet' | 'vip' | 'quota' | 'exclusive' | 'giftcode'
 type PlanOption = { code: string; name: string; priceVnd: number; durationDays: number }
 
 const TOPUP_PRESETS = [
@@ -210,6 +218,46 @@ const SENAI_SIMPLE_DETAILS: Record<
   },
 }
 
+// Danh sách các ưu đãi độc quyền hấp dẫn mới được bổ sung
+const EXCLUSIVE_CUSTOM_DEALS = [
+  {
+    id: 'combo_starter',
+    title: 'Combo Tân Thủ 2-in-1',
+    badge: 'Tiết kiệm 45%',
+    tag: 'Dành Cho Học Sinh Mới',
+    desc: 'Trọn gói 1 tháng Hội viên VIP không quảng cáo + 1 tháng SenAI Plus (50 câu/ngày).',
+    originalPrice: 178,
+    discountedPrice: 119,
+    planCode: 'plus_monthly',
+    color: 'from-amber-500 to-orange-500',
+    perks: ['VIP không quảng cáo 30 ngày', '50 câu hỏi giải bài mỗi ngày', '1 lần phân tích hình học/ngày'],
+  },
+  {
+    id: 'combo_exam_cram',
+    title: 'Chiến Binh Luyện Đề Nước Rút (3 Tháng)',
+    badge: 'Siêu Ưu Đãi',
+    tag: 'HSA / TSA / THPTQG',
+    desc: '3 tháng Hội viên Premium + 3 tháng SenAI Ultra (200 câu/ngày) + 100 lượt tải đề thi độc quyền.',
+    originalPrice: 799,
+    discountedPrice: 499,
+    planCode: 'ultra_quarterly',
+    color: 'from-purple-600 to-pink-600',
+    perks: ['200 câu hỏi giải bài mỗi ngày', '5 lần phân tích đồ thị/ngày', 'Huy hiệu Premium mạ vàng'],
+  },
+  {
+    id: 'plus_perm_deal',
+    title: 'Bản Quyền Vĩnh Viễn SenAI Plus',
+    badge: 'Giảm 20%',
+    tag: 'Không Hạn Sử Dụng',
+    desc: 'Sở hữu trọn đời 50 lượt giải đề và hướng dẫn phương pháp làm bài mỗi ngày, không bao giờ hết hạn.',
+    originalPrice: 2999,
+    discountedPrice: 2399,
+    planCode: 'plus_permanent',
+    color: 'from-pink-500 to-rose-600',
+    perks: ['Bản quyền trọn đời tài khoản', '50 câu hỏi giải đề mỗi ngày', 'Cập nhật miễn phí mãi mãi'],
+  },
+]
+
 function PayContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -223,7 +271,7 @@ function PayContent() {
   // Tab State
   const initialTab = (searchParams?.get('tab') as TabKey) || 'vip'
   const [activeTab, setActiveTab] = useState<TabKey>(
-    ['wallet', 'vip', 'quota'].includes(initialTab) ? initialTab : 'vip'
+    ['wallet', 'vip', 'quota', 'exclusive', 'giftcode'].includes(initialTab) ? initialTab : 'vip'
   )
 
   // Feedback states
@@ -255,6 +303,14 @@ function PayContent() {
   const [todaySenGraphAiCount, setTodaySenGraphAiCount] = useState(0)
   const [refreshingQuota, setRefreshingQuota] = useState(false)
   const [buyingSenAiCode, setBuyingSenAiCode] = useState<string | null>(null)
+
+  // 4. Giftcode State
+  const [giftCodeInput, setGiftCodeInput] = useState('')
+  const [redeemingGiftCode, setRedeemingGiftCode] = useState(false)
+  const [giftRedemptions, setGiftRedemptions] = useState<any[]>([])
+
+  // 5. Exclusive Store Flash Sale State
+  const [buyingExclusiveCode, setBuyingExclusiveCode] = useState<string | null>(null)
 
   // Unified QR Payment Modal State
   const [qrModal, setQrModal] = useState<{
@@ -303,6 +359,14 @@ function PayContent() {
         const isBeta = prof.is_beta_tester === true || localStorage.getItem('senexam_beta_tester') === '1'
         setIsBetaTester(isBeta)
       }
+
+      // Lấy lịch sử đổi giftcode
+      const { data: codesHistory } = await supabase
+        .from('gift_code_redemptions')
+        .select('*, gift_codes(*)')
+        .eq('user_id', uid)
+        .order('redeemed_at', { ascending: false })
+      setGiftRedemptions(codesHistory || [])
     } catch (err) {
       console.warn('Error reloading user data in new-pay:', err)
     }
@@ -593,6 +657,88 @@ function PayContent() {
     }
   }
 
+  // Redeem Giftcode
+  const handleRedeemGiftCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const clean = giftCodeInput.trim().toUpperCase()
+    if (!clean || clean.length < 4) {
+      setErrorMsg('Vui lòng nhập đúng mã quà tặng hợp lệ.')
+      return
+    }
+
+    setRedeemingGiftCode(true)
+    setErrorMsg('')
+    setSuccessMsg('')
+
+    try {
+      const token = await getToken()
+      const res = await fetch('/api/gift-codes/redeem', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ code: clean }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Mã quà tặng không hợp lệ hoặc đã hết hạn.')
+      }
+
+      setSuccessMsg(`🎉 Đổi mã thành công: ${data.reward || 'Bạn đã nhận quà từ mã thành công!'}`)
+      setGiftCodeInput('')
+      if (userId) await reloadUserData(userId)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi khi kích hoạt mã quà tặng.')
+    } finally {
+      setRedeemingGiftCode(false)
+    }
+  }
+
+  // Buy Custom Exclusive Deal
+  const handleBuyExclusiveDeal = async (deal: (typeof EXCLUSIVE_CUSTOM_DEALS)[number]) => {
+    setBuyingExclusiveCode(deal.id)
+    setErrorMsg('')
+    setSuccessMsg('')
+    try {
+      const token = await getToken()
+      if (!token) {
+        router.replace('/new-idp')
+        return
+      }
+
+      // Check balance
+      if (balance < deal.discountedPrice) {
+        setErrorMsg(`Số dư SenCash không đủ. Bạn cần ${deal.discountedPrice} SC (Hiện có ${balance} SC).`)
+        return
+      }
+
+      // Call purchase tier
+      const res = await fetch('/api/senai/purchase-tier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ planCode: deal.planCode }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setErrorMsg(json.error || 'Không thể kích hoạt ưu đãi độc quyền này')
+        return
+      }
+
+      setSuccessMsg(`🎉 Săn thành công ưu đãi "${deal.title}"! Đã kích hoạt đặc quyền vào tài khoản.`)
+      if (userId) {
+        await reloadUserData(userId)
+        await fetchQuotaData(userId, true)
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Lỗi khi mua ưu đãi độc quyền')
+    } finally {
+      setBuyingExclusiveCode(null)
+    }
+  }
+
   // Effective tiers & stats
   const effectiveSenaiTier: SenAiTierCode = useMemo(() => {
     return getEffectiveSenaiTier(profile)
@@ -649,21 +795,31 @@ function PayContent() {
           </Link>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/new-codes"
-              className="inline-flex items-center gap-1.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-sm hover:scale-105 transition"
+            <button
+              type="button"
+              onClick={() => handleTabChange('giftcode')}
+              className={`inline-flex items-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-bold shadow-sm transition hover:scale-105 ${
+                activeTab === 'giftcode'
+                  ? 'border-amber-500 bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                  : 'border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300'
+              }`}
             >
               <Gift className="h-4 w-4 text-amber-500" />
               <span className="hidden sm:inline">Mã quà tặng</span>
-            </Link>
+            </button>
 
-            <Link
-              href="/new-exclusive-store"
-              className="inline-flex items-center gap-1.5 rounded-2xl border border-pink-500/20 bg-pink-500/10 px-3.5 py-2 text-xs font-bold text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 transition"
+            <button
+              type="button"
+              onClick={() => handleTabChange('exclusive')}
+              className={`inline-flex items-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-bold transition hover:scale-105 ${
+                activeTab === 'exclusive'
+                  ? 'border-purple-500 bg-purple-500/20 text-purple-600 dark:text-purple-400'
+                  : 'border-pink-500/20 bg-pink-500/10 text-pink-600 dark:text-pink-400'
+              }`}
             >
-              <Crown className="h-4 w-4 text-pink-500" />
-              <span className="hidden sm:inline">Cửa Hàng Độc Quyền</span>
-            </Link>
+              <Gem className="h-4 w-4 text-purple-500" />
+              <span className="hidden sm:inline">Ưu Đãi Độc Quyền</span>
+            </button>
 
             <button
               type="button"
@@ -702,8 +858,8 @@ function PayContent() {
               </h1>
 
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-xl font-medium leading-relaxed">
-                Quản lý số dư Ví SenCash, kích hoạt gói Hội viên VIP không quảng cáo và nâng cấp lượt hỏi bài giải đề
-                thông minh tất cả tại một nơi.
+                Quản lý số dư Ví SenCash, kích hoạt gói Hội viên VIP không quảng cáo, săn ưu đãi độc quyền và nhập mã
+                quà tặng tất cả tại một nơi.
               </p>
             </div>
 
@@ -724,7 +880,7 @@ function PayContent() {
                   {balance.toLocaleString('vi-VN')} SC
                 </p>
                 <p className="text-[11px] font-semibold text-amber-700/80 dark:text-amber-300/80">
-                  ≈ {(balance * VND_PER_SENCASH).toLocaleString('vi-VN')}đ • Nạp thêm
+                  ≈ {(balance * VND_PER_SENCASH).toLocaleString('vi-VN')}đ • Nạp tiền
                 </p>
               </div>
 
@@ -797,12 +953,12 @@ function PayContent() {
           </div>
         )}
 
-        {/* TABS SELECTOR */}
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm">
+        {/* UNIFIED TABS SELECTOR (5 TABS) */}
+        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-sm overflow-x-auto">
           <button
             type="button"
             onClick={() => handleTabChange('vip')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition-all ${
+            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition-all ${
               activeTab === 'vip'
                 ? 'bg-[#111827] text-white dark:bg-white dark:text-slate-900 shadow-md scale-101'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -815,20 +971,20 @@ function PayContent() {
           <button
             type="button"
             onClick={() => handleTabChange('quota')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition-all ${
+            className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition-all ${
               activeTab === 'quota'
                 ? 'bg-[#111827] text-white dark:bg-white dark:text-slate-900 shadow-md scale-101'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <MessageCircle className="h-4 w-4 text-pink-500" />
-            <span>Gói Hỏi Bài & Hạn Mức</span>
+            <span>Gói Hỏi Bài & Quota</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleTabChange('wallet')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition-all ${
+            className={`flex-1 min-w-[130px] flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition-all ${
               activeTab === 'wallet'
                 ? 'bg-[#111827] text-white dark:bg-white dark:text-slate-900 shadow-md scale-101'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -836,6 +992,32 @@ function PayContent() {
           >
             <Wallet className="h-4 w-4 text-emerald-500" />
             <span>Ví Sen & Nạp Tiền</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('exclusive')}
+            className={`flex-1 min-w-[130px] flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition-all ${
+              activeTab === 'exclusive'
+                ? 'bg-[#111827] text-white dark:bg-white dark:text-slate-900 shadow-md scale-101'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Gem className="h-4 w-4 text-purple-500" />
+            <span>Ưu Đãi Độc Quyền</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleTabChange('giftcode')}
+            className={`flex-1 min-w-[130px] flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-black transition-all ${
+              activeTab === 'giftcode'
+                ? 'bg-[#111827] text-white dark:bg-white dark:text-slate-900 shadow-md scale-101'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Gift className="h-4 w-4 text-amber-500" />
+            <span>Nhập Gift Code</span>
           </button>
         </div>
 
@@ -865,7 +1047,6 @@ function PayContent() {
                     </div>
                   </div>
 
-                  {/* Chu kỳ thanh toán */}
                   <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/10">
                     {(['monthly', 'quarterly', 'yearly'] as const).map((cycle) => (
                       <button
@@ -957,7 +1138,6 @@ function PayContent() {
                     </div>
                   </div>
 
-                  {/* Chu kỳ thanh toán */}
                   <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/10">
                     {(['monthly', 'quarterly', 'yearly'] as const).map((cycle) => (
                       <button
@@ -1133,7 +1313,6 @@ function PayContent() {
                       </div>
 
                       <div className="mt-6 space-y-2 pt-4 border-t border-black/10 dark:border-white/10">
-                        {/* Buy with VietQR */}
                         <button
                           type="button"
                           onClick={() => {
@@ -1152,7 +1331,6 @@ function PayContent() {
                           )}
                         </button>
 
-                        {/* Redeem with SenCash */}
                         <button
                           type="button"
                           onClick={() => handleRedeemVipWithSenCash(activeVipGroup, plan)}
@@ -1549,18 +1727,19 @@ function PayContent() {
                     </li>
                     <li className="flex items-start gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                      <span><strong>Tải tài liệu ôn thi độc quyền:</strong> Mở khóa các bộ đề & chuyên đề nâng cao trong Thư viện.</span>
+                      <span><strong>Săn ưu đãi độc quyền:</strong> Giảm giá đặc biệt trong Cửa Hàng Độc Quyền.</span>
                     </li>
                   </ul>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-black/10 dark:border-white/10 flex items-center justify-between">
-                  <Link
-                    href="/new-codes"
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('giftcode')}
                     className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
                   >
                     <Gift className="h-3.5 w-3.5 text-amber-500" /> Nhập mã Giftcode quà tặng →
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1709,6 +1888,191 @@ function PayContent() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 4: CỬA HÀNG ĐỘC QUYỀN (EXCLUSIVE DEALS) */}
+        {/* ============================================================== */}
+        {activeTab === 'exclusive' && (
+          <div className="space-y-8 animate-in fade-in">
+            <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 px-3 py-0.5 text-[11px] font-black text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase tracking-wider">
+                      <Gem className="inline h-3.5 w-3.5 mr-1 text-purple-500" /> Cửa Hàng Độc Quyền
+                    </span>
+                    <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-[10px] font-bold">
+                      Ưu Đãi Đặc Biệt Cho Học Sinh
+                    </span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1" style={{ fontFamily: 'var(--font-newpay-heading)' }}>
+                    Combo Siêu Tiết Kiệm & Ưu Đãi Độc Quyền
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                    Các gói combo giảm sốc được tối ưu chi phí dành riêng cho thành viên SenExam.
+                  </p>
+                </div>
+
+                <div className="shrink-0 flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500">Số dư hiện tại:</span>
+                  <span className="px-3 py-1 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 font-black text-sm">
+                    {balance.toLocaleString('vi-VN')} SC
+                  </span>
+                </div>
+              </div>
+
+              {/* Grid 3 gói ưu đãi mới */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                {EXCLUSIVE_CUSTOM_DEALS.map((deal) => {
+                  const isBuying = buyingExclusiveCode === deal.id
+                  const canAfford = balance >= deal.discountedPrice
+
+                  return (
+                    <div
+                      key={deal.id}
+                      className="relative overflow-hidden rounded-[28px] border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] p-6 flex flex-col justify-between space-y-4 hover:shadow-xl transition"
+                    >
+                      <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-600 to-pink-500 text-white text-[9px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider">
+                        {deal.badge}
+                      </div>
+
+                      <div className="space-y-3">
+                        <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                          {deal.tag}
+                        </span>
+
+                        <h3 className="text-lg font-black text-slate-900 dark:text-white">{deal.title}</h3>
+
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                          {deal.desc}
+                        </p>
+
+                        <div className="flex items-baseline gap-2 pt-1">
+                          <span className="text-2xl font-black text-purple-600 dark:text-purple-400">
+                            {deal.discountedPrice} SC
+                          </span>
+                          <span className="text-xs font-bold text-slate-400 line-through">
+                            {deal.originalPrice} SC
+                          </span>
+                        </div>
+
+                        <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-2 pt-2 border-t border-black/10 dark:border-white/10">
+                          {deal.perks.map((p, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                              <span>{p}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBuyExclusiveDeal(deal)}
+                        disabled={isBuying || !canAfford}
+                        className="w-full mt-4 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-40"
+                      >
+                        {isBuying ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <ShoppingBag className="h-4 w-4" />
+                            {canAfford ? `Kích Hoạt Ngay (${deal.discountedPrice} SC)` : `Cần ${deal.discountedPrice} SC`}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 5: NHẬP MÃ QUÀ TẶNG (GIFT CODE) */}
+        {/* ============================================================== */}
+        {activeTab === 'giftcode' && (
+          <div className="space-y-8 animate-in fade-in">
+            <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-6">
+              <div className="border-b border-black/10 dark:border-white/10 pb-4">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                    <Gift className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newpay-heading)' }}>
+                      Kích Hoạt Mã Quà Tặng (Giftcode)
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                      Nhập mã quà tặng từ sự kiện, livestream hoặc thầy cô để nhận ngay SenCash, ngày VIP hoặc gói câu hỏi.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form nhập Giftcode */}
+              <form onSubmit={handleRedeemGiftCode} className="max-w-xl space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                    Mã quà tặng của bạn:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="VD: SENEXAM-VIP-2026"
+                      value={giftCodeInput}
+                      onChange={(e) => setGiftCodeInput(e.target.value.toUpperCase())}
+                      className="h-12 flex-1 rounded-2xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 px-4 font-mono font-bold text-sm tracking-widest outline-none focus:border-amber-500 dark:focus:border-amber-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={redeemingGiftCode || !giftCodeInput.trim()}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 px-6 py-3 text-xs font-black uppercase tracking-wider shadow-lg transition hover:opacity-90 disabled:opacity-40"
+                    >
+                      {redeemingGiftCode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Gift className="h-4 w-4" />}
+                      Đổi Mã
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Lịch sử đổi mã */}
+              <div className="pt-4 border-t border-black/10 dark:border-white/10 space-y-3">
+                <h3 className="text-base font-black flex items-center gap-2" style={{ fontFamily: 'var(--font-newpay-heading)' }}>
+                  <History className="h-4 w-4 text-slate-500" /> Các mã quà tặng bạn đã nhận
+                </h3>
+
+                {giftRedemptions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-black/15 dark:border-white/15 p-6 text-center text-xs text-slate-500">
+                    Bạn chưa kích hoạt mã quà tặng nào gần đây.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-black/10 dark:divide-white/10 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] overflow-hidden">
+                    {giftRedemptions.map((item) => (
+                      <div key={item.id} className="p-3.5 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                          <div>
+                            <p className="font-mono font-bold text-slate-900 dark:text-white">
+                              {item.code || item.gift_codes?.code || 'MÃ QUÀ TẶNG'}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              {new Date(item.redeemed_at).toLocaleString('vi-VN')}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {item.reward || 'Đã nhận thành công'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

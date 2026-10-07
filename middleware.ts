@@ -209,8 +209,14 @@ export function middleware(request: NextRequest) {
       url.pathname = pathname.replace('/exams', '/new-exams')
       return applySecurityHeaders(NextResponse.redirect(url))
     }
-    if (pathname === '/exclusive-store') {
-      url.pathname = '/new-exclusive-store'
+    if (pathname === '/exclusive-store' || pathname === '/new-exclusive-store') {
+      url.pathname = '/new-pay'
+      url.searchParams.set('tab', 'exclusive')
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/codes' || pathname === '/new-codes') {
+      url.pathname = '/new-pay'
+      url.searchParams.set('tab', 'giftcode')
       return applySecurityHeaders(NextResponse.redirect(url))
     }
     if (pathname === '/focus') {
