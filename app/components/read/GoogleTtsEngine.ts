@@ -32,7 +32,6 @@ export function splitTextIntoSentences(rawText: string): string[] {
           const sTrim = sub.trim()
           if (sTrim.length > 0) {
             if (sTrim.length > 180) {
-              // Cắt theo từ nếu câu không có dấu
               const words = sTrim.split(/\s+/)
               let chunk = ''
               for (const w of words) {
@@ -99,7 +98,6 @@ export class GoogleTtsEngine {
       window.speechSynthesis.addEventListener('voiceschanged', notify)
       window.speechSynthesis.onvoiceschanged = notify
 
-      // Thử gọi nhiều lần khi trình duyệt tải dữ liệu voice ngầm
       setTimeout(notify, 100)
       setTimeout(notify, 400)
       setTimeout(notify, 1200)
@@ -116,7 +114,7 @@ export class GoogleTtsEngine {
     const lang = targetLang || this.lang
     const results: SpeechVoiceOption[] = []
 
-    // 1. Luôn có giọng Google Trực Tuyến chất lượng cao
+    // 1. Luôn có giọng Google Trực Tuyến chuẩn nhất
     if (lang === 'vi') {
       results.push({
         id: 'google-online-vi',
@@ -135,7 +133,7 @@ export class GoogleTtsEngine {
       })
     }
 
-    // 2. Thêm các giọng có sẵn từ trình duyệt nếu hỗ trợ Web Speech API
+    // 2. Thêm các giọng từ trình duyệt nếu có
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       const all = window.speechSynthesis.getVoices()
 
@@ -208,7 +206,6 @@ export class GoogleTtsEngine {
 
     this.lang = newLang
 
-    // Tự động gán giọng mặc định Google Online cho ngôn ngữ đó
     if (newLang === 'vi') {
       this.selectedVoiceId = 'google-online-vi'
       this.selectedBrowserVoice = null
@@ -217,7 +214,6 @@ export class GoogleTtsEngine {
       this.selectedBrowserVoice = null
     }
 
-    // Nếu đang phát, đọc lại câu hiện tại bằng ngôn ngữ và giọng mới
     if (this.isPlaying && !this.isPaused) {
       this.playSentenceAt(this.currentIndex)
     }
@@ -265,6 +261,20 @@ export class GoogleTtsEngine {
     this.pitch = Math.max(0.5, Math.min(2.0, newPitch))
   }
 
+  // Dọn dẹp triệt để âm thanh trước đó để TUYỆT ĐỐI không bị chồng 2 giọng cùng lúc
+  private stopAudioAndSpeech() {
+    if (this.currentAudio) {
+      this.currentAudio.pause()
+      this.currentAudio.onended = null
+      this.currentAudio.onerror = null
+      this.currentAudio.removeAttribute('src')
+      this.currentAudio = null
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+  }
+
   public start(
     sentences: string[],
     startIndex: number = 0,
@@ -305,17 +315,9 @@ export class GoogleTtsEngine {
       this.onSentenceChange(index, sentence)
     }
 
-    // Dọn dẹp phiên âm trước đó
-    if (this.currentAudio) {
-      this.currentAudio.pause()
-      this.currentAudio.src = ''
-      this.currentAudio = null
-    }
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-    }
+    // Dọn dẹp mọi âm thanh đang phát để tránh bị chồng giọng
+    this.stopAudioAndSpeech()
 
-    // Kiểm tra chế độ phát: Google Online Stream hay Browser Voice
     const isOnline = this.selectedVoiceId.startsWith('google-online') || !this.selectedBrowserVoice
 
     if (isOnline) {
@@ -343,16 +345,21 @@ export class GoogleTtsEngine {
       }
     }
 
-    audio.onerror = (e) => {
-      console.warn('Google Online TTS stream warning, attempting fallback:', e)
-      // Nếu mạng có vấn đề, fallback sang Web Speech API
-      this.playWithWebSpeech(sentence)
+    audio.onerror = () => {
+      // Chỉ fallback khi thật sự lỗi mạng và currentAudio vẫn là audio này
+      if (this.currentAudio === audio) {
+        this.currentAudio = null
+        this.playWithWebSpeech(sentence)
+      }
     }
 
     audio.play().catch((err) => {
-      console.warn('Audio play error:', err)
-      // Nếu bị chặn autoplay hoặc mạng lỗi, thử qua Web Speech
-      this.playWithWebSpeech(sentence)
+      if (err.name === 'AbortError') return
+      console.warn('Audio play error, attempting fallback:', err)
+      if (this.currentAudio === audio) {
+        this.currentAudio = null
+        this.playWithWebSpeech(sentence)
+      }
     })
   }
 
@@ -360,17 +367,28 @@ export class GoogleTtsEngine {
   private playWithWebSpeech(sentence: string) {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
 
-    window.speechSynthesis.cancel()
-    window.speechSynthesis.resume()
+    this.stopAudioAndSpeech()
 
     const utter = new SpeechSynthesisUtterance(sentence)
     utter.rate = this.rate
     utter.pitch = this.pitch
     utter.lang = this.lang === 'vi' ? 'vi-VN' : 'en-US'
 
-    if (this.selectedBrowserVoice) {
-      utter.voice = this.selectedBrowserVoice
-      utter.lang = this.selectedBrowserVoice.lang || utter.lang
+    let voiceToUse = this.selectedBrowserVoice
+    if (!voiceToUse || !voiceToUse.lang.toLowerCase().replace(/_/g, '-').startsWith(this.lang)) {
+      const all = window.speechSynthesis.getVoices()
+      const match = all.find((v) => v.lang.toLowerCase().replace(/_/g, '-').startsWith(this.lang))
+      if (match) voiceToUse = match
+    }
+
+    // QUAN TRỌNG: Nếu đọc tiếng Việt nhưng máy không có giọng tiếng Việt,
+    // TUYỆT ĐỐI không gán giọng mặc định tiếng Anh (Microsoft David) để tránh đọc lẫn lộn tiếng Anh và tiếng Việt!
+    if (voiceToUse) {
+      utter.voice = voiceToUse
+      utter.lang = voiceToUse.lang
+    } else if (this.lang === 'vi') {
+      console.warn('Không tìm thấy voice tiếng Việt trên hệ thống, giữ nguyên chế độ trực tuyến.')
+      return
     }
 
     utter.onend = () => {
@@ -423,15 +441,7 @@ export class GoogleTtsEngine {
   public stop() {
     this.isPlaying = false
     this.isPaused = false
-
-    if (this.currentAudio) {
-      this.currentAudio.pause()
-      this.currentAudio.src = ''
-      this.currentAudio = null
-    }
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-    }
+    this.stopAudioAndSpeech()
   }
 
   public nextSentence() {

@@ -102,14 +102,30 @@ const DEMO_PUBLIC_BOOKS: ReadingBook[] = [
 
 Cuốn sách viết rằng: "Những con trăn nuốt trọn con mồi mà không cần nhai. Sau đó chúng không thể di chuyển được nữa và phải ngủ liền trong sáu tháng để tiêu hóa."
 
-Tôi đã suy nghĩ rất nhiều về những cuộc phiêu lưu nơi rừng thẳm, rồi cầm chiếc bút chì màu vẽ nên bức tranh đầu tiên của đời mình. Tôi đã cho người lớn xem kiệt tác ấy và hỏi họ có thấy sợ không. Họ trả lời: "Tại sao lại phải sợ một cái mũ?". Bức tranh của tôi không phải là cái mũ, mà là một con trăn đang tiêu hóa một con voi bên trong bụng nó.`,
+Tôi đã suy nghĩ rất nhiều về những cuộc phiêu lưu nơi rừng thẳm, rồi cầm chiếc bút chì màu vẽ nên bức tranh đầu tiên của đời mình. Bức tranh Số Một của tôi. Tôi đã cho người lớn xem kiệt tác ấy và hỏi họ có thấy sợ không.
+
+Họ ngạc nhiên trả lời: "Tại sao lại phải sợ một cái mũ?".
+
+Bức tranh của tôi không phải là cái mũ, mà là một con trăn đang tiêu hóa một con voi bên trong bụng nó. Nhưng vì người lớn không bao giờ hiểu được những điều giản dị nếu không được giảng giải, tôi bèn vẽ thêm Bức tranh Số Hai: tôi vẽ rõ ruột gan của con trăn để người lớn có thể nhìn thấy con voi bên trong. Người lớn luôn luôn cần lời giải thích cho mọi thứ trên đời.
+
+Thế rồi những người lớn khuyên tôi nên gác những bức vẽ trăn mở bụng hay trăn kín bụng sang một bên, mà chú tâm vào môn địa lý, lịch sử, số học và ngữ pháp. Đó là lý do vì sao năm lên sáu tuổi, tôi đã từ bỏ một sự nghiệp hội họa đầy hứa hẹn. Tôi đã chán nản vì sự thất bại của Bức tranh Số Một và Bức tranh Số Hai. Người lớn chẳng bao giờ tự mình hiểu được điều gì, và thật mệt mỏi cho trẻ con khi cứ phải giảng giải mãi cho họ suốt cuộc đời.
+
+Tôi đành phải chọn một nghề khác: tôi học lái máy bay. Tôi đã bay hầu khắp các nơi trên thế giới. Và môn địa lý quả thực đã giúp ích cho tôi rất nhiều. Ngay từ cái nhìn đầu tiên, tôi đã có thể phân biệt được Trung Quốc với bang Arizona. Điều đó vô cùng quý giá nếu bạn bị lạc đường trong đêm tối.`,
         translation_en: `Once when I was six years old I saw a magnificent picture in a book, called True Stories from Nature, about the primeval forest. It was a picture of a boa constrictor in the act of swallowing an animal.
 
 [ILLUSTRATION: Sketch of a giant boa constrictor coiled in a primeval moonlit jungle]
 
 In the book it said: "Boa constrictors swallow their prey whole, without chewing it. After that they are not able to move, and they sleep through the six months which they need for digestion."
 
-I pondered deeply, then, over the adventures of the jungle. And after some work with a colored pencil I succeeded in making my first drawing. My Drawing Number One. I showed my masterpiece to the grown-ups, and asked them whether the drawing frightened them. But they answered: "Frighten? Why should any one be frightened by a hat?" My drawing was not a picture of a hat. It was a picture of a boa constrictor digesting an elephant.`,
+I pondered deeply, then, over the adventures of the jungle. And after some work with a colored pencil I succeeded in making my first drawing. My Drawing Number One. I showed my masterpiece to the grown-ups, and asked them whether the drawing frightened them.
+
+But they answered: "Frighten? Why should any one be frightened by a hat?"
+
+My drawing was not a picture of a hat. It was a picture of a boa constrictor digesting an elephant. But since the grown-ups were not able to understand it, I made another drawing: I drew the inside of a boa constrictor, so that the grown-ups could see it clearly. They always need to have things explained.
+
+The grown-ups then advised me to lay aside my drawings of boa constrictors, whether from the inside or the outside, and devote myself instead to geography, history, arithmetic, and grammar. That is why, at the age of six, I gave up what might have been a magnificent career as a painter. I had been disheartened by the failure of my Drawing Number One and my Drawing Number Two. Grown-ups never understand anything by themselves, and it is tiresome for children to be always and forever explaining things to them.
+
+So then I chose another profession, and learned to pilot airplanes. I have flown a little over all parts of the world; and it is true that geography has been very useful to me. At a glance I can distinguish China from Arizona. If one gets lost in the night, such knowledge is valuable.`,
       },
       {
         id: 'c2',
@@ -120,16 +136,40 @@ I pondered deeply, then, over the adventures of the jungle. And after some work 
 
 [ILLUSTRATION: Phi công mệt mỏi bên cạnh cánh máy bay vỡ giữa biển cát vàng mênh mông dưới bầu trời đầy sao]
 
-Đêm đầu tiên, tôi ngủ thiếp đi trên cát, cách xa mọi chốn nhân gian ngàn dặm. Tôi còn cô độc hơn một kẻ đắm tàu trôi dạt trên chiếc bè giữa đại dương. Thế nên bạn có thể tưởng tượng tôi đã kinh ngạc đến mức nào khi vào lúc rạng đông, một giọng nói nhỏ bé lạ thường đã đánh thức tôi dậy. Giọng nói thì thầm:
+Đêm đầu tiên, tôi ngủ thiếp đi trên cát, cách xa mọi chốn nhân gian ngàn dặm. Tôi còn cô độc hơn một kẻ đắm tàu trôi dạt trên chiếc bè giữa đại dương bao la. Thế nên bạn có thể tưởng tượng tôi đã kinh ngạc đến mức nào khi vào lúc rạng đông, một giọng nói nhỏ bé lạ thường đã đánh thức tôi dậy.
 
-"Làm ơn... hãy vẽ cho tôi một con cừu!"`,
+Giọng nói thì thầm:
+"Làm ơn... hãy vẽ cho tôi một con cừu!"
+
+"Cái gì cơ?"
+"Vẽ cho tôi một con cừu đi mà..."
+
+Tôi bật dậy như bị sét đánh. Tôi dụi mắt thật kỹ và nhìn trân trân. Tôi trông thấy một cậu bé phi thường đang nghiêm trang nhìn tôi. Cậu không hề có vẻ như một đứa trẻ bị lạc giữa sa mạc, không hề đói, không hề khát, cũng chẳng hề sợ hãi. Cậu không mang bất cứ dấu vết nào của một đứa trẻ bị bỏ rơi cách xa vùng đất có người ở cả ngàn dặm.
+
+Khi cuối cùng tôi cũng tìm lại được giọng nói của mình, tôi thảng thốt hỏi:
+"Nhưng... em đang làm gì ở đây thế này?"
+
+Và cậu bé chỉ dịu dàng lặp lại, như thể đó là một việc vô cùng hệ trọng trên đời:
+"Làm ơn... hãy vẽ cho tôi một con cừu..."`,
         translation_en: `So I lived my life alone, without anyone that I could really talk to, until I had an accident with my plane in the Desert of Sahara, six years ago. Something was broken in my engine. And as I had with me neither a mechanic nor any passengers, I set myself to attempt the difficult repairs all alone. It was a question of life or death for me: I had scarcely enough drinking water for eight days.
 
 [ILLUSTRATION: Weary pilot beside broken airplane wings in endless golden sand dunes under starry skies]
 
-The first night, then, I went to sleep on the sand, a thousand miles from any human habitation. I was more isolated than a shipwrecked sailor on a raft in the middle of the ocean. Thus you can imagine my amazement, at sunrise, when a strange little voice woke me up. It said:
+The first night, then, I went to sleep on the sand, a thousand miles from any human habitation. I was more isolated than a shipwrecked sailor on a raft in the middle of the ocean. Thus you can imagine my amazement, at sunrise, when a strange little voice woke me up.
 
-"If you please—draw me a sheep!"`,
+It said:
+"If you please—draw me a sheep!"
+
+"What!"
+"Draw me a sheep..."
+
+I jumped to my feet as if I had been struck by lightning. I rubbed my eyes hard. I looked and looked. And I saw a most extraordinary small person, who stood there examining me with great gravity. He did not appear to be lost, nor dying of fatigue, hunger, thirst, or fear. Nothing about him gave any suggestion of a child lost in the middle of the desert, a thousand miles from any human habitation.
+
+When at last I was able to speak, I said to him:
+"But—what are you doing here?"
+
+And in answer he repeated, very slowly, as if he were speaking of something of momentous importance:
+"If you please—draw me a sheep..."`,
       },
     ],
   },
@@ -155,12 +195,24 @@ The first night, then, I went to sleep on the sand, a thousand miles from any hu
 
 [ILLUSTRATION: Chú Dế Mèn dũng mãnh đứng trên ngọn cỏ non, đôi càng bóng loáng vươn cao đón ánh nắng sớm ban mai]
 
-Tôi chẳng những không buồn mà lại rất thích. Tôi bước vào đời với đôi càng mẫm bóng, những cái vuốt ở chân thì cứng dần và nhọn hoắt. Thỉnh thoảng, ngứa chân vuốt cánh, tôi lại co cẳng lên đạp phanh phách vào các ngọn cỏ. Những ngọn cỏ gãy rạp, y như có nhát dao vừa lia qua.`,
+Tôi chẳng những không buồn mà lại rất thích. Tôi bước vào đời với đôi càng mẫm bóng, những cái vuốt ở chân thì cứng dần và nhọn hoắt. Thỉnh thoảng, ngứa chân vuốt cánh, tôi lại co cẳng lên đạp phanh phách vào các ngọn cỏ. Những ngọn cỏ gãy rạp, y như có nhát dao vừa lia qua. Đôi cánh tôi trước kia ngắn hủn hoẳn, giờ đã thành cái áo dài kín tận chấm đuôi. Mỗi khi tôi vũ lên, đã nghe tiếng phành phạch giòn giã.
+
+Lúc tôi đi bách bộ thì cả người tôi rung rinh một màu nâu bóng mỡ soi gương được và rất ưa nhìn. Hai cái răng đen nhánh lúc nào cũng nhai ngoàm ngoạp như hai lưỡi liềm máy làm việc. Sợi râu tôi dài và uốn cong một vẻ rất đỗi hùng dũng. Tôi lấy làm hãnh diện với bà con về cặp râu ấy lắm. Cứ chốc chốc tôi lại trịnh trọng và khoan thai đưa cả hai chân trước lên vuốt râu.
+
+Tôi tự coi mình là tay ghê gớm, có thể đứng đầu thiên hạ. Tôi cà khịa với tất cả mọi người trong xóm. Tôi quát mắng chị Cào Cào ngụ ngoài đầu bờ, đá ghẹo anh Gọng Vó lấm láp dưới đầm. Người ta càng nể sợ, tôi lại càng tưởng mình là ghê gớm.
+
+Cho đến một ngày nọ, tính hung hăng bồng bột của tôi đã dẫn đến một tai họa không thể nào cứu vãn cho người bạn láng giềng tội nghiệp Dế Choắt. Lời trăn trối cuối cùng của Dế Choắt trước khi nhắm mắt đã trở thành bài học đường đời đầu tiên sâu sắc mà suốt đời tôi chẳng thể nào quên được: "Ở đời mà có thói hung hăng bậy bạ, có óc mà không biết nghĩ, sớm muộn rồi cũng mang vạ vào mình đấy."`,
         translation_en: `I lived independently since childhood. That has been an ancient tradition of our cricket family: whenever the young grow up, they must leave to live on their own immediately. My mother only took care of us for a few days, then led each child to a separate burrow to be independent.
 
 [ILLUSTRATION: The brave cricket standing proudly on a blade of grass, sleek hind legs reaching up under the morning sun]
 
-Not only was I not sad, but I was thrilled. I entered the world with muscular, sleek legs and claws that gradually turned razor sharp and sturdy.`,
+Not only was I not sad, but I was thrilled. I entered the world with muscular, sleek legs and claws that gradually turned razor sharp and sturdy. Occasionally, feeling restless, I would kick hard against the blades of grass. The blades bent flat as if sliced by a sharp blade. My wings, once short and stubby, had grown into a long coat covering all the way to the tip of my tail. Whenever I fluttered them, they made a sharp, rhythmic sound.
+
+When I strutted about, my whole body shone with a lustrous, sleek brown that looked magnificent. My two shiny black pincers constantly snapped like working machinery. My long, curved antennae gave me an undeniably valiant air.
+
+I thought of myself as invincible, capable of standing above all creatures. I picked quarrels with everyone in the neighborhood, shouting at Mrs. Grasshopper and teasing Mr. Water Strider. The more they yielded, the prouder I became.
+
+Until one fateful day, my arrogant recklessness brought an irreparable tragedy upon my poor neighbor, the frail cricket Choat. His dying words before closing his eyes forever became the first profound life lesson that I could never forget: "If you carry reckless arrogance and act without thinking, you will inevitably bring disaster upon yourself."`,
       },
     ],
   },
@@ -322,7 +374,11 @@ export default function SenReadPage() {
         .order('created_at', { ascending: false })
 
       if (!pErr && pData && pData.length > 0) {
-        setPublicBooks(pData as any)
+        const sorted = (pData as any).map((b: any) => ({
+          ...b,
+          chapters: (b.chapters || []).sort((x: any, y: any) => (x.chapter_number || 0) - (y.chapter_number || 0)),
+        }))
+        setPublicBooks(sorted)
       } else {
         setPublicBooks(DEMO_PUBLIC_BOOKS)
       }
@@ -337,7 +393,11 @@ export default function SenReadPage() {
           .order('created_at', { ascending: false })
 
         if (!privErr && privData) {
-          setPrivateBooks(privData as any)
+          const sortedPriv = (privData as any).map((b: any) => ({
+            ...b,
+            chapters: (b.chapters || []).sort((x: any, y: any) => (x.chapter_number || 0) - (y.chapter_number || 0)),
+          }))
+          setPrivateBooks(sortedPriv)
         } else {
           // Fallback to localStorage
           const local = localStorage.getItem(`senread_private_${uid}`)
@@ -1147,7 +1207,7 @@ export default function SenReadPage() {
           </div>
 
           {/* Central Canvas Reader Workspace */}
-          <div className="flex-1 relative w-full h-full p-2 sm:p-4 overflow-hidden">
+          <div className="flex-1 min-h-0 relative w-full h-full p-2 sm:p-4 overflow-hidden">
             <CanvasStoryEngine
               title={readingBook.title}
               chapterNumber={activeChapter.chapter_number}
@@ -1157,6 +1217,7 @@ export default function SenReadPage() {
               currentSentenceIndex={currentSentenceIndex}
               isPlayingTts={isPlayingTts}
               illustrations={activeChapter.illustrations}
+              coverUrl={readingBook.cover_url}
               onSentenceClick={handleSentenceClick}
               onIllustrationClick={(prompt, idx) => {
                 setImageModalData({ prompt, index: idx })
