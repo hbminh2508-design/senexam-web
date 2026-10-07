@@ -60,6 +60,21 @@ export default function GlobalCanvasEngine() {
     }
     window.addEventListener('resize', handleResize, { passive: true })
 
+    // Tách biệt hoàn toàn FEPN (không render canvas SenExam trên phân hệ FEPN)
+    const isFepn = Boolean(
+      pathname.startsWith('/fepn-') ||
+      pathname.startsWith('/tsv-fepn') ||
+      (typeof window !== 'undefined' &&
+        (window.location.hostname.includes('fepn.') || window.location.hostname.includes('tsv.fepn.')))
+    )
+
+    if (isFepn) {
+      ctx.clearRect(0, 0, width, height)
+      return () => {
+        window.removeEventListener('resize', handleResize)
+      }
+    }
+
     // Xác định bộ màu theo tuyến đường (Route-Aware Palette)
     const isAuth = pathname.includes('idp') || pathname.includes('login') || pathname.includes('sign') || pathname.includes('reset')
     const isExam = pathname.includes('exam') || pathname.includes('setup') || pathname.includes('seb')
@@ -180,6 +195,13 @@ export default function GlobalCanvasEngine() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [pathname, isDark])
+
+  const isFepn = Boolean(
+    pathname.startsWith('/fepn-') ||
+    pathname.startsWith('/tsv-fepn')
+  )
+
+  if (isFepn) return null
 
   return (
     <canvas

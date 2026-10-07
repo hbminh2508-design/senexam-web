@@ -68,6 +68,14 @@ export default function SenChatFloatingBubble() {
     typeof window !== 'undefined' &&
     (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
 
+  // 8. Hệ thống FEPN độc lập (loại bỏ hoàn toàn các yếu tố SenExam như bong bóng chat):
+  const isFepn = Boolean(
+    pathname?.startsWith('/fepn-') ||
+    pathname?.startsWith('/tsv-fepn') ||
+    (typeof window !== 'undefined' &&
+      (window.location.hostname.includes('fepn.') || window.location.hostname.includes('tsv.fepn.')))
+  )
+
   const isExamRoom = Boolean(
     (pathname?.startsWith('/new-exams/') && pathname !== '/new-exams') ||
     (pathname?.startsWith('/legacy-exams/') && pathname !== '/legacy-exams') ||
@@ -75,6 +83,7 @@ export default function SenChatFloatingBubble() {
   )
 
   const isExcluded = Boolean(
+    isFepn ||
     isBreatheHost ||
     isExamRoom ||
     pathname?.startsWith('/new-focus') ||
@@ -91,9 +100,7 @@ export default function SenChatFloatingBubble() {
     pathname?.startsWith('/new-sign') ||
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/seb-login') ||
-    pathname?.startsWith('/fepn-login') ||
     pathname?.startsWith('/new-reset-password') ||
-    pathname?.startsWith('/fepn-reset-password') ||
     pathname?.startsWith('/breathe-u')
   )
 

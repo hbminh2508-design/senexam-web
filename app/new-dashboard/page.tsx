@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Component } from 'react'
+import React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Baloo_2, Nunito } from 'next/font/google'

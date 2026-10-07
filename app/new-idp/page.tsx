@@ -1,7 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, Component } from 'react'
-import dynamic from 'next/dynamic'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'

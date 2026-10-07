@@ -286,6 +286,13 @@ export default function MobileBottomNav() {
     typeof window !== 'undefined' &&
     (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
 
+  const isFepn = Boolean(
+    pathname?.startsWith('/fepn-') ||
+    pathname?.startsWith('/tsv-fepn') ||
+    (typeof window !== 'undefined' &&
+      (window.location.hostname.includes('fepn.') || window.location.hostname.includes('tsv.fepn.')))
+  )
+
   const isExamRoom = Boolean(
     (pathname?.startsWith('/new-exams/') && pathname !== '/new-exams') ||
     (pathname?.startsWith('/legacy-exams/') && pathname !== '/legacy-exams') ||
@@ -293,6 +300,7 @@ export default function MobileBottomNav() {
   )
 
   const isExcluded = Boolean(
+    isFepn ||
     isBreatheHost ||
     isExamRoom ||
     pathname?.startsWith('/new-focus') ||
@@ -302,20 +310,16 @@ export default function MobileBottomNav() {
     pathname?.startsWith('/new-senai-studio') ||
     pathname?.startsWith('/legacy-senai-studio') ||
     pathname?.startsWith('/senai-studio') ||
+    pathname?.startsWith('/new-setup-courses') ||
     pathname?.startsWith('/new-setup-course') ||
     pathname?.startsWith('/new-idp') ||
+    pathname?.startsWith('/idp') ||
     pathname?.startsWith('/new-sign') ||
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/seb-login') ||
-    pathname?.startsWith('/fepn-login') ||
     pathname?.startsWith('/new-reset-password') ||
-    pathname?.startsWith('/fepn-reset-password') ||
     pathname?.startsWith('/breathe-u')
   )
-
-  if (isExcluded) {
-    return null
-  }
 
   const isHomeActive = pathname === '/' || pathname === '/new-dashboard' || pathname === '/dashboard'
   const isExamsActive = pathname?.startsWith('/new-exams')
@@ -337,6 +341,11 @@ export default function MobileBottomNav() {
 
   const handleToggleSenChat = () => {
     window.dispatchEvent(new CustomEvent('toggle-sen-chat'))
+  }
+
+  // Luôn đặt early return sau tất cả các React Hooks để tuân thủ 100% Rules of Hooks
+  if (isExcluded) {
+    return null
   }
 
   return (
@@ -496,7 +505,7 @@ export default function MobileBottomNav() {
                         const isExternal = item.href.startsWith('http')
                         const extraProps = isExternal
                           ? { target: '_blank', rel: 'noopener noreferrer' }
-                          : item.href === '/new-setup-course'
+                          : item.href === '/new-setup-courses' || item.href === '/new-setup-course'
                           ? { prefetch: false }
                           : {}
 

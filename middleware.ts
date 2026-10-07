@@ -257,6 +257,18 @@ export function middleware(request: NextRequest) {
       url.pathname = '/new-media'
       return applySecurityHeaders(NextResponse.redirect(url))
     }
+    if (pathname === '/idp') {
+      url.pathname = '/new-idp'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/new-sign') {
+      url.pathname = '/new-idp'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/setup-course' || pathname === '/setup-courses' || pathname === '/new-setup-course') {
+      url.pathname = '/new-setup-courses'
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
   }
 
   // 4.7 Đường dẫn dạng /fepn- (áp dụng trên mọi domain/subdomain)
@@ -513,9 +525,9 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Tự động chuyển hướng /login sang /new-sign trên domain chính
+  // Tự động chuyển hướng /login sang /new-idp trên domain chính
   if (!isBreatheUSubdomain && pathname === '/login') {
-    url.pathname = '/new-sign'
+    url.pathname = '/new-idp'
     return applySecurityHeaders(NextResponse.redirect(url))
   }
 
