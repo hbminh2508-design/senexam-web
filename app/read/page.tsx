@@ -43,6 +43,7 @@ import {
   RefreshCw,
   Sliders,
   ExternalLink,
+  Brain,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-read-heading' })
@@ -221,6 +222,8 @@ export default function SenReadPage() {
   const [aiGeneratedChapters, setAiGeneratedChapters] = useState<
     { chapter_number: number; title: string; content: string }[]
   >([])
+  const [isDeepThink, setIsDeepThink] = useState<boolean>(false)
+  const [lastAiModelUsed, setLastAiModelUsed] = useState<string | null>(null)
 
   // Image Insert / Edit Modal on Canvas
   const [imageModalData, setImageModalData] = useState<{
@@ -490,11 +493,13 @@ export default function SenReadPage() {
           text: activeChapter.content,
           sourceLang: displayedLang,
           targetLang,
+          deepThink: isDeepThink,
         }),
       })
 
       if (!res.ok) throw new Error('Dịch thất bại')
       const data = await res.json()
+      if (data.modelUsed) setLastAiModelUsed(data.modelUsed)
 
       // Update chapter translation in state
       if (readingBook) {
@@ -535,6 +540,7 @@ export default function SenReadPage() {
         body: JSON.stringify({
           action: 'segment_chapters',
           text: rawManuscript,
+          deepThink: isDeepThink,
         }),
       })
 
@@ -542,6 +548,7 @@ export default function SenReadPage() {
       const data = await res.json()
       if (Array.isArray(data.chapters) && data.chapters.length > 0) {
         setAiGeneratedChapters(data.chapters)
+        setLastAiModelUsed(data.modelUsed || (isDeepThink ? 'gemini-3.8-flash' : 'gemini-3.5-flash-lite'))
       } else {
         alert('AI không tìm thấy cấu trúc chương, đã chuyển thành 1 chương duy nhất.')
       }
@@ -1025,8 +1032,27 @@ export default function SenReadPage() {
 
             {/* Translation & Chapter Navigation */}
             <div className="flex items-center gap-2">
-              {/* Nút Dịch Thuật AI */}
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-white/10 border border-white/15">
+              {/* Nút Dịch Thuật AI & Deep Think */}
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/10 border border-white/15">
+                <button
+                  onClick={() => setIsDeepThink((prev) => !prev)}
+                  className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    isDeepThink
+                      ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title={
+                    isDeepThink
+                      ? 'Deep Think ĐANG BẬT: Dùng gemini-3.8-flash cho suy luận và dịch thuật'
+                      : 'Deep Think TẮT: Dùng gemini-3.5-flash-lite siêu nhanh'
+                  }
+                >
+                  <Brain className="h-3 w-3" />
+                  <span className="hidden sm:inline">{isDeepThink ? 'Deep Think (3.8)' : '3.5-Lite'}</span>
+                </button>
+
+                <div className="h-3 w-px bg-white/20" />
+
                 <button
                   onClick={() => setDisplayedLang('vi')}
                   className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all ${
@@ -1347,26 +1373,55 @@ export default function SenReadPage() {
 
               {/* Bản thảo nội dung */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Nội dung bản thảo thô</label>
 
-                  {/* Kích hoạt AI chia chương */}
-                  <button
-                    type="button"
-                    onClick={handleRunAiSegmentation}
-                    disabled={isAiProcessing}
-                    className="text-xs px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold flex items-center gap-1 shadow-sm hover:opacity-90 disabled:opacity-50 transition-all"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    <span>{isAiProcessing ? 'AI đang phân tích...' : 'AI tự chia chương & chèn minh họa'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Nút Bật / Tắt Deep Think */}
+                    <button
+                      type="button"
+                      onClick={() => setIsDeepThink((prev) => !prev)}
+                      className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 border transition-all ${
+                        isDeepThink
+                          ? 'bg-purple-600 text-white border-purple-500 shadow-sm shadow-purple-500/30'
+                          : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                      title="Bật Deep Think để dùng gemini-3.8-flash cho suy luận văn học chuyên sâu; Tắt sẽ dùng gemini-3.5-flash-lite"
+                    >
+                      <Brain className="h-3.5 w-3.5 text-purple-400" />
+                      <span>Deep Think: {isDeepThink ? 'BẬT (3.8)' : 'TẮT (3.5-Lite)'}</span>
+                    </button>
+
+                    {/* Kích hoạt AI chia chương */}
+                    <button
+                      type="button"
+                      onClick={handleRunAiSegmentation}
+                      disabled={isAiProcessing}
+                      className={`text-xs px-3.5 py-1 rounded-full text-white font-bold flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 ${
+                        isDeepThink
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+                          : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'
+                      }`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>
+                        {isAiProcessing
+                          ? isDeepThink
+                            ? 'Deep Think 3.8 đang suy luận...'
+                            : 'AI 3.5-Lite đang phân tích...'
+                          : isDeepThink
+                          ? 'Deep Think Chia Chương (3.8)'
+                          : 'AI Chia Chương (3.5-Lite)'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
 
                 <textarea
                   value={rawManuscript}
                   onChange={(e) => setRawManuscript(e.target.value)}
                   rows={7}
-                  placeholder="Dán toàn bộ nội dung bản thảo hoặc sách truyện vào đây... Nếu bấm 'AI tự chia chương', AI sẽ tự động bóc tách thành các hồi và chừa các vị trí chèn hình minh họa [ILLUSTRATION: ...]."
+                  placeholder="Dán toàn bộ nội dung bản thảo hoặc sách truyện vào đây... Nếu bấm 'AI Chia Chương', AI sẽ tự động bóc tách thành các hồi và chừa các vị trí chèn hình minh họa [ILLUSTRATION: ...]."
                   className="w-full p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none font-mono"
                 />
               </div>
@@ -1374,9 +1429,16 @@ export default function SenReadPage() {
               {/* Preview các chương AI đã chia */}
               {aiGeneratedChapters.length > 0 && (
                 <div className="space-y-2 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-                    <CheckCircle2 className="h-4 w-4" /> AI đã chia thành {aiGeneratedChapters.length} chương thành công:
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4" /> AI đã chia thành {aiGeneratedChapters.length} chương thành công:
+                    </p>
+                    {lastAiModelUsed && (
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300">
+                        Model: {lastAiModelUsed}
+                      </span>
+                    )}
+                  </div>
                   <div className="divide-y divide-emerald-500/15 max-h-36 overflow-y-auto pr-1">
                     {aiGeneratedChapters.map((c, i) => (
                       <div key={i} className="py-1.5 text-xs text-slate-700 dark:text-slate-200">

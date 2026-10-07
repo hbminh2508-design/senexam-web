@@ -33,11 +33,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thiếu thông tin action' }, { status: 400 })
     }
 
-    const { action, text, sourceLang = 'vi', targetLang = 'en' } = body
+    const { action, text, sourceLang = 'vi', targetLang = 'en', deepThink = false } = body
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return NextResponse.json({ error: 'Văn bản không được để trống' }, { status: 400 })
     }
+
+    // Lựa chọn model theo yêu cầu:
+    // Mặc định: 'gemini-3.5-flash-lite'
+    // Khi kích hoạt Deep Think: 'gemini-3.8-flash'
+    const primaryModel = deepThink ? 'gemini-3.8-flash' : 'gemini-3.5-flash-lite'
+    const fallbackModel = deepThink ? 'gemini-3.5-flash-lite' : 'gemini-3.8-flash'
 
     // ----------------------------------------------------------------------------------
     // ACTION 1: SEGMENT CHAPTERS & INSERT ILLUSTRATION PLACEHOLDERS
@@ -66,16 +72,18 @@ ${text.slice(0, 30000)}
 """`
 
       let responseText = ''
+      let usedModel = primaryModel
       try {
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: primaryModel,
           contents: prompt,
         })
         responseText = response.text || ''
-      } catch (e: any) {
-        // Fallback model
+      } catch (primaryErr: any) {
+        console.warn(`[AI Read] Model ${primaryModel} gặp lỗi, chuyển sang ${fallbackModel}:`, primaryErr?.message)
+        usedModel = fallbackModel
         const fallback = await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
+          model: fallbackModel,
           contents: prompt,
         })
         responseText = fallback.text || ''
@@ -83,7 +91,6 @@ ${text.slice(0, 30000)}
 
       const parsed = parseJsonSafe<any[]>(responseText, [])
       if (!Array.isArray(parsed) || parsed.length === 0) {
-        // Fallback: nếu AI trả về định dạng văn bản thường, tự tạo 1 chương duy nhất
         return NextResponse.json({
           chapters: [
             {
@@ -92,10 +99,11 @@ ${text.slice(0, 30000)}
               content: text,
             },
           ],
+          modelUsed: usedModel,
         })
       }
 
-      return NextResponse.json({ chapters: parsed })
+      return NextResponse.json({ chapters: parsed, modelUsed: usedModel })
     }
 
     // ----------------------------------------------------------------------------------
@@ -120,21 +128,24 @@ ${text.slice(0, 25000)}
 """`
 
       let responseText = ''
+      let usedModel = primaryModel
       try {
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: primaryModel,
           contents: prompt,
         })
         responseText = response.text || ''
-      } catch (e: any) {
+      } catch (primaryErr: any) {
+        console.warn(`[AI Read] Model ${primaryModel} gặp lỗi khi dịch, chuyển sang ${fallbackModel}:`, primaryErr?.message)
+        usedModel = fallbackModel
         const fallback = await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
+          model: fallbackModel,
           contents: prompt,
         })
         responseText = fallback.text || ''
       }
 
-      return NextResponse.json({ translated_text: responseText.trim() })
+      return NextResponse.json({ translated_text: responseText.trim(), modelUsed: usedModel })
     }
 
     // ----------------------------------------------------------------------------------
@@ -151,13 +162,13 @@ ${text.slice(0, 15000)}
 """`
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: primaryModel,
         contents: prompt,
       })
       const suggestions = parseJsonSafe<string[]>(response.text || '', [
         'Khung cảnh thiên nhiên bao la dưới bầu trời chiều',
       ])
-      return NextResponse.json({ suggestions })
+      return NextResponse.json({ suggestions, modelUsed: primaryModel })
     }
 
     return NextResponse.json({ error: 'Action không được hỗ trợ' }, { status: 400 })
