@@ -225,12 +225,34 @@ export function middleware(request: NextRequest) {
       url.pathname = '/new-senai-studio'
       return applySecurityHeaders(NextResponse.redirect(url))
     }
-    if (pathname === '/submissions' || pathname.startsWith('/submissions/')) {
-      url.pathname = pathname.replace('/submissions', '/new-submissions')
+    if (
+      pathname === '/submissions' ||
+      pathname.startsWith('/submissions/') ||
+      pathname === '/history' ||
+      pathname.startsWith('/history/') ||
+      pathname === '/new-submissions' ||
+      pathname.startsWith('/new-submissions/') ||
+      pathname === '/new-history' ||
+      pathname.startsWith('/new-history/')
+    ) {
+      const match = pathname.match(/^\/(?:new-)?(?:submissions|history)(?:\/(.+))?$/)
+      const subId = match?.[1]
+      url.pathname = subId ? `/new-history-submissions/${subId}` : '/new-history-submissions'
       return applySecurityHeaders(NextResponse.redirect(url))
     }
-    if (pathname === '/vip') {
-      url.pathname = '/new-vip'
+    if (pathname === '/vip' || pathname === '/new-vip') {
+      url.pathname = '/new-pay'
+      url.searchParams.set('tab', 'vip')
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/vi-sen' || pathname === '/new-sencash') {
+      url.pathname = '/new-pay'
+      url.searchParams.set('tab', 'wallet')
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/senai' || pathname === '/new-senai') {
+      url.pathname = '/new-pay'
+      url.searchParams.set('tab', 'quota')
       return applySecurityHeaders(NextResponse.redirect(url))
     }
     if (pathname === '/tinhdiem') {
@@ -247,10 +269,6 @@ export function middleware(request: NextRequest) {
     }
     if (pathname === '/sen-cap-lai-mat-khau') {
       url.pathname = '/new-reset-password'
-      return applySecurityHeaders(NextResponse.redirect(url))
-    }
-    if (pathname === '/vi-sen') {
-      url.pathname = '/new-sencash'
       return applySecurityHeaders(NextResponse.redirect(url))
     }
     if (pathname === '/forum' || pathname.startsWith('/forum/') || pathname === '/mes') {

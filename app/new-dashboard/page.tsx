@@ -107,10 +107,10 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'study',
   },
   {
-    key: 'new-history',
-    title: 'Lịch sử bài thi',
-    description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết và tải đề thi PDF.',
-    href: '/new-history',
+    key: 'new-history-submissions',
+    title: 'Lịch sử Bài nộp',
+    description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết, đối chiếu đáp án và tải đề thi PDF.',
+    href: '/new-history-submissions',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     badge: 'Hồ sơ',
     icon: BadgeCheck,
@@ -128,23 +128,23 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
   {
     key: 'senai-quota',
-    title: 'Quản Lý Quota SenAI',
-    description: 'Bảng theo dõi hạn mức câu hỏi ngày, gói cước SenAI và quyền lợi Sen Max.',
-    href: '/new-senai',
+    title: 'Hạn Mức & Gói Hỏi Bài',
+    description: 'Bảng theo dõi hạn mức câu hỏi giải bài học tập và quản lý các gói hỏi bài thông minh.',
+    href: '/new-pay?tab=quota',
     tone: 'from-[#EC4899] via-[#A855F7] to-[#6366F1]',
-    badge: 'Q1 Quota',
+    badge: 'Hạn mức',
     icon: Brain,
     category: 'senai',
   },
   {
-    key: 'submissions',
-    title: 'Quản lý bài thi',
-    description: 'Tra cứu, đối chiếu đáp án chi tiết và xem lại các bài thi đã làm.',
-    href: '/new-submissions',
+    key: 'sen-store',
+    title: 'Cửa Hàng Sen',
+    description: 'Nạp SenCash, nâng cấp Hội viên VIP không quảng cáo và kích hoạt các đặc quyền học tập.',
+    href: '/new-pay?tab=vip',
     tone: 'from-[#6366F1] via-[#8B5CF6] to-[#EC4899]',
-    badge: 'Mới',
-    icon: FileCheck,
-    category: 'study',
+    badge: 'Cửa hàng',
+    icon: Crown,
+    category: 'senai',
   },
   {
     key: 'seb-security',
@@ -266,7 +266,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'vip',
     title: 'Gói nâng cấp VIP',
     description: 'Mở khoá trọn vẹn đặc quyền AI, đề độc quyền và hỗ trợ 24/7.',
-    href: '/new-vip',
+    href: '/new-pay?tab=vip',
     tone: 'from-[#FBBF24] via-[#F59E0B] to-[#D97706]',
     badge: 'Ưu đãi',
     icon: Crown,
@@ -710,7 +710,7 @@ function NewDashboardContent() {
             <div className="flex items-center gap-1.5 shrink-0">
               {/* VIP Label Badge */}
               <Link
-                href="/new-vip"
+                href="/new-pay?tab=vip"
                 className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-600 dark:text-amber-400 shadow-xs active:scale-95 transition"
                 title={`${vipPlanName} • ${vipLabel}`}
               >
@@ -720,7 +720,7 @@ function NewDashboardContent() {
 
               {/* SenCash Balance */}
               <Link
-                href="/new-sencash"
+                href="/new-pay?tab=wallet"
                 className="inline-flex items-center gap-1 rounded-full border border-pink-500/30 bg-pink-500/10 px-2.5 py-1 text-[11px] font-black text-pink-600 dark:text-pink-400 shadow-xs active:scale-95 transition"
                 title={`${senCash.toLocaleString('vi-VN')} SenCash`}
               >
@@ -831,7 +831,7 @@ function NewDashboardContent() {
               </button>
 
               <Link
-                href="/new-history"
+                href="/new-history-submissions"
                 className="rounded-2xl border border-black/5 dark:border-white/5 bg-teal-500/10 dark:bg-teal-500/15 p-2.5 text-center active:scale-95 transition"
               >
                 <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300">
@@ -865,7 +865,7 @@ function NewDashboardContent() {
                 />
               </div>
               <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
-                <Link href="/new-history" className="text-teal-600 dark:text-teal-400 font-bold hover:underline">
+                <Link href="/new-history-submissions" className="text-teal-600 dark:text-teal-400 font-bold hover:underline">
                   Xem chi tiết lịch sử bài làm →
                 </Link>
                 <span className="font-semibold">
@@ -1231,7 +1231,7 @@ function NewDashboardContent() {
           {/* 3 Metric Cards */}
           <div className="relative mt-6 grid gap-3.5 sm:grid-cols-3">
             <Link
-              href="/new-history"
+              href="/new-history-submissions"
               className="rounded-2xl border border-black/10 dark:border-white/10 bg-amber-500/10 dark:bg-amber-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group"
             >
               <div className="flex items-center justify-between">
@@ -1292,7 +1292,7 @@ function NewDashboardContent() {
 
               <div className="shrink-0 flex items-center gap-3">
                 <Link
-                  href="/new-vip"
+                  href="/new-pay?tab=vip"
                   className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 hover:scale-105 active:scale-95 transition"
                 >
                   <Sparkles className="h-4 w-4" /> Nâng Cấp VIP Ngay
@@ -1474,7 +1474,7 @@ function NewDashboardContent() {
               {/* 2 Nút Hành Động Lớn: Ví Sen & Sen VIP */}
               <div className="mt-4 grid grid-cols-2 gap-2.5 pt-3 border-t border-black/10 dark:border-white/10">
                 <Link
-                  href="/new-sencash"
+                  href="/new-pay?tab=wallet"
                   className="flex flex-col justify-between rounded-2xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-3 transition hover:scale-[1.02] group"
                 >
                   <div className="flex items-center justify-between text-amber-700 dark:text-amber-300">
@@ -1492,7 +1492,7 @@ function NewDashboardContent() {
                 </Link>
 
                 <Link
-                  href="/new-vip"
+                  href="/new-pay?tab=vip"
                   className="flex flex-col justify-between rounded-2xl border border-rose-500/20 bg-rose-500/10 dark:bg-rose-500/15 p-3 transition hover:scale-[1.02] group"
                 >
                   <div className="flex items-center justify-between text-rose-700 dark:text-rose-300">
@@ -1513,7 +1513,7 @@ function NewDashboardContent() {
               {/* Lối tắt: Lịch sử làm bài, Kho đề, Soạn đề & Hồ sơ cá nhân */}
               <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Link
-                  href="/new-history"
+                  href="/new-history-submissions"
                   className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
                 >
                   <BadgeCheck className="h-3.5 w-3.5 text-teal-500" /> Lịch sử
