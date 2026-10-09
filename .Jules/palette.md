@@ -1,0 +1,1 @@
+## 2026-10-09 - Add aria-labels to icon-only buttons\n**Learning:** Icon-only buttons often lack accessible names. It's important to add `aria-label` or `title` to improve accessibility for screen readers.\n**Action:** Always check icon-only buttons for accessibility attributes like `aria-label` or `title`.
