@@ -582,6 +582,7 @@ function IdpAuthContent() {
           onClick={toggleDarkMode}
           className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 shadow-sm backdrop-blur-xl transition hover:scale-105 cursor-pointer"
           title="Chuyển đổi Sáng/Tối"
+          aria-label={isDark ? "Bật chế độ sáng" : "Bật chế độ tối"}
         >
           {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
         </button>
@@ -834,6 +835,7 @@ function IdpAuthContent() {
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black dark:hover:text-white cursor-pointer"
+                        aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -1103,6 +1105,7 @@ function IdpAuthContent() {
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
                             className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black dark:hover:text-white cursor-pointer"
+                            aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
                           >
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </button>
