@@ -201,6 +201,8 @@ export default function NewFocusPage() {
           <button
             type="button"
             onClick={toggleDarkMode}
+            aria-label="Chuyển đổi giao diện sáng tối"
+            title="Chuyển đổi giao diện sáng tối"
             className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
           >
             {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
@@ -279,6 +281,7 @@ export default function NewFocusPage() {
               <button
                 type="button"
                 onClick={handleResetTimer}
+                aria-label="Đặt lại đồng hồ"
                 className="flex h-14 w-14 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105 active:scale-95"
                 title="Đặt lại đồng hồ"
               >
@@ -356,6 +359,8 @@ export default function NewFocusPage() {
                 />
                 <button
                   type="submit"
+                aria-label="Thêm việc cần làm"
+                title="Thêm việc cần làm"
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 shadow transition hover:scale-105"
                 >
                   <Plus className="h-4 w-4" />
@@ -386,6 +391,8 @@ export default function NewFocusPage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteTask(task.id)}
+                      aria-label="Xóa công việc"
+                      title="Xóa công việc"
                       className="p-1 text-slate-400 hover:text-rose-500 transition"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
