@@ -348,6 +348,7 @@ export default function MobileBottomNav() {
           <button
             type="button"
             onClick={() => setShowAllFeatures(true)}
+            aria-label="Mở tất cả tính năng"
             className="flex flex-col items-center justify-center flex-1 py-1 rounded-full text-slate-700 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-400 transition"
           >
             <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20 shrink-0 aspect-square">
