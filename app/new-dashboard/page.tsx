@@ -1091,6 +1091,7 @@ function NewDashboardContent() {
                 type="button"
                 onClick={() => setShowGoogleGuide(!showGoogleGuide)}
                 title="Lợi ích bảo mật"
+                aria-label="Thông tin bảo mật"
                 className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10"
               >
                 <HelpCircle className="h-4 w-4" />
@@ -1252,6 +1253,7 @@ function NewDashboardContent() {
                     <button
                       type="button"
                       onClick={() => setShowPasswordText(!showPasswordText)}
+                      aria-label="Ẩn/hiện mật khẩu"
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
                     >
                       {showPasswordText ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -1347,6 +1349,7 @@ function NewDashboardContent() {
             <button
               type="button"
               onClick={() => setAutoRenewMessage(null)}
+              aria-label="Đóng thông báo"
               className="ml-3 rounded-lg p-1 text-amber-600 hover:bg-amber-500/20 transition cursor-pointer"
             >
               ✕
@@ -1836,6 +1839,7 @@ function NewDashboardContent() {
                   type="button"
                   onClick={() => setShowGoogleGuide(!showGoogleGuide)}
                   title="Xem thông tin bảo mật & lợi ích"
+                  aria-label="Thông tin bảo mật"
                   className="rounded-xl border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10"
                 >
                   <HelpCircle className="h-4 w-4" />
