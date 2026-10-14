@@ -115,11 +115,12 @@ export default function ProfileCompletionModal() {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <label htmlFor="fullName" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <User className="h-3.5 w-3.5 text-indigo-500" />
               Họ và Tên
             </label>
             <input
+              id="fullName"
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -130,11 +131,12 @@ export default function ProfileCompletionModal() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <label htmlFor="phone" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5 text-indigo-500" />
               Số Điện Thoại
             </label>
             <input
+              id="phone"
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -146,11 +148,12 @@ export default function ProfileCompletionModal() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <label htmlFor="className" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 <GraduationCap className="h-3.5 w-3.5 text-indigo-500" />
                 Lớp
               </label>
               <input
+                id="className"
                 type="text"
                 value={className}
                 onChange={(e) => setClassName(e.target.value)}
@@ -161,11 +164,12 @@ export default function ProfileCompletionModal() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <label htmlFor="province" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5 text-indigo-500" />
                 Tỉnh / TP
               </label>
               <input
+                id="province"
                 type="text"
                 value={province}
                 onChange={(e) => setProvince(e.target.value)}
@@ -177,11 +181,12 @@ export default function ProfileCompletionModal() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <label htmlFor="school" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5 text-indigo-500" />
               Trường Học
             </label>
             <input
+              id="school"
               type="text"
               value={school}
               onChange={(e) => setSchool(e.target.value)}
