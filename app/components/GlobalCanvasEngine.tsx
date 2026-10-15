@@ -52,11 +52,19 @@ export default function GlobalCanvasEngine() {
     let width = (canvas.width = window.innerWidth * dpr)
     let height = (canvas.height = window.innerHeight * dpr)
 
+    let resizeRafId: number | null = null
     const handleResize = () => {
-      if (!canvas) return
-      dpr = Math.min(window.devicePixelRatio || 1, 2)
-      width = canvas.width = window.innerWidth * dpr
-      height = canvas.height = window.innerHeight * dpr
+      if (resizeRafId !== null) cancelAnimationFrame(resizeRafId)
+      resizeRafId = requestAnimationFrame(() => {
+        if (!canvas) return
+        dpr = Math.min(window.devicePixelRatio || 1, 2)
+        const newW = window.innerWidth * dpr
+        const newH = window.innerHeight * dpr
+        if (canvas.width !== newW) canvas.width = newW
+        if (canvas.height !== newH) canvas.height = newH
+        width = newW
+        height = newH
+      })
     }
     window.addEventListener('resize', handleResize, { passive: true })
 
@@ -78,7 +86,6 @@ export default function GlobalCanvasEngine() {
     // Xác định bộ màu theo tuyến đường (Route-Aware Palette)
     const isAuth = pathname.includes('idp') || pathname.includes('login') || pathname.includes('sign') || pathname.includes('reset')
     const isExam = pathname.includes('exam') || pathname.includes('setup') || pathname.includes('seb')
-    const isHome = pathname === '/' || pathname === '/home'
 
     // Bảng màu thích ứng
     let colorPaletteDark: string[]
@@ -191,6 +198,7 @@ export default function GlobalCanvasEngine() {
 
     return () => {
       cancelAnimationFrame(animId)
+      if (resizeRafId !== null) cancelAnimationFrame(resizeRafId)
       window.removeEventListener('resize', handleResize)
       document.removeEventListener('visibilitychange', handleVisibility)
     }

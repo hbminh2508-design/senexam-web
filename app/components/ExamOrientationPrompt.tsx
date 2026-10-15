@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { RotateCw, Smartphone, Monitor, X, ChevronDown, CheckCircle2, Sparkles } from 'lucide-react'
+import { RotateCw, X, ChevronDown, Sparkles } from 'lucide-react'
 
 export default function ExamOrientationPrompt() {
   const pathname = usePathname()
@@ -19,22 +19,30 @@ export default function ExamOrientationPrompt() {
     pathname?.startsWith('/new-history')
 
   useEffect(() => {
-    if (!isExamRelated) return
+    if (!isExamRelated || typeof window === 'undefined') return
+
+    const mqlMobile = window.matchMedia('(max-width: 768px)')
+    const mqlPortrait = window.matchMedia('(orientation: portrait)')
 
     const checkOrientation = () => {
-      const mobile = window.innerWidth <= 768
-      const portrait = window.innerHeight > window.innerWidth
-      setIsMobile(mobile)
-      setIsPortrait(portrait)
+      setIsMobile(mqlMobile.matches)
+      setIsPortrait(mqlPortrait.matches)
     }
 
-    checkOrientation()
-    window.addEventListener('resize', checkOrientation)
-    window.addEventListener('orientationchange', checkOrientation)
+    // Defer initial layout query to after paint to avoid forced reflow
+    const rafId = requestAnimationFrame(checkOrientation)
+
+    const handler = () => {
+      checkOrientation()
+    }
+
+    mqlMobile.addEventListener('change', handler)
+    mqlPortrait.addEventListener('change', handler)
 
     return () => {
-      window.removeEventListener('resize', checkOrientation)
-      window.removeEventListener('orientationchange', checkOrientation)
+      cancelAnimationFrame(rafId)
+      mqlMobile.removeEventListener('change', handler)
+      mqlPortrait.removeEventListener('change', handler)
     }
   }, [isExamRelated])
 
@@ -74,15 +82,15 @@ export default function ExamOrientationPrompt() {
               </div>
               <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white text-[9px] font-black">2</span>
-                <span>Bật <strong>"Yêu cầu trang web cho máy tính"</strong> 💻</span>
+                <span>Bật <strong>&quot;Yêu cầu trang web cho máy tính&quot;</strong> 💻</span>
               </div>
             </div>
 
             {/* Hướng dẫn chi tiết toggle */}
             {showGuide && (
               <div className="mt-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-2.5 text-[10px] text-slate-600 dark:text-slate-300 space-y-1 animate-in fade-in">
-                <p>• <strong>Chrome / Cốc Cốc:</strong> Nhấn nút 3 chấm góc trên bên phải → Tích chọn <em>"Trang web cho máy tính"</em>.</p>
-                <p>• <strong>Safari (iPhone):</strong> Nhấn biểu tượng <em>aA</em> góc thanh địa chỉ → Chọn <em>"Yêu cầu trang web cho máy tính"</em>.</p>
+                <p>• <strong>Chrome / Cốc Cốc:</strong> Nhấn nút 3 chấm góc trên bên phải → Tích chọn <em>&quot;Trang web cho máy tính&quot;</em>.</p>
+                <p>• <strong>Safari (iPhone):</strong> Nhấn biểu tượng <em>aA</em> góc thanh địa chỉ → Chọn <em>&quot;Yêu cầu trang web cho máy tính&quot;</em>.</p>
               </div>
             )}
 

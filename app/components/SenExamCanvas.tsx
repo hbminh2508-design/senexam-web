@@ -55,14 +55,17 @@ export default function SenExamCanvas({ isDark = false, className = '' }: SenExa
       })
     }
 
-    // Tương tác chuột nhẹ nhàng
+    // Tương tác chuột nhẹ nhàng (cache getBoundingClientRect để tránh forced reflow trên mỗi pixel di chuyển chuột)
     let mouseX = -1000
     let mouseY = -1000
+    let cachedRect: DOMRect | null = null
 
     const handleMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect()
-      mouseX = e.clientX - rect.left
-      mouseY = e.clientY - rect.top
+      if (!cachedRect) {
+        cachedRect = canvas.getBoundingClientRect()
+      }
+      mouseX = e.clientX - cachedRect.left
+      mouseY = e.clientY - cachedRect.top
     }
 
     const handleMouseLeave = () => {
@@ -70,13 +73,23 @@ export default function SenExamCanvas({ isDark = false, className = '' }: SenExa
       mouseY = -1000
     }
 
+    const handleScroll = () => {
+      cachedRect = null
+    }
+
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
     window.addEventListener('mouseleave', handleMouseLeave, { passive: true })
+    window.addEventListener('scroll', handleScroll, { passive: true })
 
+    let resizeTimer: number | null = null
     const handleResize = () => {
-      if (!canvas) return
-      width = canvas.width = canvas.parentElement?.clientWidth || window.innerWidth
-      height = canvas.height = canvas.parentElement?.clientHeight || window.innerHeight
+      cachedRect = null
+      if (resizeTimer !== null) cancelAnimationFrame(resizeTimer)
+      resizeTimer = requestAnimationFrame(() => {
+        if (!canvas) return
+        width = canvas.width = canvas.parentElement?.clientWidth || window.innerWidth
+        height = canvas.height = canvas.parentElement?.clientHeight || window.innerHeight
+      })
     }
 
     window.addEventListener('resize', handleResize, { passive: true })
@@ -175,8 +188,10 @@ export default function SenExamCanvas({ isDark = false, className = '' }: SenExa
 
     return () => {
       cancelAnimationFrame(animationFrameId)
+      if (resizeTimer !== null) cancelAnimationFrame(resizeTimer)
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseleave', handleMouseLeave)
+      window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', handleResize)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
