@@ -1,12 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, type ComponentType } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
-import { getModernThemeVars, getAccentHex } from '@/app/components/modernTheme'
+import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import {
   ShieldCheck,
@@ -61,13 +61,39 @@ import {
   Sliders,
   FileCode,
   UserCheck,
+  Compass,
+  CreditCard,
+  Rocket,
+  BadgeCheck,
+  School,
+  MapPin,
+  MessageCircle,
+  Video,
+  Star,
+  PlaySquare,
+  FlaskConical,
+  Box,
+  Brain,
 } from 'lucide-react'
 
-const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-admdash-heading' })
-const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-admdash-body' })
+const headingFont = Baloo_2({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-newdash-heading',
+  display: 'swap',
+  preload: false,
+  fallback: ['system-ui', 'sans-serif'],
+})
+
+const bodyFont = Nunito({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-newdash-body',
+  display: 'swap',
+  preload: false,
+  fallback: ['system-ui', 'sans-serif'],
+})
 
 type Perspective = 'admin' | 'student' | 'teacher'
-type AdminSection = 'overview' | 'sessions' | 'provisioning' | 'exams' | 'users' | 'giftcodes' | 'announcements' | 'settings'
+type AdminWorkbenchTab = 'sessions' | 'batch_provision' | 'single_provision' | 'exams' | 'users' | 'giftcodes'
 
 interface SessionItem {
   id: string
@@ -86,14 +112,219 @@ interface SessionItem {
   created_at: string
 }
 
+type ActionCategory = 'admin_core' | 'study' | 'senai' | 'community'
+
+interface QuickAction {
+  key: string
+  title: string
+  description: string
+  href?: string
+  actionTab?: AdminWorkbenchTab
+  tone: string
+  badge?: string
+  icon: ComponentType<{ className?: string }>
+  category: ActionCategory
+}
+
+const ADMIN_ACTION_CATEGORIES: { key: ActionCategory; label: string; icon: string }[] = [
+  { key: 'admin_core', label: 'An Ninh & Quản Trị Hệ Thống', icon: '⚡' },
+  { key: 'study', label: 'Khảo Thí & Ngân Hàng Đề Thi', icon: '📚' },
+  { key: 'senai', label: 'SenAI & Trí Tuệ Nhân Tạo', icon: '🤖' },
+  { key: 'community', label: 'Quà Tặng, Thông Báo & Tiện Ích', icon: '🎁' },
+]
+
+const ADMIN_ACTIONS: QuickAction[] = [
+  {
+    key: 'act-sessions',
+    title: 'Quản Lý Phiên Đăng Nhập',
+    description: 'Giám sát phiên làm việc trực tuyến, thiết bị, IP mạng và ngắt kết nối từ xa tức thì.',
+    actionTab: 'sessions',
+    tone: 'from-[#3B82F6] via-[#6366F1] to-[#8B5CF6]',
+    badge: 'Bảo Mật',
+    icon: Smartphone,
+    category: 'admin_core',
+  },
+  {
+    key: 'act-batch-provision',
+    title: 'Cấp Hàng Loạt 0001 - 9999',
+    description: 'Tạo hàng loạt tài khoản học sinh chạy theo dải số tuần tự kèm tên miền tùy chọn.',
+    actionTab: 'batch_provision',
+    tone: 'from-[#EF476F] via-[#F78C6C] to-[#FFD166]',
+    badge: 'Nổi Bật',
+    icon: Users,
+    category: 'admin_core',
+  },
+  {
+    key: 'act-single-provision',
+    title: 'Cấp 1 Tài Khoản Trực Tiếp',
+    description: 'Khởi tạo nhanh tài khoản với phân quyền Giáo viên, Quản trị hoặc Học sinh VIP.',
+    actionTab: 'single_provision',
+    tone: 'from-[#10B981] via-[#059669] to-[#047857]',
+    badge: 'Trực Tiếp',
+    icon: UserPlus,
+    category: 'admin_core',
+  },
+  {
+    key: 'act-user-roles',
+    title: 'Phân Quyền & Cấp Sen VIP',
+    description: 'Nâng cấp gói Premium / Sen One, cộng SenCash và quản lý vai trò thành viên.',
+    actionTab: 'users',
+    tone: 'from-[#F59E0B] via-[#D97706] to-[#B45309]',
+    badge: 'Đặc Quyền',
+    icon: ShieldCheck,
+    category: 'admin_core',
+  },
+  {
+    key: 'act-new-exams',
+    title: 'Kho Đề Thi KaTeX & PDF',
+    description: 'Ngân hàng đề thi bám sát ma trận 2026, hỗ trợ đề truyền thống PDF 2 cột và KaTeX.',
+    href: '/new-exams',
+    actionTab: 'exams',
+    tone: 'from-[#FFD166] via-[#F9A03F] to-[#EF476F]',
+    badge: 'Kho Đề',
+    icon: Rocket,
+    category: 'study',
+  },
+  {
+    key: 'act-setup-course',
+    title: 'Soạn Đề & Khóa Học SEB',
+    description: 'Soạn đề KaTeX trực tiếp, tải đề PDF, cấu hình kỳ thi chống gian lận SEB v3.8.',
+    href: '/new-setup-courses',
+    tone: 'from-[#10B981] via-[#059669] to-[#047857]',
+    badge: 'Soạn Đề',
+    icon: Sparkles,
+    category: 'study',
+  },
+  {
+    key: 'act-history-submissions',
+    title: 'Lịch Sử Bài Nộp Hệ Thống',
+    description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết, đối chiếu đáp án toàn bộ thí sinh.',
+    href: '/new-history-submissions',
+    tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
+    badge: 'Khảo Thí',
+    icon: BadgeCheck,
+    category: 'study',
+  },
+  {
+    key: 'act-senai-quota',
+    title: 'Hạn Mức SenAI & Quota',
+    description: 'Quản trị gói SenAI Studio Ultra/Max, định mức câu hỏi hàng ngày và token AI.',
+    href: '/new-pay?tab=quota',
+    tone: 'from-[#8B5CF6] via-[#A855F7] to-[#EC4899]',
+    badge: 'AI Engine',
+    icon: Brain,
+    category: 'senai',
+  },
+  {
+    key: 'act-giftcodes',
+    title: 'Kho Mã Quà Tặng (Giftcodes)',
+    description: 'Tạo mã kích hoạt Sen VIP và tặng SenCash cho học sinh nạp thưởng sự kiện.',
+    actionTab: 'giftcodes',
+    tone: 'from-[#EC4899] via-[#F43F5E] to-[#FB7185]',
+    badge: 'Giftcode',
+    icon: Gift,
+    category: 'community',
+  },
+  {
+    key: 'act-announcement',
+    title: 'Phát Hành Thông Báo Hệ Thống',
+    description: 'Đăng tải bản tin, hướng dẫn ôn thi và thông báo quan trọng đến học sinh.',
+    href: '/new-announcement',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
+    badge: 'Bản Tin',
+    icon: Megaphone,
+    category: 'community',
+  },
+]
+
+// Dữ liệu mô phỏng cho góc nhìn Sinh viên
+const STUDENT_ACTIONS: QuickAction[] = [
+  {
+    key: 'st-new-exams',
+    title: 'Kho Đề Thi Mới 2026',
+    description: 'Khám phá ngân hàng đề thi bám sát ma trận 2026 và làm bài trực tuyến.',
+    href: '/new-exams',
+    tone: 'from-[#FFD166] via-[#F9A03F] to-[#EF476F]',
+    badge: 'Mới',
+    icon: Rocket,
+    category: 'study',
+  },
+  {
+    key: 'st-history',
+    title: 'Lịch Sử Bài Làm',
+    description: 'Tra cứu kết quả thi, xem lại bảng điểm và lời giải chi tiết từng câu hỏi.',
+    href: '/new-history-submissions',
+    tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
+    badge: 'Hồ Sơ',
+    icon: BadgeCheck,
+    category: 'study',
+  },
+  {
+    key: 'st-senai',
+    title: 'Trợ Lý Gia Sư SenAI',
+    description: 'Hỏi bài tập khó, phân tích đề thi và nhận hướng dẫn giải từng bước 24/7.',
+    href: '/new-dashboard',
+    tone: 'from-[#8B5CF6] via-[#A855F7] to-[#EC4899]',
+    badge: 'AI 24/7',
+    icon: Brain,
+    category: 'senai',
+  },
+  {
+    key: 'st-community',
+    title: 'Bảng Tin & Sự Kiện',
+    description: 'Cập nhật tin tức kỳ thi tốt nghiệp THPT, lịch thi thử và mẹo làm bài.',
+    href: '/new-announcement',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
+    badge: 'Tin Mới',
+    icon: Megaphone,
+    category: 'community',
+  },
+]
+
+// Dữ liệu mô phỏng cho góc nhìn Giảng viên
+const TEACHER_ACTIONS: QuickAction[] = [
+  {
+    key: 'tc-setup',
+    title: 'Soạn Đề & Ngân Hàng Câu Hỏi',
+    description: 'Biên soạn đề KaTeX trực tiếp, tải đề PDF và quản lý đề theo lớp học.',
+    href: '/new-setup-courses',
+    tone: 'from-[#10B981] via-[#059669] to-[#047857]',
+    badge: 'Soạn Đề',
+    icon: Sparkles,
+    category: 'study',
+  },
+  {
+    key: 'tc-exams',
+    title: 'Quản Lý Phòng Thi SEB',
+    description: 'Tạo mã phòng thi, cấu hình chống gian lận Safe Exam Browser cho thí sinh.',
+    href: '/new-exams',
+    tone: 'from-[#3B82F6] via-[#6366F1] to-[#8B5CF6]',
+    badge: 'Giám Thị',
+    icon: ShieldCheck,
+    category: 'study',
+  },
+  {
+    key: 'tc-results',
+    title: 'Bảng Điểm & Phổ Điểm Lớp',
+    description: 'Theo dõi tiến độ nộp bài của học sinh, xuất bảng điểm Excel và phân tích ma trận.',
+    href: '/new-history-submissions',
+    tone: 'from-[#F59E0B] via-[#D97706] to-[#B45309]',
+    badge: 'Thống Kê',
+    icon: Activity,
+    category: 'study',
+  },
+]
+
 export default function NewAdminDashboardPage() {
   const router = useRouter()
   const { themeColor } = useNewUiPrefs()
 
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
+  const [isEcoMode, setIsEcoMode] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [userProfile, setUserProfile] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Góc nhìn hiển thị (Perspective Switcher: Admin | Sinh viên | Giảng viên)
   const [perspective, setPerspective] = useState<Perspective>(() => {
@@ -103,8 +334,8 @@ export default function NewAdminDashboardPage() {
     return 'admin'
   })
 
-  // Phân hệ đang chọn trong Admin Mode
-  const [activeSection, setActiveSection] = useState<AdminSection>('overview')
+  // Tab đang kích hoạt ở Bàn Làm Việc Phía Dưới (Admin Workbench)
+  const [workbenchTab, setWorkbenchTab] = useState<AdminWorkbenchTab>('sessions')
 
   // Thống kê tổng hợp (KPI Metrics)
   const [stats, setStats] = useState({
@@ -112,7 +343,7 @@ export default function NewAdminDashboardPage() {
     totalExams: 0,
     totalSubmissions: 0,
     totalSenCash: 0,
-    totalSessions: 0,
+    totalSessions: 1,
   })
 
   // ==========================================
@@ -140,9 +371,10 @@ export default function NewAdminDashboardPage() {
 
   // 4. Giftcodes
   const [giftcodes, setGiftcodes] = useState<any[]>([])
-  const [newCodeType, setNewCodeType] = useState<'sencash' | 'vip'>('vip')
+  const [newCodeType, setNewCodeType] = useState<'sencash' | 'vip_days'>('vip_days')
   const [newCodeAmount, setNewCodeAmount] = useState('30')
   const [newCodeMaxUses, setNewCodeMaxUses] = useState('10')
+  const [newCodeNote, setNewCodeNote] = useState('Quà tặng học sinh')
   const [codeActionLoading, setCodeActionLoading] = useState(false)
 
   // 5. Cấp tài khoản đơn lẻ (Single Provisioning)
@@ -154,7 +386,7 @@ export default function NewAdminDashboardPage() {
   const [singleClass, setSingleClass] = useState('')
   const [singleSchool, setSingleSchool] = useState('')
   const [singleProvince, setSingleProvince] = useState('')
-  const [singlePlanTier, setSinglePlanTier] = useState<'free' | 'premium' | 'premium_plus' | 'sen_one' | 'sen_one_lite'>('free')
+  const [singlePlanTier, setSinglePlanTier] = useState<'free' | 'premium' | 'premium_plus' | 'sen_one'>('free')
   const [singleVipDays, setSingleVipDays] = useState('30')
   const [singleSenCash, setSingleSenCash] = useState('0')
   const [singleLoading, setSingleLoading] = useState(false)
@@ -172,7 +404,7 @@ export default function NewAdminDashboardPage() {
   const [batchClass, setBatchClass] = useState('')
   const [batchSchool, setBatchSchool] = useState('')
   const [batchProvince, setBatchProvince] = useState('')
-  const [batchPlanTier, setBatchPlanTier] = useState<'free' | 'premium' | 'premium_plus' | 'sen_one' | 'sen_one_lite'>('free')
+  const [batchPlanTier, setBatchPlanTier] = useState<'free' | 'premium' | 'premium_plus' | 'sen_one'>('free')
   const [batchVipDays, setBatchVipDays] = useState('30')
   const [batchSenCash, setBatchSenCash] = useState('0')
   const [batchLoading, setBatchLoading] = useState(false)
@@ -180,10 +412,15 @@ export default function NewAdminDashboardPage() {
   const [batchResults, setBatchResults] = useState<any[]>([])
   const [copiedBatchList, setCopiedBatchList] = useState(false)
 
-  // Thông báo phản hồi
+  // Đổi mật khẩu
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
+
+  // Thông báo phản hồi banner
   const [bannerMsg, setBannerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Khởi tạo và kiểm tra quyền Admin
+  // Tự động kiểm tra session và đồng bộ quyền
   useEffect(() => {
     let isMounted = true
 
@@ -230,8 +467,9 @@ export default function NewAdminDashboardPage() {
           localStorage.setItem('sen_cached_role', profile?.role || 'admin')
         }
 
-        // Tải số liệu thống kê KPI
-        fetchOverviewStats()
+        // Tải số liệu thống kê KPI ban đầu
+        await fetchOverviewStats()
+        await fetchSessions()
       } catch (err) {
         console.error('Lỗi khởi tạo Admin Dashboard:', err)
       } finally {
@@ -246,6 +484,14 @@ export default function NewAdminDashboardPage() {
     }
   }, [router])
 
+  // Lời chào theo thời gian
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Chào buổi sáng'
+    if (hour < 18) return 'Chào buổi chiều'
+    return 'Chào buổi tối'
+  }, [])
+
   // Tải thống kê KPI
   const fetchOverviewStats = async () => {
     try {
@@ -255,15 +501,18 @@ export default function NewAdminDashboardPage() {
         supabase.from('submissions').select('id', { count: 'exact' }),
       ])
 
-      const totalSc = (usersRes.data || []).reduce((acc: number, curr: any) => acc + (Number(curr.sencash_balance) || 0), 0)
+      const totalSc = (usersRes.data || []).reduce(
+        (acc: number, curr: any) => acc + (Number(curr.sencash_balance) || 0),
+        0
+      )
 
-      setStats({
+      setStats((prev) => ({
+        ...prev,
         totalUsers: usersRes.count || 0,
         totalExams: examsRes.count || 0,
         totalSubmissions: subsRes.count || 0,
         totalSenCash: totalSc,
-        totalSessions: 1,
-      })
+      }))
     } catch (e) {
       console.warn('Lỗi lấy thống kê KPI:', e)
     }
@@ -320,12 +569,12 @@ export default function NewAdminDashboardPage() {
     }
   }
 
-  // Đổi phân hệ tab
+  // Tải giftcodes khi chuyển tab
   useEffect(() => {
-    if (activeSection === 'sessions') fetchSessions()
-    if (activeSection === 'exams') fetchExams()
-    if (activeSection === 'users') fetchUsers()
-  }, [activeSection])
+    if (workbenchTab === 'sessions') fetchSessions()
+    if (workbenchTab === 'exams') fetchExams()
+    if (workbenchTab === 'users') fetchUsers()
+  }, [workbenchTab])
 
   // Chuyển đổi góc nhìn
   const handleSwitchPerspective = (newPerspective: Perspective) => {
@@ -339,10 +588,10 @@ export default function NewAdminDashboardPage() {
         newPerspective === 'admin'
           ? 'Đã chuyển về Góc nhìn Quản trị viên (Master Admin)'
           : newPerspective === 'student'
-          ? 'Đã chuyển sang Góc nhìn Sinh viên / Thí sinh (Mô phỏng trải nghiệm học sinh)'
-          : 'Đã chuyển sang Góc nhìn Giảng viên / Giáo viên (Mô phỏng trải nghiệm thầy cô)',
+          ? 'Đang mô phỏng Góc nhìn Sinh viên / Học sinh (Kiểm tra trải nghiệm học sinh)'
+          : 'Đang mô phỏng Góc nhìn Giảng viên / Giáo viên (Kiểm tra trải nghiệm giáo viên)',
     })
-    setTimeout(() => setBannerMsg(null), 4000)
+    setTimeout(() => setBannerMsg(null), 3500)
   }
 
   // Chuyển đổi Dark/Light mode
@@ -351,10 +600,23 @@ export default function NewAdminDashboardPage() {
     setIsDark(next)
     if (next) {
       document.documentElement.classList.add('dark')
-      try { localStorage.setItem('theme', 'dark') } catch {}
+      try {
+        localStorage.setItem('theme', 'dark')
+      } catch {}
     } else {
       document.documentElement.classList.remove('dark')
-      try { localStorage.setItem('theme', 'light') } catch {}
+      try {
+        localStorage.setItem('theme', 'light')
+      } catch {}
+    }
+  }
+
+  // Cuộn mượt đến bàn làm việc chuyên sâu bên dưới
+  const scrollToWorkbench = (targetTab?: AdminWorkbenchTab) => {
+    if (targetTab) setWorkbenchTab(targetTab)
+    const el = document.getElementById('admin-workbench')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
 
@@ -364,9 +626,9 @@ export default function NewAdminDashboardPage() {
     router.push('/new-idp')
   }
 
-  // Thu hồi phiên đăng nhập
+  // Thu hồi phiên đăng nhập từ xa
   const handleRevokeSession = async (sessionId: string, userId: string) => {
-    const conf = window.confirm('Bạn có chắc chắn muốn hủy phiên đăng nhập này của người dùng?')
+    const conf = window.confirm('Bạn có chắc chắn muốn buộc đăng xuất phiên làm việc này?')
     if (!conf) return
     try {
       const res = await fetch('/api/admin/sessions', {
@@ -376,8 +638,10 @@ export default function NewAdminDashboardPage() {
       })
       const data = await res.json()
       if (data.success) {
-        setSessions((prev) => prev.map((s) => (s.id === sessionId || s.device_id === sessionId ? { ...s, is_active: false } : s)))
-        setBannerMsg({ type: 'success', text: 'Đã hủy phiên làm việc thành công.' })
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId || s.device_id === sessionId ? { ...s, is_active: false } : s))
+        )
+        setBannerMsg({ type: 'success', text: 'Đã thu hồi phiên đăng nhập thành công.' })
       } else {
         throw new Error(data.error)
       }
@@ -387,7 +651,7 @@ export default function NewAdminDashboardPage() {
     setTimeout(() => setBannerMsg(null), 3000)
   }
 
-  // Cấp 1 tài khoản
+  // Cấp 1 tài khoản đơn lẻ
   const handleSingleProvision = async (e: React.FormEvent) => {
     e.preventDefault()
     setSingleLoading(true)
@@ -433,6 +697,7 @@ export default function NewAdminDashboardPage() {
       setSingleProvince('')
       setSingleSenCash('0')
       fetchUsers()
+      fetchOverviewStats()
     } catch (err: any) {
       setBannerMsg({ type: 'error', text: err.message || 'Lỗi cấp tài khoản.' })
     } finally {
@@ -459,7 +724,7 @@ export default function NewAdminDashboardPage() {
 
       const total = end - start + 1
       if (total > 150) {
-        throw new Error('Mỗi lượt cấp tối đa 150 tài khoản để đảm bảo an toàn.')
+        throw new Error('Mỗi lượt cấp tối đa 150 tài khoản để đảm bảo an toàn máy chủ.')
       }
 
       setBatchProgress(40)
@@ -499,6 +764,7 @@ export default function NewAdminDashboardPage() {
         text: `✓ Cấp hàng loạt hoàn tất! Thành công: ${data.createdCount}/${data.totalRequested} tài khoản.`,
       })
       fetchUsers()
+      fetchOverviewStats()
     } catch (err: any) {
       setBannerMsg({ type: 'error', text: err.message || 'Lỗi cấp tài khoản hàng loạt.' })
     } finally {
@@ -523,7 +789,12 @@ export default function NewAdminDashboardPage() {
     if (!batchResults.length) return
     const header = 'Email,Mật khẩu,Họ và tên,Trạng thái\n'
     const rows = batchResults
-      .map((u) => `"${u.email}","${u.password}","${u.fullName}","${u.success ? 'Thành công' : u.error || 'Lỗi'}"`)
+      .map(
+        (u) =>
+          `"${u.email}","${u.password}","${u.fullName}","${
+            u.success ? 'Thành công' : u.error || 'Lỗi'
+          }"`
+      )
       .join('\n')
     const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -534,7 +805,22 @@ export default function NewAdminDashboardPage() {
     URL.revokeObjectURL(url)
   }
 
-  // Xem trước live preview cho batch
+  // Xuất file TXT
+  const handleExportTxt = () => {
+    if (!batchResults.length) return
+    const text = batchResults
+      .map((u) => `Email: ${u.email} | MK: ${u.password} | Tên: ${u.fullName} | ${u.success ? 'OK' : 'LỖI'}`)
+      .join('\r\n')
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Danh_sach_tai_khoan_${new Date().toISOString().slice(0, 10)}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Live preview cho batch provisioning
   const batchPreview = useMemo(() => {
     const start = parseInt(batchStartNum || '1', 10) || 1
     const end = parseInt(batchEndNum || '1', 10) || 1
@@ -561,7 +847,138 @@ export default function NewAdminDashboardPage() {
     }
 
     return { firstEmail, lastEmail, samplePwd, total }
-  }, [batchPrefix, batchStartNum, batchEndNum, batchPadLength, batchDomain, batchPasswordMode, batchCommonPassword])
+  }, [
+    batchPrefix,
+    batchStartNum,
+    batchEndNum,
+    batchPadLength,
+    batchDomain,
+    batchPasswordMode,
+    batchCommonPassword,
+  ])
+
+  // Cấp VIP trực tiếp cho người dùng đã chọn
+  const handleGrantVip = async () => {
+    if (!selectedUserForGrant) return
+    setGrantActionLoading(true)
+    try {
+      const res = await fetch('/api/admin/grant-vip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUserForGrant.id,
+          days: parseInt(grantVipDays, 10),
+          planTier: grantVipTier,
+          note: 'Cấp qua Master Admin Dashboard',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Cấp VIP thất bại')
+      setBannerMsg({ type: 'success', text: `✓ Cấp ${grantVipDays} ngày VIP thành công cho ${selectedUserForGrant.email}` })
+      setSelectedUserForGrant(null)
+      fetchUsers()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi cấp VIP.' })
+    } finally {
+      setGrantActionLoading(false)
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Tặng SenCash trực tiếp cho người dùng
+  const handleGiftSenCash = async () => {
+    if (!selectedUserForGrant) return
+    setGrantActionLoading(true)
+    try {
+      const res = await fetch('/api/admin/gift-sencash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUserForGrant.id,
+          amount: parseInt(grantSenCashAmount, 10),
+          note: 'Tặng qua Master Admin Dashboard',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Tặng SenCash thất bại')
+      setBannerMsg({ type: 'success', text: `✓ Đã tặng ${grantSenCashAmount} SC cho ${selectedUserForGrant.email}` })
+      setSelectedUserForGrant(null)
+      fetchUsers()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi tặng SenCash.' })
+    } finally {
+      setGrantActionLoading(false)
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Tạo Giftcode
+  const handleCreateGiftcode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCodeActionLoading(true)
+    try {
+      const payload: any = {
+        rewardType: newCodeType,
+        count: 1,
+        note: newCodeNote,
+        maxUses: parseInt(newCodeMaxUses, 10) || 1,
+      }
+      if (newCodeType === 'vip_days') {
+        payload.vipDays = parseInt(newCodeAmount, 10)
+      } else {
+        payload.sencashAmount = parseInt(newCodeAmount, 10)
+      }
+
+      const res = await fetch('/api/admin/gift-codes/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Tạo mã thất bại')
+      setBannerMsg({ type: 'success', text: `✓ Đã tạo mã quà tặng: ${data.code || 'Thành công'}` })
+      setGiftcodes((prev) => [data, ...prev])
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi tạo mã quà tặng.' })
+    } finally {
+      setCodeActionLoading(false)
+      setTimeout(() => setBannerMsg(null), 3500)
+    }
+  }
+
+  // Đổi mật khẩu Admin
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newPassword || newPassword.length < 6) {
+      setBannerMsg({ type: 'error', text: 'Mật khẩu phải có ít nhất 6 ký tự.' })
+      return
+    }
+    setSavingPassword(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      if (error) throw error
+      setBannerMsg({ type: 'success', text: '✓ Đổi mật khẩu quản trị viên thành công!' })
+      setNewPassword('')
+      setShowPasswordChange(false)
+    } catch (err: any) {
+      setBannerMsg({ type: 'error', text: err.message || 'Đổi mật khẩu thất bại.' })
+    } finally {
+      setSavingPassword(false)
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Lọc hành động theo từ khóa tìm kiếm
+  const currentActionList =
+    perspective === 'student' ? STUDENT_ACTIONS : perspective === 'teacher' ? TEACHER_ACTIONS : ADMIN_ACTIONS
+
+  const filteredActionList = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return currentActionList
+    return currentActionList.filter(
+      (a) => a.title.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
+    )
+  }, [currentActionList, searchQuery])
 
   // Lọc Sessions
   const filteredSessions = useMemo(() => {
@@ -579,29 +996,32 @@ export default function NewAdminDashboardPage() {
   const filteredExams = useMemo(() => {
     if (!examSearch.trim()) return exams
     const q = examSearch.toLowerCase()
-    return exams.filter((e) => e.title?.toLowerCase().includes(q) || e.exam_type?.toLowerCase().includes(q))
+    return exams.filter(
+      (e) => e.title?.toLowerCase().includes(q) || e.exam_type?.toLowerCase().includes(q)
+    )
   }, [exams, examSearch])
 
   // Lọc Users
   const filteredUsers = useMemo(() => {
     if (!userSearch.trim()) return users
     const q = userSearch.toLowerCase()
-    return users.filter((u) => u.email?.toLowerCase().includes(q) || u.full_name?.toLowerCase().includes(q))
+    return users.filter(
+      (u) => u.email?.toLowerCase().includes(q) || u.full_name?.toLowerCase().includes(q)
+    )
   }, [users, userSearch])
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
+      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#0F172A] text-[#2B2B2B] dark:text-slate-100 transition-colors">
+        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
           <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-          <span className="font-bold text-sm">Đang tải Trung Tâm Quản Trị SenExam IDP...</span>
+          <span className="font-bold text-base">Đang tải Master Admin Dashboard...</span>
         </div>
       </div>
     )
   }
 
-  const themeVars = getModernThemeVars(themeColor, isDark)
-  const accent = getAccentHex(themeColor, isDark)
+  const themeVars = getModernThemeVars(themeColor || 'indigo', isDark)
 
   return (
     <main
@@ -609,8 +1029,8 @@ export default function NewAdminDashboardPage() {
       style={{
         ...themeVars,
         background: isDark
-          ? 'radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.12), transparent 30%), radial-gradient(circle at 90% 20%, rgba(244, 63, 94, 0.08), transparent 30%), #080C14'
-          : 'radial-gradient(circle at 10% 10%, rgba(254, 215, 170, 0.35), transparent 30%), radial-gradient(circle at 90% 20%, rgba(199, 210, 254, 0.35), transparent 30%), #F4F7FB',
+          ? 'radial-gradient(circle at 12% 8%, rgba(56, 189, 248, 0.15), transparent 35%), radial-gradient(circle at 88% 12%, rgba(168, 85, 247, 0.15), transparent 28%), radial-gradient(circle at 80% 75%, rgba(99, 102, 241, 0.18), transparent 32%), var(--bg)'
+          : 'radial-gradient(circle at 12% 8%, rgba(255, 187, 120, 0.45), transparent 35%), radial-gradient(circle at 88% 12%, rgba(94, 234, 212, 0.34), transparent 28%), radial-gradient(circle at 80% 75%, rgba(129, 140, 248, 0.32), transparent 32%), var(--bg)',
       }}
     >
       {/* ======================================================== */}
@@ -623,7 +1043,7 @@ export default function NewAdminDashboardPage() {
             <span>
               Đang mô phỏng giao diện:{' '}
               <strong className="uppercase underline">
-                {perspective === 'student' ? 'Góc nhìn Sinh viên / Thí sinh' : 'Góc nhìn Giảng viên / Giáo viên'}
+                {perspective === 'student' ? 'Góc nhìn Sinh viên / Học sinh' : 'Góc nhìn Giảng viên / Giáo viên'}
               </strong>
             </span>
           </div>
@@ -632,7 +1052,7 @@ export default function NewAdminDashboardPage() {
             onClick={() => handleSwitchPerspective('admin')}
             className="px-3 py-1 rounded-xl bg-white text-slate-900 font-black text-[11px] shadow-sm hover:bg-slate-100 transition cursor-pointer"
           >
-            ← Quay lại Góc nhìn Admin
+            ← Quay lại Góc nhìn Master Admin
           </button>
         </div>
       )}
@@ -651,229 +1071,885 @@ export default function NewAdminDashboardPage() {
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* HEADER MASTER ADMIN DASHBOARD */}
-      {/* ======================================================== */}
-      <header className="sticky top-0 z-40 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 px-4 sm:px-8 py-3.5 backdrop-blur-2xl">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/new-dashboard" className="flex items-center gap-2 group">
-              <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-md group-hover:scale-105 transition">
-                S
+      <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+        {/* ========================================================================= */}
+        {/* GIAO DIỆN MOBILE TỐI ƯU CHO ĐIỆN THOẠI (block md:hidden)                 */}
+        {/* ========================================================================= */}
+        <div className="block md:hidden space-y-4 pb-6">
+          {/* 1. Header Mobile */}
+          <div className="flex items-center justify-between gap-2 pt-1 pb-1">
+            <Link href="/new-profile" className="flex items-center gap-2.5 group min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 text-white font-black text-sm shadow-md group-hover:scale-105 transition">
+                <Crown className="h-5 w-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-black text-base sm:text-lg tracking-tight" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                    SenExam
-                  </span>
-                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                    Master Admin
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">
-                  Trung Tâm Điều Hành & An Ninh IDP 2.0
-                </p>
+              <div className="min-w-0">
+                <span
+                  className="text-sm font-black text-slate-900 dark:text-white block truncate max-w-[130px]"
+                  style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                >
+                  {userProfile?.full_name || 'Admin'}
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block truncate">
+                  Master Administrator
+                </span>
               </div>
             </Link>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black text-amber-600 dark:text-amber-400 shadow-xs">
+                <ShieldCheck className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span>ROOT ADMIN</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => scrollToWorkbench('sessions')}
+                className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-600 dark:text-emerald-400 shadow-xs active:scale-95 transition"
+              >
+                <Smartphone className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span>{stats.totalSessions} Phiên</span>
+              </button>
+            </div>
           </div>
 
-          {/* BỘ CHUYỂN GÓC NHÌN TRÊN HEADER (PERSPECTIVE SWITCHER) */}
-          <div className="hidden md:flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-2xl border border-black/5 dark:border-white/5">
-            <button
-              type="button"
-              onClick={() => handleSwitchPerspective('admin')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                perspective === 'admin'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <Crown className="h-3.5 w-3.5 text-amber-500" />
-              <span>Góc nhìn Admin</span>
-            </button>
+          {/* 2. Ô Chào Buổi & Thống Kê Mobile */}
+          <div className="relative overflow-hidden rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(244,63,94,0.3)_0%,transparent_70%)]" />
+            <div className="absolute -left-8 bottom-0 h-28 w-28 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(20,184,166,0.25)_0%,transparent_70%)]" />
 
-            <button
-              type="button"
-              onClick={() => handleSwitchPerspective('student')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                perspective === 'student'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'text-slate-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <GraduationCap className="h-3.5 w-3.5 text-indigo-500" />
-              <span>Góc nhìn Sinh viên</span>
-            </button>
+            <div className="relative">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                  <span>IDP 2.0 ROOT</span>
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                  • Góc nhìn: {perspective.toUpperCase()}
+                </span>
+              </div>
 
-            <button
-              type="button"
-              onClick={() => handleSwitchPerspective('teacher')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                perspective === 'teacher'
-                  ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <Briefcase className="h-3.5 w-3.5 text-emerald-500" />
-              <span>Góc nhìn Giảng viên</span>
-            </button>
+              <h2
+                className="mt-2 text-xl font-black text-slate-900 dark:text-white"
+                style={{ fontFamily: 'var(--font-newdash-heading)' }}
+              >
+                {greeting}, {userProfile?.full_name || 'Admin'}! 👋
+              </h2>
+
+              <p className="mt-1 text-xs text-[#4B5563] dark:text-slate-300 font-medium leading-relaxed">
+                Hệ thống đang bảo vệ an toàn cho {stats.totalUsers} thành viên và {stats.totalExams} bộ đề thi.
+              </p>
+
+              {/* 3 Thẻ Metric Mobile */}
+              <div className="mt-3.5 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => scrollToWorkbench('users')}
+                  className="rounded-2xl border border-black/5 dark:border-white/5 bg-amber-500/10 dark:bg-amber-500/15 p-2.5 text-center active:scale-95 transition"
+                >
+                  <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                    <Users className="h-3 w-3 text-amber-500" /> Thành viên
+                  </div>
+                  <p
+                    className="mt-1 text-base font-black text-amber-900 dark:text-amber-200"
+                    style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                  >
+                    {stats.totalUsers}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToWorkbench('exams')}
+                  className="rounded-2xl border border-black/5 dark:border-white/5 bg-teal-500/10 dark:bg-teal-500/15 p-2.5 text-center active:scale-95 transition"
+                >
+                  <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300">
+                    <FileText className="h-3 w-3 text-teal-500" /> Đề thi
+                  </div>
+                  <p
+                    className="mt-1 text-base font-black text-teal-900 dark:text-teal-200"
+                    style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                  >
+                    {stats.totalExams}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToWorkbench('sessions')}
+                  className="rounded-2xl border border-black/5 dark:border-white/5 bg-indigo-500/10 dark:bg-indigo-500/15 p-2.5 text-center active:scale-95 transition"
+                >
+                  <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                    <Smartphone className="h-3 w-3 text-indigo-500" /> Phiên
+                  </div>
+                  <p
+                    className="mt-1 text-base font-black text-indigo-900 dark:text-indigo-200"
+                    style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                  >
+                    {stats.totalSessions}
+                  </p>
+                </button>
+              </div>
+
+              {/* Thanh Progress An Ninh */}
+              <div className="mt-3.5 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span className="text-slate-600 dark:text-slate-400">Chỉ số an toàn bảo mật IDP</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-black">100% An toàn</span>
+                </div>
+                <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10 p-0.5">
+                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 shadow-[0_0_12px_rgba(16,185,129,0.5)] w-full" />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* QUICK CONTROLS: THEME & LOGOUT */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleDarkMode}
-              className="h-9 w-9 rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 flex items-center justify-center hover:scale-105 transition cursor-pointer"
-              title="Đổi giao diện Sáng/Tối"
-            >
-              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />}
-            </button>
+          {/* 3. Phím Tắt Nhanh Đến Bàn Làm Việc Quản Trị Dưới Web */}
+          <button
+            type="button"
+            onClick={() => scrollToWorkbench('sessions')}
+            className="w-full flex items-center justify-between p-3.5 rounded-[22px] bg-gradient-to-r from-indigo-500/15 via-rose-500/15 to-amber-500/15 border border-indigo-500/20 text-slate-900 dark:text-white shadow-xs active:scale-[0.99] transition text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-rose-600 text-white shadow-sm shrink-0">
+                <Sliders className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  Bàn Làm Việc Quản Trị Chuyên Sâu
+                </h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Cấp tài khoản 0001-9999, quản lý phiên, duyệt đề thi và phân quyền
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-indigo-500 shrink-0" />
+          </button>
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="h-9 px-3 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center gap-1.5 text-xs font-bold hover:bg-rose-500/20 transition cursor-pointer"
-              title="Đăng xuất"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Thoát</span>
-            </button>
+          {/* 4. Bộ Chuyển Đổi Góc Nhìn Trên Mobile */}
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4 shadow-sm space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-white">
+              <Eye className="h-4 w-4 text-indigo-500" />
+              <span>Góc nhìn Trải nghiệm</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/5 dark:bg-white/5 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => handleSwitchPerspective('admin')}
+                className={`py-2 text-[11px] font-black rounded-xl transition ${
+                  perspective === 'admin'
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500'
+                }`}
+              >
+                👑 Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchPerspective('student')}
+                className={`py-2 text-[11px] font-black rounded-xl transition ${
+                  perspective === 'student'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-500'
+                }`}
+              >
+                🎓 Sinh viên
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchPerspective('teacher')}
+                className={`py-2 text-[11px] font-black rounded-xl transition ${
+                  perspective === 'teacher'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'text-slate-500'
+                }`}
+              >
+                💼 Giảng viên
+              </button>
+            </div>
+          </div>
+
+          {/* 5. Cài Đặt Web Trên Mobile */}
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm space-y-3.5">
+            <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Settings className="h-3.5 w-3.5 text-amber-500" /> Cài đặt & Tiện ích Quản trị
+            </h3>
+
+            <div className="flex items-center justify-between pt-1">
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Giao diện:</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Chế độ sáng hoặc tối</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleDarkMode}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-3 py-1.5 text-xs font-bold transition"
+              >
+                {isDark ? <Sun className="h-3.5 w-3.5 text-amber-400" /> : <Moon className="h-3.5 w-3.5 text-indigo-500" />}
+                <span>{isDark ? 'Giao diện Tối' : 'Giao diện Sáng'}</span>
+              </button>
+            </div>
+
+            <div className="pt-2 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-2 text-xs font-bold transition border border-rose-500/20"
+              >
+                <LogOut className="h-3.5 w-3.5" /> Đăng xuất khỏi hệ thống
+              </button>
+            </div>
           </div>
         </div>
-      </header>
 
-      {/* ======================================================== */}
-      {/* NỘI DUNG CHÍNH THEO GÓC NHÌN ĐÃ CHỌN */}
-      {/* ======================================================== */}
-      <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-6">
-        {/* ==================================================== */}
-        {/* A. GIAO DIỆN MÔ PHỎNG: GÓC NHÌN SINH VIÊN (STUDENT) */}
-        {/* ==================================================== */}
-        {perspective === 'student' && (
-          <div className="space-y-6 animate-in fade-in zoom-in-95">
-            <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 p-6 sm:p-8 shadow-sm backdrop-blur-2xl">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                    🎓 Học sinh tiêu chuẩn
-                  </span>
-                  <h2 className="text-2xl sm:text-3xl font-black mt-2" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                    Chào bạn, chuẩn bị cho kỳ thi hôm nay nhé!
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Chuỗi ngày ôn luyện: <strong>12 ngày liên tục 🔥</strong> • Gói tài khoản: <strong>Sen VIP</strong>
-                  </p>
-                </div>
+        {/* ========================================================================= */}
+        {/* GIAO DIỆN DESKTOP TOÀN DIỆN (hidden md:block)                             */}
+        {/* ========================================================================= */}
+        <div className="hidden md:block">
+          {/* BRANDING NHẬN DIỆN THƯƠNG HIỆU & HẠNG ĐẶT NGOÀI KHUNG THẺ */}
+          <div className="mb-3.5 flex items-center justify-between px-2">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-rose-500/15 dark:bg-rose-500/20 border border-rose-500/30 text-rose-900 dark:text-rose-300 backdrop-blur-md shadow-xs">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse" />
+                <span className="tracking-widest">MASTER ADMIN • ROOT PRIVILEGES</span>
+              </span>
 
-                <div className="flex items-center gap-2">
-                  <Link
-                    href="/new-exams"
-                    className="px-4 py-2.5 rounded-2xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition"
-                  >
-                    Vào Kho Đề Thi KaTeX & PDF →
-                  </Link>
-                </div>
-              </div>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 border border-amber-500/40 text-amber-950 dark:text-amber-200">
+                <span className="bg-gradient-to-r from-amber-700 via-rose-600 to-indigo-600 dark:from-amber-300 dark:via-rose-300 dark:to-indigo-300 bg-clip-text text-transparent font-black tracking-widest">
+                  SEN ONE
+                </span>
+              </span>
 
-              {/* Student Quick Widgets */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-                <div className="p-4 rounded-2xl border border-indigo-500/20 bg-indigo-500/5">
-                  <BookOpen className="h-6 w-6 text-indigo-500 mb-2" />
-                  <p className="font-bold text-sm">Kho Đề Đã Làm</p>
-                  <p className="text-xs text-slate-500 mt-1">18 đề đã hoàn thành với điểm trung bình 8.4</p>
-                </div>
-                <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5">
-                  <Flame className="h-6 w-6 text-amber-500 mb-2" />
-                  <p className="font-bold text-sm">Chuỗi Luyện Đề (Streak)</p>
-                  <p className="text-xs text-slate-500 mt-1">Bạn đã học liên tục 12 ngày không gián đoạn!</p>
-                </div>
-                <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
-                  <Sparkles className="h-6 w-6 text-emerald-500 mb-2" />
-                  <p className="font-bold text-sm">Trợ Lý Giải Đề SenAI</p>
-                  <p className="text-xs text-slate-500 mt-1">Sẵn sàng phân tích câu hỏi khó và hướng dẫn KaTeX chi tiết.</p>
-                </div>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" /> IDP 2.0 Security
+              </span>
+            </div>
+
+            {/* Perspective Quick Pill */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Góc nhìn:</span>
+              <div className="inline-flex items-center gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchPerspective('admin')}
+                  className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                    perspective === 'admin'
+                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  👑 Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchPerspective('student')}
+                  className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                    perspective === 'student'
+                      ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-slate-500 hover:text-indigo-600'
+                  }`}
+                >
+                  🎓 Sinh viên
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchPerspective('teacher')}
+                  className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                    perspective === 'teacher'
+                      ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'text-slate-500 hover:text-emerald-600'
+                  }`}
+                >
+                  💼 Giảng viên
+                </button>
               </div>
             </div>
           </div>
-        )}
 
-        {/* ==================================================== */}
-        {/* B. GIAO DIỆN MÔ PHỎNG: GÓC NHÌN GIẢNG VIÊN (TEACHER) */}
-        {/* ==================================================== */}
-        {perspective === 'teacher' && (
-          <div className="space-y-6 animate-in fade-in zoom-in-95">
-            <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 p-6 sm:p-8 shadow-sm backdrop-blur-2xl">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    👨‍🏫 Bàn Giảng Viên
-                  </span>
-                  <h2 className="text-2xl sm:text-3xl font-black mt-2" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                    Khu Vực Quản Lý Giảng Dạy & Khảo Thí
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Quản lý phòng thi, giám sát Safe Exam Browser trực tiếp và theo dõi phổ điểm của học sinh.
-                  </p>
-                </div>
+          {/* Banner Chào Mừng & Thống Kê Tổng Quan */}
+          <div className="relative overflow-hidden rounded-[30px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-6 shadow-sm sm:p-8">
+            <div className="absolute -right-10 -top-16 h-48 w-48 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(244,63,94,0.3)_0%,transparent_70%)]" />
+            <div className="absolute -left-12 bottom-0 h-40 w-40 rounded-full pointer-events-none opacity-30 bg-[radial-gradient(circle,rgba(20,184,166,0.25)_0%,transparent_70%)]" />
 
-                <div className="flex items-center gap-2">
-                  <Link
-                    href="/sentaobai"
-                    className="px-4 py-2.5 rounded-2xl bg-emerald-600 text-white font-bold text-xs shadow-md hover:bg-emerald-700 transition"
-                  >
-                    + Tạo Đề Thi Mới
-                  </Link>
-                </div>
+            <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h1
+                  className="text-balance text-3xl font-black leading-tight sm:text-4xl lg:text-5xl"
+                  style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                >
+                  {greeting}, {userProfile?.full_name || 'Master Admin'}! 👋
+                </h1>
+                <p
+                  className="mt-2 text-sm text-[#4B5563] dark:text-slate-300 sm:text-base max-w-2xl"
+                  style={{ fontFamily: 'var(--font-newdash-body)' }}
+                >
+                  Trung tâm điều hành IDP, phân quyền người dùng và giám sát toàn diện hệ thống SenExam. Đồng bộ phiên
+                  và cấp phát tài khoản tự động.
+                </p>
               </div>
 
-              {/* Teacher Quick Widgets */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-                <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5">
-                  <FileText className="h-6 w-6 text-emerald-500 mb-2" />
-                  <p className="font-bold text-sm">Đề Thi Của Tôi</p>
-                  <p className="text-xs text-slate-500 mt-1">6 đề thi đang mở cho học sinh làm bài.</p>
-                </div>
-                <div className="p-4 rounded-2xl border border-sky-500/20 bg-sky-500/5">
-                  <ShieldCheck className="h-6 w-6 text-sky-500 mb-2" />
-                  <p className="font-bold text-sm">Giám Thị Trực Tiếp SEB</p>
-                  <p className="text-xs text-slate-500 mt-1">Giám sát màn hình và chống gian lận trong thời gian thực.</p>
-                </div>
-                <div className="p-4 rounded-2xl border border-purple-500/20 bg-purple-500/5">
-                  <TrendingUp className="h-6 w-6 text-purple-500 mb-2" />
-                  <p className="font-bold text-sm">Thống Kê Phổ Điểm</p>
-                  <p className="text-xs text-slate-500 mt-1">Phân tích ma trận độ khó câu hỏi và xếp loại tự động.</p>
+              {/* Quick Metrics */}
+              <div className="grid grid-cols-2 gap-3 sm:min-w-[320px]">
+                <button
+                  type="button"
+                  onClick={() => scrollToWorkbench('sessions')}
+                  className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/15 p-3.5 shadow-sm text-left hover:scale-[1.03] active:scale-95 transition cursor-pointer group"
+                  title="Nhấn để xem danh sách phiên đang hoạt động"
+                >
+                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    <span className="flex items-center gap-1.5">
+                      <Smartphone className="h-4 w-4 text-emerald-500" /> Phiên Đang Mở
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 underline group-hover:scale-105 transition">
+                      Quản lý →
+                    </span>
+                  </div>
+                  <p
+                    className="mt-1 text-2xl font-black text-slate-900 dark:text-white"
+                    style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                  >
+                    {stats.totalSessions} Phiên
+                  </p>
+                </button>
+
+                <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-3.5 shadow-sm">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                    <ShieldCheck className="h-4 w-4" /> Trạng Thái
+                  </div>
+                  <p className="mt-1 text-lg font-black truncate" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    Root Admin
+                  </p>
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">
+                    Master Privileges
+                  </p>
                 </div>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* ==================================================== */}
-        {/* C. GIAO DIỆN CHÍNH: GÓC NHÌN QUẢN TRỊ VIÊN (ADMIN) */}
-        {/* ==================================================== */}
-        {perspective === 'admin' && (
-          <div className="space-y-6">
-            {/* 1. THANH ĐIỀU HƯỚNG CÁC PHÂN HỆ QUẢN TRỊ (TỐI ƯU HÓA) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+            {/* 3 Metric Cards */}
+            <div className="relative mt-6 grid gap-3.5 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => scrollToWorkbench('users')}
+                className="rounded-2xl border border-black/10 dark:border-white/10 bg-amber-500/10 dark:bg-amber-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                    Tổng Thành Viên IDP
+                  </p>
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">
+                    Xem danh sách →
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <strong className="text-3xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    {stats.totalUsers.toLocaleString()}
+                  </strong>
+                  <Users className="h-7 w-7 text-amber-600 dark:text-amber-400 opacity-80" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToWorkbench('exams')}
+                className="rounded-2xl border border-black/10 dark:border-white/10 bg-teal-500/10 dark:bg-teal-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">
+                    Ngân Hàng Kho Đề Thi
+                  </p>
+                  <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 group-hover:underline">
+                    Quản lý kho đề →
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <strong className="text-3xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    {stats.totalExams.toLocaleString()}
+                  </strong>
+                  <FileText className="h-7 w-7 text-teal-600 dark:text-teal-400 opacity-80" />
+                </div>
+              </button>
+
+              <Link
+                href="/new-history-submissions"
+                className="rounded-2xl border border-black/10 dark:border-white/10 bg-indigo-500/10 dark:bg-indigo-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
+                    Lượt Thi Toàn Hệ Thống
+                  </p>
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:underline">
+                    Xem bài nộp →
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <strong className="text-3xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    {stats.totalSubmissions.toLocaleString()}
+                  </strong>
+                  <TrendingUp className="h-7 w-7 text-indigo-600 dark:text-indigo-400 opacity-80" />
+                </div>
+              </Link>
+            </div>
+          </div>
+
+          {/* 2-Column Main Layout */}
+          <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
+            {/* CỘT TRÁI: Playground Điều Hướng Tính Năng Đồng Nhất New-Dashboard */}
+            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                    {perspective === 'student'
+                      ? 'Không gian học tập & Tính năng'
+                      : perspective === 'teacher'
+                      ? 'Không gian Giảng viên & Khảo thí'
+                      : 'Không gian Quản trị & Điều phối Hệ thống'}
+                  </h2>
+                  <p className="text-sm text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
+                    {perspective === 'admin'
+                      ? 'Khám phá các phân hệ bảo mật, quản lý tài khoản, khảo thí và tiện ích toàn hệ thống.'
+                      : 'Mô phỏng chính xác giao diện và đặc quyền truy cập của người dùng.'}
+                  </p>
+                </div>
+                <div className="relative w-full sm:w-72">
+                  <Compass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7280] dark:text-slate-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Tìm nhanh phân hệ hoặc công cụ..."
+                    className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 pl-9 pr-3 text-sm outline-none transition focus:border-amber-500 dark:focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              {/* CÁC PHẦN CHIA NGANG (VẼ ĐƯỜNG CHIA NGHỆ THUẬT) */}
+              <div className="mt-4 space-y-6">
+                {ADMIN_ACTION_CATEGORIES.map((cat) => {
+                  const groupItems = filteredActionList.filter((a) => a.category === cat.key)
+                  if (groupItems.length === 0) return null
+
+                  const catTheme =
+                    cat.key === 'admin_core'
+                      ? {
+                          line: 'from-rose-500/50 via-rose-500/20 to-transparent',
+                          badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20',
+                        }
+                      : cat.key === 'study'
+                      ? {
+                          line: 'from-emerald-500/50 via-emerald-500/20 to-transparent',
+                          badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
+                        }
+                      : cat.key === 'senai'
+                      ? {
+                          line: 'from-purple-500/50 via-purple-500/20 to-transparent',
+                          badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
+                        }
+                      : {
+                          line: 'from-sky-500/50 via-sky-500/20 to-transparent',
+                          badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20',
+                        }
+
+                  return (
+                    <div key={cat.key} className="space-y-3">
+                      {/* VẼ ĐƯỜNG CHIA PHÂN HỆ NGHỆ THUẬT */}
+                      <div className="relative flex items-center gap-3 pt-3 pb-1">
+                        <div className="flex items-center gap-2.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-800/90 px-3.5 py-1.5 shadow-xs">
+                          <span className="text-lg">{cat.icon}</span>
+                          <h3
+                            className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider"
+                            style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                          >
+                            {cat.label}
+                          </h3>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${catTheme.badge}`}>
+                            {groupItems.length}
+                          </span>
+                        </div>
+                        <div className={`flex-1 h-0.5 rounded-full bg-gradient-to-r ${catTheme.line}`} />
+                      </div>
+
+                      {/* CÁC THẺ TÍNH NĂNG GIỮ NGUYÊN FORM DÁNG NEW-DASHBOARD */}
+                      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+                        {groupItems.map((item) => {
+                          const Icon = item.icon
+                          const isAnchorOrScroll = Boolean(item.actionTab)
+
+                          const handleClick = (e: React.MouseEvent) => {
+                            if (isAnchorOrScroll) {
+                              e.preventDefault()
+                              scrollToWorkbench(item.actionTab)
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={item.key}
+                              onClick={handleClick}
+                              className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 p-4 cursor-pointer"
+                            >
+                              {/* Dải gradient nhận diện trên đỉnh thẻ */}
+                              <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.tone}`} />
+
+                              <div className="flex items-start justify-between gap-3">
+                                <span className="rounded-xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-700/80 p-2.5 shadow-sm group-hover:scale-105 transition-transform">
+                                  <Icon className="h-5 w-5 text-[#111827] dark:text-white" />
+                                </span>
+
+                                <div className="flex items-center gap-1.5">
+                                  {item.badge && (
+                                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                      {item.badge}
+                                    </span>
+                                  )}
+                                  <ArrowRight className="h-4 w-4 text-[#6B7280] dark:text-slate-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                </div>
+                              </div>
+
+                              <h3
+                                className="mt-3 text-base sm:text-lg font-black leading-tight text-slate-900 dark:text-white"
+                                style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                              >
+                                {item.title}
+                              </h3>
+                              <p
+                                className="mt-1 text-xs leading-relaxed text-[#4B5563] dark:text-slate-300 font-medium"
+                                style={{ fontFamily: 'var(--font-newdash-body)' }}
+                              >
+                                {item.description}
+                              </p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {filteredActionList.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400 font-bold">
+                    Không tìm thấy tính năng nào khớp với từ khoá &quot;{searchQuery}&quot;. Vui lòng thử từ khoá khác!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* CỘT PHẢI: Hồ Sơ Admin, Bộ Chuyển Góc Nhìn, Giám Sát An Ninh & Cài Đặt Web */}
+            <aside className="space-y-5">
+              {/* Card 1: Hồ sơ Admin & Đặc Quyền */}
+              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm">
+                <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-md">
+                      <Crown className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3
+                        className="font-black text-lg leading-tight"
+                        style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                      >
+                        {userProfile?.full_name || 'Master Admin'}
+                      </h3>
+                      <p className="text-xs text-[#6B7280] dark:text-slate-400 truncate max-w-[170px]">
+                        {currentUser?.email || 'admin@senexam.me'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-rose-500/10 px-2.5 py-1 text-[11px] font-black text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                    Toàn Quyền
+                  </span>
+                </div>
+
+                <div className="mt-3.5 space-y-2 text-xs text-[#4B5563] dark:text-slate-300">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span>Cấp bậc: <strong>Quản trị viên Cấp cao (Root)</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Server className="h-4 w-4 text-indigo-500 shrink-0" />
+                    <span>Máy chủ IDP: <strong>Cloud Supabase (AP-East)</strong></span>
+                  </div>
+                </div>
+
+                {/* 3 Nút Hành Động Nhanh */}
+                <div className="mt-4 grid grid-cols-3 gap-2 pt-3 border-t border-black/10 dark:border-white/10">
+                  <div className="flex flex-col justify-between rounded-2xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-2.5">
+                    <div className="flex items-center justify-between text-amber-700 dark:text-amber-300">
+                      <Coins className="h-4 w-4 text-amber-500" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider">Tổng SC</span>
+                    </div>
+                    <div className="mt-2">
+                      <strong
+                        className="text-sm font-black text-amber-900 dark:text-amber-200 block truncate"
+                        style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                      >
+                        {stats.totalSenCash.toLocaleString()} SC
+                      </strong>
+                      <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">Lưu hành</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col justify-between rounded-2xl border border-rose-500/20 bg-rose-500/10 dark:bg-rose-500/15 p-2.5">
+                    <div className="flex items-center justify-between text-rose-700 dark:text-rose-300">
+                      <Crown className="h-4 w-4 text-rose-500" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider">Trạng thái</span>
+                    </div>
+                    <div className="mt-2">
+                      <strong
+                        className="text-sm font-black text-rose-900 dark:text-rose-200 block truncate"
+                        style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                      >
+                        Master
+                      </strong>
+                      <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400">Đầy đủ quyền</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => scrollToWorkbench('sessions')}
+                    className="flex flex-col justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/10 dark:bg-emerald-500/15 p-2.5 transition hover:scale-[1.02] text-left cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300">
+                      <Smartphone className="h-4 w-4 text-emerald-500" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider">Phiên Mở</span>
+                    </div>
+                    <div className="mt-2">
+                      <strong
+                        className="text-sm font-black text-emerald-900 dark:text-emerald-200 block truncate"
+                        style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                      >
+                        {stats.totalSessions} Phiên
+                      </strong>
+                      <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 underline">
+                        Chi tiết →
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 2: Góc Nhìn Trải Nghiệm (Perspective Switcher) */}
+              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
+                    <Eye className="h-4 w-4 text-indigo-500" /> Góc Nhìn Trải Nghiệm
+                  </h3>
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Mô phỏng</span>
+                </div>
+                <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
+                  Chuyển đổi góc nhìn để kiểm tra chính xác những gì học sinh và giảng viên nhìn thấy trên SenExam.
+                </p>
+
+                <div className="space-y-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchPerspective('admin')}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                      perspective === 'admin'
+                        ? 'border-amber-500/40 bg-amber-500/15 text-amber-900 dark:text-amber-200 shadow-xs'
+                        : 'border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Crown className="h-4 w-4 text-amber-500" />
+                      <span>Góc nhìn Quản trị viên (Master Admin)</span>
+                    </span>
+                    {perspective === 'admin' && <Check className="h-4 w-4 text-amber-600" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchPerspective('student')}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                      perspective === 'student'
+                        ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-900 dark:text-indigo-200 shadow-xs'
+                        : 'border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 text-indigo-500" />
+                      <span>Góc nhìn Sinh viên / Thí sinh</span>
+                    </span>
+                    {perspective === 'student' && <Check className="h-4 w-4 text-indigo-600" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchPerspective('teacher')}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                      perspective === 'teacher'
+                        ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-900 dark:text-emerald-200 shadow-xs'
+                        : 'border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-emerald-500" />
+                      <span>Góc nhìn Giảng viên / Giáo viên</span>
+                    </span>
+                    {perspective === 'teacher' && <Check className="h-4 w-4 text-emerald-600" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 3: Giám Sát An Ninh & Hệ Thống (System Health) */}
+              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
+                    <Activity className="h-4 w-4 text-emerald-500" /> Giám Sát Hệ Thống
+                  </h3>
+                  <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>100% Operational</span>
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                    <span className="text-slate-600 dark:text-slate-400">Supabase Cloud Database</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">Hoạt động (99.9%)</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                    <span className="text-slate-600 dark:text-slate-400">Row-Level Security (RLS)</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">Kích hoạt chặt chẽ</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                    <span className="text-slate-600 dark:text-slate-400">Trí tuệ nhân tạo SenAI</span>
+                    <span className="font-bold text-indigo-600 dark:text-indigo-400">Gemini 3.5 & 3.8</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5">
+                    <span className="text-slate-600 dark:text-slate-400">Safe Exam Browser Gateway</span>
+                    <span className="font-bold text-teal-600 dark:text-teal-400">SEB Proctor Ready</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: Cài Đặt Web & Hệ Thống (Settings) */}
+              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-3.5">
+                <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
+                  <Settings className="h-3.5 w-3.5 text-amber-500" /> Cài Đặt Web & Hệ Thống
+                </h3>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">Giao diện Sáng / Tối:</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      Tùy chỉnh chế độ nền hiển thị
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleDarkMode}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-3 py-1.5 text-xs font-bold transition hover:bg-black/10 cursor-pointer"
+                  >
+                    {isDark ? <Sun className="h-3.5 w-3.5 text-amber-400" /> : <Moon className="h-3.5 w-3.5 text-indigo-500" />}
+                    <span>{isDark ? 'Giao diện Tối' : 'Giao diện Sáng'}</span>
+                  </button>
+                </div>
+
+                {/* Đổi Mật Khẩu Admin */}
+                <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">Bảo mật tài khoản:</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Đổi mật khẩu Root Admin</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordChange(!showPasswordChange)}
+                      className="px-2.5 py-1 rounded-xl text-xs font-bold bg-black/5 dark:bg-white/10 hover:bg-black/10 transition cursor-pointer"
+                    >
+                      {showPasswordChange ? 'Đóng' : 'Đổi mật khẩu'}
+                    </button>
+                  </div>
+
+                  {showPasswordChange && (
+                    <form onSubmit={handleChangePassword} className="space-y-2 pt-2 animate-in fade-in">
+                      <input
+                        type="password"
+                        placeholder="Nhập mật khẩu mới..."
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2 text-xs font-semibold outline-none"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        disabled={savingPassword}
+                        className="w-full rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-1.5 text-xs font-bold transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {savingPassword ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-black/10 dark:border-white/10">
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-2 text-xs font-bold transition border border-rose-500/20 cursor-pointer"
+                  >
+                    <LogOut className="h-3.5 w-3.5" /> Đăng xuất khỏi tài khoản
+                  </button>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* PHẦN ĐIỀU PHỐI CHUYÊN SÂU DÀNH CHO ADMIN ("ĐỂ XUỐNG WEB")                 */}
+        {/* Đồng nhất giao diện thẻ tròn rounded-[28px], chia tab thông minh & tiện ích*/}
+        {/* ========================================================================= */}
+        <div id="admin-workbench" className="mt-10 space-y-6">
+          <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-6 sm:p-8 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-rose-500 to-amber-500 text-white shadow-sm">
+                    <Sliders className="h-5 w-5" />
+                  </div>
+                  <h2
+                    className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white"
+                    style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                  >
+                    Bàn Làm Việc Quản Trị Chuyên Sâu (Master Workbench)
+                  </h2>
+                </div>
+                <p className="mt-1 text-xs sm:text-sm text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
+                  Khu vực giám sát phiên đăng nhập thực tế, cấp tài khoản hàng loạt & đơn lẻ, duyệt kho đề thi, phân
+                  quyền thành viên và tạo mã quà tặng.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Sẵn sàng thao tác</span>
+                </span>
+              </div>
+            </div>
+
+            {/* TAB SELECTOR BAR ĐẸP MẮT */}
+            <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
               {[
-                { id: 'overview', label: 'Tổng quan & KPI', icon: LayoutDashboard },
-                { id: 'sessions', label: 'Quản lý Phiên', icon: Smartphone },
-                { id: 'provisioning', label: 'Cấp Tài Khoản', icon: UserPlus },
-                { id: 'exams', label: 'Kho Đề Thi', icon: FileText },
-                { id: 'users', label: 'Người Dùng', icon: Users },
-                { id: 'giftcodes', label: 'Giftcodes', icon: Gift },
-                { id: 'announcements', label: 'Thông Báo', icon: Megaphone },
-                { id: 'settings', label: 'Cài Đặt Web', icon: Settings },
+                { id: 'sessions', label: 'Quản Lý Phiên', count: stats.totalSessions, icon: Smartphone },
+                { id: 'batch_provision', label: 'Cấp Hàng Loạt 0001-9999', icon: Users },
+                { id: 'single_provision', label: 'Cấp 1 Tài Khoản', icon: UserPlus },
+                { id: 'exams', label: 'Quản Trị Kho Đề', count: stats.totalExams, icon: FileText },
+                { id: 'users', label: 'Phân Quyền Người Dùng', count: stats.totalUsers, icon: ShieldCheck },
+                { id: 'giftcodes', label: 'Mã Quà Tặng Giftcode', icon: Gift },
               ].map((tab) => {
                 const Icon = tab.icon
-                const isActive = activeSection === tab.id
+                const isActive = workbenchTab === tab.id
                 return (
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveSection(tab.id as AdminSection)}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all duration-200 shrink-0 cursor-pointer ${
+                    onClick={() => setWorkbenchTab(tab.id as AdminWorkbenchTab)}
+                    className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition cursor-pointer shrink-0 ${
                       isActive
                         ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md scale-[1.02]'
                         : 'border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5'
@@ -881,232 +1957,134 @@ export default function NewAdminDashboardPage() {
                   >
                     <Icon className="h-4 w-4" />
                     <span>{tab.label}</span>
+                    {typeof tab.count === 'number' && (
+                      <span
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                          isActive
+                            ? 'bg-white/20 text-white dark:bg-black/10 dark:text-slate-900'
+                            : 'bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
                   </button>
                 )
               })}
             </div>
 
-            {/* ========================================== */}
-            {/* TAB 1: TỔNG QUAN & THỐNG KÊ KPI */}
-            {/* ========================================== */}
-            {activeSection === 'overview' && (
-              <div className="space-y-6 animate-in fade-in">
-                {/* 4 THẺ KPI ĐỈNH CAO */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-sm backdrop-blur-xl">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Tổng Thành Viên</span>
-                      <div className="h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                        <Users className="h-5 w-5" />
-                      </div>
+            {/* NỘI DUNG TỪNG TAB */}
+            <div className="mt-6">
+              {/* TAB 1: QUẢN LÝ PHIÊN (SESSIONS) */}
+              {workbenchTab === 'sessions' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="relative flex-1 min-w-[240px]">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Tìm theo email người dùng, tên thiết bị, hoặc địa chỉ IP..."
+                        value={sessionSearch}
+                        onChange={(e) => setSessionSearch(e.target.value)}
+                        className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"
+                      />
                     </div>
-                    <p className="text-3xl font-black mt-2" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                      {stats.totalUsers.toLocaleString()}
-                    </p>
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
-                      <TrendingUp className="h-3.5 w-3.5" /> +100% tài khoản đã kích hoạt
-                    </span>
-                  </div>
 
-                  <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-sm backdrop-blur-xl">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Đề Thi Hệ Thống</span>
-                      <div className="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-black mt-2" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                      {stats.totalExams.toLocaleString()}
-                    </p>
-                    <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 mt-1">
-                      <Sparkles className="h-3.5 w-3.5" /> KaTeX Sắc Nét & PDF Split View
-                    </span>
-                  </div>
-
-                  <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-sm backdrop-blur-xl">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Lượt Thi Nộp Bài</span>
-                      <div className="h-9 w-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                        <Award className="h-5 w-5" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-black mt-2" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                      {stats.totalSubmissions.toLocaleString()}
-                    </p>
-                    <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 mt-1">
-                      <Activity className="h-3.5 w-3.5" /> Tự động chấm & xếp hạng
-                    </span>
-                  </div>
-
-                  <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 shadow-sm backdrop-blur-xl">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Tổng SenCash Lưu Hành</span>
-                      <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                        <Coins className="h-5 w-5" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-black mt-2" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                      {stats.totalSenCash.toLocaleString()} SC
-                    </p>
-                    <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1">
-                      <Zap className="h-3.5 w-3.5" /> Kinh tế học tập tuần hoàn
-                    </span>
-                  </div>
-                </div>
-
-                {/* TRẠNG THÁI HỆ THỐNG CLOUD */}
-                <div className="rounded-[30px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-2xl">
-                  <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
-                    <div className="flex items-center gap-2">
-                      <Server className="h-5 w-5 text-indigo-500" />
-                      <h3 className="font-black text-base" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                        Trạng Thái Cụm Máy Chủ & Dịch Vụ SenExam
-                      </h3>
-                    </div>
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> All Systems Operational
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-4 text-xs">
-                    <div className="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 space-y-1">
-                      <span className="text-slate-500">Supabase Auth & Database</span>
-                      <p className="font-black text-slate-800 dark:text-slate-200">Hoạt động 100% (RLS Active)</p>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 space-y-1">
-                      <span className="text-slate-500">Bảo Mật 2 Lớp (TOTP)</span>
-                      <p className="font-black text-slate-800 dark:text-slate-200">FEPN-Grade MFA Ready</p>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 space-y-1">
-                      <span className="text-slate-500">Trí Tuệ Nhân Tạo (SenAI)</span>
-                      <p className="font-black text-slate-800 dark:text-slate-200">Gemini 3.5 & 3.8 Flash Online</p>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 space-y-1">
-                      <span className="text-slate-500">Safe Exam Browser Proctor</span>
-                      <p className="font-black text-slate-800 dark:text-slate-200">SEB Anti-Cheat v3.8 Active</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ========================================== */}
-            {/* TAB 2: QUẢN LÝ PHIÊN (SESSIONS & AN NINH) */}
-            {/* ========================================== */}
-            {activeSection === 'sessions' && (
-              <div className="rounded-[30px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-2xl space-y-5 animate-in fade-in">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <h3 className="font-black text-lg" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                      Quản Lý Phiên Thiết Bị Đang Hoạt Động (Session Control)
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Giám sát các thiết bị đăng nhập trong toàn hệ thống và ngắt kết nối từ xa khi phát hiện bất thường.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={fetchSessions}
                       disabled={sessionsLoading}
-                      className="px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-black/5 flex items-center gap-1 cursor-pointer"
+                      className="px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-black/5 flex items-center gap-1.5 cursor-pointer"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
-                      <span>Làm mới</span>
+                      <span>Làm mới danh sách</span>
                     </button>
                   </div>
-                </div>
 
-                {/* Tìm kiếm phiên */}
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Tìm theo email người dùng, tên thiết bị, hoặc địa chỉ IP..."
-                    value={sessionSearch}
-                    onChange={(e) => setSessionSearch(e.target.value)}
-                    className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-3 pl-11 pr-4 text-xs font-semibold outline-none"
-                  />
-                </div>
-
-                {/* Danh sách Sessions */}
-                {sessionsLoading ? (
-                  <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải dữ liệu phiên...
-                  </div>
-                ) : filteredSessions.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-slate-400">
-                    Chưa có phiên làm việc nào được ghi nhận hoặc không tìm thấy kết quả.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
-                    {filteredSessions.map((s) => (
-                      <div key={s.id || s.device_id} className="p-4 flex items-center justify-between flex-wrap gap-3 hover:bg-black/[0.01] dark:hover:bg-white/[0.01]">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                            {s.device_type === 'mobile' ? <Smartphone className="h-5 w-5" /> : <Laptop className="h-5 w-5" />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{s.device_name}</span>
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                  s.is_active
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                    : 'bg-slate-500/10 text-slate-500'
-                                }`}
-                              >
-                                {s.is_active ? '● Đang hoạt động' : 'Đã thu hồi'}
-                              </span>
+                  {sessionsLoading ? (
+                    <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                      <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải danh sách phiên...
+                    </div>
+                  ) : filteredSessions.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-slate-400">
+                      Chưa ghi nhận phiên làm việc nào hoặc không tìm thấy kết quả phù hợp.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
+                      {filteredSessions.map((s) => (
+                        <div
+                          key={s.id || s.device_id}
+                          className="p-4 flex items-center justify-between flex-wrap gap-3 hover:bg-black/[0.01] dark:hover:bg-white/[0.01]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                              {s.device_type === 'mobile' ? <Smartphone className="h-5 w-5" /> : <Laptop className="h-5 w-5" />}
                             </div>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                              Tài khoản: <strong>{s.user_email}</strong> ({s.user_full_name}) • IP: <code>{s.ip_address}</code> • HĐH: {s.os}
-                            </p>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800 dark:text-slate-200">{s.device_name}</span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    s.is_active
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                      : 'bg-slate-500/10 text-slate-500'
+                                  }`}
+                                >
+                                  {s.is_active ? '● Đang hoạt động' : 'Đã thu hồi'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                Tài khoản: <strong>{s.user_email}</strong> ({s.user_full_name || 'Học sinh'}) • IP:{' '}
+                                <code>{s.ip_address}</code> • HĐH: {s.os} • Trình duyệt: {s.browser}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                Hoạt động gần nhất: {s.last_active_at ? new Date(s.last_active_at).toLocaleString('vi-VN') : 'Vừa xong'}
+                              </p>
+                            </div>
                           </div>
+
+                          {s.is_active && (
+                            <button
+                              type="button"
+                              onClick={() => handleRevokeSession(s.id, s.user_id)}
+                              className="px-3.5 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold hover:bg-rose-500/20 transition cursor-pointer"
+                            >
+                              Buộc Đăng Xuất (Hủy Phiên)
+                            </button>
+                          )}
                         </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                        {s.is_active && (
-                          <button
-                            type="button"
-                            onClick={() => handleRevokeSession(s.id, s.user_id)}
-                            className="px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold hover:bg-rose-500/20 transition cursor-pointer"
-                          >
-                            Buộc Đăng Xuất
-                          </button>
-                        )}
-                      </div>
-                    ))}
+              {/* TAB 2: CẤP HÀNG LOẠT 0001 - 9999 @ DOMAIN */}
+              {workbenchTab === 'batch_provision' && (
+                <div className="space-y-5 animate-in fade-in">
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-200">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-amber-600" /> Cấp hàng loạt tài khoản học sinh / thí sinh:
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed">
+                      Hệ thống tự động kích hoạt tài khoản và gán phân quyền ngay tức thì. Tài khoản sẵn sàng đăng nhập
+                      tại trang IDP hoặc làm bài thi SEB mà không cần xác thực email.
+                    </p>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* ========================================================================= */}
-            {/* TAB 3: TRUNG TÂM CẤP TÀI KHOẢN (CHUYỂN TOÀN BỘ TỪ NEW-IDP VÀO ĐÂY) */}
-            {/* ========================================================================= */}
-            {activeSection === 'provisioning' && (
-              <div className="space-y-6 animate-in fade-in">
-                {/* 3.1 CẤP HÀNG LOẠT (0001 - 9999 @ domain) */}
-                <div className="rounded-[30px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-2xl space-y-4">
-                  <div className="flex items-center gap-2 font-black text-lg" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                    <Users className="h-5 w-5 text-rose-500" />
-                    <span>Cấp Hàng Loạt Tài Khoản Tuần Tự (0001 - 9999 @ domain)</span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Phục vụ cấp phát cho cả lớp học, khối thi hoặc trường học với tài khoản kích hoạt sẵn, không cần xác nhận email.
-                  </p>
 
                   <form onSubmit={handleBatchProvision} className="space-y-4 text-xs">
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Tiền tố (Prefix):</label>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                          Tiền tố tên đăng nhập (Prefix):
+                        </label>
                         <input
                           type="text"
                           value={batchPrefix}
                           onChange={(e) => setBatchPrefix(e.target.value)}
                           className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
                           placeholder="student"
+                          required
                         />
                       </div>
                       <div>
@@ -1136,37 +2114,44 @@ export default function NewAdminDashboardPage() {
                           onChange={(e) => setBatchPadLength(e.target.value)}
                           className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
                         >
-                          <option value="4">4 số (0001)</option>
-                          <option value="3">3 số (001)</option>
-                          <option value="2">2 số (01)</option>
-                          <option value="0">Không thêm 0 (1)</option>
+                          <option value="4">4 chữ số (0001, 0002... 9999)</option>
+                          <option value="3">3 chữ số (001, 002... 999)</option>
+                          <option value="2">2 chữ số (01, 02... 99)</option>
+                          <option value="0">Không thêm số 0 (1, 2, 3...)</option>
                         </select>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Đuôi email (@domain):</label>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                          Đuôi email (@domain):
+                        </label>
                         <input
                           type="text"
                           value={batchDomain}
                           onChange={(e) => setBatchDomain(e.target.value)}
                           className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          placeholder="@senexam.edu.vn"
                           required
                         />
                       </div>
+
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Kiểu mật khẩu:</label>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                          Quy tắc đặt mật khẩu:
+                        </label>
                         <select
                           value={batchPasswordMode}
                           onChange={(e) => setBatchPasswordMode(e.target.value as any)}
                           className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
                         >
-                          <option value="common">Chung một mật khẩu</option>
-                          <option value="pattern">Tự sinh: Sen@[num]2025</option>
-                          <option value="random">Ngẫu nhiên từng người</option>
+                          <option value="common">Chung một mật khẩu duy nhất</option>
+                          <option value="pattern">Tự sinh theo quy tắc: Sen@[num]2025</option>
+                          <option value="random">Ngẫu nhiên bảo mật cao từng người</option>
                         </select>
                       </div>
+
                       {batchPasswordMode === 'common' && (
                         <div>
                           <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Mật khẩu chung:</label>
@@ -1181,129 +2166,522 @@ export default function NewAdminDashboardPage() {
                       )}
                     </div>
 
-                    {/* Live Preview */}
-                    <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/10 dark:border-white/10 font-mono text-[11px] space-y-1">
-                      <p className="text-slate-500 font-sans font-bold">Xem trước: Tổng {batchPreview.total} tài khoản</p>
-                      <p className="text-slate-800 dark:text-slate-200">
-                        • Đầu: <strong>{batchPreview.firstEmail}</strong> (MK: {batchPreview.samplePwd})
-                      </p>
-                      <p className="text-slate-800 dark:text-slate-200">• Cuối: <strong>{batchPreview.lastEmail}</strong></p>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Mẫu họ tên:</label>
+                        <input
+                          type="text"
+                          value={batchNamePattern}
+                          onChange={(e) => setBatchNamePattern(e.target.value)}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          placeholder="Học sinh [num]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Lớp học:</label>
+                        <input
+                          type="text"
+                          value={batchClass}
+                          onChange={(e) => setBatchClass(e.target.value)}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          placeholder="12A1"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Trường học:</label>
+                        <input
+                          type="text"
+                          value={batchSchool}
+                          onChange={(e) => setBatchSchool(e.target.value)}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          placeholder="THPT Chuyên"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Tỉnh / Thành:</label>
+                        <input
+                          type="text"
+                          value={batchProvince}
+                          onChange={(e) => setBatchProvince(e.target.value)}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          placeholder="Hà Nội"
+                        />
+                      </div>
                     </div>
 
-                    <button
-                      type="submit"
-                      disabled={batchLoading}
-                      className="px-6 py-3 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-105 transition disabled:opacity-50 cursor-pointer"
-                    >
-                      {batchLoading ? <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> : <Zap className="h-4 w-4 inline mr-2" />}
-                      Bắt Đầu Cấp {batchPreview.total} Tài Khoản
-                    </button>
+                    {/* LIVE PREVIEW BOX */}
+                    <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/10 dark:border-white/10 font-mono text-[11px] space-y-1">
+                      <p className="text-slate-500 font-sans font-bold flex items-center justify-between">
+                        <span>🔍 Xem trước thông số cấp:</span>
+                        <span className="text-indigo-600 dark:text-indigo-400 font-black">
+                          Tổng cộng: {batchPreview.total} tài khoản
+                        </span>
+                      </p>
+                      <p className="text-slate-800 dark:text-slate-200">
+                        • Tài khoản đầu: <strong>{batchPreview.firstEmail}</strong> (MK mẫu: {batchPreview.samplePwd})
+                      </p>
+                      <p className="text-slate-800 dark:text-slate-200">
+                        • Tài khoản cuối: <strong>{batchPreview.lastEmail}</strong>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="submit"
+                        disabled={batchLoading}
+                        className="px-6 py-3 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-105 transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {batchLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                        ) : (
+                          <Zap className="h-4 w-4 inline mr-2" />
+                        )}
+                        Bắt Đầu Cấp {batchPreview.total} Tài Khoản
+                      </button>
+
+                      {batchLoading && (
+                        <div className="flex-1 max-w-xs">
+                          <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                            <div
+                              className="h-full bg-rose-500 transition-all duration-300"
+                              style={{ width: `${batchProgress}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-500 mt-1 block">
+                            Đang xử lý trên Supabase... {batchProgress}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </form>
 
                   {/* KẾT QUẢ CẤP HÀNG LOẠT */}
                   {batchResults.length > 0 && (
                     <div className="pt-4 border-t border-black/10 dark:border-white/10 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs">
-                          Kết quả: {batchResults.filter((u) => u.success).length} thành công
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                          ✓ Đã khởi tạo thành công: {batchResults.filter((u) => u.success).length} /{' '}
+                          {batchResults.length} tài khoản
                         </span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={handleCopyBatchResults}
-                            className="px-3 py-1 rounded-xl bg-black/5 dark:bg-white/10 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/10 text-xs font-bold hover:bg-black/10 transition cursor-pointer flex items-center gap-1"
                           >
-                            {copiedBatchList ? '✓ Đã chép' : 'Sao chép tất cả'}
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>{copiedBatchList ? '✓ Đã chép' : 'Sao chép tất cả'}</span>
                           </button>
                           <button
                             type="button"
                             onClick={handleExportCsv}
-                            className="px-3 py-1 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition cursor-pointer"
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition cursor-pointer flex items-center gap-1"
                           >
-                            Xuất File CSV
+                            <FileSpreadsheet className="h-3.5 w-3.5" />
+                            <span>Xuất CSV (Excel)</span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={handleExportTxt}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition cursor-pointer flex items-center gap-1"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            <span>Tải File .TXT</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-60 overflow-y-auto rounded-2xl border border-black/10 dark:border-white/10 divide-y divide-black/5 dark:divide-white/5 font-mono text-[11px]">
+                        {batchResults.map((u, idx) => (
+                          <div key={idx} className="p-2.5 flex items-center justify-between">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{u.email}</span>
+                            <span className="text-slate-500">MK: {u.password}</span>
+                            <span className={u.success ? 'text-emerald-500 font-bold' : 'text-rose-500'}>
+                              {u.success ? '✓ OK' : u.error || 'Lỗi'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: CẤP 1 TÀI KHOẢN TRỰC TIẾP */}
+              {workbenchTab === 'single_provision' && (
+                <form onSubmit={handleSingleProvision} className="space-y-4 text-xs animate-in fade-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Họ và tên *:</label>
+                      <input
+                        type="text"
+                        value={singleFullName}
+                        onChange={(e) => setSingleFullName(e.target.value)}
+                        className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                        placeholder="Nguyễn Văn A"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Email người nhận *:</label>
+                      <input
+                        type="email"
+                        value={singleEmail}
+                        onChange={(e) => setSingleEmail(e.target.value)}
+                        className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                        placeholder="nguyenvana@gmail.com"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Mật khẩu khởi tạo *:</label>
+                      <input
+                        type="text"
+                        value={singlePassword}
+                        onChange={(e) => setSinglePassword(e.target.value)}
+                        className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                        placeholder="SenExam@2025"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Vai trò phân quyền:</label>
+                      <select
+                        value={singleRole}
+                        onChange={(e) => setSingleRole(e.target.value as any)}
+                        className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                      >
+                        <option value="student">🎓 Học sinh (Student)</option>
+                        <option value="teacher">👨‍🏫 Giáo viên (Teacher)</option>
+                        <option value="collab">🤝 Cộng tác viên (Collab)</option>
+                        <option value="admin">👑 Quản trị viên (Admin)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Gói tài khoản:</label>
+                      <select
+                        value={singlePlanTier}
+                        onChange={(e) => setSinglePlanTier(e.target.value as any)}
+                        className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                      >
+                        <option value="free">Cơ bản (Free)</option>
+                        <option value="premium">Sen VIP (Premium)</option>
+                        <option value="premium_plus">Premium+ (Vip Đặc Quyền)</option>
+                        <option value="sen_one">Gói Sen One (Flagship)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Tặng SenCash ban đầu:</label>
+                      <input
+                        type="number"
+                        value={singleSenCash}
+                        onChange={(e) => setSingleSenCash(e.target.value)}
+                        className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={singleLoading}
+                    className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:bg-indigo-700 transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {singleLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                    ) : (
+                      <UserPlus className="h-4 w-4 inline mr-2" />
+                    )}
+                    Kích Hoạt Tài Khoản Trực Tiếp
+                  </button>
+                </form>
+              )}
+
+              {/* TAB 4: QUẢN TRỊ KHO ĐỀ */}
+              {workbenchTab === 'exams' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="relative flex-1 min-w-[240px]">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Tìm kiếm đề thi theo tên hoặc loại đề..."
+                        value={examSearch}
+                        onChange={(e) => setExamSearch(e.target.value)}
+                        className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"
+                      />
+                    </div>
+
+                    <Link
+                      href="/new-setup-courses"
+                      className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition flex items-center gap-1.5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Soạn & Tạo Đề Mới</span>
+                    </Link>
+                  </div>
+
+                  {examsLoading ? (
+                    <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                      <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải danh sách đề thi...
+                    </div>
+                  ) : filteredExams.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-slate-400">
+                      Chưa có đề thi nào trong kho hoặc không tìm thấy kết quả.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
+                      {filteredExams.map((ex) => {
+                        const isPdf = Boolean(ex.pdf_url || ex.drive_file_id || ex.format === 'pdf')
+                        return (
+                          <div
+                            key={ex.id}
+                            className="p-4 flex items-center justify-between flex-wrap gap-2 hover:bg-black/[0.01]"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-black text-slate-900 dark:text-white text-sm">{ex.title}</span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    isPdf ? 'bg-sky-500/10 text-sky-600' : 'bg-teal-500/10 text-teal-600'
+                                  }`}
+                                >
+                                  {isPdf ? '📄 Đề PDF Truyền Thống' : '✨ KaTeX Sắc Nét'}
+                                </span>
+                              </div>
+                              <p className="text-slate-500 text-[11px]">
+                                Môn/Loại: {ex.exam_type || 'Tổng hợp'} • Thời gian: {ex.duration || 50} phút • Mã:{' '}
+                                <code>{ex.exam_code || 'Không có'}</code>
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Link
+                                href={`/new-exams/${ex.id}`}
+                                target="_blank"
+                                className="px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-black/5 transition flex items-center gap-1"
+                              >
+                                <span>Xem Đề</span>
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Link>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 5: PHÂN QUYỀN & CẤP VIP NGƯỜI DÙNG */}
+              {workbenchTab === 'users' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="relative flex-1 min-w-[240px]">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Tìm kiếm người dùng theo email, họ tên..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {usersLoading ? (
+                    <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                      <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải danh sách người dùng...
+                    </div>
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-slate-400">
+                      Không tìm thấy người dùng nào phù hợp với từ khóa.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
+                      {filteredUsers.map((u) => (
+                        <div
+                          key={u.id}
+                          className="p-3.5 flex items-center justify-between flex-wrap gap-2 hover:bg-black/[0.01]"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 dark:text-white">{u.email}</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-500/10 text-slate-600 dark:text-slate-300">
+                                {u.role === 'admin' ? '👑 Admin' : u.role === 'teacher' ? '👨‍🏫 Giáo viên' : '🎓 Học sinh'}
+                              </span>
+                              {u.plan_tier && u.plan_tier !== 'free' && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-600">
+                                  VIP: {u.plan_tier}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {u.full_name || 'Chưa cập nhật tên'} • SenCash: {u.sencash_balance || 0} SC
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUserForGrant(u)}
+                              className="px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-xs hover:bg-amber-500/20 transition cursor-pointer"
+                            >
+                              Nâng VIP / Tặng SC
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* MODAL CẤP VIP & TẶNG SC */}
+                  {selectedUserForGrant && (
+                    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                      <div className="w-full max-w-md rounded-[28px] border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+                        <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-3">
+                          <h4 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
+                            <Crown className="h-5 w-5 text-amber-500" />
+                            <span>Cấp Đặc Quyền Cho Thành Viên</span>
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedUserForGrant(null)}
+                            className="text-slate-400 hover:text-black dark:hover:text-white text-sm font-bold"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="text-xs text-slate-600 dark:text-slate-300">
+                          Tài khoản: <strong>{selectedUserForGrant.email}</strong> ({selectedUserForGrant.full_name})
+                        </div>
+
+                        {/* Phần Cấp VIP */}
+                        <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2.5">
+                          <span className="font-bold text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                            <Crown className="h-4 w-4 text-amber-500" /> Nâng Hạng Sen VIP:
+                          </span>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <select
+                              value={grantVipTier}
+                              onChange={(e) => setGrantVipTier(e.target.value)}
+                              className="rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-2 font-bold outline-none"
+                            >
+                              <option value="premium">Sen VIP (Premium)</option>
+                              <option value="premium_plus">Premium+</option>
+                              <option value="sen_one">Sen One</option>
+                            </select>
+                            <input
+                              type="number"
+                              placeholder="Số ngày (30)"
+                              value={grantVipDays}
+                              onChange={(e) => setGrantVipDays(e.target.value)}
+                              className="rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-2 font-bold outline-none"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleGrantVip}
+                            disabled={grantActionLoading}
+                            className="w-full py-2 rounded-xl bg-amber-500 text-black font-black text-xs hover:bg-amber-600 transition disabled:opacity-50 cursor-pointer"
+                          >
+                            {grantActionLoading ? 'Đang thực hiện...' : 'Kích Hoạt Gói VIP'}
+                          </button>
+                        </div>
+
+                        {/* Phần Tặng SenCash */}
+                        <div className="p-3.5 rounded-2xl bg-pink-500/5 border border-pink-500/20 space-y-2.5">
+                          <span className="font-bold text-xs text-pink-800 dark:text-pink-300 flex items-center gap-1.5">
+                            <Coins className="h-4 w-4 text-pink-500" /> Tặng Thưởng SenCash:
+                          </span>
+                          <div className="flex items-center gap-2 text-xs">
+                            <input
+                              type="number"
+                              placeholder="Số SC tặng (50)"
+                              value={grantSenCashAmount}
+                              onChange={(e) => setGrantSenCashAmount(e.target.value)}
+                              className="flex-1 rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-2 font-bold outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleGiftSenCash}
+                              disabled={grantActionLoading}
+                              className="px-4 py-2 rounded-xl bg-pink-500 text-white font-black text-xs hover:bg-pink-600 transition disabled:opacity-50 cursor-pointer"
+                            >
+                              Cộng SC
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
+              )}
 
-                {/* 3.2 CẤP 1 TÀI KHOẢN ĐƠN LẺ */}
-                <div className="rounded-[30px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-2xl space-y-4">
-                  <div className="flex items-center gap-2 font-black text-lg" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                    <UserPlus className="h-5 w-5 text-indigo-500" />
-                    <span>Cấp 1 Tài Khoản Trực Tiếp</span>
+              {/* TAB 6: GIFTCODES */}
+              {workbenchTab === 'giftcodes' && (
+                <div className="space-y-5 animate-in fade-in">
+                  <div className="p-4 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-xs text-pink-800 dark:text-pink-200">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <Gift className="h-4 w-4 text-pink-600" /> Tạo mã quà tặng Giftcode sự kiện:
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed">
+                      Mã quà tặng cho phép học sinh tự kích hoạt VIP hoặc nhận SenCash vào ví SenExam.
+                    </p>
                   </div>
 
-                  <form onSubmit={handleSingleProvision} className="space-y-4 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <form onSubmit={handleCreateGiftcode} className="space-y-4 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Họ và tên *:</label>
-                        <input
-                          type="text"
-                          value={singleFullName}
-                          onChange={(e) => setSingleFullName(e.target.value)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Email người nhận *:</label>
-                        <input
-                          type="email"
-                          value={singleEmail}
-                          onChange={(e) => setSingleEmail(e.target.value)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Mật khẩu khởi tạo *:</label>
-                        <input
-                          type="text"
-                          value={singlePassword}
-                          onChange={(e) => setSinglePassword(e.target.value)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Vai trò phân quyền:</label>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Loại phần thưởng:</label>
                         <select
-                          value={singleRole}
-                          onChange={(e) => setSingleRole(e.target.value as any)}
+                          value={newCodeType}
+                          onChange={(e) => setNewCodeType(e.target.value as any)}
                           className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
                         >
-                          <option value="student">🎓 Học sinh (Student)</option>
-                          <option value="teacher">👨‍🏫 Giáo viên (Teacher)</option>
-                          <option value="collab">🤝 Cộng tác viên (Collab)</option>
-                          <option value="admin">👑 Quản trị viên (Admin)</option>
+                          <option value="vip_days">Kích hoạt ngày VIP</option>
+                          <option value="sencash">Cộng SenCash vào ví</option>
                         </select>
                       </div>
 
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Gói tài khoản:</label>
-                        <select
-                          value={singlePlanTier}
-                          onChange={(e) => setSinglePlanTier(e.target.value as any)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
-                        >
-                          <option value="free">Cơ bản (Free)</option>
-                          <option value="premium">Sen VIP (Premium)</option>
-                          <option value="premium_plus">Premium+ (Vip Đặc Quyền)</option>
-                          <option value="sen_one">Gói Sen One (Flagship)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Tặng SenCash ban đầu:</label>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                          {newCodeType === 'vip_days' ? 'Số ngày VIP:' : 'Số SenCash (SC):'}
+                        </label>
                         <input
                           type="number"
-                          value={singleSenCash}
-                          onChange={(e) => setSingleSenCash(e.target.value)}
+                          value={newCodeAmount}
+                          onChange={(e) => setNewCodeAmount(e.target.value)}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Số lượt dùng tối đa:</label>
+                        <input
+                          type="number"
+                          value={newCodeMaxUses}
+                          onChange={(e) => setNewCodeMaxUses(e.target.value)}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Ghi chú sự kiện:</label>
+                        <input
+                          type="text"
+                          value={newCodeNote}
+                          onChange={(e) => setNewCodeNote(e.target.value)}
                           className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
                         />
                       </div>
@@ -1311,209 +2689,19 @@ export default function NewAdminDashboardPage() {
 
                     <button
                       type="submit"
-                      disabled={singleLoading}
-                      className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:bg-indigo-700 transition disabled:opacity-50 cursor-pointer"
+                      disabled={codeActionLoading}
+                      className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-105 transition disabled:opacity-50 cursor-pointer"
                     >
-                      {singleLoading ? <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> : <UserPlus className="h-4 w-4 inline mr-2" />}
-                      Kích Hoạt Tài Khoản Trực Tiếp
+                      {codeActionLoading ? <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> : <Plus className="h-4 w-4 inline mr-2" />}
+                      Khởi Tạo Mã Giftcode Ngay
                     </button>
                   </form>
                 </div>
-              </div>
-            )}
-
-            {/* ========================================== */}
-            {/* TAB 4: KHO ĐỀ THI & QUẢN TRỊ ĐỀ */}
-            {/* ========================================== */}
-            {activeSection === 'exams' && (
-              <div className="rounded-[30px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-2xl space-y-4 animate-in fade-in">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <h3 className="font-black text-lg" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                      Quản Trị Kho Đề Thi ({filteredExams.length} đề)
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Hỗ trợ đề KaTeX trực tiếp và đề PDF truyền thống 2 cột.</p>
-                  </div>
-                  <Link
-                    href="/sentaobai"
-                    className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition"
-                  >
-                    + Tạo Đề Mới
-                  </Link>
-                </div>
-
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Tìm kiếm đề thi theo tên hoặc loại đề..."
-                    value={examSearch}
-                    onChange={(e) => setExamSearch(e.target.value)}
-                    className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-3 pl-11 pr-4 text-xs font-semibold outline-none"
-                  />
-                </div>
-
-                {examsLoading ? (
-                  <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải đề thi...
-                  </div>
-                ) : (
-                  <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
-                    {filteredExams.map((ex) => {
-                      const isPdf = Boolean(ex.pdf_url || ex.drive_file_id || ex.format === 'pdf')
-                      return (
-                        <div key={ex.id} className="p-4 flex items-center justify-between flex-wrap gap-2 hover:bg-black/[0.01]">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-black text-slate-900 dark:text-white text-sm">{ex.title}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                isPdf ? 'bg-sky-500/10 text-sky-600' : 'bg-teal-500/10 text-teal-600'
-                              }`}>
-                                {isPdf ? '📄 Đề PDF' : '✨ KaTeX'}
-                              </span>
-                            </div>
-                            <p className="text-slate-500 text-[11px]">
-                              {ex.exam_type} • Thời gian: {ex.duration} phút • Mã: <code>{ex.exam_code || 'Không có'}</code>
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <Link
-                              href={`/new-exams/${ex.id}`}
-                              target="_blank"
-                              className="px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-black/5"
-                            >
-                              Xem Đề ↗
-                            </Link>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ========================================== */}
-            {/* TAB 5: DANH SÁCH NGƯỜI DÙNG */}
-            {/* ========================================== */}
-            {activeSection === 'users' && (
-              <div className="rounded-[30px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-2xl space-y-4 animate-in fade-in">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <h3 className="font-black text-lg" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                      Danh Sách Thành Viên ({filteredUsers.length})
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Quản lý phân quyền và gói VIP cho người dùng.</p>
-                  </div>
-                </div>
-
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Tìm theo email, tên người dùng..."
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-3 pl-11 pr-4 text-xs font-semibold outline-none"
-                  />
-                </div>
-
-                {usersLoading ? (
-                  <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải danh sách...
-                  </div>
-                ) : (
-                  <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
-                    {filteredUsers.map((u) => (
-                      <div key={u.id} className="p-3.5 flex items-center justify-between flex-wrap gap-2 hover:bg-black/[0.01]">
-                        <div>
-                          <p className="font-bold text-slate-800 dark:text-slate-200">{u.email}</p>
-                          <p className="text-[11px] text-slate-500">
-                            {u.full_name || 'Chưa cập nhật tên'} • Vai trò: <strong>{u.role}</strong> • Gói: <strong>{u.plan_tier || 'free'}</strong> • SenCash: {u.sencash_balance || 0} SC
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ========================================== */}
-            {/* TAB 8: CÀI ĐẶT WEB & GÓC NHÌN */}
-            {/* ========================================== */}
-            {activeSection === 'settings' && (
-              <div className="rounded-[30px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-2xl space-y-6 animate-in fade-in">
-                <div>
-                  <h3 className="font-black text-lg" style={{ fontFamily: 'var(--font-admdash-heading)' }}>
-                    Cài Đặt Web & Tùy Chọn Góc Nhìn
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Lựa chọn góc nhìn trải nghiệm người dùng và cấu hình hiển thị bảng điều khiển.
-                  </p>
-                </div>
-
-                {/* Chọn góc nhìn */}
-                <div className="space-y-3">
-                  <label className="font-bold text-xs text-slate-700 dark:text-slate-300 block">
-                    Góc nhìn hiển thị hiện tại:
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchPerspective('admin')}
-                      className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-                        perspective === 'admin'
-                          ? 'border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30'
-                          : 'border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50'
-                      }`}
-                    >
-                      <Crown className="h-6 w-6 text-amber-500 mb-2" />
-                      <p className="font-black text-sm">Góc nhìn Quản trị viên</p>
-                      <p className="text-[11px] text-slate-500 mt-1">
-                        Toàn quyền xem KPI, cấp tài khoản, xem các phiên hoạt động và cấu hình hệ thống.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchPerspective('student')}
-                      className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-                        perspective === 'student'
-                          ? 'border-indigo-500 bg-indigo-500/10 ring-2 ring-indigo-500/30'
-                          : 'border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50'
-                      }`}
-                    >
-                      <GraduationCap className="h-6 w-6 text-indigo-500 mb-2" />
-                      <p className="font-black text-sm">Góc nhìn Sinh viên / Thí sinh</p>
-                      <p className="text-[11px] text-slate-500 mt-1">
-                        Mô phỏng chính xác giao diện của học sinh khi làm bài, xem điểm và sử dụng SenAI.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchPerspective('teacher')}
-                      className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-                        perspective === 'teacher'
-                          ? 'border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/30'
-                          : 'border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-800/50'
-                      }`}
-                    >
-                      <Briefcase className="h-6 w-6 text-emerald-500 mb-2" />
-                      <p className="font-black text-sm">Góc nhìn Giảng viên / Thầy cô</p>
-                      <p className="text-[11px] text-slate-500 mt-1">
-                        Mô phỏng giao diện của thầy cô quản lý đề thi, lớp học và giám thị phòng thi.
-                      </p>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      </section>
     </main>
   )
 }
