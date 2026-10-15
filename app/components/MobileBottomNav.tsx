@@ -408,7 +408,8 @@ export default function MobileBottomNav() {
               <button
                 type="button"
                 onClick={() => setShowAllFeatures(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-black/10 transition"
+                aria-label="Đóng bảng tất cả tính năng"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-400 hover:bg-black/10 transition"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -429,7 +430,8 @@ export default function MobileBottomNav() {
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"
+                    aria-label="Xóa từ khóa tìm kiếm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs p-2 min-h-[36px] min-w-[36px] flex items-center justify-center"
                   >
                     ✕
                   </button>

@@ -526,6 +526,15 @@ html.dark[data-eco-mode="true"] .dark\:bg-slate-800\/90 {
   animation-play-state: paused !important;
 }
 
+/* 5. Tối ưu GPU Compositor: loại bỏ cảnh báo non-composited animations */
+.animate-pulse,
+.animate-spin,
+.animate-spin-slow,
+.animate-ping {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
 /* ========================================================================= */
 /* SEN HEART 1.0 - ULTRA-LIGHT GPU PERFORMANCE ENGINE (ANTI-LAG ZERO COST)   */
 /* ========================================================================= */

@@ -21,7 +21,22 @@ import {
   GraduationCap,
   Lock,
 } from 'lucide-react'
-import { headingFont, bodyFont, getModernThemeVars } from '@/lib/fepnTheme'
+import { Baloo_2, Nunito } from 'next/font/google'
+import { getModernThemeVars } from '@/app/components/modernTheme'
+
+const headingFont = Baloo_2({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-fepn-heading',
+  display: 'swap',
+  preload: false,
+})
+
+const bodyFont = Nunito({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-fepn-body',
+  display: 'swap',
+  preload: false,
+})
 
 type StepType = 'enter_mssv' | 'verify_authenticator' | 'verify_email_otp' | 'set_new_password' | 'success'
 

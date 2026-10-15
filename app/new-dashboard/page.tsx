@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Baloo_2, Nunito } from 'next/font/google'
-import { useDeferredValue, useEffect, useMemo, useState, type ComponentType } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import {
   ArrowRight,
   BadgeCheck,
@@ -55,16 +55,48 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
-import ProfileCompletionModal from '@/app/components/ProfileCompletionModal'
-import DailyStreakModal from '@/app/components/DailyStreakModal'
+import dynamic from 'next/dynamic'
 import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 import { getPlanTierName, getTotalSenaiDailyLimit } from '@/lib/vipMembership'
 import { getEffectiveSenaiTier, SENAI_TIER_LABEL, SENAI_TIER_DAILY_LIMIT, type SenAiTierCode } from '@/lib/senaiTiers'
-import DashboardSenAiStudio from '@/app/components/DashboardSenAiStudio'
 
-const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-heading' })
-const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newdash-body' })
+const DashboardSenAiStudio = dynamic(
+  () => import('@/app/components/DashboardSenAiStudio'),
+  {
+    loading: () => (
+      <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin text-pink-500" /> Đang tải SenAI Studio...
+      </div>
+    ),
+    ssr: false,
+  }
+)
+
+const DailyStreakModal = dynamic(
+  () => import('@/app/components/DailyStreakModal'),
+  { ssr: false }
+)
+
+const ProfileCompletionModal = dynamic(
+  () => import('@/app/components/ProfileCompletionModal'),
+  { ssr: false }
+)
+
+const headingFont = Baloo_2({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-newdash-heading',
+  display: 'swap',
+  preload: false,
+  fallback: ['system-ui', 'sans-serif'],
+})
+const bodyFont = Nunito({
+  subsets: ['latin', 'vietnamese'],
+  variable: '--font-newdash-body',
+  display: 'swap',
+  preload: false,
+  fallback: ['system-ui', 'sans-serif'],
+})
 
 export type ActionCategory = 'all' | 'study' | 'math_exam' | 'senai' | 'community'
 
@@ -672,8 +704,9 @@ function NewDashboardContent() {
         return
       }
       await linkWithGoogle('/new-dashboard')
-    } catch (err: any) {
-      alert(`Không thể liên kết Google: ${err.message || 'Vui lòng cấu hình Google Provider trên Supabase.'}`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Vui lòng cấu hình Google Provider trên Supabase.'
+      alert(`Không thể liên kết Google: ${msg}`)
     } finally {
       setGoogleLinkingLoading(false)
     }
@@ -694,8 +727,9 @@ function NewDashboardContent() {
       setPasswordMsg({ type: 'success', text: 'Đổi mật khẩu thành công!' })
       setNewPassword('')
       setTimeout(() => setShowPasswordChange(false), 2000)
-    } catch (err: any) {
-      setPasswordMsg({ type: 'error', text: err.message || 'Đổi mật khẩu thất bại.' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Đổi mật khẩu thất bại.'
+      setPasswordMsg({ type: 'error', text: msg })
     } finally {
       setSavingSettings(false)
     }
@@ -1090,8 +1124,9 @@ function NewDashboardContent() {
               <button
                 type="button"
                 onClick={() => setShowGoogleGuide(!showGoogleGuide)}
+                aria-label="Xem lợi ích bảo mật khi liên kết tài khoản Google"
                 title="Lợi ích bảo mật"
-                className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10"
+                className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10 min-h-[40px] min-w-[40px] flex items-center justify-center"
               >
                 <HelpCircle className="h-4 w-4" />
               </button>
@@ -1252,9 +1287,10 @@ function NewDashboardContent() {
                     <button
                       type="button"
                       onClick={() => setShowPasswordText(!showPasswordText)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                      aria-label={showPasswordText ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 min-h-[40px] min-w-[40px] flex items-center justify-center transition"
                     >
-                      {showPasswordText ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      {showPasswordText ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {passwordMsg && (
@@ -1347,7 +1383,8 @@ function NewDashboardContent() {
             <button
               type="button"
               onClick={() => setAutoRenewMessage(null)}
-              className="ml-3 rounded-lg p-1 text-amber-600 hover:bg-amber-500/20 transition cursor-pointer"
+              aria-label="Đóng thông báo tự động gia hạn"
+              className="ml-3 rounded-lg p-2 text-amber-600 hover:bg-amber-500/20 transition cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
             >
               ✕
             </button>
@@ -1560,7 +1597,7 @@ function NewDashboardContent() {
 
                     {/* CÁC THẺ TÍNH NĂNG GIỮ NGUYÊN ICON VÀ CARD NHƯ BẢN KHÔNG BETA */}
                     <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-                      {groupItems.map((item, index) => {
+                      {groupItems.map((item) => {
                         const Icon = item.icon
                         const isExternal = item.href.startsWith('http')
                         const Wrapper = isExternal ? 'a' : Link
@@ -1612,7 +1649,7 @@ function NewDashboardContent() {
 
               {displayActions.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400 font-bold">
-                  Không tìm thấy tính năng nào khớp với từ khoá "{query}". Vui lòng thử từ khoá khác!
+                  Không tìm thấy tính năng nào khớp với từ khoá &quot;{query}&quot;. Vui lòng thử từ khoá khác!
                 </div>
               )}
             </div>
@@ -1835,8 +1872,9 @@ function NewDashboardContent() {
                 <button
                   type="button"
                   onClick={() => setShowGoogleGuide(!showGoogleGuide)}
+                  aria-label="Xem lợi ích bảo mật khi liên kết tài khoản Google"
                   title="Xem thông tin bảo mật & lợi ích"
-                  className="rounded-xl border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10"
+                  className="rounded-xl border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10 min-h-[40px] min-w-[40px] flex items-center justify-center"
                 >
                   <HelpCircle className="h-4 w-4" />
                 </button>
@@ -1999,9 +2037,10 @@ function NewDashboardContent() {
                       <button
                         type="button"
                         onClick={() => setShowPasswordText(!showPasswordText)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                        aria-label={showPasswordText ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 min-h-[40px] min-w-[40px] flex items-center justify-center transition"
                       >
-                        {showPasswordText ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        {showPasswordText ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                     {passwordMsg && (
@@ -2055,13 +2094,15 @@ function NewDashboardContent() {
   )
 }
 
-export default function NewDashboardPage() {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+const emptySubscribe = () => () => {}
+function useIsClient() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false)
+}
 
-  if (!mounted) {
+export default function NewDashboardPage() {
+  const isClient = useIsClient()
+
+  if (!isClient) {
     return (
       <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#0F172A] text-[#2B2B2B] dark:text-slate-100">
         <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
