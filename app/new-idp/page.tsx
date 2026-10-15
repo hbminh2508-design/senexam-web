@@ -296,7 +296,7 @@ function IdpAuthContent() {
         const lockUntil = Date.now() + LOCKOUT_SECONDS * 1000
         localStorage.setItem('idp_lockout_until', String(lockUntil))
         setLockoutTimer(LOCKOUT_SECONDS)
-        setErrorMsg(`Hệ thống bảo vệ Sen Heart đã tạm khóa do nhập sai liên tiếp ${MAX_FAILED_ATTEMPTS} lần. Vui lòng chờ 60 giây.`)
+        setErrorMsg(`Hệ thống bảo vệ đã tạm khóa do nhập sai liên tiếp ${MAX_FAILED_ATTEMPTS} lần. Vui lòng chờ 60 giây.`)
       }
     } catch {}
   }
@@ -788,9 +788,9 @@ function IdpAuthContent() {
         <div className="text-center space-y-2 mb-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>SenExam IDP • Sen Heart Defense</span>
+            <span>SenExam IDP</span>
             <span className="hidden sm:inline-block px-1.5 py-0.5 text-[9px] rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono">
-              2FA TOTP Ready
+              Sen 2FA Ready
             </span>
           </div>
 
@@ -836,7 +836,7 @@ function IdpAuthContent() {
                   ⏳ {lockoutTimer} giây
                 </span>
                 <span className="text-[10px] uppercase tracking-wider text-rose-500 font-mono">
-                  Sen Heart Armor Active
+                  Sen Protection Active
                 </span>
               </div>
             </div>
@@ -851,10 +851,10 @@ function IdpAuthContent() {
                 </div>
                 <div>
                   <p className="font-black text-slate-900 dark:text-white text-base">
-                    Xác Thực Bảo Mật 2 Lớp (TOTP)
+                    Xác Thực Sen 2FA (TOTP)
                   </p>
                   <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                    Tài khoản <strong>{pendingEmail || email}</strong> đã kích hoạt bảo vệ 2FA.
+                    Tài khoản <strong>{pendingEmail || email}</strong> đã kích hoạt bảo vệ Sen 2FA.
                   </p>
                 </div>
                 <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">
@@ -1014,7 +1014,7 @@ function IdpAuthContent() {
                   }`}
                 >
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  <span>2FA Auth</span>
+                  <span>Sen 2FA</span>
                 </button>
 
                 <button
@@ -1042,7 +1042,7 @@ function IdpAuthContent() {
                   <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-2">
                     <div className="flex items-center gap-2 font-black text-indigo-900 dark:text-indigo-200 text-sm">
                       <ShieldCheck className="h-5 w-5 text-indigo-500 shrink-0" />
-                      <span>Bảo Mật 2 Lớp Bằng Ứng Dụng Authenticator (TOTP)</span>
+                      <span>Bảo Mật Sen 2FA Bằng Ứng Dụng Authenticator (TOTP)</span>
                     </div>
                     <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-[11px]">
                       Hỗ trợ Google Authenticator, Microsoft Authenticator hoặc Apple Passwords. Mỗi lần đăng nhập, mã xác thực 6 số trên điện thoại sẽ ngăn chặn 100% các cuộc tấn công chiếm đoạt tài khoản.
@@ -1054,7 +1054,7 @@ function IdpAuthContent() {
                       <Lock className="h-8 w-8 text-indigo-500 mx-auto" />
                       <div>
                         <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                          Yêu cầu đăng nhập để cấu hình 2FA
+                          Yêu cầu đăng nhập để cấu hình Sen 2FA
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                           Vui lòng đăng nhập vào tài khoản của bạn để liên kết ứng dụng Authenticator hoặc kiểm tra trạng thái bảo mật.
@@ -1076,7 +1076,7 @@ function IdpAuthContent() {
                         </div>
                         <div>
                           <p className="font-black text-slate-900 dark:text-white text-sm">
-                            Bảo Mật 2 Lớp Authenticator Đang Bật
+                            Bảo Mật Sen 2FA (Authenticator) Đang Bật
                           </p>
                           <p className="text-xs text-slate-600 dark:text-slate-300">
                             Tài khoản {currentUser.email} đã được bảo vệ bởi mã TOTP.
@@ -1094,7 +1094,7 @@ function IdpAuthContent() {
                           disabled={mfaLoading}
                           className="px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold hover:bg-rose-500/20 transition cursor-pointer"
                         >
-                          {mfaLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Tắt xác thực 2 lớp'}
+                          {mfaLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Tắt Sen 2FA'}
                         </button>
                       </div>
                     </div>
@@ -1167,7 +1167,7 @@ function IdpAuthContent() {
                         className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black uppercase text-xs sm:text-sm tracking-wider shadow-lg transition hover:scale-[1.01] disabled:opacity-50 inline-flex items-center justify-center gap-2 cursor-pointer"
                       >
                         {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                        <span>Xác Nhận & Bật Bảo Mật 2 Lớp</span>
+                        <span>Xác Nhận & Bật Sen 2FA</span>
                       </button>
                     </form>
                   ) : (
@@ -1177,10 +1177,10 @@ function IdpAuthContent() {
                       </div>
                       <div>
                         <p className="font-black text-slate-900 dark:text-white text-base">
-                          Kích Hoạt Google Authenticator
+                          Kích Hoạt Sen 2FA (Authenticator)
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                          Tạo mã QR để liên kết ứng dụng xác thực hai bước ngay bây giờ.
+                          Tạo mã QR để liên kết ứng dụng xác thực hai bước bảo vệ tài khoản ngay bây giờ.
                         </p>
                       </div>
 
@@ -1191,7 +1191,7 @@ function IdpAuthContent() {
                         className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white font-black uppercase text-xs sm:text-sm tracking-wider shadow-lg transition hover:scale-[1.01] disabled:opacity-50 inline-flex items-center justify-center gap-2 cursor-pointer"
                       >
                         {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-                        <span>Bắt Đầu Thiết Lập Authenticator</span>
+                        <span>Bắt Đầu Thiết Lập Sen 2FA</span>
                       </button>
                     </div>
                   )}

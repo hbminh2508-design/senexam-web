@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
         destination: '/dashboard', // Hoặc đổi thành '/login' nếu bạn muốn bắt đăng nhập trước
         permanent: true, // Báo cho trình duyệt biết đây là chuyển hướng vĩnh viễn (301)
       },
+      {
+        source: '/new-admin',
+        destination: '/new-admin-dashboard',
+        permanent: true,
+      },
     ];
   },
   async headers() {

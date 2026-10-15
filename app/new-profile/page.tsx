@@ -321,7 +321,7 @@ export default function NewProfilePage() {
           <div className="flex items-center gap-2">
             {(profile?.role === 'admin' || profile?.role === 'collab') && (
               <Link
-                href="/new-admin"
+                href="/new-admin-dashboard"
                 className="inline-flex items-center gap-1.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-md transition hover:scale-105"
               >
                 <ShieldCheck className="h-4 w-4" /> Quản Trị Tối Cao
@@ -374,7 +374,7 @@ export default function NewProfilePage() {
           <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
             {(profile?.role === 'admin' || profile?.role === 'collab') && (
               <Link
-                href="/new-admin"
+                href="/new-admin-dashboard"
                 className="flex-1 md:flex-none flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 text-white px-4 py-3 text-xs font-black uppercase tracking-wider shadow-md transition hover:scale-105"
               >
                 <ShieldCheck className="h-4 w-4" />

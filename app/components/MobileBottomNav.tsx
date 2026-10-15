@@ -219,7 +219,7 @@ const ALL_FEATURES: FeatureItem[] = [
     key: 'admin',
     title: 'Quản Trị Hệ Thống',
     desc: 'Bảng điều khiển quản trị viên và cấu hình toàn trang.',
-    href: '/new-admin',
+    href: '/new-admin-dashboard',
     tone: 'from-red-500 to-rose-700',
     badge: 'Admin',
     icon: Settings,

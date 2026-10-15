@@ -1558,7 +1558,7 @@ function SetupCourseMainContent() {
 
           {(userRole === 'admin' || userRole === 'collab') && (
             <Link
-              href="/new-admin"
+              href="/new-admin-dashboard"
               prefetch={false}
               className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >

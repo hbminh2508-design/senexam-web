@@ -43,7 +43,7 @@ export default function LegacyUiSunsetModal() {
     )
       return '/new-media'
     if (path.startsWith('/legacy-vip') || path.startsWith('/vip')) return '/new-vip'
-    if (path.startsWith('/legacy-admin') || path.startsWith('/admin')) return '/new-admin'
+    if (path.startsWith('/legacy-admin') || path.startsWith('/admin')) return '/new-admin-dashboard'
     if (path.startsWith('/legacy-phongthinghiem') || path.startsWith('/phongthinghiem')) return '/new-labs'
     if (
       path.startsWith('/legacy-tinhdiem') ||

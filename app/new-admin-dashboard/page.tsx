@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
+import { linkWithGoogle } from '@/lib/authHelper'
 import {
   ShieldCheck,
   Users,
@@ -74,6 +75,9 @@ import {
   FlaskConical,
   Box,
   Brain,
+  Gauge,
+  Calendar,
+  MessageSquare,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({
@@ -112,7 +116,7 @@ interface SessionItem {
   created_at: string
 }
 
-type ActionCategory = 'admin_core' | 'study' | 'senai' | 'community'
+type ActionCategory = 'admin_core' | 'study' | 'math_exam' | 'senai' | 'community'
 
 interface QuickAction {
   key: string
@@ -126,6 +130,7 @@ interface QuickAction {
   category: ActionCategory
 }
 
+// 1. Phân hệ Admin
 const ADMIN_ACTION_CATEGORIES: { key: ActionCategory; label: string; icon: string }[] = [
   { key: 'admin_core', label: 'An Ninh & Quản Trị Hệ Thống', icon: '⚡' },
   { key: 'study', label: 'Khảo Thí & Ngân Hàng Đề Thi', icon: '📚' },
@@ -237,11 +242,18 @@ const ADMIN_ACTIONS: QuickAction[] = [
   },
 ]
 
-// Dữ liệu mô phỏng cho góc nhìn Sinh viên
+// 2. Phân hệ Sinh viên THẬT LẤY TỪ NEW-DASHBOARD
+const STUDENT_ACTION_CATEGORIES: { key: ActionCategory; label: string; icon: string }[] = [
+  { key: 'study', label: 'Học tập & Luyện thi', icon: '📚' },
+  { key: 'math_exam', label: 'Toán học & Khảo thí', icon: '📐' },
+  { key: 'senai', label: 'SenAI & Quota', icon: '🤖' },
+  { key: 'community', label: 'Cộng đồng & Tiện ích', icon: '🌐' },
+]
+
 const STUDENT_ACTIONS: QuickAction[] = [
   {
     key: 'st-new-exams',
-    title: 'Kho Đề Thi Mới 2026',
+    title: 'Kho đề thi mới',
     description: 'Khám phá ngân hàng đề thi bám sát ma trận 2026 và làm bài trực tuyến.',
     href: '/new-exams',
     tone: 'from-[#FFD166] via-[#F9A03F] to-[#EF476F]',
@@ -250,43 +262,176 @@ const STUDENT_ACTIONS: QuickAction[] = [
     category: 'study',
   },
   {
+    key: 'st-setup-course',
+    title: 'Soạn Đề & Khóa Học',
+    description: 'Soạn đề KaTeX trực tiếp, tải đề PDF & SEB, cấu hình kỳ thi và quản lý thí sinh.',
+    href: '/new-setup-courses',
+    tone: 'from-[#10B981] via-[#059669] to-[#047857]',
+    badge: 'Mới',
+    icon: Sparkles,
+    category: 'study',
+  },
+  {
     key: 'st-history',
-    title: 'Lịch Sử Bài Làm',
-    description: 'Tra cứu kết quả thi, xem lại bảng điểm và lời giải chi tiết từng câu hỏi.',
+    title: 'Lịch sử Bài nộp',
+    description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết, đối chiếu đáp án và tải đề thi PDF.',
     href: '/new-history-submissions',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
-    badge: 'Hồ Sơ',
+    badge: 'Hồ sơ',
     icon: BadgeCheck,
     category: 'study',
   },
   {
-    key: 'st-senai',
-    title: 'Trợ Lý Gia Sư SenAI',
-    description: 'Hỏi bài tập khó, phân tích đề thi và nhận hướng dẫn giải từng bước 24/7.',
-    href: '/new-dashboard',
-    tone: 'from-[#8B5CF6] via-[#A855F7] to-[#EC4899]',
-    badge: 'AI 24/7',
-    icon: Brain,
+    key: 'st-sen-read',
+    title: 'Phòng Đọc SenRead',
+    description: 'Không gian đọc sách & bản thảo Canvas siêu nhẹ 60FPS, AI chia chương, dịch thuật song ngữ và giọng đọc Google.',
+    href: '/read',
+    tone: 'from-[#059669] via-[#10B981] to-[#34D399]',
+    badge: 'Mới',
+    icon: BookOpen,
+    category: 'study',
+  },
+  {
+    key: 'st-senai-studio',
+    title: 'SenAI Studio',
+    description: 'Xưởng AI cá nhân hoá để tạo đề, chấm bài và giải thích chi tiết.',
+    href: '/new-senai-studio',
+    tone: 'from-[#3DA9FC] via-[#00C2A8] to-[#5EEAD4]',
+    badge: 'AI 2.0',
+    icon: Sparkles,
     category: 'senai',
   },
   {
-    key: 'st-community',
-    title: 'Bảng Tin & Sự Kiện',
-    description: 'Cập nhật tin tức kỳ thi tốt nghiệp THPT, lịch thi thử và mẹo làm bài.',
-    href: '/new-announcement',
-    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
-    badge: 'Tin Mới',
-    icon: Megaphone,
+    key: 'st-sen-store',
+    title: 'Cửa Hàng Sen',
+    description: 'Trung tâm mua sắm 5-in-1: Nâng cấp Hội viên VIP, Gói SenAI & Quota, Ví SenCash, Ưu đãi độc quyền và Đổi Gift Code.',
+    href: '/new-pay',
+    tone: 'from-[#6366F1] via-[#8B5CF6] to-[#EC4899]',
+    badge: 'Cửa hàng 5-in-1',
+    icon: Crown,
+    category: 'senai',
+  },
+  {
+    key: 'st-seb-security',
+    title: 'Sen Exam Canvas',
+    description: 'Môi trường khảo thí trực tuyến bảo mật cao chống gian lận 100% qua Sen Exam Canvas.',
+    href: 'https://seb.thicu.tailieufepn.senexam.me',
+    tone: 'from-[#0EA5E9] via-[#0284C7] to-[#1D4ED8]',
+    badge: 'Canvas',
+    icon: ShieldCheck,
+    category: 'math_exam',
+  },
+  {
+    key: 'st-sengraph',
+    title: 'SenGraph',
+    description: 'Vẽ đồ thị hàm số 2D và mô hình không gian 3D tương tác cao cấp, tích hợp Sen AI Toán học.',
+    href: 'https://sengraph.senexam.me',
+    tone: 'from-[#06B6D4] via-[#0284C7] to-[#4F46E5]',
+    badge: '2D & 3D',
+    icon: Box,
+    category: 'math_exam',
+  },
+  {
+    key: 'st-library',
+    title: 'Thư viện thông minh',
+    description: 'Kho tài liệu chuyên sâu được sắp xếp theo môn và mục tiêu thi cử.',
+    href: '/new-library',
+    tone: 'from-[#95D5B2] via-[#52B788] to-[#2D6A4F]',
+    icon: BookOpen,
+    category: 'study',
+  },
+  {
+    key: 'st-senvideo',
+    title: 'Sen Video',
+    description: 'Video bài giảng ngắn gọn, sinh động giúp nắm bắt trọng tâm nhanh.',
+    href: '/new-video',
+    tone: 'from-[#F472B6] via-[#EC4899] to-[#DB2777]',
+    badge: 'Mới',
+    icon: Video,
+    category: 'study',
+  },
+  {
+    key: 'st-media',
+    title: 'Sen Media 2.0',
+    description: 'Cộng đồng sĩ tử, diễn đàn hỏi đáp bài tập và phòng chat thảo luận toàn quốc.',
+    href: '/new-media',
+    tone: 'from-[#818CF8] via-[#6366F1] to-[#38BDF8]',
+    badge: 'Media',
+    icon: MessageSquare,
     category: 'community',
+  },
+  {
+    key: 'st-schedule',
+    title: 'Lịch Học & Lịch Thi',
+    description: 'Quản lý thời khóa biểu, lịch thi thử, cài đặt nhắc nhở và lặp lại thông minh.',
+    href: '/new-schedule',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
+    badge: 'Mới',
+    icon: Calendar,
+    category: 'community',
+  },
+  {
+    key: 'st-focus',
+    title: 'Chế độ Focus',
+    description: 'Không gian học tập yên tĩnh, đếm giờ Pomodoro tăng hiệu suất tối đa.',
+    href: '/new-focus',
+    tone: 'from-[#F9C74F] via-[#F9844A] to-[#F3722C]',
+    icon: Gauge,
+    category: 'study',
+  },
+  {
+    key: 'st-tinhdiem',
+    title: 'Tính điểm thi',
+    description: 'Công cụ tính điểm tốt nghiệp THPT, TSA và HSA chính xác nhất.',
+    href: '/new-mark-calculate',
+    tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
+    icon: TrendingUp,
+    category: 'math_exam',
+  },
+  {
+    key: 'st-student',
+    title: 'Lớp Học Của Tôi',
+    description: 'Tham gia lớp học bằng mã mời, xem các kỳ thi được giao và bảng điểm lớp.',
+    href: '/new-student',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#3B82F6]',
+    badge: 'Lớp học',
+    icon: GraduationCap,
+    category: 'study',
+  },
+  {
+    key: 'st-phongthinghiem',
+    title: 'Phòng thí nghiệm ảo',
+    description: 'Trực quan hoá các định luật Lý - Hoá - Sinh qua mô phỏng tương tác.',
+    href: '/new-labs',
+    tone: 'from-[#A78BFA] via-[#8B5CF6] to-[#7C3AED]',
+    icon: FlaskConical,
+    category: 'math_exam',
   },
 ]
 
-// Dữ liệu mô phỏng cho góc nhìn Giảng viên
+// 3. Phân hệ Giảng viên THẬT LẤY TỪ NEW-DASHBOARD
+const TEACHER_ACTION_CATEGORIES: { key: ActionCategory; label: string; icon: string }[] = [
+  { key: 'study', label: 'Giảng Dạy & Khảo Thí', icon: '👨‍🏫' },
+  { key: 'math_exam', label: 'Ngân Hàng Đề & Giám Thị SEB', icon: '📐' },
+  { key: 'senai', label: 'Trợ Giảng AI & Studio', icon: '🤖' },
+  { key: 'community', label: 'Quản Lý Lớp Học & Bảng Điểm', icon: '📊' },
+]
+
 const TEACHER_ACTIONS: QuickAction[] = [
   {
+    key: 'tc-teacher-portal',
+    title: 'Cổng Giảng Viên',
+    description: 'Soạn đề thi, quản lý lớp học, cấp mã mời và giám sát vi phạm thi cử.',
+    href: '/new-teacher',
+    tone: 'from-[#06B6D4] via-[#0EA5E9] to-[#0284C7]',
+    badge: 'Teacher',
+    icon: School,
+    category: 'study',
+  },
+  {
     key: 'tc-setup',
-    title: 'Soạn Đề & Ngân Hàng Câu Hỏi',
-    description: 'Biên soạn đề KaTeX trực tiếp, tải đề PDF và quản lý đề theo lớp học.',
+    title: 'Soạn Đề & Khóa Học SEB',
+    description: 'Biên soạn đề KaTeX trực tiếp, tải đề PDF, thiết lập phòng thi và ma trận điểm.',
     href: '/new-setup-courses',
     tone: 'from-[#10B981] via-[#059669] to-[#047857]',
     badge: 'Soạn Đề',
@@ -295,23 +440,71 @@ const TEACHER_ACTIONS: QuickAction[] = [
   },
   {
     key: 'tc-exams',
-    title: 'Quản Lý Phòng Thi SEB',
-    description: 'Tạo mã phòng thi, cấu hình chống gian lận Safe Exam Browser cho thí sinh.',
+    title: 'Ngân Hàng Kho Đề Thi',
+    description: 'Quản lý kho đề toàn diện, kiểm tra định dạng PDF 2 cột và KaTeX cho học sinh.',
     href: '/new-exams',
-    tone: 'from-[#3B82F6] via-[#6366F1] to-[#8B5CF6]',
-    badge: 'Giám Thị',
+    tone: 'from-[#FFD166] via-[#F9A03F] to-[#EF476F]',
+    badge: 'Kho Đề',
+    icon: Rocket,
+    category: 'math_exam',
+  },
+  {
+    key: 'tc-seb',
+    title: 'Giám Thị Trực Tuyến Canvas SEB',
+    description: 'Giám sát màn hình thi trực tiếp, chống gian lận và khóa ứng dụng ngoại vi.',
+    href: 'https://seb.thicu.tailieufepn.senexam.me',
+    tone: 'from-[#0EA5E9] via-[#0284C7] to-[#1D4ED8]',
+    badge: 'Canvas',
     icon: ShieldCheck,
-    category: 'study',
+    category: 'math_exam',
   },
   {
     key: 'tc-results',
-    title: 'Bảng Điểm & Phổ Điểm Lớp',
-    description: 'Theo dõi tiến độ nộp bài của học sinh, xuất bảng điểm Excel và phân tích ma trận.',
+    title: 'Lịch Sử Bài Nộp & Phổ Điểm',
+    description: 'Theo dõi tiến độ nộp bài của học sinh, xuất bảng điểm và chấm điểm tự động.',
     href: '/new-history-submissions',
-    tone: 'from-[#F59E0B] via-[#D97706] to-[#B45309]',
-    badge: 'Thống Kê',
-    icon: Activity,
+    tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
+    badge: 'Bảng Điểm',
+    icon: BadgeCheck,
+    category: 'community',
+  },
+  {
+    key: 'tc-senai',
+    title: 'SenAI Studio Trợ Giảng',
+    description: 'Tự động tạo câu hỏi trắc nghiệm theo ma trận đề, sinh đề tương đương trong 3 giây.',
+    href: '/new-senai-studio',
+    tone: 'from-[#3DA9FC] via-[#00C2A8] to-[#5EEAD4]',
+    badge: 'AI 2.0',
+    icon: Brain,
+    category: 'senai',
+  },
+  {
+    key: 'tc-library',
+    title: 'Thư Viện Tài Liệu Chuyên Môn',
+    description: 'Chia sẻ giáo trình, tài liệu chuyên sâu theo từng chương trình thi Bộ GD&ĐT.',
+    href: '/new-library',
+    tone: 'from-[#95D5B2] via-[#52B788] to-[#2D6A4F]',
+    icon: BookOpen,
     category: 'study',
+  },
+  {
+    key: 'tc-labs',
+    title: 'Phòng Thí Nghiệm Ảo Thực Hành',
+    description: 'Hỗ trợ giảng dạy trực quan các thí nghiệm Vật Lý, Hóa Học, Sinh Học không gian.',
+    href: '/new-labs',
+    tone: 'from-[#A78BFA] via-[#8B5CF6] to-[#7C3AED]',
+    icon: FlaskConical,
+    category: 'math_exam',
+  },
+  {
+    key: 'tc-sengraph',
+    title: 'SenGraph Toán Học',
+    description: 'Vẽ đồ thị giải tích và hình học không gian 3D minh họa bài giảng trên lớp.',
+    href: 'https://sengraph.senexam.me',
+    tone: 'from-[#06B6D4] via-[#0284C7] to-[#4F46E5]',
+    badge: '2D & 3D',
+    icon: Box,
+    category: 'math_exam',
   },
 ]
 
@@ -321,10 +514,20 @@ export default function NewAdminDashboardPage() {
 
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
-  const [isEcoMode, setIsEcoMode] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Google link state
+  const [linkedGoogle, setLinkedGoogle] = useState(false)
+  const [googleLinkingLoading, setGoogleLinkingLoading] = useState(false)
+  const [showGoogleGuide, setShowGoogleGuide] = useState(false)
+
+  // Sen 2FA state
+  const [hasMfaEnrolled, setHasMfaEnrolled] = useState(false)
+  const [mfaFactorId, setMfaFactorId] = useState('')
+  const [mfaLoading, setMfaLoading] = useState(false)
+  const [showMfaGuide, setShowMfaGuide] = useState(false)
 
   // Góc nhìn hiển thị (Perspective Switcher: Admin | Sinh viên | Giảng viên)
   const [perspective, setPerspective] = useState<Perspective>(() => {
@@ -334,7 +537,7 @@ export default function NewAdminDashboardPage() {
     return 'admin'
   })
 
-  // Tab đang kích hoạt ở Bàn Làm Việc Phía Dưới (Admin Workbench)
+  // Tab đang chọn ở Bàn Làm Việc Phía Dưới (Admin Workbench)
   const [workbenchTab, setWorkbenchTab] = useState<AdminWorkbenchTab>('sessions')
 
   // Thống kê tổng hợp (KPI Metrics)
@@ -346,9 +549,6 @@ export default function NewAdminDashboardPage() {
     totalSessions: 1,
   })
 
-  // ==========================================
-  // DỮ LIỆU CÁC PHÂN HỆ
-  // ==========================================
   // 1. Quản lý Phiên (Sessions)
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
@@ -440,7 +640,14 @@ export default function NewAdminDashboardPage() {
           return
         }
 
-        if (isMounted) setCurrentUser(user)
+        if (isMounted) {
+          setCurrentUser(user)
+          const isGoogle =
+            user.app_metadata?.provider === 'google' ||
+            user.identities?.some((id) => id.provider === 'google')
+          setLinkedGoogle(!!isGoogle)
+        }
+
         await ensureStudentProfile(user.id)
 
         // Kiểm tra vai trò admin trong bảng profiles
@@ -467,9 +674,20 @@ export default function NewAdminDashboardPage() {
           localStorage.setItem('sen_cached_role', profile?.role || 'admin')
         }
 
-        // Tải số liệu thống kê KPI ban đầu
-        await fetchOverviewStats()
-        await fetchSessions()
+        // Tải Sen 2FA status
+        try {
+          const { data: factorsData } = await supabase.auth.mfa.listFactors()
+          const verifiedFactor = factorsData?.totp?.find((f: any) => f.status === 'verified')
+          if (isMounted && verifiedFactor) {
+            setHasMfaEnrolled(true)
+            setMfaFactorId(verifiedFactor.id)
+          }
+        } catch (mfaErr) {
+          console.warn('Lỗi kiểm tra Sen 2FA:', mfaErr)
+        }
+
+        // Tải số liệu thống kê KPI ban đầu song song
+        await Promise.allSettled([fetchOverviewStats(), fetchSessions()])
       } catch (err) {
         console.error('Lỗi khởi tạo Admin Dashboard:', err)
       } finally {
@@ -588,8 +806,8 @@ export default function NewAdminDashboardPage() {
         newPerspective === 'admin'
           ? 'Đã chuyển về Góc nhìn Quản trị viên (Master Admin)'
           : newPerspective === 'student'
-          ? 'Đang mô phỏng Góc nhìn Sinh viên / Học sinh (Kiểm tra trải nghiệm học sinh)'
-          : 'Đang mô phỏng Góc nhìn Giảng viên / Giáo viên (Kiểm tra trải nghiệm giáo viên)',
+          ? 'Đang trải nghiệm Góc nhìn Sinh viên THẬT (Tất cả tính năng đều kết nối hoạt động thật)'
+          : 'Đang trải nghiệm Góc nhìn Giảng viên THẬT (Tất cả tính năng khảo thí đều kết nối hoạt động thật)',
     })
     setTimeout(() => setBannerMsg(null), 3500)
   }
@@ -617,6 +835,47 @@ export default function NewAdminDashboardPage() {
     const el = document.getElementById('admin-workbench')
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
+  // Liên kết tài khoản Google
+  const handleLinkGoogle = async () => {
+    setGoogleLinkingLoading(true)
+    try {
+      if (linkedGoogle) {
+        alert('Tài khoản của bạn đã được liên kết với Google!')
+        return
+      }
+      await linkWithGoogle('/new-admin-dashboard')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Vui lòng cấu hình Google Provider trên Supabase.'
+      alert(`Không thể liên kết Google: ${msg}`)
+    } finally {
+      setGoogleLinkingLoading(false)
+    }
+  }
+
+  // Bật / tắt Sen 2FA
+  const handleToggleMfa = async () => {
+    if (hasMfaEnrolled) {
+      const conf = window.confirm('Bạn có chắc chắn muốn tắt xác thực Sen 2FA cho tài khoản Root Admin này?')
+      if (!conf) return
+      setMfaLoading(true)
+      try {
+        if (mfaFactorId) {
+          await supabase.auth.mfa.unenroll({ factorId: mfaFactorId })
+        }
+        setHasMfaEnrolled(false)
+        setMfaFactorId('')
+        setBannerMsg({ type: 'success', text: '✓ Đã tắt Sen 2FA thành công.' })
+      } catch (err: any) {
+        setBannerMsg({ type: 'error', text: `Không thể tắt Sen 2FA: ${err.message || 'Lỗi'}` })
+      } finally {
+        setMfaLoading(false)
+        setTimeout(() => setBannerMsg(null), 3000)
+      }
+    } else {
+      router.push('/new-idp?mode=mfa')
     }
   }
 
@@ -968,9 +1227,20 @@ export default function NewAdminDashboardPage() {
     }
   }
 
-  // Lọc hành động theo từ khóa tìm kiếm
+  // Chọn danh mục và danh sách tính năng theo góc nhìn THẬT
+  const activeCategories =
+    perspective === 'student'
+      ? STUDENT_ACTION_CATEGORIES
+      : perspective === 'teacher'
+      ? TEACHER_ACTION_CATEGORIES
+      : ADMIN_ACTION_CATEGORIES
+
   const currentActionList =
-    perspective === 'student' ? STUDENT_ACTIONS : perspective === 'teacher' ? TEACHER_ACTIONS : ADMIN_ACTIONS
+    perspective === 'student'
+      ? STUDENT_ACTIONS
+      : perspective === 'teacher'
+      ? TEACHER_ACTIONS
+      : ADMIN_ACTIONS
 
   const filteredActionList = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -1010,12 +1280,28 @@ export default function NewAdminDashboardPage() {
     )
   }, [users, userSearch])
 
+  // ANIMATION LOADING HIỆN ĐẠI, MƯỢT MÀ VÀ TỐI ƯU TỐC ĐỘ
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#0F172A] text-[#2B2B2B] dark:text-slate-100 transition-colors">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-[0_10px_30px_rgba(0,0,0,0.08)] backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-          <span className="font-bold text-base">Đang tải Master Admin Dashboard...</span>
+      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#0B1120] text-[#2B2B2B] dark:text-slate-100 transition-colors">
+        <div className="relative flex flex-col items-center gap-4 rounded-3xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 px-8 py-7 shadow-[0_20px_50px_rgba(0,0,0,0.12)] backdrop-blur-2xl animate-in zoom-in-95 max-w-sm w-full mx-4">
+          <div className="relative flex h-16 w-16 items-center justify-center">
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 animate-spin-slow opacity-80 blur-xs" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white font-black text-2xl shadow-md">
+              S
+            </div>
+          </div>
+          <div className="text-center space-y-1">
+            <h3 className="font-black text-base text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+              SenExam IDP Master 2.0
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              Đang tối ưu bảo mật & kiểm tra phiên quản trị...
+            </p>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 rounded-full animate-pulse w-3/4 mx-auto" />
+          </div>
         </div>
       </div>
     )
@@ -1041,10 +1327,11 @@ export default function NewAdminDashboardPage() {
           <div className="flex items-center gap-2">
             <Eye className="h-4 w-4 animate-pulse" />
             <span>
-              Đang mô phỏng giao diện:{' '}
+              Đang trải nghiệm góc nhìn THẬT:{' '}
               <strong className="uppercase underline">
                 {perspective === 'student' ? 'Góc nhìn Sinh viên / Học sinh' : 'Góc nhìn Giảng viên / Giáo viên'}
-              </strong>
+              </strong>{' '}
+              (Mọi tính năng hoạt động thực tế 100%)
             </span>
           </div>
           <button
@@ -1235,7 +1522,7 @@ export default function NewAdminDashboardPage() {
               <button
                 type="button"
                 onClick={() => handleSwitchPerspective('admin')}
-                className={`py-2 text-[11px] font-black rounded-xl transition ${
+                className={`py-2 text-[11px] font-black rounded-xl transition cursor-pointer ${
                   perspective === 'admin'
                     ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500'
@@ -1246,7 +1533,7 @@ export default function NewAdminDashboardPage() {
               <button
                 type="button"
                 onClick={() => handleSwitchPerspective('student')}
-                className={`py-2 text-[11px] font-black rounded-xl transition ${
+                className={`py-2 text-[11px] font-black rounded-xl transition cursor-pointer ${
                   perspective === 'student'
                     ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-500'
@@ -1257,7 +1544,7 @@ export default function NewAdminDashboardPage() {
               <button
                 type="button"
                 onClick={() => handleSwitchPerspective('teacher')}
-                className={`py-2 text-[11px] font-black rounded-xl transition ${
+                className={`py-2 text-[11px] font-black rounded-xl transition cursor-pointer ${
                   perspective === 'teacher'
                     ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
                     : 'text-slate-500'
@@ -1268,7 +1555,72 @@ export default function NewAdminDashboardPage() {
             </div>
           </div>
 
-          {/* 5. Cài Đặt Web Trên Mobile */}
+          {/* 5. Thẻ Liên Kết Google Mobile */}
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <h3 className="font-black text-xs text-slate-900 dark:text-white">Tài khoản Google</h3>
+              </div>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${linkedGoogle ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+                {linkedGoogle ? '✓ Đã liên kết' : 'Chưa liên kết'}
+              </span>
+            </div>
+
+            <p className="mt-2 text-[11px] text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
+              {linkedGoogle
+                ? 'Đã kết nối tài khoản Google. Bạn có thể đăng nhập 1-chạm an toàn mọi lúc mọi nơi.'
+                : 'Liên kết Google để đăng nhập tức thì chỉ 1 click, không lo quên mật khẩu.'}
+            </p>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLinkGoogle}
+                disabled={googleLinkingLoading || linkedGoogle}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-2 text-xs font-black shadow-xs transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+              >
+                {googleLinkingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : linkedGoogle ? 'Đã liên kết Google' : 'Liên kết tài khoản Google'}
+              </button>
+            </div>
+          </div>
+
+          {/* 6. Thẻ Sen 2FA Mobile NẰM DƯỚI LIÊN KẾT GOOGLE */}
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                <h3 className="font-black text-xs text-slate-900 dark:text-white">Bảo mật Sen 2FA</h3>
+              </div>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${hasMfaEnrolled ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+                {hasMfaEnrolled ? '✓ Đã kích hoạt' : 'Chưa kích hoạt'}
+              </span>
+            </div>
+
+            <p className="mt-2 text-[11px] text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
+              {hasMfaEnrolled
+                ? 'Tài khoản được bảo vệ vững chắc bởi mã 6 số TOTP qua Google Authenticator hoặc Apple Passwords.'
+                : 'Bảo vệ tài khoản và bài thi chống xâm nhập trái phép bằng mã xác thực 2 bước Sen 2FA.'}
+            </p>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleMfa}
+                disabled={mfaLoading}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-2 text-xs font-black shadow-xs transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+              >
+                {mfaLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : hasMfaEnrolled ? 'Quản lý / Tắt Sen 2FA' : 'Kích hoạt Sen 2FA ngay'}
+              </button>
+            </div>
+          </div>
+
+          {/* 7. Cài Đặt Web Mobile */}
           <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm space-y-3.5">
             <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
               <Settings className="h-3.5 w-3.5 text-amber-500" /> Cài đặt & Tiện ích Quản trị
@@ -1293,7 +1645,7 @@ export default function NewAdminDashboardPage() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-2 text-xs font-bold transition border border-rose-500/20"
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-2 text-xs font-bold transition border border-rose-500/20 cursor-pointer"
               >
                 <LogOut className="h-3.5 w-3.5" /> Đăng xuất khỏi hệ thống
               </button>
@@ -1348,7 +1700,7 @@ export default function NewAdminDashboardPage() {
                       : 'text-slate-500 hover:text-indigo-600'
                   }`}
                 >
-                  🎓 Sinh viên
+                  🎓 Sinh viên (Thật)
                 </button>
                 <button
                   type="button"
@@ -1359,7 +1711,7 @@ export default function NewAdminDashboardPage() {
                       : 'text-slate-500 hover:text-emerald-600'
                   }`}
                 >
-                  💼 Giảng viên
+                  💼 Giảng viên (Thật)
                 </button>
               </div>
             </div>
@@ -1382,8 +1734,11 @@ export default function NewAdminDashboardPage() {
                   className="mt-2 text-sm text-[#4B5563] dark:text-slate-300 sm:text-base max-w-2xl"
                   style={{ fontFamily: 'var(--font-newdash-body)' }}
                 >
-                  Trung tâm điều hành IDP, phân quyền người dùng và giám sát toàn diện hệ thống SenExam. Đồng bộ phiên
-                  và cấp phát tài khoản tự động.
+                  {perspective === 'student'
+                    ? 'Đang mô phỏng môi trường học tập THẬT của thí sinh. Tất cả kho đề, tính điểm, phòng đọc và SenAI đều hoạt động thực tế.'
+                    : perspective === 'teacher'
+                    ? 'Đang mô phỏng môi trường giảng dạy THẬT của giáo viên. Các công cụ soạn đề, tạo phòng SEB và quản lý lớp đều liên kết trực tiếp.'
+                    : 'Trung tâm điều hành IDP, phân quyền người dùng và giám sát toàn diện hệ thống SenExam. Đồng bộ phiên và cấp phát tài khoản tự động.'}
                 </p>
               </div>
 
@@ -1499,15 +1854,15 @@ export default function NewAdminDashboardPage() {
                 <div>
                   <h2 className="text-2xl font-black" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
                     {perspective === 'student'
-                      ? 'Không gian học tập & Tính năng'
+                      ? 'Không gian học tập & Tính năng THẬT'
                       : perspective === 'teacher'
-                      ? 'Không gian Giảng viên & Khảo thí'
+                      ? 'Không gian Giảng viên & Khảo thí THẬT'
                       : 'Không gian Quản trị & Điều phối Hệ thống'}
                   </h2>
                   <p className="text-sm text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
                     {perspective === 'admin'
                       ? 'Khám phá các phân hệ bảo mật, quản lý tài khoản, khảo thí và tiện ích toàn hệ thống.'
-                      : 'Mô phỏng chính xác giao diện và đặc quyền truy cập của người dùng.'}
+                      : 'Toàn bộ tính năng đều là ứng dụng THẬT từ SenExam Dashboard, liên kết đầy đủ dữ liệu.'}
                   </p>
                 </div>
                 <div className="relative w-full sm:w-72">
@@ -1515,7 +1870,7 @@ export default function NewAdminDashboardPage() {
                   <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tìm nhanh phân hệ hoặc công cụ..."
+                    placeholder="Tìm nhanh tính năng, đề thi, AI..."
                     className="h-10 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 pl-9 pr-3 text-sm outline-none transition focus:border-amber-500 dark:focus:border-amber-400"
                   />
                 </div>
@@ -1523,7 +1878,7 @@ export default function NewAdminDashboardPage() {
 
               {/* CÁC PHẦN CHIA NGANG (VẼ ĐƯỜNG CHIA NGHỆ THUẬT) */}
               <div className="mt-4 space-y-6">
-                {ADMIN_ACTION_CATEGORIES.map((cat) => {
+                {activeCategories.map((cat) => {
                   const groupItems = filteredActionList.filter((a) => a.category === cat.key)
                   if (groupItems.length === 0) return null
 
@@ -1538,14 +1893,19 @@ export default function NewAdminDashboardPage() {
                           line: 'from-emerald-500/50 via-emerald-500/20 to-transparent',
                           badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
                         }
+                      : cat.key === 'math_exam'
+                      ? {
+                          line: 'from-sky-500/50 via-sky-500/20 to-transparent',
+                          badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20',
+                        }
                       : cat.key === 'senai'
                       ? {
                           line: 'from-purple-500/50 via-purple-500/20 to-transparent',
                           badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
                         }
                       : {
-                          line: 'from-sky-500/50 via-sky-500/20 to-transparent',
-                          badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20',
+                          line: 'from-pink-500/50 via-pink-500/20 to-transparent',
+                          badge: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20',
                         }
 
                   return (
@@ -1572,6 +1932,7 @@ export default function NewAdminDashboardPage() {
                         {groupItems.map((item) => {
                           const Icon = item.icon
                           const isAnchorOrScroll = Boolean(item.actionTab)
+                          const isExternal = Boolean(item.href?.startsWith('http'))
 
                           const handleClick = (e: React.MouseEvent) => {
                             if (isAnchorOrScroll) {
@@ -1580,11 +1941,18 @@ export default function NewAdminDashboardPage() {
                             }
                           }
 
+                          const Wrapper = isAnchorOrScroll ? 'div' : isExternal ? 'a' : Link
+                          const extraProps = isAnchorOrScroll
+                            ? { onClick: handleClick }
+                            : isExternal
+                            ? { href: item.href!, target: '_blank', rel: 'noopener noreferrer' }
+                            : { href: item.href || '#' }
+
                           return (
-                            <div
+                            <Wrapper
                               key={item.key}
-                              onClick={handleClick}
-                              className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 p-4 cursor-pointer"
+                              {...(extraProps as any)}
+                              className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 p-4 cursor-pointer block"
                             >
                               {/* Dải gradient nhận diện trên đỉnh thẻ */}
                               <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.tone}`} />
@@ -1616,7 +1984,7 @@ export default function NewAdminDashboardPage() {
                               >
                                 {item.description}
                               </p>
-                            </div>
+                            </Wrapper>
                           )
                         })}
                       </div>
@@ -1632,14 +2000,20 @@ export default function NewAdminDashboardPage() {
               </div>
             </div>
 
-            {/* CỘT PHẢI: Hồ Sơ Admin, Bộ Chuyển Góc Nhìn, Giám Sát An Ninh & Cài Đặt Web */}
+            {/* CỘT PHẢI: Hồ Sơ Admin, Bộ Chuyển Góc Nhìn, Giám Sát An Ninh, Google, Sen 2FA & Cài Đặt */}
             <aside className="space-y-5">
-              {/* Card 1: Hồ sơ Admin & Đặc Quyền */}
+              {/* Card 1: Hồ sơ & Trạng Thái Theo Góc Nhìn */}
               <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm">
                 <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-md">
-                      <Crown className="h-6 w-6" />
+                      {perspective === 'student' ? (
+                        <GraduationCap className="h-6 w-6" />
+                      ) : perspective === 'teacher' ? (
+                        <Briefcase className="h-6 w-6" />
+                      ) : (
+                        <Crown className="h-6 w-6" />
+                      )}
                     </div>
                     <div>
                       <h3
@@ -1653,15 +2027,32 @@ export default function NewAdminDashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="rounded-full bg-rose-500/10 px-2.5 py-1 text-[11px] font-black text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                    Toàn Quyền
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-black border ${
+                      perspective === 'student'
+                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
+                        : perspective === 'teacher'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                    }`}
+                  >
+                    {perspective === 'student' ? 'Học sinh' : perspective === 'teacher' ? 'Giáo viên' : 'Toàn Quyền'}
                   </span>
                 </div>
 
                 <div className="mt-3.5 space-y-2 text-xs text-[#4B5563] dark:text-slate-300">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span>Cấp bậc: <strong>Quản trị viên Cấp cao (Root)</strong></span>
+                    <span>
+                      Vai trò thực:{' '}
+                      <strong>
+                        {perspective === 'student'
+                          ? 'Mô phỏng Thí sinh (Student View)'
+                          : perspective === 'teacher'
+                          ? 'Mô phỏng Giảng viên (Teacher View)'
+                          : 'Quản trị viên Cấp cao (Root)'}
+                      </strong>
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Server className="h-4 w-4 text-indigo-500 shrink-0" />
@@ -1697,9 +2088,9 @@ export default function NewAdminDashboardPage() {
                         className="text-sm font-black text-rose-900 dark:text-rose-200 block truncate"
                         style={{ fontFamily: 'var(--font-newdash-heading)' }}
                       >
-                        Master
+                        {perspective.toUpperCase()}
                       </strong>
-                      <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400">Đầy đủ quyền</span>
+                      <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400">Đang bật</span>
                     </div>
                   </div>
 
@@ -1731,12 +2122,12 @@ export default function NewAdminDashboardPage() {
               <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
-                    <Eye className="h-4 w-4 text-indigo-500" /> Góc Nhìn Trải Nghiệm
+                    <Eye className="h-4 w-4 text-indigo-500" /> Góc Nhìn Trải Nghiệm THẬT
                   </h3>
-                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Mô phỏng</span>
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Thời gian thực</span>
                 </div>
                 <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
-                  Chuyển đổi góc nhìn để kiểm tra chính xác những gì học sinh và giảng viên nhìn thấy trên SenExam.
+                  Chuyển đổi góc nhìn để trực tiếp trải nghiệm và kiểm tra mọi tính năng như học sinh và giáo viên.
                 </p>
 
                 <div className="space-y-1.5 pt-1">
@@ -1767,7 +2158,7 @@ export default function NewAdminDashboardPage() {
                   >
                     <span className="flex items-center gap-2">
                       <GraduationCap className="h-4 w-4 text-indigo-500" />
-                      <span>Góc nhìn Sinh viên / Thí sinh</span>
+                      <span>Góc nhìn Sinh viên (Chạy tính năng thật)</span>
                     </span>
                     {perspective === 'student' && <Check className="h-4 w-4 text-indigo-600" />}
                   </button>
@@ -1783,7 +2174,7 @@ export default function NewAdminDashboardPage() {
                   >
                     <span className="flex items-center gap-2">
                       <Briefcase className="h-4 w-4 text-emerald-500" />
-                      <span>Góc nhìn Giảng viên / Giáo viên</span>
+                      <span>Góc nhìn Giảng viên (Khảo thí & SEB thật)</span>
                     </span>
                     {perspective === 'teacher' && <Check className="h-4 w-4 text-emerald-600" />}
                   </button>
@@ -1825,7 +2216,114 @@ export default function NewAdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Card 4: Cài Đặt Web & Hệ Thống (Settings) */}
+              {/* Card 4: Liên Kết Tài Khoản Google */}
+              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <h3 className="font-bold text-sm">Tài khoản Google</h3>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${linkedGoogle ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+                    {linkedGoogle ? '✓ Đã liên kết' : 'Chưa liên kết'}
+                  </span>
+                </div>
+
+                <p className="mt-2 text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed">
+                  {linkedGoogle
+                    ? 'Tài khoản của bạn đã được kết nối an toàn với Google. Bạn có thể đăng nhập 1-chạm bất cứ lúc nào.'
+                    : 'Liên kết với Google giúp bạn đăng nhập nhanh chóng chỉ với 1 click, không lo quên mật khẩu.'}
+                </p>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleLinkGoogle}
+                    disabled={googleLinkingLoading || linkedGoogle}
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-800 border border-black/15 dark:border-white/15 px-3 py-2 text-xs font-bold text-[#1A1A1A] dark:text-white shadow-sm transition hover:bg-black/5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {googleLinkingLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : linkedGoogle ? 'Đã liên kết thành công' : 'Liên kết tài khoản Google'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleGuide(!showGoogleGuide)}
+                    aria-label="Xem lợi ích bảo mật"
+                    className="rounded-xl border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {showGoogleGuide && (
+                  <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3.5 text-xs text-[#4B5563] dark:text-slate-300 space-y-2 animate-in fade-in zoom-in-95">
+                    <p className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-amber-500" /> Lợi ích khi liên kết Google:
+                    </p>
+                    <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                      <li>Đăng nhập tức thì 1-chạm không cần nhập mật khẩu.</li>
+                      <li>Bảo mật tài khoản 2 lớp chuẩn Google Security.</li>
+                      <li>Tự động đồng bộ quyền Master Admin trên mọi thiết bị.</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Card 5: Cài Đặt Sen 2FA NẰM DƯỚI LIÊN KẾT GOOGLE */}
+              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-emerald-500" />
+                    <h3 className="font-bold text-sm">Bảo mật Sen 2FA (Authenticator)</h3>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${hasMfaEnrolled ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+                    {hasMfaEnrolled ? '✓ Đã kích hoạt' : 'Chưa kích hoạt'}
+                  </span>
+                </div>
+
+                <p className="mt-2 text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed">
+                  {hasMfaEnrolled
+                    ? 'Tài khoản Root Admin đã được bảo vệ tối cao bằng mã xác thực 2 bước TOTP. Ngăn chặn 100% rủi ro chiếm đoạt tài khoản.'
+                    : 'Kích hoạt Sen 2FA với Google Authenticator hoặc Microsoft Authenticator để bảo vệ quyền quản trị.'}
+                </p>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleMfa}
+                    disabled={mfaLoading}
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-800 border border-black/15 dark:border-white/15 px-3 py-2 text-xs font-bold text-[#1A1A1A] dark:text-white shadow-sm transition hover:bg-black/5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : hasMfaEnrolled ? 'Quản lý / Tắt Sen 2FA' : 'Kích hoạt Sen 2FA ngay'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMfaGuide(!showMfaGuide)}
+                    aria-label="Xem lợi ích bảo mật Sen 2FA"
+                    className="rounded-xl border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {showMfaGuide && (
+                  <div className="mt-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 text-xs text-[#4B5563] dark:text-slate-300 space-y-2 animate-in fade-in zoom-in-95">
+                    <p className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <ShieldCheck className="h-4 w-4 text-emerald-500" /> Chuẩn bảo mật Sen 2FA:
+                    </p>
+                    <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                      <li>Mã xác thực 6 số đổi liên tục mỗi 30 giây theo tiêu chuẩn RFC 6238 TOTP.</li>
+                      <li>Hoạt động an toàn ngoại tuyến ngay cả khi mất sóng Internet.</li>
+                      <li>Khuyến nghị bắt buộc cho các tài khoản Quản trị viên cấp cao.</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Card 6: Cài Đặt Web & Hệ Thống (Settings) */}
               <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-3.5">
                 <h3 className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
                   <Settings className="h-3.5 w-3.5 text-amber-500" /> Cài Đặt Web & Hệ Thống
@@ -1900,40 +2398,31 @@ export default function NewAdminDashboardPage() {
         </div>
 
         {/* ========================================================================= */}
-        {/* PHẦN ĐIỀU PHỐI CHUYÊN SÂU DÀNH CHO ADMIN ("ĐỂ XUỐNG WEB")                 */}
-        {/* Đồng nhất giao diện thẻ tròn rounded-[28px], chia tab thông minh & tiện ích*/}
+        {/* PHẦN ĐIỀU PHỐI CHUYÊN SÂU DÀNH CHO ADMIN ("ĐỂ XUỐNG WEB - CĂN RA GIỮA")    */}
+        {/* Canh giữa (mx-auto max-w-5xl) theo đúng yêu cầu người dùng                */}
         {/* ========================================================================= */}
-        <div id="admin-workbench" className="mt-10 space-y-6">
-          <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-6 sm:p-8 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-5">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-rose-500 to-amber-500 text-white shadow-sm">
-                    <Sliders className="h-5 w-5" />
-                  </div>
-                  <h2
-                    className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white"
-                    style={{ fontFamily: 'var(--font-newdash-heading)' }}
-                  >
-                    Bàn Làm Việc Quản Trị Chuyên Sâu (Master Workbench)
-                  </h2>
-                </div>
-                <p className="mt-1 text-xs sm:text-sm text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
-                  Khu vực giám sát phiên đăng nhập thực tế, cấp tài khoản hàng loạt & đơn lẻ, duyệt kho đề thi, phân
-                  quyền thành viên và tạo mã quà tặng.
-                </p>
+        <div id="admin-workbench" className="mt-12 mx-auto w-full max-w-5xl space-y-6">
+          <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-6 sm:p-8 shadow-sm">
+            {/* Header Căn Giữa */}
+            <div className="text-center max-w-2xl mx-auto space-y-2 border-b border-black/10 dark:border-white/10 pb-6">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-black uppercase tracking-wider">
+                <Sliders className="h-4 w-4" />
+                <span>Trung Tâm Quản Trị Chuyên Sâu</span>
               </div>
-
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Sẵn sàng thao tác</span>
-                </span>
-              </div>
+              <h2
+                className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white"
+                style={{ fontFamily: 'var(--font-newdash-heading)' }}
+              >
+                Bàn Làm Việc Điều Hành Hệ Thống
+              </h2>
+              <p className="text-xs sm:text-sm text-[#4B5563] dark:text-slate-300" style={{ fontFamily: 'var(--font-newdash-body)' }}>
+                Khu vực giám sát phiên làm việc thực tế, cấp tài khoản hàng loạt & đơn lẻ, duyệt kho đề thi, phân
+                quyền thành viên và phát hành mã quà tặng.
+              </p>
             </div>
 
-            {/* TAB SELECTOR BAR ĐẸP MẮT */}
-            <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            {/* TAB SELECTOR CĂN RA GIỮA */}
+            <div className="mt-6 flex items-center justify-center gap-2 flex-wrap pb-2">
               {[
                 { id: 'sessions', label: 'Quản Lý Phiên', count: stats.totalSessions, icon: Smartphone },
                 { id: 'batch_provision', label: 'Cấp Hàng Loạt 0001-9999', icon: Users },
@@ -1973,8 +2462,8 @@ export default function NewAdminDashboardPage() {
               })}
             </div>
 
-            {/* NỘI DUNG TỪNG TAB */}
-            <div className="mt-6">
+            {/* NỘI DUNG TỪNG TAB TRONG BÀN LÀM VIỆC CĂN GIỮA */}
+            <div className="mt-6 max-w-4xl mx-auto">
               {/* TAB 1: QUẢN LÝ PHIÊN (SESSIONS) */}
               {workbenchTab === 'sessions' && (
                 <div className="space-y-4 animate-in fade-in">

@@ -300,7 +300,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'admin',
     title: 'Quản Trị Tối Cao',
     description: 'Giám sát hệ thống thời gian thực, giveaway SenCash và quản lý đề toàn trường.',
-    href: '/new-admin',
+    href: '/new-admin-dashboard',
     tone: 'from-[#EF4444] via-[#DC2626] to-[#991B1B]',
     badge: 'Admin',
     icon: ShieldCheck,
@@ -361,6 +361,12 @@ function NewDashboardContent() {
   const [googleLinkingLoading, setGoogleLinkingLoading] = useState(false)
   const [showGoogleGuide, setShowGoogleGuide] = useState(false)
 
+  // Sen 2FA state
+  const [hasMfaEnrolled, setHasMfaEnrolled] = useState(false)
+  const [mfaFactorId, setMfaFactorId] = useState('')
+  const [mfaLoading, setMfaLoading] = useState(false)
+  const [showMfaGuide, setShowMfaGuide] = useState(false)
+
   // Quick settings modal state
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -415,6 +421,18 @@ function NewDashboardContent() {
           setUserId(user.id)
           const isGoogle = user.app_metadata?.provider === 'google' || user.identities?.some((id) => id.provider === 'google')
           setLinkedGoogle(!!isGoogle)
+        }
+
+        // Kiểm tra trạng thái Sen 2FA (TOTP)
+        try {
+          const { data: factorsData } = await supabase.auth.mfa.listFactors()
+          const verifiedFactor = factorsData?.totp?.find((f: any) => f.status === 'verified')
+          if (!disposed && verifiedFactor) {
+            setHasMfaEnrolled(true)
+            setMfaFactorId(verifiedFactor.id)
+          }
+        } catch (mfaErr) {
+          console.warn('Lỗi kiểm tra Sen 2FA:', mfaErr)
         }
 
         try {
@@ -709,6 +727,29 @@ function NewDashboardContent() {
       alert(`Không thể liên kết Google: ${msg}`)
     } finally {
       setGoogleLinkingLoading(false)
+    }
+  }
+
+  // Xử lý bật/tắt Sen 2FA (Authenticator)
+  const handleToggleMfa = async () => {
+    if (hasMfaEnrolled) {
+      const conf = window.confirm('Bạn có chắc chắn muốn tắt xác thực Sen 2FA cho tài khoản này?')
+      if (!conf) return
+      setMfaLoading(true)
+      try {
+        if (mfaFactorId) {
+          await supabase.auth.mfa.unenroll({ factorId: mfaFactorId })
+        }
+        setHasMfaEnrolled(false)
+        setMfaFactorId('')
+        alert('Đã tắt Sen 2FA thành công.')
+      } catch (err: any) {
+        alert(`Không thể tắt Sen 2FA: ${err.message || 'Lỗi không xác định'}`)
+      } finally {
+        setMfaLoading(false)
+      }
+    } else {
+      router.push('/new-idp?mode=mfa')
     }
   }
 
@@ -1140,6 +1181,57 @@ function NewDashboardContent() {
                 <ul className="list-disc pl-3.5 space-y-0.5 text-[10px]">
                   <li>Đăng nhập nhanh 1-chạm không cần nhớ mật khẩu.</li>
                   <li>Bảo mật tài khoản chuẩn xác thực Google Security.</li>
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Thẻ Cài Đặt Sen 2FA Trên Mobile Nằm Dưới Liên Kết Google */}
+          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                <h3 className="font-black text-xs text-slate-900 dark:text-white">Bảo mật Sen 2FA</h3>
+              </div>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${hasMfaEnrolled ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+                {hasMfaEnrolled ? '✓ Đã kích hoạt' : 'Chưa kích hoạt'}
+              </span>
+            </div>
+
+            <p className="mt-2 text-[11px] text-[#4B5563] dark:text-slate-300 leading-relaxed font-medium">
+              {hasMfaEnrolled
+                ? 'Tài khoản được bảo vệ vững chắc bởi mã 6 số TOTP qua Google Authenticator hoặc Apple Passwords.'
+                : 'Bảo vệ tài khoản và bài thi chống xâm nhập trái phép bằng mã xác thực 2 bước Sen 2FA.'}
+            </p>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleMfa}
+                disabled={mfaLoading}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-2 text-xs font-black shadow-xs transition hover:opacity-90 active:scale-95 disabled:opacity-50"
+              >
+                {mfaLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : hasMfaEnrolled ? 'Quản lý / Tắt Sen 2FA' : 'Kích hoạt Sen 2FA ngay'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMfaGuide(!showMfaGuide)}
+                aria-label="Xem lợi ích bảo mật Sen 2FA"
+                title="Lợi ích bảo mật"
+                className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10 min-h-[40px] min-w-[40px] flex items-center justify-center"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
+            </div>
+
+            {showMfaGuide && (
+              <div className="mt-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-[11px] text-[#4B5563] dark:text-slate-300 space-y-1 animate-in fade-in">
+                <p className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Tiêu chuẩn bảo mật Sen 2FA:
+                </p>
+                <ul className="list-disc pl-3.5 space-y-0.5 text-[10px]">
+                  <li>Mã 6 số TOTP đổi liên tục mỗi 30 giây bảo vệ cấp ngân hàng.</li>
+                  <li>Tương thích Google Authenticator, Microsoft Authenticator, Apple Passwords.</li>
                 </ul>
               </div>
             )}
@@ -1890,6 +1982,58 @@ function NewDashboardContent() {
                     <li>Đăng nhập tức thì 1-chạm không cần nhập mật khẩu.</li>
                     <li>Bảo mật tài khoản 2 lớp chuẩn Google Security.</li>
                     <li>Tự động đồng bộ tiến độ học tập và bài thi trên mọi thiết bị.</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Card Cài Đặt Sen 2FA Nằm Dưới Liên Kết Google */}
+            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-emerald-500" />
+                  <h3 className="font-bold text-sm">Bảo mật Sen 2FA (Authenticator)</h3>
+                </div>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${hasMfaEnrolled ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400'}`}>
+                  {hasMfaEnrolled ? '✓ Đã kích hoạt' : 'Chưa kích hoạt'}
+                </span>
+              </div>
+
+              <p className="mt-2 text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed">
+                {hasMfaEnrolled
+                  ? 'Tài khoản của bạn đã được bảo vệ tối cao bằng mã xác thực 2 bước TOTP. Ngăn chặn 100% rủi ro lộ mật khẩu.'
+                  : 'Kích hoạt Sen 2FA với Google Authenticator hoặc Microsoft Authenticator để bảo vệ tài khoản và kết quả thi cử.'}
+              </p>
+
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleToggleMfa}
+                  disabled={mfaLoading}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-white dark:bg-slate-800 border border-black/15 dark:border-white/15 px-3 py-2 text-xs font-bold text-[#1A1A1A] dark:text-white shadow-sm transition hover:bg-black/5 disabled:opacity-50"
+                >
+                  {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : hasMfaEnrolled ? 'Quản lý / Tắt Sen 2FA' : 'Kích hoạt Sen 2FA ngay'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMfaGuide(!showMfaGuide)}
+                  aria-label="Xem lợi ích bảo mật Sen 2FA"
+                  title="Xem thông tin bảo mật & lợi ích"
+                  className="rounded-xl border border-black/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-2 text-xs font-bold transition hover:bg-black/10 min-h-[40px] min-w-[40px] flex items-center justify-center"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </div>
+
+              {showMfaGuide && (
+                <div className="mt-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 text-xs text-[#4B5563] dark:text-slate-300 space-y-2 animate-in fade-in zoom-in-95">
+                  <p className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-emerald-500" /> Chuẩn bảo mật Sen 2FA:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] leading-relaxed">
+                    <li>Mã xác thực 6 số đổi liên tục mỗi 30 giây theo tiêu chuẩn RFC 6238 TOTP.</li>
+                    <li>Hoạt động offline ngay cả khi không có kết nối Internet trên điện thoại.</li>
+                    <li>Được khuyến nghị cho tất cả học sinh và giáo viên tham gia thi trực tuyến.</li>
                   </ul>
                 </div>
               )}
