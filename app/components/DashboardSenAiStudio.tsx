@@ -318,6 +318,7 @@ export default function DashboardSenAiStudio({
         <div className="relative flex-1">
           <input
             type="text"
+            aria-label="Nhập câu hỏi cho SenAI"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={sending}
@@ -328,6 +329,8 @@ export default function DashboardSenAiStudio({
           <button
             type="submit"
             disabled={sending || !input.trim()}
+            aria-label="Gửi câu hỏi"
+            title="Gửi câu hỏi"
             className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white transition hover:scale-105 disabled:opacity-40"
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

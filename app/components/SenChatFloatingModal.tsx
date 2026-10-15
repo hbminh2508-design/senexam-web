@@ -297,6 +297,7 @@ export default function SenChatFloatingModal({
         <form onSubmit={handleSendMessage} className="flex items-center gap-2">
           <input
             type="text"
+            aria-label="Nhập câu hỏi với Sen Chat"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Nhập câu hỏi với Sen Chat..."
@@ -305,6 +306,8 @@ export default function SenChatFloatingModal({
           <button
             type="submit"
             disabled={!input.trim() || loading}
+            aria-label="Gửi câu hỏi"
+            title="Gửi câu hỏi"
             className="h-8 w-8 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white flex items-center justify-center transition hover:scale-105 active:scale-95 disabled:opacity-40 shrink-0"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}

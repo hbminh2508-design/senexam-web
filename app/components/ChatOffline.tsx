@@ -339,11 +339,11 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 </button>
               )}
 
-              <button onClick={() => setIsFullscreen(!isFullscreen)} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
+              <button onClick={() => setIsFullscreen(!isFullscreen)} aria-label={isFullscreen ? "Thu nhỏ" : "Phóng to"} title={isFullscreen ? "Thu nhỏ" : "Phóng to"} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
 
-              <button onClick={handleToggleChat} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
+              <button onClick={handleToggleChat} aria-label="Đóng trò chuyện" title="Đóng trò chuyện" className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -429,6 +429,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
             <form onSubmit={handleSendChatMessage} className="flex items-center gap-3 relative">
               <input
                 type="text"
+                aria-label="Nhập câu hỏi hoặc từ khóa"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder={isOnlineMode ? "Hỏi bài toán, tra tài liệu... (gõ Feedback: để góp ý)" : "Tìm đề thi, tài liệu, hỏi tác giả..."}
@@ -438,6 +439,8 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
               <button
                 type="submit"
                 disabled={!chatInput.trim() || isChatLoading}
+                aria-label="Gửi tin nhắn"
+                title="Gửi tin nhắn"
                 className={`absolute right-2 p-2.5 rounded-full transition-transform active:scale-95 shadow-md flex items-center justify-center disabled:opacity-50 disabled:shadow-none ${newUiEnabled ? 'text-white' : (isOnlineMode ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-700 hover:bg-slate-800 text-white')}`}
                 style={newUiEnabled ? { background: 'var(--accent)' } : undefined}
               >
