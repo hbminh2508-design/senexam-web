@@ -41,6 +41,7 @@ type ExamItem = {
   subject?: string | null
   duration: number
   pdf_url?: string | null
+  drive_file_id?: string | null
   solution_pdf_url?: string | null
   created_at: string
   is_hidden?: boolean
@@ -49,6 +50,7 @@ type ExamItem = {
   require_seb?: boolean | null
   created_by?: string | null
   format?: string | null
+  exam_structure?: any
 }
 
 const EXAM_TYPES = ['Tất cả', 'THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL']
@@ -378,11 +380,22 @@ export default function NewExamsPage() {
                               🎯 Của bạn
                             </span>
                           )}
-                          {!exam.pdf_url && (
-                            <span className="flex items-center gap-1 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 px-2 py-0.5 text-[10px] font-bold">
-                              ✨ KaTeX
-                            </span>
-                          )}
+                          {(() => {
+                            const isPdf = Boolean(exam.pdf_url || exam.drive_file_id || exam.format === 'pdf')
+                            const isKatex = exam.format === 'katex' || !isPdf
+                            if (isKatex) {
+                              return (
+                                <span className="flex items-center gap-1 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 px-2 py-0.5 text-[10px] font-bold">
+                                  ✨ KaTeX
+                                </span>
+                              )
+                            }
+                            return (
+                              <span className="flex items-center gap-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-2 py-0.5 text-[10px] font-bold">
+                                📄 Đề PDF
+                              </span>
+                            )
+                          })()}
                           {exam.require_seb && (
                             <span className="flex items-center gap-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-2 py-0.5 text-[10px] font-black uppercase shadow-2xs">
                               🛡️ SEB

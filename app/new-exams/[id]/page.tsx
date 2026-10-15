@@ -332,12 +332,15 @@ export default function NewExamRoomPage() {
   // Kiểm tra đề có câu hỏi KaTeX trực tiếp không
   const isKatexExam = useMemo(() => {
     if (!exam) return false
+    // Đề thi có file PDF (pdf_url hoặc drive_file_id) hoặc format === 'pdf' là đề truyền thống PDF 1 bên + trả lời câu hỏi 1 bên
+    const hasPdf = Boolean(exam.drive_file_id || exam.pdf_url || exam.format === 'pdf')
     if (exam.format === 'katex') return true
+    if (hasPdf) return false
+
     const hasQuestionsInStructure =
       Array.isArray(activeSections) &&
       activeSections.some((s: any) => Array.isArray(s?.questions) && s.questions.length > 0)
     if (hasQuestionsInStructure) return true
-    if (!exam.drive_file_id && !exam.pdf_url) return true
     return false
   }, [exam, activeSections])
 
@@ -593,9 +596,13 @@ export default function NewExamRoomPage() {
               <ArrowLeft className="h-4 w-4" /> Thoát ra kho đề
             </Link>
             <div className="flex items-center gap-2">
-              {isKatexExam && (
+              {isKatexExam ? (
                 <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1 text-xs font-bold border border-emerald-500/20">
                   ✨ KaTeX Trực Tiếp
+                </span>
+              ) : (
+                <span className="rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 px-3 py-1 text-xs font-bold border border-sky-500/20">
+                  📄 Đề PDF Truyền Thống
                 </span>
               )}
               <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-3 py-1 text-xs font-bold border border-indigo-500/20">
