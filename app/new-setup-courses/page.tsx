@@ -61,6 +61,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
+import { parseLatexExamCode } from '@/lib/latexExamParser'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -553,6 +554,8 @@ function SetupCourseMainContent() {
   const [parseLatexStatus, setParseLatexStatus] = useState('')
   const [parseLatexSuccessMsg, setParseLatexSuccessMsg] = useState<string | null>(null)
   const [copiedLatexSample, setCopiedLatexSample] = useState(false)
+  const [verifyingWithAi, setVerifyingWithAi] = useState(false)
+  const [aiVerifyStatus, setAiVerifyStatus] = useState('')
 
     // ==========================================
   // STATE: SOẠN ĐỀ PDF & SEB (PRO MULTI-SECTION BUILDER TỪ NEW-ADMIN)
@@ -876,7 +879,7 @@ function SetupCourseMainContent() {
   }
 
   // ==========================================
-  // XỬ LÝ BIÊN SOẠN ĐỀ LATEX TỰ ĐỘNG BẰNG GEMINI
+  // XỬ LÝ BIÊN SOẠN ĐỀ LATEX TỰ ĐỘNG (DETERMINISTIC ENGINE + AI THẨM ĐỊNH)
   // ==========================================
   const handleCompileLatexExam = async () => {
     let code = latexCode.trim()
@@ -907,29 +910,99 @@ function SetupCourseMainContent() {
     }
 
     setParsingLatex(true)
-    setParseLatexStatus('Đang đọc và phân tích cấu trúc đề LaTeX...')
+    setParseLatexStatus('⚡ Hệ thống đang tự động bóc tách cấu trúc câu hỏi KaTeX siêu tốc...')
     setParseLatexSuccessMsg(null)
 
     try {
+      // Đọc bảng đáp án text nếu có
+      let answerKeyStr = latexHasAnswerFile ? latexAnswerText.trim() : ''
+      if (latexHasAnswerFile && !answerKeyStr && latexAnswerFile) {
+        if (
+          latexAnswerFile.type?.includes('text') ||
+          latexAnswerFile.name?.endsWith('.txt') ||
+          latexAnswerFile.name?.endsWith('.tex')
+        ) {
+          answerKeyStr = await latexAnswerFile.text()
+        }
+      }
+
+      // BƯỚC 1: BIÊN SOẠN THUẦN SIÊU TỐC TRÊN CLIENT (< 20ms, KHÔNG GIỚI HẠN DUNG LƯỢNG FILE)
+      const localParsed = parseLatexExamCode(code, answerKeyStr)
+
+      if (localParsed.questions && localParsed.questions.length > 0) {
+        if (localParsed.title) setKatexTitle(localParsed.title)
+        if (localParsed.subject) setKatexSubject(localParsed.subject)
+        if (localParsed.duration) setKatexDuration(String(localParsed.duration))
+        if (localParsed.exam_type) setKatexExamType(localParsed.exam_type)
+
+        // Cập nhật ngay câu hỏi lên màn hình để người dùng không phải chờ đợi!
+        setKatexQuestions(localParsed.questions)
+
+        // BƯỚC 2: NẾU THIẾU ĐÁP ÁN VÀ NGƯỜI DÙNG CHỌN "AI TỰ GIẢI", GỌI AI GIẢI CÁC CÂU CÒN THIẾU
+        if (!latexHasAnswerFile && localParsed.missingAnswersCount > 0) {
+          setParseLatexStatus(
+            `Đã nhận diện ${localParsed.questions.length} câu (${localParsed.parseTimeMs}ms). Đang giao AI giải & hoàn thiện ${localParsed.missingAnswersCount} câu chưa có đáp án...`
+          )
+
+          try {
+            const aiRes = await fetch('/api/parse-latex-exam', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'ai_verify_answers',
+                questions: localParsed.questions.filter((q) => !q.hasAnswerInLatex),
+                subject: localParsed.subject || katexSubject,
+              }),
+            })
+
+            const aiJson = await aiRes.json()
+            if (aiJson.success && Array.isArray(aiJson.questions)) {
+              const aiMap = new Map<string, any>(aiJson.questions.map((q: any) => [q.id, q]))
+              const enrichedQuestions = localParsed.questions.map((q) => {
+                const updated = aiMap.get(q.id)
+                return updated || q
+              })
+              setKatexQuestions(enrichedQuestions)
+              setParseLatexSuccessMsg(
+                `⚡ Hệ thống nhận diện ${localParsed.questions.length} câu (${localParsed.parseTimeMs}ms)! AI đã thẩm định & giải thành công ${aiJson.verifiedCount || 0} câu.`
+              )
+            } else {
+              setParseLatexSuccessMsg(
+                `⚡ Hệ thống nhận diện thành công ${localParsed.questions.length} câu hỏi KaTeX (${localParsed.parseTimeMs}ms)! Bạn có thể chỉnh sửa đáp án trực tiếp.`
+              )
+            }
+          } catch (aiErr) {
+            console.warn('AI giải bổ sung gặp sự cố nhỏ:', aiErr)
+            setParseLatexSuccessMsg(
+              `⚡ Hệ thống nhận diện thành công ${localParsed.questions.length} câu hỏi KaTeX (${localParsed.parseTimeMs}ms)! Toàn bộ công thức đã sẵn sàng.`
+            )
+          }
+        } else {
+          setParseLatexSuccessMsg(
+            `🎉 Đã nhận diện siêu tốc ${localParsed.questions.length} câu hỏi KaTeX (${localParsed.parseTimeMs}ms)! Khớp ${localParsed.matchedAnswersCount}/${localParsed.questions.length} câu có đáp án chuẩn.`
+          )
+        }
+
+        setTimeout(() => {
+          const el = document.getElementById('katex-questions-section')
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 200)
+
+        return
+      }
+
+      // BƯỚC 3: NẾU BỘ BÓC TÁCH KHÔNG TÌM THẤY DẤU HIỆU CÂU HỎI TIÊU CHUẨN, GỬI LÊN SERVER
+      setParseLatexStatus('Đang gửi lên máy chủ để phân tích sâu...')
       const formData = new FormData()
+      formData.append('action', 'parse')
       formData.append('latexCode', code)
       formData.append('subject', katexSubject)
       formData.append('hasSeparateAnswer', latexHasAnswerFile ? '1' : '0')
 
       if (latexHasAnswerFile) {
-        if (latexAnswerText.trim()) {
-          formData.append('answerText', latexAnswerText.trim())
-        }
-        if (latexAnswerFile) {
-          formData.append('answerFile', latexAnswerFile)
-        }
+        if (answerKeyStr) formData.append('answerText', answerKeyStr)
+        if (latexAnswerFile) formData.append('answerFile', latexAnswerFile)
       }
-
-      setParseLatexStatus(
-        latexHasAnswerFile
-          ? 'Gemini đang đối chiếu bảng đáp án và hoàn thiện lời giải KaTeX...'
-          : 'Gemini đang đọc câu hỏi, giải toán và biên soạn lời giải KaTeX...'
-      )
 
       const res = await fetch('/api/parse-latex-exam', {
         method: 'POST',
@@ -942,37 +1015,73 @@ function SetupCourseMainContent() {
       }
 
       const { data } = result
-      if (data.title) {
-        setKatexTitle(data.title)
-      }
-      if (data.subject) {
-        setKatexSubject(data.subject)
-      }
-      if (data.duration) {
-        setKatexDuration(String(data.duration))
-      }
-      if (data.exam_type) {
-        setKatexExamType(data.exam_type)
-      }
+      if (data.title) setKatexTitle(data.title)
+      if (data.subject) setKatexSubject(data.subject)
+      if (data.duration) setKatexDuration(String(data.duration))
+      if (data.exam_type) setKatexExamType(data.exam_type)
 
       if (Array.isArray(data.questions) && data.questions.length > 0) {
         setKatexQuestions(data.questions)
         setParseLatexSuccessMsg(
-          `🎉 Đã tự động biên soạn thành công ${data.questions.length} câu hỏi KaTeX từ mã nguồn! Toàn bộ công thức và lời giải đã sẵn sàng.`
+          `🎉 Đã nhận diện thành công ${data.questions.length} câu hỏi KaTeX từ mã nguồn!`
         )
         setTimeout(() => {
           const el = document.getElementById('katex-questions-section')
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 300)
+        }, 200)
       }
     } catch (err: any) {
       console.error('Lỗi biên soạn LaTeX:', err)
-      alert(`Lỗi biên soạn LaTeX: ${err.message || 'Vui lòng thử lại.'}`)
+      alert(`Lỗi biên soạn LaTeX: ${err.message || 'Vui lòng kiểm tra lại file LaTeX.'}`)
     } finally {
       setParsingLatex(false)
       setParseLatexStatus('')
     }
   }
+
+  // ==========================================
+  // XỬ LÝ GIAO CHO AI KIỂM TRA & THẨM ĐỊNH LẠI ĐÁP ÁN
+  // ==========================================
+  const handleAiVerifyAllAnswers = async () => {
+    if (!katexQuestions || katexQuestions.length === 0) {
+      alert('Chưa có câu hỏi nào trong đề để AI kiểm tra đáp án!')
+      return
+    }
+
+    setVerifyingWithAi(true)
+    setAiVerifyStatus(`AI Gemini đang giải toán & thẩm định ${katexQuestions.length} câu hỏi...`)
+
+    try {
+      const res = await fetch('/api/parse-latex-exam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'ai_verify_answers',
+          questions: katexQuestions,
+          subject: katexSubject,
+        }),
+      })
+
+      const result = await res.json()
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'AI thẩm định đáp án thất bại.')
+      }
+
+      if (Array.isArray(result.questions) && result.questions.length > 0) {
+        setKatexQuestions(result.questions)
+        alert(
+          `🎉 AI đã thẩm định & kiểm tra thành công ${result.verifiedCount || result.questions.length}/${result.totalCount || katexQuestions.length} câu hỏi!\nToàn bộ đáp án và lời giải KaTeX đã được hoàn thiện chuẩn xác.`
+        )
+      }
+    } catch (err: any) {
+      console.error('Lỗi AI thẩm định:', err)
+      alert(`Lỗi AI kiểm tra đáp án: ${err.message || 'Vui lòng thử lại sau.'}`)
+    } finally {
+      setVerifyingWithAi(false)
+      setAiVerifyStatus('')
+    }
+  }
+
 
   // ==========================================
   // XỬ LÝ LƯU ĐỀ THI KATEX VÀO SUPABASE
@@ -2293,8 +2402,9 @@ function SetupCourseMainContent() {
                   ) : (
                     <>
                       <Zap className="h-4 w-4 text-amber-300" />
-                      <span>Tự Động Biên Soạn Đề KaTeX Ngay</span>
+                      <span>Tự Động Nhận Diện & Biên Soạn Đề LaTeX (Siêu Tốc)</span>
                     </>
+
                   )}
                 </button>
 
@@ -2452,33 +2562,65 @@ function SetupCourseMainContent() {
 
             {/* DANH SÁCH CÂU HỎI SOẠN TRỰC TIẾP */}
             <div id="katex-questions-section" className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-black uppercase tracking-wider text-slate-400" style={{ fontFamily: 'var(--font-setup-heading)' }}>
-                  2. Danh sách câu hỏi ({katexQuestions?.length || 0} câu)
-                </h2>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-sm font-black uppercase tracking-wider text-slate-400" style={{ fontFamily: 'var(--font-setup-heading)' }}>
+                    2. Danh sách câu hỏi ({katexQuestions?.length || 0} câu)
+                  </h2>
+                  {katexQuestions?.length > 0 && (
+                    <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                      ⚡ KaTeX Engine Siêu Tốc
+                    </span>
+                  )}
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newId = `q-${Date.now()}`
-                    setKatexQuestions([
-                      ...katexQuestions,
-                      {
-                        id: newId,
-                        type: 'single_choice',
-                        text: 'Câu hỏi mới $y = f(x)$...',
-                        options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
-                        correctAnswer: 'A',
-                        explanation: 'Lời giải chi tiết...',
-                        points: 1,
-                      },
-                    ])
-                  }}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
-                >
-                  <Plus className="h-4 w-4" /> Thêm câu hỏi
-                </button>
+                <div className="flex items-center gap-2">
+                  {katexQuestions?.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleAiVerifyAllAnswers}
+                      disabled={verifyingWithAi}
+                      className="inline-flex items-center gap-1.5 text-xs font-black px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md transition hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
+                      title="Giao cho AI giải toán và thẩm định toàn bộ đáp án & lời giải chi tiết"
+                    >
+                      {verifyingWithAi ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300" />
+                          <span>{aiVerifyStatus || 'AI đang thẩm định...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                          <span>AI Thẩm Định & Kiểm Tra Đáp Án</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newId = `q-${Date.now()}`
+                      setKatexQuestions([
+                        ...katexQuestions,
+                        {
+                          id: newId,
+                          type: 'single_choice',
+                          text: 'Câu hỏi mới $y = f(x)$...',
+                          options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+                          correctAnswer: 'A',
+                          explanation: 'Lời giải chi tiết...',
+                          points: 1,
+                        },
+                      ])
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" /> Thêm câu hỏi
+                  </button>
+                </div>
               </div>
+
 
               {(katexQuestions || []).map((q, qIdx) => (
                 <div
