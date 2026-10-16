@@ -114,6 +114,7 @@ import {
   Check,
   X,
   Zap,
+  Shuffle,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newroom-heading' })
@@ -364,8 +365,23 @@ export default function NewExamRoomPage() {
   }, [exam, activeSections])
 
 
-  // Tính toán danh sách phẳng các câu hỏi để hiển thị Question Map Palette & KaTeX Stepper
-  const flatQuestions = useMemo(() => {
+  // Trạng thái xáo trộn đề KaTeX
+  const [shuffledQuestionKeys, setShuffledQuestionKeys] = useState<string[] | null>(null)
+  const [shuffledOptionMap, setShuffledOptionMap] = useState<Record<string, number[]> | null>(null)
+
+  // Kiểm tra đề có bật đảo câu / đảo đáp án không (chỉ áp dụng đề KaTeX, đề PDF cố định)
+  const shouldShuffleQuestions = useMemo(() => {
+    if (!isKatexExam || !exam) return false
+    return Boolean(exam.shuffle_questions || activeSections.some((s: any) => s?.shuffle_questions))
+  }, [isKatexExam, exam, activeSections])
+
+  const shouldShuffleOptions = useMemo(() => {
+    if (!isKatexExam || !exam) return false
+    return Boolean(exam.shuffle_options || activeSections.some((s: any) => s?.shuffle_options))
+  }, [isKatexExam, exam, activeSections])
+
+  // Danh sách phẳng các câu hỏi ban đầu theo thứ tự đề gốc
+  const baseFlatQuestions = useMemo(() => {
     const list: Array<{
       key: string
       sectionId: string
@@ -411,6 +427,109 @@ export default function NewExamRoomPage() {
 
     return list
   }, [activeSections, computedOffsets])
+
+  // Khởi tạo hoặc đọc thứ tự xáo trộn đề / đáp án đã lưu
+  useEffect(() => {
+    if (!exam?.id || baseFlatQuestions.length === 0) return
+
+    const userKey = user?.id || 'guest'
+    const storageKeyQ = `senexam_q_order_${exam.id}_${userKey}`
+    const storageKeyOpt = `senexam_opt_order_${exam.id}_${userKey}`
+
+    // 1. XỬ LÝ ĐẢO THỨ TỰ CÂU HỎI
+    if (shouldShuffleQuestions) {
+      try {
+        const savedQOrder = localStorage.getItem(storageKeyQ)
+        if (savedQOrder) {
+          const parsed = JSON.parse(savedQOrder)
+          if (Array.isArray(parsed) && parsed.length === baseFlatQuestions.length) {
+            setShuffledQuestionKeys(parsed)
+          } else {
+            throw new Error('invalid')
+          }
+        } else {
+          const keys = baseFlatQuestions.map((q) => q.key)
+          for (let i = keys.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[keys[i], keys[j]] = [keys[j], keys[i]]
+          }
+          localStorage.setItem(storageKeyQ, JSON.stringify(keys))
+          setShuffledQuestionKeys(keys)
+        }
+      } catch {
+        const keys = baseFlatQuestions.map((q) => q.key)
+        for (let i = keys.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[keys[i], keys[j]] = [keys[j], keys[i]]
+        }
+        setShuffledQuestionKeys(keys)
+      }
+    } else {
+      setShuffledQuestionKeys(null)
+    }
+
+    // 2. XỬ LÝ ĐẢO CÁC ĐÁP ÁN TRONG CÂU
+    if (shouldShuffleOptions) {
+      try {
+        const savedOptOrder = localStorage.getItem(storageKeyOpt)
+        let optMap: Record<string, number[]> = {}
+        if (savedOptOrder) {
+          optMap = JSON.parse(savedOptOrder)
+        }
+        baseFlatQuestions.forEach((q) => {
+          if ((q.type === 'single_choice' || q.type === 'multiple_choice' || !q.type) && Array.isArray(q.qData?.options)) {
+            const optLen = q.qData.options.length
+            if (!optMap[q.key] || optMap[q.key].length !== optLen) {
+              const arr = Array.from({ length: optLen }, (_, idx) => idx)
+              for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1))
+                ;[arr[i], arr[j]] = [arr[j], arr[i]]
+              }
+              optMap[q.key] = arr
+            }
+          }
+        })
+        localStorage.setItem(storageKeyOpt, JSON.stringify(optMap))
+        setShuffledOptionMap(optMap)
+      } catch {
+        const optMap: Record<string, number[]> = {}
+        baseFlatQuestions.forEach((q) => {
+          if ((q.type === 'single_choice' || q.type === 'multiple_choice' || !q.type) && Array.isArray(q.qData?.options)) {
+            const optLen = q.qData.options.length
+            const arr = Array.from({ length: optLen }, (_, idx) => idx)
+            for (let i = arr.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1))
+              ;[arr[i], arr[j]] = [arr[j], arr[i]]
+            }
+            optMap[q.key] = arr
+          }
+        })
+        setShuffledOptionMap(optMap)
+      }
+    } else {
+      setShuffledOptionMap(null)
+    }
+  }, [exam?.id, user?.id, baseFlatQuestions, shouldShuffleQuestions, shouldShuffleOptions])
+
+  // flatQuestions thực tế được hiển thị (đã qua xáo trộn nếu có bật)
+  const flatQuestions = useMemo(() => {
+    if (!shouldShuffleQuestions || !shuffledQuestionKeys || shuffledQuestionKeys.length === 0) {
+      return baseFlatQuestions
+    }
+    const keyMap = new Map(baseFlatQuestions.map((q) => [q.key, q]))
+    const reordered: typeof baseFlatQuestions = []
+    shuffledQuestionKeys.forEach((key, idx) => {
+      const item = keyMap.get(key)
+      if (item) {
+        reordered.push({
+          ...item,
+          globalNum: idx + 1,
+          label: `Câu ${idx + 1}`,
+        })
+      }
+    })
+    return reordered.length === baseFlatQuestions.length ? reordered : baseFlatQuestions
+  }, [baseFlatQuestions, shouldShuffleQuestions, shuffledQuestionKeys])
 
   const questionMeta = useMemo(() => {
     return {
@@ -558,8 +677,10 @@ export default function NewExamRoomPage() {
 
       if (subError) throw subError
 
-      // Xóa bản nháp lưu tạm
+      // Xóa bản nháp lưu tạm và thứ tự xáo trộn đề
       localStorage.removeItem(`senexam_draft_${exam.id}_${user.id}`)
+      localStorage.removeItem(`senexam_q_order_${exam.id}_${user.id}`)
+      localStorage.removeItem(`senexam_opt_order_${exam.id}_${user.id}`)
 
       setSubmittedResult({
         submissionId: subData?.id || '',
@@ -628,6 +749,16 @@ export default function NewExamRoomPage() {
               <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-3 py-1 text-xs font-bold border border-indigo-500/20">
                 {exam?.exam_type || 'Đề thi'}
               </span>
+              {shouldShuffleQuestions && (
+                <span className="rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2.5 py-1 text-xs font-bold border border-purple-500/20 flex items-center gap-1">
+                  <Shuffle className="h-3 w-3" /> Đảo câu
+                </span>
+              )}
+              {shouldShuffleOptions && (
+                <span className="rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 px-2.5 py-1 text-xs font-bold border border-violet-500/20 flex items-center gap-1">
+                  <RotateCcw className="h-3 w-3" /> Đảo đáp án
+                </span>
+              )}
             </div>
           </div>
 
@@ -894,78 +1025,88 @@ export default function NewExamRoomPage() {
 
                   {/* Render Options by Type */}
                   {/* TYPE: SINGLE CHOICE */}
+                  {/* Render Options by Type */}
+                  {/* TYPE: SINGLE CHOICE */}
                   {(currentQ.type === 'single_choice' || currentQ.type === 'multiple_choice' || !currentQ.type) && (
                     <div className="space-y-3">
-                      {Array.from({ length: currentQ.qData?.options?.length || 4 }).map((_, oIdx) => {
-                        const optLetter = String.fromCharCode(65 + oIdx)
-                        const optContent = currentQ.qData?.options?.[oIdx] || `Phương án ${optLetter}`
-                        const currentAns = answers[currentQ.key]
-                        const isSelected =
-                          currentQ.type === 'multiple_choice'
-                            ? Array.isArray(currentAns) && currentAns.includes(optLetter)
-                            : currentAns === optLetter
+                      {(() => {
+                        const totalOpts = currentQ.qData?.options?.length || 4
+                        const optIndices = (shouldShuffleOptions && shuffledOptionMap && shuffledOptionMap[currentQ.key])
+                          ? shuffledOptionMap[currentQ.key]
+                          : Array.from({ length: totalOpts }, (_, i) => i)
 
-                        const isRevealed = isStudyMode && revealedAnswers[currentQ.key]
-                        const correctOpt =
-                          currentQ.qData?.correctAnswer ??
-                          currentSection?.correctAnswers?.[currentQ.qIdx]
-                        const isThisCorrect = optLetter === correctOpt
-                        const isThisWrong = isSelected && !isThisCorrect
+                        return optIndices.map((origIdx, slotIdx) => {
+                          const displayLetter = String.fromCharCode(65 + slotIdx)
+                          const originalLetter = String.fromCharCode(65 + origIdx)
+                          const optContent = currentQ.qData?.options?.[origIdx] || `Phương án ${displayLetter}`
+                          const currentAns = answers[currentQ.key]
+                          const isSelected =
+                            currentQ.type === 'multiple_choice'
+                              ? Array.isArray(currentAns) && currentAns.includes(originalLetter)
+                              : currentAns === originalLetter
 
-                        return (
-                          <button
-                            key={optLetter}
-                            type="button"
-                            onClick={() => {
-                              if (currentQ.type === 'multiple_choice') {
-                                const prevArr = Array.isArray(currentAns) ? currentAns : []
-                                const nextArr = prevArr.includes(optLetter)
-                                  ? prevArr.filter((x: string) => x !== optLetter)
-                                  : [...prevArr, optLetter].sort()
-                                handleAnswer(currentQ.key, nextArr)
-                              } else {
-                                handleAnswer(currentQ.key, optLetter)
-                              }
-                            }}
-                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-3.5 ${
-                              isRevealed
-                                ? isThisCorrect
-                                  ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20 ring-2 ring-emerald-500/40 shadow-xs'
-                                  : isThisWrong
-                                  ? 'border-rose-500 bg-rose-500/10 dark:bg-rose-500/20 ring-2 ring-rose-500/40 shadow-xs'
-                                  : 'border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] opacity-50'
-                                : isSelected
-                                ? 'border-indigo-600 dark:border-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 shadow-md ring-2 ring-indigo-500/30'
-                                : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 hover:border-indigo-300 dark:hover:border-indigo-700 shadow-2xs'
-                            }`}
-                          >
-                            <span
-                              className={`h-8 w-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition ${
+                          const isRevealed = isStudyMode && revealedAnswers[currentQ.key]
+                          const correctOpt =
+                            currentQ.qData?.correctAnswer ??
+                            currentSection?.correctAnswers?.[currentQ.qIdx]
+                          const isThisCorrect = originalLetter === correctOpt
+                          const isThisWrong = isSelected && !isThisCorrect
+
+                          return (
+                            <button
+                              key={`${currentQ.key}-${slotIdx}`}
+                              type="button"
+                              onClick={() => {
+                                if (currentQ.type === 'multiple_choice') {
+                                  const prevArr = Array.isArray(currentAns) ? currentAns : []
+                                  const nextArr = prevArr.includes(originalLetter)
+                                    ? prevArr.filter((x: string) => x !== originalLetter)
+                                    : [...prevArr, originalLetter].sort()
+                                  handleAnswer(currentQ.key, nextArr)
+                                } else {
+                                  handleAnswer(currentQ.key, originalLetter)
+                                }
+                              }}
+                              className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-3.5 ${
                                 isRevealed
                                   ? isThisCorrect
-                                    ? 'bg-emerald-600 text-white'
+                                    ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20 ring-2 ring-emerald-500/40 shadow-xs'
                                     : isThisWrong
-                                    ? 'bg-rose-600 text-white'
-                                    : 'bg-black/10 dark:bg-white/10 text-slate-500'
+                                    ? 'border-rose-500 bg-rose-500/10 dark:bg-rose-500/20 ring-2 ring-rose-500/40 shadow-xs'
+                                    : 'border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] opacity-50'
                                   : isSelected
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300'
+                                  ? 'border-indigo-600 dark:border-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 shadow-md ring-2 ring-indigo-500/30'
+                                  : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 hover:border-indigo-300 dark:hover:border-indigo-700 shadow-2xs'
                               }`}
                             >
-                              {isRevealed && isThisCorrect ? (
-                                <Check className="h-4 w-4" />
-                              ) : isRevealed && isThisWrong ? (
-                                <X className="h-4 w-4" />
-                              ) : (
-                                optLetter
-                              )}
-                            </span>
-                            <div className="flex-1 pt-1 prose prose-sm dark:prose-invert max-w-none text-sm font-semibold text-slate-800 dark:text-slate-200">
-                              <SafeMathRenderer content={optContent} gfm={false} />
-                            </div>
-                          </button>
-                        )
-                      })}
+                              <span
+                                className={`h-8 w-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition ${
+                                  isRevealed
+                                    ? isThisCorrect
+                                      ? 'bg-emerald-600 text-white'
+                                      : isThisWrong
+                                      ? 'bg-rose-600 text-white'
+                                      : 'bg-black/10 dark:bg-white/10 text-slate-500'
+                                    : isSelected
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {isRevealed && isThisCorrect ? (
+                                  <Check className="h-4 w-4" />
+                                ) : isRevealed && isThisWrong ? (
+                                  <X className="h-4 w-4" />
+                                ) : (
+                                  displayLetter
+                                )}
+                              </span>
+                              <div className="flex-1 pt-1 prose prose-sm dark:prose-invert max-w-none text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                <SafeMathRenderer content={optContent} gfm={false} />
+                              </div>
+                            </button>
+                          )
+                        })
+                      })()}
                     </div>
                   )}
 

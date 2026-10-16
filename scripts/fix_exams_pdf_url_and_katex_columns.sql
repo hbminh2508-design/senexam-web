@@ -23,7 +23,9 @@ ADD COLUMN IF NOT EXISTS max_attempts INTEGER DEFAULT 1,
 ADD COLUMN IF NOT EXISTS grading_method TEXT DEFAULT 'highest',
 ADD COLUMN IF NOT EXISTS subjects JSONB DEFAULT '["Toán học"]'::jsonb,
 ADD COLUMN IF NOT EXISTS part_instructions JSONB DEFAULT '[]'::jsonb,
-ADD COLUMN IF NOT EXISTS folder_id UUID DEFAULT NULL;
+ADD COLUMN IF NOT EXISTS folder_id UUID DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS shuffle_questions BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS shuffle_options BOOLEAN DEFAULT FALSE;
 
 -- 4. Làm mới Schema Cache của Supabase PostgREST (Xử lý dứt điểm lỗi cache)
 NOTIFY pgrst, 'reload schema';

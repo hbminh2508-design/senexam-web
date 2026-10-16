@@ -52,6 +52,7 @@ import {
   FileUp,
   FileCode,
   Code,
+  Shuffle,
   Image as ImageIcon,
 } from 'lucide-react'
 
@@ -506,6 +507,27 @@ function SetupCourseMainContent() {
   const [katexMaxScore, setKatexMaxScore] = useState('10')
   const [katexAllowReview, setKatexAllowReview] = useState(true)
   const [katexIsHidden, setKatexIsHidden] = useState(false)
+  const [katexShuffleQuestions, setKatexShuffleQuestions] = useState(false)
+  const [katexShuffleOptions, setKatexShuffleOptions] = useState(false)
+
+  // ==========================================
+  // STATE: MODAL CÀI ĐẶT ĐỀ THI (NÚT SLIDERS CẠNH THÙNG RÁC)
+  // ==========================================
+  const [editingExamSettings, setEditingExamSettings] = useState<any | null>(null)
+  const [settingsTitle, setSettingsTitle] = useState('')
+  const [settingsSubject, setSettingsSubject] = useState('Toán học')
+  const [settingsExamType, setSettingsExamType] = useState('THPTQG')
+  const [settingsDuration, setSettingsDuration] = useState('50')
+  const [settingsMaxScore, setSettingsMaxScore] = useState('10')
+  const [settingsAllowReview, setSettingsAllowReview] = useState(true)
+  const [settingsIsHidden, setSettingsIsHidden] = useState(false)
+  const [settingsAccessCode, setSettingsAccessCode] = useState('')
+  const [settingsRequireSeb, setSettingsRequireSeb] = useState(false)
+  const [settingsRequireProctoring, setSettingsRequireProctoring] = useState(false)
+  const [settingsShuffleQuestions, setSettingsShuffleQuestions] = useState(false)
+  const [settingsShuffleOptions, setSettingsShuffleOptions] = useState(false)
+  const [savingExamSettings, setSavingExamSettings] = useState(false)
+  const [settingsSuccessMsg, setSettingsSuccessMsg] = useState('')
   const [katexQuestions, setKatexQuestions] = useState<KatexQuestion[]>([
     {
       id: 'q-1',
@@ -1132,6 +1154,8 @@ function SetupCourseMainContent() {
           type: defaultSecType as any,
           format: 'katex',
           is_katex: true,
+          shuffle_questions: katexShuffleQuestions,
+          shuffle_options: katexShuffleOptions,
           instructions: 'Đề thi được soạn trực tiếp bằng KaTeX sắc nét, không dùng file PDF.',
           correctAnswers: correctAnswersMap,
           // Đính kèm danh sách câu hỏi KaTeX chi tiết
@@ -1145,6 +1169,8 @@ function SetupCourseMainContent() {
         duration: parseInt(katexDuration) || 50,
         drive_file_id: null,
         format: 'katex',
+        shuffle_questions: katexShuffleQuestions,
+        shuffle_options: katexShuffleOptions,
         exam_structure: examSections,
         allow_review: katexAllowReview,
         is_hidden: isHiddenEffective,
@@ -1188,10 +1214,16 @@ function SetupCourseMainContent() {
       }
 
       if (firstError) {
-        console.warn('Lỗi lưu đề có max_score, thử fallback lưu cơ bản:', firstError.message)
+        console.warn('Lỗi lưu đề có max_score / shuffle columns, thử fallback lưu cơ bản:', firstError.message)
+        const safePayload = { ...basePayload }
+        if (firstError.message?.includes('shuffle_questions') || firstError.message?.includes('shuffle_options')) {
+          delete safePayload.shuffle_questions
+          delete safePayload.shuffle_options
+        }
+
         let { data: fallbackData, error: fallbackError } = await supabase
           .from('exams')
-          .insert(basePayload)
+          .insert(safePayload)
           .select('*')
           .single()
 
@@ -1199,11 +1231,23 @@ function SetupCourseMainContent() {
           const safeType = getSafeExamType(katexExamType)
           const retryRes2 = await supabase
             .from('exams')
-            .insert({ ...basePayload, exam_type: safeType })
+            .insert({ ...safePayload, exam_type: safeType })
             .select('*')
             .single()
           fallbackData = retryRes2.data
           fallbackError = retryRes2.error
+        }
+
+        if (fallbackError && (fallbackError.message?.includes('shuffle_questions') || fallbackError.message?.includes('shuffle_options'))) {
+          delete safePayload.shuffle_questions
+          delete safePayload.shuffle_options
+          const retryRes3 = await supabase
+            .from('exams')
+            .insert(safePayload)
+            .select('*')
+            .single()
+          fallbackData = retryRes3.data
+          fallbackError = retryRes3.error
         }
 
         if (fallbackError) throw fallbackError
@@ -1842,7 +1886,7 @@ function SetupCourseMainContent() {
     }
   }
 
-  // Bật/tắt allow_review
+  // Bật/tắt allow_review nhanh
   const handleToggleReview = async (examId: string, currentVal: boolean) => {
     try {
       const nextVal = !currentVal
@@ -1851,6 +1895,172 @@ function SetupCourseMainContent() {
       setExamsList((prev) => prev.map((e) => (e.id === examId ? { ...e, allow_review: nextVal } : e)))
     } catch (err: any) {
       alert('Lỗi cập nhật: ' + err.message)
+    }
+  }
+
+  // Helper kiểm tra đề có phải KaTeX trực tiếp không
+  const checkIsKatexExam = (ex: any) => {
+    if (!ex) return false
+    if (ex.format === 'katex') return true
+    let struct = ex.exam_structure
+    if (typeof struct === 'string') {
+      try { struct = JSON.parse(struct) } catch { struct = [] }
+    }
+    if (struct && typeof struct === 'object' && !Array.isArray(struct) && Array.isArray((struct as any).sections)) {
+      struct = (struct as any).sections
+    }
+    const hasQuestions =
+      Array.isArray(struct) &&
+      struct.some(
+        (s: any) =>
+          (Array.isArray(s?.questions) && s.questions.length > 0) ||
+          s?.format === 'katex' ||
+          s?.is_katex === true ||
+          s?.id === 'sec-katex-main'
+      )
+    const isValidDrive = typeof ex.drive_file_id === 'string' && ex.drive_file_id.trim().length > 10 && !ex.drive_file_id.includes('null')
+    const isValidPdf = typeof ex.pdf_url === 'string' && ex.pdf_url.trim().length > 10 && !ex.pdf_url.includes('null')
+    return hasQuestions || (!isValidDrive && !isValidPdf)
+  }
+
+  // Mở modal cấu hình đề thi (Nút Sliders cạnh thùng rác)
+  const openExamSettingsModal = (exam: any) => {
+    setEditingExamSettings(exam)
+    setSettingsTitle(exam.title || '')
+    setSettingsSubject(
+      Array.isArray(exam.subjects) && exam.subjects.length > 0
+        ? exam.subjects[0]
+        : (exam.subject || 'Toán học')
+    )
+    setSettingsExamType(exam.exam_type || 'THPTQG')
+    setSettingsDuration(String(exam.duration || 50))
+    setSettingsMaxScore(String(exam.max_score || 10))
+    setSettingsAllowReview(exam.allow_review !== false)
+    setSettingsIsHidden(Boolean(exam.is_hidden))
+    setSettingsAccessCode(exam.access_code || '')
+    setSettingsRequireSeb(Boolean(exam.require_seb))
+    setSettingsRequireProctoring(Boolean(exam.require_proctoring))
+
+    let struct = exam.exam_structure
+    if (typeof struct === 'string') {
+      try { struct = JSON.parse(struct) } catch { struct = [] }
+    }
+    if (struct && typeof struct === 'object' && !Array.isArray(struct) && Array.isArray((struct as any).sections)) {
+      struct = (struct as any).sections
+    }
+    const firstSec = Array.isArray(struct) && struct.length > 0 ? struct[0] : null
+    setSettingsShuffleQuestions(Boolean(exam.shuffle_questions || firstSec?.shuffle_questions))
+    setSettingsShuffleOptions(Boolean(exam.shuffle_options || firstSec?.shuffle_options))
+    setSettingsSuccessMsg('')
+  }
+
+  // Lưu thay đổi cài đặt đề thi
+  const handleSaveExamSettings = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingExamSettings) return
+    setSavingExamSettings(true)
+    setSettingsSuccessMsg('')
+
+    try {
+      const isKatex = checkIsKatexExam(editingExamSettings)
+      let struct = editingExamSettings.exam_structure
+      if (typeof struct === 'string') {
+        try { struct = JSON.parse(struct) } catch { struct = [] }
+      }
+      if (struct && typeof struct === 'object' && !Array.isArray(struct) && Array.isArray((struct as any).sections)) {
+        struct = (struct as any).sections
+      }
+
+      if (Array.isArray(struct) && isKatex) {
+        struct = struct.map((s: any) => ({
+          ...s,
+          shuffle_questions: settingsShuffleQuestions,
+          shuffle_options: settingsShuffleOptions,
+        }))
+      }
+
+      const generatedCode = settingsIsHidden
+        ? (settingsAccessCode.trim() || Math.random().toString(36).substring(2, 8).toUpperCase())
+        : null
+
+      const updates: any = {
+        title: settingsTitle.trim() || editingExamSettings.title,
+        subjects: [settingsSubject],
+        exam_type: settingsExamType,
+        duration: parseInt(settingsDuration) || 50,
+        max_score: parseFloat(settingsMaxScore) || 10,
+        allow_review: settingsAllowReview,
+        is_hidden: settingsIsHidden,
+        access_code: generatedCode,
+        require_seb: settingsRequireSeb,
+        require_proctoring: settingsRequireProctoring,
+      }
+
+      if (isKatex) {
+        updates.shuffle_questions = settingsShuffleQuestions
+        updates.shuffle_options = settingsShuffleOptions
+        if (struct) {
+          updates.exam_structure = struct
+        }
+      }
+
+      // 1. Thử cập nhật toàn diện
+      let { error } = await supabase
+        .from('exams')
+        .update(updates)
+        .eq('id', editingExamSettings.id)
+
+      // Fallback nếu thiếu cột shuffle_questions / shuffle_options
+      if (error && (error.message?.includes('shuffle_questions') || error.message?.includes('shuffle_options'))) {
+        const fallbackUpdates = { ...updates }
+        delete fallbackUpdates.shuffle_questions
+        delete fallbackUpdates.shuffle_options
+        const retry = await supabase
+          .from('exams')
+          .update(fallbackUpdates)
+          .eq('id', editingExamSettings.id)
+        error = retry.error
+      }
+
+      // Fallback nếu thiếu cột max_score
+      if (error && error.message?.includes('max_score')) {
+        const fallbackUpdates2 = { ...updates }
+        delete fallbackUpdates2.max_score
+        delete fallbackUpdates2.shuffle_questions
+        delete fallbackUpdates2.shuffle_options
+        const retry2 = await supabase
+          .from('exams')
+          .update(fallbackUpdates2)
+          .eq('id', editingExamSettings.id)
+        error = retry2.error
+      }
+
+      if (error) throw error
+
+      // 2. Cập nhật state local examsList
+      setExamsList((prev) =>
+        prev.map((ex) =>
+          ex.id === editingExamSettings.id
+            ? {
+                ...ex,
+                ...updates,
+                shuffle_questions: isKatex ? settingsShuffleQuestions : false,
+                shuffle_options: isKatex ? settingsShuffleOptions : false,
+                exam_structure: isKatex && struct ? struct : ex.exam_structure,
+              }
+            : ex
+        )
+      )
+
+      setSettingsSuccessMsg('Đã lưu cấu hình đề thi thành công!')
+      setTimeout(() => {
+        setEditingExamSettings(null)
+        setSettingsSuccessMsg('')
+      }, 700)
+    } catch (err: any) {
+      alert('Lỗi lưu cài đặt: ' + (err.message || 'Không thể cập nhật đề thi'))
+    } finally {
+      setSavingExamSettings(false)
     }
   }
 
@@ -2106,13 +2316,9 @@ function SetupCourseMainContent() {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => handleToggleReview(exam.id, exam.allow_review)}
-                            className={`p-1.5 rounded-lg text-xs font-bold transition ${
-                              exam.allow_review
-                                ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                            }`}
-                            title={exam.allow_review ? 'Đang bật xem lại lời giải' : 'Đang tắt xem lại lời giải'}
+                            onClick={() => openExamSettingsModal(exam)}
+                            className="p-1.5 rounded-lg text-xs font-bold transition bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900 shadow-xs cursor-pointer active:scale-95"
+                            title="Cài đặt cấu hình đề thi"
                           >
                             <Sliders className="h-3.5 w-3.5" />
                           </button>
@@ -2568,6 +2774,49 @@ function SetupCourseMainContent() {
                     </label>
                   </div>
                 )}
+
+                {/* ĐẢO CÂU & ĐẢO ĐÁP ÁN (DÀNH RIÊNG CHO KATEX) */}
+                <div className="sm:col-span-2 lg:col-span-4 mt-2 p-4 rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-50/60 via-purple-50/40 to-pink-50/40 dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-pink-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                      <Shuffle className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-indigo-900 dark:text-indigo-200">
+                        Xáo Trộn Đề KaTeX Chống Gian Lận & Học Vẹt
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                        Tự động đổi thứ tự câu và đáp án mỗi lần thí sinh làm bài để chống ghi nhớ đáp án cũ.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-5 flex-wrap">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={katexShuffleQuestions}
+                        onChange={(e) => setKatexShuffleQuestions(e.target.checked)}
+                        className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                        Đảo thứ tự câu hỏi
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={katexShuffleOptions}
+                        onChange={(e) => setKatexShuffleOptions(e.target.checked)}
+                        className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                        Đảo các đáp án (A, B, C, D)
+                      </span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -4278,6 +4527,303 @@ function SetupCourseMainContent() {
           onClose={() => setManagingExamStudents(null)}
           exam={managingExamStudents}
         />
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL CÀI ĐẶT CẤU HÌNH ĐỀ THI (NÚT SLIDERS CẠNH THÙNG RÁC) */}
+      {/* ==================================================== */}
+      {editingExamSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-2xl p-6 sm:p-7 max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-black/5 dark:border-white/5 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-600 text-white flex items-center justify-center shadow-md">
+                  <Sliders className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-setup-heading)' }}>
+                      Cài Đặt Cấu Hình Đề Thi
+                    </h3>
+                    {checkIsKatexExam(editingExamSettings) ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                        ✨ KaTeX Live
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                        📄 Đề PDF
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold truncate max-w-sm sm:max-w-md">
+                    {editingExamSettings.title}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingExamSettings(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-black/5 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleSaveExamSettings} className="flex-1 overflow-y-auto py-5 space-y-5 pr-1 text-xs">
+              {/* Tên đề thi */}
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                  Tên đề thi *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={settingsTitle}
+                  onChange={(e) => setSettingsTitle(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Thông số cơ bản */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Môn học</label>
+                  <select
+                    value={settingsSubject}
+                    onChange={(e) => setSettingsSubject(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
+                  >
+                    <option value="Toán học">Toán học</option>
+                    <option value="Vật lí">Vật lí</option>
+                    <option value="Hóa học">Hóa học</option>
+                    <option value="Sinh học">Sinh học</option>
+                    <option value="Tin học">Tin học</option>
+                    <option value="Tiếng Anh">Tiếng Anh</option>
+                    <option value="Ngữ văn">Ngữ văn</option>
+                    <option value="Lịch sử">Lịch sử</option>
+                    <option value="Địa lí">Địa lí</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Loại kỳ thi</label>
+                  <select
+                    value={settingsExamType}
+                    onChange={(e) => setSettingsExamType(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
+                  >
+                    {EXAM_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Thời gian làm bài (phút)</label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="300"
+                    value={settingsDuration}
+                    onChange={(e) => setSettingsDuration(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Thang điểm tối đa</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={settingsMaxScore}
+                    onChange={(e) => setSettingsMaxScore(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* CÀI ĐẶT ĐẢO CÂU & ĐẢO ĐÁP ÁN (DÀNH RIÊNG CHO ĐỀ KATEX) */}
+              {checkIsKatexExam(editingExamSettings) ? (
+                <div className="p-4 rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-50/70 via-purple-50/50 to-pink-50/40 dark:from-indigo-950/40 dark:via-purple-950/30 dark:to-pink-950/20 space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <Shuffle className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950 dark:text-indigo-200">
+                        Tính Năng Xáo Trộn Đề KaTeX (Chống Học Vẹt)
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                        Thay đổi thứ tự câu và các phương án mỗi lần làm lại để thí sinh không thể ghi nhớ vị trí đáp án cũ.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <label className="flex items-center gap-2.5 p-3 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-white/80 dark:bg-slate-800/80 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={settingsShuffleQuestions}
+                        onChange={(e) => setSettingsShuffleQuestions(e.target.checked)}
+                        className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                      />
+                      <div>
+                        <span className="font-black text-slate-800 dark:text-slate-100 block">
+                          🔀 Đảo thứ tự câu hỏi
+                        </span>
+                        <span className="text-[10px] text-slate-500">Mỗi thí sinh có thứ tự câu khác nhau</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 p-3 rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-white/80 dark:bg-slate-800/80 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={settingsShuffleOptions}
+                        onChange={(e) => setSettingsShuffleOptions(e.target.checked)}
+                        className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                      />
+                      <div>
+                        <span className="font-black text-slate-800 dark:text-slate-100 block">
+                          🔄 Đảo đáp án (A, B, C, D)
+                        </span>
+                        <span className="text-[10px] text-slate-500">Đảo ngẫu nhiên vị trí các lựa chọn</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 dark:bg-amber-500/10 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold leading-relaxed">
+                    <strong>Đề thi PDF:</strong> Đề sử dụng file đề in cố định nên tính năng <em>Đảo câu</em> và <em>Đảo đáp án</em> không khả dụng. Bạn có thể chuyển sang định dạng KaTeX để sử dụng trọn vẹn các tính năng xáo trộn này.
+                  </p>
+                </div>
+              )}
+
+              {/* Chế độ xem lại & Bảo mật */}
+              <div className="space-y-3 pt-2 border-t border-black/5 dark:border-white/5">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={settingsAllowReview}
+                    onChange={(e) => setSettingsAllowReview(e.target.checked)}
+                    className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                  />
+                  <span className="font-bold text-slate-700 dark:text-slate-300">
+                    Cho phép học sinh xem lại lời giải chi tiết sau khi nộp bài
+                  </span>
+                </label>
+
+                <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800/50 space-y-3">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={settingsIsHidden}
+                      onChange={(e) => setSettingsIsHidden(e.target.checked)}
+                      className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                    />
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      Chế độ đề thi riêng tư (Yêu cầu nhập mã truy cập mới được vào thi)
+                    </span>
+                  </label>
+
+                  {settingsIsHidden && (
+                    <div className="pt-2 flex items-center gap-2">
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">Mã truy cập đề (Access Code)</label>
+                        <input
+                          type="text"
+                          value={settingsAccessCode}
+                          onChange={(e) => setSettingsAccessCode(e.target.value.toUpperCase())}
+                          placeholder="VD: 7YHSTB"
+                          className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 py-2 font-mono font-black text-xs uppercase outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSettingsAccessCode(Math.random().toString(36).substring(2, 8).toUpperCase())}
+                        className="mt-4 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:bg-slate-100 text-xs font-bold transition shrink-0 cursor-pointer"
+                        title="Tạo mã ngẫu nhiên"
+                      >
+                        🎲 Tạo mã mới
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2 p-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800/50 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={settingsRequireSeb}
+                      onChange={(e) => setSettingsRequireSeb(e.target.checked)}
+                      className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                    />
+                    <div>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 block">Khóa trình duyệt SEB</span>
+                      <span className="text-[10px] text-slate-400">Yêu cầu Safe Exam Browser v3.8</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800/50 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={settingsRequireProctoring}
+                      onChange={(e) => setSettingsRequireProctoring(e.target.checked)}
+                      className="h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                    />
+                    <div>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 block">Giám sát chống gian lận</span>
+                      <span className="text-[10px] text-slate-400">Ghi nhận tab switch, fullscreen</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Thông báo thành công */}
+              {settingsSuccessMsg && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{settingsSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-black/5 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setEditingExamSettings(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-black/5 transition cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={savingExamSettings}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs uppercase tracking-wider shadow-md transition hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {savingExamSettings ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      <span>Lưu Thay Đổi Cài Đặt</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </main>
   )
