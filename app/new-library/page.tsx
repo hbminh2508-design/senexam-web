@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
   Search,
@@ -546,12 +547,13 @@ export default function NewLibraryPage() {
 
         {/* Content Explorer Section */}
         {loading ? (
-          <div className="py-20 grid place-items-center">
-            <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-              <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-              <span className="font-bold text-sm">Đang tải danh mục tài liệu...</span>
-            </div>
-          </div>
+          <ModernLoading
+            fullScreen={false}
+            isDark={isDark}
+            themeColor="amber"
+            title="SenExam Thư Viện Số 2.0"
+            subtitle="Đang tải danh mục tài liệu & kho đề thi..."
+          />
         ) : (
           <div className="mt-6 space-y-8">
             

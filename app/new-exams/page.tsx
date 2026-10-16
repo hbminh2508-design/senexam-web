@@ -30,6 +30,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newexams-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newexams-body' })
@@ -192,12 +193,11 @@ export default function NewExamsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-          <span className="font-bold text-sm">Đang tải ngân hàng đề thi SenExam...</span>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        title="SenExam Ngân Hàng Đề Thi"
+        subtitle="Đang đồng bộ kho đề thi KaTeX & tối ưu trải nghiệm làm bài..."
+      />
     )
   }
 

@@ -12,6 +12,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
+import ModernLoading from '@/app/components/ModernLoading'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -895,12 +896,11 @@ export default function NewExamRoomPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-          <span className="font-bold text-sm">Đang tải đề thi và chuẩn bị phòng thi KaTeX...</span>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        title="SenExam Phòng Thi 2.0"
+        subtitle="Đang chuẩn bị đề thi & kết nối phòng thi ảo an toàn..."
+      />
     )
   }
 

@@ -7,6 +7,7 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
   Search,
@@ -281,12 +282,12 @@ export default function NewHistorySubmissionsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F4F7FB] dark:bg-[#080D1A] text-slate-800 dark:text-slate-100">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-teal-600 dark:text-teal-400" />
-          <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Đang tải Lịch sử Bài nộp...</p>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        themeColor="teal"
+        title="SenExam Lịch Sử Bài Thi"
+        subtitle="Đang đồng bộ kết quả thi, bảng điểm & dữ liệu phân tích..."
+      />
     )
   }
 

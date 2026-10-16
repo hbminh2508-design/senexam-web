@@ -7,6 +7,7 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
   MessageSquare,
@@ -302,12 +303,12 @@ export default function NewMediaPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-          <span className="font-bold text-sm">Đang tải trung tâm Sen Media...</span>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        themeColor="indigo"
+        title="SenExam Sen Media"
+        subtitle="Đang tải các cuộc thảo luận, chia sẻ & khoảnh khắc học tập..."
+      />
     )
   }
 
@@ -449,10 +450,13 @@ export default function NewMediaPage() {
               {/* Posts List */}
               <div className="space-y-4">
                 {postsLoading && posts.length === 0 ? (
-                  <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-12 text-center text-[#6B7280]">
-                    <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mx-auto mb-2" />
-                    <p className="text-xs font-bold">Đang tải các bài viết từ cộng đồng...</p>
-                  </div>
+                  <ModernLoading
+                    fullScreen={false}
+                    isDark={isDark}
+                    themeColor="indigo"
+                    title="SenExam Sen Media"
+                    subtitle="Đang tải các bài viết & thảo luận từ cộng đồng..."
+                  />
                 ) : filteredPosts.length === 0 ? (
                   <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-12 text-center text-[#6B7280] space-y-2">
                     <MessageSquare className="h-10 w-10 mx-auto opacity-40" />

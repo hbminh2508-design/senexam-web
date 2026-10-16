@@ -9,6 +9,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { signInWithGoogle } from '@/lib/authHelper'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { getModernThemeVars, getAccentHex } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   Mail,
   Lock,
@@ -1324,10 +1325,11 @@ export default function IdpAuthPage() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F4F7FB] dark:bg-[#080D1A] text-slate-600 dark:text-slate-300">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mb-3" />
-        <p className="text-xs font-bold font-mono">Đang kết nối Cổng Xác Thực Tập Trung...</p>
-      </div>
+      <ModernLoading
+        themeColor="indigo"
+        title="SenExam Cổng Định Danh IDP 2.0"
+        subtitle="Đang kết nối cổng xác thực tập trung & bảo mật phiên làm việc..."
+      />
     )
   }
 

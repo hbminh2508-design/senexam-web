@@ -46,6 +46,7 @@ import remarkMath from 'remark-math'
 import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import ModernLoading from '@/app/components/ModernLoading'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newrev-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newrev-body' })
@@ -473,12 +474,11 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-          <span className="font-bold text-sm">Đang tải chi tiết bài làm & đáp án KaTeX...</span>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        title="SenExam Chi Tiết Bài Làm"
+        subtitle="Đang tải dữ liệu bài làm & hiển thị công thức KaTeX..."
+      />
     )
   }
 

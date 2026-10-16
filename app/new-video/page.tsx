@@ -7,6 +7,7 @@ import { Baloo_2, Nunito } from 'next/font/google'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
   Video,
@@ -107,12 +108,12 @@ export default function NewVideoPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-          <span className="font-bold text-sm">Đang kết nối thư viện video bài giảng...</span>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        themeColor="amber"
+        title="SenExam SenVideo"
+        subtitle="Đang kết nối thư viện video bài giảng & tài liệu trực quan..."
+      />
     )
   }
 

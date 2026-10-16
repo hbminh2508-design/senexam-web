@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import ModernLoading from '@/app/components/ModernLoading'
 
 export default function NewSetupCourseRedirectPage() {
   const router = useRouter()
@@ -14,11 +15,10 @@ export default function NewSetupCourseRedirectPage() {
   }, [router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F3F6FA] dark:bg-[#070A11] text-slate-600 dark:text-slate-300">
-      <div className="text-center space-y-3">
-        <div className="h-8 w-8 mx-auto border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs font-bold font-mono">Đang chuyển tiếp đến Cổng Soạn Đề & Khóa Học...</p>
-      </div>
-    </div>
+    <ModernLoading
+      themeColor="emerald"
+      title="SenExam Quản Trị Khóa Học & Soạn Đề"
+      subtitle="Đang chuyển hướng đến cổng thiết lập khóa học & soạn đề KaTeX..."
+    />
   )
 }

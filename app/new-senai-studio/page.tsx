@@ -11,6 +11,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
   Sparkles,
@@ -256,12 +257,12 @@ export default function NewSenAiStudioPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#080C14] text-[#2B2B2B] dark:text-slate-100">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-6 py-4 shadow-xl backdrop-blur-xl">
-          <Loader2 className="h-6 w-6 animate-spin text-amber-500" />
-          <span className="font-bold text-sm">Đang kết nối không gian SenAI Studio 2.0...</span>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        themeColor="purple"
+        title="SenExam SenAI Studio 2.0"
+        subtitle="Đang khởi động trí tuệ nhân tạo SenAI & bộ trợ lý học tập thông minh..."
+      />
     )
   }
 

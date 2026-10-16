@@ -9,6 +9,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { initGoogleDriveUpload, uploadFileToGoogleDrive } from '@/app/components/googleDriveUpload'
 import ExamStudentProctorModal from '@/app/components/ExamStudentProctorModal'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -2091,10 +2092,12 @@ function SetupCourseMainContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500 mb-3" />
-        <p className="text-sm font-bold">Đang tải Cổng Thiết lập Khóa học & Soạn đề KaTeX...</p>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        themeColor="emerald"
+        title="SenExam Quản Trị Khóa Học & Soạn Đề"
+        subtitle="Đang tải hệ thống biên soạn đề KaTeX & ngân hàng câu hỏi..."
+      />
     )
   }
 
@@ -5029,10 +5032,11 @@ export default function NewSetupCoursePage() {
 
   if (!mounted) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500 mb-3" />
-        <p className="text-sm font-bold">Đang tải Cổng Thiết lập Khóa học & Soạn đề KaTeX...</p>
-      </div>
+      <ModernLoading
+        themeColor="emerald"
+        title="SenExam Quản Trị Khóa Học & Soạn Đề"
+        subtitle="Đang khởi tạo không gian thiết lập đề thi..."
+      />
     )
   }
 
