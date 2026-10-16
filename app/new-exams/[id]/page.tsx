@@ -560,25 +560,117 @@ export default function NewExamRoomPage() {
     }
   }, [exam?.id, currentUser?.id, baseFlatQuestions, shouldShuffleQuestions, shouldShuffleOptions])
 
-  // flatQuestions thực tế được hiển thị (đã qua xáo trộn nếu có bật)
+  // flatQuestions thực tế được hiển thị (đã qua xáo trộn nếu có bật và viết lại đáp án chuẩn theo vị trí mới)
   const flatQuestions = useMemo(() => {
-    if (!shouldShuffleQuestions || !shuffledQuestionKeys || shuffledQuestionKeys.length === 0) {
-      return baseFlatQuestions
+    let list = baseFlatQuestions
+    if (shouldShuffleQuestions && shuffledQuestionKeys && shuffledQuestionKeys.length === baseFlatQuestions.length) {
+      const keyMap = new Map(baseFlatQuestions.map((q) => [q.key, q]))
+      const reordered: typeof baseFlatQuestions = []
+      shuffledQuestionKeys.forEach((key, idx) => {
+        const item = keyMap.get(key)
+        if (item) {
+          reordered.push({
+            ...item,
+            globalNum: idx + 1,
+            label: `Câu ${idx + 1}`,
+          })
+        }
+      })
+      if (reordered.length === baseFlatQuestions.length) {
+        list = reordered
+      }
     }
-    const keyMap = new Map(baseFlatQuestions.map((q) => [q.key, q]))
-    const reordered: typeof baseFlatQuestions = []
-    shuffledQuestionKeys.forEach((key, idx) => {
-      const item = keyMap.get(key)
-      if (item) {
-        reordered.push({
-          ...item,
-          globalNum: idx + 1,
-          label: `Câu ${idx + 1}`,
-        })
+
+    // ========================================================
+    // HỆ THỐNG VIẾT LẠI ĐÚNG VỊ TRÍ CÂU ĐÁP ÁN ĐÚNG KHI ĐẢO ĐỀ / ĐẢO ĐÁP ÁN
+    // ========================================================
+    const parseOrigIndex = (val: any): number => {
+      if (val === undefined || val === null) return -1
+      if (typeof val === 'number') return val
+      const s = String(val).trim().toUpperCase()
+      if (s.length === 1 && s >= 'A' && s <= 'Z') {
+        return s.charCodeAt(0) - 65
+      }
+      const num = parseInt(s, 10)
+      if (!isNaN(num)) return num
+      return -1
+    }
+
+    return list.map((item) => {
+      const isChoiceType = item.type === 'single_choice' || item.type === 'multiple_choice' || !item.type
+      const rawOptions = item.qData?.options
+      const hasOptions = Array.isArray(rawOptions) && rawOptions.length > 0
+      const optOrder = shouldShuffleOptions && shuffledOptionMap ? shuffledOptionMap[item.key] : null
+
+      // 1. Viết lại danh sách phương án lựa chọn theo vị trí hiển thị thực tế
+      let effectiveOptions = rawOptions
+      if (isChoiceType && hasOptions && optOrder && optOrder.length === rawOptions.length) {
+        effectiveOptions = optOrder.map((origIdx) => rawOptions[origIdx])
+      }
+
+      // 2. Lấy đáp án đúng ban đầu trong cơ sở dữ liệu
+      const origCorrectAns =
+        item.qData?.correctAnswer ??
+        activeSections.find((s: any) => s.id === item.sectionId)?.correctAnswers?.[item.qIdx]
+
+      // 3. Viết lại vị trí đáp án đúng chính xác theo vị trí mới của phương án
+      let effectiveCorrectAnswer = origCorrectAns
+
+      if (
+        isChoiceType &&
+        hasOptions &&
+        optOrder &&
+        optOrder.length === rawOptions.length &&
+        origCorrectAns !== undefined &&
+        origCorrectAns !== null &&
+        origCorrectAns !== ''
+      ) {
+        if (item.type === 'multiple_choice') {
+          // Xử lý câu nhiều đáp án đúng (ví dụ ['A', 'C'] hoặc 'A, C')
+          const origList: any[] = Array.isArray(origCorrectAns)
+            ? origCorrectAns
+            : String(origCorrectAns).split(/[,;]/).map((s) => s.trim().toUpperCase())
+
+          const newLetters = origList
+            .map((ansItem) => {
+              const origIdx = parseOrigIndex(ansItem)
+              if (origIdx >= 0) {
+                const newSlotIdx = optOrder.indexOf(origIdx)
+                if (newSlotIdx !== -1) {
+                  return String.fromCharCode(65 + newSlotIdx)
+                }
+              }
+              return String(ansItem).trim().toUpperCase()
+            })
+            .sort()
+
+          effectiveCorrectAnswer = Array.isArray(origCorrectAns) ? newLetters : newLetters.join(', ')
+        } else {
+          // Xử lý câu 1 đáp án (single_choice: 'A', 'B', 'C', 'D'...)
+          const origIdx = parseOrigIndex(origCorrectAns)
+          if (origIdx >= 0) {
+            const newSlotIdx = optOrder.indexOf(origIdx)
+            if (newSlotIdx !== -1) {
+              effectiveCorrectAnswer = String.fromCharCode(65 + newSlotIdx)
+            }
+          }
+        }
+      }
+
+      return {
+        ...item,
+        effectiveOptions: effectiveOptions || rawOptions,
+        effectiveCorrectAnswer,
+        origCorrectAns,
+        qData: {
+          ...item.qData,
+          options: effectiveOptions || rawOptions,
+          correctAnswer: effectiveCorrectAnswer,
+          originalCorrectAnswer: origCorrectAns,
+        },
       }
     })
-    return reordered.length === baseFlatQuestions.length ? reordered : baseFlatQuestions
-  }, [baseFlatQuestions, shouldShuffleQuestions, shuffledQuestionKeys])
+  }, [baseFlatQuestions, shouldShuffleQuestions, shuffledQuestionKeys, shouldShuffleOptions, shuffledOptionMap, activeSections])
 
   const questionMeta = useMemo(() => {
     return {
@@ -589,6 +681,7 @@ export default function NewExamRoomPage() {
 
   const answeredCount = useMemo(() => {
     return Object.keys(answers).filter((k) => {
+      if (k.startsWith('_')) return false
       const val = answers[k]
       if (val === undefined || val === null || val === '') return false
       if (typeof val === 'object' && Object.keys(val).length === 0) return false
@@ -625,7 +718,16 @@ export default function NewExamRoomPage() {
     }
 
     if (type === 'multiple_choice') {
-      if (Array.isArray(studentAns) && Array.isArray(correctAns) && studentAns.length === correctAns.length && studentAns.every((v) => correctAns.includes(v))) {
+      const sArr = Array.isArray(studentAns)
+        ? studentAns.map((v: any) => String(v).trim().toUpperCase())
+        : []
+      const cArr = Array.isArray(correctAns)
+        ? correctAns.map((v: any) => String(v).trim().toUpperCase())
+        : String(correctAns || '')
+            .split(/[,;]/)
+            .map((v: any) => v.trim().toUpperCase())
+            .filter(Boolean)
+      if (sArr.length > 0 && sArr.length === cArr.length && sArr.every((v) => cArr.includes(v))) {
         return { isCorrect: true, scorePercent: 1.0 }
       }
       return { isCorrect: false, scorePercent: 0 }
@@ -694,7 +796,9 @@ export default function NewExamRoomPage() {
             hasEssay = true
           } else {
             const studentAns = answers[key]
+            const qItem = flatQuestions.find((q: any) => q.key === key)
             const correctAns =
+              qItem?.effectiveCorrectAnswer ??
               section.questions?.[qIdx]?.correctAnswer ??
               (section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)])
 
@@ -710,12 +814,25 @@ export default function NewExamRoomPage() {
       const finalScore = parseFloat(totalPoints.toFixed(2))
       const timeSpentSeconds = (exam.duration || 50) * 60 - Math.max(0, timeLeft)
 
+      // Lưu ánh xạ đáp án chuẩn thực tế (sau khi đảo vị trí nếu có) để phục vụ xem lại lịch sử
+      const effectiveCorrectAnswersMap: Record<string, any> = {}
+      flatQuestions.forEach((q: any) => {
+        if (q.key && q.effectiveCorrectAnswer !== undefined) {
+          effectiveCorrectAnswersMap[q.key] = q.effectiveCorrectAnswer
+        }
+      })
+
+      const submissionAnswers = {
+        ...answers,
+        _effectiveCorrectAnswers: effectiveCorrectAnswersMap,
+      }
+
       const { data: subData, error: subError } = await supabase
         .from('submissions')
         .insert({
           exam_id: exam.id,
           user_id: user.id,
-          answers: answers,
+          answers: submissionAnswers,
           score: finalScore,
           detailed_scores: detailedScores,
           time_spent: timeSpentSeconds,
@@ -1170,26 +1287,36 @@ export default function NewExamRoomPage() {
                   {(currentQ.type === 'single_choice' || currentQ.type === 'multiple_choice' || !currentQ.type) && (
                     <div className="space-y-3">
                       {(() => {
-                        const totalOpts = currentQ.qData?.options?.length || 4
-                        const optIndices = (shouldShuffleOptions && shuffledOptionMap && shuffledOptionMap[currentQ.key])
-                          ? shuffledOptionMap[currentQ.key]
-                          : Array.from({ length: totalOpts }, (_, i) => i)
+                        const rawOpts = currentQ.effectiveOptions || currentQ.qData?.options
+                        const optionsToRender: string[] =
+                          Array.isArray(rawOpts) && rawOpts.length > 0
+                            ? rawOpts
+                            : ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D']
 
-                        return optIndices.map((origIdx, slotIdx) => {
-                          const displayLetter = String.fromCharCode(65 + slotIdx)
-                          const originalLetter = String.fromCharCode(65 + origIdx)
-                          const optContent = currentQ.qData?.options?.[origIdx] || `Phương án ${displayLetter}`
+                        const effectiveCorrect =
+                          currentQ.effectiveCorrectAnswer ??
+                          currentQ.qData?.correctAnswer ??
+                          currentSection?.correctAnswers?.[currentQ.qIdx]
+
+                        return optionsToRender.map((optContent, slotIdx) => {
+                          const slotLetter = String.fromCharCode(65 + slotIdx)
                           const currentAns = answers[currentQ.key]
                           const isSelected =
                             currentQ.type === 'multiple_choice'
-                              ? Array.isArray(currentAns) && currentAns.includes(originalLetter)
-                              : currentAns === originalLetter
+                              ? Array.isArray(currentAns) && currentAns.includes(slotLetter)
+                              : currentAns === slotLetter
 
                           const isRevealed = isStudyMode && revealedAnswers[currentQ.key]
-                          const correctOpt =
-                            currentQ.qData?.correctAnswer ??
-                            currentSection?.correctAnswers?.[currentQ.qIdx]
-                          const isThisCorrect = originalLetter === correctOpt
+                          const isThisCorrect =
+                            currentQ.type === 'multiple_choice'
+                              ? Array.isArray(effectiveCorrect)
+                                ? effectiveCorrect.includes(slotLetter)
+                                : typeof effectiveCorrect === 'string' &&
+                                  effectiveCorrect
+                                    .split(/[,;]/)
+                                    .map((s: string) => s.trim().toUpperCase())
+                                    .includes(slotLetter)
+                              : effectiveCorrect === slotLetter
                           const isThisWrong = isSelected && !isThisCorrect
 
                           return (
@@ -1199,12 +1326,12 @@ export default function NewExamRoomPage() {
                               onClick={() => {
                                 if (currentQ.type === 'multiple_choice') {
                                   const prevArr = Array.isArray(currentAns) ? currentAns : []
-                                  const nextArr = prevArr.includes(originalLetter)
-                                    ? prevArr.filter((x: string) => x !== originalLetter)
-                                    : [...prevArr, originalLetter].sort()
+                                  const nextArr = prevArr.includes(slotLetter)
+                                    ? prevArr.filter((x: string) => x !== slotLetter)
+                                    : [...prevArr, slotLetter].sort()
                                   handleAnswer(currentQ.key, nextArr)
                                 } else {
-                                  handleAnswer(currentQ.key, originalLetter)
+                                  handleAnswer(currentQ.key, slotLetter)
                                 }
                               }}
                               className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-3.5 ${
@@ -1237,11 +1364,11 @@ export default function NewExamRoomPage() {
                                 ) : isRevealed && isThisWrong ? (
                                   <X className="h-4 w-4" />
                                 ) : (
-                                  displayLetter
+                                  slotLetter
                                 )}
                               </span>
                               <div className="flex-1 pt-1 prose prose-sm dark:prose-invert max-w-none text-sm font-semibold text-slate-800 dark:text-slate-200">
-                                <SafeMathRenderer content={optContent} gfm={false} />
+                                <SafeMathRenderer content={optContent || `Phương án ${slotLetter}`} gfm={false} />
                               </div>
                             </button>
                           )
@@ -1362,6 +1489,7 @@ export default function NewExamRoomPage() {
                     <div className="space-y-4 pt-3">
                       {(() => {
                         const correctOpt =
+                          currentQ.effectiveCorrectAnswer ??
                           currentQ.qData?.correctAnswer ??
                           currentSection?.correctAnswers?.[currentQ.qIdx]
                         const studentAns = answers[currentQ.key]
@@ -1610,6 +1738,7 @@ export default function NewExamRoomPage() {
                 const isActive = activeQuestionIdx === idx
                 const isRevealed = isStudyMode && revealedAnswers[item.key]
                 const correctOpt =
+                  item.effectiveCorrectAnswer ??
                   item.qData?.correctAnswer ??
                   activeSections.find((s: any) => s.id === item.sectionId)?.correctAnswers?.[item.qIdx]
                 const evalRes = isRevealed ? evaluateAnswer(item.type, ans, correctOpt) : null

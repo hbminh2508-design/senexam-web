@@ -319,7 +319,10 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
                     const key = `${section.id}-${qIdx}`
                     const globalNum = offset + qIdx + 1
                     const studentAns = submission.answers?.[key]
-                    const correctAns = section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)]
+                    const correctAns =
+                      submission.answers?._effectiveCorrectAnswers?.[key] ??
+                      section.questions?.[qIdx]?.correctAnswer ??
+                      (section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)])
                     const earnedPoint = submission.detailed_scores?.[key] || 0
 
                     let currentType = section.type || 'single_choice'
