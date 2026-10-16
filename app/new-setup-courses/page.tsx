@@ -50,6 +50,8 @@ import {
   Hash,
   KeyRound,
   FileUp,
+  FileCode,
+  Code,
   Image as ImageIcon,
 } from 'lucide-react'
 
@@ -406,6 +408,77 @@ const MATH_KEYBOARD_TABS = [
   },
 ]
 
+const SAMPLE_LATEX_EXAM = `\\documentclass{article}
+\\usepackage[utf8]{vietnam}
+\\usepackage{amsmath,amssymb}
+\\begin{document}
+
+\\title{ĐỀ ÔN TẬP TOÁN HỌC CHUẨN 2026}
+\\author{SenExam KaTeX Compiler}
+\\date{Thời gian: 50 phút}
+
+% ========================================================
+% PHẦN 1: CÂU TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN
+% ========================================================
+\\begin{ex}
+Cho hàm số $y = f(x)$ có đạo hàm $f'(x) = (x - 1)^2(x + 2)$. Điểm cực tiểu của hàm số đã cho là:
+\\choice
+{\\True $x = -2$}
+{$x = 1$}
+{$x = 2$}
+{$x = -1$}
+\\loigiai{
+Đạo hàm $f'(x)$ đổi dấu từ âm sang dương khi qua $x = -2$ (nghiệm bội lẻ) và không đổi dấu khi qua $x = 1$ (nghiệm bội chẵn). Do đó $x = -2$ là điểm cực tiểu của hàm số.
+}
+\\end{ex}
+
+\\begin{ex}
+Tập nghiệm của bất phương trình $\\log_2(x - 1) < 3$ là:
+\\choice
+{$(-\\infty; 9)$}
+{\\True $(1; 9)$}
+{$(9; +\\infty)$}
+{$(0; 9)$}
+\\loigiai{
+Điều kiện: $x - 1 > 0 \\Leftrightarrow x > 1$.
+Bất phương trình $\\Leftrightarrow x - 1 < 2^3 = 8 \\Leftrightarrow x < 9$. Kết hợp điều kiện ta có $S = (1; 9)$.
+}
+\\end{ex}
+
+% ========================================================
+% PHẦN 2: CÂU TRẮC NGHIỆM ĐÚNG / SAI (4 Ý a, b, c, d)
+% ========================================================
+\\begin{ex}
+Cho hàm số $f(x) = x^3 - 3x + 2$. Xét tính Đúng/Sai của các mệnh đề sau:
+\\choiceTF
+{\\True a) Hàm số đã cho đồng biến trên khoảng $(1; +\\infty)$.}
+{\\True b) Điểm cực đại của đồ thị hàm số là $M(-1; 4)$.}
+{c) Giá trị nhỏ nhất của hàm số trên đoạn $[0; 2]$ bằng $2$.}
+{\\True d) Đường thẳng $y = m$ cắt đồ thị tại 3 điểm phân biệt khi $0 < m < 4$.}
+\\loigiai{
+Ta có $f'(x) = 3x^2 - 3 = 0 \\Leftrightarrow x = \\pm 1$.
+- Ý a ĐÚNG vì $f'(x) > 0$ trên $(1; +\\infty)$.
+- Ý b ĐÚNG vì $f(-1) = 4$, $f'(-1) = 0$.
+- Ý c SAI vì $f(1) = 0 \\le f(x)$ với mọi $x \\in [0; 2]$.
+- Ý d ĐÚNG vì $y_{CT} = 0 < m < 4 = y_{CD}$.
+}
+\\end{ex}
+
+% ========================================================
+% PHẦN 3: CÂU TRẮC NGHIỆM TRẢ LỜI NGẮN / ĐIỀN SỐ
+% ========================================================
+\\begin{ex}
+Biết $\\int_0^1 (2x + 1)e^x dx = a \\cdot e + b$ với $a, b \\in \\mathbb{Z}$. Tính $T = a + b$.
+\\shortans{2}
+\\loigiai{
+Tích phân từng phần: $u = 2x + 1, dv = e^x dx \\Rightarrow du = 2dx, v = e^x$.
+$I = [(2x + 1)e^x]_0^1 - \\int_0^1 2e^x dx = (3e - 1) - (2e - 2) = e + 1$.
+Do đó $a = 1, b = 1 \\Rightarrow T = a + b = 2$.
+}
+\\end{ex}
+
+\\end{document}`
+
 function SetupCourseMainContent() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -466,6 +539,20 @@ function SetupCourseMainContent() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiModelUsed, setAiModelUsed] = useState<string | null>(null)
   const [aiStatusMessage, setAiStatusMessage] = useState('')
+
+  // LaTeX Import & Parser State
+  const [showLatexHelpModal, setShowLatexHelpModal] = useState(false)
+  const [latexInputMode, setLatexInputMode] = useState<'file' | 'code'>('file')
+  const [latexFile, setLatexFile] = useState<File | null>(null)
+  const [latexCode, setLatexCode] = useState('')
+  const [latexHasAnswerFile, setLatexHasAnswerFile] = useState(false)
+  const [latexAnswerType, setLatexAnswerType] = useState<'text' | 'file'>('text')
+  const [latexAnswerFile, setLatexAnswerFile] = useState<File | null>(null)
+  const [latexAnswerText, setLatexAnswerText] = useState('')
+  const [parsingLatex, setParsingLatex] = useState(false)
+  const [parseLatexStatus, setParseLatexStatus] = useState('')
+  const [parseLatexSuccessMsg, setParseLatexSuccessMsg] = useState<string | null>(null)
+  const [copiedLatexSample, setCopiedLatexSample] = useState(false)
 
     // ==========================================
   // STATE: SOẠN ĐỀ PDF & SEB (PRO MULTI-SECTION BUILDER TỪ NEW-ADMIN)
@@ -789,6 +876,105 @@ function SetupCourseMainContent() {
   }
 
   // ==========================================
+  // XỬ LÝ BIÊN SOẠN ĐỀ LATEX TỰ ĐỘNG BẰNG GEMINI
+  // ==========================================
+  const handleCompileLatexExam = async () => {
+    let code = latexCode.trim()
+    if (!code && latexFile) {
+      try {
+        code = await latexFile.text()
+        setLatexCode(code)
+      } catch (err: any) {
+        alert('Không thể đọc file LaTeX: ' + (err?.message || 'Lỗi đọc file'))
+        return
+      }
+    }
+
+    if (!code) {
+      alert('Vui lòng chọn file LaTeX (.tex, .txt) hoặc dán mã nguồn LaTeX vào khung soạn thảo!')
+      return
+    }
+
+    if (latexHasAnswerFile && !latexAnswerText.trim() && !latexAnswerFile) {
+      const confirmNoAnswer = window.confirm(
+        'Bạn đang chọn chế độ "Đã có file/bảng đáp án riêng" nhưng chưa chọn file hoặc nhập đáp án.\n\nBấm OK để chuyển sang chế độ "Chưa có file đáp án (AI tự giải)", hoặc bấm Cancel để bổ sung đáp án.'
+      )
+      if (confirmNoAnswer) {
+        setLatexHasAnswerFile(false)
+      } else {
+        return
+      }
+    }
+
+    setParsingLatex(true)
+    setParseLatexStatus('Đang đọc và phân tích cấu trúc đề LaTeX...')
+    setParseLatexSuccessMsg(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('latexCode', code)
+      formData.append('subject', katexSubject)
+      formData.append('hasSeparateAnswer', latexHasAnswerFile ? '1' : '0')
+
+      if (latexHasAnswerFile) {
+        if (latexAnswerText.trim()) {
+          formData.append('answerText', latexAnswerText.trim())
+        }
+        if (latexAnswerFile) {
+          formData.append('answerFile', latexAnswerFile)
+        }
+      }
+
+      setParseLatexStatus(
+        latexHasAnswerFile
+          ? 'Gemini đang đối chiếu bảng đáp án và hoàn thiện lời giải KaTeX...'
+          : 'Gemini đang đọc câu hỏi, giải toán và biên soạn lời giải KaTeX...'
+      )
+
+      const res = await fetch('/api/parse-latex-exam', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await res.json()
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'Biên soạn đề LaTeX thất bại.')
+      }
+
+      const { data } = result
+      if (data.title) {
+        setKatexTitle(data.title)
+      }
+      if (data.subject) {
+        setKatexSubject(data.subject)
+      }
+      if (data.duration) {
+        setKatexDuration(String(data.duration))
+      }
+      if (data.exam_type) {
+        setKatexExamType(data.exam_type)
+      }
+
+      if (Array.isArray(data.questions) && data.questions.length > 0) {
+        setKatexQuestions(data.questions)
+        setParseLatexSuccessMsg(
+          `🎉 Đã tự động biên soạn thành công ${data.questions.length} câu hỏi KaTeX từ mã nguồn! Toàn bộ công thức và lời giải đã sẵn sàng.`
+        )
+        setTimeout(() => {
+          const el = document.getElementById('katex-questions-section')
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 300)
+      }
+    } catch (err: any) {
+      console.error('Lỗi biên soạn LaTeX:', err)
+      alert(`Lỗi biên soạn LaTeX: ${err.message || 'Vui lòng thử lại.'}`)
+    } finally {
+      setParsingLatex(false)
+      setParseLatexStatus('')
+    }
+  }
+
+  // ==========================================
   // XỬ LÝ LƯU ĐỀ THI KATEX VÀO SUPABASE
   // ==========================================
   const handleSaveKatexExam = async (e: React.FormEvent) => {
@@ -822,6 +1008,10 @@ function SetupCourseMainContent() {
         correctAnswersMap[idx] = q.correctAnswer
       })
 
+      const distinctTypes = Array.from(new Set(katexQuestions.map((q) => q.type)))
+      const isMixed = distinctTypes.length > 1
+      const defaultSecType = isMixed ? 'mixed' : (distinctTypes[0] || 'single_choice')
+
       const examSections: SectionItem[] = [
         {
           id: 'sec-katex-main',
@@ -829,8 +1019,8 @@ function SetupCourseMainContent() {
           totalPoints: parsedMaxScore,
           scoringMode: 'auto_divide',
           questionCount: katexQuestions.length,
-          questionTypeMode: 'uniform',
-          type: 'single_choice',
+          questionTypeMode: isMixed ? 'mixed' : 'uniform',
+          type: defaultSecType as any,
           instructions: 'Đề thi được soạn trực tiếp bằng KaTeX sắc nét, không dùng file PDF.',
           correctAnswers: correctAnswersMap,
           // Đính kèm danh sách câu hỏi KaTeX chi tiết
@@ -1786,7 +1976,7 @@ function SetupCourseMainContent() {
         {/* ==================================================== */}
         {activeTab === 'create_katex' && (
           <form onSubmit={handleSaveKatexExam} className="space-y-8">
-            {/* Top Banner AI Assistant */}
+            {/* Top Banner AI Assistant & Nút Hướng Dẫn LaTeX (?) */}
             <div className="rounded-3xl border border-indigo-500/20 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white shadow-md">
@@ -1802,13 +1992,319 @@ function SetupCourseMainContent() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowAiModal(true)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-5 py-3 text-xs font-black uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition"
-              >
-                <Sparkles className="h-4 w-4" /> Mở AI Soạn Đề Tự Động
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setShowLatexHelpModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 px-4 py-3 text-xs font-black uppercase tracking-wider backdrop-blur-md shadow-xs transition hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Xem hướng dẫn định dạng file LaTeX để hệ thống tự động nhận diện câu hỏi"
+                >
+                  <HelpCircle className="h-4 w-4 text-amber-500" />
+                  <span>Hướng Dẫn Định Dạng LaTeX (?)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAiModal(true)}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-5 py-3 text-xs font-black uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition cursor-pointer"
+                >
+                  <Sparkles className="h-4 w-4" /> Mở AI Soạn Đề Tự Động
+                </button>
+              </div>
+            </div>
+
+            {/* KHU VỰC TẢI FILE / NHẬP MÃ CODE LATEX ĐỂ BIÊN SOẠN TỰ ĐỘNG */}
+            <div className="rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-6 shadow-sm space-y-5">
+              <div className="flex items-center justify-between flex-wrap gap-3 border-b border-black/5 dark:border-white/5 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-sm">
+                    <FileCode className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-100" style={{ fontFamily: 'var(--font-setup-heading)' }}>
+                        Nhập File / Mã Code LaTeX Để Tự Động Biên Soạn
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                        Chuẩn KaTeX 2026
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                      Tải file .tex hoặc dán mã code để hệ thống tự động bóc tách từng câu hỏi, công thức toán và lời giải
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLatexHelpModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-black transition cursor-pointer"
+                  >
+                    <HelpCircle className="h-4 w-4 text-amber-500" />
+                    <span>Quy ước định dạng (?)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabs phương thức nhập: Tải file .tex vs Dán mã code LaTeX */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLatexInputMode('file')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+                      latexInputMode === 'file'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                    }`}
+                  >
+                    <UploadCloud className="h-4 w-4" />
+                    <span>Tải File .tex / .txt</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setLatexInputMode('code')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+                      latexInputMode === 'code'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Code className="h-4 w-4" />
+                    <span>Dán Mã Code LaTeX Trực Tiếp</span>
+                  </button>
+                </div>
+
+                {/* Khung tải file */}
+                {latexInputMode === 'file' ? (
+                  <div className="rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/20 p-6 flex flex-col items-center justify-center text-center gap-3">
+                    <input
+                      type="file"
+                      id="latex-file-input"
+                      accept=".tex,.txt,.latex"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setLatexFile(file)
+                          try {
+                            const text = await file.text()
+                            setLatexCode(text)
+                          } catch (err: any) {
+                            console.error('Lỗi đọc file:', err)
+                          }
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor="latex-file-input"
+                      className="cursor-pointer flex flex-col items-center gap-2 group"
+                    >
+                      <div className="h-12 w-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition shadow-xs">
+                        <UploadCloud className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-black text-slate-900 dark:text-white block">
+                          {latexFile ? `Đã chọn: ${latexFile.name} (${(latexFile.size / 1024).toFixed(1)} KB)` : 'Nhấp để chọn file .tex hoặc .txt từ máy tính'}
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          Hỗ trợ định dạng file mã nguồn LaTeX chuẩn UTF-8
+                        </span>
+                      </div>
+                    </label>
+
+                    {latexFile && (
+                      <div className="flex items-center gap-2 pt-2">
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <Check className="h-3.5 w-3.5" /> File sẵn sàng ({latexCode.length} ký tự)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLatexFile(null)
+                            setLatexCode('')
+                          }}
+                          className="text-xs text-rose-500 hover:underline font-bold"
+                        >
+                          Xóa file
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Khung dán mã code */
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                        Nội dung mã nguồn LaTeX ({latexCode.length} ký tự):
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLatexCode(SAMPLE_LATEX_EXAM)}
+                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                        >
+                          Dán mẫu thử nghiệm chuẩn 2026
+                        </button>
+                        {latexCode && (
+                          <button
+                            type="button"
+                            onClick={() => setLatexCode('')}
+                            className="text-xs font-bold text-rose-500 hover:underline cursor-pointer"
+                          >
+                            Xóa trắng
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <textarea
+                      rows={8}
+                      value={latexCode}
+                      onChange={(e) => setLatexCode(e.target.value)}
+                      placeholder={`% Dán mã nguồn LaTeX đề thi vào đây...\n\\begin{ex}\nCho hàm số $y = f(x)$...\n\\choice\n{$A$}\n{$B$}\n{$C$}\n{$D$}\n\\end{ex}`}
+                      className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/60 p-4 font-mono text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 leading-relaxed"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* TÙY CHỌN BẢNG / FILE ĐÁP ÁN (TƯƠNG TỰ BÊN SOẠN ĐỀ PDF & SEB) */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="h-5 w-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                      Bạn đã có sẵn file hoặc bảng đáp án riêng của đề này chưa?
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/10 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setLatexHasAnswerFile(false)}
+                      className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                        !latexHasAnswerFile
+                          ? 'bg-indigo-600 text-white font-black shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Chưa có (AI tự giải)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLatexHasAnswerFile(true)}
+                      className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                        latexHasAnswerFile
+                          ? 'bg-indigo-600 text-white font-black shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Đã có file/bảng đáp án (Khuyên dùng)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  {latexHasAnswerFile
+                    ? '💡 Bạn tải file đáp án (PDF/Ảnh/Tex) hoặc nhập bảng đáp án text. Hệ thống sẽ đối chiếu trực tiếp để nạp đúng 100% đáp án chuẩn, và AI chỉ hỗ trợ giải thêm lời giải chi tiết cho từng câu.'
+                    : '💡 Hệ thống sẽ bóc tách câu hỏi từ LaTeX. Nếu câu nào chưa có đáp án, Gemini sẽ tự động giải toán, tìm đáp án đúng và viết lời giải chi tiết KaTeX.'}
+                </p>
+
+                {/* Khu vực nạp đáp án riêng */}
+                {latexHasAnswerFile && (
+                  <div className="pt-2 space-y-3 border-t border-slate-200 dark:border-white/10 animate-in fade-in">
+                    <div className="flex items-center gap-3 text-xs font-bold">
+                      <span className="text-slate-700 dark:text-slate-300">Phương thức nạp đáp án:</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLatexAnswerType('text')}
+                          className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                            latexAnswerType === 'text'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-black/5 dark:bg-white/5 text-slate-600 hover:bg-black/10'
+                          }`}
+                        >
+                          Nhập bảng text (1A 2B 3C...)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLatexAnswerType('file')}
+                          className={`px-3 py-1 rounded-lg transition cursor-pointer ${
+                            latexAnswerType === 'file'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-black/5 dark:bg-white/5 text-slate-600 hover:bg-black/10'
+                          }`}
+                        >
+                          Tải file đáp án (PDF/Ảnh/Text)
+                        </button>
+                      </div>
+                    </div>
+
+                    {latexAnswerType === 'text' ? (
+                      <textarea
+                        rows={3}
+                        value={latexAnswerText}
+                        onChange={(e) => setLatexAnswerText(e.target.value)}
+                        placeholder="Nhập bảng đáp án nhanh, ví dụ:&#10;1A 2B 3C 4D 5: a-Đ, b-S, c-Đ, d-S 6: 2.5&#10;Hoặc dán bảng đáp án LaTeX..."
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-3 text-xs font-mono font-bold outline-none focus:border-indigo-500"
+                      />
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-indigo-300 dark:border-indigo-500/40 p-4 bg-white dark:bg-slate-900 text-center">
+                        <input
+                          type="file"
+                          id="latex-answer-file"
+                          accept=".pdf,.png,.jpg,.jpeg,.txt,.tex"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0]
+                            if (f) setLatexAnswerFile(f)
+                          }}
+                        />
+                        <label htmlFor="latex-answer-file" className="cursor-pointer block">
+                          <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 block mb-1">
+                            {latexAnswerFile ? `✓ Đã chọn file đáp án: ${latexAnswerFile.name}` : 'Bấm để tải file đáp án (PDF, Ảnh hoặc Văn bản)'}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Hệ thống sẽ đối chiếu tự động với đề thi
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Nút hành động Bắt đầu biên soạn */}
+              <div className="pt-2 flex items-center justify-between flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleCompileLatexExam}
+                  disabled={parsingLatex}
+                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white font-black text-xs uppercase tracking-wider shadow-lg transition hover:scale-105 active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                >
+                  {parsingLatex ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{parseLatexStatus || 'Đang biên soạn đề KaTeX...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 text-amber-300" />
+                      <span>Tự Động Biên Soạn Đề KaTeX Ngay</span>
+                    </>
+                  )}
+                </button>
+
+                {parseLatexSuccessMsg && (
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-2 rounded-xl border border-emerald-500/20 animate-in fade-in">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{parseLatexSuccessMsg}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Thông tin chung của đề */}
@@ -1955,7 +2451,7 @@ function SetupCourseMainContent() {
             </div>
 
             {/* DANH SÁCH CÂU HỎI SOẠN TRỰC TIẾP */}
-            <div className="space-y-6">
+            <div id="katex-questions-section" className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-black uppercase tracking-wider text-slate-400" style={{ fontFamily: 'var(--font-setup-heading)' }}>
                   2. Danh sách câu hỏi ({katexQuestions?.length || 0} câu)
@@ -3433,6 +3929,144 @@ function SetupCourseMainContent() {
               >
                 {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 Bắt đầu soạn đề
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL HƯỚNG DẪN ĐỊNH DẠNG FILE LATEX & QUY ƯỚC NHẬN DIỆN */}
+      {showLatexHelpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-5">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-indigo-600 text-white shadow-xs">
+                  <HelpCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-setup-heading)' }}>
+                    Hướng Dẫn Định Dạng Viết Đề LaTeX & Nhận Diện Câu Hỏi
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    Quy chuẩn nhận diện tự động cấu trúc đề 3 phần (Chuẩn Bộ GD 2026, HSA, TSA)
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowLatexHelpModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-black/5 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="space-y-4 text-xs">
+              {/* Section 1: 3 dạng câu hỏi chính */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-2xl border border-indigo-500/20 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-2">
+                  <span className="font-black text-indigo-700 dark:text-indigo-300 uppercase tracking-wider block">
+                    1. Trắc nghiệm 4 lựa chọn
+                  </span>
+                  <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                    Mỗi câu có 4 phương án A, B, C, D. Hệ thống nhận diện qua <code>\choice&#123;A&#125;&#123;B&#125;&#123;C&#125;&#123;D&#125;</code> hoặc <code>A. B. C. D.</code>
+                  </p>
+                  <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
+                    Đáp án đúng: <code>\True</code>, <code>\textbf&#123;A&#125;</code>, hoặc bảng đáp án riêng.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-purple-500/20 bg-purple-50/40 dark:bg-purple-950/20 space-y-2">
+                  <span className="font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider block">
+                    2. Đúng / Sai 4 ý (a, b, c, d)
+                  </span>
+                  <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                    Mỗi câu có 4 ý con <code>a)</code>, <code>b)</code>, <code>c)</code>, <code>d)</code> hoặc lệnh <code>\choiceTF</code>. Thí sinh chọn Đúng hoặc Sai cho từng ý.
+                  </p>
+                  <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400">
+                    Đáp án: <code>\True</code> trước ý đúng, hoặc bảng đáp án riêng.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-teal-500/20 bg-teal-50/40 dark:bg-teal-950/20 space-y-2">
+                  <span className="font-black text-teal-700 dark:text-teal-300 uppercase tracking-wider block">
+                    3. Trả lời ngắn / Điền số
+                  </span>
+                  <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                    Thí sinh tính toán và nhập đáp số số học (số nguyên hoặc thập phân, ví dụ <code>2.5</code>, <code>-4</code>).
+                  </p>
+                  <p className="text-[10px] font-bold text-teal-600 dark:text-teal-400">
+                    Đáp án: <code>\shortans&#123;2.5&#125;</code> hoặc <code>Đáp số: 2.5</code>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Section 2: Công thức toán & Lời giải */}
+              <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/40 space-y-2">
+                <span className="font-black text-slate-800 dark:text-slate-200">
+                  ✨ Quy ước công thức KaTeX & Lời giải chi tiết:
+                </span>
+                <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                  <li><strong>Công thức nội dòng:</strong> Bọc trong cặp dấu <code>$...$</code>, ví dụ: <code>$y = f(x) = x^2 - 4x + 3$</code>.</li>
+                  <li><strong>Công thức khối nổi bật:</strong> Bọc trong cặp dấu <code>$$...$$</code>, ví dụ: <code>$$\int_0^1 (2x + 1)dx = 2$$</code>.</li>
+                  <li><strong>Lời giải chi tiết:</strong> Viết trong lệnh <code>\loigiai&#123;...&#125;</code> hoặc môi trường <code>\begin&#123;solution&#125;...\end&#123;solution&#125;</code>. Nếu chưa có, Gemini sẽ tự động giải toán từng bước và bổ sung.</li>
+                  <li><strong>Bảng đáp án riêng:</strong> Bạn có thể đính kèm file đáp án (PDF/Ảnh) hoặc nhập văn bản nhanh dạng <code>1A 2B 3C...</code> để hệ thống đối chiếu 100%.</li>
+                </ul>
+              </div>
+
+              {/* Section 3: Mẫu code LaTeX chuẩn có thể Copy 1-chạm */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-slate-800 dark:text-slate-200">
+                    📋 Mẫu mã nguồn LaTeX hoàn chỉnh (Chuẩn 2026):
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(SAMPLE_LATEX_EXAM)
+                        setCopiedLatexSample(true)
+                        setTimeout(() => setCopiedLatexSample(false), 2000)
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-600 text-white font-bold text-[11px] hover:bg-indigo-700 transition cursor-pointer"
+                    >
+                      {copiedLatexSample ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedLatexSample ? 'Đã sao chép!' : 'Sao chép mẫu'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLatexCode(SAMPLE_LATEX_EXAM)
+                        setLatexInputMode('code')
+                        setShowLatexHelpModal(false)
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border border-indigo-500/30 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold text-[11px] hover:bg-indigo-100 transition cursor-pointer"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Dán mẫu vào khung soạn</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-900 text-slate-200 p-4 font-mono text-[11px] overflow-x-auto max-h-56">
+                  <pre>{SAMPLE_LATEX_EXAM}</pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end pt-3 border-t border-black/5 dark:border-white/5">
+              <button
+                type="button"
+                onClick={() => setShowLatexHelpModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-xs transition hover:opacity-90 cursor-pointer"
+              >
+                Đã hiểu, đóng hướng dẫn
               </button>
             </div>
           </div>
