@@ -332,17 +332,37 @@ export default function NewExamRoomPage() {
   // Kiểm tra đề có câu hỏi KaTeX trực tiếp không
   const isKatexExam = useMemo(() => {
     if (!exam) return false
-    // Đề thi có file PDF (pdf_url hoặc drive_file_id) hoặc format === 'pdf' là đề truyền thống PDF 1 bên + trả lời câu hỏi 1 bên
-    const hasPdf = Boolean(exam.drive_file_id || exam.pdf_url || exam.format === 'pdf')
     if (exam.format === 'katex') return true
-    if (hasPdf) return false
 
+    // 1. ƯU TIÊN SỐ 1: Nếu cấu trúc đề thi có chứa mảng questions (có câu hỏi KaTeX chi tiết)
     const hasQuestionsInStructure =
       Array.isArray(activeSections) &&
-      activeSections.some((s: any) => Array.isArray(s?.questions) && s.questions.length > 0)
+      activeSections.some(
+        (s: any) =>
+          (Array.isArray(s?.questions) && s.questions.length > 0) ||
+          s?.format === 'katex' ||
+          s?.is_katex === true ||
+          s?.id === 'sec-katex-main'
+      )
     if (hasQuestionsInStructure) return true
-    return false
+
+    // 2. Chỉ coi là PDF khi có URL hoặc drive_file_id THỰC SỰ hợp lệ (độ dài > 10 ký tự)
+    const isValidDriveId =
+      typeof exam.drive_file_id === 'string' &&
+      exam.drive_file_id.trim().length > 10 &&
+      !exam.drive_file_id.includes('null') &&
+      !exam.drive_file_id.includes('undefined')
+    const isValidPdfUrl =
+      typeof exam.pdf_url === 'string' &&
+      exam.pdf_url.trim().length > 10 &&
+      !exam.pdf_url.includes('null')
+    const hasPdf = Boolean(isValidDriveId || isValidPdfUrl || exam.format === 'pdf')
+
+    if (hasPdf) return false
+
+    return true
   }, [exam, activeSections])
+
 
   // Tính toán danh sách phẳng các câu hỏi để hiển thị Question Map Palette & KaTeX Stepper
   const flatQuestions = useMemo(() => {
@@ -1271,8 +1291,12 @@ export default function NewExamRoomPage() {
           </div>
 
           {/* 2. BẢNG TRUY CẬP NHANH CÂU HỎI (QUESTION GRID PALETTE) */}
-          <div className="p-4 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80">
-            <div className="flex items-center justify-between mb-2.5">
+          <div
+            className={`p-4 bg-white/80 dark:bg-slate-900/80 flex flex-col ${
+              isKatexExam ? 'flex-1 overflow-hidden' : 'border-b border-black/10 dark:border-white/10'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2.5 shrink-0">
               <span className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Bảng Câu Hỏi ({flatQuestions.length} câu)
               </span>
@@ -1289,7 +1313,11 @@ export default function NewExamRoomPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-5 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
+            <div
+              className={`grid grid-cols-5 sm:grid-cols-6 md:grid-cols-5 lg:grid-cols-6 gap-2 p-1 overflow-y-auto ${
+                isKatexExam ? 'flex-1 pr-1.5' : 'max-h-48'
+              }`}
+            >
               {flatQuestions.map((item, idx) => {
                 const ans = answers[item.key]
                 const isAnswered =

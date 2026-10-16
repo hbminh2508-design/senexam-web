@@ -381,8 +381,26 @@ export default function NewExamsPage() {
                             </span>
                           )}
                           {(() => {
-                            const isPdf = Boolean(exam.pdf_url || exam.drive_file_id || exam.format === 'pdf')
-                            const isKatex = exam.format === 'katex' || !isPdf
+                            let struct = exam.exam_structure
+                            if (typeof struct === 'string') {
+                              try { struct = JSON.parse(struct) } catch { struct = [] }
+                            }
+                            if (struct && typeof struct === 'object' && !Array.isArray(struct) && Array.isArray(struct.sections)) {
+                              struct = struct.sections
+                            }
+                            const hasQuestionsInStructure =
+                              Array.isArray(struct) &&
+                              struct.some(
+                                (s: any) =>
+                                  (Array.isArray(s?.questions) && s.questions.length > 0) ||
+                                  s?.format === 'katex' ||
+                                  s?.is_katex === true ||
+                                  s?.id === 'sec-katex-main'
+                              )
+                            const isValidDriveId = typeof exam.drive_file_id === 'string' && exam.drive_file_id.trim().length > 10 && !exam.drive_file_id.includes('null')
+                            const isValidPdfUrl = typeof exam.pdf_url === 'string' && exam.pdf_url.trim().length > 10 && !exam.pdf_url.includes('null')
+                            const isKatex = exam.format === 'katex' || hasQuestionsInStructure || (!isValidDriveId && !isValidPdfUrl)
+
                             if (isKatex) {
                               return (
                                 <span className="flex items-center gap-1 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 px-2 py-0.5 text-[10px] font-bold">
@@ -434,7 +452,7 @@ export default function NewExamsPage() {
 
                     {/* Actions */}
                     <div className="mt-5 pt-3.5 border-t border-black/5 dark:border-white/5 flex items-center justify-between gap-2">
-                      {exam.pdf_url ? (
+                      {exam.pdf_url && typeof exam.pdf_url === 'string' && exam.pdf_url.trim().length > 10 ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -448,9 +466,10 @@ export default function NewExamsPage() {
                         </button>
                       ) : (
                         <span className="text-[11px] text-[#6B7280] dark:text-slate-400 font-semibold">
-                          Đề thi trực tuyến
+                          Đề thi trực tuyến KaTeX
                         </span>
                       )}
+
 
                       <Link
                         href={exam.require_seb ? `/seb-exam/${exam.id}` : `/new-exams/${exam.id}`}

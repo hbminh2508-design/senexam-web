@@ -1130,6 +1130,8 @@ function SetupCourseMainContent() {
           questionCount: katexQuestions.length,
           questionTypeMode: isMixed ? 'mixed' : 'uniform',
           type: defaultSecType as any,
+          format: 'katex',
+          is_katex: true,
           instructions: 'Đề thi được soạn trực tiếp bằng KaTeX sắc nét, không dùng file PDF.',
           correctAnswers: correctAnswersMap,
           // Đính kèm danh sách câu hỏi KaTeX chi tiết
@@ -1141,7 +1143,8 @@ function SetupCourseMainContent() {
         title: katexTitle.trim(),
         exam_type: katexExamType,
         duration: parseInt(katexDuration) || 50,
-        drive_file_id: '',
+        drive_file_id: null,
+        format: 'katex',
         exam_structure: examSections,
         allow_review: katexAllowReview,
         is_hidden: isHiddenEffective,

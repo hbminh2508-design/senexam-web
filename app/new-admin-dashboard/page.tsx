@@ -3333,7 +3333,27 @@ export default function NewAdminDashboardPage() {
                   ) : (
                     <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
                       {filteredExams.map((ex) => {
-                        const isPdf = Boolean(ex.pdf_url || ex.drive_file_id || ex.format === 'pdf')
+                        let struct = ex.exam_structure
+                        if (typeof struct === 'string') {
+                          try { struct = JSON.parse(struct) } catch { struct = [] }
+                        }
+                        if (struct && typeof struct === 'object' && !Array.isArray(struct) && Array.isArray((struct as any).sections)) {
+                          struct = (struct as any).sections
+                        }
+                        const hasQuestionsInStructure =
+                          Array.isArray(struct) &&
+                          struct.some(
+                            (s: any) =>
+                              (Array.isArray(s?.questions) && s.questions.length > 0) ||
+                              s?.format === 'katex' ||
+                              s?.is_katex === true ||
+                              s?.id === 'sec-katex-main'
+                          )
+                        const isValidDriveId = typeof ex.drive_file_id === 'string' && ex.drive_file_id.trim().length > 10 && !ex.drive_file_id.includes('null')
+                        const isValidPdfUrl = typeof ex.pdf_url === 'string' && ex.pdf_url.trim().length > 10 && !ex.pdf_url.includes('null')
+                        const isKatex = ex.format === 'katex' || hasQuestionsInStructure || (!isValidDriveId && !isValidPdfUrl)
+                        const isPdf = !isKatex
+
                         return (
                           <div
                             key={ex.id}
@@ -3344,10 +3364,10 @@ export default function NewAdminDashboardPage() {
                                 <span className="font-black text-slate-900 dark:text-white text-sm">{ex.title}</span>
                                 <span
                                   className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                    isPdf ? 'bg-sky-500/10 text-sky-600' : 'bg-teal-500/10 text-teal-600'
+                                    isKatex ? 'bg-teal-500/10 text-teal-600' : 'bg-sky-500/10 text-sky-600'
                                   }`}
                                 >
-                                  {isPdf ? '📄 Đề PDF Truyền Thống' : '✨ KaTeX Sắc Nét'}
+                                  {isKatex ? '✨ KaTeX Sắc Nét' : '📄 Đề PDF Truyền Thống'}
                                 </span>
                               </div>
                               <p className="text-slate-500 text-[11px]">
