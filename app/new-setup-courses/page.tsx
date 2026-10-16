@@ -1137,12 +1137,11 @@ function SetupCourseMainContent() {
         } as any,
       ]
 
-      const examPayload: any = {
+      const basePayload: any = {
         title: katexTitle.trim(),
         exam_type: katexExamType,
         duration: parseInt(katexDuration) || 50,
-        drive_file_id: null, // Không cần PDF Google Drive
-        pdf_url: null,
+        drive_file_id: '',
         exam_structure: examSections,
         allow_review: katexAllowReview,
         is_hidden: isHiddenEffective,
@@ -1153,11 +1152,30 @@ function SetupCourseMainContent() {
         require_proctoring: false,
         require_seb: false,
         created_by: currentUser?.id,
-        max_score: parsedMaxScore,
       }
 
-      const { data, error } = await supabase.from('exams').insert(examPayload).select('*').single()
-      if (error) throw error
+      // Thử lưu với max_score, nếu bảng exams chưa có cột max_score thì tự động lưu basePayload
+      let data: any = null
+      const { data: firstData, error: firstError } = await supabase
+        .from('exams')
+        .insert({ ...basePayload, max_score: parsedMaxScore })
+        .select('*')
+        .single()
+
+      if (firstError) {
+        console.warn('Lỗi lưu đề có max_score, thử fallback lưu cơ bản:', firstError.message)
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('exams')
+          .insert(basePayload)
+          .select('*')
+          .single()
+
+        if (fallbackError) throw fallbackError
+        data = fallbackData
+      } else {
+        data = firstData
+      }
+
 
       setExamsList([data, ...examsList])
       setActiveTab('manage')
