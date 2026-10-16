@@ -466,6 +466,7 @@ export default function MobileBottomNav() {
                       {items.map((item) => {
                         const Icon = item.icon
                         const isExternal = item.href.startsWith('http')
+                        const Wrapper: any = isExternal ? 'a' : Link
                         const extraProps = isExternal
                           ? { target: '_blank', rel: 'noopener noreferrer' }
                           : item.href === '/new-setup-courses' || item.href === '/new-setup-course'

@@ -966,8 +966,8 @@ function IdpAuthContent() {
             </div>
           ) : (
             <>
-              {/* TAB SWITCHER: CHỈ CÁC TAB XÁC THỰC CÔNG KHAI (KHÔNG CÓ CẤP TÀI KHOẢN ĐỂ BẢO MẬT) */}
-              <div className="grid grid-cols-4 gap-1 rounded-2xl bg-black/5 dark:bg-white/5 p-1 mb-6">
+              {/* TAB SWITCHER: 3 TAB XÁC THỰC CÔNG KHAI (ĐĂNG NHẬP, ĐĂNG KÝ, QUÊN MK) */}
+              <div className="grid grid-cols-3 gap-1 rounded-2xl bg-black/5 dark:bg-white/5 p-1 mb-6">
                 <button
                   type="button"
                   onClick={() => {
@@ -1003,23 +1003,6 @@ function IdpAuthContent() {
                 <button
                   type="button"
                   onClick={() => {
-                    setMode('mfa')
-                    setErrorMsg('')
-                    setSuccessMsg('')
-                  }}
-                  className={`rounded-xl py-2 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-1 cursor-pointer ${
-                    mode === 'mfa'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-indigo-600 dark:text-indigo-400 hover:text-indigo-700'
-                  }`}
-                >
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  <span>Sen 2FA</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
                     setMode('forgot')
                     setErrorMsg('')
                     setSuccessMsg('')
@@ -1035,180 +1018,9 @@ function IdpAuthContent() {
               </div>
 
               {/* ==================================================== */}
-              {/* TAB: BẢO MẬT 2 LỚP AUTHENTICATOR (TOTP NHƯ FEPN) */}
-              {/* ==================================================== */}
-              {mode === 'mfa' && (
-                <div className="space-y-4 animate-in fade-in zoom-in-95">
-                  <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-2">
-                    <div className="flex items-center gap-2 font-black text-indigo-900 dark:text-indigo-200 text-sm">
-                      <ShieldCheck className="h-5 w-5 text-indigo-500 shrink-0" />
-                      <span>Bảo Mật Sen 2FA Bằng Ứng Dụng Authenticator (TOTP)</span>
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-[11px]">
-                      Hỗ trợ Google Authenticator, Microsoft Authenticator hoặc Apple Passwords. Mỗi lần đăng nhập, mã xác thực 6 số trên điện thoại sẽ ngăn chặn 100% các cuộc tấn công chiếm đoạt tài khoản.
-                    </p>
-                  </div>
-
-                  {!currentUser ? (
-                    <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-5 text-center space-y-3">
-                      <Lock className="h-8 w-8 text-indigo-500 mx-auto" />
-                      <div>
-                        <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                          Yêu cầu đăng nhập để cấu hình Sen 2FA
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Vui lòng đăng nhập vào tài khoản của bạn để liên kết ứng dụng Authenticator hoặc kiểm tra trạng thái bảo mật.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setMode('login')}
-                        className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md transition hover:bg-indigo-700 cursor-pointer"
-                      >
-                        Chuyển sang Đăng Nhập
-                      </button>
-                    </div>
-                  ) : hasMfaEnrolled ? (
-                    <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
-                          <Check className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-900 dark:text-white text-sm">
-                            Bảo Mật Sen 2FA (Authenticator) Đang Bật
-                          </p>
-                          <p className="text-xs text-slate-600 dark:text-slate-300">
-                            Tài khoản {currentUser.email} đã được bảo vệ bởi mã TOTP.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                          <ShieldCheck className="h-3.5 w-3.5" /> FEPN Standard Armor
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleDisableMfa}
-                          disabled={mfaLoading}
-                          className="px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold hover:bg-rose-500/20 transition cursor-pointer"
-                        >
-                          {mfaLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Tắt Sen 2FA'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : mfaQrCode ? (
-                    /* FORM QUÉT QR & NHẬP MÃ KÍCH HOẠT */
-                    <form onSubmit={handleConfirmMfaEnrollment} className="space-y-4">
-                      <div className="text-center space-y-2">
-                        <p className="font-bold text-xs text-slate-700 dark:text-slate-300">
-                          1. Mở Google Authenticator trên điện thoại và quét mã QR:
-                        </p>
-                        <div className="p-3 bg-white rounded-2xl inline-block shadow-md border border-slate-200">
-                          {mfaQrCode.startsWith('data:') ? (
-                            <img src={mfaQrCode} alt="MFA QR Code" className="w-44 h-44 mx-auto" />
-                          ) : (
-                            <div
-                              className="w-44 h-44 mx-auto [&>svg]:w-full [&>svg]:h-full"
-                              dangerouslySetInnerHTML={{ __html: mfaQrCode }}
-                            />
-                          )}
-                        </div>
-
-                        {mfaSecret && (
-                          <div className="pt-2 space-y-1">
-                            <p className="text-[11px] text-slate-500">Hoặc nhập mã khóa thủ công:</p>
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-xs font-bold">
-                              <span>{mfaSecret}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(mfaSecret)
-                                  setCopiedSecret(true)
-                                  setTimeout(() => setCopiedSecret(false), 2000)
-                                }}
-                                className="text-indigo-600 dark:text-indigo-400 hover:scale-110 transition cursor-pointer"
-                                title="Sao chép"
-                              >
-                                {copiedSecret ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="font-bold text-slate-700 dark:text-slate-300 block text-center mb-1 text-xs">
-                          2. Nhập mã 6 chữ số từ ứng dụng để xác nhận:
-                        </label>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          inputMode="numeric"
-                          placeholder="••••••"
-                          value={mfaSetupCode}
-                          onChange={(e) => setMfaSetupCode(e.target.value.replace(/[^0-9]/g, ''))}
-                          className="w-full text-center tracking-[0.5em] font-mono text-xl font-black py-3 rounded-2xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                          required
-                        />
-                      </div>
-
-                      {errorMsg && (
-                        <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center justify-center gap-2">
-                          <AlertCircle className="h-4 w-4 shrink-0" />
-                          <span>{errorMsg}</span>
-                        </div>
-                      )}
-
-                      <button
-                        type="submit"
-                        disabled={mfaLoading || mfaSetupCode.trim().length !== 6}
-                        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black uppercase text-xs sm:text-sm tracking-wider shadow-lg transition hover:scale-[1.01] disabled:opacity-50 inline-flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                        <span>Xác Nhận & Bật Sen 2FA</span>
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="text-center py-4 space-y-4">
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500">
-                        <QrCode className="h-7 w-7" />
-                      </div>
-                      <div>
-                        <p className="font-black text-slate-900 dark:text-white text-base">
-                          Kích Hoạt Sen 2FA (Authenticator)
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                          Tạo mã QR để liên kết ứng dụng xác thực hai bước bảo vệ tài khoản ngay bây giờ.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={initAuthenticatorEnrollment}
-                        disabled={mfaLoading}
-                        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white font-black uppercase text-xs sm:text-sm tracking-wider shadow-lg transition hover:scale-[1.01] disabled:opacity-50 inline-flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        {mfaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-                        <span>Bắt Đầu Thiết Lập Sen 2FA</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {successMsg && (
-                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" /> {successMsg}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ==================================================== */}
               {/* CÁC CHẾ ĐỘ: ĐĂNG NHẬP / ĐĂNG KÝ / QUÊN MẬT KHẨU */}
               {/* ==================================================== */}
-              {mode !== 'mfa' && (
-                <>
+              <>
                   {/* NÚT GOOGLE AUTH */}
                   {mode !== 'forgot' && (
                     <>
@@ -1484,7 +1296,6 @@ function IdpAuthContent() {
                     </div>
                   )}
                 </>
-              )}
             </>
           )}
         </div>

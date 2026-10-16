@@ -519,10 +519,9 @@ html.dark[data-eco-mode="true"] .dark\:bg-slate-800\/90 {
   display: none !important;
 }
 
-/* 4. Tắt animation lặp vô tận khi ở Eco Mode hoặc khi chuyển tab ngầm */
-[data-eco-mode="true"] .animate-pulse,
-[data-eco-mode="true"] .animate-spin-slow,
-[data-app-hidden="true"] * {
+/* 4. Tắt animation lặp vô tận khi ở Eco Mode (ngoại trừ loading spinner) */
+[data-eco-mode="true"] .animate-pulse:not(.sen-loading-glow):not(.sen-loading-shimmer),
+[data-eco-mode="true"] .animate-spin-slow:not(.sen-loading-spinner) {
   animation-play-state: paused !important;
 }
 
@@ -530,9 +529,47 @@ html.dark[data-eco-mode="true"] .dark\:bg-slate-800\/90 {
 .animate-pulse,
 .animate-spin,
 .animate-spin-slow,
-.animate-ping {
+.animate-ping,
+.sen-loading-spinner,
+.sen-loading-shimmer,
+.sen-loading-glow {
   will-change: transform, opacity;
   transform: translateZ(0);
+}
+
+/* LOADING ANIMATIONS: Luôn chạy mượt mà 60fps, không bao giờ bị đơ hay tạm dừng */
+@keyframes senSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes senShimmer {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(50%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes senPulseGlow {
+  0%, 100% { opacity: 0.6; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.sen-loading-spinner {
+  animation: senSpin 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+  animation-play-state: running !important;
+  will-change: transform;
+}
+
+.sen-loading-shimmer {
+  animation: senShimmer 1.6s ease-in-out infinite !important;
+  animation-play-state: running !important;
+  will-change: transform;
+}
+
+.sen-loading-glow {
+  animation: senPulseGlow 2.2s ease-in-out infinite !important;
+  animation-play-state: running !important;
+  will-change: transform, opacity;
 }
 
 /* ========================================================================= */
