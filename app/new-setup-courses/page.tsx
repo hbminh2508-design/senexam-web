@@ -1154,27 +1154,61 @@ function SetupCourseMainContent() {
         created_by: currentUser?.id,
       }
 
-      // Thử lưu với max_score, nếu bảng exams chưa có cột max_score thì tự động lưu basePayload
+      // Hàm chuẩn hóa an toàn exam_type phòng trường hợp DB có check constraint cũ (chỉ cho phép THPTQG, HSA, TSA, SPT)
+      const getSafeExamType = (val: string) => {
+        const upper = (val || '').toUpperCase().trim()
+        if (upper.includes('HSA')) return 'HSA'
+        if (upper.includes('TSA')) return 'TSA'
+        if (upper.includes('SPT')) return 'SPT'
+        if (upper.includes('THPT')) return 'THPTQG'
+        return 'THPTQG'
+      }
+
+      // Thử lưu với max_score, nếu bảng exams chưa có cột max_score hoặc vướng check constraint exam_type
       let data: any = null
-      const { data: firstData, error: firstError } = await supabase
+      let { data: firstData, error: firstError } = await supabase
         .from('exams')
         .insert({ ...basePayload, max_score: parsedMaxScore })
         .select('*')
         .single()
 
+      // Nếu lỗi do ràng buộc exams_exam_type_check
+      if (firstError && firstError.message?.includes('exams_exam_type_check')) {
+        const safeType = getSafeExamType(katexExamType)
+        const retryRes = await supabase
+          .from('exams')
+          .insert({ ...basePayload, exam_type: safeType, max_score: parsedMaxScore })
+          .select('*')
+          .single()
+        firstData = retryRes.data
+        firstError = retryRes.error
+      }
+
       if (firstError) {
         console.warn('Lỗi lưu đề có max_score, thử fallback lưu cơ bản:', firstError.message)
-        const { data: fallbackData, error: fallbackError } = await supabase
+        let { data: fallbackData, error: fallbackError } = await supabase
           .from('exams')
           .insert(basePayload)
           .select('*')
           .single()
+
+        if (fallbackError && fallbackError.message?.includes('exams_exam_type_check')) {
+          const safeType = getSafeExamType(katexExamType)
+          const retryRes2 = await supabase
+            .from('exams')
+            .insert({ ...basePayload, exam_type: safeType })
+            .select('*')
+            .single()
+          fallbackData = retryRes2.data
+          fallbackError = retryRes2.error
+        }
 
         if (fallbackError) throw fallbackError
         data = fallbackData
       } else {
         data = firstData
       }
+
 
 
       setExamsList([data, ...examsList])
