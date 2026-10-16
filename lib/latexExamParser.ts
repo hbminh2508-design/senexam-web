@@ -561,13 +561,47 @@ export function parseLatexExamCode(
       }
 
       // 2. Định dạng a) b) c) d) trong đề Đúng Sai
-      if (options.length === 0 && (qType === 'true_false' || blockContent.includes('a)'))) {
-        const tfParts = blockContent.split(/(?:^|\n)\s*(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.)\s*/i)
+      if (
+        options.length === 0 &&
+        (qType === 'true_false' ||
+          /(?:^|\n|\r|\s+)(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i.test(blockContent))
+      ) {
+        // Thử tách ngắt dòng trước
+        let tfParts = blockContent.split(
+          /(?:^|\n|\r)\s*(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i
+        )
+        // Nếu không đủ 5 phần, thử tách theo khoảng cách rộng hoặc dấu chấm kết thúc câu
+        if (tfParts.length < 5) {
+          tfParts = blockContent.split(
+            /(?:^|\n|\r|\s{2,}|\$\s*|\.\s+)(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i
+          )
+        }
+        // Thử tách khoảng trắng bất kỳ
+        if (tfParts.length < 5) {
+          tfParts = blockContent.split(
+            /(?:^|\n|\r|\s+)(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i
+          )
+        }
+
         if (tfParts.length >= 5) {
           // Phần 0 là câu hỏi, 1-4 là 4 ý a, b, c, d
           blockContent = tfParts[0]
           options = tfParts.slice(1, 5).map((p) => cleanLatexQuestionText(p))
           qType = 'true_false'
+        }
+      }
+
+      // 2b. Định dạng \begin{enumerate} hoặc \begin{itemize} trong đề Đúng Sai
+      if (options.length === 0 && qType === 'true_false') {
+        const enumMatch = blockContent.match(
+          /\\begin\{(?:enumerate|itemize)\}(?:\[[^\]]*\])?([\s\S]*?)\\end\{(?:enumerate|itemize)\}/i
+        )
+        if (enumMatch) {
+          const items = enumMatch[1].split(/\\item\b/).filter((t) => t.trim().length > 0)
+          if (items.length >= 4) {
+            options = items.slice(0, 4).map((p) => cleanLatexQuestionText(p))
+            blockContent = blockContent.replace(enumMatch[0], '')
+          }
         }
       }
 

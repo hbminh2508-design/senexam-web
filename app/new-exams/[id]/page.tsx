@@ -697,17 +697,30 @@ export default function NewExamRoomPage() {
 
     if (type === 'true_false') {
       let correctSubCount = 0
-      if (studentAns && typeof studentAns === 'object' && correctAns && typeof correctAns === 'object') {
-        ;['a', 'b', 'c', 'd'].forEach((sub) => {
-          const sVal = String(studentAns[sub] || '').toUpperCase()
-          const cVal = String(correctAns[sub] || '').toUpperCase()
-          const sT = sVal === 'Đ' || sVal === 'T' || sVal === 'TRUE' || sVal === '1'
-          const sF = sVal === 'S' || sVal === 'F' || sVal === 'FALSE' || sVal === '0'
-          const cT = cVal === 'Đ' || cVal === 'T' || cVal === 'TRUE' || cVal === '1'
-          const cF = cVal === 'S' || cVal === 'F' || cVal === 'FALSE' || cVal === '0'
-          if ((sT && cT) || (sF && cF)) correctSubCount++
-        })
-      }
+      ;['a', 'b', 'c', 'd'].forEach((sub, sIdx) => {
+        let sVal = ''
+        if (studentAns && typeof studentAns === 'object' && !Array.isArray(studentAns)) {
+          sVal = String(studentAns[sub] || studentAns[sub.toUpperCase()] || studentAns[sIdx] || '').toUpperCase()
+        } else if (Array.isArray(studentAns)) {
+          sVal = String(studentAns[sIdx] || '').toUpperCase()
+        }
+
+        let cVal = ''
+        if (correctAns && typeof correctAns === 'object' && !Array.isArray(correctAns)) {
+          cVal = String(correctAns[sub] || correctAns[sub.toUpperCase()] || correctAns[sIdx] || '').toUpperCase()
+        } else if (Array.isArray(correctAns)) {
+          cVal = String(correctAns[sIdx] || '').toUpperCase()
+        } else if (typeof correctAns === 'string') {
+          const cleaned = correctAns.replace(/[\s,;-]+/g, '')
+          if (cleaned.length === 4) cVal = cleaned[sIdx].toUpperCase()
+        }
+
+        const sT = sVal === 'Đ' || sVal === 'D' || sVal === 'T' || sVal === 'TRUE' || sVal === '1'
+        const sF = sVal === 'S' || sVal === 'F' || sVal === 'FALSE' || sVal === '0'
+        const cT = cVal === 'Đ' || cVal === 'D' || cVal === 'T' || cVal === 'TRUE' || cVal === '1'
+        const cF = cVal === 'S' || cVal === 'F' || cVal === 'FALSE' || cVal === '0'
+        if ((sT && cT) || (sF && cF)) correctSubCount++
+      })
       const isCorrect = correctSubCount === 4
       let scorePercent = 0
       if (correctSubCount === 1) scorePercent = 0.1
@@ -745,8 +758,17 @@ export default function NewExamRoomPage() {
   // Định dạng hiển thị đáp án đúng
   const formatCorrectAnswerDisplay = (type: string, correctAns: any) => {
     if (!correctAns) return 'Chưa có'
-    if (type === 'true_false' && typeof correctAns === 'object') {
-      return `a: ${correctAns.a || '?'}, b: ${correctAns.b || '?'}, c: ${correctAns.c || '?'}, d: ${correctAns.d || '?'}`
+    if (type === 'true_false') {
+      if (correctAns && typeof correctAns === 'object' && !Array.isArray(correctAns)) {
+        const a = correctAns.a || correctAns.A || '?'
+        const b = correctAns.b || correctAns.B || '?'
+        const c = correctAns.c || correctAns.C || '?'
+        const d = correctAns.d || correctAns.D || '?'
+        return `a: ${a}, b: ${b}, c: ${c}, d: ${d}`
+      }
+      if (Array.isArray(correctAns) && correctAns.length >= 4) {
+        return `a: ${correctAns[0] || '?'}, b: ${correctAns[1] || '?'}, c: ${correctAns[2] || '?'}, d: ${correctAns[3] || '?'}`
+      }
     }
     if (Array.isArray(correctAns)) {
       return correctAns.join(', ')
@@ -1257,7 +1279,17 @@ export default function NewExamRoomPage() {
 
                   <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-sans select-text">
                     <SafeMathRenderer
-                      content={currentQ.qData?.text || currentQ.qData?.content || `Câu hỏi số ${currentQ.globalNum}`}
+                      content={(() => {
+                        const rawText = currentQ.qData?.text || currentQ.qData?.content || `Câu hỏi số ${currentQ.globalNum}`
+                        if (currentQ.type === 'true_false') {
+                          const splitPattern = /(?:^|\n|\r|\s{2,}|\$\s*|\.\s+)(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i
+                          const splitParts = rawText.split(splitPattern)
+                          if (splitParts.length >= 5 && splitParts[0].trim()) {
+                            return splitParts[0].trim()
+                          }
+                        }
+                        return rawText
+                      })()}
                     />
                   </div>
                 </div>
@@ -1380,14 +1412,92 @@ export default function NewExamRoomPage() {
                   {/* TYPE: TRUE / FALSE (4 Ý) */}
                   {currentQ.type === 'true_false' && (
                     <div className="space-y-3">
-                      {['a', 'b', 'c', 'd'].map((sub) => {
-                        const subContent = currentQ.qData?.options?.[sub] || `Mệnh đề ${sub})`
+                      {['a', 'b', 'c', 'd'].map((sub, sIdx) => {
+                        const rawOpts = currentQ.effectiveOptions || currentQ.qData?.options
+                        let subContent = ''
+
+                        // 1. Kiểm tra options dạng Array (options[0], options[1]...)
+                        if (Array.isArray(rawOpts)) {
+                          subContent = rawOpts[sIdx] || ''
+                        } else if (rawOpts && typeof rawOpts === 'object') {
+                          // 2. Kiểm tra options dạng Object ({ a: '...', b: '...' } hoặc { A: '...', B: '...' })
+                          subContent =
+                            rawOpts[sub] ||
+                            rawOpts[sub.toUpperCase()] ||
+                            rawOpts[sIdx] ||
+                            rawOpts[String(sIdx)] ||
+                            ''
+                        }
+
+                        // 3. Fallback: Kiểm tra trong subQuestions (dạng AI sentaobai: subQuestions: [{ text: '...' }])
+                        if (!subContent && currentQ.qData?.subQuestions && Array.isArray(currentQ.qData.subQuestions)) {
+                          const sq = currentQ.qData.subQuestions[sIdx]
+                          subContent = typeof sq === 'object' ? sq?.text || sq?.question || sq?.content : sq
+                        }
+                        // 4. Fallback: Kiểm tra trong statements hoặc items
+                        if (!subContent && currentQ.qData?.statements && Array.isArray(currentQ.qData.statements)) {
+                          const st = currentQ.qData.statements[sIdx]
+                          subContent = typeof st === 'object' ? st?.text || st?.statement : st
+                        }
+                        if (!subContent && currentQ.qData?.items && Array.isArray(currentQ.qData.items)) {
+                          const it = currentQ.qData.items[sIdx]
+                          subContent = typeof it === 'object' ? it?.text || it?.content : it
+                        }
+
+                        // 5. Fallback mạnh mẽ: Nếu đề chưa tách được options mà vẫn còn nguyên trong question text
+                        if (!subContent && (currentQ.qData?.text || currentQ.qData?.content)) {
+                          const fullText = String(currentQ.qData?.text || currentQ.qData?.content || '')
+                          const splitPattern = /(?:^|\n|\r|\s{2,}|\$\s*|\.\s+)(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/gi
+                          const parts = fullText.split(splitPattern)
+                          if (parts.length >= 5 && parts[sIdx + 1]) {
+                            subContent = parts[sIdx + 1].trim()
+                          }
+                        }
+
+                        if (!subContent) {
+                          subContent = `Mệnh đề ${sub})`
+                        }
+
+                        // Làm sạch tiền tố trùng lặp (ví dụ "a) ..." hoặc "a. ...") để giao diện gọn gàng
+                        const cleanSubContent = subContent.replace(/^(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i, '') || subContent
+
                         const currentAns = answers[currentQ.key]
-                        const val = currentAns?.[sub]
+                        let val = ''
+                        if (currentAns && typeof currentAns === 'object' && !Array.isArray(currentAns)) {
+                          val = currentAns[sub] || currentAns[sub.toUpperCase()] || currentAns[sIdx] || ''
+                        } else if (Array.isArray(currentAns)) {
+                          val = currentAns[sIdx] || ''
+                        }
+                        if (val) {
+                          const vu = String(val).toUpperCase()
+                          if (vu === 'Đ' || vu === 'D' || vu === 'T' || vu === 'TRUE' || vu === '1') val = 'Đ'
+                          else if (vu === 'S' || vu === 'F' || vu === 'FALSE' || vu === '0') val = 'S'
+                        }
+
                         const isRevealed = isStudyMode && revealedAnswers[currentQ.key]
-                        const correctSub =
-                          currentQ.qData?.correctAnswer?.[sub] ??
-                          currentSection?.correctAnswers?.[currentQ.qIdx]?.[sub]
+                        
+                        let correctSub = ''
+                        const rawCA =
+                          currentQ.effectiveCorrectAnswer ??
+                          currentQ.qData?.correctAnswer ??
+                          currentSection?.correctAnswers?.[currentQ.qIdx]
+
+                        if (rawCA && typeof rawCA === 'object' && !Array.isArray(rawCA)) {
+                          correctSub = rawCA[sub] || rawCA[sub.toUpperCase()] || rawCA[sIdx] || ''
+                        } else if (Array.isArray(rawCA)) {
+                          correctSub = rawCA[sIdx] || ''
+                        } else if (typeof rawCA === 'string') {
+                          const cleaned = rawCA.replace(/[\s,;-]+/g, '')
+                          if (cleaned.length === 4) {
+                            correctSub = cleaned[sIdx]
+                          }
+                        }
+
+                        if (correctSub) {
+                          const cu = String(correctSub).toUpperCase()
+                          if (cu === 'Đ' || cu === 'D' || cu === 'T' || cu === 'TRUE' || cu === '1') correctSub = 'Đ'
+                          else if (cu === 'S' || cu === 'F' || cu === 'FALSE' || cu === '0') correctSub = 'S'
+                        }
 
                         return (
                           <div
@@ -1395,21 +1505,26 @@ export default function NewExamRoomPage() {
                             className="p-3.5 rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] space-y-2"
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-start gap-2">
+                              <div className="flex items-start gap-2.5">
                                 <span className="h-6 w-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-black flex items-center justify-center shrink-0 uppercase">
                                   {sub}
                                 </span>
                                 <div className="prose prose-sm dark:prose-invert max-w-none text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                  <SafeMathRenderer content={subContent} gfm={false} />
+                                  <SafeMathRenderer content={cleanSubContent} gfm={false} />
                                 </div>
                               </div>
 
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <button
                                   type="button"
-                                  onClick={() => handleAnswer(currentQ.key, { ...currentAns, [sub]: 'Đ' })}
-                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition ${
-                                    val === 'Đ' || val === 'T'
+                                  onClick={() => {
+                                    const nextAns = typeof currentAns === 'object' && currentAns !== null && !Array.isArray(currentAns)
+                                      ? { ...currentAns, [sub]: 'Đ' }
+                                      : { [sub]: 'Đ' }
+                                    handleAnswer(currentQ.key, nextAns)
+                                  }}
+                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition cursor-pointer ${
+                                    val === 'Đ'
                                       ? 'bg-emerald-600 text-white shadow-sm'
                                       : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-black/5'
                                   }`}
@@ -1418,9 +1533,14 @@ export default function NewExamRoomPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleAnswer(currentQ.key, { ...currentAns, [sub]: 'S' })}
-                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition ${
-                                    val === 'S' || val === 'F'
+                                  onClick={() => {
+                                    const nextAns = typeof currentAns === 'object' && currentAns !== null && !Array.isArray(currentAns)
+                                      ? { ...currentAns, [sub]: 'S' }
+                                      : { [sub]: 'S' }
+                                    handleAnswer(currentQ.key, nextAns)
+                                  }}
+                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition cursor-pointer ${
+                                    val === 'S'
                                       ? 'bg-rose-600 text-white shadow-sm'
                                       : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-black/5'
                                   }`}
@@ -1431,8 +1551,13 @@ export default function NewExamRoomPage() {
                             </div>
 
                             {isRevealed && (
-                              <div className="text-[11px] pt-1 border-t border-black/5 dark:border-white/5 flex items-center justify-between text-slate-500">
-                                <span>Đáp án chuẩn: <strong className="text-emerald-600 dark:text-emerald-400 font-black">{correctSub || 'Chưa có'}</strong></span>
+                              <div className="text-[11px] pt-1.5 border-t border-black/5 dark:border-white/5 flex items-center justify-between text-slate-500">
+                                <span>
+                                  Đáp án chuẩn:{' '}
+                                  <strong className="text-emerald-600 dark:text-emerald-400 font-black">
+                                    {correctSub === 'Đ' ? 'Đúng' : correctSub === 'S' ? 'Sai' : (correctSub || 'Chưa có')}
+                                  </strong>
+                                </span>
                                 {val && (
                                   <span className={val === correctSub ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
                                     {val === correctSub ? '✓ Chính xác' : '✗ Chưa đúng'}

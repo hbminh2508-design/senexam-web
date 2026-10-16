@@ -3123,6 +3123,136 @@ function SetupCourseMainContent() {
                     </div>
                   )}
 
+                  {/* Các mệnh đề và đáp án Đúng / Sai (cho dạng true_false 4 ý) */}
+                  {q.type === 'true_false' && (
+                    <div className="space-y-3 pt-2">
+                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-300">
+                        Nội dung 4 mệnh đề a, b, c, d & Đáp án Đúng / Sai:
+                      </label>
+
+                      <div className="space-y-2.5">
+                        {['a', 'b', 'c', 'd'].map((sub, optIdx) => {
+                          const rawOpts = q.options
+                          let optText = ''
+                          if (Array.isArray(rawOpts)) {
+                            optText = rawOpts[optIdx] || ''
+                          } else if (rawOpts && typeof rawOpts === 'object') {
+                            optText =
+                              (rawOpts as any)[sub] ||
+                              (rawOpts as any)[sub.toUpperCase()] ||
+                              (rawOpts as any)[optIdx] ||
+                              ''
+                          }
+
+                          let tfAns = 'Đ'
+                          if (
+                            q.correctAnswer &&
+                            typeof q.correctAnswer === 'object' &&
+                            !Array.isArray(q.correctAnswer)
+                          ) {
+                            tfAns =
+                              (q.correctAnswer as any)[sub] ||
+                              (q.correctAnswer as any)[sub.toUpperCase()] ||
+                              'Đ'
+                          } else if (Array.isArray(q.correctAnswer)) {
+                            tfAns = q.correctAnswer[optIdx] || 'Đ'
+                          }
+
+                          return (
+                            <div
+                              key={sub}
+                              className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/30 p-3 flex items-start gap-2.5"
+                            >
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase">
+                                {sub}
+                              </span>
+
+                              <div className="flex-1">
+                                <input
+                                  type="text"
+                                  value={optText}
+                                  onFocus={() => setFocusedField({ qIdx, field: 'option', optIdx })}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    setKatexQuestions((prev) => {
+                                      const next = [...prev]
+                                      const curOpts = Array.isArray(next[qIdx].options)
+                                        ? [...next[qIdx].options]
+                                        : ['', '', '', '']
+                                      while (curOpts.length < 4) curOpts.push('')
+                                      curOpts[optIdx] = val
+                                      next[qIdx].options = curOpts
+                                      return next
+                                    })
+                                  }}
+                                  placeholder={`Nội dung mệnh đề ${sub})...`}
+                                  className="w-full bg-transparent text-xs font-medium outline-none"
+                                />
+
+                                {optText && (
+                                  <div className="mt-1 text-[11px] text-slate-600 dark:text-slate-300 border-t border-black/5 dark:border-white/5 pt-1">
+                                    <SafeMathRenderer content={optText} gfm={false} />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKatexQuestions((prev) => {
+                                      const next = [...prev]
+                                      const curCA =
+                                        typeof next[qIdx].correctAnswer === 'object' &&
+                                        next[qIdx].correctAnswer !== null &&
+                                        !Array.isArray(next[qIdx].correctAnswer)
+                                          ? { ...next[qIdx].correctAnswer }
+                                          : { a: 'Đ', b: 'S', c: 'Đ', d: 'S' }
+                                      curCA[sub] = 'Đ'
+                                      next[qIdx].correctAnswer = curCA
+                                      return next
+                                    })
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition cursor-pointer ${
+                                    tfAns === 'Đ' || tfAns === 'D' || tfAns === 'T'
+                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                      : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-black/10'
+                                  }`}
+                                >
+                                  Đúng
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setKatexQuestions((prev) => {
+                                      const next = [...prev]
+                                      const curCA =
+                                        typeof next[qIdx].correctAnswer === 'object' &&
+                                        next[qIdx].correctAnswer !== null &&
+                                        !Array.isArray(next[qIdx].correctAnswer)
+                                          ? { ...next[qIdx].correctAnswer }
+                                          : { a: 'Đ', b: 'S', c: 'Đ', d: 'S' }
+                                      curCA[sub] = 'S'
+                                      next[qIdx].correctAnswer = curCA
+                                      return next
+                                    })
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition cursor-pointer ${
+                                    tfAns === 'S' || tfAns === 'F'
+                                      ? 'bg-rose-600 text-white shadow-xs'
+                                      : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-black/10'
+                                  }`}
+                                >
+                                  Sai
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Lời giải chi tiết */}
                   <div className="pt-2">
                     <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
