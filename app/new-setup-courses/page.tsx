@@ -53,6 +53,7 @@ import {
   FileCode,
   Code,
   Shuffle,
+  Crown,
   Image as ImageIcon,
 } from 'lucide-react'
 
@@ -507,6 +508,7 @@ function SetupCourseMainContent() {
   const [katexMaxScore, setKatexMaxScore] = useState('10')
   const [katexAllowReview, setKatexAllowReview] = useState(true)
   const [katexIsHidden, setKatexIsHidden] = useState(false)
+  const [katexIsVip, setKatexIsVip] = useState(false)
   const [katexShuffleQuestions, setKatexShuffleQuestions] = useState(false)
   const [katexShuffleOptions, setKatexShuffleOptions] = useState(false)
 
@@ -521,6 +523,7 @@ function SetupCourseMainContent() {
   const [settingsMaxScore, setSettingsMaxScore] = useState('10')
   const [settingsAllowReview, setSettingsAllowReview] = useState(true)
   const [settingsIsHidden, setSettingsIsHidden] = useState(false)
+  const [settingsIsVip, setSettingsIsVip] = useState(false)
   const [settingsAccessCode, setSettingsAccessCode] = useState('')
   const [settingsRequireSeb, setSettingsRequireSeb] = useState(false)
   const [settingsRequireProctoring, setSettingsRequireProctoring] = useState(false)
@@ -1154,6 +1157,7 @@ function SetupCourseMainContent() {
           type: defaultSecType as any,
           format: 'katex',
           is_katex: true,
+          is_vip: katexIsVip,
           shuffle_questions: katexShuffleQuestions,
           shuffle_options: katexShuffleOptions,
           instructions: 'Đề thi được soạn trực tiếp bằng KaTeX sắc nét, không dùng file PDF.',
@@ -1169,6 +1173,7 @@ function SetupCourseMainContent() {
         duration: parseInt(katexDuration) || 50,
         drive_file_id: null,
         format: 'katex',
+        is_vip: katexIsVip,
         shuffle_questions: katexShuffleQuestions,
         shuffle_options: katexShuffleOptions,
         exam_structure: examSections,
@@ -1214,11 +1219,14 @@ function SetupCourseMainContent() {
       }
 
       if (firstError) {
-        console.warn('Lỗi lưu đề có max_score / shuffle columns, thử fallback lưu cơ bản:', firstError.message)
+        console.warn('Lỗi lưu đề có max_score / shuffle / is_vip columns, thử fallback lưu cơ bản:', firstError.message)
         const safePayload = { ...basePayload }
         if (firstError.message?.includes('shuffle_questions') || firstError.message?.includes('shuffle_options')) {
           delete safePayload.shuffle_questions
           delete safePayload.shuffle_options
+        }
+        if (firstError.message?.includes('is_vip')) {
+          delete safePayload.is_vip
         }
 
         let { data: fallbackData, error: fallbackError } = await supabase
@@ -1949,6 +1957,7 @@ function SetupCourseMainContent() {
       struct = (struct as any).sections
     }
     const firstSec = Array.isArray(struct) && struct.length > 0 ? struct[0] : null
+    setSettingsIsVip(Boolean(exam.is_vip || firstSec?.is_vip))
     setSettingsShuffleQuestions(Boolean(exam.shuffle_questions || firstSec?.shuffle_questions))
     setSettingsShuffleOptions(Boolean(exam.shuffle_options || firstSec?.shuffle_options))
     setSettingsSuccessMsg('')
@@ -1971,11 +1980,12 @@ function SetupCourseMainContent() {
         struct = (struct as any).sections
       }
 
-      if (Array.isArray(struct) && isKatex) {
+      if (Array.isArray(struct)) {
         struct = struct.map((s: any) => ({
           ...s,
-          shuffle_questions: settingsShuffleQuestions,
-          shuffle_options: settingsShuffleOptions,
+          is_vip: settingsIsVip,
+          shuffle_questions: isKatex ? settingsShuffleQuestions : s?.shuffle_questions,
+          shuffle_options: isKatex ? settingsShuffleOptions : s?.shuffle_options,
         }))
       }
 
@@ -1991,6 +2001,7 @@ function SetupCourseMainContent() {
         max_score: parseFloat(settingsMaxScore) || 10,
         allow_review: settingsAllowReview,
         is_hidden: settingsIsHidden,
+        is_vip: settingsIsVip,
         access_code: generatedCode,
         require_seb: settingsRequireSeb,
         require_proctoring: settingsRequireProctoring,
@@ -2010,11 +2021,23 @@ function SetupCourseMainContent() {
         .update(updates)
         .eq('id', editingExamSettings.id)
 
+      // Fallback nếu thiếu cột is_vip
+      if (error && error.message?.includes('is_vip')) {
+        const fallbackUpdatesVip = { ...updates }
+        delete fallbackUpdatesVip.is_vip
+        const retryVip = await supabase
+          .from('exams')
+          .update(fallbackUpdatesVip)
+          .eq('id', editingExamSettings.id)
+        error = retryVip.error
+      }
+
       // Fallback nếu thiếu cột shuffle_questions / shuffle_options
       if (error && (error.message?.includes('shuffle_questions') || error.message?.includes('shuffle_options'))) {
         const fallbackUpdates = { ...updates }
         delete fallbackUpdates.shuffle_questions
         delete fallbackUpdates.shuffle_options
+        delete fallbackUpdates.is_vip
         const retry = await supabase
           .from('exams')
           .update(fallbackUpdates)
@@ -2028,6 +2051,7 @@ function SetupCourseMainContent() {
         delete fallbackUpdates2.max_score
         delete fallbackUpdates2.shuffle_questions
         delete fallbackUpdates2.shuffle_options
+        delete fallbackUpdates2.is_vip
         const retry2 = await supabase
           .from('exams')
           .update(fallbackUpdates2)
@@ -2044,9 +2068,10 @@ function SetupCourseMainContent() {
             ? {
                 ...ex,
                 ...updates,
+                is_vip: settingsIsVip,
                 shuffle_questions: isKatex ? settingsShuffleQuestions : false,
                 shuffle_options: isKatex ? settingsShuffleOptions : false,
-                exam_structure: isKatex && struct ? struct : ex.exam_structure,
+                exam_structure: struct || ex.exam_structure,
               }
             : ex
         )
@@ -2258,6 +2283,12 @@ function SetupCourseMainContent() {
                             {exam.require_seb && (
                               <span className="rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[9px] font-black px-2 py-0.5">
                                 SEB Lock
+                              </span>
+                            )}
+
+                            {exam.is_vip && (
+                              <span className="rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 text-[9px] font-black px-2 py-0.5 flex items-center gap-1 shadow-2xs">
+                                <Crown className="h-2.5 w-2.5" /> VIP
                               </span>
                             )}
 
@@ -2774,6 +2805,19 @@ function SetupCourseMainContent() {
                     </label>
                   </div>
                 )}
+
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="katexIsVip"
+                    checked={katexIsVip}
+                    onChange={(e) => setKatexIsVip(e.target.checked)}
+                    className="h-4 w-4 rounded accent-amber-500 cursor-pointer"
+                  />
+                  <label htmlFor="katexIsVip" className="text-xs font-black text-amber-700 dark:text-amber-400 flex items-center gap-1 cursor-pointer select-none">
+                    <Crown className="h-3.5 w-3.5 text-amber-500" /> Đề thi dành riêng cho VIP
+                  </label>
+                </div>
 
                 {/* ĐẢO CÂU & ĐẢO ĐÁP ÁN (DÀNH RIÊNG CHO KATEX) */}
                 <div className="sm:col-span-2 lg:col-span-4 mt-2 p-4 rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-50/60 via-purple-50/40 to-pink-50/40 dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-pink-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -4717,6 +4761,24 @@ function SetupCourseMainContent() {
                   <span className="font-bold text-slate-700 dark:text-slate-300">
                     Cho phép học sinh xem lại lời giải chi tiết sau khi nộp bài
                   </span>
+                </label>
+
+                {/* ĐẶC QUYỀN VIP */}
+                <label className="flex items-center gap-2.5 p-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={settingsIsVip}
+                    onChange={(e) => setSettingsIsVip(e.target.checked)}
+                    className="h-4 w-4 rounded accent-amber-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5 text-xs">
+                      <Crown className="h-4 w-4 text-amber-500" /> Đề thi dành riêng cho tài khoản VIP
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold block">
+                      Chỉ học sinh sở hữu gói VIP hoặc tài khoản Giáo viên/Admin mới được phép vào thi.
+                    </span>
+                  </div>
                 </label>
 
                 <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-slate-800/50 space-y-3">

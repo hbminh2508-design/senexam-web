@@ -25,7 +25,14 @@ ADD COLUMN IF NOT EXISTS subjects JSONB DEFAULT '["Toán học"]'::jsonb,
 ADD COLUMN IF NOT EXISTS part_instructions JSONB DEFAULT '[]'::jsonb,
 ADD COLUMN IF NOT EXISTS folder_id UUID DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS shuffle_questions BOOLEAN DEFAULT FALSE,
-ADD COLUMN IF NOT EXISTS shuffle_options BOOLEAN DEFAULT FALSE;
+ADD COLUMN IF NOT EXISTS shuffle_options BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE;
 
--- 4. Làm mới Schema Cache của Supabase PostgREST (Xử lý dứt điểm lỗi cache)
+-- 4. Đảm bảo bảng profiles có cột is_vip và vip_until
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS vip_until TIMESTAMPTZ DEFAULT NULL;
+
+-- 5. Làm mới Schema Cache của Supabase PostgREST (Xử lý dứt điểm lỗi cache)
 NOTIFY pgrst, 'reload schema';
+

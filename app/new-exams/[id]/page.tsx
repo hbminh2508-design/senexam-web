@@ -115,6 +115,9 @@ import {
   X,
   Zap,
   Shuffle,
+  Crown,
+  AlertCircle,
+  Trash2,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newroom-heading' })
@@ -130,6 +133,12 @@ export default function NewExamRoomPage() {
   const [isDark, setIsDark] = useState(false)
   const [hasStarted, setHasStarted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  // Người dùng & Trạng thái VIP
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [isUserVip, setIsUserVip] = useState(false)
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false)
+  const [hasUnfinishedSession, setHasUnfinishedSession] = useState(false)
 
   // Thông tin thí sinh
   const [studentInfo, setStudentInfo] = useState<{
@@ -174,15 +183,25 @@ export default function NewExamRoomPage() {
         router.replace('/new-sign')
         return
       }
+      setCurrentUser(user)
 
       await ensureStudentProfile(user.id)
 
-      // Lấy thông tin profile học sinh
+      // Lấy thông tin profile học sinh & Trạng thái VIP
       const { data: pData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle()
+
+      const isVip = Boolean(
+        pData?.is_vip ||
+        (pData?.vip_until && new Date(pData.vip_until) > new Date()) ||
+        pData?.role === 'admin' ||
+        pData?.role === 'collab' ||
+        pData?.role === 'teacher'
+      )
+      setIsUserVip(isVip)
 
       setStudentInfo({
         name: pData?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Thí sinh',
@@ -216,7 +235,10 @@ export default function NewExamRoomPage() {
       if (savedDraft) {
         try {
           const parsed = JSON.parse(savedDraft)
-          if (parsed.answers) setAnswers(parsed.answers)
+          if (parsed.answers && Object.keys(parsed.answers).length > 0) {
+            setAnswers(parsed.answers)
+            setHasUnfinishedSession(true)
+          }
           if (parsed.bookmarked) setBookmarked(parsed.bookmarked)
           if (parsed.revealedAnswers) setRevealedAnswers(parsed.revealedAnswers)
         } catch (e) {
@@ -261,6 +283,23 @@ export default function NewExamRoomPage() {
     }, 800)
     return () => clearTimeout(timer)
   }, [answers, bookmarked, revealedAnswers, examId, hasStarted])
+
+  // Cảnh báo và tự động bảo lưu khi thoát bằng trình duyệt web
+  useEffect(() => {
+    if (!hasStarted || submittedResult) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = 'Hệ thống ghi nhận bạn đang làm bài thi. Khi rời khỏi web, tiến độ câu trả lời đã được lưu lại và tính là xác nhận kết thúc.'
+      return 'Hệ thống ghi nhận bạn đang làm bài thi. Khi rời khỏi web, tiến độ câu trả lời đã được lưu lại và tính là xác nhận kết thúc.'
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [hasStarted, submittedResult])
+
 
   const toggleDarkMode = () => {
     const next = !isDark
@@ -380,6 +419,16 @@ export default function NewExamRoomPage() {
     return Boolean(exam.shuffle_options || activeSections.some((s: any) => s?.shuffle_options))
   }, [isKatexExam, exam, activeSections])
 
+  // Cờ kiểm tra đề thi có yêu cầu tài khoản VIP không
+  const isExamVip = useMemo(() => {
+    if (!exam) return false
+    return Boolean(
+      exam.is_vip ||
+      activeSections.some((s: any) => s?.is_vip) ||
+      exam.exam_structure?.[0]?.is_vip
+    )
+  }, [exam, activeSections])
+
   // Danh sách phẳng các câu hỏi ban đầu theo thứ tự đề gốc
   const baseFlatQuestions = useMemo(() => {
     const list: Array<{
@@ -432,7 +481,7 @@ export default function NewExamRoomPage() {
   useEffect(() => {
     if (!exam?.id || baseFlatQuestions.length === 0) return
 
-    const userKey = user?.id || 'guest'
+    const userKey = currentUser?.id || 'guest'
     const storageKeyQ = `senexam_q_order_${exam.id}_${userKey}`
     const storageKeyOpt = `senexam_opt_order_${exam.id}_${userKey}`
 
@@ -509,7 +558,7 @@ export default function NewExamRoomPage() {
     } else {
       setShuffledOptionMap(null)
     }
-  }, [exam?.id, user?.id, baseFlatQuestions, shouldShuffleQuestions, shouldShuffleOptions])
+  }, [exam?.id, currentUser?.id, baseFlatQuestions, shouldShuffleQuestions, shouldShuffleOptions])
 
   // flatQuestions thực tế được hiển thị (đã qua xáo trộn nếu có bật)
   const flatQuestions = useMemo(() => {
@@ -736,7 +785,12 @@ export default function NewExamRoomPage() {
             >
               <ArrowLeft className="h-4 w-4" /> Thoát ra kho đề
             </Link>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {isExamVip && (
+                <span className="rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 px-3 py-1 text-xs font-black uppercase tracking-wider shadow-xs flex items-center gap-1">
+                  <Crown className="h-3 w-3" /> VIP Only
+                </span>
+              )}
               {isKatexExam ? (
                 <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1 text-xs font-bold border border-emerald-500/20">
                   ✨ KaTeX Trực Tiếp
@@ -792,6 +846,60 @@ export default function NewExamRoomPage() {
             </div>
           </div>
 
+          {/* THÔNG BÁO PHIÊN LÀM BÀI TRƯỚC CHƯA KẾT THÚC */}
+          {hasUnfinishedSession && Object.keys(answers).length > 0 && (
+            <div className="mt-5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-3 animate-in fade-in">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-black text-xs uppercase tracking-wider">
+                <AlertCircle className="h-4 w-4" />
+                <span>Hệ thống phát hiện phiên làm bài dở dang trước đó</span>
+              </div>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                Bạn có một phiên làm bài chưa kết thúc với <strong>{answeredCount} câu đã trả lời</strong> được lưu tự động. Bạn muốn nộp bài đã làm hay tiếp tục làm tiếp?
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasStarted(true)
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Tiếp tục làm bài
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSubmitExam()
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Đồng ý nộp bài ngay
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Bạn có chắc muốn xóa toàn bộ câu trả lời cũ để làm lại từ đầu không?')) {
+                      if (currentUser?.id) {
+                        localStorage.removeItem(`senexam_draft_${examId}_${currentUser.id}`)
+                        localStorage.removeItem(`senexam_q_order_${examId}_${currentUser.id}`)
+                        localStorage.removeItem(`senexam_opt_order_${examId}_${currentUser.id}`)
+                      }
+                      setAnswers({})
+                      setBookmarked({})
+                      setRevealedAnswers({})
+                      setHasUnfinishedSession(false)
+                    }
+                  }}
+                  className="px-3 py-2 rounded-xl border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-xs font-bold transition flex items-center gap-1"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Làm lại từ đầu
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Quy chế phòng thi */}
           <div className="mt-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-[#4B5563] dark:text-slate-300 space-y-2">
             <p className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
@@ -804,22 +912,53 @@ export default function NewExamRoomPage() {
             </ul>
           </div>
 
-          <div className="mt-7 flex gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setHasStarted(true)
-                try {
-                  const docEl = document.documentElement as any
-                  if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {})
-                  else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {})
-                } catch (e) {}
-              }}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition hover:scale-[1.01] active:scale-[0.99]"
-            >
-              Bắt đầu làm bài thi ngay <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+          {/* Nút bắt đầu thi hoặc Paywall VIP */}
+          {isExamVip && !isUserVip ? (
+            <div className="mt-6 rounded-3xl border-2 border-amber-500/50 bg-gradient-to-br from-amber-500/15 via-yellow-500/10 to-transparent p-6 text-center space-y-4 shadow-xl">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 shadow-lg">
+                <Crown className="h-7 w-7" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-amber-900 dark:text-amber-200 uppercase tracking-wider">
+                  👑 Đề Thi Đặc Quyền Dành Cho VIP
+                </h3>
+                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 max-w-md mx-auto leading-relaxed">
+                  Đề thi này được thiết kế và biên soạn độc quyền cho học sinh nâng cấp gói VIP SenExam. Hãy nâng cấp tài khoản VIP để mở khóa đề thi và nhận toàn bộ lời giải chi tiết cùng kho tài liệu chuyên sâu!
+                </p>
+              </div>
+              <div className="pt-2 flex justify-center gap-3">
+                <Link
+                  href="/new-vip"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 hover:from-amber-600 hover:to-yellow-500 text-slate-950 px-6 py-3 text-xs font-black uppercase tracking-wider shadow-lg transition hover:scale-105 active:scale-95"
+                >
+                  <Crown className="h-4 w-4" /> Nâng Cấp VIP Ngay
+                </Link>
+                <Link
+                  href="/new-exams"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-4 py-3 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-black/5"
+                >
+                  Xem đề miễn phí khác
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-7 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setHasStarted(true)
+                  try {
+                    const docEl = document.documentElement as any
+                    if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {})
+                    else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {})
+                  } catch (e) {}
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition hover:scale-[1.01] active:scale-[0.99]"
+              >
+                Bắt đầu làm bài thi ngay <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </main>
     )
@@ -838,13 +977,14 @@ export default function NewExamRoomPage() {
       <header className="h-16 shrink-0 border-b border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 px-4 sm:px-6 flex items-center justify-between backdrop-blur-xl z-20">
         {/* Left: Exam title */}
         <div className="flex items-center gap-3 max-w-sm sm:max-w-md">
-          <Link
-            href="/new-exams"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
-            title="Thoát phòng thi"
+          <button
+            type="button"
+            onClick={() => setShowExitConfirmModal(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105 cursor-pointer text-slate-700 dark:text-slate-200"
+            title="Thoát và nộp bài thi"
           >
             <ArrowLeft className="h-4 w-4" />
-          </Link>
+          </button>
           <div className="truncate">
             <h2 className="text-sm sm:text-base font-black truncate" style={{ fontFamily: 'var(--font-newroom-heading)' }}>
               {exam?.title || 'Đề thi'}
@@ -1689,6 +1829,57 @@ export default function NewExamRoomPage() {
           </div>
         </div>
       )}
+
+      {/* EXIT & CONFIRM SUBMIT MODAL */}
+      {showExitConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-lg animate-in fade-in">
+          <div className="w-full max-w-md rounded-[32px] border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newroom-heading)' }}>
+                  Xác nhận kết thúc & nộp bài
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                  Bạn có muốn rời khỏi phòng thi ngay bây giờ?
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-slate-600 dark:text-slate-300 space-y-2 leading-relaxed">
+              <p>
+                Khi xác nhận rời đi, hệ thống sẽ <strong>tự động nộp bài và chấm điểm</strong> dựa trên <strong>{answeredCount}/{flatQuestions.length} câu</strong> bạn đã trả lời.
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Thời gian làm bài còn lại: <strong className="font-mono text-amber-600 dark:text-amber-400">{formatTimer(timeLeft)}</strong>
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowExitConfirmModal(false)}
+                className="flex-1 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-3 text-xs font-bold hover:bg-black/10 transition"
+              >
+                Quay lại làm tiếp
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExitConfirmModal(false)
+                  handleSubmitExam()
+                }}
+                className="flex-1 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-3 text-xs font-black shadow-lg transition"
+              >
+                Đồng ý nộp bài & Thoát
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
+
