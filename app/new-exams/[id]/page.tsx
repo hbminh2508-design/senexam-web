@@ -242,6 +242,7 @@ export default function NewExamRoomPage() {
           }
           if (parsed.bookmarked) setBookmarked(parsed.bookmarked)
           if (parsed.revealedAnswers) setRevealedAnswers(parsed.revealedAnswers)
+          if (parsed.isStudyMode !== undefined) setIsStudyMode(Boolean(parsed.isStudyMode))
         } catch (e) {
           console.error('Error loading draft answers:', e)
         }
@@ -279,11 +280,14 @@ export default function NewExamRoomPage() {
       const { data: auth } = await supabase.auth.getUser()
       if (auth.user) {
         const draftKey = `senexam_draft_${examId}_${auth.user.id}`
-        localStorage.setItem(draftKey, JSON.stringify({ answers, bookmarked, revealedAnswers, updatedAt: Date.now() }))
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({ answers, bookmarked, revealedAnswers, isStudyMode, updatedAt: Date.now() })
+        )
       }
     }, 800)
     return () => clearTimeout(timer)
-  }, [answers, bookmarked, revealedAnswers, examId, hasStarted])
+  }, [answers, bookmarked, revealedAnswers, isStudyMode, examId, hasStarted])
 
   // Cảnh báo và tự động bảo lưu khi thoát bằng trình duyệt web
   useEffect(() => {
@@ -1055,6 +1059,107 @@ export default function NewExamRoomPage() {
             </ul>
           </div>
 
+          {/* LỰA CHỌN CHẾ ĐỘ THI TRƯỚC KHI VÀO BÀI (KHÔNG THỂ THAY ĐỔI KHI ĐANG LÀM BÀI) */}
+          <div className="mt-5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-4 shadow-sm backdrop-blur-sm space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
+                  <Zap className="h-4 w-4 text-amber-500" /> Lựa chọn chế độ làm bài:
+                </span>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {isStudyMode
+                    ? '⚡ Chế độ Luyện tập: Kiểm tra đáp án & xem lời giải KaTeX ngay sau từng câu (sau khi kiểm tra sẽ khóa không chọn lại).'
+                    : '🛡️ Chế độ Thi Chuẩn: Không hiện đáp án trong khi thi, tính giờ nghiêm túc và nộp bài để xem điểm tổng thể.'}
+                </p>
+              </div>
+
+              {/* Nút bật/tắt dạng Switch Button */}
+              <button
+                type="button"
+                onClick={() => setIsStudyMode(!isStudyMode)}
+                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors cursor-pointer p-0.5 ${
+                  isStudyMode ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+                title="Bật/Tắt chế độ luyện tập"
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform ${
+                    isStudyMode ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* 2 Thẻ lựa chọn trực quan */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsStudyMode(true)}
+                className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start gap-2.5 ${
+                  isStudyMode
+                    ? 'border-amber-500 bg-amber-500/10 text-amber-950 dark:text-amber-200 shadow-xs'
+                    : 'border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] text-slate-600 dark:text-slate-400 hover:bg-black/5'
+                }`}
+              >
+                <div
+                  className={`mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${
+                    isStudyMode ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-400'
+                  }`}
+                >
+                  {isStudyMode && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-xs font-black flex items-center gap-1.5">
+                    <span>⚡ Chế độ Luyện Tập</span>
+                    {isStudyMode && (
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/20 px-1.5 py-0.2 rounded-md">
+                        Đang chọn
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] leading-relaxed opacity-85">
+                    Biết Đúng/Sai tức thì & xem lời giải chi tiết KaTeX ngay khi xác nhận đáp án.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsStudyMode(false)}
+                className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start gap-2.5 ${
+                  !isStudyMode
+                    ? 'border-indigo-500 bg-indigo-500/10 text-indigo-950 dark:text-indigo-200 shadow-xs'
+                    : 'border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] text-slate-600 dark:text-slate-400 hover:bg-black/5'
+                }`}
+              >
+                <div
+                  className={`mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 ${
+                    !isStudyMode ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-400'
+                  }`}
+                >
+                  {!isStudyMode && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-xs font-black flex items-center gap-1.5">
+                    <span>🛡️ Chế độ Thi Chuẩn</span>
+                    {!isStudyMode && (
+                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/20 px-1.5 py-0.2 rounded-md">
+                        Đang chọn
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] leading-relaxed opacity-85">
+                    Mô phỏng thi thực tế, không lộ đáp án cho tới khi hoàn tất nộp bài.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 italic">
+              * Lưu ý: Chế độ làm bài thi được lựa chọn tại đây và sẽ được <strong>cố định</strong> trong suốt quá trình làm bài (không thể bật/tắt khi đã vào phòng thi).
+            </p>
+          </div>
+
           {/* Nút bắt đầu thi hoặc Paywall VIP */}
           {isExamVip && !isUserVip ? (
             <div className="mt-6 rounded-3xl border-2 border-amber-500/50 bg-gradient-to-br from-amber-500/15 via-yellow-500/10 to-transparent p-6 text-center space-y-4 shadow-xl">
@@ -1824,24 +1929,21 @@ export default function NewExamRoomPage() {
               </div>
             </div>
 
-            {/* Practice / Study Mode Toggle */}
+            {/* Chế độ làm bài đã cố định (Không cho phép bật/tắt trong khi thi) */}
             <div className="flex items-center justify-between pt-1">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Zap className="h-3.5 w-3.5 text-amber-500" /> Chế độ luyện tập (Biết đáp án ngay):
+                <Zap className="h-3.5 w-3.5 text-amber-500" /> Chế độ làm bài:
               </span>
-              <button
-                type="button"
-                onClick={() => setIsStudyMode(!isStudyMode)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  isStudyMode ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+              <span
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                  isStudyMode
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                    : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'
                 }`}
+                title="Chế độ làm bài thi đã được cố định từ trước khi bắt đầu"
               >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    isStudyMode ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
+                {isStudyMode ? '⚡ Luyện tập (Cố định)' : '🛡️ Thi Chuẩn (Cố định)'}
+              </span>
             </div>
           </div>
 
