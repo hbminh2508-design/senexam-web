@@ -316,6 +316,10 @@ export default function NewExamRoomPage() {
 
   // Cập nhật câu trả lời
   const handleAnswer = (key: string, value: any) => {
+    // Chế độ luyện tập: khi đã kiểm tra đáp án thì không được chọn lại các đáp án khác nữa
+    if (isStudyMode && revealedAnswers[key]) {
+      return
+    }
     setAnswers((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -1306,14 +1310,19 @@ export default function NewExamRoomPage() {
                     </h4>
 
                     {isStudyMode && (
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        ⚡ Chế độ Luyện tập bật
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          ⚡ Chế độ Luyện tập bật
+                        </span>
+                        {revealedAnswers[currentQ.key] && (
+                          <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 flex items-center gap-1 shadow-2xs">
+                            🔒 Đã khóa đáp án
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {/* Render Options by Type */}
-                  {/* TYPE: SINGLE CHOICE */}
                   {/* Render Options by Type */}
                   {/* TYPE: SINGLE CHOICE */}
                   {(currentQ.type === 'single_choice' || currentQ.type === 'multiple_choice' || !currentQ.type) && (
@@ -1355,7 +1364,9 @@ export default function NewExamRoomPage() {
                             <button
                               key={`${currentQ.key}-${slotIdx}`}
                               type="button"
+                              disabled={Boolean(isRevealed)}
                               onClick={() => {
+                                if (isRevealed) return
                                 if (currentQ.type === 'multiple_choice') {
                                   const prevArr = Array.isArray(currentAns) ? currentAns : []
                                   const nextArr = prevArr.includes(slotLetter)
@@ -1369,13 +1380,13 @@ export default function NewExamRoomPage() {
                               className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-3.5 ${
                                 isRevealed
                                   ? isThisCorrect
-                                    ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20 ring-2 ring-emerald-500/40 shadow-xs'
+                                    ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20 ring-2 ring-emerald-500/40 shadow-xs cursor-default'
                                     : isThisWrong
-                                    ? 'border-rose-500 bg-rose-500/10 dark:bg-rose-500/20 ring-2 ring-rose-500/40 shadow-xs'
-                                    : 'border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] opacity-50'
+                                    ? 'border-rose-500 bg-rose-500/10 dark:bg-rose-500/20 ring-2 ring-rose-500/40 shadow-xs cursor-default'
+                                    : 'border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] opacity-50 cursor-not-allowed'
                                   : isSelected
-                                  ? 'border-indigo-600 dark:border-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 shadow-md ring-2 ring-indigo-500/30'
-                                  : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 hover:border-indigo-300 dark:hover:border-indigo-700 shadow-2xs'
+                                  ? 'border-indigo-600 dark:border-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 shadow-md ring-2 ring-indigo-500/30 cursor-pointer'
+                                  : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 hover:border-indigo-300 dark:hover:border-indigo-700 shadow-2xs cursor-pointer'
                               }`}
                             >
                               <span
@@ -1517,32 +1528,40 @@ export default function NewExamRoomPage() {
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <button
                                   type="button"
+                                  disabled={Boolean(isRevealed)}
                                   onClick={() => {
+                                    if (isRevealed) return
                                     const nextAns = typeof currentAns === 'object' && currentAns !== null && !Array.isArray(currentAns)
                                       ? { ...currentAns, [sub]: 'Đ' }
                                       : { [sub]: 'Đ' }
                                     handleAnswer(currentQ.key, nextAns)
                                   }}
-                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition cursor-pointer ${
+                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition ${
+                                    isRevealed ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                                  } ${
                                     val === 'Đ'
                                       ? 'bg-emerald-600 text-white shadow-sm'
-                                      : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-black/5'
+                                      : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-black/5 disabled:opacity-50'
                                   }`}
                                 >
                                   Đúng
                                 </button>
                                 <button
                                   type="button"
+                                  disabled={Boolean(isRevealed)}
                                   onClick={() => {
+                                    if (isRevealed) return
                                     const nextAns = typeof currentAns === 'object' && currentAns !== null && !Array.isArray(currentAns)
                                       ? { ...currentAns, [sub]: 'S' }
                                       : { [sub]: 'S' }
                                     handleAnswer(currentQ.key, nextAns)
                                   }}
-                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition cursor-pointer ${
+                                  className={`rounded-xl px-3.5 py-1.5 text-xs font-black transition ${
+                                    isRevealed ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                                  } ${
                                     val === 'S'
                                       ? 'bg-rose-600 text-white shadow-sm'
-                                      : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-black/5'
+                                      : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-black/5 disabled:opacity-50'
                                   }`}
                                 >
                                   Sai
@@ -1576,10 +1595,11 @@ export default function NewExamRoomPage() {
                     <div className="space-y-3">
                       <input
                         type="text"
-                        placeholder="Nhập kết quả số hoặc biểu thức của bạn..."
+                        disabled={Boolean(isStudyMode && revealedAnswers[currentQ.key])}
+                        placeholder={isStudyMode && revealedAnswers[currentQ.key] ? "Đã khóa kết quả sau khi kiểm tra" : "Nhập kết quả số hoặc biểu thức của bạn..."}
                         value={answers[currentQ.key] || ''}
                         onChange={(e) => handleAnswer(currentQ.key, e.target.value)}
-                        className="h-12 w-full rounded-2xl border border-black/15 dark:border-white/15 bg-white dark:bg-slate-800 px-4 text-sm font-black font-mono outline-none focus:border-indigo-500 shadow-inner"
+                        className="h-12 w-full rounded-2xl border border-black/15 dark:border-white/15 bg-white dark:bg-slate-800 px-4 text-sm font-black font-mono outline-none focus:border-indigo-500 shadow-inner disabled:bg-black/[0.04] dark:disabled:bg-white/[0.04] disabled:cursor-not-allowed disabled:text-slate-600 dark:disabled:text-slate-300"
                       />
                     </div>
                   )}
@@ -1588,10 +1608,11 @@ export default function NewExamRoomPage() {
                   {currentQ.type === 'essay' && (
                     <textarea
                       rows={4}
-                      placeholder="Gõ lời giải tóm tắt hoặc ghi chú..."
+                      disabled={Boolean(isStudyMode && revealedAnswers[currentQ.key])}
+                      placeholder={isStudyMode && revealedAnswers[currentQ.key] ? "Đã khóa lời giải sau khi kiểm tra" : "Gõ lời giải tóm tắt hoặc ghi chú..."}
                       value={answers[currentQ.key]?.text || answers[currentQ.key] || ''}
                       onChange={(e) => handleAnswer(currentQ.key, e.target.value)}
-                      className="w-full rounded-2xl border border-black/15 dark:border-white/15 bg-white dark:bg-slate-800 p-4 text-xs font-medium outline-none focus:border-indigo-500"
+                      className="w-full rounded-2xl border border-black/15 dark:border-white/15 bg-white dark:bg-slate-800 p-4 text-xs font-medium outline-none focus:border-indigo-500 disabled:bg-black/[0.04] dark:disabled:bg-white/[0.04] disabled:cursor-not-allowed disabled:text-slate-600 dark:disabled:text-slate-300"
                     />
                   )}
 

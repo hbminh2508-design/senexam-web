@@ -978,8 +978,8 @@ function IdpAuthContent() {
             </div>
           ) : (
             <>
-              {/* TAB SWITCHER: 3 TAB XÁC THỰC CÔNG KHAI (ĐĂNG NHẬP, ĐĂNG KÝ, QUÊN MK) */}
-              <div className="grid grid-cols-3 gap-1 rounded-2xl bg-black/5 dark:bg-white/5 p-1 mb-6">
+              {/* TAB SWITCHER: 2 TAB XÁC THỰC CÔNG KHAI (ĐĂNG NHẬP, ĐĂNG KÝ) */}
+              <div className="grid grid-cols-2 gap-1 rounded-2xl bg-black/5 dark:bg-white/5 p-1 mb-6">
                 <button
                   type="button"
                   onClick={() => {
@@ -1010,22 +1010,6 @@ function IdpAuthContent() {
                   }`}
                 >
                   Đăng Ký
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('forgot')
-                    setErrorMsg('')
-                    setSuccessMsg('')
-                  }}
-                  className={`rounded-xl py-2 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
-                    mode === 'forgot'
-                      ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-black dark:hover:text-white'
-                  }`}
-                >
-                  Quên MK
                 </button>
               </div>
 
@@ -1187,17 +1171,12 @@ function IdpAuthContent() {
 
                         {mode === 'login' && (
                           <div className="flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMode('forgot')
-                                setErrorMsg('')
-                                setSuccessMsg('')
-                              }}
+                            <Link
+                              href="/new-change-password"
                               className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                             >
                               Quên mật khẩu?
-                            </button>
+                            </Link>
                           </div>
                         )}
                       </div>

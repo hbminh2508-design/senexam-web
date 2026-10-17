@@ -1,8 +1,46 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import nodemailer from 'nodemailer'
+import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
+
+function base32ToBuffer(base32: string): Buffer {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  const clean = base32.toUpperCase().replace(/=+$/, '')
+  let bits = 0
+  let value = 0
+  const output: number[] = []
+
+  for (let i = 0; i < clean.length; i++) {
+    const idx = alphabet.indexOf(clean[i])
+    if (idx === -1) continue
+    value = (value << 5) | idx
+    bits += 5
+    if (bits >= 8) {
+      output.push((value >>> (bits - 8)) & 255)
+      bits -= 8
+    }
+  }
+  return Buffer.from(output)
+}
+
+function verifyTotp(secret: string, token: string, window = 1): boolean {
+  try {
+    const key = base32ToBuffer(secret)
+    const epoch = Math.floor(Date.now() / 1000 / 30)
+    for (let error = -window; error <= window; error++) {
+      const counter = epoch + error
+      const buf = Buffer.alloc(8)
+      buf.writeBigInt64BE(BigInt(counter))
+      const hmac = crypto.createHmac('sha1', key).update(buf).digest()
+      const offset = hmac[hmac.length - 1] & 0x0f
+      const code = ((hmac.readUInt32BE(offset) & 0x7fffffff) % 1000000).toString().padStart(6, '0')
+      if (code === token.trim()) return true
+    }
+  } catch {}
+  return false
+}
 
 // Bộ nhớ đệm OTP xác thực đổi mật khẩu (10 phút)
 declare global {
@@ -171,17 +209,53 @@ async function sendEmailOtp(toEmail: string, otpCode: string): Promise<{ success
 export async function GET(request: Request) {
   try {
     const caller = await getUserFromRequest(request)
-    if (!caller) {
-      return NextResponse.json({ error: 'Chưa đăng nhập hoặc phiên đã hết hạn' }, { status: 401 })
+    const supabaseAdmin = getSupabaseAdmin()
+
+    let targetUserId = caller?.id
+    let targetEmail = ''
+
+    if (!targetUserId) {
+      const url = new URL(request.url)
+      const emailParam = url.searchParams.get('email')?.trim().toLowerCase()
+      if (!emailParam) {
+        return NextResponse.json({ error: 'Chưa đăng nhập hoặc thiếu địa chỉ email' }, { status: 401 })
+      }
+
+      // 1. Tra cứu qua bảng profiles
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, password_change_count')
+        .ilike('email', emailParam)
+        .maybeSingle()
+
+      if (prof?.id) {
+        targetUserId = prof.id
+        targetEmail = prof.email || emailParam
+      } else {
+        // 2. Tra cứu qua admin auth listUsers
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers()
+        const found = usersData?.users?.find((u) => u.email?.toLowerCase() === emailParam)
+        if (found) {
+          targetUserId = found.id
+          targetEmail = found.email || emailParam
+        }
+      }
+
+      if (!targetUserId) {
+        return NextResponse.json(
+          { error: 'Không tìm thấy tài khoản với email này trên hệ thống', notFound: true },
+          { status: 404 }
+        )
+      }
     }
 
-    const supabaseAdmin = getSupabaseAdmin()
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(caller.id)
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(targetUserId)
     if (userError || !userData?.user) {
       return NextResponse.json({ error: 'Không tìm thấy người dùng' }, { status: 404 })
     }
 
     const user = userData.user
+    targetEmail = user.email || targetEmail
     const userMetadata = user.user_metadata || {}
     const appMetadata = user.app_metadata || {}
 
@@ -236,7 +310,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      email: user.email,
+      email: targetEmail,
       isProvisioned,
       passwordChangeCount,
       canChangeDirectly,
@@ -254,31 +328,64 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const caller = await getUserFromRequest(request)
-    if (!caller) {
-      return NextResponse.json({ error: 'Chưa đăng nhập hoặc phiên đã hết hạn' }, { status: 401 })
-    }
-
-    const supabaseAdmin = getSupabaseAdmin()
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(caller.id)
-    if (userError || !userData?.user) {
-      return NextResponse.json({ error: 'Không tìm thấy người dùng' }, { status: 404 })
-    }
-
-    const user = userData.user
-    const email = user.email
-    if (!email) {
-      return NextResponse.json({ error: 'Tài khoản chưa có địa chỉ email' }, { status: 400 })
-    }
-
     const body = await request.json()
     const {
       action,
+      email: rawEmail,
       newPassword,
       confirmPassword,
       verificationMethod,
       otpCode,
     } = body
+
+    const caller = await getUserFromRequest(request)
+    const supabaseAdmin = getSupabaseAdmin()
+
+    let targetUserId = caller?.id
+    let targetEmail = ''
+
+    if (!targetUserId) {
+      const emailInput = (rawEmail || '').trim().toLowerCase()
+      if (!emailInput) {
+        return NextResponse.json({ error: 'Vui lòng cung cấp địa chỉ email tài khoản' }, { status: 400 })
+      }
+
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email')
+        .ilike('email', emailInput)
+        .maybeSingle()
+
+      if (prof?.id) {
+        targetUserId = prof.id
+        targetEmail = prof.email || emailInput
+      } else {
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers()
+        const found = usersData?.users?.find((u) => u.email?.toLowerCase() === emailInput)
+        if (found) {
+          targetUserId = found.id
+          targetEmail = found.email || emailInput
+        }
+      }
+
+      if (!targetUserId) {
+        return NextResponse.json(
+          { error: 'Không tìm thấy tài khoản với email này trên hệ thống', notFound: true },
+          { status: 404 }
+        )
+      }
+    }
+
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(targetUserId)
+    if (userError || !userData?.user) {
+      return NextResponse.json({ error: 'Không tìm thấy người dùng' }, { status: 404 })
+    }
+
+    const user = userData.user
+    const email = user.email || targetEmail
+    if (!email) {
+      return NextResponse.json({ error: 'Tài khoản chưa có địa chỉ email' }, { status: 400 })
+    }
 
     cleanExpiredOtp()
 
@@ -286,7 +393,7 @@ export async function POST(request: Request) {
     // HÀNH ĐỘNG 1: GỬI MÃ OTP QUA EMAIL
     // -------------------------------------------------------------
     if (action === 'send_email_otp') {
-      const existing = otpStore[caller.id]
+      const existing = otpStore[targetUserId]
       const now = Date.now()
 
       // Giới hạn tần suất 60s
@@ -300,14 +407,14 @@ export async function POST(request: Request) {
 
       // Tạo mã OTP ngẫu nhiên 6 chữ số
       const code = Math.floor(100000 + Math.random() * 900000).toString()
-      otpStore[caller.id] = {
+      otpStore[targetUserId] = {
         code,
         email,
         expiresAt: now + 10 * 60 * 1000, // 10 phút
         lastSentAt: now,
       }
 
-      const sendRes = await sendEmailOtp(email, code)
+      await sendEmailOtp(email, code)
       return NextResponse.json({
         success: true,
         message: `Mã OTP đã được gửi đến email ${email}. Vui lòng kiểm tra hộp thư.`,
@@ -388,9 +495,53 @@ export async function POST(request: Request) {
         // passwordChangeCount === 0: Cho phép đổi mật khẩu lần 1 trực tiếp mà không cần OTP/2FA
       } else {
         // Tài khoản thông thường: Bắt buộc xác minh qua TOTP hoặc Email OTP
-        if (verificationMethod === 'email_otp') {
+        if (verificationMethod === 'totp') {
+          const cleanTotp = (otpCode || '').trim().replace(/[^0-9]/g, '')
+          if (cleanTotp.length !== 6) {
+            return NextResponse.json({ error: 'Mã xác thực Sen 2FA (TOTP) phải gồm 6 chữ số' }, { status: 400 })
+          }
+
+          // Kiểm tra xem user có factor totp không
+          const factors = user.factors || []
+          const verifiedTotp = factors.find((f: any) => f.factor_type === 'totp' && f.status === 'verified')
+          if (!verifiedTotp) {
+            return NextResponse.json({ error: 'Tài khoản chưa thiết lập mã xác thực 2FA. Vui lòng chọn nhận mã qua Email.' }, { status: 400 })
+          }
+
+          let totpVerified = false
+          try {
+            const { data: factorRecord } = await supabaseAdmin
+              .schema('auth')
+              .from('mfa_factors')
+              .select('secret')
+              .eq('id', verifiedTotp.id)
+              .maybeSingle()
+
+            if (factorRecord?.secret) {
+              totpVerified = verifyTotp(factorRecord.secret, cleanTotp)
+            }
+          } catch (e) {
+            console.warn('Lỗi kiểm tra TOTP secret từ database:', e)
+          }
+
+          // Fallback: nếu người dùng nhập mã email OTP vào ô này
+          if (!totpVerified) {
+            const record = otpStore[targetUserId]
+            if (record && record.code === cleanTotp && Date.now() <= record.expiresAt) {
+              delete otpStore[targetUserId]
+              totpVerified = true
+            }
+          }
+
+          if (!totpVerified) {
+            return NextResponse.json(
+              { error: 'Mã xác thực TOTP không chính xác hoặc đã hết hạn. Bạn có thể bấm xác minh qua Email OTP bên dưới.' },
+              { status: 400 }
+            )
+          }
+        } else if (verificationMethod === 'email_otp') {
           const cleanCode = (otpCode || '').trim()
-          const record = otpStore[caller.id]
+          const record = otpStore[targetUserId]
 
           if (!record) {
             return NextResponse.json(
@@ -400,7 +551,7 @@ export async function POST(request: Request) {
           }
 
           if (Date.now() > record.expiresAt) {
-            delete otpStore[caller.id]
+            delete otpStore[targetUserId]
             return NextResponse.json({ error: 'Mã OTP đã hết hiệu lực (quá 10 phút). Vui lòng gửi lại mã mới.' }, { status: 400 })
           }
 
@@ -409,13 +560,13 @@ export async function POST(request: Request) {
           }
 
           // Xóa OTP sau khi sử dụng thành công
-          delete otpStore[caller.id]
+          delete otpStore[targetUserId]
         }
       }
 
       // Cập nhật mật khẩu mới qua Service Role
       const nextCount = passwordChangeCount + 1
-      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(caller.id, {
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
         password: newPassword,
         user_metadata: {
           ...userMetadata,
@@ -433,7 +584,7 @@ export async function POST(request: Request) {
         await supabaseAdmin
           .from('profiles')
           .update({ password_change_count: nextCount })
-          .eq('id', caller.id)
+          .eq('id', targetUserId)
       } catch (err) {
         // ignore
       }
@@ -443,7 +594,7 @@ export async function POST(request: Request) {
         await supabaseAdmin
           .from('fepn_user_sessions')
           .update({ is_active: false })
-          .eq('user_id', caller.id)
+          .eq('user_id', targetUserId)
       } catch (sessionErr) {
         console.warn('Lỗi thu hồi phiên thiết bị cũ:', sessionErr)
       }
