@@ -569,6 +569,7 @@ export default function NewAdminDashboardPage() {
   const [examSearch, setExamSearch] = useState('')
   const [examSubTab, setExamSubTab] = useState<'folders' | 'list'>('folders')
   const [adminFolders, setAdminFolders] = useState<any[]>([])
+  const [adminFolderSearch, setAdminFolderSearch] = useState('')
   const [adminFoldersLoading, setAdminFoldersLoading] = useState(false)
   const [showFolderModal, setShowFolderModal] = useState(false)
   const [folderModalMode, setFolderModalMode] = useState<'create_parent' | 'create_child' | 'edit'>('create_parent')
@@ -1554,6 +1555,32 @@ export default function NewAdminDashboardPage() {
     })
     return list
   }, [adminFolders])
+
+  // Lọc adminFolders theo adminFolderSearch
+  const filteredAdminFolders = useMemo(() => {
+    if (!adminFolderSearch.trim()) return adminFolders
+    const q = adminFolderSearch.toLowerCase().trim()
+    return adminFolders
+      .map((parent) => {
+        const parentMatches =
+          parent.name?.toLowerCase().includes(q) ||
+          (parent.description && parent.description.toLowerCase().includes(q))
+        const matchingChildren = (parent.children || []).filter(
+          (c: any) =>
+            c.name?.toLowerCase().includes(q) ||
+            (c.description && c.description.toLowerCase().includes(q))
+        )
+        if (parentMatches) return parent
+        if (matchingChildren.length > 0) {
+          return {
+            ...parent,
+            children: matchingChildren,
+          }
+        }
+        return null
+      })
+      .filter((p) => p !== null)
+  }, [adminFolders, adminFolderSearch])
 
   // Lọc Users
   const filteredUsers = useMemo(() => {
@@ -3287,17 +3314,41 @@ export default function NewAdminDashboardPage() {
                   {/* SUBTAB 1: CÂY THƯ MỤC MẸ - CON */}
                   {examSubTab === 'folders' && (
                     <div className="space-y-4">
+                      {/* Search bar thư mục Admin */}
+                      <div className="relative w-full">
+                        <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Tìm nhanh thư mục mẹ hoặc môn thi con..."
+                          value={adminFolderSearch}
+                          onChange={(e) => setAdminFolderSearch(e.target.value)}
+                          className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-2.5 pl-10 pr-9 text-xs font-semibold outline-none transition focus:border-indigo-500"
+                        />
+                        {adminFolderSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setAdminFolderSearch('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                            title="Xóa tìm kiếm"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+
                       {adminFoldersLoading ? (
                         <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
                           <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải cây thư mục đề thi...
                         </div>
-                      ) : adminFolders.length === 0 ? (
+                      ) : filteredAdminFolders.length === 0 ? (
                         <div className="py-12 text-center text-xs text-slate-400">
-                          Chưa có thư mục nào trong hệ thống. Hãy bấm <b>+ Thư Mục Mẹ</b> để tạo khối thi đầu tiên.
+                          {adminFolderSearch
+                            ? 'Không tìm thấy thư mục nào phù hợp với từ khóa.'
+                            : 'Chưa có thư mục nào trong hệ thống. Hãy bấm + Thư Mục Mẹ để tạo khối thi đầu tiên.'}
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          {adminFolders.map((parent) => (
+                          {filteredAdminFolders.map((parent) => (
                             <div
                               key={parent.id}
                               className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-5 shadow-sm space-y-4"

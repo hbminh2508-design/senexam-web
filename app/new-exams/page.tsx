@@ -93,6 +93,7 @@ export default function NewExamsPage() {
 
   // Cây Thư Mục Mẹ - Con theo kiến trúc SEB
   const [folders, setFolders] = useState<SebParentFolder[]>([])
+  const [folderSearch, setFolderSearch] = useState('')
   const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({})
   const [selectedChildId, setSelectedChildId] = useState<string>('')
   const [selectedFolderObj, setSelectedFolderObj] = useState<SebChildFolder | null>(null)
@@ -272,6 +273,47 @@ export default function NewExamsPage() {
     return counts
   }, [folders, exams])
 
+  // Lọc cây thư mục theo ô tìm kiếm thư mục
+  const filteredFolders = useMemo(() => {
+    if (!folderSearch.trim()) return folders
+    const q = folderSearch.toLowerCase().trim()
+
+    return folders
+      .map((parent) => {
+        const parentMatches =
+          parent.name.toLowerCase().includes(q) ||
+          (parent.description && parent.description.toLowerCase().includes(q))
+        const matchingChildren = (parent.children || []).filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            (c.description && c.description.toLowerCase().includes(q))
+        )
+
+        if (parentMatches) {
+          return parent
+        }
+        if (matchingChildren.length > 0) {
+          return {
+            ...parent,
+            children: matchingChildren,
+          }
+        }
+        return null
+      })
+      .filter((p): p is SebParentFolder => p !== null)
+  }, [folders, folderSearch])
+
+  // Tự động mở rộng các thư mục mẹ có kết quả tìm kiếm khớp
+  useEffect(() => {
+    if (folderSearch.trim()) {
+      const exp: Record<string, boolean> = {}
+      filteredFolders.forEach((p) => {
+        exp[p.id] = true
+      })
+      setExpandedParents((prev) => ({ ...prev, ...exp }))
+    }
+  }, [folderSearch, filteredFolders])
+
   // Lọc danh sách đề thi theo thư mục & từ khóa & phân loại
   const filteredExams = useMemo(() => {
     return exams.filter((exam) => {
@@ -427,6 +469,28 @@ export default function NewExamsPage() {
                 </span>
               </div>
 
+              {/* Ô tìm kiếm nhanh Thư mục / Môn thi */}
+              <div className="relative mb-2">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm môn thi, khối thi..."
+                  value={folderSearch}
+                  onChange={(e) => setFolderSearch(e.target.value)}
+                  className="h-8.5 w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] pl-8.5 pr-7 text-xs font-semibold outline-none transition focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-800"
+                />
+                {folderSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setFolderSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    title="Xóa tìm kiếm"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
               {/* Nút Xem Tất Cả Đề Thi */}
               <button
                 type="button"
@@ -454,12 +518,12 @@ export default function NewExamsPage() {
 
               {/* Danh sách Thư Mục Mẹ và Thư Mục Con */}
               <div className="space-y-2 overflow-y-auto max-h-[600px] pr-1">
-                {folders.length === 0 ? (
+                {filteredFolders.length === 0 ? (
                   <div className="py-6 text-center text-slate-400 text-xs">
-                    Đang tải danh mục môn thi...
+                    {folderSearch ? 'Không tìm thấy thư mục nào phù hợp' : 'Đang tải danh mục môn thi...'}
                   </div>
                 ) : (
-                  folders.map((parent) => {
+                  filteredFolders.map((parent) => {
                     const isExpanded = Boolean(expandedParents[parent.id])
                     const hasChildren = parent.children && parent.children.length > 0
 
