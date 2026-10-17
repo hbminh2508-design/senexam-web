@@ -255,18 +255,73 @@ export default function NewHistorySubmissionReviewPage() {
     reader.readAsDataURL(file)
   }
 
-  // Yêu cầu SenAI giải thích chi tiết câu hỏi (Model: gemini-3.5-flash-lite)
+  // Yêu cầu SenAI giải thích chi tiết câu hỏi (Tự động nhận diện KaTeX & Phương án & Lời giải đề)
   const handleAskAiExplain = async (
-    key: string,
-    questionLabel: string,
-    studentAns: any,
-    correctAns: any,
-    qText?: string
+    target:
+      | string
+      | {
+          key: string
+          globalNum: number | string
+          type: string
+          cleanPrompt?: string
+          qData?: any
+          studentAns: any
+          correctAns: any
+          label?: string
+          sectionName?: string
+        },
+    legacyLabel?: string,
+    legacyStudentAns?: any,
+    legacyCorrectAns?: any,
+    legacyQText?: string
   ) => {
-    const userPrompt = (questionInputs[key] || qText || '').trim()
+    let key: string
+    let globalNum: number | string = ''
+    let type = 'single_choice'
+    let qData: any = null
+    let studentAns: any = null
+    let correctAns: any = null
+    let rawPrompt = ''
+
+    if (typeof target === 'string') {
+      key = target
+      const found = flatReviewQuestions.find((q) => q.key === key)
+      if (found) {
+        globalNum = found.globalNum
+        type = found.type
+        qData = found.qData
+        studentAns = found.studentAns
+        correctAns = found.correctAns
+        rawPrompt = found.qData?.text || found.qData?.content || legacyQText || ''
+      } else {
+        globalNum = legacyLabel || key
+        studentAns = legacyStudentAns
+        correctAns = legacyCorrectAns
+        rawPrompt = legacyQText || ''
+      }
+    } else {
+      key = target.key
+      globalNum = target.globalNum
+      type = target.type
+      qData = target.qData
+      studentAns = target.studentAns
+      correctAns = target.correctAns
+      rawPrompt = target.cleanPrompt || target.qData?.text || target.qData?.content || ''
+    }
+
+    const cleanPrompt = cleanQuestionPrompt(rawPrompt, type)
+    const userNote = (questionInputs[key] || '').trim()
     const userImg = questionImages[key] || ''
 
-    if (!userPrompt && !userImg) {
+    // Kiểm tra xem câu hỏi có nội dung KaTeX / văn bản / các phương án không
+    const hasKaTexOrText = Boolean(
+      cleanPrompt.trim() ||
+      (Array.isArray(qData?.options) && qData.options.length > 0) ||
+      qData?.explanation ||
+      qData?.solution
+    )
+
+    if (!hasKaTexOrText && !userNote && !userImg) {
       alert('Vui lòng nhập nội dung câu hỏi hoặc tải lên hình ảnh đề bài để SenAI phân tích.')
       return
     }
@@ -286,18 +341,61 @@ export default function NewHistorySubmissionReviewPage() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
-      const fullMessage = `Hãy giải thích chi tiết phương pháp giải cho ${questionLabel} trong bài thi "${submission.exams?.title || 'Đề thi'}".
-Nội dung câu hỏi: "${userPrompt || '(Xem hình ảnh đính kèm)'}".
-Đáp án đúng: "${typeof correctAns === 'object' ? JSON.stringify(correctAns) : correctAns}".
-Lựa chọn của học sinh: "${typeof studentAns === 'object' ? JSON.stringify(studentAns) : (studentAns || 'Chưa làm')}".
-Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTeX ($...$ hoặc $$...$$) và chỉ ra phương pháp giải tối ưu nhất.`
+      // XÂY DỰNG PROMPT CHUYÊN SÂU TỰ ĐỘNG NHẬN DIỆN KATEX & PHƯƠNG ÁN & LỜI GIẢI
+      let promptBuilder = `Bạn là SenAI - Trợ lý gia sư AI phân tích & giải đề thi thông minh của SenExam.\n`
+      promptBuilder += `Nhiệm vụ: Giải thích chi tiết và hướng dẫn phương pháp giải cho Câu hỏi ${globalNum} trong đề thi "${submission?.exams?.title || 'Đề thi'}".\n\n`
+
+      if (cleanPrompt.trim()) {
+        promptBuilder += `=== ĐỀ BÀI (Định dạng KaTeX / LaTeX) ===\n${cleanPrompt}\n\n`
+      } else if (userImg) {
+        promptBuilder += `=== ĐỀ BÀI ===\n(Vui lòng xem hình ảnh đề bài đính kèm)\n\n`
+      }
+
+      // Đính kèm các phương án lựa chọn
+      if (type === 'single_choice' || type === 'multiple_choice' || !type) {
+        const opts = qData?.options
+        if (Array.isArray(opts) && opts.length > 0) {
+          promptBuilder += `=== CÁC PHƯƠNG ÁN LỰA CHỌN ===\n`
+          opts.forEach((opt: any, idx: number) => {
+            const letter = String.fromCharCode(65 + idx)
+            promptBuilder += `${letter}. ${typeof opt === 'string' ? opt : JSON.stringify(opt)}\n`
+          })
+          promptBuilder += `\n`
+        }
+      } else if (type === 'true_false') {
+        promptBuilder += `=== CÁC Ý MỆNH ĐỀ ĐÚNG / SAI ===\n`
+        ;['a', 'b', 'c', 'd'].forEach((sub, sIdx) => {
+          const stmt = resolveStatementContent(qData, sub, sIdx)
+          promptBuilder += `${sub}) ${stmt || `Mệnh đề ${sub}`}\n`
+        })
+        promptBuilder += `\n`
+      }
+
+      promptBuilder += `=== KẾT QUẢ ĐỐI CHIẾU ===\n`
+      promptBuilder += `- Đáp án chính xác của đề: ${typeof correctAns === 'object' ? JSON.stringify(correctAns) : (correctAns || 'Chưa có')}\n`
+      promptBuilder += `- Lựa chọn của học sinh: ${typeof studentAns === 'object' ? JSON.stringify(studentAns) : (studentAns || 'Chưa làm')}\n\n`
+
+      if (qData?.explanation || qData?.solution) {
+        promptBuilder += `=== LỜI GIẢI / GỢI Ý CÓ SẴN TỪ ĐỀ THI ===\n${qData.explanation || qData.solution}\n\n`
+      }
+
+      if (userNote) {
+        promptBuilder += `=== THẮC MẮC CỤ THỂ CỦA HỌC SINH ===\n"${userNote}"\n\n`
+      }
+
+      promptBuilder += `=== YÊU CẦU GIẢI THÍCH CHI TIẾT ===\n`
+      promptBuilder += `1. Tự động nhận diện toàn bộ công thức toán/lý/hóa KaTeX trong đề bài và các phương án.\n`
+      promptBuilder += `2. Trình bày lời giải từng bước rõ ràng, khoa học, sư phạm; sử dụng KaTeX ($...$ hoặc $$...$$) cho mọi biểu thức toán học.\n`
+      promptBuilder += `3. Giải thích tường tận tại sao đáp án đúng là đúng, và chỉ rõ lỗi sai hoặc hiểu nhầm phổ biến khiến học sinh chọn sai (nếu học sinh chọn sai).\n`
+      promptBuilder += `4. Trả lời trực tiếp vào thắc mắc của học sinh (nếu có).\n`
+      promptBuilder += `5. Đưa ra mẹo làm nhanh hoặc phương pháp tối ưu giúp học sinh ghi nhớ.`
 
       const res = await fetch('/api/senai-chat', {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          message: fullMessage,
-          image: userImg,
+          message: promptBuilder,
+          image: userImg || undefined,
           model: 'gemini-3.5-flash-lite',
           deepThink: false,
         }),
@@ -426,11 +524,64 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
           if (range?.type) qType = range.type
         }
 
-        const studentAns = submission?.answers?.[key]
-        const correctAns =
-          submission?.answers?._effectiveCorrectAnswers?.[key] ??
+        const rawOptions = qData?.options
+        const origCorrectAns =
           qData?.correctAnswer ??
           (section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)])
+        const correctAns =
+          submission?.answers?._effectiveCorrectAnswers?.[key] ?? origCorrectAns
+
+        // XÁC ĐỊNH DANH SÁCH OPTIONS HIỂN THỊ THỰC TẾ (ĐỒNG BỘ ĐẢO ĐÁP ÁN)
+        let effectiveOptions = rawOptions
+
+        // 1. Ưu tiên cao nhất: Snapshot danh sách options thực tế lúc thi đã lưu
+        if (
+          submission?.answers?._effectiveOptionsMap?.[key] &&
+          Array.isArray(submission.answers._effectiveOptionsMap[key])
+        ) {
+          effectiveOptions = submission.answers._effectiveOptionsMap[key]
+        }
+        // 2. Ưu tiên nhì: Có lưu bản đồ thứ tự hoán vị option _shuffledOptionMap
+        else if (
+          submission?.answers?._shuffledOptionMap?.[key] &&
+          Array.isArray(rawOptions)
+        ) {
+          const optOrder = submission.answers._shuffledOptionMap[key]
+          if (Array.isArray(optOrder) && optOrder.length === rawOptions.length) {
+            effectiveOptions = optOrder.map((origIdx: number) => rawOptions[origIdx])
+          }
+        }
+        // 3. Fallback cho các bài thi cũ: Khi có _effectiveCorrectAnswers khác origCorrectAns (đã bị đảo khi thi)
+        else if (
+          Array.isArray(rawOptions) &&
+          origCorrectAns !== undefined &&
+          correctAns !== undefined &&
+          String(origCorrectAns).trim().toUpperCase() !== String(correctAns).trim().toUpperCase()
+        ) {
+          const parseIdx = (v: any) => {
+            if (typeof v === 'number') return v
+            const s = String(v).trim().toUpperCase()
+            if (s.length === 1 && s >= 'A' && s <= 'Z') return s.charCodeAt(0) - 65
+            const n = parseInt(s, 10)
+            return !isNaN(n) ? n : -1
+          }
+          const origIdx = parseIdx(origCorrectAns)
+          const effIdx = parseIdx(correctAns)
+          if (
+            origIdx >= 0 &&
+            origIdx < rawOptions.length &&
+            effIdx >= 0 &&
+            effIdx < rawOptions.length
+          ) {
+            const reconstructed = [...rawOptions]
+            const tmp = reconstructed[origIdx]
+            reconstructed[origIdx] = reconstructed[effIdx]
+            reconstructed[effIdx] = tmp
+            effectiveOptions = reconstructed
+          }
+        }
+
+        const studentAns = submission?.answers?.[key]
         const earnedPoint = Number(submission?.detailed_scores?.[key] || 0)
         const isCorrect = earnedPoint > 0
         const isAnswered =
@@ -439,13 +590,21 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
           studentAns !== '' &&
           (typeof studentAns !== 'object' || Object.keys(studentAns).length > 0)
 
+        const updatedQData = qData
+          ? {
+              ...qData,
+              options: effectiveOptions || rawOptions,
+              correctAnswer: correctAns,
+            }
+          : null
+
         list.push({
           key,
           sectionId: section.id || `sec-${sIdx}`,
           sectionName: section.name || section.title || `Phần ${sIdx + 1}`,
           qIdx,
           globalNum,
-          qData,
+          qData: updatedQData,
           type: qType,
           earnedPoint,
           studentAns,
@@ -455,6 +614,34 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
         })
       }
     })
+
+    // XỬ LÝ ĐẢO THỨ TỰ CÂU HỎI THEO THỨ TỰ THỰC TẾ LÚC THI
+    const savedQKeys = submission?.answers?._shuffledQuestionKeys
+    if (Array.isArray(savedQKeys) && savedQKeys.length > 0) {
+      const keyMap = new Map(list.map((item) => [item.key, item]))
+      const reordered: typeof list = []
+      savedQKeys.forEach((k: string, idx: number) => {
+        const item = keyMap.get(k)
+        if (item) {
+          reordered.push({
+            ...item,
+            globalNum: idx + 1,
+          })
+        }
+      })
+      // Bổ sung các câu nếu có câu nào chưa có trong keys
+      list.forEach((item) => {
+        if (!savedQKeys.includes(item.key)) {
+          reordered.push({
+            ...item,
+            globalNum: reordered.length + 1,
+          })
+        }
+      })
+      if (reordered.length === list.length) {
+        return reordered
+      }
+    }
 
     return list
   }, [activeSections, computedOffsets, submission])
@@ -470,7 +657,386 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
     return { total, correct, incorrect, unanswered, accuracy }
   }, [flatReviewQuestions])
 
+  const isQuestionsShuffled = useMemo(() => {
+    return Boolean(
+      Array.isArray(submission?.answers?._shuffledQuestionKeys) &&
+      submission.answers._shuffledQuestionKeys.length > 0
+    )
+  }, [submission])
+
   const themeVars = getModernThemeVars('indigo', isDark)
+
+  const renderQuestionCard = (item: any) => {
+    const { key, globalNum, type, earnedPoint, studentAns, correctAns, isCorrect, qData } = item
+    const promptRaw = qData?.text || qData?.content || `Câu hỏi số ${globalNum}`
+    const cleanPrompt = cleanQuestionPrompt(promptRaw, type)
+    const optLetters =
+      Array.isArray(qData?.options) && qData.options.length > 0
+        ? qData.options.map((_: any, i: number) => String.fromCharCode(65 + i))
+        : ['A', 'B', 'C', 'D']
+
+    return (
+      <div
+        key={key}
+        id={`q-${key}`}
+        className={`rounded-3xl border p-5 sm:p-7 shadow-sm bg-white/95 dark:bg-slate-900/95 space-y-5 transition scroll-mt-6 ${
+          isCorrect
+            ? 'border-emerald-500/30 ring-1 ring-emerald-500/20'
+            : 'border-rose-500/30 ring-1 ring-rose-500/20'
+        }`}
+      >
+        {/* Top Question Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5">
+          <div className="flex items-center gap-2.5">
+            <span
+              className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black text-white shadow-xs ${
+                isCorrect ? 'bg-emerald-600' : 'bg-rose-600'
+              }`}
+            >
+              {globalNum}
+            </span>
+            <span
+              className="text-sm font-black text-slate-900 dark:text-white"
+              style={{ fontFamily: 'var(--font-newrev-heading)' }}
+            >
+              Câu hỏi {globalNum}
+            </span>
+            {item.sectionName && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hidden sm:inline">
+                {item.sectionName}
+              </span>
+            )}
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-slate-500">
+              {type === 'true_false'
+                ? 'Đúng / Sai 4 ý'
+                : type === 'multiple_choice'
+                ? 'Nhiều đáp án'
+                : type === 'short_answer'
+                ? 'Điền số / kết quả ngắn'
+                : type === 'essay'
+                ? 'Tự luận'
+                : 'Trắc nghiệm'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-xs font-black px-3 py-1 rounded-xl border flex items-center gap-1 ${
+                isCorrect
+                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                  : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+              }`}
+            >
+              {isCorrect ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+              +{earnedPoint} đ
+            </span>
+          </div>
+        </div>
+
+        {/* 1. THÂN ĐỀ BÀI (KATEX) */}
+        <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-sans select-text">
+          <SafeMathRenderer content={cleanPrompt} />
+        </div>
+
+        {/* 2. CÁC PHƯƠNG ÁN / MỆNH ĐỀ & ĐÁNH GIÁ ĐÁP ÁN */}
+        {/* DẠNG 1: TRẮC NGHIỆM 1 HOẶC NHIỀU ĐÁP ÁN */}
+        {(type === 'single_choice' || type === 'multiple_choice' || !type) && (
+          <div className="space-y-3 pt-2">
+            {optLetters.map((letter, optIdx) => {
+              const rawOpts = qData?.options
+              const optContent = Array.isArray(rawOpts)
+                ? rawOpts[optIdx]
+                : rawOpts && typeof rawOpts === 'object'
+                ? rawOpts[letter] || rawOpts[letter.toLowerCase()] || rawOpts[optIdx]
+                : `Phương án ${letter}`
+
+              const isStudentChosen =
+                type === 'multiple_choice'
+                  ? Array.isArray(studentAns) && studentAns.includes(letter)
+                  : studentAns === letter
+
+              const isOfficialCorrect =
+                type === 'multiple_choice'
+                  ? Array.isArray(correctAns)
+                    ? correctAns.includes(letter)
+                    : String(correctAns || '')
+                        .split(/[,;]/)
+                        .map((s) => s.trim().toUpperCase())
+                        .includes(letter)
+                  : correctAns === letter
+
+              return (
+                <div
+                  key={letter}
+                  className={`p-3.5 rounded-2xl border transition flex items-start gap-3.5 ${
+                    isStudentChosen && isOfficialCorrect
+                      ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20 ring-2 ring-emerald-500/30'
+                      : isStudentChosen && !isOfficialCorrect
+                      ? 'border-rose-500 bg-rose-500/10 dark:bg-rose-500/20 ring-2 ring-rose-500/30'
+                      : isOfficialCorrect
+                      ? 'border-emerald-500/60 bg-emerald-500/5 dark:bg-emerald-500/10 border-dashed'
+                      : 'border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] opacity-70'
+                  }`}
+                >
+                  <span
+                    className={`h-7 w-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                      isStudentChosen && isOfficialCorrect
+                        ? 'bg-emerald-600 text-white'
+                        : isStudentChosen && !isOfficialCorrect
+                        ? 'bg-rose-600 text-white'
+                        : isOfficialCorrect
+                        ? 'bg-emerald-600/80 text-white'
+                        : 'bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {isStudentChosen && isOfficialCorrect ? (
+                      <Check className="h-4 w-4" />
+                    ) : isStudentChosen && !isOfficialCorrect ? (
+                      <X className="h-4 w-4" />
+                    ) : (
+                      letter
+                    )}
+                  </span>
+
+                  <div className="flex-1 pt-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    <SafeMathRenderer content={optContent || `Phương án ${letter}`} gfm={false} />
+                  </div>
+
+                  {/* Nhãn trạng thái phương án */}
+                  <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-bold">
+                    {isStudentChosen && isOfficialCorrect && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black">
+                        Lựa chọn của bạn ✓
+                      </span>
+                    )}
+                    {isStudentChosen && !isOfficialCorrect && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black">
+                        Lựa chọn của bạn ✗
+                      </span>
+                    )}
+                    {!isStudentChosen && isOfficialCorrect && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                        Đáp án đúng chuẩn
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* DẠNG 2: ĐÚNG / SAI (4 Ý A, B, C, D) */}
+        {type === 'true_false' && (
+          <div className="space-y-3 pt-2">
+            {['a', 'b', 'c', 'd'].map((sub, sIdx) => {
+              const statementContent = resolveStatementContent(qData, sub, sIdx)
+              const sVal =
+                typeof studentAns === 'object' && studentAns !== null
+                  ? studentAns[sub] || studentAns[sub.toUpperCase()] || studentAns[sIdx]
+                  : undefined
+              const cVal =
+                typeof correctAns === 'object' && correctAns !== null
+                  ? correctAns[sub] || correctAns[sub.toUpperCase()] || correctAns[sIdx]
+                  : Array.isArray(correctAns)
+                  ? correctAns[sIdx]
+                  : undefined
+
+              const sNorm = sVal === 'Đ' || sVal === 'D' || sVal === 'T' || sVal === '1' ? 'Đúng' : sVal === 'S' || sVal === 'F' || sVal === '0' ? 'Sai' : null
+              const cNorm = cVal === 'Đ' || cVal === 'D' || cVal === 'T' || cVal === '1' ? 'Đúng' : cVal === 'S' || cVal === 'F' || cVal === '0' ? 'Sai' : 'Chưa có'
+              const isSubCorrect = sNorm !== null && sNorm === cNorm
+
+              return (
+                <div
+                  key={sub}
+                  className={`p-3.5 rounded-2xl border space-y-2 ${
+                    isSubCorrect
+                      ? 'border-emerald-500/30 bg-emerald-500/5'
+                      : sNorm !== null
+                      ? 'border-rose-500/30 bg-rose-500/5'
+                      : 'border-black/10 dark:border-white/10 bg-black/[0.01]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <span className="h-6 w-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-black flex items-center justify-center shrink-0 uppercase">
+                        {sub}
+                      </span>
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-xs font-semibold text-slate-800 dark:text-slate-200">
+                        <SafeMathRenderer content={statementContent} gfm={false} />
+                      </div>
+                    </div>
+
+                    {/* Kết quả lựa chọn của học sinh vs Đáp án */}
+                    <div className="flex items-center gap-2 shrink-0 text-xs">
+                      <span className="text-[11px] text-slate-500 font-medium">Bạn chọn:</span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-lg font-black text-xs ${
+                          isSubCorrect
+                            ? 'bg-emerald-600 text-white'
+                            : sNorm !== null
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                        }`}
+                      >
+                        {sNorm || 'Chưa làm'}
+                      </span>
+
+                      <span className="text-[11px] text-slate-500 font-medium ml-1">Đáp án:</span>
+                      <span className="px-2.5 py-0.5 rounded-lg font-black text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                        {cNorm}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* DẠNG 3: TRẢ LỜI NGẮN / ĐIỀN SỐ */}
+        {type === 'short_answer' && (
+          <div className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500 font-bold">Câu trả lời của bạn:</span>
+              <strong className={`font-black font-mono text-sm ${isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {studentAns || '(Chưa điền)'}
+              </strong>
+            </div>
+            <div className="flex items-center justify-between border-t border-black/5 dark:border-white/5 pt-2">
+              <span className="text-slate-500 font-bold">Đáp án chính xác:</span>
+              <strong className="font-black font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                {correctAns || 'Chưa có'}
+              </strong>
+            </div>
+          </div>
+        )}
+
+        {/* DẠNG 4: TỰ LUẬN */}
+        {type === 'essay' && (
+          <div className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] space-y-3 text-xs">
+            <div>
+              <span className="text-slate-500 font-bold block mb-1">Bài làm của thí sinh:</span>
+              <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 whitespace-pre-wrap">
+                {studentAns?.text || studentAns || '(Chưa làm bài tự luận)'}
+              </div>
+            </div>
+            {correctAns && (
+              <div>
+                <span className="text-slate-500 font-bold block mb-1">Hướng dẫn chấm / Đáp án gợi ý:</span>
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-200">
+                  <SafeMathRenderer content={String(correctAns)} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. LỜI GIẢI CHI TIẾT TỪ ĐỀ THI (OFFICIAL EXPLANATION) */}
+        {qData?.explanation && (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 p-4 text-xs leading-relaxed space-y-2">
+            <span className="font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 text-xs">
+              <Sparkles className="h-4 w-4 text-amber-500" /> Lời giải chi tiết từ đề thi:
+            </span>
+            <div className="prose prose-sm dark:prose-invert max-w-none text-xs text-slate-800 dark:text-slate-200">
+              <SafeMathRenderer content={qData.explanation} />
+            </div>
+          </div>
+        )}
+
+        {/* 4. HỎI THÊM SENAI VỀ CÂU NÀY */}
+        <div className="pt-2 border-t border-black/5 dark:border-white/5 space-y-2.5">
+          {aiExplains[key] ? (
+            <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 text-xs leading-relaxed space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 text-xs">
+                  <BrainCircuit className="h-4 w-4 text-amber-500" /> Phân tích chuyên sâu từ SenAI:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAiInput((prev) => ({ ...prev, [key]: !prev[key] }))}
+                  className="text-[10px] text-[#6B7280] dark:text-slate-400 font-bold hover:underline"
+                >
+                  {showAiInput[key] ? 'Đóng ô hỏi' : 'Hỏi lại câu này'}
+                </button>
+              </div>
+              <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
+                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                  {aiExplains[key]}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ) : null}
+
+          {(!aiExplains[key] || showAiInput[key]) && (
+            <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" /> Nhờ SenAI phân tích & giải thích thêm câu {globalNum}:
+                </span>
+              </div>
+
+              <textarea
+                rows={2}
+                value={questionInputs[key] || ''}
+                onChange={(e) => setQuestionInputs({ ...questionInputs, [key]: e.target.value })}
+                placeholder="Gõ thắc mắc cụ thể nếu cần, hoặc bấm nút bên dưới để SenAI tự động đọc đề KaTeX và giải thích ngay..."
+                className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2.5 text-xs outline-none focus:border-indigo-500"
+              />
+
+              {questionImages[key] && (
+                <div className="relative inline-block">
+                  <img
+                    src={questionImages[key]}
+                    alt="Đề bài"
+                    className="max-h-28 rounded-xl border border-black/10 dark:border-white/10 object-contain"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQuestionImages({ ...questionImages, [key]: '' })}
+                    className="absolute -right-2 -top-2 rounded-full bg-rose-600 p-1 text-white shadow-md transition hover:scale-110"
+                    title="Xóa ảnh"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <label className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold cursor-pointer hover:bg-black/5 transition">
+                  <ImageIcon className="h-3.5 w-3.5 text-indigo-500" />
+                  <span>{questionImages[key] ? 'Đổi ảnh đính kèm' : 'Đính kèm ảnh hình vẽ (tùy chọn)'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleImageUpload(key, e)}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  disabled={aiLoadingKey === key}
+                  onClick={() => handleAskAiExplain(item)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-40"
+                >
+                  {aiLoadingKey === key ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> SenAI đang giải thích...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5 text-amber-300" /> Hỏi SenAI giải thích
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -582,392 +1148,37 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
         <div className="flex-1 flex overflow-hidden">
           {/* CỘT TRÁI / CHÍNH: DANH SÁCH CÂU HỎI VÀ ĐÁP ÁN KATEX */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-4xl mx-auto w-full">
-            {activeSections.map((section: any, sIdx: number) => {
-              const secQuestions = flatReviewQuestions.filter((q) => q.sectionId === (section.id || `sec-${sIdx}`))
+            {isQuestionsShuffled ? (
+              <div className="space-y-6">
+                {flatReviewQuestions.map((item) => renderQuestionCard(item))}
+              </div>
+            ) : (
+              activeSections.map((section: any, sIdx: number) => {
+                const secQuestions = flatReviewQuestions.filter((q) => q.sectionId === (section.id || `sec-${sIdx}`))
 
-              return (
-                <div key={section.id || sIdx} className="space-y-5">
-                  <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-4 text-indigo-900 dark:text-indigo-200 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-black text-sm sm:text-base" style={{ fontFamily: 'var(--font-newrev-heading)' }}>
-                        {section.name || section.title || `Phần ${sIdx + 1}`}
-                      </h3>
-                      {section.description && (
-                        <p className="text-xs opacity-75 mt-0.5">{section.description}</p>
-                      )}
+                return (
+                  <div key={section.id || sIdx} className="space-y-5">
+                    <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-4 text-indigo-900 dark:text-indigo-200 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-black text-sm sm:text-base" style={{ fontFamily: 'var(--font-newrev-heading)' }}>
+                          {section.name || section.title || `Phần ${sIdx + 1}`}
+                        </h3>
+                        {section.description && (
+                          <p className="text-xs opacity-75 mt-0.5">{section.description}</p>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-xl bg-white/80 dark:bg-slate-800/80 shadow-xs border border-indigo-500/20">
+                        {secQuestions.length} câu hỏi
+                      </span>
                     </div>
-                    <span className="text-xs font-bold px-3 py-1 rounded-xl bg-white/80 dark:bg-slate-800/80 shadow-xs border border-indigo-500/20">
-                      {secQuestions.length} câu hỏi
-                    </span>
+
+                    <div className="space-y-6">
+                      {secQuestions.map((item) => renderQuestionCard(item))}
+                    </div>
                   </div>
-
-                  <div className="space-y-6">
-                    {secQuestions.map((item) => {
-                      const { key, globalNum, type, earnedPoint, studentAns, correctAns, isCorrect, qData } = item
-                      const promptRaw = qData?.text || qData?.content || `Câu hỏi số ${globalNum}`
-                      const cleanPrompt = cleanQuestionPrompt(promptRaw, type)
-
-                      return (
-                        <div
-                          key={key}
-                          id={`q-${key}`}
-                          className={`rounded-3xl border p-5 sm:p-7 shadow-sm bg-white/95 dark:bg-slate-900/95 space-y-5 transition scroll-mt-6 ${
-                            isCorrect
-                              ? 'border-emerald-500/30 ring-1 ring-emerald-500/20'
-                              : 'border-rose-500/30 ring-1 ring-rose-500/20'
-                          }`}
-                        >
-                          {/* Top Question Header */}
-                          <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5">
-                            <div className="flex items-center gap-2.5">
-                              <span
-                                className={`flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black text-white shadow-xs ${
-                                  isCorrect ? 'bg-emerald-600' : 'bg-rose-600'
-                                }`}
-                              >
-                                {globalNum}
-                              </span>
-                              <span
-                                className="text-sm font-black text-slate-900 dark:text-white"
-                                style={{ fontFamily: 'var(--font-newrev-heading)' }}
-                              >
-                                Câu hỏi {globalNum}
-                              </span>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-slate-500">
-                                {type === 'true_false'
-                                  ? 'Đúng / Sai 4 ý'
-                                  : type === 'multiple_choice'
-                                  ? 'Nhiều đáp án'
-                                  : type === 'short_answer'
-                                  ? 'Điền số / kết quả ngắn'
-                                  : type === 'essay'
-                                  ? 'Tự luận'
-                                  : 'Trắc nghiệm'}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`text-xs font-black px-3 py-1 rounded-xl border flex items-center gap-1 ${
-                                  isCorrect
-                                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                                    : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                                }`}
-                              >
-                                {isCorrect ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                                +{earnedPoint} đ
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* 1. THÂN ĐỀ BÀI (KATEX) */}
-                          <div className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-sans select-text">
-                            <SafeMathRenderer content={cleanPrompt} />
-                          </div>
-
-                          {/* 2. CÁC PHƯƠNG ÁN / MỆNH ĐỀ & ĐÁNH GIÁ ĐÁP ÁN */}
-                          {/* DẠNG 1: TRẮC NGHIỆM 1 HOẶC NHIỀU ĐÁP ÁN */}
-                          {(type === 'single_choice' || type === 'multiple_choice' || !type) && (
-                            <div className="space-y-3 pt-2">
-                              {['A', 'B', 'C', 'D'].map((letter, optIdx) => {
-                                const rawOpts = qData?.options
-                                const optContent = Array.isArray(rawOpts)
-                                  ? rawOpts[optIdx]
-                                  : rawOpts && typeof rawOpts === 'object'
-                                  ? rawOpts[letter] || rawOpts[letter.toLowerCase()] || rawOpts[optIdx]
-                                  : `Phương án ${letter}`
-
-                                const isStudentChosen =
-                                  type === 'multiple_choice'
-                                    ? Array.isArray(studentAns) && studentAns.includes(letter)
-                                    : studentAns === letter
-
-                                const isOfficialCorrect =
-                                  type === 'multiple_choice'
-                                    ? Array.isArray(correctAns)
-                                      ? correctAns.includes(letter)
-                                      : String(correctAns || '')
-                                          .split(/[,;]/)
-                                          .map((s) => s.trim().toUpperCase())
-                                          .includes(letter)
-                                    : correctAns === letter
-
-                                return (
-                                  <div
-                                    key={letter}
-                                    className={`p-3.5 rounded-2xl border transition flex items-start gap-3.5 ${
-                                      isStudentChosen && isOfficialCorrect
-                                        ? 'border-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20 ring-2 ring-emerald-500/30'
-                                        : isStudentChosen && !isOfficialCorrect
-                                        ? 'border-rose-500 bg-rose-500/10 dark:bg-rose-500/20 ring-2 ring-rose-500/30'
-                                        : isOfficialCorrect
-                                        ? 'border-emerald-500/60 bg-emerald-500/5 dark:bg-emerald-500/10 border-dashed'
-                                        : 'border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] opacity-70'
-                                    }`}
-                                  >
-                                    <span
-                                      className={`h-7 w-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
-                                        isStudentChosen && isOfficialCorrect
-                                          ? 'bg-emerald-600 text-white'
-                                          : isStudentChosen && !isOfficialCorrect
-                                          ? 'bg-rose-600 text-white'
-                                          : isOfficialCorrect
-                                          ? 'bg-emerald-600/80 text-white'
-                                          : 'bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-300'
-                                      }`}
-                                    >
-                                      {isStudentChosen && isOfficialCorrect ? (
-                                        <Check className="h-4 w-4" />
-                                      ) : isStudentChosen && !isOfficialCorrect ? (
-                                        <X className="h-4 w-4" />
-                                      ) : (
-                                        letter
-                                      )}
-                                    </span>
-
-                                    <div className="flex-1 pt-0.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                      <SafeMathRenderer content={optContent || `Phương án ${letter}`} gfm={false} />
-                                    </div>
-
-                                    {/* Nhãn trạng thái phương án */}
-                                    <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-bold">
-                                      {isStudentChosen && isOfficialCorrect && (
-                                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black">
-                                          Lựa chọn của bạn ✓
-                                        </span>
-                                      )}
-                                      {isStudentChosen && !isOfficialCorrect && (
-                                        <span className="px-2.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black">
-                                          Lựa chọn của bạn ✗
-                                        </span>
-                                      )}
-                                      {!isStudentChosen && isOfficialCorrect && (
-                                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                                          Đáp án đúng chuẩn
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {/* DẠNG 2: ĐÚNG / SAI (4 Ý A, B, C, D) */}
-                          {type === 'true_false' && (
-                            <div className="space-y-3 pt-2">
-                              {['a', 'b', 'c', 'd'].map((sub, sIdx) => {
-                                const statementContent = resolveStatementContent(qData, sub, sIdx)
-                                const sVal =
-                                  typeof studentAns === 'object' && studentAns !== null
-                                    ? studentAns[sub] || studentAns[sub.toUpperCase()] || studentAns[sIdx]
-                                    : undefined
-                                const cVal =
-                                  typeof correctAns === 'object' && correctAns !== null
-                                    ? correctAns[sub] || correctAns[sub.toUpperCase()] || correctAns[sIdx]
-                                    : Array.isArray(correctAns)
-                                    ? correctAns[sIdx]
-                                    : undefined
-
-                                const sNorm = sVal === 'Đ' || sVal === 'D' || sVal === 'T' || sVal === '1' ? 'Đúng' : sVal === 'S' || sVal === 'F' || sVal === '0' ? 'Sai' : null
-                                const cNorm = cVal === 'Đ' || cVal === 'D' || cVal === 'T' || cVal === '1' ? 'Đúng' : cVal === 'S' || cVal === 'F' || cVal === '0' ? 'Sai' : 'Chưa có'
-                                const isSubCorrect = sNorm !== null && sNorm === cNorm
-
-                                return (
-                                  <div
-                                    key={sub}
-                                    className={`p-3.5 rounded-2xl border space-y-2 ${
-                                      isSubCorrect
-                                        ? 'border-emerald-500/30 bg-emerald-500/5'
-                                        : sNorm !== null
-                                        ? 'border-rose-500/30 bg-rose-500/5'
-                                        : 'border-black/10 dark:border-white/10 bg-black/[0.01]'
-                                    }`}
-                                  >
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="flex items-start gap-2.5">
-                                        <span className="h-6 w-6 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-black flex items-center justify-center shrink-0 uppercase">
-                                          {sub}
-                                        </span>
-                                        <div className="prose prose-sm dark:prose-invert max-w-none text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                          <SafeMathRenderer content={statementContent} gfm={false} />
-                                        </div>
-                                      </div>
-
-                                      {/* Kết quả lựa chọn của học sinh vs Đáp án */}
-                                      <div className="flex items-center gap-2 shrink-0 text-xs">
-                                        <span className="text-[11px] text-slate-500 font-medium">Bạn chọn:</span>
-                                        <span
-                                          className={`px-2.5 py-0.5 rounded-lg font-black text-xs ${
-                                            isSubCorrect
-                                              ? 'bg-emerald-600 text-white'
-                                              : sNorm !== null
-                                              ? 'bg-rose-600 text-white'
-                                              : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                                          }`}
-                                        >
-                                          {sNorm || 'Chưa làm'}
-                                        </span>
-
-                                        <span className="text-[11px] text-slate-500 font-medium ml-1">Đáp án:</span>
-                                        <span className="px-2.5 py-0.5 rounded-lg font-black text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                                          {cNorm}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {/* DẠNG 3: TRẢ LỜI NGẮN / ĐIỀN SỐ */}
-                          {type === 'short_answer' && (
-                            <div className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] space-y-2 text-xs">
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-500 font-bold">Câu trả lời của bạn:</span>
-                                <strong className={`font-black font-mono text-sm ${isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  {studentAns || '(Chưa điền)'}
-                                </strong>
-                              </div>
-                              <div className="flex items-center justify-between border-t border-black/5 dark:border-white/5 pt-2">
-                                <span className="text-slate-500 font-bold">Đáp án chính xác:</span>
-                                <strong className="font-black font-mono text-sm text-emerald-600 dark:text-emerald-400">
-                                  {correctAns || 'Chưa có'}
-                                </strong>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* DẠNG 4: TỰ LUẬN */}
-                          {type === 'essay' && (
-                            <div className="p-4 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] space-y-3 text-xs">
-                              <div>
-                                <span className="text-slate-500 font-bold block mb-1">Bài làm của thí sinh:</span>
-                                <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 whitespace-pre-wrap">
-                                  {studentAns?.text || studentAns || '(Chưa làm bài tự luận)'}
-                                </div>
-                              </div>
-                              {correctAns && (
-                                <div>
-                                  <span className="text-slate-500 font-bold block mb-1">Hướng dẫn chấm / Đáp án gợi ý:</span>
-                                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-200">
-                                    <SafeMathRenderer content={String(correctAns)} />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* 3. LỜI GIẢI CHI TIẾT TỪ ĐỀ THI (OFFICIAL EXPLANATION) */}
-                          {qData?.explanation && (
-                            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 p-4 text-xs leading-relaxed space-y-2">
-                              <span className="font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 text-xs">
-                                <Sparkles className="h-4 w-4 text-amber-500" /> Lời giải chi tiết từ đề thi:
-                              </span>
-                              <div className="prose prose-sm dark:prose-invert max-w-none text-xs text-slate-800 dark:text-slate-200">
-                                <SafeMathRenderer content={qData.explanation} />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 4. HỎI THÊM SENAI VỀ CÂU NÀY */}
-                          <div className="pt-2 border-t border-black/5 dark:border-white/5 space-y-2.5">
-                            {aiExplains[key] ? (
-                              <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4 text-xs leading-relaxed space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 text-xs">
-                                    <BrainCircuit className="h-4 w-4 text-amber-500" /> Phân tích chuyên sâu từ SenAI:
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowAiInput((prev) => ({ ...prev, [key]: !prev[key] }))}
-                                    className="text-[10px] text-[#6B7280] dark:text-slate-400 font-bold hover:underline"
-                                  >
-                                    {showAiInput[key] ? 'Đóng ô hỏi' : 'Hỏi lại câu này'}
-                                  </button>
-                                </div>
-                                <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
-                                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                                    {aiExplains[key]}
-                                  </ReactMarkdown>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {(!aiExplains[key] || showAiInput[key]) && (
-                              <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-3.5 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-indigo-500" /> Nhờ SenAI phân tích & giải thích thêm câu {globalNum}:
-                                  </span>
-                                </div>
-
-                                <textarea
-                                  rows={2}
-                                  value={questionInputs[key] || ''}
-                                  onChange={(e) => setQuestionInputs({ ...questionInputs, [key]: e.target.value })}
-                                  placeholder={cleanPrompt.slice(0, 80) + '... (Gõ thắc mắc hoặc nhấn nút bên dưới để hỏi ngay)'}
-                                  className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 p-2.5 text-xs outline-none focus:border-indigo-500"
-                                />
-
-                                {questionImages[key] && (
-                                  <div className="relative inline-block">
-                                    <img
-                                      src={questionImages[key]}
-                                      alt="Đề bài"
-                                      className="max-h-28 rounded-xl border border-black/10 dark:border-white/10 object-contain"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => setQuestionImages({ ...questionImages, [key]: '' })}
-                                      className="absolute -right-2 -top-2 rounded-full bg-rose-600 p-1 text-white shadow-md transition hover:scale-110"
-                                      title="Xóa ảnh"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                )}
-
-                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                                  <label className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold cursor-pointer hover:bg-black/5 transition">
-                                    <ImageIcon className="h-3.5 w-3.5 text-indigo-500" />
-                                    <span>{questionImages[key] ? 'Đổi ảnh đính kèm' : 'Đính kèm ảnh'}</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="hidden"
-                                      onChange={(e) => handleImageUpload(key, e)}
-                                    />
-                                  </label>
-
-                                  <button
-                                    type="button"
-                                    disabled={aiLoadingKey === key}
-                                    onClick={() => handleAskAiExplain(key, `Câu hỏi ${globalNum}`, studentAns, correctAns, cleanPrompt)}
-                                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-40"
-                                  >
-                                    {aiLoadingKey === key ? (
-                                      <>
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang giải thích...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Send className="h-3.5 w-3.5" /> Hỏi SenAI giải thích
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
 
           {/* CỘT PHẢI: BẢNG TRUY CẬP NHANH CÂU HỎI & TỔNG QUAN ĐIỂM SỐ */}
@@ -1256,8 +1467,29 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
 
                                   <button
                                     type="button"
-                                    disabled={aiLoadingKey === key || (!questionInputs[key]?.trim() && !questionImages[key])}
-                                    onClick={() => handleAskAiExplain(key, `Câu hỏi ${globalNum}`, studentAns, correctAns)}
+                                    disabled={
+                                      aiLoadingKey === key ||
+                                      (!flatReviewQuestions.find((q) => q.key === key)?.qData?.text &&
+                                        !flatReviewQuestions.find((q) => q.key === key)?.qData?.content &&
+                                        !section.questions?.[qIdx]?.text &&
+                                        !section.questions?.[qIdx]?.content &&
+                                        !questionInputs[key]?.trim() &&
+                                        !questionImages[key])
+                                    }
+                                    onClick={() => {
+                                      const foundItem = flatReviewQuestions.find((q) => q.key === key)
+                                      handleAskAiExplain(
+                                        foundItem || {
+                                          key,
+                                          globalNum,
+                                          type: currentType,
+                                          cleanPrompt: section.questions?.[qIdx]?.text || section.questions?.[qIdx]?.content || '',
+                                          qData: section.questions?.[qIdx],
+                                          studentAns,
+                                          correctAns,
+                                        }
+                                      )
+                                    }}
                                     className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-40"
                                   >
                                     {aiLoadingKey === key ? (
@@ -1266,7 +1498,7 @@ Hãy giải thích từng bước rõ ràng, sử dụng công thức KaTeX LaTe
                                       </>
                                     ) : (
                                       <>
-                                        <Send className="h-3.5 w-3.5" /> Hỏi Lời Giải Chi Tiết
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-300" /> Hỏi Lời Giải Chi Tiết
                                       </>
                                     )}
                                   </button>

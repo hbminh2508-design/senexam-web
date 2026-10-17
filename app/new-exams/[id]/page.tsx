@@ -847,15 +847,29 @@ export default function NewExamRoomPage() {
 
       // Lưu ánh xạ đáp án chuẩn thực tế (sau khi đảo vị trí nếu có) để phục vụ xem lại lịch sử
       const effectiveCorrectAnswersMap: Record<string, any> = {}
+      // Lưu mảng options thực tế hiển thị cho học sinh (đã đảo nếu có) để xem lại chuẩn 100%
+      const effectiveOptionsMap: Record<string, any[]> = {}
+      // Lưu danh sách keys câu hỏi theo đúng thứ tự hiển thị thực tế khi thi
+      const displayedQuestionKeys: string[] = flatQuestions.map((q: any) => q.key)
+
       flatQuestions.forEach((q: any) => {
-        if (q.key && q.effectiveCorrectAnswer !== undefined) {
-          effectiveCorrectAnswersMap[q.key] = q.effectiveCorrectAnswer
+        if (q.key) {
+          if (q.effectiveCorrectAnswer !== undefined) {
+            effectiveCorrectAnswersMap[q.key] = q.effectiveCorrectAnswer
+          }
+          const opts = q.effectiveOptions || q.qData?.options
+          if (Array.isArray(opts)) {
+            effectiveOptionsMap[q.key] = opts
+          }
         }
       })
 
       const submissionAnswers = {
         ...answers,
         _effectiveCorrectAnswers: effectiveCorrectAnswersMap,
+        _shuffledQuestionKeys: displayedQuestionKeys,
+        _shuffledOptionMap: shuffledOptionMap || null,
+        _effectiveOptionsMap: effectiveOptionsMap,
       }
 
       const { data: subData, error: subError } = await supabase
