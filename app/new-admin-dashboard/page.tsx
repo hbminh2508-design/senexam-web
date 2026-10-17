@@ -82,6 +82,7 @@ import {
   QrCode,
   X,
 } from 'lucide-react'
+import SecurePasswordChangeCard from '@/app/components/SecurePasswordChangeCard'
 
 const headingFont = Baloo_2({
   subsets: ['latin', 'vietnamese'],
@@ -1725,150 +1726,11 @@ export default function NewAdminDashboardPage() {
           </div>
 
           {/* Thẻ Đổi Mật Khẩu Riêng Biệt Trên Mobile NẰM DƯỚI SEN 2FA */}
-          <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-xs">
-                  <KeyRound className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="font-black text-xs text-slate-900 dark:text-white">
-                    Đổi Mật Khẩu Bảo Mật
-                  </h3>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Xác thực email 2 bước • Chuẩn an toàn 2026
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {passwordVerificationSent ? (
-              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 space-y-2 animate-in fade-in">
-                <div className="flex items-start gap-2 text-emerald-800 dark:text-emerald-300">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-500" />
-                  <div className="space-y-1">
-                    <p className="text-xs font-black">Chờ xác thực email để hoàn tất đổi mật khẩu!</p>
-                    <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                      Hệ thống đã gửi liên kết xác nhận bảo mật đến <strong>{currentUser?.email || 'admin@senexam.me'}</strong>. Vui lòng mở email và nhấn vào liên kết xác nhận để hoàn toàn đổi mật khẩu sang. Mật khẩu cũ của bạn vẫn được bảo vệ cho đến khi bạn xác nhận qua email.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={handleRequestPasswordChange}
-                    disabled={resendCooldown > 0 || savingPassword}
-                    className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline disabled:opacity-50"
-                  >
-                    {resendCooldown > 0 ? `Gửi lại sau (${resendCooldown}s)` : 'Gửi lại email xác thực'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPasswordVerificationSent(false)
-                      setNewPassword('')
-                      setConfirmPassword('')
-                    }}
-                    className="text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                  >
-                    Nhập lại mật khẩu
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleRequestPasswordChange} className="space-y-2.5">
-                {/* Mật khẩu mới */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                    Mật khẩu mới
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPasswordText ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Nhập mật khẩu mới..."
-                      className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.04] py-2 pl-3 pr-8 text-xs font-medium text-slate-900 dark:text-white outline-none focus:border-amber-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPasswordText(!showPasswordText)}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                    >
-                      {showPasswordText ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Xác nhận mật khẩu mới */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                    Xác nhận mật khẩu mới
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPasswordText ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Nhập lại mật khẩu mới..."
-                      className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.04] py-2 pl-3 pr-8 text-xs font-medium text-slate-900 dark:text-white outline-none focus:border-amber-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPasswordText(!showConfirmPasswordText)}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                    >
-                      {showConfirmPasswordText ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Tiêu chí bảo mật mật khẩu (Security Checklist) */}
-                <div className="rounded-xl bg-black/[0.03] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 p-2.5 space-y-1">
-                  <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                    Yêu cầu bảo mật tài khoản:
-                  </p>
-                  <div className="grid grid-cols-2 gap-1 text-[10px]">
-                    <div className={`flex items-center gap-1 ${hasMinLength ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                      {hasMinLength ? <Check className="h-3 w-3 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                      Tối thiểu 8 ký tự
-                    </div>
-                    <div className={`flex items-center gap-1 ${hasUpperCase && hasLowerCase ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                      {hasUpperCase && hasLowerCase ? <Check className="h-3 w-3 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                      Chữ hoa & thường
-                    </div>
-                    <div className={`flex items-center gap-1 ${hasNumberOrSpecial ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                      {hasNumberOrSpecial ? <Check className="h-3 w-3 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                      Có số / ký tự đặc biệt
-                    </div>
-                    <div className={`flex items-center gap-1 ${isPasswordMatched ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                      {isPasswordMatched ? <Check className="h-3 w-3 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                      Khớp mật khẩu
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={savingPassword || !isPasswordValid}
-                  className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-bold text-xs py-2.5 transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {savingPassword ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Đang gửi xác thực...</span>
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="h-3.5 w-3.5" />
-                      <span>Xác Nhận & Gửi Email Đổi Mật Khẩu</span>
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
-          </div>
+          <SecurePasswordChangeCard
+            userEmail={currentUser?.email || 'admin@senexam.me'}
+            isDark={isDark}
+            defaultCollapsed={true}
+          />
 
           {/* 7. Cài Đặt Web Mobile */}
           <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-4.5 shadow-sm space-y-3.5">
@@ -2597,150 +2459,11 @@ export default function NewAdminDashboardPage() {
               </div>
 
               {/* Card 5.5: Thẻ Đổi Mật Khẩu Riêng Biệt (Dưới 2FA, Bảo Mật Cao Cấp) */}
-              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-xs">
-                      <KeyRound className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                        Đổi Mật Khẩu Bảo Mật
-                      </h3>
-                      <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
-                        Xác thực email 2 bước • Chuẩn an toàn 2026
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {passwordVerificationSent ? (
-                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-2.5 animate-in fade-in">
-                    <div className="flex items-start gap-2.5 text-emerald-800 dark:text-emerald-300">
-                      <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-emerald-500" />
-                      <div className="space-y-1">
-                        <p className="text-xs font-black">Chờ xác thực email để hoàn tất đổi mật khẩu!</p>
-                        <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                          Hệ thống đã gửi liên kết xác nhận bảo mật đến <strong>{currentUser?.email || 'admin@senexam.me'}</strong>. Vui lòng mở email và bấm vào liên kết xác nhận để hoàn toàn đổi sang mật khẩu mới. Mật khẩu cũ của bạn vẫn có hiệu lực cho đến khi bạn xác nhận qua email.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={handleRequestPasswordChange}
-                        disabled={resendCooldown > 0 || savingPassword}
-                        className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline disabled:opacity-50 cursor-pointer"
-                      >
-                        {resendCooldown > 0 ? `Gửi lại sau (${resendCooldown}s)` : 'Gửi lại email xác thực'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPasswordVerificationSent(false)
-                          setNewPassword('')
-                          setConfirmPassword('')
-                        }}
-                        className="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
-                      >
-                        Nhập lại mật khẩu
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <form onSubmit={handleRequestPasswordChange} className="space-y-3">
-                    {/* Mật khẩu mới */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Mật khẩu mới
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showPasswordText ? 'text' : 'password'}
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="Nhập mật khẩu mới..."
-                          className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.04] py-2 pl-3 pr-8 text-xs font-medium text-slate-900 dark:text-white outline-none focus:border-amber-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPasswordText(!showPasswordText)}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        >
-                          {showPasswordText ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Xác nhận mật khẩu mới */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Xác nhận mật khẩu mới
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showConfirmPasswordText ? 'text' : 'password'}
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Nhập lại mật khẩu mới..."
-                          className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/[0.02] dark:bg-white/[0.04] py-2 pl-3 pr-8 text-xs font-medium text-slate-900 dark:text-white outline-none focus:border-amber-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPasswordText(!showConfirmPasswordText)}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        >
-                          {showConfirmPasswordText ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Tiêu chí bảo mật mật khẩu (Security Checklist) */}
-                    <div className="rounded-xl bg-black/[0.03] dark:bg-white/[0.03] border border-black/5 dark:border-white/5 p-3 space-y-1.5">
-                      <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                        Yêu cầu an toàn tài khoản:
-                      </p>
-                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                        <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                          {hasMinLength ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                          Tối thiểu 8 ký tự
-                        </div>
-                        <div className={`flex items-center gap-1.5 ${hasUpperCase && hasLowerCase ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                          {hasUpperCase && hasLowerCase ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                          Chữ hoa & thường
-                        </div>
-                        <div className={`flex items-center gap-1.5 ${hasNumberOrSpecial ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                          {hasNumberOrSpecial ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                          Có số / ký tự đặc biệt
-                        </div>
-                        <div className={`flex items-center gap-1.5 ${isPasswordMatched ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
-                          {isPasswordMatched ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <div className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 ml-0.5 mr-1" />}
-                          Khớp mật khẩu
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={savingPassword || !isPasswordValid}
-                      className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-bold text-xs py-2.5 transition shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {savingPassword ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Đang gửi email xác nhận...</span>
-                        </>
-                      ) : (
-                        <>
-                          <KeyRound className="h-4 w-4" />
-                          <span>Xác Nhận & Gửi Email Đổi Mật Khẩu</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                )}
-              </div>
+              <SecurePasswordChangeCard
+                userEmail={currentUser?.email || 'admin@senexam.me'}
+                isDark={isDark}
+                defaultCollapsed={false}
+              />
 
               {/* Card 6: Cài Đặt Web & Hệ Thống (Settings) */}
               <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-3.5">

@@ -9,6 +9,7 @@ import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import { linkWithGoogle } from '@/lib/authHelper'
 import ModernLoading from '@/app/components/ModernLoading'
+import SecurePasswordChangeCard from '@/app/components/SecurePasswordChangeCard'
 import {
   ArrowLeft,
   User,
@@ -516,52 +517,11 @@ export default function NewProfilePage() {
             </div>
 
             {/* BẢO MẬT & ĐỔI MẬT KHẨU */}
-            <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 shadow-sm backdrop-blur-xl space-y-4">
-              <h3 className="text-lg font-black flex items-center gap-2" style={{ fontFamily: 'var(--font-newprof-heading)' }}>
-                <KeyRound className="h-5 w-5 text-amber-500" /> Đổi Mật Khẩu Đăng Nhập
-              </h3>
-
-              <form onSubmit={handleChangePassword} className="space-y-3 text-xs font-bold max-w-md">
-                <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Mật khẩu mới (tối thiểu 6 ký tự)</label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3.5 outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[#6B7280] dark:text-slate-400 block mb-1.5">Xác nhận mật khẩu mới</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="h-11 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3.5 outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                {passwordMsg && (
-                  <div className={`rounded-xl p-3 text-xs font-bold flex items-center gap-2 ${
-                    passwordMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                  }`}>
-                    {passwordMsg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                    <span>{passwordMsg.text}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={savingPassword || !newPassword}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 px-5 py-2.5 text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-50"
-                >
-                  {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-                  Cập Nhật Mật Khẩu
-                </button>
-              </form>
-            </div>
+            <SecurePasswordChangeCard
+              userEmail={user?.email}
+              isDark={isDark}
+              defaultCollapsed={false}
+            />
           </div>
 
           {/* COLUMN 3: GỬI PHẢN HỒI / GÓP Ý CHO ADMIN */}

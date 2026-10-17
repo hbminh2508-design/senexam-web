@@ -163,6 +163,10 @@ function IdpAuthContent() {
             )
           }
 
+          if (params.get('password_changed') === '1' || params.get('changed') === '1') {
+            setSuccessMsg('Đổi mật khẩu thành công! Tất cả thiết bị cũ đã được đăng xuất an toàn. Vui lòng đăng nhập lại với mật khẩu mới.')
+          }
+
           // Kiểm tra lockout còn hiệu lực không
           const lockoutUntil = parseInt(localStorage.getItem('idp_lockout_until') || '0', 10)
           const now = Date.now()
@@ -178,6 +182,13 @@ function IdpAuthContent() {
     // Tối ưu tốc độ kiểm tra tài khoản (Non-blocking & timeout protection)
     const checkSessionAndMfa = async () => {
       try {
+        const isPasswordChanged = typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('password_changed') === '1' || new URLSearchParams(window.location.search).get('changed') === '1')
+        if (isPasswordChanged) {
+          await supabase.auth.signOut().catch(() => {})
+          if (isMounted) setCurrentUser(null)
+          return
+        }
+
         const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
         const sessionPromise = supabase.auth.getSession().then((res) => res?.data?.session || null).catch(() => null)
         const session = await Promise.race([sessionPromise, timeoutPromise])
