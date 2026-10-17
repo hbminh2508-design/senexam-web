@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useDeferredValue } from 'react'
+import { useState, useEffect, useMemo, useDeferredValue, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
@@ -65,12 +65,22 @@ type Breadcrumb = {
 
 export default function NewLibraryPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [folderLoading, setFolderLoading] = useState(false)
   const [isDark, setIsDark] = useState(false)
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'collab' | 'teacher'>('student')
   const [isVip, setIsVip] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [accessToken, setAccessToken] = useState<string | null>(null)
+
+  const roleRef = useRef(userRole)
+  const vipRef = useRef(isVip)
+  useEffect(() => {
+    roleRef.current = userRole
+  }, [userRole])
+  useEffect(() => {
+    vipRef.current = isVip
+  }, [isVip])
 
   // Navigation State
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
@@ -106,7 +116,7 @@ export default function NewLibraryPage() {
   const canManage = userRole === 'admin' || userRole === 'collab' || userRole === 'teacher'
 
   const fetchContents = async (folderId: string | null, role: string, vipStatus: boolean) => {
-    setLoading(true)
+    setFolderLoading(true)
     try {
       const folderQuery = supabase
         .from('library_folders')
@@ -143,7 +153,7 @@ export default function NewLibraryPage() {
     } catch (err) {
       console.error('Error fetching library contents:', err)
     } finally {
-      setLoading(false)
+      setFolderLoading(false)
     }
   }
 
@@ -214,6 +224,7 @@ export default function NewLibraryPage() {
       setCurrentFolderId(initialFolderId)
       setBreadcrumbs(initialBreadcrumbs)
       await fetchContents(initialFolderId, role, vip)
+      setInitialLoading(false)
     }
 
     init()
@@ -222,11 +233,11 @@ export default function NewLibraryPage() {
       const params = new URLSearchParams(window.location.search)
       const fId = params.get('folder')
       setCurrentFolderId(fId)
-      fetchContents(fId, userRole, isVip)
+      fetchContents(fId, roleRef.current, vipRef.current)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [router, isVip, userRole])
+  }, [router])
 
   const toggleDarkMode = () => {
     const next = !isDark
@@ -246,7 +257,7 @@ export default function NewLibraryPage() {
     const nextCrumbs = [...breadcrumbs, { id: folder.id, name: folder.name }]
     setBreadcrumbs(nextCrumbs)
     window.history.pushState(null, '', `/new-library?folder=${folder.id}`)
-    fetchContents(folder.id, userRole, isVip)
+    fetchContents(folder.id, roleRef.current, vipRef.current)
   }
 
   // Điều hướng breadcrumb (Cập nhật URL)
@@ -259,7 +270,7 @@ export default function NewLibraryPage() {
     } else {
       window.history.pushState(null, '', `/new-library`)
     }
-    fetchContents(crumb.id, userRole, isVip)
+    fetchContents(crumb.id, roleRef.current, vipRef.current)
   }
 
   // Tạo thư mục mới (Admin / Collab)
@@ -395,6 +406,17 @@ export default function NewLibraryPage() {
   }, [folders, deferredQuery])
 
   const themeVars = getModernThemeVars('indigo', isDark)
+
+  if (initialLoading) {
+    return (
+      <ModernLoading
+        isDark={isDark}
+        themeColor="indigo"
+        title="SenExam Thư Viện Số 2.0"
+        subtitle="Đang tải danh mục tài liệu & kho học liệu số..."
+      />
+    )
+  }
 
   return (
     <main
@@ -546,14 +568,16 @@ export default function NewLibraryPage() {
         </div>
 
         {/* Content Explorer Section */}
-        {loading ? (
-          <ModernLoading
-            fullScreen={false}
-            isDark={isDark}
-            themeColor="amber"
-            title="SenExam Thư Viện Số 2.0"
-            subtitle="Đang tải danh mục tài liệu & kho đề thi..."
-          />
+        {folderLoading ? (
+          <div className="py-12 flex justify-center">
+            <ModernLoading
+              fullScreen={false}
+              isDark={isDark}
+              themeColor="indigo"
+              title="Thư mục học liệu"
+              subtitle="Đang cập nhật danh mục tài liệu..."
+            />
+          </div>
         ) : (
           <div className="mt-6 space-y-8">
             

@@ -81,7 +81,12 @@ import {
   EyeOff,
   QrCode,
   X,
+  Folder,
+  FolderPlus,
+  FolderOpen,
+  Edit2,
 } from 'lucide-react'
+import { isExamInFolder } from '@/lib/sebFolderUtils'
 import SecurePasswordChangeCard from '@/app/components/SecurePasswordChangeCard'
 
 const headingFont = Baloo_2({
@@ -558,10 +563,26 @@ export default function NewAdminDashboardPage() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionSearch, setSessionSearch] = useState('')
 
-  // 2. Danh sách Đề thi
+  // 2. Danh sách Đề thi & Quản lý Cây Thư Mục Mẹ - Con
   const [exams, setExams] = useState<any[]>([])
   const [examsLoading, setExamsLoading] = useState(false)
   const [examSearch, setExamSearch] = useState('')
+  const [examSubTab, setExamSubTab] = useState<'folders' | 'list'>('folders')
+  const [adminFolders, setAdminFolders] = useState<any[]>([])
+  const [adminFoldersLoading, setAdminFoldersLoading] = useState(false)
+  const [showFolderModal, setShowFolderModal] = useState(false)
+  const [folderModalMode, setFolderModalMode] = useState<'create_parent' | 'create_child' | 'edit'>('create_parent')
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
+  const [folderNameInput, setFolderNameInput] = useState('')
+  const [folderDescInput, setFolderDescInput] = useState('')
+  const [folderParentSelect, setFolderParentSelect] = useState('')
+  const [folderSaving, setFolderSaving] = useState(false)
+
+  // Modal quản lý / gán đề thi cho Thư mục con
+  const [showAdminFolderExamModal, setShowAdminFolderExamModal] = useState(false)
+  const [selectedAdminChildFolder, setSelectedAdminChildFolder] = useState<any | null>(null)
+  const [adminFolderExamSearch, setAdminFolderExamSearch] = useState('')
+  const [updatingFolderExams, setUpdatingFolderExams] = useState(false)
 
   // 3. Danh sách Người dùng
   const [users, setUsers] = useState<any[]>([])
@@ -806,12 +827,157 @@ export default function NewAdminDashboardPage() {
         .from('exams')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(100)
+        .limit(200)
       if (data) setExams(data)
     } catch (e) {
       console.warn('Lỗi tải exams:', e)
     } finally {
       setExamsLoading(false)
+    }
+  }
+
+  // Tải cây Thư mục Mẹ - Con
+  const fetchFolders = async () => {
+    setAdminFoldersLoading(true)
+    try {
+      const res = await fetch('/api/seb/folders')
+      const data = await res.json()
+      if (data?.folders) {
+        setAdminFolders(data.folders)
+      }
+    } catch (err) {
+      console.warn('Lỗi tải folders:', err)
+    } finally {
+      setAdminFoldersLoading(false)
+    }
+  }
+
+  // Thêm mới hoặc Cập nhật Thư mục
+  const handleSaveFolder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!folderNameInput.trim()) return
+
+    setFolderSaving(true)
+    try {
+      let action = 'create'
+      let parentId: string | null = null
+
+      if (folderModalMode === 'create_child') {
+        parentId = folderParentSelect || adminFolders[0]?.id || null
+      } else if (folderModalMode === 'edit') {
+        action = 'update'
+        parentId = folderParentSelect || null
+      }
+
+      const res = await fetch('/api/seb/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          folderId: editingFolderId,
+          name: folderNameInput.trim(),
+          description: folderDescInput.trim(),
+          parentId,
+          userRole: 'admin',
+          userEmail: currentUser?.email,
+        }),
+      })
+      const resData = await res.json()
+      if (resData.success) {
+        setShowFolderModal(false)
+        setFolderNameInput('')
+        setFolderDescInput('')
+        setEditingFolderId(null)
+        await fetchFolders()
+        setBannerMsg({
+          type: 'success',
+          text: 'Đã lưu thư mục thành công!',
+        })
+        setTimeout(() => setBannerMsg(null), 3000)
+      } else {
+        alert(resData.error || 'Lỗi khi lưu thư mục')
+      }
+    } catch (e: any) {
+      alert(e.message || 'Lỗi hệ thống khi lưu thư mục')
+    } finally {
+      setFolderSaving(false)
+    }
+  }
+
+  // Xóa thư mục
+  const handleDeleteFolder = async (folderId: string, folderName: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa thư mục "${folderName}" không?`)) return
+
+    try {
+      const res = await fetch('/api/seb/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          folderId,
+          userRole: 'admin',
+          userEmail: currentUser?.email,
+        }),
+      })
+      const resData = await res.json()
+      if (resData.success) {
+        await fetchFolders()
+        setBannerMsg({
+          type: 'success',
+          text: 'Đã xóa thư mục thành công!',
+        })
+        setTimeout(() => setBannerMsg(null), 3000)
+      } else {
+        alert(resData.error || 'Lỗi xóa thư mục')
+      }
+    } catch (e: any) {
+      alert(e.message || 'Lỗi kết nối khi xóa')
+    }
+  }
+
+  // Gán hoặc gỡ đề thi khỏi thư mục con
+  const handleToggleExamInFolder = async (examId: string, currentInFolder: boolean, targetFolderId: string) => {
+    setUpdatingFolderExams(true)
+    try {
+      const res = await fetch('/api/seb/folder-exams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderId: targetFolderId,
+          assignExamId: currentInFolder ? undefined : examId,
+          unassignExamId: currentInFolder ? examId : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        await Promise.all([fetchExams(), fetchFolders()])
+      } else {
+        alert(data.error || 'Lỗi cập nhật đề')
+      }
+    } catch (e: any) {
+      alert(e.message || 'Lỗi kết nối')
+    } finally {
+      setUpdatingFolderExams(false)
+    }
+  }
+
+  // Thay đổi nhanh folder_id của đề thi
+  const handleQuickChangeExamFolder = async (examId: string, newFolderId: string) => {
+    try {
+      const { error } = await supabase
+        .from('exams')
+        .update({ folder_id: newFolderId || null })
+        .eq('id', examId)
+
+      if (error) throw error
+      await Promise.all([fetchExams(), fetchFolders()])
+      setBannerMsg({
+        type: 'success',
+        text: 'Đã cập nhật thư mục cho đề thi thành công!',
+      })
+      setTimeout(() => setBannerMsg(null), 3000)
+    } catch (e: any) {
+      alert(e.message || 'Lỗi cập nhật thư mục đề')
     }
   }
 
@@ -832,10 +998,13 @@ export default function NewAdminDashboardPage() {
     }
   }
 
-  // Tải giftcodes khi chuyển tab
+  // Tải dữ liệu khi chuyển tab
   useEffect(() => {
     if (workbenchTab === 'sessions') fetchSessions()
-    if (workbenchTab === 'exams') fetchExams()
+    if (workbenchTab === 'exams') {
+      fetchExams()
+      fetchFolders()
+    }
     if (workbenchTab === 'users') fetchUsers()
   }, [workbenchTab])
 
@@ -1374,6 +1543,17 @@ export default function NewAdminDashboardPage() {
       (e) => e.title?.toLowerCase().includes(q) || e.exam_type?.toLowerCase().includes(q)
     )
   }, [exams, examSearch])
+
+  // Danh sách phẳng tất cả Thư mục con
+  const allChildFolders = useMemo(() => {
+    const list: any[] = []
+    adminFolders.forEach((parent) => {
+      ;(parent.children || []).forEach((c: any) => {
+        list.push({ ...c, parentName: parent.name })
+      })
+    })
+    return list
+  }, [adminFolders])
 
   // Lọc Users
   const filteredUsers = useMemo(() => {
@@ -3021,99 +3201,363 @@ export default function NewAdminDashboardPage() {
                 </form>
               )}
 
-              {/* TAB 4: QUẢN TRỊ KHO ĐỀ */}
+              {/* TAB 4: QUẢN TRỊ KHO ĐỀ & CÂY THƯ MỤC MẸ - CON */}
               {workbenchTab === 'exams' && (
-                <div className="space-y-4 animate-in fade-in">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="relative flex-1 min-w-[240px]">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Tìm kiếm đề thi theo tên hoặc loại đề..."
-                        value={examSearch}
-                        onChange={(e) => setExamSearch(e.target.value)}
-                        className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"
-                      />
+                <div className="space-y-5 animate-in fade-in">
+                  
+                  {/* Subtabs Selector: Cây Thư Mục vs Tất Cả Đề Thi */}
+                  <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-black/10 dark:border-white/10">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setExamSubTab('folders')}
+                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                          examSubTab === 'folders'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <Folder className="h-4 w-4" />
+                        <span>Cây Thư Mục Mẹ - Con ({adminFolders.reduce((a, b) => a + (b.children?.length || 0), 0)} Môn)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setExamSubTab('list')}
+                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                          examSubTab === 'list'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>Kho Đề Thi ({filteredExams.length})</span>
+                      </button>
                     </div>
 
-                    <Link
-                      href="/new-setup-courses"
-                      className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition flex items-center gap-1.5"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Soạn & Tạo Đề Mới</span>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      {examSubTab === 'folders' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFolderModalMode('create_parent')
+                              setFolderNameInput('')
+                              setFolderDescInput('')
+                              setFolderParentSelect('')
+                              setEditingFolderId(null)
+                              setShowFolderModal(true)
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <FolderPlus className="h-4 w-4" />
+                            <span>+ Thư Mục Mẹ (Kỳ Thi)</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFolderModalMode('create_child')
+                              setFolderNameInput('')
+                              setFolderDescInput('')
+                              setFolderParentSelect(adminFolders[0]?.id || '')
+                              setEditingFolderId(null)
+                              setShowFolderModal(true)
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-500/20 cursor-pointer hover:from-indigo-700 hover:to-purple-700"
+                          >
+                            <Plus className="h-4 w-4" />
+                            <span>+ Thư Mục Con (Môn Thi)</span>
+                          </button>
+                        </>
+                      )}
+
+                      {examSubTab === 'list' && (
+                        <Link
+                          href="/new-setup-courses"
+                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md hover:bg-indigo-700 transition flex items-center gap-1.5"
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>Soạn & Tạo Đề Mới</span>
+                        </Link>
+                      )}
+                    </div>
                   </div>
 
-                  {examsLoading ? (
-                    <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                      <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải danh sách đề thi...
-                    </div>
-                  ) : filteredExams.length === 0 ? (
-                    <div className="py-12 text-center text-xs text-slate-400">
-                      Chưa có đề thi nào trong kho hoặc không tìm thấy kết quả.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
-                      {filteredExams.map((ex) => {
-                        let struct = ex.exam_structure
-                        if (typeof struct === 'string') {
-                          try { struct = JSON.parse(struct) } catch { struct = [] }
-                        }
-                        if (struct && typeof struct === 'object' && !Array.isArray(struct) && Array.isArray((struct as any).sections)) {
-                          struct = (struct as any).sections
-                        }
-                        const hasQuestionsInStructure =
-                          Array.isArray(struct) &&
-                          struct.some(
-                            (s: any) =>
-                              (Array.isArray(s?.questions) && s.questions.length > 0) ||
-                              s?.format === 'katex' ||
-                              s?.is_katex === true ||
-                              s?.id === 'sec-katex-main'
-                          )
-                        const isValidDriveId = typeof ex.drive_file_id === 'string' && ex.drive_file_id.trim().length > 10 && !ex.drive_file_id.includes('null')
-                        const isValidPdfUrl = typeof ex.pdf_url === 'string' && ex.pdf_url.trim().length > 10 && !ex.pdf_url.includes('null')
-                        const isKatex = ex.format === 'katex' || hasQuestionsInStructure || (!isValidDriveId && !isValidPdfUrl)
-                        const isPdf = !isKatex
+                  {/* SUBTAB 1: CÂY THƯ MỤC MẸ - CON */}
+                  {examSubTab === 'folders' && (
+                    <div className="space-y-4">
+                      {adminFoldersLoading ? (
+                        <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải cây thư mục đề thi...
+                        </div>
+                      ) : adminFolders.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-slate-400">
+                          Chưa có thư mục nào trong hệ thống. Hãy bấm <b>+ Thư Mục Mẹ</b> để tạo khối thi đầu tiên.
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {adminFolders.map((parent) => (
+                            <div
+                              key={parent.id}
+                              className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-5 shadow-sm space-y-4"
+                            >
+                              {/* Header Thư mục Mẹ */}
+                              <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/5 flex-wrap gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                                    <Folder className="h-5 w-5" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h3 className="text-base font-black text-slate-900 dark:text-white">{parent.name}</h3>
+                                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/10 text-slate-600 dark:text-slate-300 font-bold">
+                                        {parent.children?.length || 0} môn thi
+                                      </span>
+                                    </div>
+                                    {parent.description && (
+                                      <p className="text-xs text-slate-500 mt-0.5">{parent.description}</p>
+                                    )}
+                                  </div>
+                                </div>
 
-                        return (
-                          <div
-                            key={ex.id}
-                            className="p-4 flex items-center justify-between flex-wrap gap-2 hover:bg-black/[0.01]"
-                          >
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-black text-slate-900 dark:text-white text-sm">{ex.title}</span>
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                    isKatex ? 'bg-teal-500/10 text-teal-600' : 'bg-sky-500/10 text-sky-600'
-                                  }`}
-                                >
-                                  {isKatex ? '✨ KaTeX Sắc Nét' : '📄 Đề PDF Truyền Thống'}
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFolderModalMode('create_child')
+                                      setFolderNameInput('')
+                                      setFolderDescInput('')
+                                      setFolderParentSelect(parent.id)
+                                      setEditingFolderId(null)
+                                      setShowFolderModal(true)
+                                    }}
+                                    className="p-1.5 rounded-xl border border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-black/5 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                                    title="Thêm môn thi vào khối này"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    <span>Thêm Môn</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFolderModalMode('edit')
+                                      setEditingFolderId(parent.id)
+                                      setFolderNameInput(parent.name)
+                                      setFolderDescInput(parent.description || '')
+                                      setFolderParentSelect('')
+                                      setShowFolderModal(true)
+                                    }}
+                                    className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-black/5 transition cursor-pointer"
+                                    title="Sửa tên / mô tả thư mục mẹ"
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteFolder(parent.id, parent.name)}
+                                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                    title="Xóa thư mục mẹ này"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               </div>
-                              <p className="text-slate-500 text-[11px]">
-                                Môn/Loại: {ex.exam_type || 'Tổng hợp'} • Thời gian: {ex.duration || 50} phút • Mã:{' '}
-                                <code>{ex.exam_code || 'Không có'}</code>
-                              </p>
-                            </div>
 
-                            <div className="flex items-center gap-2">
-                              <Link
-                                href={`/new-exams/${ex.id}`}
-                                target="_blank"
-                                className="px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-black/5 transition flex items-center gap-1"
-                              >
-                                <span>Xem Đề</span>
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </Link>
+                              {/* Danh sách Thư mục Con */}
+                              {(!parent.children || parent.children.length === 0) ? (
+                                <p className="text-xs text-slate-400 italic py-2">
+                                  Chưa có môn thi nào trong khối này. Bấm "+ Thêm Môn" ở trên để tạo.
+                                </p>
+                              ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                  {parent.children.map((child: any) => {
+                                    const realCount = exams.filter((ex) => !ex.is_hidden && isExamInFolder(ex, child)).length
+
+                                    return (
+                                      <div
+                                        key={child.id}
+                                        className="p-3.5 rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between gap-2"
+                                      >
+                                        <div className="min-w-0 flex items-center gap-2">
+                                          <div className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" />
+                                          <div className="min-w-0">
+                                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">
+                                              {child.name}
+                                            </span>
+                                            {child.description && (
+                                              <span className="text-[10px] text-slate-400 truncate block">
+                                                {child.description}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/80 dark:bg-slate-900/80 border border-black/5 dark:border-white/10 text-slate-600 dark:text-slate-300 font-mono font-bold">
+                                            {realCount} đề
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedAdminChildFolder(child)
+                                              setShowAdminFolderExamModal(true)
+                                            }}
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-black/5 transition cursor-pointer"
+                                            title="Quản lý / Gán đề thi cho môn này"
+                                          >
+                                            <Sliders className="h-3.5 w-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setFolderModalMode('edit')
+                                              setEditingFolderId(child.id)
+                                              setFolderNameInput(child.name)
+                                              setFolderDescInput(child.description || '')
+                                              setFolderParentSelect(child.parent_id || parent.id)
+                                              setShowFolderModal(true)
+                                            }}
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-black/5 transition cursor-pointer"
+                                            title="Sửa môn thi này"
+                                          >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteFolder(child.id, child.name)}
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                            title="Xóa môn thi này"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )
-                      })}
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
+
+                  {/* SUBTAB 2: DANH SÁCH TẤT CẢ ĐỀ THI */}
+                  {examSubTab === 'list' && (
+                    <div className="space-y-4">
+                      <div className="relative w-full">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Tìm kiếm đề thi theo tên hoặc loại đề..."
+                          value={examSearch}
+                          onChange={(e) => setExamSearch(e.target.value)}
+                          className="w-full rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"
+                        />
+                      </div>
+
+                      {examsLoading ? (
+                        <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin text-indigo-500" /> Đang tải danh sách đề thi...
+                        </div>
+                      ) : filteredExams.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-slate-400">
+                          Chưa có đề thi nào trong kho hoặc không tìm thấy kết quả.
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
+                          {filteredExams.map((ex) => {
+                            let struct = ex.exam_structure
+                            if (typeof struct === 'string') {
+                              try { struct = JSON.parse(struct) } catch { struct = [] }
+                            }
+                            if (struct && typeof struct === 'object' && !Array.isArray(struct) && Array.isArray((struct as any).sections)) {
+                              struct = (struct as any).sections
+                            }
+                            const hasQuestionsInStructure =
+                              Array.isArray(struct) &&
+                              struct.some(
+                                (s: any) =>
+                                  (Array.isArray(s?.questions) && s.questions.length > 0) ||
+                                  s?.format === 'katex' ||
+                                  s?.is_katex === true ||
+                                  s?.id === 'sec-katex-main'
+                              )
+                            const isValidDriveId = typeof ex.drive_file_id === 'string' && ex.drive_file_id.trim().length > 10 && !ex.drive_file_id.includes('null')
+                            const isValidPdfUrl = typeof ex.pdf_url === 'string' && ex.pdf_url.trim().length > 10 && !ex.pdf_url.includes('null')
+                            const isKatex = ex.format === 'katex' || hasQuestionsInStructure || (!isValidDriveId && !isValidPdfUrl)
+
+                            // Xác định thư mục con mà đề đang thuộc về
+                            const assignedFolder = allChildFolders.find((c) => c.id === ex.folder_id)
+
+                            return (
+                              <div
+                                key={ex.id}
+                                className="p-4 flex items-center justify-between flex-wrap gap-3 hover:bg-black/[0.01]"
+                              >
+                                <div className="space-y-1.5 min-w-[280px] flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-black text-slate-900 dark:text-white text-sm">{ex.title}</span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                        isKatex ? 'bg-teal-500/10 text-teal-600' : 'bg-sky-500/10 text-sky-600'
+                                      }`}
+                                    >
+                                      {isKatex ? '✨ KaTeX' : '📄 PDF'}
+                                    </span>
+                                    {assignedFolder ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                                        📁 {assignedFolder.name} ({assignedFolder.parentName})
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-500/10 text-slate-500">
+                                        Chưa gán thư mục
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-slate-500 text-[11px]">
+                                    Môn/Loại: {ex.exam_type || 'Tổng hợp'} • Thời gian: {ex.duration || 50} phút • Mã:{' '}
+                                    <code>{ex.exam_code || ex.access_code || 'Không có'}</code>
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {/* Quick assign dropdown */}
+                                  <select
+                                    value={ex.folder_id || ''}
+                                    onChange={(e) => handleQuickChangeExamFolder(ex.id, e.target.value)}
+                                    className="rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-2.5 py-1.5 text-xs font-semibold outline-none cursor-pointer"
+                                    title="Chọn thư mục môn thi cho đề"
+                                  >
+                                    <option value="">-- Gán thư mục môn --</option>
+                                    {allChildFolders.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.name} ({c.parentName})
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <Link
+                                    href={`/new-exams/${ex.id}`}
+                                    target="_blank"
+                                    className="px-3.5 py-1.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-black/5 transition flex items-center gap-1"
+                                  >
+                                    <span>Xem Đề</span>
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </Link>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               )}
 
@@ -3444,6 +3888,212 @@ export default function NewAdminDashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÊM / SỬA THƯ MỤC MẸ & CON */}
+      {showFolderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/10">
+              <div className="flex items-center gap-2">
+                <Folder className="h-5 w-5 text-indigo-500" />
+                <h3 className="font-black text-sm text-slate-900 dark:text-white">
+                  {folderModalMode === 'create_parent'
+                    ? 'Tạo Thư Mục Mẹ (Kỳ Thi / Khối Thi)'
+                    : folderModalMode === 'create_child'
+                    ? 'Tạo Thư Mục Con (Môn Thi)'
+                    : 'Cập Nhật Thư Mục'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFolderModal(false)}
+                className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-slate-400 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFolder} className="space-y-4 text-xs">
+              {folderModalMode === 'create_child' && (
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Thuộc Thư Mục Mẹ (Kỳ thi):
+                  </label>
+                  <select
+                    value={folderParentSelect}
+                    onChange={(e) => setFolderParentSelect(e.target.value)}
+                    className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none cursor-pointer"
+                    required
+                  >
+                    {adminFolders.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Tên Thư Mục:
+                </label>
+                <input
+                  type="text"
+                  placeholder={folderModalMode === 'create_parent' ? 'VD: Thi Thử THPT Quốc Gia' : 'VD: Toán Học Chuyên Sâu'}
+                  value={folderNameInput}
+                  onChange={(e) => setFolderNameInput(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Mô Tả Ngắn:
+                </label>
+                <input
+                  type="text"
+                  placeholder="VD: Tổng hợp các bộ đề thi thử bám sát đề minh họa..."
+                  value={folderDescInput}
+                  onChange={(e) => setFolderDescInput(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFolderModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-black/5 transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={folderSaving || !folderNameInput.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition disabled:opacity-50 inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {folderSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  <span>{folderModalMode === 'edit' ? 'Lưu Thay Đổi' : 'Tạo Thư Mục'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ADMIN QUẢN LÝ ĐỀ THI TRONG THƯ MỤC CON */}
+      {showAdminFolderExamModal && selectedAdminChildFolder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-2xl rounded-3xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 shadow-2xl p-6 flex flex-col max-h-[85vh] space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-black/5 dark:border-white/10">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-indigo-500" />
+                  <h3 className="font-black text-sm text-slate-900 dark:text-white">
+                    Quản Lý Đề Thi Trong Môn: {selectedAdminChildFolder.name}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Gán hoặc gỡ đề thi vào thư mục môn này để học sinh tra cứu dễ dàng.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdminFolderExamModal(false)
+                  setSelectedAdminChildFolder(null)
+                  setAdminFolderExamSearch('')
+                }}
+                className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-slate-400 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Tìm đề thi theo tiêu đề, loại đề..."
+                value={adminFolderExamSearch}
+                onChange={(e) => setAdminFolderExamSearch(e.target.value)}
+                className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] py-2 pl-9 pr-3 text-xs outline-none"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto divide-y divide-black/5 dark:divide-white/5 border border-black/5 dark:border-white/10 rounded-2xl">
+              {exams
+                .filter((ex) => {
+                  if (ex.is_hidden) return false
+                  if (!adminFolderExamSearch.trim()) return true
+                  const q = adminFolderExamSearch.toLowerCase()
+                  return ex.title?.toLowerCase().includes(q) || ex.exam_type?.toLowerCase().includes(q)
+                })
+                .map((ex) => {
+                  const isAssigned = isExamInFolder(ex, selectedAdminChildFolder)
+                  const isDirect = ex.folder_id === selectedAdminChildFolder.id
+
+                  return (
+                    <div
+                      key={ex.id}
+                      className="p-3 flex items-center justify-between gap-3 text-xs hover:bg-black/[0.01]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 truncate">{ex.title}</span>
+                          {isDirect && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                              Gán thủ công
+                            </span>
+                          )}
+                          {!isDirect && isAssigned && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 font-bold">
+                              Khớp tự động
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {ex.exam_type || 'Tổng hợp'} • {ex.duration || 50} phút
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={updatingFolderExams}
+                        onClick={() =>
+                          handleToggleExamInFolder(ex.id, isAssigned, selectedAdminChildFolder.id)
+                        }
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer shrink-0 ${
+                          isAssigned
+                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+                        }`}
+                      >
+                        {isAssigned ? 'Gỡ khỏi môn' : 'Gán vào môn'}
+                      </button>
+                    </div>
+                  )
+                })}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdminFolderExamModal(false)
+                  setSelectedAdminChildFolder(null)
+                  setAdminFolderExamSearch('')
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}
