@@ -13,13 +13,18 @@ export async function POST(request: Request) {
     const supabaseAdmin = getSupabaseAdmin()
     const { data: callerProfile, error: callerErr } = await supabaseAdmin
       .from('profiles')
-      .select('role')
+      .select('role, email')
       .eq('id', caller.id)
       .maybeSingle()
 
     if (callerErr) throw callerErr
     const callerRole = callerProfile?.role
-    if (callerRole !== 'admin' && callerRole !== 'collab') {
+    const callerEmail = (caller.email || callerProfile?.email || '').toLowerCase()
+    const isSuperEmail =
+      callerEmail === 'admin@senexam.me' ||
+      callerEmail === 'hoangbinhminh2508@gmail.com'
+
+    if (callerRole !== 'admin' && callerRole !== 'collab' && !isSuperEmail) {
       return NextResponse.json({ error: 'Chỉ Quản trị viên (Admin) hoặc Cộng tác viên mới có quyền cấp tài khoản' }, { status: 403 })
     }
 

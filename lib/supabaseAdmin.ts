@@ -27,7 +27,7 @@ function getAnonClient(): SupabaseClient {
 
 // Xác thực người dùng từ access token gửi qua header Authorization: Bearer <token>,
 // hoặc query param ?token= (dùng cho các thẻ <a>/<iframe> không gắn được header, vd tải tài liệu VIP).
-export async function getUserFromRequest(request: Request): Promise<{ id: string } | null> {
+export async function getUserFromRequest(request: Request): Promise<{ id: string; email?: string } | null> {
   const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
   const queryToken = new URL(request.url).searchParams.get('token')
@@ -36,15 +36,32 @@ export async function getUserFromRequest(request: Request): Promise<{ id: string
 
   const { data, error } = await getAnonClient().auth.getUser(token)
   if (error || !data?.user) return null
-  return { id: data.user.id }
+  return { id: data.user.id, email: data.user.email }
 }
 
-// Xác thực + xác minh caller có role 'admin' (dùng cho các route quản trị cấp VIP/tặng SenCash) —
-// trả về null nếu chưa đăng nhập hoặc không phải admin, để route trả 401/403 tương ứng.
-export async function requireAdmin(request: Request): Promise<{ id: string } | null> {
+// Xác thực + xác minh caller có role 'admin' hoặc 'collab' hoặc email quản trị viên —
+// trả về null nếu chưa đăng nhập hoặc không phải admin/collab, để route trả 401/403 tương ứng.
+export async function requireAdmin(request: Request): Promise<{ id: string; email?: string } | null> {
   const user = await getUserFromRequest(request)
   if (!user) return null
-  const { data: profile } = await getSupabaseAdmin().from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'admin') return null
-  return user
+
+  const isSuperEmail =
+    user.email?.toLowerCase() === 'admin@senexam.me' ||
+    user.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com'
+
+  const { data: profile } = await getSupabaseAdmin().from('profiles').select('role, email').eq('id', user.id).maybeSingle()
+  const role = profile?.role
+  const profileEmail = profile?.email?.toLowerCase()
+
+  if (
+    role === 'admin' ||
+    role === 'collab' ||
+    isSuperEmail ||
+    profileEmail === 'admin@senexam.me' ||
+    profileEmail === 'hoangbinhminh2508@gmail.com'
+  ) {
+    return user
+  }
+
+  return null
 }

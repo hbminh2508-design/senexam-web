@@ -604,6 +604,21 @@ export default function NewAdminDashboardPage() {
   const [newCodeNote, setNewCodeNote] = useState('Quà tặng học sinh')
   const [codeActionLoading, setCodeActionLoading] = useState(false)
 
+  // Helper lấy Bearer Token gửi kèm các API Quản trị Server-side
+  const getAdminAuthHeaders = async (): Promise<Record<string, string>> => {
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (token) {
+        return {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        }
+      }
+    } catch {}
+    return { 'Content-Type': 'application/json' }
+  }
+
   // 5. Cấp tài khoản đơn lẻ (Single Provisioning)
   const [singleEmail, setSingleEmail] = useState('')
   const [singlePassword, setSinglePassword] = useState('')
@@ -808,7 +823,10 @@ export default function NewAdminDashboardPage() {
   const fetchSessions = async () => {
     setSessionsLoading(true)
     try {
-      const res = await fetch('/api/admin/sessions')
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/sessions', {
+        headers,
+      })
       const data = await res.json()
       if (data.success && Array.isArray(data.sessions)) {
         setSessions(data.sessions)
@@ -818,6 +836,22 @@ export default function NewAdminDashboardPage() {
       console.warn('Lỗi tải sessions:', e)
     } finally {
       setSessionsLoading(false)
+    }
+  }
+
+  // Tải danh sách Giftcodes
+  const fetchGiftcodes = async () => {
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/gift-codes/list', {
+        headers,
+      })
+      const data = await res.json()
+      if (Array.isArray(data.codes)) {
+        setGiftcodes(data.codes)
+      }
+    } catch (e) {
+      console.warn('Lỗi tải giftcodes:', e)
     }
   }
 
@@ -1008,6 +1042,7 @@ export default function NewAdminDashboardPage() {
       fetchFolders()
     }
     if (workbenchTab === 'users') fetchUsers()
+    if (workbenchTab === 'giftcodes') fetchGiftcodes()
   }, [workbenchTab])
 
   // Chuyển đổi góc nhìn
@@ -1157,9 +1192,10 @@ export default function NewAdminDashboardPage() {
     const conf = window.confirm('Bạn có chắc chắn muốn buộc đăng xuất phiên làm việc này?')
     if (!conf) return
     try {
+      const headers = await getAdminAuthHeaders()
       const res = await fetch('/api/admin/sessions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ action: 'revoke', sessionId, userId }),
       })
       const data = await res.json()
@@ -1187,9 +1223,10 @@ export default function NewAdminDashboardPage() {
         throw new Error('Vui lòng điền đầy đủ Họ tên, Email và Mật khẩu khởi tạo.')
       }
 
+      const headers = await getAdminAuthHeaders()
       const res = await fetch('/api/admin/provision-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           email: singleEmail.trim(),
           password: singlePassword,
@@ -1255,9 +1292,10 @@ export default function NewAdminDashboardPage() {
 
       setBatchProgress(40)
 
+      const headers = await getAdminAuthHeaders()
       const res = await fetch('/api/admin/provision-users-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           prefix: batchPrefix.trim(),
           startNum: start,
@@ -1388,9 +1426,10 @@ export default function NewAdminDashboardPage() {
     if (!selectedUserForGrant) return
     setGrantActionLoading(true)
     try {
+      const headers = await getAdminAuthHeaders()
       const res = await fetch('/api/admin/grant-vip', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           userId: selectedUserForGrant.id,
           days: parseInt(grantVipDays, 10),
@@ -1416,9 +1455,10 @@ export default function NewAdminDashboardPage() {
     if (!selectedUserForGrant) return
     setGrantActionLoading(true)
     try {
+      const headers = await getAdminAuthHeaders()
       const res = await fetch('/api/admin/gift-sencash', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           userId: selectedUserForGrant.id,
           amount: parseInt(grantSenCashAmount, 10),
@@ -1455,9 +1495,10 @@ export default function NewAdminDashboardPage() {
         payload.sencashAmount = parseInt(newCodeAmount, 10)
       }
 
+      const headers = await getAdminAuthHeaders()
       const res = await fetch('/api/admin/gift-codes/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       })
       const data = await res.json()

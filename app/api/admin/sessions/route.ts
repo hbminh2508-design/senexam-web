@@ -19,7 +19,8 @@ export async function GET(request: Request) {
 
     if (callerErr) throw callerErr
     const callerRole = callerProfile?.role
-    if (callerRole !== 'admin' && callerRole !== 'collab') {
+    const isSuperAdmin = caller.email && ['admin@senexam.me', 'hoangbinhminh2508@gmail.com'].includes(caller.email.toLowerCase())
+    if (callerRole !== 'admin' && callerRole !== 'collab' && !isSuperAdmin) {
       return NextResponse.json({ error: 'Chỉ Quản trị viên mới có quyền xem danh sách phiên' }, { status: 403 })
     }
 
@@ -99,7 +100,8 @@ export async function POST(request: Request) {
 
     if (callerErr) throw callerErr
     const callerRole = callerProfile?.role
-    if (callerRole !== 'admin' && callerRole !== 'collab') {
+    const isSuperAdmin = caller.email && ['admin@senexam.me', 'hoangbinhminh2508@gmail.com'].includes(caller.email.toLowerCase())
+    if (callerRole !== 'admin' && callerRole !== 'collab' && !isSuperAdmin) {
       return NextResponse.json({ error: 'Chỉ Quản trị viên mới có quyền quản lý phiên' }, { status: 403 })
     }
 
