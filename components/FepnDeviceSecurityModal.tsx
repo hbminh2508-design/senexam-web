@@ -187,6 +187,7 @@ export default function FepnDeviceSecurityModal({
               disabled={loading}
               className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
               title="Làm mới danh sách"
+              aria-label="Làm mới danh sách"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -194,6 +195,7 @@ export default function FepnDeviceSecurityModal({
               type="button"
               onClick={onClose}
               className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              aria-label="Đóng cửa sổ"
             >
               <X className="h-5 w-5" />
             </button>
