@@ -232,27 +232,22 @@ export default function NewBetaPage() {
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
         
         {/* HEADER */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-black/10 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
             <Link
               href="/new-dashboard"
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
-              title="Về Dashboard"
+              title="Quay lại Dashboard"
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-gradient-to-r from-pink-500/20 to-purple-500/20 px-3 py-0.5 text-[11px] font-black text-pink-600 dark:text-pink-400 border border-pink-500/30 uppercase tracking-wider">
-                  <Sparkles className="inline h-3.5 w-3.5 mr-1 text-purple-500" /> SenExam Insider
-                </span>
-                <span className="rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-0.5 text-[10px] font-bold">
-                  2027 Preview
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
-                Chương Trình Trải Nghiệm Thử Nghiệm (Beta Program)
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newbeta-heading)' }}>
+                Chương Trình Beta
               </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Trải nghiệm sớm các tính năng tương lai và đóng góp ý kiến hoàn thiện.
+              </p>
             </div>
           </div>
 
@@ -260,7 +255,8 @@ export default function NewBetaPage() {
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+              title="Chuyển chế độ Sáng / Tối"
             >
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>

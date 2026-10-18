@@ -183,6 +183,7 @@ export default function NewTeacherPage() {
   // ==========================================
   const [submissionsList, setSubmissionsList] = useState<any[]>([])
   const [filterClassResult, setFilterClassResult] = useState<string>('all')
+  const [filterClassExam, setFilterClassExam] = useState<string>('all')
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -985,27 +986,22 @@ export default function NewTeacherPage() {
     >
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
         {/* HEADER */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-black/10 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
             <Link
               href="/new-dashboard"
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
-              title="Về Dashboard"
+              title="Quay lại Dashboard"
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-gradient-to-r from-sky-500/20 to-indigo-500/20 px-3 py-0.5 text-[11px] font-black text-sky-600 dark:text-sky-400 border border-sky-500/30 uppercase tracking-wider">
-                  <School className="inline h-3.5 w-3.5 mr-1 text-sky-500" /> Cổng Giảng Viên 2.0
-                </span>
-                <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold">
-                  {teacherName}
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
-                Quản Lý Lớp Học, Soạn Đề & Giám Sát Thi Cử
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newteacher-heading)' }}>
+                Không Gian Giảng Viên
               </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Quản lý lớp học, phân phối đề thi chuẩn và giám sát thi cử trực tiếp.
+              </p>
             </div>
           </div>
 
@@ -1013,7 +1009,8 @@ export default function NewTeacherPage() {
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+              title="Chuyển chế độ Sáng / Tối"
             >
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>
@@ -2056,15 +2053,31 @@ export default function NewTeacherPage() {
                 </p>
               </div>
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm đề thi..."
-                  value={examSearch}
-                  onChange={(e) => setExamSearch(e.target.value)}
-                  className="rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-2 pl-9 pr-3 text-xs font-semibold outline-none focus:border-sky-500"
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={filterClassExam}
+                  onChange={(e) => setFilterClassExam(e.target.value)}
+                  className="rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-2 px-3 text-xs font-semibold outline-none focus:border-sky-500"
+                >
+                  <option value="all">Tất cả lớp học ({examsList.length})</option>
+                  <option value="unassigned">⚠️ Chưa gán lớp</option>
+                  {classesList.map((cls) => (
+                    <option key={cls.id} value={cls.id}>
+                      🏫 {cls.name}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm đề thi..."
+                    value={examSearch}
+                    onChange={(e) => setExamSearch(e.target.value)}
+                    className="rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 py-2 pl-9 pr-3 text-xs font-semibold outline-none focus:border-sky-500"
+                  />
+                </div>
               </div>
             </div>
 
@@ -2075,7 +2088,15 @@ export default function NewTeacherPage() {
                 </div>
               ) : (
                 examsList
-                  .filter((ex) => ex.title?.toLowerCase().includes(examSearch.toLowerCase()))
+                  .filter((ex) => {
+                    const matchSearch = ex.title?.toLowerCase().includes(examSearch.toLowerCase())
+                    if (!matchSearch) return false
+                    if (filterClassExam === 'all') return true
+                    if (filterClassExam === 'unassigned') {
+                      return !ex.class_exams || ex.class_exams.length === 0
+                    }
+                    return (ex.class_exams || []).some((ce: any) => ce.class_id === filterClassExam)
+                  })
                   .map((ex) => {
                     const assignedInfo = ex.class_exams?.[0]
                     const className = assignedInfo?.classes?.name

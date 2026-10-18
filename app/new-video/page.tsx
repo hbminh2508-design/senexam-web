@@ -129,23 +129,18 @@ export default function NewVideoPage() {
     >
       <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* HEADER */}
-        <div className="flex items-center justify-between pb-6 border-b border-black/10 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
             <Link
               href="/new-dashboard"
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
-              title="Về Dashboard"
+              title="Quay lại Dashboard"
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-pink-500/10 px-2.5 py-0.5 text-[11px] font-bold text-pink-600 dark:text-pink-400 border border-pink-500/20">
-                  <Video className="inline h-3 w-3 mr-1" /> Sen Video 2.0
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newvid-heading)' }}>
-                Kho Video Bài Giảng & Chuyên Đề
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newvid-heading)' }}>
+                Kho Video Bài Giảng
               </h1>
               <p className="text-xs text-[#6B7280] dark:text-slate-400">
                 Học trực quan qua các video bài giảng ngắn gọn, cô đọng kiến thức trọng tâm.
@@ -153,13 +148,16 @@ export default function NewVideoPage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={toggleDarkMode}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
-          >
-            {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+              title="Chuyển chế độ Sáng / Tối"
+            >
+              {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
+            </button>
+          </div>
         </div>
 
         {/* MAIN VIDEO PLAYER + PLAYLIST LAYOUT */}

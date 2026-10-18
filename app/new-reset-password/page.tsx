@@ -15,6 +15,7 @@ import {
   Loader2,
   KeyRound,
   ArrowRight,
+  ArrowLeft,
   Sun,
   Moon,
   Sparkles,
@@ -98,12 +99,21 @@ export default function NewResetPasswordPage() {
           : 'radial-gradient(circle at 10% 10%, rgba(224, 231, 255, 0.6), transparent 30%), #F4F7FB',
       }}
     >
-      {/* Dark Mode toggle */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+      {/* Header controls (Dark Mode Toggle & Back Link) */}
+      <div className="absolute top-4 sm:top-6 left-4 sm:left-6 right-4 sm:right-6 flex items-center justify-between z-10">
+        <Link
+          href="/new-idp"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+          title="Về trang Đăng nhập"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+
         <button
           type="button"
           onClick={toggleDarkMode}
-          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 shadow-sm backdrop-blur-xl transition hover:scale-105"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+          title="Chuyển chế độ Sáng / Tối"
         >
           {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
         </button>

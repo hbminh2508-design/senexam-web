@@ -2107,63 +2107,56 @@ function SetupCourseMainContent() {
       style={themeVars}
     >
       {/* HEADER ĐIỀU HƯỚNG */}
-      <header className="sticky top-0 z-30 border-b border-black/5 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl px-4 sm:px-8 py-3.5 flex items-center justify-between">
+      <header className="sticky top-0 z-30 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
             href="/new-dashboard"
             prefetch={false}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm transition hover:scale-105"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
             title="Quay lại Dashboard"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black tracking-tight" style={{ fontFamily: 'var(--font-setup-heading)' }}>
-                Thiết Lập Khóa Học & Soạn Đề KaTeX
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-setup-heading)' }}>
+                Soạn Đề KaTeX & Khóa Học
               </h1>
               {/* BADGE 2 CHẾ ĐỘ NGẦM */}
               {userRole === 'admin' || userRole === 'collab' || userRole === 'teacher' ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider">
-                  <ShieldCheck className="h-3 w-3" /> Toàn hệ thống (Admin/Colab)
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider">
+                  <ShieldCheck className="h-3 w-3" /> Toàn hệ thống
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider">
-                  <GraduationCap className="h-3 w-3" /> Tự học cá nhân (Học sinh)
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider">
+                  <GraduationCap className="h-3 w-3" /> Cá nhân
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold hidden sm:block">
-              Quản lý đề thi, soạn đề KaTeX trực tiếp không cần PDF và hỗ trợ AI Gemini đa tầng
+            <p className="text-xs text-[#6B7280] dark:text-slate-400">
+              Quản lý đề thi, soạn đề KaTeX trực tiếp không cần PDF và hỗ trợ AI Gemini đa tầng.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/new-dashboard"
-            prefetch={false}
-            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Trang chủ</span>
-          </Link>
-
           {(userRole === 'admin' || userRole === 'collab') && (
             <Link
               href="/new-admin-dashboard"
               prefetch={false}
-              className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2.5 rounded-2xl border border-black/10 dark:border-white/15 bg-white/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition shadow-sm"
             >
-              <LayoutDashboard className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Admin Portal</span>
+              <LayoutDashboard className="h-3.5 w-3.5 text-indigo-500" /> <span className="hidden sm:inline">Admin Portal</span>
             </Link>
           )}
 
           <button
             type="button"
             onClick={toggleDarkMode}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 shadow-sm transition"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+            title="Chuyển chế độ Sáng / Tối"
           >
-            {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />}
+            {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
           </button>
         </div>
       </header>

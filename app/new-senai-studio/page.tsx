@@ -276,46 +276,42 @@ export default function NewSenAiStudioPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/new-dashboard"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
-            title="Về Dashboard"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+            title="Quay lại Dashboard"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white shadow-sm">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-base font-black leading-none" style={{ fontFamily: 'var(--font-newsenai-heading)' }}>
-                SenAI Studio 2.0
-              </h2>
-              <span className="text-[10px] text-[#6B7280] dark:text-slate-400 font-bold uppercase tracking-wider">
-                Trợ lý học tập & Luyện thi thông minh
-              </span>
-            </div>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black leading-tight" style={{ fontFamily: 'var(--font-newsenai-heading)' }}>
+              SenAI Studio
+            </h2>
+            <p className="text-xs text-[#6B7280] dark:text-slate-400">
+              Trợ lý học tập & luyện thi thông minh với AI.
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <Link
             href="/new-senai"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-pink-500/20 bg-pink-500/10 dark:bg-pink-500/15 px-3 py-2 text-xs font-bold text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 transition shadow-sm"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition shadow-sm"
             title="Xem hạn mức Quota SenAI"
           >
-            <Brain className="h-3.5 w-3.5 text-pink-500" />
+            <Brain className="h-3.5 w-3.5 text-indigo-500" />
             <span>Quota SenAI</span>
           </Link>
           <button
             type="button"
             onClick={toggleDarkMode}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+            title="Chuyển chế độ Sáng / Tối"
           >
-            {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />}
+            {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
           </button>
           <button
             type="button"
             onClick={handleNewSession}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 px-3.5 py-2 text-xs font-black uppercase tracking-wider shadow-sm transition hover:opacity-90"
           >
             <Plus className="h-3.5 w-3.5" /> Đoạn chat mới
           </button>

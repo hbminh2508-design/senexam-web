@@ -321,19 +321,19 @@ export default function NewChangePasswordPage() {
       <div className="absolute top-4 sm:top-6 left-4 sm:left-6 right-4 sm:right-6 flex items-center justify-between z-10">
         <Link
           href="/new-idp"
-          className="inline-flex items-center gap-1.5 text-xs font-black text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition px-3 py-1.5 rounded-xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-black/5 dark:border-white/10 shadow-2xs"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+          title="Về trang Đăng nhập"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Về trang Đăng nhập</span>
+          <ArrowLeft className="h-5 w-5" />
         </Link>
 
         <button
           type="button"
           onClick={toggleDarkMode}
-          className="p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-black/5 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-amber-500 transition shadow-2xs"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
           title="Chuyển chế độ Sáng / Tối"
         >
-          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
         </button>
       </div>
 

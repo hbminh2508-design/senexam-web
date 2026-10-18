@@ -117,51 +117,19 @@ export default function NewStudentPage() {
       // 2. Fetch Exams Assigned to Enrolled Classes
       try {
         if (classIds.length > 0) {
-          // Lấy qua bảng class_exams
+          // Lấy qua bảng class_exams ĐƯỢC GÁN CHÍNH XÁC CHO CÁC LỚP HỌC SINH ĐÃ THAM GIA
           const { data: classExamsData } = await supabase
             .from('class_exams')
             .select('*, exams(*), classes(name, grade, subject, class_code)')
             .in('class_id', classIds)
             .order('created_at', { ascending: false })
 
-          // Đồng thời quét thêm các đề có mã định danh 12 số (4 số đầu là mã lớp)
-          const { data: allExams } = await supabase
-            .from('exams')
-            .select('*')
-            .order('created_at', { ascending: false })
+          // Lọc các bản ghi hợp lệ: có dữ liệu đề thi, đề chưa bị xóa/ẩn và đúng lớp
+          const validClassExams = (classExamsData || []).filter(
+            (item: any) => item.exams && item.exams.id && !item.exams.is_hidden
+          )
 
-          const classCodeMap = new Map()
-          validClasses.forEach((cls) => {
-            if (cls.class_code) classCodeMap.set(String(cls.class_code), cls)
-          })
-
-          const directMatchedExams: any[] = []
-          if (allExams && allExams.length > 0) {
-            allExams.forEach((ex: any) => {
-              const code = String(ex.exam_code || '')
-              if (code.length === 12 && /^\d{12}$/.test(code)) {
-                const classCode4 = code.slice(0, 4)
-                const matchedCls = classCodeMap.get(classCode4)
-                if (matchedCls) {
-                  const alreadyInList = (classExamsData || []).some((ce: any) => ce.exam_id === ex.id)
-                  if (!alreadyInList) {
-                    directMatchedExams.push({
-                      id: 'dir_' + ex.id,
-                      class_id: matchedCls.id,
-                      exam_id: ex.id,
-                      exams: ex,
-                      classes: matchedCls,
-                      due_date: null,
-                      created_at: ex.created_at,
-                    })
-                  }
-                }
-              }
-            })
-          }
-
-          const combined = [...(classExamsData || []), ...directMatchedExams]
-          setClassExamsList(combined)
+          setClassExamsList(validClassExams)
         } else {
           setClassExamsList([])
         }
@@ -380,27 +348,22 @@ export default function NewStudentPage() {
     >
       <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
         {/* HEADER */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-black/10 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
             <Link
               href="/new-dashboard"
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
-              title="Về Dashboard"
+              title="Quay lại Dashboard"
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-gradient-to-r from-sky-500/20 to-indigo-500/20 px-3 py-0.5 text-[11px] font-black text-sky-600 dark:text-sky-400 border border-sky-500/30 uppercase tracking-wider">
-                  <GraduationCap className="inline h-3.5 w-3.5 mr-1 text-sky-500" /> Không Gian Học Sinh
-                </span>
-                <span className="rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold">
-                  {studentName}
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
-                Lớp Học Của Tôi, Đề Thi & Kho Tài Liệu
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newstu-heading)' }}>
+                Không Gian Lớp Học
               </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Lớp học của tôi, đề thi được giao và kho tài liệu học tập chuẩn xác.
+              </p>
             </div>
           </div>
 
@@ -408,7 +371,8 @@ export default function NewStudentPage() {
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+              title="Chuyển chế độ Sáng / Tối"
             >
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>
