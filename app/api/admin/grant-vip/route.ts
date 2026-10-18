@@ -14,7 +14,8 @@ export async function POST(request: Request) {
     if (!userId || !Number.isFinite(daysNum) || daysNum <= 0) {
       return NextResponse.json({ error: 'Thiếu userId hoặc số ngày không hợp lệ' }, { status: 400 })
     }
-    const tier: 'lite' | 'vip' | 'premium' = planTier === 'lite' || planTier === 'premium' ? planTier : 'vip'
+    const validTiers = ['lite', 'vip', 'premium', 'premium_plus', 'sen_one', 'sen_one_lite']
+    const tier = validTiers.includes(planTier) ? planTier : 'premium'
 
     const supabaseAdmin = getSupabaseAdmin()
     const { data: profile, error: fetchErr } = await supabaseAdmin.from('profiles').select('vip_expires_at').eq('id', userId).maybeSingle()

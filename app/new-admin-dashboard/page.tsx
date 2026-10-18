@@ -85,6 +85,8 @@ import {
   FolderPlus,
   FolderOpen,
   Edit2,
+  ArrowLeft,
+  Ban,
 } from 'lucide-react'
 import { isExamInFolder } from '@/lib/sebFolderUtils'
 import SecurePasswordChangeCard from '@/app/components/SecurePasswordChangeCard'
@@ -586,7 +588,7 @@ export default function NewAdminDashboardPage() {
   const [adminFolderExamSearch, setAdminFolderExamSearch] = useState('')
   const [updatingFolderExams, setUpdatingFolderExams] = useState(false)
 
-  // 3. Danh sách Người dùng
+  // 3. Danh sách Người dùng & Quyền lực Admin
   const [users, setUsers] = useState<any[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -596,13 +598,24 @@ export default function NewAdminDashboardPage() {
   const [grantSenCashAmount, setGrantSenCashAmount] = useState('50')
   const [grantActionLoading, setGrantActionLoading] = useState(false)
 
+  // Modal đổi mật khẩu nhanh người dùng
+  const [userResetPwdTarget, setUserResetPwdTarget] = useState<any>(null)
+  const [userNewPasswordInput, setUserNewPasswordInput] = useState('')
+  const [userResetPwdLoading, setUserResetPwdLoading] = useState(false)
+
   // 4. Giftcodes
   const [giftcodes, setGiftcodes] = useState<any[]>([])
-  const [newCodeType, setNewCodeType] = useState<'sencash' | 'vip_days'>('vip_days')
+  const [giftcodesLoading, setGiftcodesLoading] = useState(false)
+  const [newCodeType, setNewCodeType] = useState<'sencash' | 'vip_days' | 'senai_tier'>('vip_days')
   const [newCodeAmount, setNewCodeAmount] = useState('30')
   const [newCodeMaxUses, setNewCodeMaxUses] = useState('10')
   const [newCodeNote, setNewCodeNote] = useState('Quà tặng học sinh')
+  const [newCustomCode, setNewCustomCode] = useState('')
+  const [newBatchCount, setNewBatchCount] = useState('1')
+  const [newSenaiTier, setNewSenaiTier] = useState('plus')
+  const [newSenaiDays, setNewSenaiDays] = useState('30')
   const [codeActionLoading, setCodeActionLoading] = useState(false)
+  const [giftcodeSearch, setGiftcodeSearch] = useState('')
 
   // Helper lấy Bearer Token gửi kèm các API Quản trị Server-side
   const getAdminAuthHeaders = async (): Promise<Record<string, string>> => {
@@ -841,6 +854,7 @@ export default function NewAdminDashboardPage() {
 
   // Tải danh sách Giftcodes
   const fetchGiftcodes = async () => {
+    setGiftcodesLoading(true)
     try {
       const headers = await getAdminAuthHeaders()
       const res = await fetch('/api/admin/gift-codes/list', {
@@ -852,6 +866,8 @@ export default function NewAdminDashboardPage() {
       }
     } catch (e) {
       console.warn('Lỗi tải giftcodes:', e)
+    } finally {
+      setGiftcodesLoading(false)
     }
   }
 
@@ -1478,21 +1494,152 @@ export default function NewAdminDashboardPage() {
     }
   }
 
-  // Tạo Giftcode
+  // Cập nhật vai trò người dùng (Student / Teacher / Collab / Admin)
+  const handleUpdateUserRole = async (targetUserId: string, newRole: string) => {
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/users/action', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'update_role', userId: targetUserId, role: newRole }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Đổi vai trò thất bại')
+      setBannerMsg({ type: 'success', text: `✓ ${data.message || 'Đã cập nhật vai trò'}` })
+      fetchUsers()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi đổi vai trò' })
+    } finally {
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Đổi mật khẩu trực tiếp cho học sinh
+  const handleAdminResetUserPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userResetPwdTarget || !userNewPasswordInput.trim()) return
+    setUserResetPwdLoading(true)
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/users/action', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          action: 'reset_password',
+          userId: userResetPwdTarget.id,
+          newPassword: userNewPasswordInput.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Đổi mật khẩu thất bại')
+      setBannerMsg({ type: 'success', text: `✓ Đã đổi mật khẩu cho [${userResetPwdTarget.email}] thành công!` })
+      setUserResetPwdTarget(null)
+      setUserNewPasswordInput('')
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi đổi mật khẩu' })
+    } finally {
+      setUserResetPwdLoading(false)
+      setTimeout(() => setBannerMsg(null), 3500)
+    }
+  }
+
+  // Khóa / Mở khóa tài khoản học sinh
+  const handleToggleBanUser = async (targetUser: any) => {
+    const isCurrentlyBanned = Boolean(targetUser.is_banned)
+    const promptMsg = isCurrentlyBanned
+      ? `Bạn có chắc muốn MỞ KHÓA tài khoản ${targetUser.email}?`
+      : `Bạn có chắc muốn KHÓA tài khoản ${targetUser.email}? Người dùng sẽ bị đình chỉ quyền truy cập.`
+    if (!window.confirm(promptMsg)) return
+
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/users/action', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          action: 'toggle_ban',
+          userId: targetUser.id,
+          isBanned: !isCurrentlyBanned,
+          banReason: isCurrentlyBanned ? null : 'Vi phạm quy định bởi Admin',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Thao tác khóa thất bại')
+      setBannerMsg({ type: 'success', text: `✓ ${data.message}` })
+      fetchUsers()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi thao tác' })
+    } finally {
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Xóa vĩnh viễn tài khoản người dùng
+  const handleDeleteUserPermanently = async (targetUser: any) => {
+    if (!window.confirm(`⚠️ CẢNH BÁO NGUY HIỂM: Bạn có chắc chắn muốn XÓA VĨNH VIỄN tài khoản ${targetUser.email}? Mọi dữ liệu bài nộp và hồ sơ sẽ bị xóa hoàn toàn khỏi cơ sở dữ liệu.`)) return
+
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/users/action', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'delete_user', userId: targetUser.id }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Xóa tài khoản thất bại')
+      setBannerMsg({ type: 'success', text: `✓ ${data.message}` })
+      fetchUsers()
+      fetchOverviewStats()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi xóa tài khoản' })
+    } finally {
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Thu hồi gói VIP của người dùng
+  const handleRevokeUserVip = async (targetUser: any) => {
+    if (!window.confirm(`Bạn có chắc muốn hủy gói VIP của ${targetUser.email}?`)) return
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/users/action', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'update_plan', userId: targetUser.id, removeVip: true }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Thu hồi thất bại')
+      setBannerMsg({ type: 'success', text: '✓ Đã thu hồi gói VIP thành công' })
+      fetchUsers()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi thu hồi' })
+    } finally {
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Tạo Giftcode nâng cao (Hỗ trợ VIP, SenCash, SenAI và Mã tùy chọn)
   const handleCreateGiftcode = async (e: React.FormEvent) => {
     e.preventDefault()
     setCodeActionLoading(true)
     try {
+      const codeCount = parseInt(newBatchCount, 10) || 1
       const payload: any = {
         rewardType: newCodeType,
-        count: 1,
-        note: newCodeNote,
+        count: codeCount,
+        note: newCodeNote.trim() || 'Quà tặng sự kiện SenExam',
         maxUses: parseInt(newCodeMaxUses, 10) || 1,
+        customCode: newCustomCode.trim() || undefined,
       }
+
       if (newCodeType === 'vip_days') {
-        payload.vipDays = parseInt(newCodeAmount, 10)
-      } else {
-        payload.sencashAmount = parseInt(newCodeAmount, 10)
+        payload.vipDays = parseInt(newCodeAmount, 10) || 30
+      } else if (newCodeType === 'sencash') {
+        payload.sencashAmount = parseInt(newCodeAmount, 10) || 50
+      } else if (newCodeType === 'senai_tier') {
+        payload.senaiTier = newSenaiTier
+        payload.senaiDurationDays = parseInt(newSenaiDays, 10) || 30
+        payload.senaiPermanent = false
       }
 
       const headers = await getAdminAuthHeaders()
@@ -1503,13 +1650,56 @@ export default function NewAdminDashboardPage() {
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'Tạo mã thất bại')
-      setBannerMsg({ type: 'success', text: `✓ Đã tạo mã quà tặng: ${data.code || 'Thành công'}` })
-      setGiftcodes((prev) => [data, ...prev])
+      const createdCount = Array.isArray(data.codes) ? data.codes.length : 1
+      setBannerMsg({ type: 'success', text: `✓ Đã tạo thành công ${createdCount} mã quà tặng!` })
+      setNewCustomCode('')
+      fetchGiftcodes()
     } catch (e: any) {
       setBannerMsg({ type: 'error', text: e.message || 'Lỗi tạo mã quà tặng.' })
     } finally {
       setCodeActionLoading(false)
       setTimeout(() => setBannerMsg(null), 3500)
+    }
+  }
+
+  // Xóa Giftcode
+  const handleDeleteGiftcode = async (codeId: string, codeString: string) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa vĩnh viễn mã "${codeString}"?`)) return
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/gift-codes/action', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'delete', codeId }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Xóa thất bại')
+      setBannerMsg({ type: 'success', text: '✓ Đã xóa mã quà tặng' })
+      fetchGiftcodes()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi xóa mã quà tặng' })
+    } finally {
+      setTimeout(() => setBannerMsg(null), 3000)
+    }
+  }
+
+  // Bật / tắt hiệu lực Giftcode
+  const handleToggleGiftcodeActive = async (codeId: string, currentActive: boolean) => {
+    try {
+      const headers = await getAdminAuthHeaders()
+      const res = await fetch('/api/admin/gift-codes/action', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'toggle_active', codeId, active: !currentActive }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Cập nhật thất bại')
+      setBannerMsg({ type: 'success', text: `✓ ${data.message}` })
+      fetchGiftcodes()
+    } catch (e: any) {
+      setBannerMsg({ type: 'error', text: e.message || 'Lỗi cập nhật' })
+    } finally {
+      setTimeout(() => setBannerMsg(null), 3000)
     }
   }
 
@@ -1633,6 +1823,18 @@ export default function NewAdminDashboardPage() {
     )
   }, [users, userSearch])
 
+  // Lọc Giftcodes
+  const filteredGiftcodes = useMemo(() => {
+    if (!giftcodeSearch.trim()) return giftcodes
+    const q = giftcodeSearch.toLowerCase().trim()
+    return giftcodes.filter(
+      (c) =>
+        c.code?.toLowerCase().includes(q) ||
+        c.note?.toLowerCase().includes(q) ||
+        c.reward_type?.toLowerCase().includes(q)
+    )
+  }, [giftcodes, giftcodeSearch])
+
   // ANIMATION LOADING HIỆN ĐẠI, MƯỢT MÀ VÀ TỐI ƯU TỐC ĐỘ (KHÔNG BAO GIỜ BỊ ĐƠ)
   if (loading) {
     return (
@@ -1696,7 +1898,53 @@ export default function NewAdminDashboardPage() {
         </div>
       )}
 
-      <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-4 sm:pt-6 sm:px-6 lg:px-8">
+      <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-4 sm:pt-6 sm:px-6 lg:px-8 space-y-6">
+        {/* Top Navigation Bar theo chuẩn New-Exams */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/new-dashboard"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+              title="Quay lại Trang Chủ Dashboard"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
+                  Trung Tâm Quản Trị Hệ Thống
+                </h1>
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                  ROOT PRIVILEGES
+                </span>
+              </div>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Bảng điều khiển kiểm soát toàn diện, phân quyền người dùng, cấp tài khoản và tạo mã quà tặng.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105 cursor-pointer"
+              title="Chuyển chế độ Sáng / Tối"
+            >
+              {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
+            </button>
+
+            <Link
+              href="/new-dashboard"
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 text-xs font-bold shadow-sm hover:scale-105 transition"
+            >
+              <LayoutDashboard className="h-4 w-4 text-indigo-500" />
+              <span>Dashboard</span>
+            </Link>
+          </div>
+        </div>
+
         {/* ========================================================================= */}
         {/* GIAO DIỆN MOBILE TỐI ƯU CHO ĐIỆN THOẠI (block md:hidden)                 */}
         {/* ========================================================================= */}
@@ -2244,129 +2492,71 @@ export default function NewAdminDashboardPage() {
                 </div>
               </div>
 
-              {/* CÁC PHẦN CHIA NGANG (VẼ ĐƯỜNG CHIA NGHỆ THUẬT) */}
-              <div className="mt-4 space-y-6">
-                {activeCategories.map((cat) => {
-                  const groupItems = filteredActionList.filter((a) => a.category === cat.key)
-                  if (groupItems.length === 0) return null
+                {/* BẢNG ĐIỀU KHIỂN QUẢN TRỊ TRỰC QUAN (ADMIN CONTROL PANELS) */}
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredActionList.map((item) => {
+                    const Icon = item.icon
+                    const isAnchorOrScroll = Boolean(item.actionTab)
+                    const isExternal = Boolean(item.href?.startsWith('http'))
 
-                  const catTheme =
-                    cat.key === 'admin_core'
-                      ? {
-                          line: 'from-rose-500/50 via-rose-500/20 to-transparent',
-                          badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20',
-                        }
-                      : cat.key === 'study'
-                      ? {
-                          line: 'from-emerald-500/50 via-emerald-500/20 to-transparent',
-                          badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
-                        }
-                      : cat.key === 'math_exam'
-                      ? {
-                          line: 'from-sky-500/50 via-sky-500/20 to-transparent',
-                          badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20',
-                        }
-                      : cat.key === 'senai'
-                      ? {
-                          line: 'from-purple-500/50 via-purple-500/20 to-transparent',
-                          badge: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
-                        }
-                      : {
-                          line: 'from-pink-500/50 via-pink-500/20 to-transparent',
-                          badge: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20',
-                        }
+                    const handleClick = (e: React.MouseEvent) => {
+                      if (isAnchorOrScroll) {
+                        e.preventDefault()
+                        scrollToWorkbench(item.actionTab)
+                      }
+                    }
 
-                  return (
-                    <div key={cat.key} className="space-y-3">
-                      {/* VẼ ĐƯỜNG CHIA PHÂN HỆ NGHỆ THUẬT */}
-                      <div className="relative flex items-center gap-3 pt-3 pb-1">
-                        <div className="flex items-center gap-2.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-800/90 px-3.5 py-1.5 shadow-xs">
-                          <span className="text-lg">{cat.icon}</span>
-                          <h3
-                            className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider"
-                            style={{ fontFamily: 'var(--font-newdash-heading)' }}
-                          >
-                            {cat.label}
-                          </h3>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${catTheme.badge}`}>
-                            {groupItems.length}
-                          </span>
+                    const Wrapper = isAnchorOrScroll ? 'div' : isExternal ? 'a' : Link
+                    const extraProps = isAnchorOrScroll
+                      ? { onClick: handleClick }
+                      : isExternal
+                      ? { href: item.href!, target: '_blank', rel: 'noopener noreferrer' }
+                      : { href: item.href || '#' }
+
+                    return (
+                      <Wrapper
+                        key={item.key}
+                        {...(extraProps as any)}
+                        className="group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-850/95 p-4.5 cursor-pointer block hover:border-slate-400 dark:hover:border-slate-600 hover:shadow-md transition-all active:scale-[0.99]"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-black/5 dark:border-white/10 shadow-xs group-hover:bg-slate-200 dark:group-hover:bg-slate-700 transition">
+                            <Icon className="h-5 w-5" />
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {item.badge && (
+                              <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 border border-black/10 dark:border-white/10">
+                                {item.badge}
+                              </span>
+                            )}
+                            <ArrowRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-700 dark:group-hover:text-slate-200" />
+                          </div>
                         </div>
-                        <div className={`flex-1 h-0.5 rounded-full bg-gradient-to-r ${catTheme.line}`} />
-                      </div>
 
-                      {/* CÁC THẺ TÍNH NĂNG GIỮ NGUYÊN FORM DÁNG NEW-DASHBOARD */}
-                      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-                        {groupItems.map((item) => {
-                          const Icon = item.icon
-                          const isAnchorOrScroll = Boolean(item.actionTab)
-                          const isExternal = Boolean(item.href?.startsWith('http'))
-
-                          const handleClick = (e: React.MouseEvent) => {
-                            if (isAnchorOrScroll) {
-                              e.preventDefault()
-                              scrollToWorkbench(item.actionTab)
-                            }
-                          }
-
-                          const Wrapper = isAnchorOrScroll ? 'div' : isExternal ? 'a' : Link
-                          const extraProps = isAnchorOrScroll
-                            ? { onClick: handleClick }
-                            : isExternal
-                            ? { href: item.href!, target: '_blank', rel: 'noopener noreferrer' }
-                            : { href: item.href || '#' }
-
-                          return (
-                            <Wrapper
-                              key={item.key}
-                              {...(extraProps as any)}
-                              className="newdash-card group relative overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 p-4 cursor-pointer block"
-                            >
-                              {/* Dải gradient nhận diện trên đỉnh thẻ */}
-                              <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${item.tone}`} />
-
-                              <div className="flex items-start justify-between gap-3">
-                                <span className="rounded-xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-700/80 p-2.5 shadow-sm group-hover:scale-105 transition-transform">
-                                  <Icon className="h-5 w-5 text-[#111827] dark:text-white" />
-                                </span>
-
-                                <div className="flex items-center gap-1.5">
-                                  {item.badge && (
-                                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                                      {item.badge}
-                                    </span>
-                                  )}
-                                  <ArrowRight className="h-4 w-4 text-[#6B7280] dark:text-slate-400 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                                </div>
-                              </div>
-
-                              <h3
-                                className="mt-3 text-base sm:text-lg font-black leading-tight text-slate-900 dark:text-white"
-                                style={{ fontFamily: 'var(--font-newdash-heading)' }}
-                              >
-                                {item.title}
-                              </h3>
-                              <p
-                                className="mt-1 text-xs leading-relaxed text-[#4B5563] dark:text-slate-300 font-medium"
-                                style={{ fontFamily: 'var(--font-newdash-body)' }}
-                              >
-                                {item.description}
-                              </p>
-                            </Wrapper>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
+                        <h3
+                          className="mt-3.5 text-base font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors"
+                          style={{ fontFamily: 'var(--font-newdash-heading)' }}
+                        >
+                          {item.title}
+                        </h3>
+                        <p
+                          className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300 font-medium"
+                          style={{ fontFamily: 'var(--font-newdash-body)' }}
+                        >
+                          {item.description}
+                        </p>
+                      </Wrapper>
+                    )
+                  })}
+                </div>
 
                 {filteredActionList.length === 0 && (
                   <div className="rounded-2xl border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-800/50 p-6 text-center text-sm text-[#4B5563] dark:text-slate-400 font-bold">
-                    Không tìm thấy tính năng nào khớp với từ khoá &quot;{searchQuery}&quot;. Vui lòng thử từ khoá khác!
+                    Không tìm thấy bảng điều khiển nào khớp với từ khoá &quot;{searchQuery}&quot;. Vui lòng thử từ khoá khác!
                   </div>
                 )}
               </div>
-            </div>
 
             {/* CỘT PHẢI: Hồ Sơ Admin, Bộ Chuyển Góc Nhìn, Giám Sát An Ninh, Google, Sen 2FA & Cài Đặt */}
             <aside className="space-y-5">
@@ -3667,36 +3857,203 @@ export default function NewAdminDashboardPage() {
                       {filteredUsers.map((u) => (
                         <div
                           key={u.id}
-                          className="p-3.5 flex items-center justify-between flex-wrap gap-2 hover:bg-black/[0.01]"
+                          className={`p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition ${
+                            u.is_banned ? 'bg-rose-500/5' : ''
+                          }`}
                         >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 dark:text-white">{u.email}</span>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-500/10 text-slate-600 dark:text-slate-300">
-                                {u.role === 'admin' ? '👑 Admin' : u.role === 'teacher' ? '👨‍🏫 Giáo viên' : '🎓 Học sinh'}
-                              </span>
+                          {/* Thông tin người dùng */}
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center flex-wrap gap-2">
+                              <span className="font-bold text-slate-900 dark:text-white truncate">{u.email}</span>
+                              
+                              {/* Dropdown Đổi Vai Trò Trực Tiếp */}
+                              <select
+                                value={u.role || 'student'}
+                                onChange={(e) => handleUpdateUserRole(u.id, e.target.value)}
+                                className={`text-[10px] font-black rounded-lg px-2 py-0.5 border outline-none cursor-pointer transition ${
+                                  u.role === 'admin'
+                                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                                    : u.role === 'teacher'
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                    : u.role === 'collab'
+                                    ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                                    : 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-black/10 dark:border-white/10'
+                                }`}
+                              >
+                                <option value="student">🎓 Học sinh</option>
+                                <option value="teacher">👨‍🏫 Giáo viên</option>
+                                <option value="collab">🤝 Cộng tác viên</option>
+                                <option value="admin">👑 Quản trị viên</option>
+                              </select>
+
+                              {/* Gói VIP nếu có */}
                               {u.plan_tier && u.plan_tier !== 'free' && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-600">
-                                  VIP: {u.plan_tier}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                  <Crown className="h-3 w-3 text-amber-500" />
+                                  <span>{u.plan_tier.toUpperCase()}</span>
+                                </span>
+                              )}
+
+                              {/* Trạng thái Khóa (Ban) */}
+                              {u.is_banned && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                                  <Ban className="h-3 w-3" />
+                                  <span>ĐÃ KHÓA</span>
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              {u.full_name || 'Chưa cập nhật tên'} • SenCash: {u.sencash_balance || 0} SC
+
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Họ tên: <strong className="text-slate-700 dark:text-slate-200">{u.full_name || 'Chưa đặt tên'}</strong> • SenCash:{' '}
+                              <strong className="text-pink-600 dark:text-pink-400 font-mono">{u.sencash_balance || 0} SC</strong>
+                              {u.plan_expires_at && (
+                                <span> • Hết hạn VIP: {new Date(u.plan_expires_at).toLocaleDateString('vi-VN')}</span>
+                              )}
                             </p>
+                          </div>
+
+                          {/* Bộ phím chức năng quản trị trực tiếp */}
+                          <div className="flex items-center flex-wrap gap-1.5 shrink-0">
+                            {/* Nút Đổi Mật Khẩu Trực Tiếp */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUserResetPwdTarget(u)
+                                setUserNewPasswordInput('')
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold text-xs hover:bg-indigo-500/20 transition flex items-center gap-1 cursor-pointer"
+                              title="Đặt mật khẩu mới trực tiếp không cần email OTP"
+                            >
+                              <KeyRound className="h-3.5 w-3.5 text-indigo-500" />
+                              <span>Đổi Mật Khẩu</span>
+                            </button>
+
+                            {/* Nút Nâng VIP / Tặng SC */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUserForGrant(u)}
+                              className="px-2.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-xs hover:bg-amber-500/20 transition flex items-center gap-1 cursor-pointer"
+                              title="Cấp VIP hoặc cộng SenCash"
+                            >
+                              <Crown className="h-3.5 w-3.5 text-amber-500" />
+                              <span>Nâng VIP / SC</span>
+                            </button>
+
+                            {/* Thu hồi VIP nếu có */}
+                            {u.plan_tier && u.plan_tier !== 'free' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRevokeUserVip(u)}
+                                className="px-2.5 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400 font-bold text-xs hover:bg-amber-500/15 transition cursor-pointer"
+                                title="Hủy gói VIP và đưa về tài khoản miễn phí"
+                              >
+                                Thu hồi VIP
+                              </button>
+                            )}
+
+                            {/* Khóa / Mở Khóa */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleBanUser(u)}
+                              className={`px-2.5 py-1.5 rounded-xl border font-bold text-xs transition flex items-center gap-1 cursor-pointer ${
+                                u.is_banned
+                                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                                  : 'border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20'
+                              }`}
+                              title={u.is_banned ? 'Mở khóa tài khoản' : 'Đình chỉ / Khóa tài khoản'}
+                            >
+                              {u.is_banned ? <Unlock className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
+                              <span>{u.is_banned ? 'Mở Khóa' : 'Khóa Nick'}</span>
+                            </button>
+
+                            {/* Xóa Vĩnh Viễn Tài Khoản */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUserPermanently(u)}
+                              className="p-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                              title="Xóa vĩnh viễn tài khoản khỏi Supabase Auth & Database"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* MODAL ĐẶT MẬT KHẨU MỚI TRỰC TIẾP CHO NGƯỜI DÙNG */}
+                  {userResetPwdTarget && (
+                    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                      <div className="w-full max-w-md rounded-[28px] border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+                        <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-3">
+                          <h4 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
+                            <KeyRound className="h-5 w-5 text-indigo-500" />
+                            <span>Đổi Mật Khẩu Trực Tiếp Cho Học Sinh</span>
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => setUserResetPwdTarget(null)}
+                            className="text-slate-400 hover:text-black dark:hover:text-white text-sm font-bold"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-900 dark:text-indigo-200 space-y-1">
+                          <p>
+                            Tài khoản: <strong>{userResetPwdTarget.email}</strong>
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Họ tên: {userResetPwdTarget.full_name || 'Học sinh'} • Thao tác sẽ cập nhật ngay lập tức vào Supabase Auth mà không cần gửi email OTP.
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleAdminResetUserPassword} className="space-y-4 text-xs">
+                          <div>
+                            <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                              Nhập mật khẩu mới cho tài khoản (tối thiểu 6 ký tự):
+                            </label>
+                            <input
+                              type="text"
+                              value={userNewPasswordInput}
+                              onChange={(e) => setUserNewPasswordInput(e.target.value)}
+                              placeholder="Ví dụ: SenExam@2026 hoặc mật khẩu mới..."
+                              required
+                              minLength={6}
+                              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 p-3 font-mono font-bold text-xs outline-none focus:border-indigo-500"
+                            />
                           </div>
 
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setSelectedUserForGrant(u)}
-                              className="px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-xs hover:bg-amber-500/20 transition cursor-pointer"
+                              onClick={() => {
+                                const randomPwd = `Sen@${Math.floor(100000 + Math.random() * 900000)}`
+                                setUserNewPasswordInput(randomPwd)
+                              }}
+                              className="px-3 py-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 font-bold text-xs hover:bg-black/10 transition cursor-pointer"
                             >
-                              Nâng VIP / Tặng SC
+                              Tạo pass ngẫu nhiên
+                            </button>
+
+                            <button
+                              type="submit"
+                              disabled={userResetPwdLoading || userNewPasswordInput.trim().length < 6}
+                              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                              {userResetPwdLoading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" /> Đang cập nhật...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="h-4 w-4" /> Lưu Mật Khẩu Mới
+                                </>
+                              )}
                             </button>
                           </div>
-                        </div>
-                      ))}
+                        </form>
+                      </div>
                     </div>
                   )}
 
@@ -3784,63 +4141,145 @@ export default function NewAdminDashboardPage() {
                 </div>
               )}
 
-              {/* TAB 6: GIFTCODES */}
+              {/* TAB 6: GIFTCODES (MÃ QUÀ TẶNG & LĨNH THƯỞNG) */}
               {workbenchTab === 'giftcodes' && (
-                <div className="space-y-5 animate-in fade-in">
+                <div className="space-y-6 animate-in fade-in">
                   <div className="p-4 rounded-2xl bg-pink-500/10 border border-pink-500/20 text-xs text-pink-800 dark:text-pink-200">
                     <p className="font-bold flex items-center gap-1.5">
-                      <Gift className="h-4 w-4 text-pink-600" /> Tạo mã quà tặng Giftcode sự kiện:
+                      <Gift className="h-4 w-4 text-pink-600" /> Trung Tâm Quản Trị Giftcode & Phần Thưởng:
                     </p>
                     <p className="mt-1 text-[11px] leading-relaxed">
-                      Mã quà tặng cho phép học sinh tự kích hoạt VIP hoặc nhận SenCash vào ví SenExam.
+                      Khởi tạo mã kích hoạt VIP (mọi hạng), tặng ví SenCash hoặc cấp quyền hạng SenAI Studio. Hỗ trợ tạo mã tùy chọn (Custom Code), sinh hàng loạt mã cùng lúc và theo dõi lượt sử dụng thời gian thực.
                     </p>
                   </div>
 
-                  <form onSubmit={handleCreateGiftcode} className="space-y-4 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  {/* FORM TẠO GIFTCODE MỞ RỘNG */}
+                  <form onSubmit={handleCreateGiftcode} className="p-5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 space-y-4 text-xs">
+                    <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                      <Plus className="h-4 w-4 text-pink-500" />
+                      <span>Khởi Tạo Mã Quà Tặng Mới</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Loại phần thưởng:</label>
+                        <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Loại phần thưởng:</label>
                         <select
                           value={newCodeType}
                           onChange={(e) => setNewCodeType(e.target.value as any)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
                         >
-                          <option value="vip_days">Kích hoạt ngày VIP</option>
-                          <option value="sencash">Cộng SenCash vào ví</option>
+                          <option value="vip_days">👑 Kích hoạt ngày Sen VIP</option>
+                          <option value="sencash">🪙 Cộng SenCash vào ví</option>
+                          <option value="senai_tier">🤖 Cấp gói hạng SenAI Studio</option>
                         </select>
                       </div>
 
-                      <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">
-                          {newCodeType === 'vip_days' ? 'Số ngày VIP:' : 'Số SenCash (SC):'}
-                        </label>
-                        <input
-                          type="number"
-                          value={newCodeAmount}
-                          onChange={(e) => setNewCodeAmount(e.target.value)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
-                          required
-                        />
-                      </div>
+                      {newCodeType === 'vip_days' && (
+                        <div>
+                          <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Số ngày VIP:</label>
+                          <input
+                            type="number"
+                            value={newCodeAmount}
+                            onChange={(e) => setNewCodeAmount(e.target.value)}
+                            placeholder="30"
+                            className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
+                            required
+                          />
+                        </div>
+                      )}
+
+                      {newCodeType === 'sencash' && (
+                        <div>
+                          <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Số lượng SenCash (SC):</label>
+                          <input
+                            type="number"
+                            value={newCodeAmount}
+                            onChange={(e) => setNewCodeAmount(e.target.value)}
+                            placeholder="50"
+                            className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
+                            required
+                          />
+                        </div>
+                      )}
+
+                      {newCodeType === 'senai_tier' && (
+                        <>
+                          <div>
+                            <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Hạng SenAI Studio:</label>
+                            <select
+                              value={newSenaiTier}
+                              onChange={(e) => setNewSenaiTier(e.target.value)}
+                              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
+                            >
+                              <option value="ultra_250">SenAI Ultra (250 tokens/ngày)</option>
+                              <option value="max_500">SenAI Max (500 tokens/ngày)</option>
+                              <option value="unlimited">SenAI Unlimited (Không giới hạn)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Thời hạn SenAI (ngày):</label>
+                            <input
+                              type="number"
+                              value={newSenaiDays}
+                              onChange={(e) => setNewSenaiDays(e.target.value)}
+                              placeholder="30"
+                              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
+                              required
+                            />
+                          </div>
+                        </>
+                      )}
 
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Số lượt dùng tối đa:</label>
+                        <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Số lượt dùng tối đa:</label>
                         <input
                           type="number"
                           value={newCodeMaxUses}
                           onChange={(e) => setNewCodeMaxUses(e.target.value)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          placeholder="1"
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                          Mã tùy chọn (Custom Code - Không bắt buộc):
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomCode}
+                          onChange={(e) => setNewCustomCode(e.target.value)}
+                          placeholder="Ví dụ: SENEXAM2026 (để trống sẽ tự sinh)"
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-mono uppercase font-bold outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                          Số lượng mã tạo cùng lúc:
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={newBatchCount}
+                          onChange={(e) => setNewBatchCount(e.target.value)}
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="font-bold text-slate-600 dark:text-slate-300 block mb-1">Ghi chú sự kiện:</label>
+                        <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Ghi chú sự kiện:</label>
                         <input
                           type="text"
                           value={newCodeNote}
                           onChange={(e) => setNewCodeNote(e.target.value)}
-                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 p-2.5 font-bold outline-none"
+                          placeholder="Quà tặng khai giảng / Fanpage..."
+                          className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
                         />
                       </div>
                     </div>
@@ -3848,12 +4287,151 @@ export default function NewAdminDashboardPage() {
                     <button
                       type="submit"
                       disabled={codeActionLoading}
-                      className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-105 transition disabled:opacity-50 cursor-pointer"
+                      className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-105 transition disabled:opacity-50 cursor-pointer flex items-center gap-2"
                     >
-                      {codeActionLoading ? <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> : <Plus className="h-4 w-4 inline mr-2" />}
-                      Khởi Tạo Mã Giftcode Ngay
+                      {codeActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      <span>{newBatchCount && parseInt(newBatchCount, 10) > 1 ? `Khởi Tạo ${newBatchCount} Mã Cùng Lúc` : 'Khởi Tạo Mã Ngay'}</span>
                     </button>
                   </form>
+
+                  {/* DANH SÁCH MÃ GIFTCODE ĐANG LƯU HÀNH */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          <Gift className="h-4 w-4 text-pink-500" />
+                          <span>Kho Mã Giftcode Lưu Hành ({filteredGiftcodes.length})</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Bấm sao chép để gửi cho thí sinh hoặc kích hoạt / vô hiệu hóa tức thì.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="relative w-full sm:w-64">
+                          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                          <input
+                            type="text"
+                            placeholder="Tìm kiếm mã hoặc ghi chú..."
+                            value={giftcodeSearch}
+                            onChange={(e) => setGiftcodeSearch(e.target.value)}
+                            className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 py-1.5 pl-8 pr-3 text-xs outline-none"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={fetchGiftcodes}
+                          className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:bg-black/5 cursor-pointer"
+                          title="Làm mới danh sách mã"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {giftcodesLoading ? (
+                      <div className="py-12 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin text-pink-500" /> Đang tải kho mã quà tặng...
+                      </div>
+                    ) : filteredGiftcodes.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-400 border border-dashed border-black/10 dark:border-white/10 rounded-2xl">
+                        Chưa có mã quà tặng nào hoặc không tìm thấy kết quả phù hợp.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-black/5 dark:divide-white/5 border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden text-xs">
+                        {filteredGiftcodes.map((c) => {
+                          const isExpired = c.expires_at && new Date(c.expires_at) < new Date()
+                          const isDepleted = c.used_count >= c.max_uses
+                          const isActive = c.is_active !== false && !isExpired && !isDepleted
+
+                          return (
+                            <div
+                              key={c.id || c.code}
+                              className={`p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition ${
+                                !isActive ? 'opacity-60 bg-slate-500/5' : ''
+                              }`}
+                            >
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex items-center flex-wrap gap-2">
+                                  <span className="font-mono font-black text-sm text-slate-900 dark:text-white tracking-wider bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-lg select-all">
+                                    {c.code}
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(c.code)
+                                      setBannerMsg({ type: 'success', text: `✓ Đã sao chép mã ${c.code}` })
+                                      setTimeout(() => setBannerMsg(null), 2000)
+                                    }}
+                                    className="p-1 rounded text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                                    title="Sao chép mã"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  {/* Loại phần thưởng */}
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
+                                    {c.reward_type === 'vip_days'
+                                      ? `👑 VIP: +${c.reward_value?.vip_days || 30} ngày`
+                                      : c.reward_type === 'sencash'
+                                      ? `🪙 +${c.reward_value?.sencash_amount || 50} SC`
+                                      : `🤖 SenAI: ${c.reward_value?.tier || 'VIP'}`}
+                                  </span>
+
+                                  {/* Trạng thái */}
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                      isActive
+                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                    }`}
+                                  >
+                                    {isActive ? '● Đang hoạt động' : isDepleted ? 'Hết lượt' : isExpired ? 'Hết hạn' : 'Đã tắt'}
+                                  </span>
+                                </div>
+
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                  Lượt dùng: <strong className="text-slate-700 dark:text-slate-200">{c.used_count || 0} / {c.max_uses || 1}</strong>
+                                  {c.note && <span> • Ghi chú: {c.note}</span>}
+                                  {c.created_at && (
+                                    <span> • Tạo lúc: {new Date(c.created_at).toLocaleDateString('vi-VN')}</span>
+                                  )}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Bật / Tắt hiệu lực mã */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleGiftcodeActive(c)}
+                                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                                    c.is_active !== false
+                                      ? 'border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20'
+                                      : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                                  }`}
+                                  title={c.is_active !== false ? 'Vô hiệu hóa mã này' : 'Kích hoạt lại mã'}
+                                >
+                                  {c.is_active !== false ? 'Tắt mã' : 'Bật mã'}
+                                </button>
+
+                                {/* Xóa mã khỏi hệ thống */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteGiftcode(c)}
+                                  className="p-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition cursor-pointer"
+                                  title="Xóa vĩnh viễn giftcode này"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
