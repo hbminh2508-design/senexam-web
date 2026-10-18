@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     if (!userId || !Number.isFinite(daysNum) || daysNum <= 0) {
       return NextResponse.json({ error: 'Thiếu userId hoặc số ngày không hợp lệ' }, { status: 400 })
     }
-    const validTiers = ['lite', 'vip', 'premium', 'premium_plus', 'sen_one', 'sen_one_lite']
+    const validTiers = ['lite', 'vip', 'premium', 'premium_plus', 'sen_one', 'sen_one_lite', 'sen_unlimited']
     const tier = validTiers.includes(planTier) ? planTier : 'premium'
 
     const supabaseAdmin = getSupabaseAdmin()
@@ -22,8 +22,19 @@ export async function POST(request: Request) {
     if (fetchErr) throw fetchErr
     if (!profile) return NextResponse.json({ error: 'Không tìm thấy người dùng' }, { status: 404 })
 
-    const newExpiresAt = extendVipExpiry(profile.vip_expires_at, daysNum)
-    await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, plan_tier: tier }).eq('id', userId)
+    const isUnlimited = tier === 'sen_unlimited'
+    const newExpiresAt = isUnlimited ? '2099-12-31T23:59:59.999Z' : extendVipExpiry(profile.vip_expires_at, daysNum)
+    
+    await supabaseAdmin
+      .from('profiles')
+      .update({
+        vip_expires_at: newExpiresAt,
+        plan_tier: tier,
+        is_sen_unlimited: isUnlimited,
+        senai_tier: isUnlimited ? 'unlimited' : undefined,
+        senai_tier_permanent: isUnlimited ? true : undefined,
+      })
+      .eq('id', userId)
 
     await supabaseAdmin.from('admin_grants_log').insert({
       admin_id: admin.id,

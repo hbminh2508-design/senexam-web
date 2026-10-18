@@ -4093,6 +4093,7 @@ export default function NewAdminDashboardPage() {
                               <option value="premium">Sen VIP (Premium)</option>
                               <option value="premium_plus">Premium+</option>
                               <option value="sen_one">Sen One</option>
+                              <option value="sen_unlimited">💎 Sen Unlimited (Gói Ẩn Vô Cực)</option>
                             </select>
                             <input
                               type="number"
