@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
@@ -76,11 +77,14 @@ export default function NewMarkCalculatePage() {
   // AI Advice
   const [aiAdvice, setAiAdvice] = useState('')
   const [isAiLoading, setIsAiLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
+    const timer = setTimeout(() => setInitialLoading(false), 200)
+    return () => clearTimeout(timer)
   }, [])
 
   const toggleDarkMode = () => {
@@ -201,6 +205,17 @@ export default function NewMarkCalculatePage() {
   const currentBlock = EXAM_BLOCKS.find((b) => b.code === selectedBlock) || EXAM_BLOCKS[0]
   const themeVars = getModernThemeVars('indigo', isDark)
 
+  if (initialLoading) {
+    return (
+      <ModernLoading
+        isDark={isDark}
+        themeColor="indigo"
+        title="SenExam Công Cụ Tính Điểm 2026"
+        subtitle="Đang chuẩn bị công thức tính điểm tốt nghiệp & xét tuyển..."
+      />
+    )
+  }
+
   return (
     <main
       className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-[#1A1A1A] dark:text-slate-100 font-sans transition-colors duration-300`}
@@ -213,7 +228,7 @@ export default function NewMarkCalculatePage() {
     >
       <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* HEADER */}
-        <div className="flex items-center justify-between pb-6 border-b border-black/10 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
             <Link
               href="/new-dashboard"
@@ -223,12 +238,7 @@ export default function NewMarkCalculatePage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                  <Calculator className="inline h-3 w-3 mr-1" /> Công Cụ Tính Điểm 2026
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newmark-heading)' }}>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newmark-heading)' }}>
                 Tính Điểm Tốt Nghiệp & Xét Tuyển Đại Học
               </h1>
               <p className="text-xs text-[#6B7280] dark:text-slate-400">
@@ -240,7 +250,8 @@ export default function NewMarkCalculatePage() {
           <button
             type="button"
             onClick={toggleDarkMode}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+            title="Chuyển chế độ Sáng / Tối"
           >
             {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
           </button>

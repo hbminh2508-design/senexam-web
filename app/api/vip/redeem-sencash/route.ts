@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getPlanByGroup, extendVipExpiry, type PlanGroup, type VipPlanCode } from '@/lib/vipMembership'
+import { getPlanByGroup, extendVipExpiry, isSameActivePlan, type PlanGroup, type VipPlanCode } from '@/lib/vipMembership'
 import { vndToSenCash } from '@/lib/senCash'
 import {
   applyVipPurchasePerks,
@@ -23,8 +23,21 @@ export async function POST(request: Request) {
     const plan = getPlanByGroup(group, planCode)
     if (!plan) return NextResponse.json({ error: 'Gói không hợp lệ' }, { status: 400 })
 
-    const cost = vndToSenCash(plan.priceVnd)
     const supabaseAdmin = getSupabaseAdmin()
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('vip_expires_at, plan_tier, vip_plan_code, sencash_balance')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (isSameActivePlan(profile, group, plan.code)) {
+      return NextResponse.json(
+        { error: 'Bạn đang sử dụng gói này. Bạn chỉ có thể nâng cấp hoặc chuyển sang gói khác, không thể đăng ký lại gói đang dùng.' },
+        { status: 400 }
+      )
+    }
+
+    const cost = vndToSenCash(plan.priceVnd)
 
     let balanceDeducted = false
     try {
@@ -60,7 +73,6 @@ export async function POST(request: Request) {
       balanceDeducted = true
     }
 
-    const { data: profile } = await supabaseAdmin.from('profiles').select('vip_expires_at').eq('id', user.id).maybeSingle()
     const newExpiresAt = extendVipExpiry(profile?.vip_expires_at, plan.durationDays)
 
     await supabaseAdmin.from('profiles').update({ vip_expires_at: newExpiresAt, vip_plan_code: plan.code, plan_tier: group }).eq('id', user.id)

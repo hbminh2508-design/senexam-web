@@ -348,7 +348,7 @@ function PayContent() {
       const { data: prof } = await supabase
         .from('profiles')
         .select(
-          'id, full_name, email, role, is_beta_tester, sencash_balance, senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at, plan_tier'
+          'id, full_name, email, role, is_beta_tester, sencash_balance, senai_tier, senai_tier_expires_at, senai_tier_permanent, vip_expires_at, plan_tier, vip_plan_code'
         )
         .eq('id', uid)
         .single()
@@ -559,8 +559,21 @@ function PayContent() {
     }, 2500)
   }
 
+  // Kiểm tra gói người dùng đang hoạt động (không được đăng ký lại chính gói này)
+  const isPlanActive = (group: PlanGroup, code: string) => {
+    if (!vipExpiresAt) return false
+    if (new Date(vipExpiresAt).getTime() <= Date.now()) return false
+    const userGroup = (profile?.plan_tier as PlanGroup) || 'vip'
+    const userCode = profile?.vip_plan_code || 'monthly'
+    return userGroup === group && userCode === code
+  }
+
   // Create VIP Order (VietQR)
   const handleBuyVip = async (group: PlanGroup, plan: PlanOption) => {
+    if (isPlanActive(group, plan.code)) {
+      setErrorMsg('Bạn đang sử dụng gói này. Bạn có thể chọn nâng cấp hoặc đổi sang gói khác!')
+      return
+    }
     setCreatingVipOrder(true)
     setErrorMsg('')
     setActivePayingVipPlan(plan)
@@ -593,6 +606,10 @@ function PayContent() {
 
   // Redeem VIP with SenCash
   const handleRedeemVipWithSenCash = async (group: PlanGroup, plan: PlanOption) => {
+    if (isPlanActive(group, plan.code)) {
+      setErrorMsg('Bạn đang sử dụng gói này. Bạn có thể chọn nâng cấp hoặc đổi sang gói khác!')
+      return
+    }
     setRedeemingVipPlan(plan.code)
     setErrorMsg('')
     setSuccessMsg('')
@@ -787,15 +804,26 @@ function PayContent() {
     >
       <div className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6 lg:px-8 space-y-6">
         {/* TOP BAR / NAVIGATION */}
-        <div className="flex items-center justify-between">
-          <Link
-            href="/new-dashboard"
-            className="inline-flex items-center gap-2 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 shadow-sm transition hover:scale-105"
-          >
-            <ArrowLeft className="h-4 w-4" /> Quay lại Dashboard
-          </Link>
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/new-dashboard"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+              title="Quay lại Dashboard"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newpay-heading)' }}>
+                Cửa Hàng Sen & Gói Hội Viên
+              </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Nâng cấp VIP, nạp SenCash và nhận các ưu đãi học tập độc quyền.
+              </p>
+            </div>
+          </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <button
               type="button"
               onClick={() => handleTabChange('giftcode')}
@@ -825,7 +853,8 @@ function PayContent() {
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+              title="Chuyển chế độ Sáng / Tối"
             >
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>
@@ -1091,36 +1120,44 @@ function PayContent() {
                 </div>
 
                 <div className="mt-6 flex flex-col sm:flex-row gap-2 pt-4 border-t border-black/10 dark:border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => handleBuyVip('sen_one', currentSenOnePlan)}
-                    disabled={creatingVipOrder}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3 text-xs font-black uppercase tracking-wider shadow transition hover:opacity-90 disabled:opacity-50"
-                  >
-                    {creatingVipOrder && activePayingVipPlan?.code === currentSenOnePlan.code ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4" />
-                    )}
-                    Quét VietQR Kích Hoạt
-                  </button>
+                  {isPlanActive('sen_one', currentSenOnePlan.code) ? (
+                    <div className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-3 text-xs font-black uppercase tracking-wider">
+                      <CheckCircle2 className="h-4 w-4" /> Đang Sử Dụng Gói Này
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleBuyVip('sen_one', currentSenOnePlan)}
+                        disabled={creatingVipOrder}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3 text-xs font-black uppercase tracking-wider shadow transition hover:opacity-90 disabled:opacity-50"
+                      >
+                        {creatingVipOrder && activePayingVipPlan?.code === currentSenOnePlan.code ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CreditCard className="h-4 w-4" />
+                        )}
+                        Quét VietQR Kích Hoạt
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleRedeemVipWithSenCash('sen_one', currentSenOnePlan)}
-                    disabled={
-                      redeemingVipPlan === currentSenOnePlan.code ||
-                      balance < vndToSenCash(currentSenOnePlan.priceVnd)
-                    }
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 py-3 px-4 text-xs font-bold transition hover:bg-amber-500/20 disabled:opacity-40"
-                  >
-                    {redeemingVipPlan === currentSenOnePlan.code ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Coins className="h-4 w-4 text-amber-500" />
-                    )}
-                    Đổi bằng SenCash
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRedeemVipWithSenCash('sen_one', currentSenOnePlan)}
+                        disabled={
+                          redeemingVipPlan === currentSenOnePlan.code ||
+                          balance < vndToSenCash(currentSenOnePlan.priceVnd)
+                        }
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 py-3 px-4 text-xs font-bold transition hover:bg-amber-500/20 disabled:opacity-40"
+                      >
+                        {redeemingVipPlan === currentSenOnePlan.code ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Coins className="h-4 w-4 text-amber-500" />
+                        )}
+                        Đổi bằng SenCash
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1182,36 +1219,44 @@ function PayContent() {
                 </div>
 
                 <div className="mt-6 flex flex-col sm:flex-row gap-2 pt-4 border-t border-black/10 dark:border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => handleBuyVip('sen_one_lite', currentSenOneLitePlan)}
-                    disabled={creatingVipOrder}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3 text-xs font-black uppercase tracking-wider shadow transition hover:opacity-90 disabled:opacity-50"
-                  >
-                    {creatingVipOrder && activePayingVipPlan?.code === currentSenOneLitePlan.code ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <CreditCard className="h-4 w-4" />
-                    )}
-                    Quét VietQR Kích Hoạt
-                  </button>
+                  {isPlanActive('sen_one_lite', currentSenOneLitePlan.code) ? (
+                    <div className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-3 text-xs font-black uppercase tracking-wider">
+                      <CheckCircle2 className="h-4 w-4" /> Đang Sử Dụng Gói Này
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleBuyVip('sen_one_lite', currentSenOneLitePlan)}
+                        disabled={creatingVipOrder}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3 text-xs font-black uppercase tracking-wider shadow transition hover:opacity-90 disabled:opacity-50"
+                      >
+                        {creatingVipOrder && activePayingVipPlan?.code === currentSenOneLitePlan.code ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CreditCard className="h-4 w-4" />
+                        )}
+                        Quét VietQR Kích Hoạt
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleRedeemVipWithSenCash('sen_one_lite', currentSenOneLitePlan)}
-                    disabled={
-                      redeemingVipPlan === currentSenOneLitePlan.code ||
-                      balance < vndToSenCash(currentSenOneLitePlan.priceVnd)
-                    }
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 py-3 px-4 text-xs font-bold transition hover:bg-sky-500/20 disabled:opacity-40"
-                  >
-                    {redeemingVipPlan === currentSenOneLitePlan.code ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Coins className="h-4 w-4 text-sky-500" />
-                    )}
-                    Đổi bằng SenCash
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRedeemVipWithSenCash('sen_one_lite', currentSenOneLitePlan)}
+                        disabled={
+                          redeemingVipPlan === currentSenOneLitePlan.code ||
+                          balance < vndToSenCash(currentSenOneLitePlan.priceVnd)
+                        }
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 py-3 px-4 text-xs font-bold transition hover:bg-sky-500/20 disabled:opacity-40"
+                      >
+                        {redeemingVipPlan === currentSenOneLitePlan.code ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Coins className="h-4 w-4 text-sky-500" />
+                        )}
+                        Đổi bằng SenCash
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1314,15 +1359,21 @@ function PayContent() {
                       </div>
 
                       <div className="mt-6 space-y-2 pt-4 border-t border-black/10 dark:border-white/10">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedVipPlan(plan)
-                            handleBuyVip(activeVipGroup, plan)
-                          }}
-                          disabled={creatingVipOrder}
-                          className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-2.5 text-xs font-black uppercase tracking-wider shadow transition hover:opacity-90 disabled:opacity-50"
-                        >
+                        {isPlanActive(activeVipGroup, plan.code) ? (
+                          <div className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-3 text-xs font-black uppercase tracking-wider">
+                            <CheckCircle2 className="h-4 w-4" /> Đang Sử Dụng Gói Này
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                              setSelectedVipPlan(plan)
+                              handleBuyVip(activeVipGroup, plan)
+                            }}
+                            disabled={creatingVipOrder}
+                            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-2.5 text-xs font-black uppercase tracking-wider shadow transition hover:opacity-90 disabled:opacity-50"
+                          >
                           {creatingVipOrder && activePayingVipPlan?.code === plan.code ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
@@ -1349,6 +1400,8 @@ function PayContent() {
                             </>
                           )}
                         </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   )

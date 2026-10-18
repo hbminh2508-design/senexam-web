@@ -127,11 +127,24 @@ export function generateOrderCode(
   return `${prefix}${rand}`
 }
 
-// Cộng dồn thời hạn VIP: nếu còn hạn cũ thì cộng tiếp từ đó, nếu đã hết hạn thì tính từ hiện tại
-export function extendVipExpiry(currentIso: string | null | undefined, durationDays: number): string {
-  const currentExpiry = currentIso ? new Date(currentIso).getTime() : 0
-  const base = Math.max(currentExpiry, Date.now())
+// Không cộng dồn thời hạn VIP: tính đúng mốc từ ngày đăng ký tới ngày hết hạn
+export function extendVipExpiry(_currentIso: string | null | undefined, durationDays: number): string {
+  const base = Date.now()
   return new Date(base + durationDays * 24 * 60 * 60 * 1000).toISOString()
+}
+
+// Kiểm tra xem người dùng có đang hoạt động trên chính gói này không
+export function isSameActivePlan(
+  profile: { vip_expires_at?: string | null; plan_tier?: string | null; vip_plan_code?: string | null } | null | undefined,
+  targetGroup: PlanGroup,
+  targetPlanCode: string
+): boolean {
+  if (!profile?.vip_expires_at) return false
+  const expiry = new Date(profile.vip_expires_at).getTime()
+  if (expiry <= Date.now()) return false
+  const currentGroup = profile.plan_tier || 'vip'
+  const currentCode = profile.vip_plan_code || 'monthly'
+  return currentGroup === targetGroup && currentCode === targetPlanCode
 }
 
 // URL ảnh QR VietQR — endpoint công khai của VietQR.io, không cần API key để tạo ảnh tĩnh

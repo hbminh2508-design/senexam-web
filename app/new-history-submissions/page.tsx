@@ -297,52 +297,48 @@ export default function NewHistorySubmissionsPage() {
       style={themeVars}
     >
       {/* HEADER TOP BAR */}
-      <header className="sticky top-0 z-30 border-b border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      {/* HEADER */}
+      <div className="max-w-7xl mx-auto px-4 pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
             <Link
               href="/new-dashboard"
-              className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300 transition"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
               title="Về Dashboard"
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-500/20">
-                <FileCheck className="h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-base sm:text-lg font-black tracking-tight" style={{ fontFamily: 'var(--font-history-subs-heading)' }}>
-                  Lịch sử Bài nộp
-                </h1>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">
-                  Tra cứu kết quả thi, phân tích tiến độ điểm số và xem lại lời giải chi tiết
-                </p>
-              </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-history-subs-heading)' }}>
+                Lịch Sử Bài Nộp & Phân Tích Điểm
+              </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Tra cứu kết quả thi, phân tích tiến độ điểm số và xem lại lời giải chi tiết.
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowChart((v) => !v)}
-              className="px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 text-xs font-bold text-slate-700 dark:text-slate-200 transition hover:scale-105 shadow-sm flex items-center gap-1.5"
               title="Ẩn/Hiện biểu đồ"
             >
-              <BarChart3 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+              <BarChart3 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
               <span className="hidden sm:inline">{showChart ? 'Thu gọn biểu đồ' : 'Xem biểu đồ'}</span>
               {showChart ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
 
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300 transition"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
               title={isDark ? 'Chế độ Sáng' : 'Chế độ Tối'}
             >
-              {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-slate-600" />}
+              {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* KPI CARDS THỐNG KÊ NHANH */}

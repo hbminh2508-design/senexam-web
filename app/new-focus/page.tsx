@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
   Play,
@@ -80,11 +81,14 @@ export default function NewFocusPage() {
   // YouTube Lofi
   const [selectedYoutubeId, setSelectedYoutubeId] = useState('jfKfPfyJRdk')
   const [newTaskText, setNewTaskText] = useState('')
+  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
+    const timer = setTimeout(() => setInitialLoading(false), 200)
+    return () => clearTimeout(timer)
   }, [])
 
   // Timer Tick
@@ -163,6 +167,17 @@ export default function NewFocusPage() {
 
   const themeVars = getModernThemeVars('indigo', isDark)
 
+  if (initialLoading) {
+    return (
+      <ModernLoading
+        isDark={isDark}
+        themeColor="amber"
+        title="SenExam Không Gian Focus"
+        subtitle="Đang khởi tạo không gian tập trung sâu & âm thanh thư giãn..."
+      />
+    )
+  }
+
   return (
     <main
       className={`${headingFont.variable} ${bodyFont.variable} min-h-screen text-[#1A1A1A] dark:text-slate-100 font-sans transition-colors duration-300 flex flex-col justify-between`}
@@ -177,7 +192,7 @@ export default function NewFocusPage() {
 
       {/* HEADER */}
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-3">
             <Link
               href="/new-dashboard"
@@ -187,21 +202,20 @@ export default function NewFocusPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-orange-500/10 px-2.5 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400 border border-orange-500/20">
-                  <Flame className="inline h-3 w-3 mr-1" /> Không Gian Focus 2.0
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newfocus-heading)' }}>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newfocus-heading)' }}>
                 Tập Trung Sâu & Quản Lý Ca Học
               </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Phương pháp Pomodoro kết hợp âm thanh thư giãn giúp tối ưu hóa hiệu suất học tập.
+              </p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={toggleDarkMode}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+            title="Chuyển chế độ Sáng / Tối"
           >
             {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
           </button>

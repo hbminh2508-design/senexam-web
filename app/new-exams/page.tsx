@@ -372,15 +372,7 @@ export default function NewExamsPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  <Sparkles className="inline h-3 w-3 mr-1" /> Ngân Hàng Đề Chuẩn 2026
-                </span>
-                <span className="hidden sm:inline-block rounded-full bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-bold text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                  Cấu trúc Cây Thư Mục SEB
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newexams-heading)' }}>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newexams-heading)' }}>
                 Kho Đề Thi & Khảo Thí
               </h1>
               <p className="text-xs text-[#6B7280] dark:text-slate-400">

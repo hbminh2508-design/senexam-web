@@ -273,19 +273,12 @@ export default function NewAnnouncementPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-teal-500/10 px-2.5 py-0.5 text-[11px] font-bold text-teal-600 dark:text-teal-400 border border-teal-500/20">
-                  <Megaphone className="inline h-3 w-3 mr-1" /> Trung Tâm Thông Báo
-                </span>
-                {unreadCount > 0 && (
-                  <span className="rounded-full bg-rose-500 text-white px-2 py-0.5 text-[10px] font-black animate-pulse">
-                    {unreadCount} tin mới
-                  </span>
-                )}
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newann-heading)' }}>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newann-heading)' }}>
                 Bảng Tin & Thông Báo Từ Admin
               </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Cập nhật tin tức quan trọng, tính năng mới và thông báo từ ban quản trị.
+              </p>
             </div>
           </div>
 

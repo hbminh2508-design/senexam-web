@@ -59,6 +59,7 @@ import {
 import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import { useNewUiPrefs } from '@/app/components/useNewUiPrefs'
 import { linkWithGoogle } from '@/lib/authHelper'
 import SecurePasswordChangeCard from '@/app/components/SecurePasswordChangeCard'
@@ -891,28 +892,12 @@ function NewDashboardContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-[#FDF6EC] dark:bg-[#0B1120] text-[#2B2B2B] dark:text-slate-100 transition-colors">
-        <div className="relative flex flex-col items-center gap-4 rounded-3xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 px-8 py-7 shadow-[0_20px_50px_rgba(0,0,0,0.12)] backdrop-blur-2xl max-w-sm w-full mx-4">
-          <div className="relative flex h-16 w-16 items-center justify-center">
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 sen-loading-glow opacity-80 blur-xs" />
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white font-black text-2xl shadow-md">
-              S
-            </div>
-            <div className="absolute inset-0 rounded-2xl border-2 border-indigo-500/40 sen-loading-spinner pointer-events-none" />
-          </div>
-          <div className="text-center space-y-1">
-            <h3 className="font-black text-base text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-newdash-heading)' }}>
-              SenExam Dashboard 2.0
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              Đang tải không gian học tập & tối ưu trải nghiệm...
-            </p>
-          </div>
-          <div className="w-full h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden relative">
-            <div className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 rounded-full sen-loading-shimmer" />
-          </div>
-        </div>
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        themeColor="indigo"
+        title="SenExam Dashboard 2.0"
+        subtitle="Đang tải không gian học tập & tối ưu trải nghiệm..."
+      />
     )
   }
 
@@ -1498,7 +1483,7 @@ function NewDashboardContent() {
                 title="Bấm để chuyển đổi mã build phiên bản"
                 className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
               >
-                {showFullVersion ? '2.0.2194023.4923.01' : '2.0'}
+                {showFullVersion ? '2.0.2194023.7903.02' : '2.0'}
               </button>
             </div>
 
@@ -2141,7 +2126,7 @@ function NewDashboardContent() {
             </div>
 
             {/* Card 2.5: Thẻ Đổi Mật Khẩu Riêng Biệt (Dưới 2FA, Bảo Mật Cao Cấp) */}
-            <SecurePasswordChangeCard userEmail={userEmail} isDark={isDark} defaultCollapsed={false} />
+            <SecurePasswordChangeCard userEmail={userEmail} isDark={isDark} defaultCollapsed={true} />
 
             {/* Card 3: Cài đặt hệ thống & Tiện ích Web */}
             <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 p-5 shadow-sm space-y-4">
@@ -2278,7 +2263,7 @@ function NewDashboardContent() {
                   title="Bấm để chuyển đổi mã build phiên bản"
                   className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
                 >
-                  {showFullVersion ? '2.0.2194023.4923.01' : '2.0'}
+                  {showFullVersion ? '2.0.2194023.7903.02' : '2.0'}
                 </button>
               </div>
 

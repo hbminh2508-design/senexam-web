@@ -441,17 +441,7 @@ export default function NewLibraryPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                  <BookOpen className="inline h-3 w-3 mr-1" /> Kho Học Liệu Số
-                </span>
-                {isVip && (
-                  <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[10px] font-black uppercase">
-                    <Crown className="h-3 w-3" /> VIP
-                  </span>
-                )}
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newlib-heading)' }}>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newlib-heading)' }}>
                 Thư Viện Tài Liệu & Chuyên Đề
               </h1>
               <p className="text-xs text-[#6B7280] dark:text-slate-400">

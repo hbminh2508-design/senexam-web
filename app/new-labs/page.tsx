@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Baloo_2, Nunito } from 'next/font/google'
 import { getModernThemeVars } from '@/app/components/modernTheme'
+import ModernLoading from '@/app/components/ModernLoading'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ArrowLeft,
@@ -123,19 +124,28 @@ export default function NewLabsPage() {
   const isDraggingRef = useRef(false)
   const lastMousePosRef = useRef({ x: 0, y: 0 })
 
+  const [initialLoading, setInitialLoading] = useState(true)
+
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
+    const timer = setTimeout(() => setInitialLoading(false), 250)
+    return () => clearTimeout(timer)
   }, [])
 
-  // Animation Loop (60fps)
+  // Animation Loop (60fps) - Tối ưu khi chuyển tab
   useEffect(() => {
     let req: number
     let last = performance.now()
     const loop = (now: number) => {
+      if (document.hidden) {
+        last = now
+        req = requestAnimationFrame(loop)
+        return
+      }
       const delta = (now - last) / 1000
-      setTime((t) => t + delta)
+      setTime((t) => t + Math.min(delta, 0.1)) // Tránh bước nhảy thời gian quá lớn
       last = now
       req = requestAnimationFrame(loop)
     }
@@ -1005,7 +1015,16 @@ export default function NewLabsPage() {
     }
   }
 
-  const themeVars = getModernThemeVars('indigo', isDark)
+  if (initialLoading) {
+    return (
+      <ModernLoading
+        isDark={isDark}
+        themeColor="amber"
+        title="Phòng Thí Nghiệm Ảo (SenLabs)"
+        subtitle="Đang khởi tạo môi trường mô phỏng Vật lý & Hóa học 60FPS..."
+      />
+    )
+  }
 
   return (
     <main
@@ -1017,23 +1036,18 @@ export default function NewLabsPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/new-dashboard"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
             title="Về Dashboard"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-sm">
-              <FlaskConical className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-base font-black leading-none" style={{ fontFamily: 'var(--font-newlab-heading)' }}>
-                Phòng Thí Nghiệm Ảo (SenLabs)
-              </h2>
-              <span className="text-[10px] text-[#6B7280] dark:text-slate-400 font-bold uppercase tracking-wider">
-                Mô phỏng tương tác Vật lý - Hóa học 60FPS
-              </span>
-            </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black leading-tight" style={{ fontFamily: 'var(--font-newlab-heading)' }}>
+              Phòng Thí Nghiệm Ảo (SenLabs)
+            </h1>
+            <p className="text-xs text-[#6B7280] dark:text-slate-400">
+              Mô phỏng tương tác Vật lý - Hóa học 60FPS thời gian thực.
+            </p>
           </div>
         </div>
 
@@ -1041,9 +1055,10 @@ export default function NewLabsPage() {
           <button
             type="button"
             onClick={toggleDarkMode}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl transition hover:scale-105"
+            title="Chuyển chế độ Sáng / Tối"
           >
-            {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />}
+            {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
           </button>
         </div>
       </header>

@@ -338,17 +338,12 @@ export default function NewSchedulePage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-[11px] font-black text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-                  <Calendar className="inline h-3.5 w-3.5 mr-1" /> Lịch Học & Lịch Thi 2.0
-                </span>
-                <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-[10px] font-bold">
-                  {schedules.length} lịch đã lên
-                </span>
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newsch-heading)' }}>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newsch-heading)' }}>
                 Thời Khóa Biểu & Kế Hoạch Ôn Thi
               </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Theo dõi lịch học, ca thi và kế hoạch học tập khoa học mỗi ngày.
+              </p>
             </div>
           </div>
 

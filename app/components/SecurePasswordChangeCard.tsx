@@ -33,7 +33,7 @@ interface SecurePasswordChangeCardProps {
 export default function SecurePasswordChangeCard({
   userEmail: initialEmail = '',
   isDark = false,
-  defaultCollapsed = false,
+  defaultCollapsed = true,
   className = '',
 }: SecurePasswordChangeCardProps) {
   const router = useRouter()

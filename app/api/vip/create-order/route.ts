@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getPlanByGroup, generateOrderCode, buildVietQrUrl, type PlanGroup } from '@/lib/vipMembership'
+import { getPlanByGroup, generateOrderCode, buildVietQrUrl, isSameActivePlan, type PlanGroup } from '@/lib/vipMembership'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +26,20 @@ export async function POST(request: Request) {
     const plan = getPlanByGroup(group, planCode)
     if (!plan) return NextResponse.json({ error: 'Gói không hợp lệ' }, { status: 400 })
 
+    const supabaseAdmin = getSupabaseAdmin()
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('vip_expires_at, plan_tier, vip_plan_code')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (isSameActivePlan(profile, group, plan.code)) {
+      return NextResponse.json(
+        { error: 'Bạn đang sử dụng gói này. Bạn chỉ có thể nâng cấp hoặc chuyển sang gói khác, không thể đăng ký lại gói đang dùng.' },
+        { status: 400 }
+      )
+    }
+
     const bankBin = process.env.VIETQR_BANK_BIN
     const accountNo = process.env.VIETQR_ACCOUNT_NO
     const accountName = process.env.VIETQR_ACCOUNT_NAME
@@ -36,7 +50,7 @@ export async function POST(request: Request) {
     const orderCode = generateOrderCode(ORDER_CODE_PREFIX[group])
     const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000).toISOString()
 
-    const { data: order, error } = await getSupabaseAdmin()
+    const { data: order, error } = await supabaseAdmin
       .from('vip_orders')
       .insert({
         user_id: user.id,

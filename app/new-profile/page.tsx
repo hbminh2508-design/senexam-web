@@ -304,19 +304,12 @@ export default function NewProfilePage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-indigo-500/10 px-2.5 py-0.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                  <User className="inline h-3 w-3 mr-1" /> Hồ Sơ Thí Sinh
-                </span>
-                {profile?.role === 'admin' && (
-                  <span className="rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 px-2 py-0.5 text-[10px] font-black uppercase">
-                    Quản Trị Viên
-                  </span>
-                )}
-              </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newprof-heading)' }}>
+              <h1 className="text-2xl sm:text-3xl font-black leading-tight" style={{ fontFamily: 'var(--font-newprof-heading)' }}>
                 Quản Lý Hồ Sơ & Cài Đặt Cá Nhân
               </h1>
+              <p className="text-xs text-[#6B7280] dark:text-slate-400">
+                Xem và cập nhật thông tin cá nhân, cài đặt bảo mật và quản lý tài khoản.
+              </p>
             </div>
           </div>
 
@@ -520,7 +513,7 @@ export default function NewProfilePage() {
             <SecurePasswordChangeCard
               userEmail={user?.email}
               isDark={isDark}
-              defaultCollapsed={false}
+              defaultCollapsed={true}
             />
           </div>
 
