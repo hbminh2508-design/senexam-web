@@ -161,6 +161,11 @@ ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_senai_tier_check;
 ALTER TABLE public.profiles ADD CONSTRAINT profiles_senai_tier_check
   CHECK (senai_tier IN ('free', 'lite', 'plus_lite', 'plus', 'ultra', 'max', 'unlimited'));
 
+-- 2.1 Cập nhật check constraint cho bảng public.gift_codes (mã quà tặng SenAI)
+ALTER TABLE public.gift_codes DROP CONSTRAINT IF EXISTS gift_codes_reward_senai_tier_check;
+ALTER TABLE public.gift_codes ADD CONSTRAINT gift_codes_reward_senai_tier_check
+  CHECK (reward_senai_tier IN ('lite', 'plus_lite', 'plus', 'ultra', 'max', 'unlimited'));
+
 -- 3. Thêm cột cờ nhận diện đặc quyền Gói Ẩn Vô Cực (Sen Unlimited)
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS is_sen_unlimited boolean NOT NULL DEFAULT false,

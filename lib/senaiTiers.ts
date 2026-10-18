@@ -1,4 +1,4 @@
-export type SenAiTierCode = 'free' | 'lite' | 'plus_lite' | 'plus' | 'ultra' | 'max'
+export type SenAiTierCode = 'free' | 'lite' | 'plus_lite' | 'plus' | 'ultra' | 'max' | 'unlimited'
 export type SenAiPlanDuration = 'trial_3d' | 'monthly' | 'quarterly' | 'yearly' | 'permanent'
 
 export type SenAiPlan = {
@@ -18,6 +18,7 @@ export const SENAI_TIER_DAILY_LIMIT: Record<SenAiTierCode, number> = {
   plus: 50,
   ultra: 200,
   max: 500, // Sen Max: 500 câu hỏi 1 ngày
+  unlimited: 999999, // SenAI Unlimited: Không giới hạn
 }
 
 export const SENAI_TIER_LABEL: Record<SenAiTierCode, string> = {
@@ -27,6 +28,7 @@ export const SENAI_TIER_LABEL: Record<SenAiTierCode, string> = {
   plus: 'SenAI Plus',
   ultra: 'SenAI Ultra',
   max: 'Sen Max',
+  unlimited: 'SenAI Unlimited (Vô Cực)',
 }
 
 // Hạn mức câu hỏi SenGraph AI theo từng hạng
@@ -37,6 +39,7 @@ export const SENGRAPH_AI_DAILY_LIMIT: Record<SenAiTierCode, number> = {
   plus: 1,
   ultra: 5,
   max: 15, // Sen Max: 15 lần hỏi AI trong SenAI Graph
+  unlimited: 999, // SenAI Unlimited
 }
 
 // Danh mục gói SenAI — mua bằng SenCash. Gói năm luôn bằng 10 lần giá gói tháng cùng hạng.

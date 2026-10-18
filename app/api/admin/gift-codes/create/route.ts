@@ -42,15 +42,23 @@ export async function POST(request: Request) {
       if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'Số SenCash không hợp lệ' }, { status: 400 })
       row.reward_sencash_amount = amount
     } else if (rewardType === 'senai_tier') {
-      if (!['lite', 'plus_lite', 'plus', 'ultra'].includes(senaiTier)) {
+      let normalizedTier = senaiTier
+      if (normalizedTier === 'ultra_250') normalizedTier = 'ultra'
+      if (normalizedTier === 'max_500') normalizedTier = 'max'
+
+      const validSenaiTiers = ['lite', 'plus_lite', 'plus', 'ultra', 'max', 'unlimited']
+      if (!validSenaiTiers.includes(normalizedTier)) {
         return NextResponse.json({ error: 'Hạng SenAI không hợp lệ' }, { status: 400 })
       }
-      row.reward_senai_tier = senaiTier
-      row.reward_senai_permanent = !!senaiPermanent
-      if (!senaiPermanent) {
+      row.reward_senai_tier = normalizedTier
+      const isPerm = !!senaiPermanent || normalizedTier === 'unlimited'
+      row.reward_senai_permanent = isPerm
+      if (!isPerm) {
         const days = parseInt(senaiDurationDays, 10)
         if (!Number.isFinite(days) || days <= 0) return NextResponse.json({ error: 'Số ngày gói SenAI không hợp lệ' }, { status: 400 })
         row.reward_senai_duration_days = days
+      } else {
+        row.reward_senai_duration_days = null
       }
     } else {
       return NextResponse.json({ error: 'Loại phần thưởng không hợp lệ' }, { status: 400 })

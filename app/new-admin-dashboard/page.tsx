@@ -4212,8 +4212,9 @@ export default function NewAdminDashboardPage() {
                               onChange={(e) => setNewSenaiTier(e.target.value)}
                               className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 font-bold outline-none"
                             >
-                              <option value="ultra_250">SenAI Ultra (250 tokens/ngày)</option>
-                              <option value="max_500">SenAI Max (500 tokens/ngày)</option>
+                              <option value="plus">SenAI Plus (50 câu/ngày)</option>
+                              <option value="ultra">SenAI Ultra (200 câu/ngày)</option>
+                              <option value="max">Sen Max (500 câu/ngày)</option>
                               <option value="unlimited">SenAI Unlimited (Không giới hạn)</option>
                             </select>
                           </div>
