@@ -694,43 +694,6 @@ export default function FepnDashboardMainPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Nút gạt chuyển chế độ góc nhìn Sinh viên / Quản trị cho Admin */}
-            {isRealAdmin && (
-              <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-2xl border border-sky-500/30 bg-sky-500/5 shadow-xs">
-                <div className="flex items-center gap-1.5 text-xs font-black select-none">
-                  {viewAsStudent ? (
-                    <span className="text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                      <GraduationCap className="h-4 w-4 text-emerald-600 shrink-0" />
-                      <span className="hidden sm:inline">Góc nhìn:</span> Sinh viên
-                    </span>
-                  ) : (
-                    <span className="text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                      <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
-                      <span className="hidden sm:inline">Góc nhìn:</span> Quản trị
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={viewAsStudent}
-                  onClick={toggleViewAsStudent}
-                  className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    viewAsStudent ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
-                  }`}
-                  title={viewAsStudent ? 'Đang xem góc nhìn sinh viên (Bấm để trở về Quản trị)' : 'Đang ở góc nhìn Quản trị (Bấm để xem góc nhìn sinh viên)'}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                      viewAsStudent ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
-
             {isAdmin && (
               <button
                 type="button"
@@ -750,20 +713,6 @@ export default function FepnDashboardMainPage() {
                 <span>Admin</span>
               </Link>
             )}
-
-            {/* Nút Sen Exam Canvas trên Top Bar */}
-            <a
-              href={
-                typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-                  ? 'https://seb.thicu.tailieufepn.senexam.me'
-                  : '/seb-dashboard'
-              }
-              className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white px-3 py-2 text-xs font-black transition shadow-sm shadow-sky-500/25 hover:scale-105 active:scale-95"
-              title="Cổng khảo thí bảo mật cao Sen Exam Canvas"
-            >
-              <ShieldCheck className="h-3.5 w-3.5 text-white" />
-              <span>Sen Exam Canvas</span>
-            </a>
 
             <Link
               href="/fepn-recap"
@@ -1482,21 +1431,7 @@ export default function FepnDashboardMainPage() {
 
             {/* List tính năng */}
             <div className="grid grid-cols-2 gap-2.5 pt-1">
-              <a
-                href={
-                  typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-                    ? 'https://seb.thicu.tailieufepn.senexam.me'
-                    : '/seb-dashboard'
-                }
-                onClick={() => setShowMobileMenu(false)}
-                className="flex flex-col items-start p-3.5 rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 to-blue-500/10 hover:border-sky-500 hover:from-sky-500/20 hover:to-blue-500/20 transition group"
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white mb-2 group-hover:scale-105 transition shadow-sm">
-                  <ShieldCheck className="h-4 w-4" />
-                </div>
-                <span className="text-xs font-black text-sky-700 dark:text-sky-300">Sen Exam Canvas</span>
-                <span className="text-[10px] text-slate-400 font-medium">Khảo thí bảo mật cao</span>
-              </a>
+
 
               <Link
                 href="/fepn-schedule"

@@ -1775,7 +1775,7 @@ export default function FepnAdminDashboardPage() {
                                   ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
                                   : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-slate-200'
                               }`}
-                              title="Bấm để Bật / Tắt tính năng File Ghi Âm & Lời Giảng AI cho môn học này (Mặc định: TẮT)"
+                              title="Bấm để Bật / Tắt tính năng File Ghi Âm Buổi Học cho môn học này (Mặc định: TẮT)"
                             >
                               <Mic className={`h-3 w-3 ${recEnabled ? 'text-indigo-600' : 'text-slate-400'}`} />
                               <span>{recEnabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}</span>
@@ -1860,7 +1860,7 @@ export default function FepnAdminDashboardPage() {
                   <option value="exercise">Bài tập</option>
                   <option value="video">Video bài giảng</option>
                   <option value="exam">Đề thi & Đáp án</option>
-                  <option value="recording">🎙️ File Ghi Âm AI</option>
+                  <option value="recording">🎙️ File Ghi Âm</option>
                 </select>
 
                 <button
@@ -3131,10 +3131,10 @@ export default function FepnAdminDashboardPage() {
                     </div>
                     <div>
                       <span className="text-xs font-black text-indigo-950">
-                        Tính năng File Ghi Âm & Lời Giảng AI
+                        Tính năng File Ghi Âm Buổi Học
                       </span>
                       <p className="text-[11px] text-indigo-600 font-medium">
-                        Phân tích kiến thức bài giảng bằng gemini-3.8-flash (Mặc định: TẮT)
+                        Lưu trữ và phát bản ghi âm bài học (Mặc định: TẮT)
                       </p>
                     </div>
                   </div>

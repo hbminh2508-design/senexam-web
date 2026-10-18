@@ -13,8 +13,6 @@ import {
   AlertCircle,
   BookOpen,
   Sparkles,
-  Send,
-  Bot,
   Loader2,
   Award,
   FileText,
@@ -30,22 +28,8 @@ import {
   HelpCircle,
 } from 'lucide-react'
 
-// Thư viện kết xuất Markdown & Công thức Toán học KaTeX
-import ReactMarkdown from 'react-markdown'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import remarkGfm from 'remark-gfm'
-import 'katex/dist/katex.min.css'
-
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-seb-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-seb-body' })
-
-interface AIQuestionState {
-  isOpen: boolean
-  questionText: string
-  response: string
-  isLoading: boolean
-}
 
 /**
  * Chuẩn hóa kiểu câu hỏi với cơ chế Fallback và nhận diện thông minh
@@ -153,8 +137,6 @@ export default function SebReviewPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Quản lý trạng thái AI phân tích theo từng câu
-  const [aiStates, setAiStates] = useState<Record<string, AIQuestionState>>({})
   const [activeTab, setActiveTab] = useState<'all' | 'wrong' | 'correct'>('all')
 
   useEffect(() => {
@@ -350,71 +332,6 @@ export default function SebReviewPage() {
       return activeTab === 'correct' ? isRight : !isRight
     })
   }, [allQuestions, activeTab, submission])
-
-  // Gọi SenAI giải thích câu hỏi
-  const handleAskAI = async (q: any) => {
-    const key = q.key
-    const currentState = aiStates[key] || {
-      isOpen: true,
-      questionText: '',
-      response: '',
-      isLoading: false,
-    }
-
-    if (currentState.isLoading) return
-
-    setAiStates((prev) => ({
-      ...prev,
-      [key]: { ...currentState, isOpen: true, isLoading: true, response: '' },
-    }))
-
-    const { studentAns, correctAns } = checkQuestionStatus(q)
-    const formattedStudent = typeof studentAns === 'object' ? JSON.stringify(studentAns) : String(studentAns)
-    const formattedCorrect = typeof correctAns === 'object' ? JSON.stringify(correctAns) : String(correctAns)
-
-    const prompt = `Bạn là SenAI Gia Sư Khảo Thí Thông Minh trong hệ thống Safe Exam Browser (SEB).
-Học sinh đang xem lại kết quả bài thi: "${submission?.exams?.title}".
-Thông tin câu hỏi:
-- Câu số: ${q.globalNum} (${q.sectionName})
-- Dạng câu: ${q.type}
-- Đáp án thí sinh đã chọn: ${formattedStudent}
-- Đáp án chính xác của đề thi: ${formattedCorrect}
-${currentState.questionText ? `- Câu hỏi thắc mắc thêm từ học sinh: "${currentState.questionText}"` : ''}
-
-Nhiệm vụ của bạn:
-1. Giải thích chi tiết, cặn kẽ từng bước tại sao đáp án hệ thống lại là đáp án đúng.
-2. Trình bày công thức Toán học bằng chuẩn LaTeX (dùng $ cho inline math và $$ cho block math).
-3. Chỉ ra nguyên nhân học sinh hay nhầm lẫn ở câu này.
-4. Rút ra phương pháp giải nhanh và mẹo ghi nhớ.
-5. Giọng văn khuyến khích, ân cần, xưng "Mình" gọi "Bạn".`
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt, history: [] }),
-      })
-      const data = await res.json()
-      if (res.ok && data.text) {
-        setAiStates((prev) => ({
-          ...prev,
-          [key]: { ...currentState, isOpen: true, isLoading: false, response: data.text },
-        }))
-      } else {
-        throw new Error(data.error || 'Không thể kết nối đến máy chủ AI')
-      }
-    } catch (err: any) {
-      setAiStates((prev) => ({
-        ...prev,
-        [key]: {
-          ...currentState,
-          isOpen: true,
-          isLoading: false,
-          response: 'SenAI tạm thời gặp gián đoạn kết nối. Bạn vui lòng bấm thử lại sau giây lát nhé! 😥',
-        },
-      }))
-    }
-  }
 
   // MÀN HÌNH LOADING
   if (loading) {
@@ -649,12 +566,6 @@ Nhiệm vụ của bạn:
               filteredQuestions.map((q) => {
                 const { isRight, isPartial, studentAns, correctAns } = checkQuestionStatus(q)
                 const qScore = Number(submission?.detailed_scores?.[q.key]) || 0
-                const aiState = aiStates[q.key] || {
-                  isOpen: false,
-                  questionText: '',
-                  response: '',
-                  isLoading: false,
-                }
 
                 return (
                   <div
@@ -777,109 +688,6 @@ Nhiệm vụ của bạn:
                         </div>
                       </div>
                     )}
-
-                    {/* VÙNG SENAI GIA SƯ GIẢI THÍCH CHI TIẾT */}
-                    <div className="pt-2 border-t border-slate-100">
-                      <div className="flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!aiState.response && !aiState.isLoading) {
-                              handleAskAI(q)
-                            } else {
-                              setAiStates((prev) => ({
-                                ...prev,
-                                [q.key]: { ...aiState, isOpen: !aiState.isOpen },
-                              }))
-                            }
-                          }}
-                          className="text-[11px] font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1.5 transition"
-                        >
-                          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                          <span>
-                            {aiState.response
-                              ? aiState.isOpen
-                                ? 'Thu gọn phân tích SenAI'
-                                : 'Mở rộng phân tích SenAI'
-                              : 'Hỏi SenAI Gia Sư Lời Giải & Phân Tích Lỗi'}
-                          </span>
-                          {aiState.isOpen ? (
-                            <ChevronUp className="h-3 w-3" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3" />
-                          )}
-                        </button>
-                      </div>
-
-                      {aiState.isOpen && (
-                        <div className="mt-3 p-3.5 rounded-2xl bg-sky-50/50 border border-sky-100 space-y-3">
-                          {aiState.isLoading ? (
-                            <div className="flex items-center gap-2 py-4 text-xs font-bold text-sky-700 justify-center">
-                              <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
-                              <span>SenAI đang đọc dữ liệu đề và phân tích chi tiết...</span>
-                            </div>
-                          ) : aiState.response ? (
-                            <div className="text-xs text-slate-800 leading-relaxed space-y-2">
-                              <div className="flex items-center gap-1.5 text-sky-700 font-bold border-b border-sky-100 pb-1.5">
-                                <Bot className="h-4 w-4 text-sky-600" />
-                                <span>Lời giải chi tiết từ SenAI:</span>
-                              </div>
-                              <div className="markdown-body text-xs">
-                                <ReactMarkdown
-                                  remarkPlugins={[remarkMath, remarkGfm]}
-                                  rehypePlugins={[rehypeKatex]}
-                                  components={{
-                                    p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-                                    strong: ({ node, ...props }) => <strong className="font-bold text-sky-900" {...props} />,
-                                    ul: ({ node, ...props }) => <ul className="list-disc ml-5 mb-2 space-y-1" {...props} />,
-                                    ol: ({ node, ...props }) => <ol className="list-decimal ml-5 mb-2 space-y-1" {...props} />,
-                                    li: ({ node, ...props }) => <li className="pl-1" {...props} />,
-                                    h3: ({ node, ...props }) => <h3 className="text-xs font-black text-slate-900 mt-2 mb-1" {...props} />,
-                                    table: ({ node, ...props }) => (
-                                      <div className="overflow-x-auto my-2 rounded-xl border border-sky-200">
-                                        <table className="w-full text-left border-collapse text-xs" {...props} />
-                                      </div>
-                                    ),
-                                    th: ({ node, ...props }) => <th className="p-2 bg-sky-100/60 font-bold" {...props} />,
-                                    td: ({ node, ...props }) => <td className="p-2 border-t border-sky-100" {...props} />,
-                                  }}
-                                >
-                                  {aiState.response}
-                                </ReactMarkdown>
-                              </div>
-                            </div>
-                          ) : null}
-
-                          {/* Khung Hỏi Tiếp Trợ Lý AI */}
-                          <div className="flex items-center gap-2 pt-1 border-t border-sky-100/80">
-                            <input
-                              type="text"
-                              value={aiState.questionText || ''}
-                              onChange={(e) =>
-                                setAiStates((prev) => ({
-                                  ...prev,
-                                  [q.key]: { ...aiState, questionText: e.target.value },
-                                }))
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleAskAI(q)
-                              }}
-                              placeholder="Hỏi thêm SenAI về câu này..."
-                              className="flex-1 px-3 py-1.5 rounded-xl border border-sky-200 bg-white text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-sky-400/20"
-                            />
-                            <button
-                              type="button"
-                              disabled={aiState.isLoading}
-                              onClick={() => handleAskAI(q)}
-                              className="p-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white transition disabled:opacity-50"
-                              title="Gửi câu hỏi"
-                            >
-                              <Send className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 )
               })
