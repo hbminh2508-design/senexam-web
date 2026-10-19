@@ -79,7 +79,7 @@ export default function NopQuyLopHomePage() {
 
   // Admin Authentication State
   const [showAdminAuthModal, setShowAdminAuthModal] = useState(false)
-  const [adminUsername, setAdminUsername] = useState('admin')
+  const [adminUsername, setAdminUsername] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [adminAuthError, setAdminAuthError] = useState('')
   const [isAdminVerified, setIsAdminVerified] = useState(false)
@@ -99,14 +99,8 @@ export default function NopQuyLopHomePage() {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    if (adminUsername.trim() !== 'admin') {
-      setAdminAuthError('Tên tài khoản không chính xác. Yêu cầu tài khoản "admin".')
-      return
-    }
-    if (!isValidAdminDailyPassword(adminPassword)) {
-      setAdminAuthError(
-        'Mật khẩu admin không đúng! Mật khẩu được cập nhật mỗi ngày theo định dạng: admin-ngày hiện tại (Ví dụ: admin-19/10/2026).'
-      )
+    if (adminUsername.trim() !== 'admin' || !isValidAdminDailyPassword(adminPassword)) {
+      setAdminAuthError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
       return
     }
     setIsAdminVerified(true)
@@ -568,15 +562,6 @@ export default function NopQuyLopHomePage() {
               </button>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs space-y-1">
-              <div className="flex items-center gap-1.5 font-black uppercase text-[10px] tracking-wider">
-                <ShieldCheck className="h-3.5 w-3.5" /> Cơ Chế Bảo Mật Ngày
-              </div>
-              <p className="leading-relaxed">
-                Yêu cầu tài khoản <strong className="font-mono text-amber-900 dark:text-amber-100">admin</strong> và mật khẩu động theo ngày: <strong className="font-mono">admin-DD/MM/YYYY</strong>.
-              </p>
-            </div>
-
             {adminAuthError && (
               <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -587,21 +572,21 @@ export default function NopQuyLopHomePage() {
             <form onSubmit={handleAdminLogin} className="space-y-4 text-xs font-bold">
               <div className="space-y-1.5">
                 <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
-                  Tài khoản Admin:
+                  Tài khoản:
                 </label>
                 <input
                   type="text"
                   required
                   value={adminUsername}
                   onChange={(e) => setAdminUsername(e.target.value)}
-                  placeholder="admin"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-amber-500 font-mono"
+                  placeholder="Nhập tài khoản quản trị..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-indigo-500 font-sans"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
-                  Mật khẩu Admin theo ngày:
+                  Mật khẩu:
                 </label>
                 <input
                   type="password"
@@ -611,12 +596,9 @@ export default function NopQuyLopHomePage() {
                     setAdminPassword(e.target.value)
                     if (adminAuthError) setAdminAuthError('')
                   }}
-                  placeholder="admin-DD/MM/YYYY"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-amber-500 font-mono"
+                  placeholder="Nhập mật khẩu..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-indigo-500 font-sans"
                 />
-                <span className="text-[10px] text-slate-400 block font-medium">
-                  Ví dụ hôm nay: <code className="text-amber-600 dark:text-amber-400 font-mono font-bold">admin-19/10/2026</code>
-                </span>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
