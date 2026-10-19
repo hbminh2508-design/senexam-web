@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAllFunds, createFund, type FundStudent } from '@/lib/nopQuyLopStore'
+import { getAllFunds, createFund, type FundStudent, isValidAdminDailyPassword } from '@/lib/nopQuyLopStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,8 +62,23 @@ export async function POST(request: Request) {
       accountName,
       description,
       adminPasscode,
+      adminUsername,
+      adminPassword,
       students,
     } = body
+
+    // 1. Kiểm tra tài khoản & mật khẩu admin theo ngày
+    const adminUser = (adminUsername || request.headers.get('x-admin-username') || '').trim()
+    const adminPass = (adminPassword || request.headers.get('x-admin-password') || '').trim()
+
+    if (adminUser !== 'admin' || !isValidAdminDailyPassword(adminPass)) {
+      return NextResponse.json(
+        {
+          error: 'Bảo mật: Yêu cầu đăng nhập tài khoản admin và mật khẩu ngày dạng admin-DD/MM/YYYY (VD: admin-19/10/2026)',
+        },
+        { status: 401 }
+      )
+    }
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'Tên quỹ không được để trống' }, { status: 400 })

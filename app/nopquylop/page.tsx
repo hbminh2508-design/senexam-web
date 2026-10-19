@@ -24,7 +24,11 @@ import {
   Calendar,
   Layers,
   HelpCircle,
+  Lock,
+  Unlock,
+  KeyRound,
 } from 'lucide-react'
+import { isValidAdminDailyPassword, getExpectedAdminDailyPassword } from '@/lib/nopQuyLopAuth'
 
 interface FundSummary {
   id: string
@@ -73,9 +77,43 @@ export default function NopQuyLopHomePage() {
   const [creatingFund, setCreatingFund] = useState(false)
   const [createError, setCreateError] = useState('')
 
+  // Admin Authentication State
+  const [showAdminAuthModal, setShowAdminAuthModal] = useState(false)
+  const [adminUsername, setAdminUsername] = useState('admin')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminAuthError, setAdminAuthError] = useState('')
+  const [isAdminVerified, setIsAdminVerified] = useState(false)
+
   // Modal Share QR
   const [shareQrFund, setShareQrFund] = useState<FundSummary | null>(null)
   const [copiedLink, setCopiedLink] = useState(false)
+
+  const handleOpenCreateModal = () => {
+    if (isAdminVerified) {
+      setShowCreateModal(true)
+    } else {
+      setShowAdminAuthModal(true)
+      setAdminAuthError('')
+    }
+  }
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (adminUsername.trim() !== 'admin') {
+      setAdminAuthError('Tên tài khoản không chính xác. Yêu cầu tài khoản "admin".')
+      return
+    }
+    if (!isValidAdminDailyPassword(adminPassword)) {
+      setAdminAuthError(
+        'Mật khẩu admin không đúng! Mật khẩu được cập nhật mỗi ngày theo định dạng: admin-ngày hiện tại (Ví dụ: admin-19/10/2026).'
+      )
+      return
+    }
+    setIsAdminVerified(true)
+    setShowAdminAuthModal(false)
+    setShowCreateModal(true)
+    setAdminAuthError('')
+  }
 
   const fetchFunds = async () => {
     try {
@@ -180,6 +218,8 @@ export default function NopQuyLopHomePage() {
         accountName: createAccountName,
         description: createDescription,
         adminPasscode: createAdminPasscode,
+        adminUsername: adminUsername.trim(),
+        adminPassword: adminPassword.trim(),
         students: finalStudents,
       }
 
@@ -255,11 +295,11 @@ export default function NopQuyLopHomePage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setShowCreateModal(true)}
+              onClick={handleOpenCreateModal}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white text-xs font-black shadow-md shadow-indigo-500/20 transition-all"
             >
               <Plus className="h-4 w-4" />
-              <span>Tạo Đợt Thu Quỹ (AI)</span>
+              <span>Tạo Đợt Thu Quỹ (Admin)</span>
             </button>
           </div>
         </div>
@@ -360,7 +400,7 @@ export default function NopQuyLopHomePage() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowCreateModal(true)}
+                onClick={handleOpenCreateModal}
                 className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black shadow-md hover:bg-indigo-700 transition"
               >
                 + Tạo Đợt Thu Quỹ Ngay
@@ -467,6 +507,107 @@ export default function NopQuyLopHomePage() {
           )}
         </section>
       </main>
+
+      {/* MODAL XÁC THỰC ADMIN TẠO QUỸ (admin / admin-DD/MM/YYYY) */}
+      {showAdminAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-[32px] border border-black/10 dark:border-white/15 bg-white dark:bg-slate-900 p-6 sm:p-8 text-slate-900 dark:text-white shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950 text-amber-600">
+                  <Lock className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                    Xác Thực Admin Tạo Quỹ
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Bảo mật khởi tạo đợt thu quỹ lớp ME2
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAdminAuthModal(false)}
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs space-y-1">
+              <div className="flex items-center gap-1.5 font-black uppercase text-[10px] tracking-wider">
+                <ShieldCheck className="h-3.5 w-3.5" /> Cơ Chế Bảo Mật Ngày
+              </div>
+              <p className="leading-relaxed">
+                Yêu cầu tài khoản <strong className="font-mono text-amber-900 dark:text-amber-100">admin</strong> và mật khẩu động theo ngày: <strong className="font-mono">admin-DD/MM/YYYY</strong>.
+              </p>
+            </div>
+
+            {adminAuthError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{adminAuthError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAdminLogin} className="space-y-4 text-xs font-bold">
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                  Tài khoản Admin:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  placeholder="admin"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-amber-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                  Mật khẩu Admin theo ngày:
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => {
+                    setAdminPassword(e.target.value)
+                    if (adminAuthError) setAdminAuthError('')
+                  }}
+                  placeholder="admin-DD/MM/YYYY"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-amber-500 font-mono"
+                />
+                <span className="text-[10px] text-slate-400 block font-medium">
+                  Ví dụ hôm nay: <code className="text-amber-600 dark:text-amber-400 font-mono font-bold">admin-19/10/2026</code>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminAuthModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Hủy Bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5"
+                >
+                  <Unlock className="h-4 w-4" />
+                  <span>Xác Thực & Tạo Quỹ</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* MODAL TẠO QUỸ MỚI CÓ AI GEMINI 3.5 FLASH LITE */}
       {showCreateModal && (

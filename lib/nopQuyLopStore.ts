@@ -238,12 +238,9 @@ export async function updateStudentPayment(
   return { success: true, student, fund }
 }
 
-// Chuẩn hóa tên tiếng Việt để so khớp không phân biệt hoa thường và dấu
-export function normalizeVietnamese(str: string): string {
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .trim()
-}
+// Re-export client-safe auth & normalization functions
+export {
+  normalizeVietnamese,
+  getExpectedAdminDailyPassword,
+  isValidAdminDailyPassword,
+} from './nopQuyLopAuth'
