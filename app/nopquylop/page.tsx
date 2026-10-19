@@ -133,7 +133,33 @@ export default function NopQuyLopHomePage() {
     fetchFunds()
   }, [])
 
-  // Xử lý AI Gemini 3.5 Flash Lite lọc danh sách
+  // Hàm trích xuất họ tên & MSSV cục bộ trên máy khách (chống lỗi mạng/Safari Load failed)
+  const parseStudentListLocally = (rawText: string) => {
+    const lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0)
+    const students: Array<{ id: string; name: string; mssv?: string }> = []
+    let count = 1
+
+    for (const line of lines) {
+      if (/^(stt|họ và tên|danh sách|mssv|lớp|quỹ|stt\t|tên|ngày sinh|ghi chú)/i.test(line)) continue
+      const mssvMatch = line.match(/\b(\d{7,10})\b/)
+      const mssv = mssvMatch ? mssvMatch[1] : ''
+      let cleaned = line.replace(/^\d+[\.\/\-\)]\s*/, '')
+      if (mssv) {
+        cleaned = cleaned.replace(mssv, '').replace(/[,\t\-\|]/g, ' ')
+      }
+      cleaned = cleaned.replace(/[0-9\t\-\|\(\)]/g, ' ').replace(/\s+/g, ' ').trim()
+      if (cleaned.length >= 2) {
+        students.push({
+          id: String(count++),
+          name: cleaned,
+          mssv: mssv || undefined,
+        })
+      }
+    }
+    return students
+  }
+
+  // Xử lý AI Gemini lọc danh sách với cơ chế đa tầng bảo vệ
   const handleAiParseList = async () => {
     if (!rawTextList.trim()) {
       setCreateError('Vui lòng dán văn bản danh sách lớp vào khung trước khi lọc')
@@ -151,22 +177,28 @@ export default function NopQuyLopHomePage() {
       })
       const json = await res.json()
 
-      if (!res.ok) {
-        setCreateError(json.error || 'Lỗi khi trích xuất danh sách bằng AI')
-        return
-      }
-
-      if (Array.isArray(json.students)) {
+      if (res.ok && Array.isArray(json.students) && json.students.length > 0) {
         setAiParsedStudents(json.students)
         setAiMessage(
           `Trích xuất thành công ${json.students.length} sinh viên bằng AI (gemini-3.5-flash-lite)! Vui lòng kiểm tra lại bảng bên dưới.`
         )
+        return
       }
     } catch (err: any) {
-      setCreateError(err.message || 'Lỗi kết nối máy chủ AI')
-    } finally {
-      setIsAiParsing(false)
+      console.warn('Lỗi gọi API AI từ trình duyệt, chuyển ngay sang bộ lọc thông minh cục bộ:', err)
     }
+
+    // Dự phòng cục bộ (bảo đảm 100% không bao giờ bị dừng lại bởi lỗi Safari "Load failed")
+    const localStudents = parseStudentListLocally(rawTextList)
+    if (localStudents.length > 0) {
+      setAiParsedStudents(localStudents)
+      setAiMessage(
+        `Đã trích xuất thành công ${localStudents.length} sinh viên từ danh sách lớp! Vui lòng kiểm tra lại bảng bên dưới.`
+      )
+    } else {
+      setCreateError('Không tìm thấy họ tên sinh viên hợp lệ trong văn bản. Vui lòng kiểm tra lại định dạng danh sách.')
+    }
+    setIsAiParsing(false)
   }
 
   // Submit tạo quỹ

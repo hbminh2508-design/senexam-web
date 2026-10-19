@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getFundById, normalizeVietnamese } from '@/lib/nopQuyLopStore'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { buildVietQrUrl } from '@/lib/vipMembership'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,18 +80,45 @@ export async function POST(
       })
     }
 
-    // Sinh mã nộp tiền độc nhất: ME2-[MSSV]-[RANDOM_4_DIGITS]
-    const shortMssv = matchedStudent.mssv || matchedStudent.id
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000)
-    const paymentCode = `ME2-${shortMssv}-${randomSuffix}`
+    // Sinh mã nộp tiền chuẩn SePay: NOPQUY + 6 ký tự ngẫu nhiên
+    // Khớp biểu thức ORDER_CODE_RE để SePay tự động bắt webhook và đối soát tiền về tài khoản
+    const randSuffix = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const paymentCode = `NOPQUY${randSuffix}`
 
-    // Chuẩn hóa Bank ID cho VietQR
-    const bankClean = (fund.bankName || 'MBBANK').toUpperCase().replace(/[^A-Z0-9]/g, '')
-    const accountClean = (fund.bankAccount || '').replace(/[^0-9]/g, '')
+    // Thông tin ngân hàng: Ưu tiên cấu hình VietQR của SenExam, nếu không thì dùng của quỹ
+    const bankBin = process.env.VIETQR_BANK_BIN || fund.bankName || '970422'
+    const accountNo = process.env.VIETQR_ACCOUNT_NO || fund.bankAccount || '0988776655'
+    const accountName = process.env.VIETQR_ACCOUNT_NAME || fund.accountName || 'THU QUY LOP ME2'
     const transferNote = paymentCode
 
-    // Tạo link VietQR chuẩn
-    const qrUrl = `https://img.vietqr.io/image/${bankClean}-${accountClean}-compact2.png?amount=${fund.amountPerPerson}&addInfo=${encodeURIComponent(transferNote)}&accountName=${encodeURIComponent(fund.accountName || 'THU QUY LOP ME2')}`
+    // Tạo link VietQR chuẩn bằng bộ tạo VietQR của SenExam (img.vietqr.io compact2)
+    const qrUrl = buildVietQrUrl({
+      bankBin,
+      accountNo,
+      accountName,
+      amountVnd: fund.amountPerPerson,
+      addInfo: transferNote,
+    })
+
+    // Lưu đơn nộp tiền vào cơ sở dữ liệu Supabase để đối soát webhook chống gian lận
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      await supabaseAdmin.from('class_fund_payments').insert({
+        fund_id: fund.id,
+        student_id: matchedStudent.id,
+        student_name: matchedStudent.name,
+        mssv: matchedStudent.mssv || '',
+        order_code: paymentCode,
+        amount_vnd: fund.amountPerPerson,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      })
+    } catch (saveErr: any) {
+      console.warn('Lỗi lưu class_fund_payments:', saveErr?.message)
+    }
+
+    // Cập nhật paymentCode vào hồ sơ sinh viên
+    matchedStudent.paymentCode = paymentCode
 
     return NextResponse.json({
       success: true,
@@ -97,9 +126,10 @@ export async function POST(
       paymentCode,
       qrUrl,
       amount: fund.amountPerPerson,
-      bankName: fund.bankName,
-      bankAccount: fund.bankAccount,
-      accountName: fund.accountName,
+      bankBin,
+      bankName: fund.bankName || 'MBBANK',
+      bankAccount: accountNo,
+      accountName: accountName,
       transferNote,
     })
   } catch (err: any) {

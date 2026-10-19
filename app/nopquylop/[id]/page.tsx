@@ -82,6 +82,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     alreadyPaid?: boolean
     message?: string
   } | null>(null)
+  const [autoPaidSuccess, setAutoPaidSuccess] = useState(false)
 
   // Admin Mode (Thủ quỹ duyệt trực tiếp)
   const [isAdminMode, setIsAdminMode] = useState(false)
@@ -116,6 +117,28 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     fetchFund()
   }, [fundId])
+
+  // Tự động đối soát giao dịch VietQR qua SePay theo thời gian thực (chống gian lận)
+  useEffect(() => {
+    if (!showPayModal || !paymentData || paymentData.alreadyPaid || autoPaidSuccess) return
+
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `/api/nopquylop/funds/${fundId}/pay-status?code=${paymentData.paymentCode}&studentId=${paymentData.student.id}`
+        )
+        const json = await res.json()
+        if (json.paid) {
+          setAutoPaidSuccess(true)
+          fetchFund()
+        }
+      } catch (err) {
+        console.warn('Lỗi polling đối soát SePay:', err)
+      }
+    }, 2500)
+
+    return () => clearInterval(timer)
+  }, [showPayModal, paymentData, autoPaidSuccess, fundId])
 
   // Tính toán thời gian quá hạn 1 tuần
   const isFundOverdueOneWeek = useMemo(() => {
@@ -784,7 +807,34 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             {/* KẾT QUẢ XÁC NHẬN & MÃ VIETQR CHUYỂN KHOẢN */}
             {paymentData && (
               <div className="space-y-4">
-                {paymentData.alreadyPaid ? (
+                {autoPaidSuccess ? (
+                  <div className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-center space-y-3 animate-in zoom-in-95">
+                    <CheckCircle2 className="h-14 w-14 text-emerald-600 mx-auto animate-bounce" />
+                    <h4 className="font-black text-emerald-900 dark:text-emerald-200 text-lg">
+                      ĐÃ NHẬN TIỀN THÀNH CÔNG!
+                    </h4>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed">
+                      Hệ thống VietQR & SePay đã tự động xác thực khoản nộp{' '}
+                      <strong>{paymentData.amount.toLocaleString('vi-VN')} đ</strong> của sinh viên{' '}
+                      <strong>&quot;{paymentData.student.name}&quot;</strong> ({paymentData.student.mssv || 'ME2'}).
+                    </p>
+                    <span className="inline-block px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono text-[11px] font-bold">
+                      Mã giao dịch: {paymentData.paymentCode}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPayModal(false)
+                        setAutoPaidSuccess(false)
+                        setPaymentData(null)
+                        fetchFund()
+                      }}
+                      className="mt-2 w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md transition"
+                    >
+                      Hoàn Tất & Đóng Cửa Sổ
+                    </button>
+                  </div>
+                ) : paymentData.alreadyPaid ? (
                   <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 text-center space-y-2">
                     <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto" />
                     <h4 className="font-black text-emerald-900 dark:text-emerald-200 text-base">
@@ -811,6 +861,12 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       <span className="px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-600 font-black text-xs">
                         Đã Khớp Danh Sách
                       </span>
+                    </div>
+
+                    {/* Chỉ báo trạng thái chờ chuyển khoản thời gian thực */}
+                    <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/50 text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" />
+                      <span>Đang tự động đối soát giao dịch ngân hàng theo thời gian thực (SePay)...</span>
                     </div>
 
                     {/* Mã QR VietQR */}
