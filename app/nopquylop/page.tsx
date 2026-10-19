@@ -350,6 +350,41 @@ export default function NopQuyLopHomePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-indigo-500 selection:text-white pb-16">
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-40 border-b border-black/5 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 text-white flex items-center justify-center font-black shadow-md shadow-indigo-500/20">
+              <Wallet className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-black tracking-tight text-slate-900 dark:text-white">
+                  Quỹ Lớp ME2
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase border border-indigo-200 dark:border-indigo-800">
+                  Công Khai Minh Bạch
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+                Hệ thống theo dõi & nộp quỹ lớp tự động
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white text-xs font-black shadow-md shadow-indigo-500/20 transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Tạo Đợt Thu Quỹ (Admin)</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Banner & Stats */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-8">
         <section className="relative overflow-hidden rounded-[32px] border border-indigo-100 dark:border-indigo-950/60 bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-950 p-6 sm:p-10 text-white shadow-xl">

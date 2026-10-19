@@ -260,7 +260,14 @@ export default function MobileBottomNav() {
     pathname?.startsWith('/seb-exam')
   )
 
+  // 8. Trang Quỹ Lớp ME2 độc lập (không hiển thị thanh bottom nav của SenExam):
+  const isNopQuyLop = Boolean(
+    pathname?.startsWith('/nopquylop') ||
+    (typeof window !== 'undefined' && window.location.hostname.includes('nopquylop'))
+  )
+
   const isExcluded = Boolean(
+    isNopQuyLop ||
     isFepn ||
     isBreatheHost ||
     isExamRoom ||
