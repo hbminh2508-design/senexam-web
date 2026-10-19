@@ -143,6 +143,59 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // Xóa 1 sinh viên / người nộp quỹ (Yêu cầu xác minh Admin)
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null)
+  const [showDeleteStudentModal, setShowDeleteStudentModal] = useState(false)
+  const [deleteStudentAdminUsername, setDeleteStudentAdminUsername] = useState('')
+  const [deleteStudentAdminPassword, setDeleteStudentAdminPassword] = useState('')
+  const [deleteStudentError, setDeleteStudentError] = useState('')
+  const [isDeletingStudent, setIsDeletingStudent] = useState(false)
+
+  const handleOpenDeleteStudentModal = (student: Student) => {
+    setStudentToDelete(student)
+    setDeleteStudentAdminUsername('')
+    setDeleteStudentAdminPassword('')
+    setDeleteStudentError('')
+    setShowDeleteStudentModal(true)
+  }
+
+  const handleDeleteStudent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!studentToDelete) return
+
+    if (deleteStudentAdminUsername.trim() !== 'admin' || !isValidAdminDailyPassword(deleteStudentAdminPassword)) {
+      setDeleteStudentError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+      return
+    }
+
+    setIsDeletingStudent(true)
+    setDeleteStudentError('')
+    try {
+      const res = await fetch(`/api/nopquylop/funds/${fundId}/students/${studentToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminUsername: deleteStudentAdminUsername.trim(),
+          adminPassword: deleteStudentAdminPassword.trim(),
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setDeleteStudentError(json.error || 'Lỗi khi xóa người nộp quỹ')
+        return
+      }
+
+      setShowDeleteStudentModal(false)
+      setStudentToDelete(null)
+      fetchFund()
+    } catch (err: any) {
+      setDeleteStudentError(err.message || 'Lỗi kết nối máy chủ')
+    } finally {
+      setIsDeletingStudent(false)
+    }
+  }
+
   const fetchFund = async () => {
     try {
       setLoading(true)
@@ -660,13 +713,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                   <th className="py-3 px-4">MSSV</th>
                   <th className="py-3 px-4">Số Tiền</th>
                   <th className="py-3 px-4">Trạng Thái</th>
-                  {isAdminMode && <th className="py-3 px-4 text-right">Thủ Quỹ Duyệt</th>}
+                  <th className="py-3 px-4 text-right">Thao Tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-white/5 font-medium">
                 {sortedAndFilteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdminMode ? 6 : 5} className="py-12 text-center text-slate-400 font-bold">
+                    <td colSpan={6} className="py-12 text-center text-slate-400 font-bold">
                       Không tìm thấy sinh viên nào theo điều kiện lọc này.
                     </td>
                   </tr>
@@ -745,29 +798,40 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                           )}
                         </td>
 
-                        {/* Quản trị thủ quỹ toggle */}
-                        {isAdminMode && (
-                          <td className="py-3.5 px-4 text-right">
+                        {/* Thao tác (Duyệt nếu đang mở chế độ Admin, và nút Xóa yêu cầu Admin) */}
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {isAdminMode && (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStudentPaid(student)}
+                                disabled={updatingStudentId === student.id}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
+                                  student.paid
+                                    ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
+                                } disabled:opacity-40`}
+                              >
+                                {updatingStudentId === student.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : student.paid ? (
+                                  'Đánh Dấu Chưa Nộp'
+                                ) : (
+                                  'Duyệt Đã Nộp ✓'
+                                )}
+                              </button>
+                            )}
+
                             <button
                               type="button"
-                              onClick={() => handleToggleStudentPaid(student)}
-                              disabled={updatingStudentId === student.id}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-                                student.paid
-                                  ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-                                  : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
-                              } disabled:opacity-40`}
+                              onClick={() => handleOpenDeleteStudentModal(student)}
+                              title="Xóa sinh viên này khỏi quỹ"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition"
                             >
-                              {updatingStudentId === student.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : student.paid ? (
-                                'Đánh Dấu Chưa Nộp'
-                              ) : (
-                                'Duyệt Đã Nộp ✓'
-                              )}
+                              <Trash2 className="h-4 w-4" />
                             </button>
-                          </td>
-                        )}
+                          </div>
+                        </td>
                       </tr>
                     )
                   })
@@ -1193,6 +1257,104 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 >
                   {isDeletingFund ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   <span>{isDeletingFund ? 'Đang Xóa...' : 'Xác Nhận Xóa Vĩnh Viễn'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XÁC THỰC ADMIN ĐỂ XÓA 1 SINH VIÊN */}
+      {showDeleteStudentModal && studentToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 max-w-md w-full border border-black/10 dark:border-white/10 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-rose-600 dark:text-rose-400">
+                    Xác Thực Admin Xóa Sinh Viên
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Xóa sinh viên khỏi danh sách nộp quỹ này
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowDeleteStudentModal(false)}
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs">
+              <div className="font-bold text-slate-500 mb-1">Sinh viên sẽ bị xóa:</div>
+              <div className="text-sm font-black text-slate-900 dark:text-white flex items-center justify-between">
+                <span>{studentToDelete.name}</span>
+                <span className="font-mono text-xs text-slate-500">{studentToDelete.mssv || 'Không có MSSV'}</span>
+              </div>
+            </div>
+
+            {deleteStudentError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{deleteStudentError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleDeleteStudent} className="space-y-4 text-xs font-bold">
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                  Tài khoản:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={deleteStudentAdminUsername}
+                  onChange={(e) => setDeleteStudentAdminUsername(e.target.value)}
+                  placeholder="Nhập tài khoản quản trị..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-rose-500 font-sans"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                  Mật khẩu:
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={deleteStudentAdminPassword}
+                  onChange={(e) => {
+                    setDeleteStudentAdminPassword(e.target.value)
+                    if (deleteStudentError) setDeleteStudentError('')
+                  }}
+                  placeholder="Nhập mật khẩu..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-rose-500 font-sans"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteStudentModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Hủy Bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isDeletingStudent}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDeletingStudent ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  <span>{isDeletingStudent ? 'Đang Xóa...' : 'Xác Nhận Xóa Sinh Viên'}</span>
                 </button>
               </div>
             </form>

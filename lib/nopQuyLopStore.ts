@@ -261,6 +261,52 @@ export async function deleteFund(fundId: string): Promise<boolean> {
   }
 }
 
+// 6. Xóa 1 người nộp quỹ khỏi đợt thu quỹ (Chỉ dành cho Admin)
+export async function deleteStudentFromFund(fundId: string, studentId: string): Promise<boolean> {
+  const fund = await getFundById(fundId)
+  if (!fund) return false
+
+  const updatedStudents = fund.students.filter((s) => s.id !== studentId && s.mssv !== studentId)
+  fund.students = updatedStudents
+  fund.updatedAt = new Date().toISOString()
+
+  // Cập nhật Supabase
+  try {
+    const supabaseAdmin = getSupabaseAdmin()
+    await supabaseAdmin
+      .from('class_funds')
+      .update({
+        students: updatedStudents,
+        updated_at: fund.updatedAt,
+      })
+      .eq('id', fundId)
+
+    // Xóa cả đơn giao dịch của sinh viên này trong quỹ nếu có
+    await supabaseAdmin
+      .from('class_fund_payments')
+      .delete()
+      .eq('fund_id', fundId)
+      .eq('student_id', studentId)
+  } catch (err: any) {
+    console.warn('Lỗi cập nhật xóa sinh viên trên Supabase:', err?.message)
+  }
+
+  // Cập nhật file JSON cục bộ
+  try {
+    const local = readLocalFunds()
+    const idx = local.findIndex((f) => f.id === fundId)
+    if (idx >= 0) {
+      local[idx].students = updatedStudents
+      local[idx].updatedAt = fund.updatedAt
+      writeLocalFunds(local)
+    }
+    return true
+  } catch (err: any) {
+    console.error('Lỗi cập nhật xóa sinh viên file JSON:', err)
+    return false
+  }
+}
+
 // Re-export client-safe auth & normalization functions
 export {
   normalizeVietnamese,
