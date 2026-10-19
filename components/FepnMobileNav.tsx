@@ -182,6 +182,8 @@ export default function FepnMobileNav({
             onClick={() => setShowDrawer(true)}
             className="flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition flex-1 py-1 font-bold"
             title="Mở tất cả tính năng"
+            aria-expanded={showDrawer}
+            aria-controls="fepn-drawer"
           >
             <LayoutGrid className="h-5 w-5" />
             <span className="text-[11px] leading-tight">Tính năng</span>
@@ -196,6 +198,10 @@ export default function FepnMobileNav({
           onClick={() => setShowDrawer(false)}
         >
           <div
+            id="fepn-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="drawer-title"
             className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl border-t border-black/10 dark:border-white/10 p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -206,7 +212,7 @@ export default function FepnMobileNav({
                   <Image src="/fepn-logo.png" alt="FEPN Logo" fill className="object-contain" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading, inherit)' }}>
+                  <h3 id="drawer-title" className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-fepn-heading, inherit)' }}>
                     {currentMeta.title}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-bold uppercase">{currentMeta.subtitle}</p>
@@ -216,6 +222,7 @@ export default function FepnMobileNav({
                 type="button"
                 onClick={() => setShowDrawer(false)}
                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 hover:bg-black/10 transition"
+                aria-label="Đóng"
               >
                 <X className="h-4 w-4" />
               </button>
