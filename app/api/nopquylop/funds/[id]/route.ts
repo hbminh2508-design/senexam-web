@@ -1,0 +1,75 @@
+import { NextResponse } from 'next/server'
+import { getFundById, updateStudentPayment } from '@/lib/nopQuyLopStore'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const fund = await getFundById(id)
+
+    if (!fund) {
+      return NextResponse.json({ error: 'Không tìm thấy quỹ lớp này' }, { status: 404 })
+    }
+
+    const now = Date.now()
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
+    const isOverdueOneWeek = fund.dueDate ? now - new Date(fund.dueDate).getTime() > ONE_WEEK_MS : false
+
+    const totalStudents = fund.students.length
+    const paidStudents = fund.students.filter((s) => s.paid).length
+    const unpaidStudents = totalStudents - paidStudents
+    const overdueOneWeekStudents = fund.students.filter((s) => !s.paid && isOverdueOneWeek).length
+    const totalCollected = paidStudents * fund.amountPerPerson
+    const targetAmount = totalStudents * fund.amountPerPerson
+
+    return NextResponse.json({
+      fund,
+      stats: {
+        totalStudents,
+        paidStudents,
+        unpaidStudents,
+        overdueOneWeekStudents,
+        totalCollected,
+        targetAmount,
+        progressPercent: targetAmount > 0 ? Math.round((totalCollected / targetAmount) * 100) : 0,
+        isOverdueOneWeek,
+      },
+    })
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || 'Lỗi truy xuất quỹ' }, { status: 500 })
+  }
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const body = await request.json()
+    const { studentId, paid, paymentCode, adminPasscode } = body
+
+    const fund = await getFundById(id)
+    if (!fund) {
+      return NextResponse.json({ error: 'Không tìm thấy quỹ lớp' }, { status: 404 })
+    }
+
+    // Kiểm tra passcode thủ quỹ nếu có
+    if (fund.adminPasscode && adminPasscode !== fund.adminPasscode) {
+      return NextResponse.json({ error: 'Mã xác thực thủ quỹ / quản trị không chính xác' }, { status: 403 })
+    }
+
+    const result = await updateStudentPayment(id, studentId, Boolean(paid), paymentCode)
+    if (!result.success) {
+      return NextResponse.json({ error: 'Không tìm thấy sinh viên trong quỹ' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, student: result.student })
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || 'Lỗi cập nhật trạng thái nộp' }, { status: 500 })
+  }
+}

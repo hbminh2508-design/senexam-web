@@ -195,8 +195,12 @@ export function middleware(request: NextRequest) {
     hostname.includes('breathu.senexam.') ||
     hostname.includes('breatheu.senexam.')
 
+  const isNopQuyLopSubdomain =
+    hostname.startsWith('nopquylop.') ||
+    hostname.includes('nopquylop.senexam.')
+
   // 4.6 Chuyển hướng các đường dẫn cũ sang giao diện Mới (New UI) trên miền chính
-  if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain) {
+  if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain && !isNopQuyLopSubdomain) {
     if (pathname === '/admin') {
       url.pathname = '/new-admin'
       return applySecurityHeaders(NextResponse.redirect(url))
@@ -435,6 +439,19 @@ export function middleware(request: NextRequest) {
     }
     // Mặc định mọi path khác trên subdomain breathu.senexam.me đều rewrite về /breathe-u
     url.pathname = '/breathe-u'
+    return applySecurityHeaders(NextResponse.rewrite(url))
+  }
+
+  // 4.10 Kiểm tra nếu truy cập qua subdomain nopquylop.senexam.me
+  if (isNopQuyLopSubdomain) {
+    if (pathname === '/' || pathname === '/dashboard') {
+      url.pathname = '/nopquylop'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/nopquylop')) {
+      return applySecurityHeaders(NextResponse.next())
+    }
+    url.pathname = `/nopquylop${pathname}`
     return applySecurityHeaders(NextResponse.rewrite(url))
   }
 
