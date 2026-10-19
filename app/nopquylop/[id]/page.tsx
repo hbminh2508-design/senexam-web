@@ -29,8 +29,24 @@ import {
   Trash2,
   UploadCloud,
   Image as ImageIcon,
+  Receipt,
+  FileText,
+  Plus,
+  Maximize2,
+  Eye,
+  Edit3,
+  TrendingDown,
+  TrendingUp,
+  Coins,
 } from 'lucide-react'
 import { isValidAdminDailyPassword } from '@/lib/nopQuyLopAuth'
+import {
+  saveAdminSession,
+  getAdminSession,
+  clearAdminSession,
+  isCurrentAdminSessionValid,
+  formatAdminRemainingTime,
+} from '@/lib/nopQuyLopAdminSession'
 
 interface Student {
   id: string
@@ -40,6 +56,17 @@ interface Student {
   paidAt?: string
   paymentCode?: string
   note?: string
+}
+
+interface FundExpense {
+  id: string
+  title: string
+  amount: number
+  spentAt: string
+  spentBy?: string
+  note?: string
+  billImageUrl?: string
+  createdAt: string
 }
 
 interface FundDetail {
@@ -53,6 +80,8 @@ interface FundDetail {
   accountName: string
   description?: string
   adminPasscode?: string
+  initialBalance?: number
+  expenses?: FundExpense[]
   students: Student[]
   createdAt: string
   updatedAt: string
@@ -97,12 +126,51 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [proofVerifyError, setProofVerifyError] = useState('')
   const [proofSuccessMessage, setProofSuccessMessage] = useState('')
 
-  // Admin Mode (Thủ quỹ duyệt trực tiếp)
+  // Admin Mode & Session 30 phút
   const [isAdminMode, setIsAdminMode] = useState(false)
+  const [adminRemainingTime, setAdminRemainingTime] = useState('')
   const [showAdminPassModal, setShowAdminPassModal] = useState(false)
   const [adminPassInput, setAdminPassInput] = useState('')
   const [adminPassError, setAdminPassError] = useState('')
   const [updatingStudentId, setUpdatingStudentId] = useState<string | null>(null)
+
+  // Main Tabs: Sinh viên nộp quỹ vs Hóa đơn chi tiêu
+  const [mainTab, setMainTab] = useState<'students' | 'expenses'>('students')
+
+  // Quản lý Hóa đơn chi tiêu (Bill)
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false)
+  const [expenseTitle, setExpenseTitle] = useState('')
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseSpentAt, setExpenseSpentAt] = useState(new Date().toISOString().split('T')[0])
+  const [expenseSpentBy, setExpenseSpentBy] = useState('Trần Duy Khương')
+  const [expenseNote, setExpenseNote] = useState('')
+  const [expenseBillImage, setExpenseBillImage] = useState<string | null>(null)
+  const [isOcrAnalyzing, setIsOcrAnalyzing] = useState(false)
+  const [ocrError, setOcrError] = useState('')
+  const [ocrSuccessMsg, setOcrSuccessMsg] = useState('')
+  const [expenseAdminUser, setExpenseAdminUser] = useState('')
+  const [expenseAdminPass, setExpenseAdminPass] = useState('')
+  const [expenseError, setExpenseError] = useState('')
+  const [isSubmittingExpense, setIsSubmittingExpense] = useState(false)
+
+  // Xóa khoản chi
+  const [expenseToDelete, setExpenseToDelete] = useState<FundExpense | null>(null)
+  const [showDeleteExpenseModal, setShowDeleteExpenseModal] = useState(false)
+  const [deleteExpenseUser, setDeleteExpenseUser] = useState('')
+  const [deleteExpensePass, setDeleteExpensePass] = useState('')
+  const [deleteExpenseError, setDeleteExpenseError] = useState('')
+  const [isDeletingExpense, setIsDeletingExpense] = useState(false)
+
+  // Cập nhật số tiền ban đầu của lớp
+  const [showBalanceModal, setShowBalanceModal] = useState(false)
+  const [newInitialBalance, setNewInitialBalance] = useState('')
+  const [balanceAdminUser, setBalanceAdminUser] = useState('')
+  const [balanceAdminPass, setBalanceAdminPass] = useState('')
+  const [balanceError, setBalanceError] = useState('')
+  const [isUpdatingBalance, setIsUpdatingBalance] = useState(false)
+
+  // Phóng to xem ảnh bill
+  const [viewingBillImage, setViewingBillImage] = useState<string | null>(null)
 
   const router = useRouter()
 
@@ -119,9 +187,42 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [deleteError, setDeleteError] = useState('')
   const [isDeletingFund, setIsDeletingFund] = useState(false)
 
+  // Đồng bộ phiên Admin 30 phút trên toàn hệ thống
+  useEffect(() => {
+    const updateTimer = () => {
+      const session = getAdminSession()
+      if (session && session.expiresAt > Date.now()) {
+        setIsAdminMode(true)
+        setAdminRemainingTime(formatAdminRemainingTime(session.expiresAt))
+      } else {
+        setAdminRemainingTime('')
+      }
+    }
+    updateTimer()
+    const timer = setInterval(updateTimer, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const handleOpenDeleteFundModal = () => {
+    const session = getAdminSession()
+    if (session && session.expiresAt > Date.now()) {
+      setDeleteAdminUsername('admin')
+      setDeleteAdminPassword(session.adminPassword)
+    } else {
+      setDeleteAdminUsername('')
+      setDeleteAdminPassword('')
+    }
+    setDeleteError('')
+    setShowDeleteAdminModal(true)
+  }
+
   const handleDeleteThisFund = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (deleteAdminUsername.trim() !== 'admin' || !isValidAdminDailyPassword(deleteAdminPassword)) {
+    const session = getAdminSession()
+    const pass = deleteAdminPassword.trim() || (session ? session.adminPassword : '')
+    const user = deleteAdminUsername.trim() || (session ? session.adminUsername : 'admin')
+
+    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
       setDeleteError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
       return
     }
@@ -133,8 +234,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adminUsername: deleteAdminUsername.trim(),
-          adminPassword: deleteAdminPassword.trim(),
+          adminUsername: user,
+          adminPassword: pass,
         }),
       })
 
@@ -144,6 +245,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         return
       }
 
+      saveAdminSession(pass)
       setShowDeleteAdminModal(false)
       router.push('/nopquylop')
     } catch (err: any) {
@@ -163,8 +265,14 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
 
   const handleOpenDeleteStudentModal = (student: Student) => {
     setStudentToDelete(student)
-    setDeleteStudentAdminUsername('')
-    setDeleteStudentAdminPassword('')
+    const session = getAdminSession()
+    if (session && session.expiresAt > Date.now()) {
+      setDeleteStudentAdminUsername('admin')
+      setDeleteStudentAdminPassword(session.adminPassword)
+    } else {
+      setDeleteStudentAdminUsername('')
+      setDeleteStudentAdminPassword('')
+    }
     setDeleteStudentError('')
     setShowDeleteStudentModal(true)
   }
@@ -173,7 +281,11 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     e.preventDefault()
     if (!studentToDelete) return
 
-    if (deleteStudentAdminUsername.trim() !== 'admin' || !isValidAdminDailyPassword(deleteStudentAdminPassword)) {
+    const session = getAdminSession()
+    const pass = deleteStudentAdminPassword.trim() || (session ? session.adminPassword : '')
+    const user = deleteStudentAdminUsername.trim() || (session ? session.adminUsername : 'admin')
+
+    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
       setDeleteStudentError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
       return
     }
@@ -185,8 +297,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adminUsername: deleteStudentAdminUsername.trim(),
-          adminPassword: deleteStudentAdminPassword.trim(),
+          adminUsername: user,
+          adminPassword: pass,
         }),
       })
 
@@ -196,6 +308,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         return
       }
 
+      saveAdminSession(pass)
       setShowDeleteStudentModal(false)
       setStudentToDelete(null)
       fetchFund()
@@ -204,6 +317,208 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsDeletingStudent(false)
     }
+  }
+
+  // Xử lý thêm khoản chi / Bill
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const session = getAdminSession()
+    const pass = expenseAdminPass.trim() || (session ? session.adminPassword : '')
+    const user = expenseAdminUser.trim() || (session ? session.adminUsername : 'admin')
+
+    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
+      setExpenseError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+      return
+    }
+
+    const amt = Number(expenseAmount.replace(/[^0-9]/g, ''))
+    if (!amt || amt <= 0) {
+      setExpenseError('Số tiền chi phải lớn hơn 0!')
+      return
+    }
+
+    if (!expenseTitle.trim()) {
+      setExpenseError('Vui lòng nhập tên khoản chi!')
+      return
+    }
+
+    setIsSubmittingExpense(true)
+    setExpenseError('')
+    try {
+      const res = await fetch(`/api/nopquylop/funds/${fundId}/expenses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: expenseTitle.trim(),
+          amount: amt,
+          spentAt: expenseSpentAt,
+          spentBy: expenseSpentBy.trim() || undefined,
+          note: expenseNote.trim() || undefined,
+          billImageUrl: expenseBillImage || undefined,
+          adminUsername: user,
+          adminPassword: pass,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setExpenseError(json.error || 'Lỗi thêm hóa đơn chi tiêu')
+        return
+      }
+
+      saveAdminSession(pass)
+      setIsAdminMode(true)
+      setShowAddExpenseModal(false)
+      setExpenseTitle('')
+      setExpenseAmount('')
+      setExpenseNote('')
+      setExpenseBillImage(null)
+      setOcrSuccessMsg('')
+      await fetchFund()
+    } catch (err: any) {
+      setExpenseError(err.message || 'Lỗi kết nối')
+    } finally {
+      setIsSubmittingExpense(false)
+    }
+  }
+
+  // Xử lý AI đọc hóa đơn chi tiêu
+  const handleOcrBill = async () => {
+    if (!expenseBillImage) {
+      setOcrError('Vui lòng chọn hoặc chụp ảnh hóa đơn trước!')
+      return
+    }
+
+    setIsOcrAnalyzing(true)
+    setOcrError('')
+    setOcrSuccessMsg('')
+    try {
+      const res = await fetch('/api/nopquylop/ocr-bill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: expenseBillImage }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setOcrError(json.error || 'Không thể đọc ảnh hóa đơn bằng AI')
+        return
+      }
+
+      if (json.amount) {
+        setExpenseAmount(String(json.amount))
+      }
+      if (json.title) {
+        setExpenseTitle(json.title)
+      }
+      setOcrSuccessMsg(
+        `AI (gemini-3.5-flash-lite) đã nhận diện: "${json.title || 'Khoản chi'}" — ${(json.amount || 0).toLocaleString('vi-VN')} đ`
+      )
+    } catch (err: any) {
+      setOcrError(err.message || 'Lỗi phân tích hóa đơn bằng AI')
+    } finally {
+      setIsOcrAnalyzing(false)
+    }
+  }
+
+  // Xóa khoản chi
+  const handleDeleteExpense = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!expenseToDelete) return
+    const session = getAdminSession()
+    const pass = deleteExpensePass.trim() || (session ? session.adminPassword : '')
+    const user = deleteExpenseUser.trim() || (session ? session.adminUsername : 'admin')
+
+    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
+      setDeleteExpenseError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+      return
+    }
+
+    setIsDeletingExpense(true)
+    setDeleteExpenseError('')
+    try {
+      const res = await fetch(`/api/nopquylop/funds/${fundId}/expenses/${expenseToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminUsername: user,
+          adminPassword: pass,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setDeleteExpenseError(json.error || 'Lỗi khi xóa khoản chi')
+        return
+      }
+
+      saveAdminSession(pass)
+      setShowDeleteExpenseModal(false)
+      setExpenseToDelete(null)
+      await fetchFund()
+    } catch (err: any) {
+      setDeleteExpenseError(err.message || 'Lỗi kết nối')
+    } finally {
+      setIsDeletingExpense(false)
+    }
+  }
+
+  // Cập nhật số tiền ban đầu hiện có của lớp
+  const handleUpdateBalance = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const session = getAdminSession()
+    const pass = balanceAdminPass.trim() || (session ? session.adminPassword : '')
+    const user = balanceAdminUser.trim() || (session ? session.adminUsername : 'admin')
+
+    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
+      setBalanceError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+      return
+    }
+
+    const amt = Number(newInitialBalance.replace(/[^0-9]/g, ''))
+    if (isNaN(amt) || amt < 0) {
+      setBalanceError('Số tiền không hợp lệ!')
+      return
+    }
+
+    setIsUpdatingBalance(true)
+    setBalanceError('')
+    try {
+      const res = await fetch(`/api/nopquylop/funds/${fundId}/balance`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initialBalance: amt,
+          adminUsername: user,
+          adminPassword: pass,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setBalanceError(json.error || 'Lỗi cập nhật số dư ban đầu')
+        return
+      }
+
+      saveAdminSession(pass)
+      setShowBalanceModal(false)
+      await fetchFund()
+    } catch (err: any) {
+      setBalanceError(err.message || 'Lỗi kết nối')
+    } finally {
+      setIsUpdatingBalance(false)
+    }
+  }
+
+  const handleExpenseImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setOcrError('')
+    setOcrSuccessMsg('')
+    const reader = new FileReader()
+    reader.onload = () => {
+      setExpenseBillImage(reader.result as string)
+    }
+    reader.readAsDataURL(file)
   }
 
   const fetchFund = async () => {
@@ -562,24 +877,43 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           </Link>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (isAdminMode) {
-                  setIsAdminMode(false)
-                } else {
-                  setShowAdminPassModal(true)
-                }
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
-                isAdminMode
-                  ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
-                  : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 border-black/5 dark:border-white/5'
-              }`}
-            >
-              {isAdminMode ? <Unlock className="h-3.5 w-3.5 text-amber-500" /> : <Lock className="h-3.5 w-3.5" />}
-              <span>{isAdminMode ? 'Thủ Quỹ (Bật)' : 'Chế Độ Thủ Quỹ'}</span>
-            </button>
+            {adminRemainingTime ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-black shadow-xs">
+                <Unlock className="h-3.5 w-3.5" />
+                <span>Admin ({adminRemainingTime})</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearAdminSession()
+                    setIsAdminMode(false)
+                    setAdminRemainingTime('')
+                  }}
+                  title="Thoát phiên Admin"
+                  className="ml-1 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isAdminMode) {
+                    setIsAdminMode(false)
+                  } else {
+                    setShowAdminPassModal(true)
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                  isAdminMode
+                    ? 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+                    : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 border-black/5 dark:border-white/5'
+                }`}
+              >
+                {isAdminMode ? <Unlock className="h-3.5 w-3.5 text-amber-500" /> : <Lock className="h-3.5 w-3.5" />}
+                <span>{isAdminMode ? 'Thủ Quỹ (Bật)' : 'Chế Độ Thủ Quỹ'}</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -592,12 +926,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
 
             <button
               type="button"
-              onClick={() => {
-                setDeleteAdminUsername('')
-                setDeleteAdminPassword('')
-                setDeleteError('')
-                setShowDeleteAdminModal(true)
-              }}
+              onClick={handleOpenDeleteFundModal}
               title="Xóa đợt thu quỹ (Chỉ dành cho Admin)"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-xs font-bold transition"
             >
@@ -679,23 +1008,112 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Metrics & Progress Bar */}
           <div className="pt-6 border-t border-black/5 dark:border-white/5 space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-black/5 dark:border-white/5">
+            {/* THỐNG KÊ TÀI CHÍNH THỰC TẾ: BAN ĐẦU, THU, CHI, VÀ SỐ DƯ CÒN LẠI */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Card 1: Số Dư Quỹ Còn Lại (Nổi bật nhất) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border-2 border-emerald-500/40 dark:border-emerald-500/50 relative overflow-hidden shadow-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Coins className="h-4 w-4 text-emerald-600" />
+                    Số Dư Quỹ Còn Lại
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-black uppercase">
+                    Thực Tế
+                  </span>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                  {((fund.initialBalance || 0) + stats.collected - ((fund.expenses || []).reduce((s, e) => s + (e.amount || 0), 0))).toLocaleString('vi-VN')} đ
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-1">
+                  = Ban đầu + Đã thu - Các bill chi tiêu
+                </p>
+              </div>
+
+              {/* Card 2: Số Tiền Ban Đầu Của Lớp */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-black/10 dark:border-white/10">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <Building className="h-3.5 w-3.5" />
+                    Quỹ Ban Đầu
+                  </span>
+                  {isAdminMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewInitialBalance(String(fund.initialBalance || 0))
+                        setBalanceError('')
+                        const session = getAdminSession()
+                        if (session && session.expiresAt > Date.now()) {
+                          setBalanceAdminUser('admin')
+                          setBalanceAdminPass(session.adminPassword)
+                        }
+                        setShowBalanceModal(true)
+                      }}
+                      className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline inline-flex items-center gap-0.5"
+                    >
+                      <Edit3 className="h-3 w-3" /> Sửa
+                    </button>
+                  )}
+                </div>
+                <div className="text-xl font-black text-slate-900 dark:text-white">
+                  {(fund.initialBalance || 0).toLocaleString('vi-VN')} đ
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Số tiền lớp có trước đợt thu này</p>
+              </div>
+
+              {/* Card 3: Tổng Thu Từ Sinh Viên */}
+              <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200/50 dark:border-indigo-900/40">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
+                    <TrendingUp className="h-3.5 w-3.5 text-indigo-600" />
+                    Tổng Thu Sinh Viên
+                  </span>
+                  <span className="text-[10px] text-indigo-600 font-bold">
+                    {stats.paid}/{stats.total} bạn
+                  </span>
+                </div>
+                <div className="text-xl font-black text-indigo-600 dark:text-indigo-400">
+                  +{stats.collected.toLocaleString('vi-VN')} đ
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Tiến độ thu: {stats.percent}% chỉ tiêu</p>
+              </div>
+
+              {/* Card 4: Tổng Chi Tiêu Theo Bill */}
+              <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/30 border border-rose-200/50 dark:border-rose-900/40">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 flex items-center gap-1">
+                    <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
+                    Tổng Đã Chi (Bills)
+                  </span>
+                  <span className="text-[10px] text-rose-600 font-bold">
+                    {(fund.expenses || []).length} hóa đơn
+                  </span>
+                </div>
+                <div className="text-xl font-black text-rose-600 dark:text-rose-400">
+                  -{((fund.expenses || []).reduce((s, e) => s + (e.amount || 0), 0)).toLocaleString('vi-VN')} đ
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Được trừ trực tiếp vào quỹ</p>
+              </div>
+            </div>
+
+            {/* Sĩ số và Trạng thái */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-black/5 dark:border-white/5">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Sĩ số lớp</span>
-                <span className="text-lg font-black text-slate-900 dark:text-white">{stats.total} sinh viên</span>
+                <span className="text-base font-black text-slate-900 dark:text-white">{stats.total} sinh viên</span>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+              <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-300">
                 <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-0.5">Đã nộp ({stats.percent}%)</span>
-                <span className="text-lg font-black">{stats.paid} sinh viên</span>
+                <span className="text-base font-black">{stats.paid} sinh viên</span>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/60 text-amber-800 dark:text-amber-300">
+              <div className="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/60 text-amber-800 dark:text-amber-300">
                 <span className="text-[10px] uppercase font-bold text-amber-600 block mb-0.5">Chưa nộp</span>
-                <span className="text-lg font-black">{stats.unpaid} sinh viên</span>
+                <span className="text-base font-black">{stats.unpaid} sinh viên</span>
               </div>
 
-              <div className={`p-3.5 rounded-2xl border ${
+              <div className={`p-3 rounded-xl border ${
                 stats.overdue > 0
                   ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-300 dark:border-rose-900 text-rose-700 dark:text-rose-300'
                   : 'bg-slate-50 dark:bg-slate-800/40 border-black/5 dark:border-white/5 text-slate-400'
@@ -703,21 +1121,21 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 <span className="text-[10px] uppercase font-bold block mb-0.5 flex items-center gap-1">
                   <Flame className="h-3 w-3 text-rose-500" /> Trễ Hạn &gt; 1 Tuần
                 </span>
-                <span className="text-lg font-black">
+                <span className="text-base font-black">
                   {stats.overdue} bạn
                 </span>
               </div>
             </div>
 
             {/* Progress Bar */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-500">
-                  Tổng thu được: <strong className="text-emerald-600 font-black">{stats.collected.toLocaleString('vi-VN')} đ</strong> / {stats.target.toLocaleString('vi-VN')} đ
+                  Thu đợt này: <strong className="text-emerald-600 font-black">{stats.collected.toLocaleString('vi-VN')} đ</strong> / {stats.target.toLocaleString('vi-VN')} đ
                 </span>
-                <span className="text-indigo-600 dark:text-indigo-400 font-black">{stats.percent}% Hoàn Thành</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-black">{stats.percent}% Chỉ Tiêu</span>
               </div>
-              <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 rounded-full transition-all duration-500"
                   style={{ width: `${stats.percent}%` }}
@@ -727,8 +1145,64 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </section>
 
-        {/* Search & Tabs Filter */}
-        <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* CHUYỂN TAB CHÍNH: DANH SÁCH SINH VIÊN vs HÓA ĐƠN CHI TIÊU */}
+        <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-3">
+          <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/5 dark:bg-white/5">
+            <button
+              type="button"
+              onClick={() => setMainTab('students')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition ${
+                mainTab === 'students'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              <span>Danh Sách Nộp Quỹ ({stats.total})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMainTab('expenses')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition ${
+                mainTab === 'expenses'
+                  ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+              }`}
+            >
+              <Receipt className="h-4 w-4" />
+              <span>Khoản Chi & Hóa Đơn ({(fund.expenses || []).length})</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const session = getAdminSession()
+                if (session && session.expiresAt > Date.now()) {
+                  setExpenseAdminUser('admin')
+                  setExpenseAdminPass(session.adminPassword)
+                }
+                setExpenseSpentAt(new Date().toISOString().split('T')[0])
+                setShowAddExpenseModal(true)
+                setExpenseError('')
+                setOcrError('')
+                setOcrSuccessMsg('')
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-black shadow-md shadow-rose-500/20 transition"
+            >
+              <Plus className="h-4 w-4" />
+              <span>+ Đưa Bill Vào Trừ Quỹ</span>
+            </button>
+          </div>
+        </section>
+
+        {/* TAB 1: DANH SÁCH SINH VIÊN NỘP TIỀN */}
+        {mainTab === 'students' && (
+          <div className="space-y-6">
+            {/* Search & Tabs Filter */}
+            <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Tabs */}
           <div className="flex items-center gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl overflow-x-auto text-xs font-bold">
             <button
@@ -958,7 +1432,166 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             </table>
           </div>
         </section>
-      </main>
+      </div>
+    )}
+
+    {/* TAB 2: QUẢN LÝ HÓA ĐƠN & KHOẢN CHI TIÊU (TRỪ DẦN QUỸ LỚP) */}
+    {mainTab === 'expenses' && (
+      <div className="space-y-6">
+        <section className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+          <div className="p-4 sm:p-6 border-b border-black/5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-rose-600" />
+                <span>Danh Sách Hóa Đơn & Khoản Chi Trừ Quỹ</span>
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Các hóa đơn mua sắm, chi tiêu thực tế của lớp ME2 được công khai minh bạch và trừ trực tiếp vào số dư quỹ
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const session = getAdminSession()
+                if (session && session.expiresAt > Date.now()) {
+                  setExpenseAdminUser('admin')
+                  setExpenseAdminPass(session.adminPassword)
+                }
+                setExpenseSpentAt(new Date().toISOString().split('T')[0])
+                setShowAddExpenseModal(true)
+                setExpenseError('')
+                setOcrError('')
+                setOcrSuccessMsg('')
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-black shadow-md transition shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              <span>+ Đưa Bill Mới Vào</span>
+            </button>
+          </div>
+
+          {!(fund.expenses && fund.expenses.length > 0) ? (
+            <div className="p-16 text-center space-y-4">
+              <div className="h-14 w-14 rounded-3xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center mx-auto">
+                <Receipt className="h-7 w-7" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-base font-black text-slate-800 dark:text-slate-200">
+                  Chưa có hóa đơn chi tiêu nào
+                </h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Lớp chưa phát sinh khoản chi nào hoặc thủ quỹ chưa tải hóa đơn lên. Hãy bấm "+ Đưa Bill Mới Vào" để thêm bill chi tiêu.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const session = getAdminSession()
+                  if (session && session.expiresAt > Date.now()) {
+                    setExpenseAdminUser('admin')
+                    setExpenseAdminPass(session.adminPassword)
+                  }
+                  setShowAddExpenseModal(true)
+                }}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md transition"
+              >
+                + Đưa Bill Chi Tiêu Đầu Tiên
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-black/5 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40 text-slate-400 font-black uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4 w-14">STT</th>
+                    <th className="py-3 px-4">Ngày Chi</th>
+                    <th className="py-3 px-4">Tên Khoản Chi / Mục Đích</th>
+                    <th className="py-3 px-4">Người Chi</th>
+                    <th className="py-3 px-4">Số Tiền Trừ Quỹ</th>
+                    <th className="py-3 px-4 text-center">Ảnh Hóa Đơn (Bill)</th>
+                    <th className="py-3 px-4 text-right">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                  {fund.expenses.map((exp, idx) => (
+                    <tr key={exp.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                      <td className="py-3.5 px-4 font-mono text-slate-400">{idx + 1}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-600 dark:text-slate-400">
+                        {exp.spentAt ? new Date(exp.spentAt).toLocaleDateString('vi-VN') : '—'}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-0.5">
+                          <span className="font-black text-slate-900 dark:text-white text-sm block">
+                            {exp.title}
+                          </span>
+                          {exp.note && (
+                            <span className="text-[11px] text-slate-400 line-clamp-1">
+                              {exp.note}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-700 dark:text-slate-300">
+                        {exp.spentBy || 'Thủ quỹ'}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-black text-rose-600 dark:text-rose-400 text-sm">
+                          -{exp.amount.toLocaleString('vi-VN')} đ
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        {exp.billImageUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewingBillImage(exp.billImageUrl || null)}
+                            title="Bấm để xem ảnh hóa đơn rõ nét"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-black/10 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition"
+                          >
+                            <img
+                              src={exp.billImageUrl}
+                              alt="Bill"
+                              className="w-5 h-5 object-cover rounded-md"
+                            />
+                            <Eye className="h-3.5 w-3.5 text-indigo-500" />
+                            <span>Xem Bill</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Không có ảnh</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpenseToDelete(exp)
+                            const session = getAdminSession()
+                            if (session && session.expiresAt > Date.now()) {
+                              setDeleteExpenseUser('admin')
+                              setDeleteExpensePass(session.adminPassword)
+                            } else {
+                              setDeleteExpenseUser('')
+                              setDeleteExpensePass('')
+                            }
+                            setDeleteExpenseError('')
+                            setShowDeleteExpenseModal(true)
+                          }}
+                          title="Xóa hóa đơn chi tiêu này"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    )}
+  </main>
 
       {/* MODAL NỘP TIỀN QUỸ (YÊU CẦU TÊN HOẶC MSSV VÀ SINH MÃ VIETQR) */}
       {showPayModal && (
@@ -1557,6 +2190,496 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÊM KHOẢN CHI / BILL VÀO TRỪ QUỸ (CÓ AI GEMINI ĐỌC BILL) */}
+      {showAddExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in">
+          <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-[32px] border border-black/10 dark:border-white/15 bg-white dark:bg-slate-900 p-6 sm:p-8 text-slate-900 dark:text-white shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-rose-500/10 text-rose-600">
+                  <Receipt className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                    Đưa Hóa Đơn / Bill Vào Trừ Quỹ
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Hỗ trợ quét ảnh hóa đơn tự động bằng AI (gemini-3.5-flash-lite)
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddExpenseModal(false)
+                  setExpenseError('')
+                  setOcrError('')
+                  setOcrSuccessMsg('')
+                }}
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-white p-2"
+              >
+                ✕ Đóng
+              </button>
+            </div>
+
+            {expenseError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{expenseError}</span>
+              </div>
+            )}
+
+            {/* VÙNG TẢI ẢNH BILL & NÚT AI ĐỌC BILL */}
+            <div className="p-4 rounded-2xl border-2 border-dashed border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-rose-950 dark:text-rose-200 flex items-center gap-1.5">
+                  <UploadCloud className="h-4 w-4 text-rose-600" />
+                  Ảnh Hóa Đơn / Bill Chi Tiêu
+                </span>
+                <span className="text-[10px] text-slate-500">Chụp hoặc tải ảnh lên</span>
+              </div>
+
+              {expenseBillImage ? (
+                <div className="relative rounded-2xl overflow-hidden border border-black/10 bg-black flex items-center justify-center p-1">
+                  <img
+                    src={expenseBillImage}
+                    alt="Bill chi tiêu"
+                    className="max-h-52 object-contain rounded-xl"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpenseBillImage(null)
+                      setOcrError('')
+                      setOcrSuccessMsg('')
+                    }}
+                    className="absolute top-2 right-2 px-2.5 py-1 rounded-xl bg-black/70 hover:bg-black text-white text-[10px] font-bold backdrop-blur-md"
+                  >
+                    ✕ Đổi ảnh khác
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center p-6 border border-rose-200 dark:border-rose-900 rounded-xl cursor-pointer bg-white/60 dark:bg-slate-800/60 hover:bg-white transition text-center space-y-2">
+                  <ImageIcon className="h-8 w-8 text-rose-400" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Bấm vào đây để chọn hoặc chụp ảnh hóa đơn
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Hỗ trợ PNG, JPG, JPEG (Hóa đơn siêu thị, quán nước, in ấn...)
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleExpenseImageChange}
+                    className="hidden"
+                  />
+                </label>
+              )}
+
+              {expenseBillImage && (
+                <button
+                  type="button"
+                  onClick={handleOcrBill}
+                  disabled={isOcrAnalyzing}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black shadow-xs transition flex items-center justify-center gap-2 disabled:opacity-40"
+                >
+                  {isOcrAnalyzing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>AI (gemini-3.5-flash-lite) đang đọc hóa đơn...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 text-amber-300" />
+                      <span>AI Đọc Tự Động (Trích Xuất Tiền & Khoản Chi)</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {ocrSuccessMsg && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                  ✓ {ocrSuccessMsg}
+                </p>
+              )}
+
+              {ocrError && (
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 font-bold">
+                  ⚠️ {ocrError}
+                </p>
+              )}
+            </div>
+
+            <form onSubmit={handleAddExpense} className="space-y-4 text-xs font-bold">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
+                    Tên khoản chi / Mục đích:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="VD: Mua nước ngọt liên hoan, in đề..."
+                    value={expenseTitle}
+                    onChange={(e) => setExpenseTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
+                    Số tiền chi (VNĐ):
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="VD: 150000"
+                    value={expenseAmount}
+                    onChange={(e) => setExpenseAmount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-black text-rose-600 outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
+                    Ngày chi:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={expenseSpentAt}
+                    onChange={(e) => setExpenseSpentAt(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
+                    Người chi tiền:
+                  </label>
+                  <input
+                    type="text"
+                    value={expenseSpentBy}
+                    onChange={(e) => setExpenseSpentBy(e.target.value)}
+                    placeholder="VD: Trần Duy Khương"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
+                  Ghi chú chi tiết:
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ghi chú thêm về địa điểm mua, số lượng, v.v..."
+                  value={expenseNote}
+                  onChange={(e) => setExpenseNote(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-rose-500"
+                />
+              </div>
+
+              {/* Xác thực Admin (Nếu chưa có phiên) */}
+              {!isCurrentAdminSessionValid() && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-black/10 dark:border-white/10 space-y-3">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Xác thực quyền Admin thêm bill:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Tài khoản admin..."
+                      value={expenseAdminUser}
+                      onChange={(e) => setExpenseAdminUser(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-xs font-bold"
+                    />
+                    <input
+                      type="password"
+                      required
+                      placeholder="Mật khẩu admin..."
+                      value={expenseAdminPass}
+                      onChange={(e) => setExpenseAdminPass(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-xs font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-black/10 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowAddExpenseModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Hủy Bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingExpense}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-black shadow-md shadow-rose-500/20 transition flex items-center gap-2 disabled:opacity-40"
+                >
+                  {isSubmittingExpense ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang lưu bill...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Receipt className="h-4 w-4" />
+                      <span>Xác Nhận Đưa Bill Vào Trừ Quỹ</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CẬP NHẬT SỐ DƯ BAN ĐẦU CỦA LỚP */}
+      {showBalanceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-[32px] border border-black/10 dark:border-white/15 bg-white dark:bg-slate-900 p-6 sm:p-8 text-slate-900 dark:text-white shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
+                  <Building className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                    Cập Nhật Quỹ Ban Đầu
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Số tiền hiện có của lớp ME2 trước đợt thu này
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowBalanceModal(false)}
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {balanceError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{balanceError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateBalance} className="space-y-4 text-xs font-bold">
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                  Số tiền ban đầu của quỹ (VNĐ):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  value={newInitialBalance}
+                  onChange={(e) => setNewInitialBalance(e.target.value)}
+                  placeholder="VD: 2500000"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-black outline-none focus:border-indigo-500"
+                />
+                <p className="text-[10px] text-slate-400 font-medium">
+                  Hệ thống sẽ tự động tính: Số dư còn lại = Quỹ ban đầu + Tổng đã thu - Tổng các bill chi tiêu.
+                </p>
+              </div>
+
+              {!isCurrentAdminSessionValid() && (
+                <div className="space-y-3 pt-2 border-t border-black/5 dark:border-white/5">
+                  <div className="space-y-1">
+                    <label className="block text-slate-500 uppercase text-[10px]">Tài khoản admin:</label>
+                    <input
+                      type="text"
+                      required
+                      value={balanceAdminUser}
+                      onChange={(e) => setBalanceAdminUser(e.target.value)}
+                      placeholder="admin"
+                      className="w-full px-3 py-2 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-slate-500 uppercase text-[10px]">Mật khẩu admin:</label>
+                    <input
+                      type="password"
+                      required
+                      value={balanceAdminPass}
+                      onChange={(e) => setBalanceAdminPass(e.target.value)}
+                      placeholder="Mật khẩu..."
+                      className="w-full px-3 py-2 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBalanceModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Hủy Bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isUpdatingBalance}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-md shadow-indigo-500/20 transition flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isUpdatingBalance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  <span>{isUpdatingBalance ? 'Đang Lưu...' : 'Cập Nhật Số Dư'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XÁC THỰC XÓA KHOẢN CHI / BILL */}
+      {showDeleteExpenseModal && expenseToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 max-w-md w-full border border-black/10 dark:border-white/10 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-rose-600 dark:text-rose-400">
+                    Xác Thực Admin Xóa Bill
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Khoản tiền sẽ được hoàn trả lại vào số dư quỹ
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowDeleteExpenseModal(false)}
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs">
+              <div className="font-bold text-slate-500 mb-1">Khoản chi sẽ bị xóa:</div>
+              <div className="text-sm font-black text-slate-900 dark:text-white flex items-center justify-between">
+                <span>{expenseToDelete.title}</span>
+                <span className="font-mono text-xs text-rose-600 font-bold">-{expenseToDelete.amount.toLocaleString('vi-VN')} đ</span>
+              </div>
+            </div>
+
+            {deleteExpenseError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{deleteExpenseError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleDeleteExpense} className="space-y-4 text-xs font-bold">
+              {!isCurrentAdminSessionValid() && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                      Tài khoản:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={deleteExpenseUser}
+                      onChange={(e) => setDeleteExpenseUser(e.target.value)}
+                      placeholder="admin"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-rose-500 font-sans"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                      Mật khẩu:
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={deleteExpensePass}
+                      onChange={(e) => setDeleteExpensePass(e.target.value)}
+                      placeholder="Mật khẩu..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-rose-500 font-sans"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteExpenseModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Hủy Bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isDeletingExpense}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDeletingExpense ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  <span>{isDeletingExpense ? 'Đang Xóa...' : 'Xác Nhận Xóa Bill'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PHÓNG TO XEM ẢNH HÓA ĐƠN BILL RÕ NÉT */}
+      {viewingBillImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in"
+          onClick={() => setViewingBillImage(null)}
+        >
+          <div
+            className="relative max-w-3xl max-h-[90vh] overflow-hidden rounded-3xl bg-slate-900 border border-white/20 p-2 shadow-2xl flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between p-3 border-b border-white/10 text-white">
+              <span className="text-xs font-black flex items-center gap-1.5">
+                <Receipt className="h-4 w-4 text-rose-400" />
+                Hóa Đơn / Minh Chứng Chi Tiêu
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingBillImage(null)}
+                className="text-xs font-bold px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white"
+              >
+                ✕ Đóng
+              </button>
+            </div>
+            <div className="p-2 overflow-auto max-h-[80vh] flex items-center justify-center">
+              <img
+                src={viewingBillImage}
+                alt="Ảnh hóa đơn chi tiêu"
+                className="max-h-[75vh] w-auto object-contain rounded-2xl"
+              />
+            </div>
           </div>
         </div>
       )}

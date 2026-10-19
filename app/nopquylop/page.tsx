@@ -30,6 +30,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import { isValidAdminDailyPassword, getExpectedAdminDailyPassword } from '@/lib/nopQuyLopAuth'
+import {
+  saveAdminSession,
+  getAdminSession,
+  clearAdminSession,
+  isCurrentAdminSessionValid,
+  formatAdminRemainingTime,
+} from '@/lib/nopQuyLopAdminSession'
 import { VIETNAM_BANKS } from '@/lib/vietQrHelper'
 
 interface FundSummary {
@@ -48,6 +55,9 @@ interface FundSummary {
   overdueOneWeekStudents: number
   totalCollected: number
   targetAmount: number
+  initialBalance?: number
+  totalExpenses?: number
+  currentBalance?: number
   progressPercent: number
   isPastDueDate: boolean
   isOverdueOneWeek: boolean
@@ -64,8 +74,9 @@ export default function NopQuyLopHomePage() {
   const [createTitle, setCreateTitle] = useState('')
   const [createClassName, setCreateClassName] = useState('ME2')
   const [createAmount, setCreateAmount] = useState('100000')
+  const [createInitialBalance, setCreateInitialBalance] = useState('0')
   const [createDueDate, setCreateDueDate] = useState('')
-  const [createBankName, setCreateBankName] = useState('VietABank')
+  const [createBankName, setCreateBankName] = useState('VietABank - PGD Tây Hồ')
   const [createBankAccount, setCreateBankAccount] = useState('00222085')
   const [createAccountName, setCreateAccountName] = useState('TRAN DUY KHUONG')
   const [createDescription, setCreateDescription] = useState('')
@@ -85,6 +96,7 @@ export default function NopQuyLopHomePage() {
   const [adminPassword, setAdminPassword] = useState('')
   const [adminAuthError, setAdminAuthError] = useState('')
   const [isAdminVerified, setIsAdminVerified] = useState(false)
+  const [adminRemainingTime, setAdminRemainingTime] = useState('')
 
   // Modal Share QR
   const [shareQrFund, setShareQrFund] = useState<FundSummary | null>(null)
@@ -98,10 +110,33 @@ export default function NopQuyLopHomePage() {
   const [deleteError, setDeleteError] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // Lắng nghe và đồng bộ phiên Admin (30 phút)
+  useEffect(() => {
+    const updateAdminTimer = () => {
+      const session = getAdminSession()
+      if (session && session.expiresAt > Date.now()) {
+        setIsAdminVerified(true)
+        setAdminRemainingTime(formatAdminRemainingTime(session.expiresAt))
+      } else {
+        setIsAdminVerified(false)
+        setAdminRemainingTime('')
+      }
+    }
+    updateAdminTimer()
+    const timer = setInterval(updateAdminTimer, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   const handleOpenDeleteModal = (fund: FundSummary) => {
     setFundToDelete(fund)
-    setDeleteAdminUsername('')
-    setDeleteAdminPassword('')
+    const session = getAdminSession()
+    if (session && session.expiresAt > Date.now()) {
+      setDeleteAdminUsername('admin')
+      setDeleteAdminPassword(session.adminPassword)
+    } else {
+      setDeleteAdminUsername('')
+      setDeleteAdminPassword('')
+    }
     setDeleteError('')
     setShowDeleteAuthModal(true)
   }
@@ -110,7 +145,11 @@ export default function NopQuyLopHomePage() {
     e.preventDefault()
     if (!fundToDelete) return
 
-    if (deleteAdminUsername.trim() !== 'admin' || !isValidAdminDailyPassword(deleteAdminPassword)) {
+    const session = getAdminSession()
+    const pass = deleteAdminPassword.trim() || (session ? session.adminPassword : '')
+    const user = deleteAdminUsername.trim() || (session ? session.adminUsername : 'admin')
+
+    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
       setDeleteError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
       return
     }
@@ -122,8 +161,8 @@ export default function NopQuyLopHomePage() {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adminUsername: deleteAdminUsername.trim(),
-          adminPassword: deleteAdminPassword.trim(),
+          adminUsername: user,
+          adminPassword: pass,
         }),
       })
 
@@ -133,6 +172,9 @@ export default function NopQuyLopHomePage() {
         return
       }
 
+      // Duy trì phiên admin 30 phút
+      saveAdminSession(pass)
+      setIsAdminVerified(true)
       setShowDeleteAuthModal(false)
       setFundToDelete(null)
       fetchFunds()
@@ -144,7 +186,7 @@ export default function NopQuyLopHomePage() {
   }
 
   const handleOpenCreateModal = () => {
-    if (isAdminVerified) {
+    if (isCurrentAdminSessionValid()) {
       setShowCreateModal(true)
     } else {
       setShowAdminAuthModal(true)
@@ -158,6 +200,7 @@ export default function NopQuyLopHomePage() {
       setAdminAuthError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
       return
     }
+    saveAdminSession(adminPassword.trim())
     setIsAdminVerified(true)
     setShowAdminAuthModal(false)
     setShowCreateModal(true)
@@ -299,18 +342,23 @@ export default function NopQuyLopHomePage() {
         return
       }
 
+      const session = getAdminSession()
+      const pass = adminPassword.trim() || (session ? session.adminPassword : '')
+      const user = adminUsername.trim() || (session ? session.adminUsername : 'admin')
+
       const payload = {
         title: createTitle,
         className: createClassName || 'ME2',
         amountPerPerson: amount,
         dueDate: createDueDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-        bankName: createBankName,
-        bankAccount: createBankAccount,
-        accountName: createAccountName,
+        bankName: 'VietABank - PGD Tây Hồ',
+        bankAccount: '00222085',
+        accountName: 'TRAN DUY KHUONG',
         description: createDescription,
         adminPasscode: createAdminPasscode,
-        adminUsername: adminUsername.trim(),
-        adminPassword: adminPassword.trim(),
+        initialBalance: Number(createInitialBalance) || 0,
+        adminUsername: user,
+        adminPassword: pass,
         students: finalStudents,
       }
 
@@ -327,9 +375,14 @@ export default function NopQuyLopHomePage() {
         return
       }
 
+      // Duy trì phiên admin 30 phút
+      if (pass) saveAdminSession(pass)
+      setIsAdminVerified(true)
+
       // Reset form
       setShowCreateModal(false)
       setCreateTitle('')
+      setCreateInitialBalance('0')
       setRawTextList('')
       setAiParsedStudents([])
       await fetchFunds()
@@ -384,6 +437,24 @@ export default function NopQuyLopHomePage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {adminRemainingTime && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-black shadow-xs">
+                <Unlock className="h-3.5 w-3.5" />
+                <span>Admin ({adminRemainingTime})</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearAdminSession()
+                    setIsAdminVerified(false)
+                    setAdminRemainingTime('')
+                  }}
+                  title="Thoát phiên Admin"
+                  className="ml-1 text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <button
               type="button"
               onClick={handleOpenCreateModal}
@@ -578,6 +649,18 @@ export default function NopQuyLopHomePage() {
                           />
                         </div>
                       </div>
+
+                      {/* Số Dư Quỹ Hiện Tại */}
+                      {fund.currentBalance !== undefined && (
+                        <div className="flex items-center justify-between text-xs px-3 py-1.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-900/50">
+                          <span className="text-emerald-700 dark:text-emerald-300 font-bold text-[11px]">
+                            Số Dư Quỹ Hiện Tại:
+                          </span>
+                          <span className="font-black text-emerald-600 dark:text-emerald-400">
+                            {fund.currentBalance.toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
@@ -861,7 +944,8 @@ export default function NopQuyLopHomePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Ô nhập số dư hiện có ban đầu của lớp */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
                     Hạn chót nộp:
@@ -876,52 +960,82 @@ export default function NopQuyLopHomePage() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
-                    Ngân hàng nhận:
-                  </label>
-                  <select
-                    value={createBankName}
-                    onChange={(e) => setCreateBankName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-indigo-500 text-xs"
-                  >
-                    {VIETNAM_BANKS.map((b) => (
-                      <option key={b.code} value={b.shortName}>
-                        {b.shortName} — {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
-                    Số tài khoản:
+                  <label className="block text-indigo-700 dark:text-indigo-300 mb-1.5 uppercase tracking-wider text-[11px] font-black">
+                    Số tiền hiện có ban đầu của lớp (VNĐ):
                   </label>
                   <input
-                    type="text"
-                    required
-                    placeholder="VD: 0988776655"
-                    value={createBankAccount}
-                    onChange={(e) => setCreateBankAccount(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-indigo-500"
+                    type="number"
+                    min="0"
+                    placeholder="VD: 2500000 (Để 0 nếu bắt đầu quỹ mới)"
+                    value={createInitialBalance}
+                    onChange={(e) => setCreateInitialBalance(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200 font-black outline-none focus:border-indigo-600"
                   />
+                  <span className="text-[10px] text-slate-400 font-medium block mt-1">
+                    Số dư có sẵn trong quỹ lớp trước đợt thu này (dùng cộng dồn và trừ bill).
+                  </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
-                    Tên chủ tài khoản:
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: NGUYEN VAN A"
-                    value={createAccountName}
-                    onChange={(e) => setCreateAccountName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-indigo-500"
-                  />
+              {/* THÔNG TIN TÀI KHOẢN THỦ QUỸ KHƯƠNG - BỊ BÔI XÁM KHÓA CỐ ĐỊNH */}
+              <div className="p-4 rounded-2xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-amber-500" />
+                    Tài Khoản Thủ Quỹ Nhận Tiền (Cố Định - Không Thay Đổi)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/20">
+                    Khóa Cố Định ME2
+                  </span>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-slate-400 text-[10px] uppercase font-bold mb-1">
+                      Ngân hàng:
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      readOnly
+                      value="VietABank - PGD Tây Hồ"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-bold text-xs cursor-not-allowed border border-slate-300 dark:border-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 text-[10px] uppercase font-bold mb-1">
+                      Số tài khoản:
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      readOnly
+                      value="00222085"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-mono font-bold text-xs cursor-not-allowed border border-slate-300 dark:border-slate-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 text-[10px] uppercase font-bold mb-1">
+                      Tên chủ tài khoản:
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      readOnly
+                      value="TRAN DUY KHUONG"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-200/70 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 font-bold text-xs cursor-not-allowed border border-slate-300 dark:border-slate-600"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Mặc định thủ quỹ là bạn <strong>Trần Duy Khương</strong> nhận quỹ lớp ME2. Tài khoản này tách biệt với SenExam, sinh viên nộp tiền sẽ quét mã VietQR tự động chuyển vào tài khoản trên.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
                     Mã bảo mật thủ quỹ (để duyệt nộp):
@@ -934,13 +1048,6 @@ export default function NopQuyLopHomePage() {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/50 text-[11px] text-indigo-700 dark:text-indigo-300 font-bold flex items-start gap-2">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-indigo-600 mt-0.5" />
-                <span>
-                  Tài khoản ngân hàng này dùng riêng cho đợt thu quỹ lớp, <strong>tách biệt hoàn toàn</strong> với tài khoản nhận tiền SenExam. Sinh viên quét mã VietQR sẽ nộp tiền trực tiếp về đúng số tài khoản bạn điền ở đây.
-                </span>
               </div>
 
               <div>

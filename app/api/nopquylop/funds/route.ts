@@ -18,6 +18,9 @@ export async function GET() {
       const overdueOneWeekStudents = f.students.filter((s) => !s.paid && isOverdueOneWeek).length
       const totalCollected = paidStudents * f.amountPerPerson
       const targetAmount = totalStudents * f.amountPerPerson
+      const initialBalance = f.initialBalance || 0
+      const totalExpenses = (f.expenses || []).reduce((sum, exp) => sum + (exp.amount || 0), 0)
+      const currentBalance = initialBalance + totalCollected - totalExpenses
 
       return {
         id: f.id,
@@ -35,6 +38,9 @@ export async function GET() {
         overdueOneWeekStudents,
         totalCollected,
         targetAmount,
+        initialBalance,
+        totalExpenses,
+        currentBalance,
         progressPercent: targetAmount > 0 ? Math.round((totalCollected / targetAmount) * 100) : 0,
         isPastDueDate,
         isOverdueOneWeek,
@@ -65,6 +71,7 @@ export async function POST(request: Request) {
       adminUsername,
       adminPassword,
       students,
+      initialBalance,
     } = body
 
     // 1. Kiểm tra tài khoản & mật khẩu admin theo ngày
@@ -115,11 +122,12 @@ export async function POST(request: Request) {
       className: className?.trim() || 'ME2',
       amountPerPerson: Number(amountPerPerson),
       dueDate: dueDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-      bankName: bankName?.trim() || 'MBBANK',
-      bankAccount: bankAccount?.trim() || '',
-      accountName: accountName?.trim() || '',
+      bankName: bankName?.trim() || 'VietABank',
+      bankAccount: bankAccount?.trim() || '00222085',
+      accountName: accountName?.trim() || 'TRAN DUY KHUONG',
       description: description?.trim() || '',
       adminPasscode: adminPasscode?.trim() || '123456',
+      initialBalance: Number(initialBalance) || 0,
       students: formattedStudents,
     })
 
