@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   RefreshCw,
   Trash2,
+  UploadCloud,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { isValidAdminDailyPassword } from '@/lib/nopQuyLopAuth'
 
@@ -86,6 +88,14 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     message?: string
   } | null>(null)
   const [autoPaidSuccess, setAutoPaidSuccess] = useState(false)
+
+  // Phiên nộp tiền lưu trong 10 phút & Tải ảnh minh chứng
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null)
+  const [timeLeftStr, setTimeLeftStr] = useState<string>('10:00')
+  const [proofImagePreview, setProofImagePreview] = useState<string | null>(null)
+  const [isVerifyingProof, setIsVerifyingProof] = useState(false)
+  const [proofVerifyError, setProofVerifyError] = useState('')
+  const [proofSuccessMessage, setProofSuccessMessage] = useState('')
 
   // Admin Mode (Thủ quỹ duyệt trực tiếp)
   const [isAdminMode, setIsAdminMode] = useState(false)
@@ -217,7 +227,49 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     fetchFund()
   }, [fundId])
 
-  // Tự động đối soát giao dịch VietQR qua SePay theo thời gian thực (chống gian lận)
+  // Khôi phục phiên nộp tiền 10 phút từ localStorage (không sợ bị mất khi chuyển sang app ngân hàng)
+  useEffect(() => {
+    try {
+      const sessionKey = `nopquylop_session_${fundId}`
+      const saved = localStorage.getItem(sessionKey)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.expiresAt && parsed.expiresAt > Date.now() && parsed.paymentData) {
+          setPaymentData(parsed.paymentData)
+          setSessionExpiresAt(parsed.expiresAt)
+          setShowPayModal(true)
+        } else {
+          localStorage.removeItem(sessionKey)
+        }
+      }
+    } catch {}
+  }, [fundId])
+
+  // Đếm ngược thời gian phiên nộp tiền 10 phút
+  useEffect(() => {
+    if (!sessionExpiresAt || !showPayModal) return
+
+    const tick = () => {
+      const remainingMs = sessionExpiresAt - Date.now()
+      if (remainingMs <= 0) {
+        setTimeLeftStr('00:00')
+        try {
+          localStorage.removeItem(`nopquylop_session_${fundId}`)
+        } catch {}
+      } else {
+        const totalSec = Math.floor(remainingMs / 1000)
+        const mins = Math.floor(totalSec / 60)
+        const secs = totalSec % 60
+        setTimeLeftStr(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`)
+      }
+    }
+
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => clearInterval(timer)
+  }, [sessionExpiresAt, showPayModal, fundId])
+
+  // Kiểm tra trạng thái nộp tiền (nếu thủ quỹ ở máy khác bấm duyệt)
   useEffect(() => {
     if (!showPayModal || !paymentData || paymentData.alreadyPaid || autoPaidSuccess) return
 
@@ -229,12 +281,15 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         const json = await res.json()
         if (json.paid) {
           setAutoPaidSuccess(true)
+          try {
+            localStorage.removeItem(`nopquylop_session_${fundId}`)
+          } catch {}
           fetchFund()
         }
       } catch (err) {
-        console.warn('Lỗi polling đối soát SePay:', err)
+        console.warn('Lỗi kiểm tra trạng thái:', err)
       }
-    }, 2500)
+    }, 3000)
 
     return () => clearInterval(timer)
   }, [showPayModal, paymentData, autoPaidSuccess, fundId])
@@ -333,10 +388,73 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       setPaymentData(json)
+      const expires = Date.now() + 10 * 60 * 1000
+      setSessionExpiresAt(expires)
+      try {
+        localStorage.setItem(
+          `nopquylop_session_${fundId}`,
+          JSON.stringify({ paymentData: json, expiresAt: expires })
+        )
+      } catch {}
     } catch (err: any) {
       setPayError(err.message || 'Lỗi xử lý xác nhận')
     } finally {
       setIsVerifying(false)
+    }
+  }
+
+  const handleProofImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setProofVerifyError('')
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setProofImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSubmitProof = async () => {
+    if (!paymentData || !proofImagePreview) {
+      setProofVerifyError('Vui lòng chọn hoặc chụp ảnh biên lai chuyển khoản trước!')
+      return
+    }
+
+    setIsVerifyingProof(true)
+    setProofVerifyError('')
+    try {
+      const res = await fetch(`/api/nopquylop/funds/${fundId}/verify-proof`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: paymentData.student.id,
+          paymentCode: paymentData.paymentCode,
+          image: proofImagePreview,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setProofVerifyError(
+          json.reason ||
+            json.error ||
+            'Ảnh biên lai chưa hợp lệ. Vui lòng kiểm tra lại ảnh chụp màn hình ngân hàng!'
+        )
+        return
+      }
+
+      // Xác minh thành công!
+      setAutoPaidSuccess(true)
+      setProofSuccessMessage(json.message || 'Xác minh thành công!')
+      try {
+        localStorage.removeItem(`nopquylop_session_${fundId}`)
+      } catch {}
+      await fetchFund()
+    } catch (err: any) {
+      setProofVerifyError(err.message || 'Lỗi kết nối kiểm tra minh chứng. Vui lòng thử lại!')
+    } finally {
+      setIsVerifyingProof(false)
     }
   }
 
@@ -936,15 +1054,19 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                   <div className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-center space-y-3 animate-in zoom-in-95">
                     <CheckCircle2 className="h-14 w-14 text-emerald-600 mx-auto animate-bounce" />
                     <h4 className="font-black text-emerald-900 dark:text-emerald-200 text-lg">
-                      ĐÃ NHẬN TIỀN THÀNH CÔNG!
+                      XÁC NHẬN NỘP TIỀN THÀNH CÔNG!
                     </h4>
                     <p className="text-xs text-emerald-700 dark:text-emerald-300 leading-relaxed">
-                      Hệ thống VietQR & SePay đã tự động xác thực khoản nộp{' '}
-                      <strong>{paymentData.amount.toLocaleString('vi-VN')} đ</strong> của sinh viên{' '}
-                      <strong>&quot;{paymentData.student.name}&quot;</strong> ({paymentData.student.mssv || 'ME2'}).
+                      {proofSuccessMessage || (
+                        <>
+                          Hệ thống đã nhận diện thành công biên lai chuyển khoản{' '}
+                          <strong>{paymentData.amount.toLocaleString('vi-VN')} đ</strong> của sinh viên{' '}
+                          <strong>&quot;{paymentData.student.name}&quot;</strong> ({paymentData.student.mssv || 'ME2'}).
+                        </>
+                      )}
                     </p>
                     <span className="inline-block px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-mono text-[11px] font-bold">
-                      Mã giao dịch: {paymentData.paymentCode}
+                      Mã nộp tiền: {paymentData.paymentCode}
                     </span>
                     <button
                       type="button"
@@ -952,6 +1074,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                         setShowPayModal(false)
                         setAutoPaidSuccess(false)
                         setPaymentData(null)
+                        setProofImagePreview(null)
+                        setProofVerifyError('')
                         fetchFund()
                       }}
                       className="mt-2 w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md transition"
@@ -988,10 +1112,15 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       </span>
                     </div>
 
-                    {/* Chỉ báo trạng thái chờ chuyển khoản thời gian thực */}
-                    <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/50 text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" />
-                      <span>Đang tự động đối soát giao dịch ngân hàng theo thời gian thực (SePay)...</span>
+                    {/* Đếm ngược 10 phút lưu phiên */}
+                    <div className="flex items-center justify-between py-2.5 px-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/60 text-xs font-bold text-amber-800 dark:text-amber-200">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-amber-600 animate-spin" />
+                        <span>Phiên nộp tiền lưu trong 10 phút:</span>
+                      </div>
+                      <span className="font-mono text-sm px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 font-black">
+                        {timeLeftStr}
+                      </span>
                     </div>
 
                     {/* Mã QR VietQR */}
@@ -1050,27 +1179,97 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* KHU VỰC GỬI ẢNH MINH CHỨNG CHUYỂN TIỀN */}
+                    <div className="rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/80 bg-indigo-50/40 dark:bg-indigo-950/30 p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-black text-xs">
+                        <UploadCloud className="h-4 w-4 text-indigo-600" />
+                        <span>Gửi Ảnh Minh Chứng / Biên Lai Chuyển Khoản</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                        Sau khi chuyển tiền trên app ngân hàng, bạn hãy gửi ảnh biên lai giao dịch. Hệ thống và AI sẽ tự động đọc mã <strong>{paymentData.paymentCode}</strong> và xác minh hoàn tất cho bạn.
+                      </p>
+
+                      {proofImagePreview ? (
+                        <div className="relative rounded-2xl overflow-hidden border border-black/10 bg-black flex items-center justify-center p-1">
+                          <img
+                            src={proofImagePreview}
+                            alt="Biên lai chuyển khoản"
+                            className="max-h-60 object-contain rounded-xl"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProofImagePreview(null)
+                              setProofVerifyError('')
+                            }}
+                            className="absolute top-2 right-2 px-3 py-1.5 rounded-xl bg-black/80 hover:bg-black text-white text-[11px] font-bold transition shadow-md"
+                          >
+                            ✕ Đổi ảnh khác
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 cursor-pointer transition">
+                          <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+                            <ImageIcon className="h-5 w-5" />
+                          </div>
+                          <div className="text-center">
+                            <span className="text-xs font-bold text-indigo-600 hover:underline">
+                              Bấm chọn ảnh biên lai chuyển tiền
+                            </span>
+                            <span className="text-xs text-slate-400 font-medium"> hoặc chụp màn hình</span>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Hỗ trợ JPG, PNG, WebP (Ảnh màn hình ngân hàng)</p>
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleProofImageChange}
+                          />
+                        </label>
+                      )}
+
+                      {proofVerifyError && (
+                        <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-200 text-xs font-bold flex items-start gap-2 animate-in shake">
+                          <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                          <span className="leading-relaxed">{proofVerifyError}</span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleSubmitProof}
+                        disabled={isVerifyingProof || !proofImagePreview}
+                        className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isVerifyingProof ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>AI đang phân tích biên lai & xác minh (xếp hàng tự động)...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span>Xác Nhận & Kiểm Tra Minh Chứng Bằng AI</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => {
                           setPaymentData(null)
                           setPayInput('')
+                          setProofImagePreview(null)
+                          setProofVerifyError('')
+                          try {
+                            localStorage.removeItem(`nopquylop_session_${fundId}`)
+                          } catch {}
                         }}
-                        className="flex-1 py-3 px-4 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
+                        className="w-full py-2.5 px-4 rounded-xl border border-black/10 dark:border-white/10 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                       >
-                        Nộp Cho Bạn Khác
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowPayModal(false)
-                          fetchFund()
-                        }}
-                        className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs transition"
-                      >
-                        Tôi Đã Chuyển Khoản Xong ✓
+                        Nộp Cho Bạn Khác / Hủy Phiên
                       </button>
                     </div>
                   </>

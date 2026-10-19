@@ -81,10 +81,10 @@ export async function POST(
       })
     }
 
-    // Sinh mã nộp tiền chuẩn SePay: NOPQUY + 6 ký tự ngẫu nhiên
-    // Khớp biểu thức ORDER_CODE_RE để SePay tự động bắt webhook và đối soát tiền về tài khoản
-    const randSuffix = Math.random().toString(36).substring(2, 8).toUpperCase()
-    const paymentCode = `NOPQUY${randSuffix}`
+    // Sinh mã nộp tiền riêng biệt cho mỗi người (gồm lớp ME2, MSSV/ID và mã ngẫu nhiên)
+    const randSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
+    const studentTag = matchedStudent.mssv ? matchedStudent.mssv.replace(/\s+/g, '') : `SV${matchedStudent.id}`
+    const paymentCode = `ME2-${studentTag}-${randSuffix}`
 
     // Thông tin ngân hàng: Tách biệt hoàn toàn với SenExam
     // 1. Ưu tiên tài khoản cấu hình trong đợt quỹ này (fund.bankAccount, fund.accountName, fund.bankName)
