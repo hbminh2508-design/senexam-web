@@ -60,6 +60,12 @@ export default function SenChatFloatingBubble() {
       (window.location.hostname.includes('fepn.') || window.location.hostname.includes('tsv.fepn.')))
   )
 
+  // 9. Trang Quỹ Lớp ME2 độc lập (loại bỏ hoàn toàn SenAI / Sen Chat):
+  const isNopQuyLop = Boolean(
+    pathname?.startsWith('/nopquylop') ||
+    (typeof window !== 'undefined' && window.location.hostname.includes('nopquylop'))
+  )
+
   const isExamRoom = Boolean(
     (pathname?.startsWith('/new-exams/') && pathname !== '/new-exams') ||
     (pathname?.startsWith('/legacy-exams/') && pathname !== '/legacy-exams') ||
@@ -68,6 +74,7 @@ export default function SenChatFloatingBubble() {
 
   const isExcluded = Boolean(
     isFepn ||
+    isNopQuyLop ||
     isBreatheHost ||
     isExamRoom ||
     pathname?.startsWith('/new-focus') ||

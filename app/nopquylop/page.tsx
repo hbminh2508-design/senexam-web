@@ -27,6 +27,7 @@ import {
   Lock,
   Unlock,
   KeyRound,
+  Trash2,
 } from 'lucide-react'
 import { isValidAdminDailyPassword, getExpectedAdminDailyPassword } from '@/lib/nopQuyLopAuth'
 
@@ -87,6 +88,59 @@ export default function NopQuyLopHomePage() {
   // Modal Share QR
   const [shareQrFund, setShareQrFund] = useState<FundSummary | null>(null)
   const [copiedLink, setCopiedLink] = useState(false)
+
+  // Xóa đợt thu quỹ (Yêu cầu xác thực Admin)
+  const [fundToDelete, setFundToDelete] = useState<FundSummary | null>(null)
+  const [showDeleteAuthModal, setShowDeleteAuthModal] = useState(false)
+  const [deleteAdminUsername, setDeleteAdminUsername] = useState('')
+  const [deleteAdminPassword, setDeleteAdminPassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleOpenDeleteModal = (fund: FundSummary) => {
+    setFundToDelete(fund)
+    setDeleteAdminUsername('')
+    setDeleteAdminPassword('')
+    setDeleteError('')
+    setShowDeleteAuthModal(true)
+  }
+
+  const handleDeleteFund = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!fundToDelete) return
+
+    if (deleteAdminUsername.trim() !== 'admin' || !isValidAdminDailyPassword(deleteAdminPassword)) {
+      setDeleteError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+      return
+    }
+
+    setIsDeleting(true)
+    setDeleteError('')
+    try {
+      const res = await fetch(`/api/nopquylop/funds/${fundToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminUsername: deleteAdminUsername.trim(),
+          adminPassword: deleteAdminPassword.trim(),
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setDeleteError(json.error || 'Lỗi khi xóa đợt thu quỹ')
+        return
+      }
+
+      setShowDeleteAuthModal(false)
+      setFundToDelete(null)
+      fetchFunds()
+    } catch (err: any) {
+      setDeleteError(err.message || 'Lỗi kết nối máy chủ')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const handleOpenCreateModal = () => {
     if (isAdminVerified) {
@@ -525,6 +579,15 @@ export default function NopQuyLopHomePage() {
                       >
                         <Share2 className="h-4 w-4" />
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDeleteModal(fund)}
+                        title="Xóa đợt thu quỹ (Chỉ dành cho Admin)"
+                        className="p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 transition"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 )
@@ -616,6 +679,96 @@ export default function NopQuyLopHomePage() {
                 >
                   <Unlock className="h-4 w-4" />
                   <span>Xác Thực & Tạo Quỹ</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XÁC THỰC ADMIN XÓA QUỸ (Yêu cầu tài khoản & mật khẩu như lúc tạo) */}
+      {showDeleteAuthModal && fundToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-[32px] border border-rose-200 dark:border-rose-900/40 bg-white dark:bg-slate-900 p-6 sm:p-8 text-slate-900 dark:text-white shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-rose-600 dark:text-rose-400">
+                    Xác Thực Admin Xóa Quỹ
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Xóa vĩnh viễn: {fundToDelete.title}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowDeleteAuthModal(false)}
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {deleteError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleDeleteFund} className="space-y-4 text-xs font-bold">
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                  Tài khoản:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={deleteAdminUsername}
+                  onChange={(e) => setDeleteAdminUsername(e.target.value)}
+                  placeholder="Nhập tài khoản quản trị..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-rose-500 font-sans"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
+                  Mật khẩu:
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={deleteAdminPassword}
+                  onChange={(e) => {
+                    setDeleteAdminPassword(e.target.value)
+                    if (deleteError) setDeleteError('')
+                  }}
+                  placeholder="Nhập mật khẩu..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:border-rose-500 font-sans"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteAuthModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Hủy Bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isDeleting}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-md shadow-rose-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  <span>{isDeleting ? 'Đang Xóa...' : 'Xác Nhận Xóa Vĩnh Viễn'}</span>
                 </button>
               </div>
             </form>

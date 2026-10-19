@@ -238,6 +238,29 @@ export async function updateStudentPayment(
   return { success: true, student, fund }
 }
 
+// 5. Xóa đợt thu quỹ (Chỉ dành cho Admin)
+export async function deleteFund(fundId: string): Promise<boolean> {
+  // Xóa trên Supabase
+  try {
+    const supabaseAdmin = getSupabaseAdmin()
+    await supabaseAdmin.from('class_fund_payments').delete().eq('fund_id', fundId)
+    await supabaseAdmin.from('class_funds').delete().eq('id', fundId)
+  } catch (err: any) {
+    console.warn('Lỗi xóa quỹ trên Supabase:', err?.message)
+  }
+
+  // Xóa trong file JSON cục bộ
+  try {
+    const local = readLocalFunds()
+    const filtered = local.filter((f) => f.id !== fundId)
+    writeLocalFunds(filtered)
+    return true
+  } catch (err: any) {
+    console.error('Lỗi xóa quỹ cục bộ:', err)
+    return false
+  }
+}
+
 // Re-export client-safe auth & normalization functions
 export {
   normalizeVietnamese,

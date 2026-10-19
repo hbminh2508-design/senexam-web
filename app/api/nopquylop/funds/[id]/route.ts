@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getFundById, updateStudentPayment } from '@/lib/nopQuyLopStore'
+import { getFundById, updateStudentPayment, deleteFund, isValidAdminDailyPassword } from '@/lib/nopQuyLopStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,5 +71,39 @@ export async function PUT(
     return NextResponse.json({ success: true, student: result.student })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Lỗi cập nhật trạng thái nộp' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const body = await request.json().catch(() => null)
+    const adminUsername = String(body?.adminUsername || '').trim()
+    const adminPassword = String(body?.adminPassword || '').trim()
+
+    // Bắt buộc xác thực tài khoản & mật khẩu quản trị như lúc tạo
+    if (adminUsername !== 'admin' || !isValidAdminDailyPassword(adminPassword)) {
+      return NextResponse.json(
+        { error: 'Tài khoản hoặc mật khẩu quản trị không chính xác!' },
+        { status: 401 }
+      )
+    }
+
+    const fund = await getFundById(id)
+    if (!fund) {
+      return NextResponse.json({ error: 'Không tìm thấy quỹ cần xóa' }, { status: 404 })
+    }
+
+    const success = await deleteFund(id)
+    if (!success) {
+      return NextResponse.json({ error: 'Không thể xóa đợt thu quỹ này' }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Đã xóa đợt thu quỹ thành công' })
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || 'Lỗi xử lý xóa quỹ' }, { status: 500 })
   }
 }
