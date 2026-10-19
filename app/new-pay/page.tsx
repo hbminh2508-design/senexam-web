@@ -46,6 +46,10 @@ import {
   MONTHLY_FLASH_SALE_DISCOUNT_PERCENT,
   MONTHLY_FLASH_SALE_QUOTA,
   applyDiscount,
+  EXCLUSIVE_STORE_ITEMS,
+  EXCLUSIVE_CATEGORIES,
+  type ExclusiveStoreDeal,
+  type ExclusiveCategoryKey,
 } from '@/lib/exclusiveStore'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
@@ -83,6 +87,12 @@ import {
   ShoppingBag,
   ExternalLink,
   History,
+  Layers,
+  Download,
+  Award,
+  Palette,
+  Package,
+  Infinity as InfinityIcon,
 } from 'lucide-react'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newpay-heading' })
@@ -219,45 +229,26 @@ const SENAI_SIMPLE_DETAILS: Record<
   },
 }
 
-// Danh sách các ưu đãi độc quyền hấp dẫn mới được bổ sung
-const EXCLUSIVE_CUSTOM_DEALS = [
-  {
-    id: 'combo_starter',
-    title: 'Combo Tân Thủ 2-in-1',
-    badge: 'Tiết kiệm 45%',
-    tag: 'Dành Cho Học Sinh Mới',
-    desc: 'Trọn gói 1 tháng Hội viên VIP không quảng cáo + 1 tháng SenAI Plus (50 câu/ngày).',
-    originalPrice: 178,
-    discountedPrice: 119,
-    planCode: 'plus_monthly',
-    color: 'from-amber-500 to-orange-500',
-    perks: ['VIP không quảng cáo 30 ngày', '50 câu hỏi giải bài mỗi ngày', '1 lần phân tích hình học/ngày'],
-  },
-  {
-    id: 'combo_exam_cram',
-    title: 'Chiến Binh Luyện Đề Nước Rút (3 Tháng)',
-    badge: 'Siêu Ưu Đãi',
-    tag: 'HSA / TSA / THPTQG',
-    desc: '3 tháng Hội viên Premium + 3 tháng SenAI Ultra (200 câu/ngày) + 100 lượt tải đề thi độc quyền.',
-    originalPrice: 799,
-    discountedPrice: 499,
-    planCode: 'ultra_quarterly',
-    color: 'from-purple-600 to-pink-600',
-    perks: ['200 câu hỏi giải bài mỗi ngày', '5 lần phân tích đồ thị/ngày', 'Huy hiệu Premium mạ vàng'],
-  },
-  {
-    id: 'plus_perm_deal',
-    title: 'Bản Quyền Vĩnh Viễn SenAI Plus',
-    badge: 'Giảm 20%',
-    tag: 'Không Hạn Sử Dụng',
-    desc: 'Sở hữu trọn đời 50 lượt giải đề và hướng dẫn phương pháp làm bài mỗi ngày, không bao giờ hết hạn.',
-    originalPrice: 2999,
-    discountedPrice: 2399,
-    planCode: 'plus_permanent',
-    color: 'from-pink-500 to-rose-600',
-    perks: ['Bản quyền trọn đời tài khoản', '50 câu hỏi giải đề mỗi ngày', 'Cập nhật miễn phí mãi mãi'],
-  },
-]
+function renderDealIcon(name: string, className = "h-5 w-5") {
+  switch (name) {
+    case 'Crown': return <Crown className={className} />
+    case 'Flame': return <Flame className={className} />
+    case 'Sparkles': return <Sparkles className={className} />
+    case 'Package': return <Package className={className} />
+    case 'Rocket': return <Rocket className={className} />
+    case 'ShieldCheck': return <ShieldCheck className={className} />
+    case 'Infinity': return <InfinityIcon className={className} />
+    case 'DownloadCloud': return <Download className={className} />
+    case 'Moon': return <Moon className={className} />
+    case 'ZapFast': return <Zap className={className} />
+    case 'Award': return <Award className={className} />
+    case 'Palette': return <Palette className={className} />
+    case 'Gift': return <Gift className={className} />
+    case 'Gem': return <Gem className={className} />
+    case 'Layers': return <Layers className={className} />
+    default: return <Sparkles className={className} />
+  }
+}
 
 function PayContent() {
   const router = useRouter()
@@ -312,6 +303,13 @@ function PayContent() {
 
   // 5. Exclusive Store Flash Sale State
   const [buyingExclusiveCode, setBuyingExclusiveCode] = useState<string | null>(null)
+  const [exclusiveFilter, setExclusiveFilter] = useState<ExclusiveCategoryKey>('all')
+  const [mysteryReward, setMysteryReward] = useState<{
+    title: string
+    desc: string
+    type: string
+    value: string | number
+  } | null>(null)
 
   // Unified QR Payment Modal State
   const [qrModal, setQrModal] = useState<{
@@ -715,7 +713,7 @@ function PayContent() {
   }
 
   // Buy Custom Exclusive Deal
-  const handleBuyExclusiveDeal = async (deal: (typeof EXCLUSIVE_CUSTOM_DEALS)[number]) => {
+  const handleBuyExclusiveDeal = async (deal: ExclusiveStoreDeal) => {
     setBuyingExclusiveCode(deal.id)
     setErrorMsg('')
     setSuccessMsg('')
@@ -728,15 +726,15 @@ function PayContent() {
 
       // Check balance
       if (balance < deal.discountedPrice) {
-        setErrorMsg(`Số dư SenCash không đủ. Bạn cần ${deal.discountedPrice} SC (Hiện có ${balance} SC).`)
+        setErrorMsg(`Số dư SenCash không đủ. Bạn cần ${deal.discountedPrice.toLocaleString('vi-VN')} SC (Hiện có ${balance.toLocaleString('vi-VN')} SC). Vui lòng nạp thêm tại tab Ví Sen.`)
         return
       }
 
-      // Call purchase tier
-      const res = await fetch('/api/senai/purchase-tier', {
+      // Call purchase exclusive deal
+      const res = await fetch('/api/exclusive-store/purchase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ planCode: deal.planCode }),
+        body: JSON.stringify({ dealId: deal.id }),
       })
 
       const json = await res.json()
@@ -745,7 +743,16 @@ function PayContent() {
         return
       }
 
-      setSuccessMsg(`🎉 Săn thành công ưu đãi "${deal.title}"! Đã kích hoạt đặc quyền vào tài khoản.`)
+      if (json.reward) {
+        setMysteryReward(json.reward)
+      } else {
+        setSuccessMsg(`🎉 Săn thành công ưu đãi "${deal.title}"! Đã kích hoạt đặc quyền vào tài khoản của bạn.`)
+      }
+
+      if (typeof json.remainingBalance === 'number') {
+        setBalance(json.remainingBalance)
+      }
+
       if (userId) {
         await reloadUserData(userId)
         await fetchQuotaData(userId, true)
@@ -1951,90 +1958,198 @@ function PayContent() {
         {/* ============================================================== */}
         {activeTab === 'exclusive' && (
           <div className="space-y-8 animate-in fade-in">
-            <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-4">
+            {/* Main Store Container */}
+            <div className="rounded-[32px] border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-6 sm:p-8 shadow-sm backdrop-blur-xl space-y-6">
+              
+              {/* Header Banner */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-6">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 px-3 py-0.5 text-[11px] font-black text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase tracking-wider">
-                      <Gem className="inline h-3.5 w-3.5 mr-1 text-purple-500" /> Cửa Hàng Độc Quyền
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 px-3 py-0.5 text-[11px] font-black text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase tracking-wider inline-flex items-center gap-1">
+                      <Gem className="h-3.5 w-3.5 text-purple-500" /> Cửa Hàng Thượng Lưu VIP
                     </span>
-                    <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-[10px] font-bold">
-                      Ưu Đãi Đặc Biệt Cho Học Sinh
+                    <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-0.5 text-[10px] font-bold border border-amber-500/20 flex items-center gap-1">
+                      <Crown className="h-3 w-3 text-amber-500" /> Đặc Quyền Hội Viên
+                    </span>
+                    <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 text-[10px] font-bold border border-emerald-500/20 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 text-emerald-500" /> Ưu Đãi Lên Đến 45%
                     </span>
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1" style={{ fontFamily: 'var(--font-newpay-heading)' }}>
-                    Combo Siêu Tiết Kiệm & Ưu Đãi Độc Quyền
+                  <h2 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mt-2" style={{ fontFamily: 'var(--font-newpay-heading)' }}>
+                    Đặc Quyền Thượng Hạng & Kho Ưu Đãi VIP
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-500 font-medium">
-                    Các gói combo giảm sốc được tối ưu chi phí dành riêng cho thành viên SenExam.
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-2xl mt-1">
+                    Tuyển tập các gói Flash Sale, Combo bứt phá điểm số, Thẻ đặc quyền thi cử và Huy hiệu mạ vàng độc quyền dành riêng cho thành viên SenExam.
                   </p>
                 </div>
 
-                <div className="shrink-0 flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">Số dư hiện tại:</span>
-                  <span className="px-3 py-1 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 font-black text-sm">
-                    {balance.toLocaleString('vi-VN')} SC
-                  </span>
+                <div className="shrink-0 flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-black/[0.03] dark:bg-white/[0.04] p-3.5 rounded-2xl border border-black/5 dark:border-white/5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                      <Coins className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Số dư SenCash</span>
+                      <span className="text-base font-black text-slate-900 dark:text-white">
+                        {balance.toLocaleString('vi-VN')} SC
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('wallet')}
+                    className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-black shadow-xs transition inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Wallet className="h-3.5 w-3.5" /> Nạp Thêm Sen
+                  </button>
                 </div>
               </div>
 
-              {/* Grid 3 gói ưu đãi mới */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-                {EXCLUSIVE_CUSTOM_DEALS.map((deal) => {
+              {/* Category Filter Tabs */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                {EXCLUSIVE_CATEGORIES.map((cat) => {
+                  const isActive = exclusiveFilter === cat.key
+                  return (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      onClick={() => setExclusiveFilter(cat.key)}
+                      className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all ${
+                        isActive
+                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/20'
+                          : 'bg-black/[0.04] dark:bg-white/[0.05] text-slate-600 dark:text-slate-300 hover:bg-black/[0.08] dark:hover:bg-white/[0.1]'
+                      }`}
+                    >
+                      {renderDealIcon(cat.icon, "h-4 w-4")}
+                      <span>{cat.label}</span>
+                      {cat.badgeText && (
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-purple-500/20 text-purple-600 dark:text-purple-300'
+                        }`}>
+                          {cat.badgeText}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Product Catalog Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                {EXCLUSIVE_STORE_ITEMS.filter(deal => exclusiveFilter === 'all' || deal.category === exclusiveFilter).map((deal) => {
                   const isBuying = buyingExclusiveCode === deal.id
                   const canAfford = balance >= deal.discountedPrice
+                  const savings = deal.originalPrice - deal.discountedPrice
 
                   return (
                     <div
                       key={deal.id}
-                      className="relative overflow-hidden rounded-[28px] border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] p-6 flex flex-col justify-between space-y-4 hover:shadow-xl transition"
+                      className="group relative overflow-hidden rounded-[28px] border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-6 flex flex-col justify-between space-y-4 hover:shadow-xl hover:border-purple-500/40 transition-all duration-300 backdrop-blur-md"
                     >
-                      <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-600 to-pink-500 text-white text-[9px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider">
+                      {/* Ribbon Badge */}
+                      <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-600 via-pink-600 to-rose-500 text-white text-[10px] font-black px-3.5 py-1 rounded-bl-2xl uppercase tracking-wider shadow-xs">
                         {deal.badge}
                       </div>
 
                       <div className="space-y-3">
-                        <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                          {deal.tag}
-                        </span>
+                        {/* Header icon & Tag */}
+                        <div className="flex items-center gap-3">
+                          <div className={`h-11 w-11 rounded-2xl bg-gradient-to-br ${deal.gradient} text-white flex items-center justify-center shrink-0 shadow-sm shadow-purple-500/20`}>
+                            {renderDealIcon(deal.iconName, "h-5 w-5")}
+                          </div>
+                          <div>
+                            <span className="inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                              {deal.tag}
+                            </span>
+                            <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5 leading-snug group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                              {deal.title}
+                            </h3>
+                          </div>
+                        </div>
 
-                        <h3 className="text-lg font-black text-slate-900 dark:text-white">{deal.title}</h3>
-
-                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                        {/* Description */}
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium min-h-[36px]">
                           {deal.desc}
                         </p>
 
-                        <div className="flex items-baseline gap-2 pt-1">
-                          <span className="text-2xl font-black text-purple-600 dark:text-purple-400">
-                            {deal.discountedPrice} SC
-                          </span>
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            {deal.originalPrice} SC
-                          </span>
+                        {/* Stock Progress Bar */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between text-[11px] font-bold">
+                            <span className="text-slate-400 flex items-center gap-1">
+                              <Flame className="h-3 w-3 text-orange-500" /> Đã bán {deal.soldPercent}%
+                            </span>
+                            {deal.limitedSlots ? (
+                              <span className="text-rose-500 dark:text-rose-400 font-black">
+                                Chỉ còn {deal.limitedSlots} suất
+                              </span>
+                            ) : (
+                              <span className="text-emerald-500 font-black">Sẵn sàng kích hoạt</span>
+                            )}
+                          </div>
+                          <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 rounded-full transition-all duration-500"
+                              style={{ width: `${deal.soldPercent}%` }}
+                            />
+                          </div>
                         </div>
 
-                        <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-2 pt-2 border-t border-black/10 dark:border-white/10">
+                        {/* Price section */}
+                        <div className="flex items-baseline justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-2xl font-black text-purple-600 dark:text-purple-400">
+                              {deal.discountedPrice.toLocaleString('vi-VN')} <span className="text-xs font-bold">SC</span>
+                            </span>
+                            <span className="text-xs font-bold text-slate-400 line-through">
+                              {deal.originalPrice.toLocaleString('vi-VN')} SC
+                            </span>
+                          </div>
+                          {savings > 0 && (
+                            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                              Tiết kiệm {savings.toLocaleString('vi-VN')} SC
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Perks check list */}
+                        <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 pt-2 border-t border-black/5 dark:border-white/5">
                           {deal.perks.map((p, idx) => (
                             <li key={idx} className="flex items-start gap-2">
                               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                              <span>{p}</span>
+                              <span className="text-[11px] leading-tight font-medium">{p}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
 
+                      {/* Buy Action Button */}
                       <button
                         type="button"
-                        onClick={() => handleBuyExclusiveDeal(deal)}
-                        disabled={isBuying || !canAfford}
-                        className="w-full mt-4 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-40"
+                        onClick={() => {
+                          if (!canAfford) {
+                            handleTabChange('wallet')
+                          } else {
+                            handleBuyExclusiveDeal(deal)
+                          }
+                        }}
+                        disabled={isBuying}
+                        className={`w-full mt-4 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all ${
+                          canAfford
+                            ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 hover:from-purple-700 hover:to-pink-700 text-white shadow-purple-500/20 hover:shadow-purple-500/30'
+                            : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                        } disabled:opacity-40`}
                       >
                         {isBuying ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
+                        ) : canAfford ? (
                           <>
                             <ShoppingBag className="h-4 w-4" />
-                            {canAfford ? `Kích Hoạt Ngay (${deal.discountedPrice} SC)` : `Cần ${deal.discountedPrice} SC`}
+                            Kích Hoạt Ngay ({deal.discountedPrice.toLocaleString('vi-VN')} SC)
+                          </>
+                        ) : (
+                          <>
+                            <Coins className="h-4 w-4 text-amber-500" />
+                            Thiếu {(deal.discountedPrice - balance).toLocaleString('vi-VN')} SC — Nạp Ngay
                           </>
                         )}
                       </button>
@@ -2232,6 +2347,49 @@ function PayContent() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MYSTERY REWARD CELEBRATION MODAL */}
+      {/* ============================================================== */}
+      {mysteryReward && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-amber-500/40 bg-slate-900/95 p-6 sm:p-8 text-center text-white shadow-2xl space-y-5">
+            {/* Background Glow */}
+            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-amber-500/25 blur-3xl rounded-full pointer-events-none" />
+
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/30 animate-bounce">
+              <Gift className="h-10 w-10" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                ✨ MỞ RƯƠNG THẦN BÍ THÀNH CÔNG ✨
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-amber-300" style={{ fontFamily: 'var(--font-newpay-heading)' }}>
+                {mysteryReward.title}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+                {mysteryReward.desc}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/[0.06] border border-white/10 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Số dư mới sau khi nhận</span>
+              <span className="text-2xl font-black text-emerald-400">
+                {balance.toLocaleString('vi-VN')} SC
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMysteryReward(null)}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/25 transition-all"
+            >
+              🎉 Tuyệt Vời! Nhận Quà Ngay
+            </button>
           </div>
         </div>
       )}
