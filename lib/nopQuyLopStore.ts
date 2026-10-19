@@ -44,7 +44,7 @@ function readLocalFunds(): ClassFund[] {
           dueDate: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Đặt quá hạn > 7 ngày để test tính năng cảnh báo đỏ
           bankName: 'MBBANK',
           bankAccount: '0988776655',
-          accountName: 'BUI HOANG BINH MINH',
+          accountName: 'THU QUY LOP ME2',
           description: 'Thu tiền quỹ phục vụ photo tài liệu, sinh hoạt ngoại khóa và quỹ thực hành xưởng ME2.',
           adminPasscode: 'me2@2026',
           students: [

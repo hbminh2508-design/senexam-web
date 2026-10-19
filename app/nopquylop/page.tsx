@@ -30,6 +30,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { isValidAdminDailyPassword, getExpectedAdminDailyPassword } from '@/lib/nopQuyLopAuth'
+import { VIETNAM_BANKS } from '@/lib/vietQrHelper'
 
 interface FundSummary {
   id: string
@@ -179,6 +180,16 @@ export default function NopQuyLopHomePage() {
 
   useEffect(() => {
     fetchFunds()
+    fetch('/api/nopquylop/bank-config')
+      .then((res) => res.json())
+      .then((cfg) => {
+        if (cfg) {
+          if (cfg.bankName) setCreateBankName(cfg.bankName)
+          if (cfg.accountNo) setCreateBankAccount(cfg.accountNo)
+          if (cfg.accountName) setCreateAccountName(cfg.accountName)
+        }
+      })
+      .catch(() => {})
   }, [])
 
   // Hàm trích xuất họ tên & MSSV cục bộ trên máy khách (chống lỗi mạng/Safari Load failed)
@@ -868,14 +879,17 @@ export default function NopQuyLopHomePage() {
                   <label className="block text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider text-[11px]">
                     Ngân hàng nhận:
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: MBBANK, VCB, TCB..."
+                  <select
                     value={createBankName}
                     onChange={(e) => setCreateBankName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-indigo-500"
-                  />
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-indigo-500 text-xs"
+                  >
+                    {VIETNAM_BANKS.map((b) => (
+                      <option key={b.code} value={b.shortName}>
+                        {b.shortName} — {b.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -920,6 +934,13 @@ export default function NopQuyLopHomePage() {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/50 text-[11px] text-indigo-700 dark:text-indigo-300 font-bold flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-indigo-600 mt-0.5" />
+                <span>
+                  Tài khoản ngân hàng này dùng riêng cho đợt thu quỹ lớp, <strong>tách biệt hoàn toàn</strong> với tài khoản nhận tiền SenExam. Sinh viên quét mã VietQR sẽ nộp tiền trực tiếp về đúng số tài khoản bạn điền ở đây.
+                </span>
               </div>
 
               <div>

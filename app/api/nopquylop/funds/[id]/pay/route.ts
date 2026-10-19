@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getFundById, normalizeVietnamese } from '@/lib/nopQuyLopStore'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { buildVietQrUrl } from '@/lib/vipMembership'
+import { getNopQuyBankConfig } from '@/lib/vietQrHelper'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,13 +86,18 @@ export async function POST(
     const randSuffix = Math.random().toString(36).substring(2, 8).toUpperCase()
     const paymentCode = `NOPQUY${randSuffix}`
 
-    // Thông tin ngân hàng: Ưu tiên cấu hình VietQR của SenExam, nếu không thì dùng của quỹ
-    const bankBin = process.env.VIETQR_BANK_BIN || fund.bankName || '970422'
-    const accountNo = process.env.VIETQR_ACCOUNT_NO || fund.bankAccount || '0988776655'
-    const accountName = process.env.VIETQR_ACCOUNT_NAME || fund.accountName || 'THU QUY LOP ME2'
+    // Thông tin ngân hàng: Tách biệt hoàn toàn với SenExam
+    // 1. Ưu tiên tài khoản cấu hình trong đợt quỹ này (fund.bankAccount, fund.accountName, fund.bankName)
+    // 2. Ưu tiên biến môi trường riêng NOPQUYLOP_ACCOUNT_NO, NOPQUYLOP_ACCOUNT_NAME, NOPQUYLOP_BANK_BIN
+    // 3. Không dùng đè tài khoản Hoàng Bình Minh của SenExam
+    const bankConfig = getNopQuyBankConfig(fund)
+    const bankBin = bankConfig.bankBin
+    const accountNo = bankConfig.accountNo
+    const accountName = bankConfig.accountName
+    const bankName = bankConfig.bankName
     const transferNote = paymentCode
 
-    // Tạo link VietQR chuẩn bằng bộ tạo VietQR của SenExam (img.vietqr.io compact2)
+    // Tạo link VietQR chuẩn bằng bộ tạo VietQR (img.vietqr.io compact2)
     const qrUrl = buildVietQrUrl({
       bankBin,
       accountNo,
@@ -127,9 +133,9 @@ export async function POST(
       qrUrl,
       amount: fund.amountPerPerson,
       bankBin,
-      bankName: fund.bankName || 'MBBANK',
+      bankName,
       bankAccount: accountNo,
-      accountName: accountName,
+      accountName,
       transferNote,
     })
   } catch (err: any) {

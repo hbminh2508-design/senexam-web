@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
+import { getNopQuyBankConfig, VIETNAM_BANKS } from '@/lib/vietQrHelper'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const bankBin = process.env.VIETQR_BANK_BIN || '970422'
-  const accountNo = process.env.VIETQR_ACCOUNT_NO || '0988776655'
-  const accountName = process.env.VIETQR_ACCOUNT_NAME || 'BUI HOANG BINH MINH'
+  const config = getNopQuyBankConfig()
 
   return NextResponse.json({
-    bankBin,
-    bankName: 'MBBANK',
-    accountNo,
-    accountName,
+    bankBin: config.bankBin,
+    bankName: config.bankName,
+    accountNo: config.accountNo,
+    accountName: config.accountName,
+    banks: VIETNAM_BANKS,
   })
 }
