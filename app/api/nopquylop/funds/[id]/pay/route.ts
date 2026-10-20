@@ -34,8 +34,10 @@ export async function POST(
     const normName = normalizeVietnamese(inputName)
     const normMssv = normalizeVietnamese(inputMssv)
 
+    const isTestFund = Boolean((fund as any).isTestFund || fund.id === 'quy-test-hoang-binh-minh' || fund.id.includes('test'))
+
     // Nhận diện 1 trong 2: Họ và tên HOẶC MSSV
-    const matchedStudent = fund.students.find((s) => {
+    let matchedStudent = fund.students.find((s) => {
       const studentNormName = normalizeVietnamese(s.name)
       const studentMssv = s.mssv ? normalizeVietnamese(s.mssv) : ''
 
@@ -61,19 +63,29 @@ export async function POST(
       return false
     })
 
-    // Nếu không khớp cả 2: Cảnh báo và yêu cầu kiểm tra lại thông tin
+    // Nếu không khớp cả 2: Đối với Quỹ Test cho phép tự động thêm tester để nộp vô hạn lần
     if (!matchedStudent) {
-      return NextResponse.json(
-        {
-          error: 'Không tìm thấy thông tin của bạn trong danh sách lớp ME2. Vui lòng kiểm tra lại chính xác Họ & Tên hoặc MSSV!',
-          isNotFound: true,
-        },
-        { status: 400 }
-      )
+      if (isTestFund) {
+        matchedStudent = {
+          id: 'tester-' + Math.random().toString(36).substring(2, 8),
+          name: rawInput || inputName || 'Hoàng Bình Minh',
+          mssv: inputMssv || 'ADMIN-TEST',
+          paid: false,
+        }
+        fund.students.push(matchedStudent)
+      } else {
+        return NextResponse.json(
+          {
+            error: 'Không tìm thấy thông tin của bạn trong danh sách lớp ME2. Vui lòng kiểm tra lại chính xác Họ & Tên hoặc MSSV!',
+            isNotFound: true,
+          },
+          { status: 400 }
+        )
+      }
     }
 
-    // Đã nộp rồi thì thông báo
-    if (matchedStudent.paid) {
+    // Đã nộp rồi thì thông báo (TRỪ KHI LÀ QUỸ TEST CÓ SỐ LẦN NỘP VÔ HẠN)
+    if (matchedStudent.paid && !isTestFund) {
       return NextResponse.json({
         student: matchedStudent,
         alreadyPaid: true,
@@ -81,10 +93,10 @@ export async function POST(
       })
     }
 
-    // Sinh mã nộp tiền riêng biệt cho mỗi người (gồm lớp ME2, MSSV/ID và mã ngẫu nhiên)
+    // Sinh mã nộp tiền riêng biệt cho mỗi người
     const randSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
     const studentTag = matchedStudent.mssv ? matchedStudent.mssv.replace(/\s+/g, '') : `SV${matchedStudent.id}`
-    const paymentCode = `ME2-${studentTag}-${randSuffix}`
+    const paymentCode = isTestFund ? `TEST-MINH-${randSuffix}` : `ME2-${studentTag}-${randSuffix}`
 
     // Thông tin ngân hàng: Tách biệt hoàn toàn với SenExam
     // 1. Ưu tiên tài khoản cấu hình trong đợt quỹ này (fund.bankAccount, fund.accountName, fund.bankName)

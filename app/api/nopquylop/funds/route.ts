@@ -26,6 +26,7 @@ export async function GET() {
         id: f.id,
         title: f.title,
         className: f.className || 'ME2',
+        isTestFund: Boolean(f.isTestFund || f.id === 'quy-test-hoang-binh-minh' || f.id.includes('test')),
         amountPerPerson: f.amountPerPerson,
         dueDate: f.dueDate,
         bankName: f.bankName,

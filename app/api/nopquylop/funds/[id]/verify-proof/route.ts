@@ -97,8 +97,10 @@ export async function POST(
       )
     }
 
-    // Nếu đã hoàn tất trước đó thì phản hồi ngay
-    if (student.paid) {
+    const isTestFund = Boolean((fund as any).isTestFund || fund.id === 'quy-test-hoang-binh-minh' || fund.id.includes('test'))
+
+    // Nếu đã hoàn tất trước đó thì phản hồi ngay (TRỪ KHI LÀ QUỸ TEST NỘP VÔ HẠN LẦN)
+    if (student.paid && !isTestFund) {
       return NextResponse.json({
         success: true,
         alreadyPaid: true,
@@ -302,31 +304,33 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc codeblock markdown, KHÔ
       }
     }
 
-    // YẾU TỐ 3: KIỂM TRA ĐÚNG NGƯỜI NHẬN TIỀN (TRAN DUY KHUONG / TRẦN DUY KHƯƠNG)
-    const targetRecipient = fund.accountName || 'TRAN DUY KHUONG'
+    // YẾU TỐ 3: KIỂM TRA ĐÚNG NGƯỜI NHẬN TIỀN
+    const targetRecipient = fund.accountName || (isTestFund ? 'HOANG BINH MINH' : 'TRAN DUY KHUONG')
     const normTargetRecipient = normalizeVietnamese(targetRecipient)
     const normDetectedRecipient = normalizeVietnamese(detectedRecipientName)
     const normFullText = normalizeVietnamese(fullRawText)
 
-    // Khớp tên đầy đủ hoặc từ khóa nhận diện thủ quỹ Trần Duy Khương
+    // Khớp tên đầy đủ hoặc từ khóa nhận diện người nhận (Trần Duy Khương hoặc Hoàng Bình Minh)
     const recipientMatched =
       (normDetectedRecipient.length > 0 &&
         (normDetectedRecipient.includes(normTargetRecipient) ||
           normTargetRecipient.includes(normDetectedRecipient) ||
-          normDetectedRecipient.includes('tran duy khuong') ||
-          normDetectedRecipient.includes('duy khuong'))) ||
-      normFullText.includes('tran duy khuong') ||
-      normFullText.includes('duy khuong') ||
+          (isTestFund
+            ? normDetectedRecipient.includes('hoang binh minh') || normDetectedRecipient.includes('binh minh')
+            : normDetectedRecipient.includes('tran duy khuong') || normDetectedRecipient.includes('duy khuong')))) ||
+      (isTestFund
+        ? normFullText.includes('hoang binh minh') || normFullText.includes('binh minh')
+        : normFullText.includes('tran duy khuong') || normFullText.includes('duy khuong')) ||
       normFullText.includes(normTargetRecipient)
 
     if (!recipientMatched) {
       failedReasons.push(
-        `Người nhận tiền trên biên lai không khớp với thủ quỹ "${targetRecipient}".`
+        `Người nhận tiền trên biên lai không khớp với người thụ hưởng "${targetRecipient}".`
       )
     }
 
-    // YẾU TỐ 4: KIỂM TRA ĐÚNG SỐ TÀI KHOẢN NHẬN & NGÂN HÀNG (00222085 - VietABank / VAB)
-    const targetAccount = (fund.bankAccount || '00222085').replace(/\D/g, '')
+    // YẾU TỐ 4: KIỂM TRA ĐÚNG SỐ TÀI KHOẢN NHẬN & NGÂN HÀNG
+    const targetAccount = (fund.bankAccount || (isTestFund ? '0336062007' : '00222085')).replace(/\D/g, '')
     const cleanDetectedAcc = detectedRecipientAccount.replace(/\D/g, '')
     const cleanFullTextDigits = fullRawText.replace(/\D/g, '')
 
@@ -334,12 +338,14 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc codeblock markdown, KHÔ
       (cleanDetectedAcc.length > 0 && cleanDetectedAcc.includes(targetAccount)) ||
       cleanFullTextDigits.includes(targetAccount)
 
-    // Kiểm tra tên ngân hàng VietABank / VAB
-    const bankKeywords = ['vietabank', 'vab', 'viet a', 'vieta']
+    // Kiểm tra tên ngân hàng (VietABank hoặc MBBank)
+    const bankKeywords = isTestFund
+      ? ['mbbank', 'mb bank', 'mb', 'quan doi', 'ngan hang quan doi']
+      : ['vietabank', 'vab', 'viet a', 'vieta']
     const bankMatched =
       bankKeywords.some((kw) => normFullText.includes(kw)) ||
       bankKeywords.some((kw) => normalizeVietnamese(detectedBank).includes(kw)) ||
-      accountMatched // Nếu khớp số tài khoản 00222085 duy nhất thì đã có độ tin cậy rất cao
+      accountMatched // Nếu khớp số tài khoản duy nhất thì đã có độ tin cậy rất cao
 
     if (!accountMatched) {
       failedReasons.push(

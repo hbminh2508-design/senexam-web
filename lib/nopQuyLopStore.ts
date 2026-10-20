@@ -37,10 +37,37 @@ export interface ClassFund {
   description?: string
   adminPasscode?: string
   initialBalance?: number // Số tiền đang có hiện tại của lớp (admin nhập lên CSDL)
+  isTestFund?: boolean
   students: FundStudent[]
   expenses?: FundExpense[] // Các bill chi tiêu trừ dần từ quỹ lớp
   createdAt: string
   updatedAt: string
+}
+
+export const ADMIN_TEST_FUND_ID = 'quy-test-hoang-binh-minh'
+
+export const ADMIN_TEST_FUND: ClassFund = {
+  id: ADMIN_TEST_FUND_ID,
+  title: '[ADMIN TEST] Quỹ Thử Nghiệm Thanh Toán - Hoàng Bình Minh',
+  className: 'ADMIN-TEST',
+  amountPerPerson: 2000,
+  dueDate: '2030-12-31',
+  bankName: 'MBBank',
+  bankAccount: '0336062007',
+  accountName: 'HOANG BINH MINH',
+  description:
+    'Quỹ thử nghiệm dành riêng cho Quản trị viên đối soát thanh toán VietQR và OCR. Cho phép nộp tiền thử nghiệm vô hạn lần với mức phí 2.000 đ/lần vào STK 0336062007 MB Bank.',
+  adminPasscode: 'me2@2026',
+  initialBalance: 0,
+  isTestFund: true,
+  students: [
+    { id: 'hbm-01', name: 'Hoàng Bình Minh', mssv: 'ADMIN-HBM', paid: false },
+    { id: 'test-01', name: 'Tester Thử Nghiệm 1', mssv: 'TEST-01', paid: false },
+    { id: 'test-02', name: 'Tester Thử Nghiệm 2', mssv: 'TEST-02', paid: false },
+  ],
+  expenses: [],
+  createdAt: '2026-10-20T12:00:00.000Z',
+  updatedAt: new Date().toISOString(),
 }
 
 function normalizeExpenses(expenses: unknown): FundExpense[] {
@@ -144,6 +171,7 @@ function writeLocalFunds(funds: ClassFund[]): void {
 
 // 1. Lấy danh sách tất cả các quỹ
 export async function getAllFunds(): Promise<ClassFund[]> {
+  let fundsList: ClassFund[] = []
   try {
     const supabaseAdmin = getSupabaseAdmin()
     const { data, error } = await supabaseAdmin
@@ -152,7 +180,7 @@ export async function getAllFunds(): Promise<ClassFund[]> {
       .order('created_at', { ascending: false })
 
     if (!error && Array.isArray(data) && data.length > 0) {
-      return data.map((d: any) => {
+      fundsList = data.map((d: any) => {
         const { cleanDescription, initialBalance, expenses } = unpackFundDescription(d.description)
         return {
           id: d.id,
@@ -166,6 +194,7 @@ export async function getAllFunds(): Promise<ClassFund[]> {
           description: cleanDescription,
           adminPasscode: d.admin_passcode,
           initialBalance: d.initial_balance !== undefined ? Number(d.initial_balance) : initialBalance,
+          isTestFund: d.id === ADMIN_TEST_FUND_ID || Boolean(d.id?.includes('test')),
           students: Array.isArray(d.students) ? d.students : [],
           expenses: Array.isArray(d.expenses) ? normalizeExpenses(d.expenses) : expenses,
           createdAt: d.created_at,
@@ -176,11 +205,58 @@ export async function getAllFunds(): Promise<ClassFund[]> {
   } catch {
     // Fallback to local file
   }
-  return readLocalFunds()
+
+  if (fundsList.length === 0) {
+    fundsList = readLocalFunds()
+  }
+
+  // Đảm bảo Quỹ Test nội bộ của Hoàng Bình Minh luôn có sẵn
+  if (!fundsList.some((f) => f.id === ADMIN_TEST_FUND_ID)) {
+    fundsList.push(ADMIN_TEST_FUND)
+  }
+
+  return fundsList
 }
 
 // 2. Lấy thông tin 1 quỹ theo ID
 export async function getFundById(id: string): Promise<ClassFund | null> {
+  if (id === ADMIN_TEST_FUND_ID || id.toLowerCase().includes('quy-test-hoang-binh-minh')) {
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      const { data } = await supabaseAdmin
+        .from('class_funds')
+        .select('*')
+        .eq('id', ADMIN_TEST_FUND_ID)
+        .maybeSingle()
+      if (data) {
+        const { cleanDescription, initialBalance, expenses } = unpackFundDescription(data.description)
+        return {
+          id: data.id,
+          title: data.title,
+          className: data.class_name || 'ADMIN-TEST',
+          amountPerPerson: Number(data.amount_per_person) || 2000,
+          dueDate: data.due_date || '2030-12-31',
+          bankName: data.bank_name || 'MBBank',
+          bankAccount: data.bank_account || '0336062007',
+          accountName: data.account_name || 'HOANG BINH MINH',
+          description: cleanDescription || ADMIN_TEST_FUND.description,
+          adminPasscode: data.admin_passcode || 'me2@2026',
+          initialBalance: d_balance(data.initial_balance, initialBalance),
+          isTestFund: true,
+          students: Array.isArray(data.students) && data.students.length > 0 ? data.students : ADMIN_TEST_FUND.students,
+          expenses: Array.isArray(data.expenses) ? normalizeExpenses(data.expenses) : expenses,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+        }
+      }
+    } catch {}
+
+    const local = readLocalFunds()
+    const foundLocal = local.find((f) => f.id === ADMIN_TEST_FUND_ID)
+    if (foundLocal) return { ...foundLocal, isTestFund: true }
+    return ADMIN_TEST_FUND
+  }
+
   try {
     const supabaseAdmin = getSupabaseAdmin()
     const { data, error } = await supabaseAdmin
@@ -202,7 +278,8 @@ export async function getFundById(id: string): Promise<ClassFund | null> {
         accountName: data.account_name,
         description: cleanDescription,
         adminPasscode: data.admin_passcode,
-        initialBalance: data.initial_balance !== undefined ? Number(data.initial_balance) : initialBalance,
+        initialBalance: d_balance(data.initial_balance, initialBalance),
+        isTestFund: data.id === ADMIN_TEST_FUND_ID || Boolean(data.id?.includes('test')),
         students: Array.isArray(data.students) ? data.students : [],
         expenses: Array.isArray(data.expenses) ? normalizeExpenses(data.expenses) : expenses,
         createdAt: data.created_at,
@@ -214,7 +291,14 @@ export async function getFundById(id: string): Promise<ClassFund | null> {
   }
 
   const local = readLocalFunds()
-  return local.find((f) => f.id === id) || null
+  const found = local.find((f) => f.id === id)
+  if (found) return found
+  if (id === ADMIN_TEST_FUND_ID) return ADMIN_TEST_FUND
+  return null
+}
+
+function d_balance(val: any, fallback: number): number {
+  return val !== undefined && val !== null ? Number(val) : fallback
 }
 
 // 3. Tạo quỹ mới
