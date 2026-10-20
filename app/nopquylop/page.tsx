@@ -6,7 +6,6 @@ import {
   Wallet,
   Users,
   Clock,
-  Sparkles,
   QrCode,
   Share2,
   CheckCircle2,
@@ -430,7 +429,7 @@ export default function NopQuyLopHomePage() {
       <header className="sticky top-0 z-40 border-b border-black/5 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 text-white flex items-center justify-center font-black shadow-md shadow-indigo-500/20">
+            <div className="h-10 w-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/20">
               <Wallet className="h-5 w-5" />
             </div>
             <div>
@@ -481,7 +480,7 @@ export default function NopQuyLopHomePage() {
               <button
                 type="button"
                 onClick={handleOpenCreateModal}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white text-xs font-black shadow-md shadow-indigo-500/20 transition-all"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md shadow-blue-500/20 transition-all"
               >
                 <Plus className="h-4 w-4" />
                 <span>Tạo Đợt Thu Quỹ</span>
@@ -493,18 +492,11 @@ export default function NopQuyLopHomePage() {
 
       {/* Hero Banner & Stats */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-8">
-        <section className="relative overflow-hidden rounded-[32px] border border-indigo-100 dark:border-indigo-950/60 bg-gradient-to-br from-indigo-900 via-slate-900 to-purple-950 p-6 sm:p-10 text-white shadow-xl">
-          <div className="relative z-10 max-w-3xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[11px] font-bold border border-white/15 text-indigo-200">
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              Trang Nộp Tiền Quỹ Lớp ME2 — Kèm AI Lọc Danh Sách Tự Động
-            </div>
+        <section className="relative overflow-hidden rounded-[32px] border border-blue-500/20 bg-blue-600 dark:bg-blue-700 p-6 sm:p-10 text-white shadow-lg">
+          <div className="relative z-10 max-w-3xl space-y-2">
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight">
-              Theo Dõi Thu Chi & Nộp Quỹ Lớp Minh Bạch Thời Gian Thực
+              Trang dành cho việc thu quỹ ME 2
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl font-medium">
-              Tất cả các khoản nộp đều được công khai minh bạch. Sinh viên dễ dàng quét mã VietQR tự động sinh nội dung chuyển khoản theo tên hoặc MSSV.
-            </p>
           </div>
 
           {/* Quick Stats Grid */}
@@ -564,7 +556,7 @@ export default function NopQuyLopHomePage() {
             <button
               type="button"
               onClick={handleOpenCreateModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:to-pink-700 text-white text-xs font-black shadow-md shadow-indigo-500/20 transition-all shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md shadow-blue-500/20 transition-all shrink-0"
             >
               <Plus className="h-4 w-4" />
               <span>+ Thêm Thu Quỹ</span>
@@ -917,15 +909,15 @@ export default function NopQuyLopHomePage() {
           <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[32px] border border-black/10 dark:border-white/15 bg-white dark:bg-slate-900 p-6 sm:p-8 text-slate-900 dark:text-white shadow-2xl space-y-6">
             <div className="flex items-center justify-between border-b border-black/10 dark:border-white/10 pb-4">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
-                  <Sparkles className="h-6 w-6" />
+                <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-950 text-blue-600">
+                  <Wallet className="h-6 w-6" />
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-slate-900 dark:text-white">
                     Tạo Đợt Thu Quỹ Lớp ME2
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Hỗ trợ trích xuất & lọc họ tên danh sách lớp bằng AI (gemini-3.5-flash-lite)
+                    Hỗ trợ trích xuất & lọc danh sách lớp tự động
                   </p>
                 </div>
               </div>
@@ -1099,9 +1091,9 @@ export default function NopQuyLopHomePage() {
               {/* VÙNG NHẬP DANH SÁCH LỚP BẰNG AI */}
               <div className="p-4 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-indigo-600" />
-                    Dán Danh Sách Lớp Thô Để AI Lọc
+                  <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    Dán Danh Sách Lớp Để Tự Động Phân Tách
                   </span>
                   <span className="text-[10px] text-slate-500">
                     Hỗ trợ Excel, Zalo, Notepad
@@ -1113,7 +1105,7 @@ export default function NopQuyLopHomePage() {
                   placeholder="Dán danh sách lớp vào đây (Ví dụ:&#10;1. 20221001 Nguyễn Văn An&#10;2. 20221002 Trần Thị Bích...)"
                   value={rawTextList}
                   onChange={(e) => setRawTextList(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-white dark:bg-slate-800 text-xs font-mono outline-none focus:border-indigo-600"
+                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-xs font-mono outline-none focus:border-blue-600"
                 />
 
                 <div className="flex items-center justify-between gap-3">
@@ -1121,17 +1113,17 @@ export default function NopQuyLopHomePage() {
                     type="button"
                     onClick={handleAiParseList}
                     disabled={isAiParsing || !rawTextList.trim()}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs transition disabled:opacity-40"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-xs transition disabled:opacity-40"
                   >
                     {isAiParsing ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>AI (gemini-3.5-flash-lite) đang phân tích...</span>
+                        <span>Đang xử lý phân tách danh sách...</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles className="h-4 w-4" />
-                        <span>Lọc & Trích Xuất AI (gemini-3.5-flash-lite)</span>
+                        <FileText className="h-4 w-4" />
+                        <span>Tự Động Phân Tách Danh Sách</span>
                       </>
                     )}
                   </button>
@@ -1188,7 +1180,7 @@ export default function NopQuyLopHomePage() {
                 <button
                   type="submit"
                   disabled={creatingFund}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black shadow-md transition disabled:opacity-40"
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-md transition disabled:opacity-40"
                 >
                   {creatingFund ? 'Đang tạo quỹ...' : 'Tạo Đợt Thu Quỹ Ngay'}
                 </button>
