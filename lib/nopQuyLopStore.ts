@@ -9,6 +9,7 @@ export interface FundStudent {
   paid: boolean
   paidAt?: string
   paymentCode?: string
+  proofImage?: string
   note?: string
 }
 
@@ -19,6 +20,7 @@ export interface FundExpense {
   spentAt: string // YYYY-MM-DD or ISO
   spentBy?: string
   receiptImage?: string
+  billImageUrl?: string
   note?: string
   createdAt: string
 }
@@ -261,7 +263,8 @@ export async function updateStudentPayment(
   fundId: string,
   studentIdOrMssv: string,
   paid: boolean,
-  paymentCode?: string
+  paymentCode?: string,
+  proofImage?: string
 ): Promise<{ success: boolean; student?: FundStudent; fund?: ClassFund }> {
   const fund = await getFundById(fundId)
   if (!fund) return { success: false }
@@ -272,8 +275,9 @@ export async function updateStudentPayment(
   if (!student) return { success: false }
 
   student.paid = paid
-  student.paidAt = paid ? new Date().toISOString() : undefined
+  student.paidAt = paid ? (student.paidAt || new Date().toISOString()) : undefined
   if (paymentCode) student.paymentCode = paymentCode
+  if (proofImage !== undefined) student.proofImage = proofImage
   fund.updatedAt = new Date().toISOString()
 
   // Cập nhật Supabase
@@ -507,4 +511,5 @@ export {
   normalizeVietnamese,
   getExpectedAdminDailyPassword,
   isValidAdminDailyPassword,
+  isAuthorizedAdminOrTreasurer,
 } from './nopQuyLopAuth'

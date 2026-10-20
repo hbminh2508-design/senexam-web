@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
-import { deleteStudentFromFund, isValidAdminDailyPassword, getFundById } from '@/lib/nopQuyLopStore'
+import {
+  deleteStudentFromFund,
+  isValidAdminDailyPassword,
+  isAuthorizedAdminOrTreasurer,
+  getFundById,
+} from '@/lib/nopQuyLopStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,18 +17,24 @@ export async function DELETE(
     const body = await request.json().catch(() => null)
     const adminUsername = String(body?.adminUsername || '').trim()
     const adminPassword = String(body?.adminPassword || '').trim()
-
-    // Bắt buộc xác thực tài khoản & mật khẩu admin như lúc tạo quỹ
-    if (adminUsername !== 'admin' || !isValidAdminDailyPassword(adminPassword)) {
-      return NextResponse.json(
-        { error: 'Tài khoản hoặc mật khẩu quản trị không chính xác!' },
-        { status: 401 }
-      )
-    }
+    const adminPasscode = String(body?.adminPasscode || '').trim()
 
     const fund = await getFundById(id)
     if (!fund) {
       return NextResponse.json({ error: 'Không tìm thấy quỹ lớp' }, { status: 404 })
+    }
+
+    const isAuth = isAuthorizedAdminOrTreasurer(fund, {
+      adminUsername,
+      adminPassword,
+      adminPasscode,
+    })
+
+    if (!isAuth) {
+      return NextResponse.json(
+        { error: 'Bạn cần mã bảo mật Thủ Quỹ hoặc mật khẩu Admin để xóa sinh viên!' },
+        { status: 401 }
+      )
     }
 
     const exists = fund.students.some((s) => s.id === studentId || s.mssv === studentId)

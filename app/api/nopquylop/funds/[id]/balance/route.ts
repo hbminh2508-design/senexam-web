@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
-import { updateFundInitialBalance, isValidAdminDailyPassword } from '@/lib/nopQuyLopStore'
+import {
+  updateFundInitialBalance,
+  getFundById,
+  isValidAdminDailyPassword,
+  isAuthorizedAdminOrTreasurer,
+} from '@/lib/nopQuyLopStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,11 +15,22 @@ export async function PUT(
   try {
     const { id: fundId } = await params
     const body = await request.json()
-    const { initialBalance, adminUsername, adminPassword } = body
+    const { initialBalance, adminUsername, adminPassword, adminPasscode } = body
 
-    if (adminUsername !== 'admin' || !isValidAdminDailyPassword(adminPassword)) {
+    const fund = await getFundById(fundId)
+    if (!fund) {
+      return NextResponse.json({ error: 'Không tìm thấy quỹ lớp này' }, { status: 404 })
+    }
+
+    const isAuth = isAuthorizedAdminOrTreasurer(fund, {
+      adminUsername,
+      adminPassword,
+      adminPasscode,
+    })
+
+    if (!isAuth) {
       return NextResponse.json(
-        { error: 'Tài khoản hoặc mật khẩu quản trị không chính xác!' },
+        { error: 'Bạn cần mã bảo mật Thủ Quỹ hoặc mật khẩu Admin để cập nhật số dư!' },
         { status: 401 }
       )
     }

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
     const prompt = `Bạn là hệ thống AI trích xuất thông tin hóa đơn / bill chi tiêu cho lớp ME2.
 Hãy đọc ảnh hóa đơn/biên lai mua hàng hoặc bill chuyển khoản sau và trích xuất:

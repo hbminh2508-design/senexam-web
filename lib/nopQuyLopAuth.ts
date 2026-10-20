@@ -50,3 +50,33 @@ export function isValidAdminDailyPassword(inputPassword: string): boolean {
     clean === expectedUtc
   )
 }
+
+/**
+ * Kiểm tra quyền của Admin hoặc Thủ Quỹ.
+ * Cho phép xác thực nếu khớp mật khẩu ngày của Admin HOẶC mã bảo mật passcode của Thủ Quỹ đợt quỹ này.
+ */
+export function isAuthorizedAdminOrTreasurer(
+  fund: { adminPasscode?: string } | null | undefined,
+  auth: { adminUsername?: string; adminPassword?: string; adminPasscode?: string }
+): boolean {
+  if (!auth) return false
+  const pass = (auth.adminPassword || auth.adminPasscode || '').trim()
+
+  // 1. Khớp mật khẩu Admin theo ngày (admin-DD/MM/YYYY)
+  if (isValidAdminDailyPassword(pass)) {
+    return true
+  }
+
+  // 2. Khớp Passcode Thủ Quỹ của đợt quỹ
+  const fundPass = fund?.adminPasscode?.trim()
+  if (fundPass && pass === fundPass) {
+    return true
+  }
+
+  // 3. Nếu đợt quỹ không đặt passcode, chấp nhận mật khẩu quản trị hoặc session hợp lệ
+  if (!fundPass && pass) {
+    return isValidAdminDailyPassword(pass)
+  }
+
+  return false
+}

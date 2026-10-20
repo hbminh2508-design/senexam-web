@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getFundById, updateStudentPayment } from '@/lib/nopQuyLopStore'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const dynamic = 'force-dynamic'
@@ -88,16 +89,33 @@ export async function POST(
       )
     }
 
-    // BƯỚC XÁC MINH HÌNH ẢNH QUA GEMINI AI (gemini-3.5-flash-lite / gemini-3.8-flash)
+    // Chuẩn bị URL ảnh minh chứng để lưu trữ
+    const proofImageUrl = rawImage.startsWith('data:')
+      ? rawImage
+      : `data:${mimeType};base64,${base64Data}`
+
+    // BƯỚC XÁC MINH HÌNH ẢNH QUA GEMINI AI
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
       // Nếu chưa có API key trên server, tự động chấp nhận để không chặn người dùng nộp tiền
-      await updateStudentPayment(fund.id, student.id, true, paymentCode)
+      await updateStudentPayment(fund.id, student.id, true, paymentCode, proofImageUrl)
+      try {
+        const supabaseAdmin = getSupabaseAdmin()
+        await supabaseAdmin
+          .from('class_fund_payments')
+          .update({
+            proof_image: proofImageUrl,
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+          })
+          .eq('order_code', paymentCode)
+      } catch {}
+
       return NextResponse.json({
         success: true,
         verified: true,
         fallbackNoAi: true,
-        student: { ...student, paid: true, paymentCode },
+        student: { ...student, paid: true, paymentCode, proofImage: proofImageUrl },
         message: 'Biên lai đã được ghi nhận thành công!',
       })
     }
@@ -132,7 +150,7 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc trong markdown hay text 
 }`
 
     // Hàng đợi / Thử nghiệm với các model và cơ chế retry nếu bị quá tải (rate limit)
-    const modelsToTry = ['gemini-3.5-flash-lite', 'gemini-3.8-flash']
+    const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash']
     let aiResponseText = ''
     let lastError: any = null
 
@@ -167,12 +185,24 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc trong markdown hay text 
     if (!aiResponseText) {
       console.warn('AI verification retry exhausted:', lastError?.message)
       // Nếu AI tạm thời quá tải, chấp nhận biên lai và ghi nhận trạng thái để thủ quỹ kiểm tra thêm
-      await updateStudentPayment(fund.id, student.id, true, paymentCode)
+      await updateStudentPayment(fund.id, student.id, true, paymentCode, proofImageUrl)
+      try {
+        const supabaseAdmin = getSupabaseAdmin()
+        await supabaseAdmin
+          .from('class_fund_payments')
+          .update({
+            proof_image: proofImageUrl,
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+          })
+          .eq('order_code', paymentCode)
+      } catch {}
+
       return NextResponse.json({
         success: true,
         verified: true,
         queuedReview: true,
-        student: { ...student, paid: true, paymentCode },
+        student: { ...student, paid: true, paymentCode, proofImage: proofImageUrl },
         message: 'Biên lai đã được tải lên và ghi nhận thành công!',
       })
     }
@@ -198,14 +228,25 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc trong markdown hay text 
     )
 
     if (isMatch) {
-      // Cập nhật trạng thái đã nộp
-      const updateRes = await updateStudentPayment(fund.id, student.id, true, paymentCode)
+      // Cập nhật trạng thái đã nộp kèm ảnh minh chứng
+      const updateRes = await updateStudentPayment(fund.id, student.id, true, paymentCode, proofImageUrl)
+      try {
+        const supabaseAdmin = getSupabaseAdmin()
+        await supabaseAdmin
+          .from('class_fund_payments')
+          .update({
+            proof_image: proofImageUrl,
+            status: 'paid',
+            paid_at: new Date().toISOString(),
+          })
+          .eq('order_code', paymentCode)
+      } catch {}
 
       return NextResponse.json({
         success: true,
         verified: true,
         aiAnalysis: parsed,
-        student: updateRes.student || { ...student, paid: true, paymentCode },
+        student: updateRes.student || { ...student, paid: true, paymentCode, proofImage: proofImageUrl },
         message: `Xác minh thành công! Sinh viên "${student.name}" đã hoàn thành nộp quỹ lớp.`,
       })
     }

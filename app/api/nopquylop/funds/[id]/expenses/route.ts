@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getFundById, addExpenseToFund, isValidAdminDailyPassword } from '@/lib/nopQuyLopStore'
+import {
+  getFundById,
+  addExpenseToFund,
+  isValidAdminDailyPassword,
+  isAuthorizedAdminOrTreasurer,
+} from '@/lib/nopQuyLopStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,15 +37,28 @@ export async function POST(
       spentAt,
       spentBy,
       receiptImage,
+      billImageUrl,
       note,
       adminUsername,
       adminPassword,
+      adminPasscode,
     } = body
 
-    // Xác thực Admin (Chỉ admin mới có quyền đưa bill chi tiêu vào quỹ)
-    if (adminUsername !== 'admin' || !isValidAdminDailyPassword(adminPassword)) {
+    const fund = await getFundById(id)
+    if (!fund) {
+      return NextResponse.json({ error: 'Không tìm thấy quỹ lớp này' }, { status: 404 })
+    }
+
+    // Xác thực Admin hoặc Thủ Quỹ
+    const isAuth = isAuthorizedAdminOrTreasurer(fund, {
+      adminUsername,
+      adminPassword,
+      adminPasscode,
+    })
+
+    if (!isAuth) {
       return NextResponse.json(
-        { error: 'Tài khoản hoặc mật khẩu quản trị không chính xác!' },
+        { error: 'Bạn cần nhập mã bảo mật Thủ Quỹ hoặc mật khẩu Admin để thêm hóa đơn vào quỹ!' },
         { status: 401 }
       )
     }
@@ -54,12 +72,15 @@ export async function POST(
       return NextResponse.json({ error: 'Số tiền chi tiêu phải lớn hơn 0' }, { status: 400 })
     }
 
+    const finalImage = receiptImage || billImageUrl || undefined
+
     const res = await addExpenseToFund(id, {
       title: title.trim(),
       amount: numAmount,
       spentAt: spentAt || new Date().toISOString().split('T')[0],
-      spentBy: spentBy?.trim() || 'TRAN DUY KHUONG',
-      receiptImage: receiptImage || undefined,
+      spentBy: spentBy?.trim() || 'Thủ quỹ',
+      receiptImage: finalImage,
+      billImageUrl: finalImage,
       note: note?.trim() || undefined,
     })
 

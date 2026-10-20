@@ -38,6 +38,7 @@ import {
   TrendingDown,
   TrendingUp,
   Coins,
+  ExternalLink,
 } from 'lucide-react'
 import { isValidAdminDailyPassword } from '@/lib/nopQuyLopAuth'
 import {
@@ -48,6 +49,64 @@ import {
   formatAdminRemainingTime,
 } from '@/lib/nopQuyLopAdminSession'
 
+// Helper nén ảnh nhẹ nhàng trên trình duyệt (giảm 10MB xuống ~150KB) để tránh lỗi Payload Too Large trên Vercel/Safari
+function compressImageFile(
+  file: File,
+  maxWidth = 1280,
+  maxHeight = 1280,
+  quality = 0.75
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = reject
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onerror = reject
+      img.onload = () => {
+        let { width, height } = img
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width)
+            width = maxWidth
+          } else {
+            width = Math.round((width * maxHeight) / height)
+            height = maxHeight
+          }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(e.target?.result as string)
+          return
+        }
+        ctx.drawImage(img, 0, 0, width, height)
+        const dataUrl = canvas.toDataURL('image/jpeg', quality)
+        resolve(dataUrl)
+      }
+      img.src = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+// Helper fetch an toàn không gây lỗi 'The string did not match the expected pattern' trên WebKit/Safari
+async function safeFetchJson(url: string, options?: RequestInit) {
+  const res = await fetch(url, options)
+  const text = await res.text()
+  let json: any = {}
+  try {
+    json = JSON.parse(text)
+  } catch {
+    throw new Error(text && text.length < 200 ? text : `Máy chủ trả về mã lỗi ${res.status}`)
+  }
+  if (!res.ok) {
+    throw new Error(json.error || `Yêu cầu không thành công (${res.status})`)
+  }
+  return json
+}
+
 interface Student {
   id: string
   name: string
@@ -55,6 +114,7 @@ interface Student {
   paid: boolean
   paidAt?: string
   paymentCode?: string
+  proofImage?: string
   note?: string
 }
 
@@ -66,6 +126,7 @@ interface FundExpense {
   spentBy?: string
   note?: string
   billImageUrl?: string
+  receiptImage?: string
   createdAt: string
 }
 
@@ -85,6 +146,15 @@ interface FundDetail {
   students: Student[]
   createdAt: string
   updatedAt: string
+}
+
+interface ImageViewerData {
+  url: string
+  title: string
+  subtitle?: string
+  badge?: string
+  date?: string
+  code?: string
 }
 
 export default function FundDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -169,8 +239,9 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [balanceError, setBalanceError] = useState('')
   const [isUpdatingBalance, setIsUpdatingBalance] = useState(false)
 
-  // Phóng to xem ảnh bill
-  const [viewingBillImage, setViewingBillImage] = useState<string | null>(null)
+  // Phóng to xem ảnh minh chứng & hóa đơn bill
+  const [activeViewerImage, setActiveViewerImage] = useState<ImageViewerData | null>(null)
+  const [pendingToggleStudent, setPendingToggleStudent] = useState<Student | null>(null)
 
   const router = useRouter()
 
@@ -282,33 +353,31 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     if (!studentToDelete) return
 
     const session = getAdminSession()
-    const pass = deleteStudentAdminPassword.trim() || (session ? session.adminPassword : '')
+    const pass = deleteStudentAdminPassword.trim() || (session ? session.adminPassword : '') || adminPassInput.trim() || ''
     const user = deleteStudentAdminUsername.trim() || (session ? session.adminUsername : 'admin')
 
-    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
-      setDeleteStudentError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+    const isValidAdmin = isValidAdminDailyPassword(pass)
+    const isValidTreasurer = Boolean(fund?.adminPasscode && pass === fund.adminPasscode.trim())
+
+    if (!isValidAdmin && !isValidTreasurer) {
+      setDeleteStudentError('Tài khoản hoặc mã bảo mật không chính xác!')
       return
     }
 
     setIsDeletingStudent(true)
     setDeleteStudentError('')
     try {
-      const res = await fetch(`/api/nopquylop/funds/${fundId}/students/${studentToDelete.id}`, {
+      await safeFetchJson(`/api/nopquylop/funds/${fundId}/students/${studentToDelete.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           adminUsername: user,
           adminPassword: pass,
+          adminPasscode: pass,
         }),
       })
 
-      const json = await res.json()
-      if (!res.ok) {
-        setDeleteStudentError(json.error || 'Lỗi khi xóa người nộp quỹ')
-        return
-      }
-
-      saveAdminSession(pass)
+      if (pass) saveAdminSession(pass)
       setShowDeleteStudentModal(false)
       setStudentToDelete(null)
       fetchFund()
@@ -323,13 +392,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()
     const session = getAdminSession()
-    const pass = expenseAdminPass.trim() || (session ? session.adminPassword : '')
+    const pass = expenseAdminPass.trim() || (session ? session.adminPassword : '') || adminPassInput.trim() || ''
     const user = expenseAdminUser.trim() || (session ? session.adminUsername : 'admin')
-
-    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
-      setExpenseError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
-      return
-    }
 
     const amt = Number(expenseAmount.replace(/[^0-9]/g, ''))
     if (!amt || amt <= 0) {
@@ -345,7 +409,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     setIsSubmittingExpense(true)
     setExpenseError('')
     try {
-      const res = await fetch(`/api/nopquylop/funds/${fundId}/expenses`, {
+      await safeFetchJson(`/api/nopquylop/funds/${fundId}/expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -355,19 +419,17 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           spentBy: expenseSpentBy.trim() || undefined,
           note: expenseNote.trim() || undefined,
           billImageUrl: expenseBillImage || undefined,
+          receiptImage: expenseBillImage || undefined,
           adminUsername: user,
           adminPassword: pass,
+          adminPasscode: pass,
         }),
       })
 
-      const json = await res.json()
-      if (!res.ok) {
-        setExpenseError(json.error || 'Lỗi thêm hóa đơn chi tiêu')
-        return
+      if (pass) {
+        saveAdminSession(pass)
+        setIsAdminMode(true)
       }
-
-      saveAdminSession(pass)
-      setIsAdminMode(true)
       setShowAddExpenseModal(false)
       setExpenseTitle('')
       setExpenseAmount('')
@@ -376,13 +438,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
       setOcrSuccessMsg('')
       await fetchFund()
     } catch (err: any) {
-      setExpenseError(err.message || 'Lỗi kết nối')
+      setExpenseError(err.message || 'Lỗi thêm hóa đơn chi tiêu')
     } finally {
       setIsSubmittingExpense(false)
     }
   }
 
-  // Xử lý AI đọc hóa đơn chi tiêu
+  // Xử lý AI đọc hóa đơn chi tiêu (Tùy chọn)
   const handleOcrBill = async () => {
     if (!expenseBillImage) {
       setOcrError('Vui lòng chọn hoặc chụp ảnh hóa đơn trước!')
@@ -393,28 +455,27 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     setOcrError('')
     setOcrSuccessMsg('')
     try {
-      const res = await fetch('/api/nopquylop/ocr-bill', {
+      const json = await safeFetchJson('/api/nopquylop/ocr-bill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: expenseBillImage }),
       })
-      const json = await res.json()
-      if (!res.ok) {
-        setOcrError(json.error || 'Không thể đọc ảnh hóa đơn bằng AI')
-        return
-      }
 
-      if (json.amount) {
-        setExpenseAmount(String(json.amount))
+      const data = json.data || json
+      if (data.amount) {
+        setExpenseAmount(String(data.amount))
       }
-      if (json.title) {
-        setExpenseTitle(json.title)
+      if (data.title) {
+        setExpenseTitle(data.title)
+      }
+      if (data.spentAt) {
+        setExpenseSpentAt(data.spentAt)
       }
       setOcrSuccessMsg(
-        `AI (gemini-3.5-flash-lite) đã nhận diện: "${json.title || 'Khoản chi'}" — ${(json.amount || 0).toLocaleString('vi-VN')} đ`
+        `AI đã nhận diện: "${data.title || 'Khoản chi'}" — ${(data.amount || 0).toLocaleString('vi-VN')} đ`
       )
     } catch (err: any) {
-      setOcrError(err.message || 'Lỗi phân tích hóa đơn bằng AI')
+      setOcrError(err.message || 'Lỗi phân tích hóa đơn')
     } finally {
       setIsOcrAnalyzing(false)
     }
@@ -425,33 +486,31 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     e.preventDefault()
     if (!expenseToDelete) return
     const session = getAdminSession()
-    const pass = deleteExpensePass.trim() || (session ? session.adminPassword : '')
+    const pass = deleteExpensePass.trim() || (session ? session.adminPassword : '') || adminPassInput.trim() || ''
     const user = deleteExpenseUser.trim() || (session ? session.adminUsername : 'admin')
 
-    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
-      setDeleteExpenseError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+    const isValidAdmin = isValidAdminDailyPassword(pass)
+    const isValidTreasurer = Boolean(fund?.adminPasscode && pass === fund.adminPasscode.trim())
+
+    if (!isValidAdmin && !isValidTreasurer) {
+      setDeleteExpenseError('Tài khoản hoặc mã bảo mật không chính xác!')
       return
     }
 
     setIsDeletingExpense(true)
     setDeleteExpenseError('')
     try {
-      const res = await fetch(`/api/nopquylop/funds/${fundId}/expenses/${expenseToDelete.id}`, {
+      await safeFetchJson(`/api/nopquylop/funds/${fundId}/expenses/${expenseToDelete.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           adminUsername: user,
           adminPassword: pass,
+          adminPasscode: pass,
         }),
       })
 
-      const json = await res.json()
-      if (!res.ok) {
-        setDeleteExpenseError(json.error || 'Lỗi khi xóa khoản chi')
-        return
-      }
-
-      saveAdminSession(pass)
+      if (pass) saveAdminSession(pass)
       setShowDeleteExpenseModal(false)
       setExpenseToDelete(null)
       await fetchFund()
@@ -466,11 +525,14 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const handleUpdateBalance = async (e: React.FormEvent) => {
     e.preventDefault()
     const session = getAdminSession()
-    const pass = balanceAdminPass.trim() || (session ? session.adminPassword : '')
+    const pass = balanceAdminPass.trim() || (session ? session.adminPassword : '') || adminPassInput.trim() || ''
     const user = balanceAdminUser.trim() || (session ? session.adminUsername : 'admin')
 
-    if (user !== 'admin' || !isValidAdminDailyPassword(pass)) {
-      setBalanceError('Tài khoản hoặc mật khẩu quản trị không chính xác!')
+    const isValidAdmin = isValidAdminDailyPassword(pass)
+    const isValidTreasurer = Boolean(fund?.adminPasscode && pass === fund.adminPasscode.trim())
+
+    if (!isValidAdmin && !isValidTreasurer) {
+      setBalanceError('Tài khoản hoặc mã bảo mật không chính xác!')
       return
     }
 
@@ -483,23 +545,18 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     setIsUpdatingBalance(true)
     setBalanceError('')
     try {
-      const res = await fetch(`/api/nopquylop/funds/${fundId}/balance`, {
+      await safeFetchJson(`/api/nopquylop/funds/${fundId}/balance`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           initialBalance: amt,
           adminUsername: user,
           adminPassword: pass,
+          adminPasscode: pass,
         }),
       })
 
-      const json = await res.json()
-      if (!res.ok) {
-        setBalanceError(json.error || 'Lỗi cập nhật số dư ban đầu')
-        return
-      }
-
-      saveAdminSession(pass)
+      if (pass) saveAdminSession(pass)
       setShowBalanceModal(false)
       await fetchFund()
     } catch (err: any) {
@@ -509,16 +566,22 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleExpenseImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExpenseImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setExpenseError('')
     setOcrError('')
     setOcrSuccessMsg('')
-    const reader = new FileReader()
-    reader.onload = () => {
-      setExpenseBillImage(reader.result as string)
+    try {
+      const compressed = await compressImageFile(file, 1280, 1280, 0.75)
+      setExpenseBillImage(compressed)
+    } catch {
+      const reader = new FileReader()
+      reader.onload = () => {
+        setExpenseBillImage(reader.result as string)
+      }
+      reader.readAsDataURL(file)
     }
-    reader.readAsDataURL(file)
   }
 
   const fetchFund = async () => {
@@ -718,16 +781,21 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleProofImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProofImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setProofVerifyError('')
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      setProofImagePreview(reader.result as string)
+    try {
+      const compressed = await compressImageFile(file, 1280, 1280, 0.75)
+      setProofImagePreview(compressed)
+    } catch {
+      const reader = new FileReader()
+      reader.onload = () => {
+        setProofImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
     }
-    reader.readAsDataURL(file)
   }
 
   const handleSubmitProof = async () => {
@@ -739,7 +807,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     setIsVerifyingProof(true)
     setProofVerifyError('')
     try {
-      const res = await fetch(`/api/nopquylop/funds/${fundId}/verify-proof`, {
+      const json = await safeFetchJson(`/api/nopquylop/funds/${fundId}/verify-proof`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -748,16 +816,6 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           image: proofImagePreview,
         }),
       })
-
-      const json = await res.json()
-      if (!res.ok) {
-        setProofVerifyError(
-          json.reason ||
-            json.error ||
-            'Ảnh biên lai chưa hợp lệ. Vui lòng kiểm tra lại ảnh chụp màn hình ngân hàng!'
-        )
-        return
-      }
 
       // Xác minh thành công!
       setAutoPaidSuccess(true)
@@ -773,47 +831,77 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  // Thủ quỹ đổi trạng thái nộp tiền của sinh viên
-  const handleToggleStudentPaid = async (student: Student) => {
-    if (!isAdminMode) {
-      setShowAdminPassModal(true)
-      return
-    }
+  // Thực hiện đổi trạng thái nộp tiền của sinh viên
+  const executeToggleStudentPaid = async (student: Student, passToUse?: string) => {
+    const session = getAdminSession()
+    const pass = passToUse || adminPassInput.trim() || (session ? session.adminPassword : '') || ''
 
     setUpdatingStudentId(student.id)
     try {
-      const res = await fetch(`/api/nopquylop/funds/${fundId}`, {
+      await safeFetchJson(`/api/nopquylop/funds/${fundId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId: student.id,
           paid: !student.paid,
-          adminPasscode: adminPassInput,
+          adminPasscode: pass,
+          adminPassword: pass,
+          adminUsername: 'admin',
         }),
       })
 
-      if (res.ok) {
-        await fetchFund()
-      } else {
-        const json = await res.json()
-        alert(json.error || 'Lỗi cập nhật trạng thái nộp tiền')
+      if (pass) {
+        saveAdminSession(pass)
+        setIsAdminMode(true)
       }
-    } catch (err) {
-      alert('Lỗi cập nhật')
+      await fetchFund()
+    } catch (err: any) {
+      alert(err.message || 'Lỗi cập nhật trạng thái nộp tiền')
     } finally {
       setUpdatingStudentId(null)
     }
   }
 
-  // Xác nhận passcode thủ quỹ
+  // Bấm nút Duyệt Đã Nộp / Đánh Dấu Chưa Nộp
+  const handleToggleStudentPaid = async (student: Student) => {
+    const session = getAdminSession()
+    const isUnlocked =
+      (session && session.expiresAt > Date.now()) ||
+      (adminPassInput.trim() &&
+        (!fund?.adminPasscode ||
+          adminPassInput.trim() === fund.adminPasscode.trim() ||
+          isValidAdminDailyPassword(adminPassInput.trim())))
+
+    if (!isUnlocked && !isAdminMode) {
+      setPendingToggleStudent(student)
+      setShowAdminPassModal(true)
+      return
+    }
+
+    await executeToggleStudentPaid(student)
+  }
+
+  // Xác nhận passcode thủ quỹ hoặc mật khẩu Admin
   const handleUnlockAdminMode = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!fund?.adminPasscode || adminPassInput === fund.adminPasscode) {
+    const cleanPass = adminPassInput.trim()
+    const isValidDaily = isValidAdminDailyPassword(cleanPass)
+    const isFundPassMatch = Boolean(fund?.adminPasscode && cleanPass === fund.adminPasscode.trim())
+    const noPassRequired = !fund?.adminPasscode
+
+    if (isValidDaily || isFundPassMatch || (noPassRequired && cleanPass)) {
+      saveAdminSession(cleanPass)
       setIsAdminMode(true)
       setShowAdminPassModal(false)
       setAdminPassError('')
+
+      if (pendingToggleStudent) {
+        const target = pendingToggleStudent
+        setPendingToggleStudent(null)
+        executeToggleStudentPaid(target, cleanPass)
+      }
     } else {
-      setAdminPassError('Mã bảo mật thủ quỹ không chính xác!')
+      setAdminPassError('Mã bảo mật thủ quỹ hoặc mật khẩu Admin không chính xác!')
     }
   }
 
@@ -1300,18 +1388,19 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-black/5 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40 text-slate-400 font-black uppercase text-[10px] tracking-wider">
-                  <th className="py-3 px-4 w-14">STT</th>
+                  <th className="py-3 px-4 w-12">STT</th>
                   <th className="py-3 px-4">Họ và Tên</th>
                   <th className="py-3 px-4">MSSV</th>
                   <th className="py-3 px-4">Số Tiền</th>
                   <th className="py-3 px-4">Trạng Thái</th>
+                  <th className="py-3 px-4">Minh Chứng Nộp</th>
                   <th className="py-3 px-4 text-right">Thao Tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-white/5 font-medium">
                 {sortedAndFilteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400 font-bold">
+                    <td colSpan={7} className="py-12 text-center text-slate-400 font-bold">
                       Không tìm thấy sinh viên nào theo điều kiện lọc này.
                     </td>
                   </tr>
@@ -1390,29 +1479,57 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                           )}
                         </td>
 
-                        {/* Thao tác (Duyệt nếu đang mở chế độ Admin, và nút Xóa yêu cầu Admin) */}
+                        {/* Minh Chứng Nộp Tiền (Đường link / Nút bấm mở ảnh minh chứng) */}
+                        <td className="py-3.5 px-4">
+                          {student.proofImage ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActiveViewerImage({
+                                  url: student.proofImage!,
+                                  title: `Minh Chứng Nộp Tiền: ${student.name}`,
+                                  subtitle: `MSSV: ${student.mssv || '—'}`,
+                                  code: student.paymentCode,
+                                  date: student.paidAt,
+                                  badge: 'Đã tải minh chứng',
+                                })
+                              }
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[11px] font-black transition shadow-2xs group"
+                            >
+                              <Eye className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition" />
+                              <span>Xem Minh Chứng</span>
+                            </button>
+                          ) : student.paid ? (
+                            <span className="text-[11px] text-slate-400 font-medium italic">
+                              Nộp trực tiếp / Thẻ
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                          )}
+                        </td>
+
+                        {/* Thao tác (Duyệt nộp và xóa sinh viên) */}
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {isAdminMode && (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleStudentPaid(student)}
-                                disabled={updatingStudentId === student.id}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-                                  student.paid
-                                    ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-                                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
-                                } disabled:opacity-40`}
-                              >
-                                {updatingStudentId === student.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : student.paid ? (
-                                  'Đánh Dấu Chưa Nộp'
-                                ) : (
-                                  'Duyệt Đã Nộp ✓'
-                                )}
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStudentPaid(student)}
+                              disabled={updatingStudentId === student.id}
+                              title={student.paid ? 'Đánh dấu sinh viên này chưa nộp' : 'Duyệt hoàn thành nộp quỹ'}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
+                                student.paid
+                                  ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
+                                  : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
+                              } disabled:opacity-40`}
+                            >
+                              {updatingStudentId === student.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : student.paid ? (
+                                'Đánh Dấu Chưa Nộp'
+                              ) : (
+                                'Duyệt Đã Nộp ✓'
+                              )}
+                            </button>
 
                             <button
                               type="button"
@@ -1541,19 +1658,27 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        {exp.billImageUrl ? (
+                        {(exp.billImageUrl || exp.receiptImage) ? (
                           <button
                             type="button"
-                            onClick={() => setViewingBillImage(exp.billImageUrl || null)}
+                            onClick={() =>
+                              setActiveViewerImage({
+                                url: (exp.billImageUrl || exp.receiptImage)!,
+                                title: `Hóa Đơn Chi Tiêu: ${exp.title}`,
+                                subtitle: `Số tiền: ${(exp.amount || 0).toLocaleString('vi-VN')} đ • Người chi: ${exp.spentBy || 'Thủ quỹ'}`,
+                                date: exp.spentAt,
+                                badge: 'Hóa đơn trừ quỹ',
+                              })
+                            }
                             title="Bấm để xem ảnh hóa đơn rõ nét"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-black/10 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 transition"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900 text-[11px] font-black text-rose-700 dark:text-rose-300 transition shadow-2xs group"
                           >
                             <img
-                              src={exp.billImageUrl}
+                              src={exp.billImageUrl || exp.receiptImage}
                               alt="Bill"
                               className="w-5 h-5 object-cover rounded-md"
                             />
-                            <Eye className="h-3.5 w-3.5 text-indigo-500" />
+                            <Eye className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 group-hover:scale-110 transition" />
                             <span>Xem Bill</span>
                           </button>
                         ) : (
@@ -1934,13 +2059,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             </div>
 
             <p className="text-xs text-slate-500">
-              Nhập mã bảo mật của thủ quỹ lớp ME2 để mở khóa quyền đánh dấu đã nộp / chưa nộp tiền.
+              Nhập mã bảo mật của thủ quỹ lớp hoặc mật khẩu Admin để mở khóa quyền duyệt nộp tiền và quản lý quỹ.
             </p>
 
             <form onSubmit={handleUnlockAdminMode} className="space-y-3">
               <input
                 type="password"
-                placeholder="Nhập mã bảo mật thủ quỹ..."
+                placeholder="Nhập mã bảo mật thủ quỹ hoặc admin..."
                 value={adminPassInput}
                 onChange={(e) => {
                   setAdminPassInput(e.target.value)
@@ -2194,7 +2319,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* MODAL THÊM KHOẢN CHI / BILL VÀO TRỪ QUỸ (CÓ AI GEMINI ĐỌC BILL) */}
+      {/* MODAL THÊM KHOẢN CHI / BILL VÀO TRỪ QUỸ (ĐIỀN BẰNG TAY HOẶC ĐÍNH KÈM ẢNH) */}
       {showAddExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in">
           <div className="relative w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-[32px] border border-black/10 dark:border-white/15 bg-white dark:bg-slate-900 p-6 sm:p-8 text-slate-900 dark:text-white shadow-2xl space-y-5">
@@ -2208,7 +2333,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                     Đưa Hóa Đơn / Bill Vào Trừ Quỹ
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Hỗ trợ quét ảnh hóa đơn tự động bằng AI (gemini-3.5-flash-lite)
+                    Nhập tay thông tin chi tiêu & đính kèm ảnh hóa đơn minh chứng
                   </p>
                 </div>
               </div>
@@ -2234,34 +2359,60 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
-            {/* VÙNG TẢI ẢNH BILL & NÚT AI ĐỌC BILL */}
+            {/* VÙNG TẢI ẢNH BILL (TỰ ĐỘNG NÉN NHẸ GỌN) */}
             <div className="p-4 rounded-2xl border-2 border-dashed border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-rose-950 dark:text-rose-200 flex items-center gap-1.5">
                   <UploadCloud className="h-4 w-4 text-rose-600" />
-                  Ảnh Hóa Đơn / Bill Chi Tiêu
+                  Ảnh Hóa Đơn / Bill Chi Tiêu (Tùy chọn)
                 </span>
-                <span className="text-[10px] text-slate-500">Chụp hoặc tải ảnh lên</span>
+                <span className="text-[10px] text-slate-500">Tự động nén tối ưu</span>
               </div>
 
               {expenseBillImage ? (
-                <div className="relative rounded-2xl overflow-hidden border border-black/10 bg-black flex items-center justify-center p-1">
-                  <img
-                    src={expenseBillImage}
-                    alt="Bill chi tiêu"
-                    className="max-h-52 object-contain rounded-xl"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExpenseBillImage(null)
-                      setOcrError('')
-                      setOcrSuccessMsg('')
-                    }}
-                    className="absolute top-2 right-2 px-2.5 py-1 rounded-xl bg-black/70 hover:bg-black text-white text-[10px] font-bold backdrop-blur-md"
-                  >
-                    ✕ Đổi ảnh khác
-                  </button>
+                <div className="space-y-2">
+                  <div className="relative rounded-2xl overflow-hidden border border-black/10 bg-black flex items-center justify-center p-1">
+                    <img
+                      src={expenseBillImage}
+                      alt="Bill chi tiêu"
+                      className="max-h-52 object-contain rounded-xl"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpenseBillImage(null)
+                        setOcrError('')
+                        setOcrSuccessMsg('')
+                      }}
+                      className="absolute top-2 right-2 px-2.5 py-1 rounded-xl bg-black/70 hover:bg-black text-white text-[10px] font-bold backdrop-blur-md"
+                    >
+                      ✕ Xóa ảnh
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-emerald-600 font-bold">
+                      ✓ Đã đính kèm ảnh hóa đơn
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleOcrBill}
+                      disabled={isOcrAnalyzing}
+                      className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline inline-flex items-center gap-1"
+                    >
+                      {isOcrAnalyzing ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>AI đang đọc...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3 w-3 text-amber-500" />
+                          <span>Điền nhanh bằng AI (Tùy chọn)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <label className="flex flex-col items-center justify-center p-6 border border-rose-200 dark:border-rose-900 rounded-xl cursor-pointer bg-white/60 dark:bg-slate-800/60 hover:bg-white transition text-center space-y-2">
@@ -2279,27 +2430,6 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                     className="hidden"
                   />
                 </label>
-              )}
-
-              {expenseBillImage && (
-                <button
-                  type="button"
-                  onClick={handleOcrBill}
-                  disabled={isOcrAnalyzing}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-black shadow-xs transition flex items-center justify-center gap-2 disabled:opacity-40"
-                >
-                  {isOcrAnalyzing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>AI (gemini-3.5-flash-lite) đang đọc hóa đơn...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 text-amber-300" />
-                      <span>AI Đọc Tự Động (Trích Xuất Tiền & Khoản Chi)</span>
-                    </>
-                  )}
-                </button>
               )}
 
               {ocrSuccessMsg && (
@@ -2388,30 +2518,20 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 />
               </div>
 
-              {/* Xác thực Admin (Nếu chưa có phiên) */}
-              {!isCurrentAdminSessionValid() && (
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-black/10 dark:border-white/10 space-y-3">
+              {/* Xác thực Thủ Quỹ / Admin (Nếu chưa mở phiên) */}
+              {!isCurrentAdminSessionValid() && !adminPassInput && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-black/10 dark:border-white/10 space-y-2">
                   <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    Xác thực quyền Admin thêm bill:
+                    Mã bảo mật Thủ Quỹ hoặc Mật khẩu Admin:
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Tài khoản admin..."
-                      value={expenseAdminUser}
-                      onChange={(e) => setExpenseAdminUser(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-xs font-bold"
-                    />
-                    <input
-                      type="password"
-                      required
-                      placeholder="Mật khẩu admin..."
-                      value={expenseAdminPass}
-                      onChange={(e) => setExpenseAdminPass(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-xs font-bold"
-                    />
-                  </div>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Nhập mã bảo mật thủ quỹ hoặc admin..."
+                    value={expenseAdminPass}
+                    onChange={(e) => setExpenseAdminPass(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-xs font-bold outline-none focus:border-rose-500"
+                  />
                 </div>
               )}
 
@@ -2650,34 +2770,62 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* MODAL PHÓNG TO XEM ẢNH HÓA ĐƠN BILL RÕ NÉT */}
-      {viewingBillImage && (
+      {/* MODAL PHÓNG TO XEM ẢNH MINH CHỨNG NỘP TIỀN HOẶC HÓA ĐƠN BILL RÕ NÉT */}
+      {activeViewerImage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in"
-          onClick={() => setViewingBillImage(null)}
+          onClick={() => setActiveViewerImage(null)}
         >
           <div
-            className="relative max-w-3xl max-h-[90vh] overflow-hidden rounded-3xl bg-slate-900 border border-white/20 p-2 shadow-2xl flex flex-col items-center"
+            className="relative max-w-3xl w-full max-h-[92vh] overflow-hidden rounded-[32px] bg-slate-900 border border-white/20 p-4 shadow-2xl flex flex-col space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-full flex items-center justify-between p-3 border-b border-white/10 text-white">
-              <span className="text-xs font-black flex items-center gap-1.5">
-                <Receipt className="h-4 w-4 text-rose-400" />
-                Hóa Đơn / Minh Chứng Chi Tiêu
-              </span>
-              <button
-                type="button"
-                onClick={() => setViewingBillImage(null)}
-                className="text-xs font-bold px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white"
-              >
-                ✕ Đóng
-              </button>
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 text-white">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-black flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-indigo-400" />
+                    {activeViewerImage.title}
+                  </h3>
+                  {activeViewerImage.badge && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black border border-emerald-500/40">
+                      {activeViewerImage.badge}
+                    </span>
+                  )}
+                </div>
+                {activeViewerImage.subtitle && (
+                  <p className="text-xs text-slate-400 font-medium">{activeViewerImage.subtitle}</p>
+                )}
+                {activeViewerImage.code && (
+                  <p className="text-[11px] font-mono text-indigo-300">
+                    Mã nộp: <strong>{activeViewerImage.code}</strong>
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={activeViewerImage.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                  <span>Mở Tab Mới</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewerImage(null)}
+                  className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-bold transition"
+                >
+                  ✕ Đóng
+                </button>
+              </div>
             </div>
-            <div className="p-2 overflow-auto max-h-[80vh] flex items-center justify-center">
+            <div className="p-1 overflow-auto max-h-[75vh] flex items-center justify-center bg-black/40 rounded-2xl">
               <img
-                src={viewingBillImage}
-                alt="Ảnh hóa đơn chi tiêu"
-                className="max-h-[75vh] w-auto object-contain rounded-2xl"
+                src={activeViewerImage.url}
+                alt={activeViewerImage.title}
+                className="max-h-[72vh] w-auto object-contain rounded-xl"
               />
             </div>
           </div>

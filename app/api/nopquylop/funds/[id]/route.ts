@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getFundById, updateStudentPayment, deleteFund, isValidAdminDailyPassword } from '@/lib/nopQuyLopStore'
+import {
+  getFundById,
+  updateStudentPayment,
+  deleteFund,
+  isValidAdminDailyPassword,
+  isAuthorizedAdminOrTreasurer,
+} from '@/lib/nopQuyLopStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,19 +57,36 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const { studentId, paid, paymentCode, adminPasscode } = body
+    const {
+      studentId,
+      paid,
+      paymentCode,
+      proofImage,
+      adminPasscode,
+      adminPassword,
+      adminUsername,
+    } = body
 
     const fund = await getFundById(id)
     if (!fund) {
       return NextResponse.json({ error: 'Không tìm thấy quỹ lớp' }, { status: 404 })
     }
 
-    // Kiểm tra passcode thủ quỹ nếu có
-    if (fund.adminPasscode && adminPasscode !== fund.adminPasscode) {
-      return NextResponse.json({ error: 'Mã xác thực thủ quỹ / quản trị không chính xác' }, { status: 403 })
+    // Kiểm tra quyền Admin hoặc Thủ Quỹ
+    const isAuth = isAuthorizedAdminOrTreasurer(fund, {
+      adminUsername,
+      adminPassword,
+      adminPasscode,
+    })
+
+    if (!isAuth) {
+      return NextResponse.json(
+        { error: 'Mã xác thực thủ quỹ hoặc mật khẩu admin không chính xác!' },
+        { status: 403 }
+      )
     }
 
-    const result = await updateStudentPayment(id, studentId, Boolean(paid), paymentCode)
+    const result = await updateStudentPayment(id, studentId, Boolean(paid), paymentCode, proofImage)
     if (!result.success) {
       return NextResponse.json({ error: 'Không tìm thấy sinh viên trong quỹ' }, { status: 404 })
     }
@@ -83,18 +106,25 @@ export async function DELETE(
     const body = await request.json().catch(() => null)
     const adminUsername = String(body?.adminUsername || '').trim()
     const adminPassword = String(body?.adminPassword || '').trim()
-
-    // Bắt buộc xác thực tài khoản & mật khẩu quản trị như lúc tạo
-    if (adminUsername !== 'admin' || !isValidAdminDailyPassword(adminPassword)) {
-      return NextResponse.json(
-        { error: 'Tài khoản hoặc mật khẩu quản trị không chính xác!' },
-        { status: 401 }
-      )
-    }
+    const adminPasscode = String(body?.adminPasscode || '').trim()
 
     const fund = await getFundById(id)
     if (!fund) {
       return NextResponse.json({ error: 'Không tìm thấy quỹ cần xóa' }, { status: 404 })
+    }
+
+    // Kiểm tra quyền Admin hoặc Thủ Quỹ
+    const isAuth = isAuthorizedAdminOrTreasurer(fund, {
+      adminUsername,
+      adminPassword,
+      adminPasscode,
+    })
+
+    if (!isAuth) {
+      return NextResponse.json(
+        { error: 'Tài khoản hoặc mật khẩu quản trị không chính xác!' },
+        { status: 401 }
+      )
     }
 
     const success = await deleteFund(id)

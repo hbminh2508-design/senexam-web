@@ -79,10 +79,14 @@ export function clearAdminSession(): void {
 }
 
 /**
- * Format số giây thành MM:SS
+ * Format số giây hoặc timestamp thành MM:SS
  */
-export function formatAdminRemainingTime(remainingSec: number): string {
-  const m = Math.floor(remainingSec / 60)
-  const s = remainingSec % 60
+export function formatAdminRemainingTime(val: number): string {
+  let sec = val
+  if (val > 1000000000) {
+    sec = Math.max(0, Math.floor((val - Date.now()) / 1000))
+  }
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
