@@ -63,8 +63,8 @@ export async function runOcrAudit(
     return {
       success: false,
       rateLimited: true,
-      failedReasons: ['Chưa cấu hình GEMINI_API_KEY'],
-      message: 'Hệ thống chưa thể OCR tự động (chưa cấu hình API Key). Minh chứng được chuyển vào Hàng chờ để Thủ quỹ duyệt!',
+      failedReasons: ['Chưa cấu hình API Key'],
+      message: 'Hệ thống đã lưu minh chứng vào Hàng chờ để tiếp tục đối soát và duyệt!',
     }
   }
 
@@ -162,8 +162,8 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG markdown codeblock, KHÔNG th�
       timedOut: lastError?.message?.includes('TIMEOUT'),
       failedReasons: [
         isRateLimitedOrOverloaded
-          ? 'Hệ thống AI đạt giới hạn lượt xử lý (15 lượt/phút) hoặc đang có nhiều người cùng nộp tiền.'
-          : 'Hệ thống OCR tạm thời bận hoặc phản hồi chậm.',
+          ? 'Hệ thống đạt giới hạn lượt xử lý (15 lượt/phút) hoặc đang có nhiều người cùng nộp tiền.'
+          : 'Hệ thống tạm thời bận hoặc phản hồi chậm.',
       ],
       message:
         'Hệ thống đang đông hoặc đạt hạn mức 15 lượt/phút. Minh chứng đã được tự động lưu vào Hàng chờ để xử lý tuần tự!',

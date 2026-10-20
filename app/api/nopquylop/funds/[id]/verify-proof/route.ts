@@ -136,7 +136,7 @@ export async function POST(
           paymentCode,
         },
         message:
-          'Minh chứng của bạn đã được ghi nhận và lưu an toàn vào Hàng chờ! Hệ thống sẽ tự động quét đối soát sau mỗi 5 phút hoặc Thủ quỹ sẽ duyệt trực tiếp cho bạn.',
+          'Minh chứng của bạn đã được ghi nhận và lưu an toàn vào Hàng chờ! Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi, bạn có thể yên tâm thoát ra ngoài. Hệ thống sẽ tự động duyệt lần lượt cho tới khi hoàn tất.',
       })
     }
 

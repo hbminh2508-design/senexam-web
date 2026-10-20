@@ -58,7 +58,7 @@ export async function POST(
         processed: false,
         rateLimited: true,
         message:
-          'Hệ thống AI đang tạm thời đạt hạn mức 15 lượt/phút. Phiên của bạn vẫn được lưu nguyên vẹn và sẽ tự động thử lại sau 5 phút!',
+          'Hệ thống đang tạm thời đạt hạn mức 15 lượt/phút. Phiên của bạn vẫn được lưu nguyên vẹn và sẽ tự động thử lại sau 1 phút!',
         student: nextStudent,
         remaining: pendingStudents.length,
       })

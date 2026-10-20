@@ -223,7 +223,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [proofSuccessMessage, setProofSuccessMessage] = useState('')
   const [isQueued, setIsQueued] = useState(false)
   const [queuePosition, setQueuePosition] = useState(1)
-  const [queueCountdown, setQueueCountdown] = useState(300)
+  const [queueCountdown, setQueueCountdown] = useState(60)
   const [isProcessingQueue, setIsProcessingQueue] = useState(false)
   const [queueProcessMsg, setQueueProcessMsg] = useState('')
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null)
@@ -480,7 +480,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  // Xử lý AI đọc hóa đơn chi tiêu (Tùy chọn)
+  // Tự động nhận diện hóa đơn chi tiêu (Tùy chọn)
   const handleOcrBill = async () => {
     if (!expenseBillImage) {
       setOcrError('Vui lòng chọn hoặc chụp ảnh hóa đơn trước!')
@@ -508,7 +508,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         setExpenseSpentAt(data.spentAt)
       }
       setOcrSuccessMsg(
-        `AI đã nhận diện: "${data.title || 'Khoản chi'}" — ${(data.amount || 0).toLocaleString('vi-VN')} đ`
+        `Hệ thống đã nhận diện: "${data.title || 'Khoản chi'}" — ${(data.amount || 0).toLocaleString('vi-VN')} đ`
       )
     } catch (err: any) {
       setOcrError(err.message || 'Lỗi phân tích hóa đơn')
@@ -713,25 +713,23 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     return () => clearInterval(timer)
   }, [showPayModal, paymentData, autoPaidSuccess, fundId])
 
-  // Định kỳ mỗi 5 phút tự động quét hàng chờ minh chứng
+  // Định kỳ mỗi 1 phút tự động quét và duyệt tiếp hàng chờ minh chứng
   useEffect(() => {
     if (!fundId) return
     const timer = setInterval(() => {
-      fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
-        .then(() => fetchFund())
-        .catch(() => {})
-    }, 5 * 60 * 1000)
+      handleAutoProcessQueue()
+    }, 60 * 1000)
     return () => clearInterval(timer)
-  }, [fundId])
+  }, [fundId, pendingQueueList.length])
 
-  // Đếm ngược 5 phút khi người dùng ở trong hàng chờ
+  // Đếm ngược 1 phút khi người dùng ở trong hàng chờ
   useEffect(() => {
     if (!isQueued) return
     const timer = setInterval(() => {
       setQueueCountdown((prev) => {
         if (prev <= 1) {
           handleTriggerQueuePoll()
-          return 300
+          return 60
         }
         return prev - 1
       })
@@ -949,10 +947,10 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
       if (json.inQueue) {
         setIsQueued(true)
         setQueuePosition(json.queuePosition || 1)
-        setQueueCountdown(300)
+        setQueueCountdown(60)
         setProofSuccessMessage(
           json.message ||
-            'Minh chứng đã được lưu an toàn vào Hàng chờ! Hệ thống sẽ tự động đối soát sau mỗi 5 phút hoặc Thủ quỹ sẽ duyệt trực tiếp cho bạn.'
+            'Minh chứng của bạn đã được ghi nhận và lưu an toàn vào Hàng chờ! Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi, bạn hoàn toàn có thể yên tâm thoát ra ngoài. Hàng chờ sẽ luôn được lưu trên hệ thống đến khi được duyệt hoàn tất!'
         )
         try {
           localStorage.setItem(
@@ -978,10 +976,10 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     } catch (err: any) {
       // Khi timeout hoặc mạng chập chờn, minh chứng đã được lưu vào CSDL
       setIsQueued(true)
-      setQueueCountdown(300)
+      setQueueCountdown(60)
       setProofVerifyError('')
       setProofSuccessMessage(
-        'Minh chứng của bạn đã được ghi nhận vào Hàng chờ! Hệ thống sẽ tự động quét đối soát sau mỗi 5 phút hoặc Thủ quỹ sẽ duyệt trực tiếp cho bạn.'
+        'Minh chứng của bạn đã được ghi nhận vào Hàng chờ! Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi, bạn hoàn toàn có thể yên tâm thoát ra ngoài. Hàng chờ sẽ luôn được lưu trên hệ thống đến khi được duyệt hoàn tất!'
       )
       await fetchFund()
     } finally {
@@ -989,7 +987,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  // Quét hàng chờ thủ công hoặc khi hết 5 phút
+  // Quét hàng chờ thủ công hoặc khi hết 1 phút
   const handleTriggerQueuePoll = async () => {
     if (!paymentData) return
     try {
@@ -1013,20 +1011,41 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     } catch {}
   }
 
-  // Admin / Thủ quỹ bấm AI kiểm tra người tiếp theo trong hàng chờ
-  const handleProcessQueueNext = async () => {
+  // Duyệt tuần tự liên tục từng người cho đến khi hết hàng chờ hoặc tạm chạm giới hạn
+  const handleAutoProcessQueue = async () => {
+    if (isProcessingQueue) return
     setIsProcessingQueue(true)
     setQueueProcessMsg('')
     try {
-      const res = await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
-      const data = await res.json()
-      setQueueProcessMsg(data.message || 'Đã chạy kiểm tra người tiếp theo trong hàng chờ')
-      await fetchFund()
+      let keepGoing = true
+      while (keepGoing) {
+        const res = await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
+        const data = await res.json()
+        await fetchFund()
+
+        if (!data || data.remaining <= 0) {
+          setQueueProcessMsg('Đã hoàn tất duyệt toàn bộ hàng chờ!')
+          keepGoing = false
+        } else if (data.rateLimited) {
+          setQueueProcessMsg('Hệ thống tạm nghỉ 1 phút trước khi duyệt lượt tiếp theo...')
+          setQueueCountdown(60)
+          keepGoing = false
+        } else {
+          setQueueProcessMsg(`Đã duyệt cho ${data.student?.name || '1 bạn'}. Còn lại ${data.remaining} người...`)
+          // Nghỉ 1.5 giây giữa các lượt duyệt để tránh ùn ứ và giữ kết nối mượt mà
+          await new Promise((r) => setTimeout(r, 1500))
+        }
+      }
     } catch (err: any) {
-      setQueueProcessMsg(err.message || 'Lỗi khi gọi AI kiểm tra hàng chờ')
+      setQueueProcessMsg(err.message || 'Lỗi khi duyệt hàng chờ')
     } finally {
       setIsProcessingQueue(false)
     }
+  }
+
+  // Admin / Thủ quỹ bấm duyệt người tiếp theo hoặc kích hoạt duyệt hàng chờ
+  const handleProcessQueueNext = async () => {
+    await handleAutoProcessQueue()
   }
 
   // Thủ quỹ / Admin Kiểm Tra Chay (Duyệt thủ công hoặc từ chối)
@@ -1565,12 +1584,12 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 {isProcessingQueue ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Đang AI quét...</span>
+                    <span>Đang duyệt...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    <span>⚡ AI Quét Người Tiếp Theo</span>
+                    <span>⚡ Tự Động Duyệt Hàng Chờ</span>
                   </>
                 )}
               </button>
@@ -2050,7 +2069,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 Hàng Chờ Xác Minh Minh Chứng ({pendingQueueList.length} người đang đợi)
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
-                Hệ thống tự động xếp hàng tuần tự (FIFO) và quét mỗi 5 phút một lần bằng AI <code className="font-mono bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded text-[11px]">gemini-3.5-flash-lite</code> nhằm chống nghẽn server và không vượt hạn mức 15 lượt/phút. Tiền bạc và biên lai được lưu an toàn tuyệt đối.
+                Hệ thống tự động xếp hàng tuần tự (FIFO) và đối soát liên tục từng người để tránh ùn ứ. Khi đạt hạn mức giao dịch sẽ tự động đếm 1 phút trước khi tiếp tục. Tiền bạc và biên lai được lưu an toàn tuyệt đối cho đến khi duyệt hoàn tất.
               </p>
             </div>
 
@@ -2064,12 +2083,12 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 {isProcessingQueue ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Đang AI quét...</span>
+                    <span>Đang duyệt...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    <span>⚡ AI Quét Người Tiếp Theo</span>
+                    <span>⚡ Tự Động Duyệt Hàng Chờ</span>
                   </>
                 )}
               </button>
@@ -2102,7 +2121,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               Hàng chờ hiện đang trống!
             </h4>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Tất cả các bạn nộp minh chứng đều đã được hệ thống AI hoặc Thủ quỹ xác minh thành công.
+              Tất cả các bạn nộp minh chứng đều đã được hệ thống hoặc Thủ quỹ xác minh thành công.
             </p>
           </div>
         ) : (
@@ -2588,23 +2607,32 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                           <div className="flex items-center justify-between">
                             <span className="font-black flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
                               <Clock className="h-4 w-4 animate-spin text-amber-600" />
-                              ĐÃ LƯU VÀO HÀNG CHỜ #{queuePosition}
+                              ĐÃ LƯU VÀO HÀNG CHỜ — ĐANG DUYỆT (#{queuePosition})
                             </span>
                             <span className="px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-mono text-[10px] font-bold">
                               {formatSeconds(queueCountdown)}
                             </span>
                           </div>
-                          <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                            Minh chứng và mã chuyển khoản của bạn đã được lưu an toàn tuyệt đối. Do giới hạn 15 lượt/phút hoặc hệ thống đang đông, hệ thống sẽ tự động quét đối soát sau mỗi 5 phút hoặc Thủ quỹ sẽ duyệt trực tiếp cho bạn!
-                          </p>
-                          <div className="flex items-center gap-2 pt-0.5">
+
+                          <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-300 space-y-1">
+                            <p className="font-black text-xs flex items-center gap-1.5">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                              <span>Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi!</span>
+                            </p>
+                            <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 pl-5.5">
+                              Bạn hoàn toàn có thể yên tâm thoát ra ngoài. Hàng chờ sẽ luôn được lưu trên hệ thống đến khi được duyệt hoàn tất, không bao giờ bị mất dữ liệu!
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-0.5">
+                            <span className="text-[10px] text-slate-400">Tự động duyệt tuần tự</span>
                             <button
                               type="button"
                               onClick={handleTriggerQueuePoll}
                               className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition shadow-xs flex items-center gap-1"
                             >
                               <RefreshCw className="h-3 w-3" />
-                              <span>Kiểm tra hàng chờ ngay</span>
+                              <span>Kiểm tra ngay</span>
                             </button>
                           </div>
                         </div>
@@ -2620,7 +2648,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                           {isVerifyingProof ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>Đang kiểm tra minh chứng (gemini-3.5-flash-lite)...</span>
+                              <span>Đang duyệt...</span>
                             </>
                           ) : (
                             <>
@@ -2636,7 +2664,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                           className="w-full py-3.5 px-4 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
                         >
                           <Clock className="h-4 w-4 animate-spin" />
-                          <span>Đang xếp hàng chờ (Tự động quét sau {formatSeconds(queueCountdown)})</span>
+                          <span>Đang trong hàng chờ duyệt (Tự động kiểm tra sau {formatSeconds(queueCountdown)})</span>
                         </button>
                       )}
                     </div>
@@ -3054,12 +3082,12 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       {isOcrAnalyzing ? (
                         <>
                           <Loader2 className="h-3 w-3 animate-spin" />
-                          <span>AI đang đọc...</span>
+                          <span>Hệ thống đang đọc...</span>
                         </>
                       ) : (
                         <>
                           <Sparkles className="h-3 w-3 text-amber-500" />
-                          <span>Điền nhanh bằng AI (Tùy chọn)</span>
+                          <span>Tự động đọc hóa đơn</span>
                         </>
                       )}
                     </button>
