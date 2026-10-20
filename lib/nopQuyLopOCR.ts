@@ -32,6 +32,27 @@ export interface OcrAuditResult {
   audit?: any
 }
 
+// Bộ đếm sliding-window 15 lượt / phút cho model gemini-3.5-flash-lite
+let geminiCallTimestamps: number[] = []
+
+export function checkAndRegisterGeminiRateLimit(maxPerMinute = 15): boolean {
+  const now = Date.now()
+  const ONE_MINUTE = 60 * 1000
+  geminiCallTimestamps = geminiCallTimestamps.filter((t) => now - t < ONE_MINUTE)
+  if (geminiCallTimestamps.length >= maxPerMinute) {
+    return false
+  }
+  geminiCallTimestamps.push(now)
+  return true
+}
+
+export function getRemainingGeminiCalls(maxPerMinute = 15): number {
+  const now = Date.now()
+  const ONE_MINUTE = 60 * 1000
+  geminiCallTimestamps = geminiCallTimestamps.filter((t) => now - t < ONE_MINUTE)
+  return Math.max(0, maxPerMinute - geminiCallTimestamps.length)
+}
+
 export function parseImageBase64(rawImage: string): { base64Data: string; mimeType: string } {
   let mimeType = 'image/jpeg'
   let base64Data = rawImage.trim()
@@ -68,6 +89,17 @@ export async function runOcrAudit(
     }
   }
 
+  // Kiểm tra hạn mức 15 lượt / phút của gemini-3.5-flash-lite
+  if (!checkAndRegisterGeminiRateLimit(15)) {
+    return {
+      success: false,
+      rateLimited: true,
+      failedReasons: ['Hệ thống đã đạt giới hạn 15 lượt / phút.'],
+      message:
+        'Hệ thống đang đạt giới hạn 15 lượt / phút. Minh chứng đã được tự động lưu vào Hàng chờ để tiếp tục duyệt sau 1 phút!',
+    }
+  }
+
   const { base64Data, mimeType } = parseImageBase64(rawImage)
   if (!base64Data) {
     return {
@@ -79,7 +111,7 @@ export async function runOcrAudit(
 
   const isTestFund = Boolean(fund.isTestFund || fund.id === 'quy-test-hoang-binh-minh' || fund.id.includes('test'))
 
-  const ocrPrompt = `Bạn là hệ thống OCR bóc tách dữ liệu từ ảnh chụp biên lai chuyển tiền / màn hình banking ngân hàng Việt Nam (VietQR, VAB, VCB, MB, Techcombank, Momo...).
+  const ocrPrompt = `Bạn là hệ thống đối soát dữ liệu từ ảnh chụp biên lai chuyển tiền / màn hình banking ngân hàng Việt Nam (VietQR, VAB, VCB, MB, Techcombank, Momo...).
 Đọc chính xác từng ký tự trên ảnh biên lai và trích xuất ra JSON cấu trúc:
 1. "fullRawText": Toàn bộ chữ và số xuất hiện trong ảnh (giữ nguyên tất cả các dòng, số tiền, tên, số tài khoản, nội dung chuyển khoản).
 2. "detectedAmount": Số tiền chuyển khoản thực tế (VND, số nguyên, ví dụ: 50000 hoặc 100000).
@@ -102,7 +134,7 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG markdown codeblock, KHÔNG th�
 
   const genAI = new GoogleGenerativeAI(apiKey)
   // Ưu tiên cao nhất 'gemini-3.5-flash-lite' theo đúng yêu cầu người dùng
-  const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.0-flash']
+  const candidateModels = ['gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-2.0-flash']
 
   let ocrRawResult = ''
   let lastError: any = null
@@ -128,9 +160,9 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG markdown codeblock, KHÔNG th�
         { text: ocrPrompt },
       ])
 
-      // Timeout 8.5 giây để tránh treo màn hình người dùng
+      // Timeout 25 giây cho gemini-3.5-flash-lite đối soát kỹ càng và đầy đủ
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('TIMEOUT_LIMIT_REACHED')), 8500)
+        setTimeout(() => reject(new Error('TIMEOUT_LIMIT_REACHED')), 25000)
       )
 
       const result: any = await Promise.race([callPromise, timeoutPromise])
@@ -145,6 +177,7 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG markdown codeblock, KHÔNG th�
         msg.includes('ResourceExhausted') ||
         msg.includes('overloaded') ||
         msg.includes('limit') ||
+        msg.includes('rate') ||
         msg.includes('TIMEOUT_LIMIT_REACHED')
       ) {
         isRateLimitedOrOverloaded = true

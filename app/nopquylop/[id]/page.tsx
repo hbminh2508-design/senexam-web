@@ -232,6 +232,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [queueCountdown, setQueueCountdown] = useState(60)
   const [isProcessingQueue, setIsProcessingQueue] = useState(false)
   const [queueProcessMsg, setQueueProcessMsg] = useState('')
+  const [showQueueNoticeModal, setShowQueueNoticeModal] = useState(false)
+  const [queueNoticeMessage, setQueueNoticeMessage] = useState('')
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null)
   const [manualVerifyingId, setManualVerifyingId] = useState<string | null>(null)
 
@@ -705,30 +707,24 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     } catch {}
   }
 
-  // Duyệt tuần tự liên tục từng người cho đến khi hết hàng chờ hoặc tạm chạm giới hạn
+  // Duyệt tuần tự theo lượt (tối đa 15 lượt / phút), sau đó tạm nghỉ 1 phút trước khi duyệt tiếp
   const handleAutoProcessQueue = async () => {
     if (isProcessingQueue) return
     setIsProcessingQueue(true)
     setQueueProcessMsg('')
     try {
-      let keepGoing = true
-      while (keepGoing) {
-        const res = await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
-        const data = await res.json()
-        await fetchFund()
+      const res = await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
+      const data = await res.json()
+      await fetchFund()
 
-        if (!data || data.remaining <= 0) {
-          setQueueProcessMsg('Đã hoàn tất duyệt toàn bộ hàng chờ!')
-          keepGoing = false
-        } else if (data.rateLimited) {
-          setQueueProcessMsg('Hệ thống tạm nghỉ 1 phút trước khi duyệt lượt tiếp theo...')
-          setQueueCountdown(60)
-          keepGoing = false
-        } else {
-          setQueueProcessMsg(`Đã duyệt cho ${data.student?.name || '1 bạn'}. Còn lại ${data.remaining} người...`)
-          // Nghỉ 1.5 giây giữa các lượt duyệt để tránh ùn ứ và giữ kết nối mượt mà
-          await new Promise((r) => setTimeout(r, 1500))
-        }
+      if (!data || data.remaining <= 0) {
+        setQueueProcessMsg('Đã hoàn tất duyệt toàn bộ hàng chờ!')
+        setIsQueued(false)
+      } else if (data.rateLimited) {
+        setQueueProcessMsg('Hệ thống đạt 15 lượt / phút. Tự động tạm nghỉ 1 phút trước khi duyệt 15 lượt tiếp theo...')
+        setQueueCountdown(60)
+      } else {
+        setQueueProcessMsg(`Đã duyệt cho ${data.processedCount || 1} bạn. Còn lại ${data.remaining} người...`)
       }
     } catch (err: any) {
       setQueueProcessMsg(err.message || 'Lỗi khi duyệt hàng chờ')
@@ -1002,17 +998,21 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             image: proofImagePreview,
           }),
         },
-        14000
+        30000
       )
 
       if (json.inQueue) {
         setIsQueued(true)
         setQueuePosition(json.queuePosition || 1)
         setQueueCountdown(60)
-        setProofSuccessMessage(
+        const msg =
           json.message ||
-            'Minh chứng của bạn đã được ghi nhận và lưu an toàn vào Hàng chờ! Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi, bạn hoàn toàn có thể yên tâm thoát ra ngoài. Hàng chờ sẽ luôn được lưu trên hệ thống đến khi được duyệt hoàn tất!'
-        )
+          'Minh chứng của bạn đã được ghi nhận và lưu an toàn vào Hàng chờ! Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi, bạn hoàn toàn có thể yên tâm thoát ra ngoài. Hàng chờ sẽ luôn được lưu trên hệ thống đến khi được duyệt hoàn tất!'
+        setQueueNoticeMessage(msg)
+        setProofSuccessMessage(msg)
+        // TỰ ĐỘNG ĐÓNG TAB THANH TOÁN VÀ HIỆN THÔNG BÁO HÀNG CHỜ VỚI NÚT "TÔI HIỂU RỒI"
+        setShowPayModal(false)
+        setShowQueueNoticeModal(true)
         try {
           localStorage.setItem(
             `nopquylop_session_${fundId}`,
@@ -1039,9 +1039,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
       setIsQueued(true)
       setQueueCountdown(60)
       setProofVerifyError('')
-      setProofSuccessMessage(
-        'Minh chứng của bạn đã được ghi nhận vào Hàng chờ! Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi, bạn hoàn toàn có thể yên tâm thoát ra ngoài. Hàng chờ sẽ luôn được lưu trên hệ thống đến khi được duyệt hoàn tất!'
-      )
+      const msg =
+        'Minh chứng của bạn đã được ghi nhận và lưu an toàn vào Hàng chờ! Khả năng 99% hệ thống đã nhận được tiền & minh chứng rồi, bạn hoàn toàn có thể yên tâm thoát ra ngoài. Hàng chờ sẽ luôn được lưu trên hệ thống đến khi được duyệt hoàn tất!'
+      setQueueNoticeMessage(msg)
+      setProofSuccessMessage(msg)
+      // TỰ ĐỘNG ĐÓNG TAB THANH TOÁN VÀ HIỆN THÔNG BÁO HÀNG CHỜ VỚI NÚT "TÔI HIỂU RỒI"
+      setShowPayModal(false)
+      setShowQueueNoticeModal(true)
       await fetchFund()
     } finally {
       setIsVerifyingProof(false)
@@ -1291,7 +1295,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 Quỹ Thử Nghiệm - Hoàng Bình Minh
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                Đây là Quỹ Test nội bộ dành riêng cho Quản trị viên đối soát thanh toán VietQR (0336062007 MB Bank - 2.000 đ) và kiểm tra OCR. Vui lòng đăng nhập Chế Độ Thủ Quỹ / Admin để truy cập.
+                Đây là Quỹ Test nội bộ dành riêng cho Quản trị viên đối soát thanh toán VietQR (0336062007 MB Bank - 2.000 đ) và kiểm tra đối soát tự động. Vui lòng đăng nhập Chế Độ Thủ Quỹ / Admin để truy cập.
               </p>
             </div>
             <div className="pt-2 flex flex-col sm:flex-row gap-2 justify-center">
@@ -1801,6 +1805,10 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                                 </span>
                               )}
                             </div>
+                          ) : student.verificationStatus === 'pending' && Boolean(student.proofImage) ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[11px] font-black">
+                              <Clock className="h-3.5 w-3.5 animate-spin" /> Đang Chờ Duyệt
+                            </span>
                           ) : isOverdueStudent ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-600 text-white text-[11px] font-black shadow-xs uppercase tracking-wider animate-pulse">
                               <Flame className="h-3.5 w-3.5" /> Trễ Hạn &gt; 7 Ngày
@@ -2690,6 +2698,57 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÔNG BÁO VÀO HÀNG CHỜ DUYỆT (TỰ ĐỘNG ĐÓNG TAB THANH TOÁN, NGƯỜI DÙNG BẤM TÔI HIỂU RỒI) */}
+      {showQueueNoticeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="relative w-full max-w-md rounded-[32px] border border-amber-500/30 bg-white dark:bg-slate-900 p-6 sm:p-7 text-slate-900 dark:text-white shadow-2xl space-y-5 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 border-b border-black/10 dark:border-white/10 pb-4">
+              <div className="p-3 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <Clock className="h-6 w-6 animate-spin" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                  Đã Lưu Vào Hàng Chờ Duyệt
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Hệ thống tự động duyệt tuần tự theo lượt
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 space-y-1.5">
+              <div className="flex items-center gap-2 font-black text-sm">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                <span>Khả năng 99% hệ thống đã nhận được tiền rồi!</span>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300 pl-7">
+                Minh chứng và mã chuyển khoản của bạn đã được ghi nhận và lưu trữ an toàn. Bạn hoàn toàn có thể yên tâm thoát ra ngoài.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-black/5 dark:border-white/5 space-y-2.5 text-xs text-slate-600 dark:text-slate-400">
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
+                <span>Hệ thống tự động duyệt 15 lượt / phút và sẽ tự động tiếp tục duyệt sau mỗi 1 phút cho đến khi hoàn tất toàn bộ hàng chờ.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Users className="h-4 w-4 text-purple-500 mt-0.5 shrink-0" />
+                <span>Hàng chờ luôn được lưu trữ trên hệ thống, không bao giờ bị mất dữ liệu hay ảnh hưởng tới quyền lợi của bạn!</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowQueueNoticeModal(false)}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 active:scale-95"
+            >
+              <Check className="h-4 w-4" />
+              <span>Tôi hiểu rồi</span>
+            </button>
           </div>
         </div>
       )}
