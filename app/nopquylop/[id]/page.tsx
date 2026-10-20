@@ -102,7 +102,14 @@ async function safeFetchJson(url: string, options?: RequestInit) {
     throw new Error(text && text.length < 200 ? text : `Máy chủ trả về mã lỗi ${res.status}`)
   }
   if (!res.ok) {
-    throw new Error(json.error || `Yêu cầu không thành công (${res.status})`)
+    const errorMsg =
+      (Array.isArray(json.reasons) && json.reasons.length > 0
+        ? json.reasons.join('\n• ')
+        : '') ||
+      json.message ||
+      json.error ||
+      `Yêu cầu không thành công (${res.status})`
+    throw new Error(errorMsg)
   }
   return json
 }
@@ -907,7 +914,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         executeToggleStudentPaid(target, cleanPass)
       }
     } else {
-      setAdminPassError("Tài khoản hoặc mã bảo mật không hợp lệ (admin + mật khẩu ngày, hoặc thuquy + mã thủ quỹ).");
+      setAdminPassError("Tài khoản hoặc mật khẩu không chính xác. Vui lòng thử lại!");
     }
   }
 
@@ -1018,15 +1025,17 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               <span>Chia Sẻ</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleOpenDeleteFundModal}
-              title="Xóa đợt thu quỹ (Chỉ dành cho Admin)"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-xs font-bold transition"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Xóa Quỹ</span>
-            </button>
+            {isAdminMode && (
+              <button
+                type="button"
+                onClick={handleOpenDeleteFundModal}
+                title="Xóa đợt thu quỹ (Chỉ dành cho Admin)"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-xs font-bold transition"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Xóa Quỹ</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1269,32 +1278,29 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (!isAdminMode && !isCurrentAdminSessionValid()) {
-                  setShowAdminPassModal(true)
-                  setAdminPassError('Vui lòng mở khóa bằng tài khoản Admin hoặc mã Thủ quỹ trước khi nộp bill.')
-                  return
-                }
-                const session = getAdminSession()
-                if (session && session.expiresAt > Date.now()) {
-                  setExpenseAdminUser('admin')
-                  setExpenseAdminPass(session.adminPassword)
-                }
-                setExpenseSpentAt(new Date().toISOString().split('T')[0])
-                setShowAddExpenseModal(true)
-                setExpenseError('')
-                setOcrError('')
-                setOcrSuccessMsg('')
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-black shadow-md shadow-rose-500/20 transition"
-            >
-              <Plus className="h-4 w-4" />
-              <span>+ Đưa Bill Vào Trừ Quỹ</span>
-            </button>
-          </div>
+          {isAdminMode && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const session = getAdminSession()
+                  if (session && session.expiresAt > Date.now()) {
+                    setExpenseAdminUser('admin')
+                    setExpenseAdminPass(session.adminPassword)
+                  }
+                  setExpenseSpentAt(new Date().toISOString().split('T')[0])
+                  setShowAddExpenseModal(true)
+                  setExpenseError('')
+                  setOcrError('')
+                  setOcrSuccessMsg('')
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-black shadow-md shadow-rose-500/20 transition"
+              >
+                <Plus className="h-4 w-4" />
+                <span>+ Đưa Bill Vào Trừ Quỹ</span>
+              </button>
+            </div>
+          )}
         </section>
 
         {/* TAB 1: DANH SÁCH SINH VIÊN NỘP TIỀN */}
@@ -1405,13 +1411,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                   <th className="py-3 px-4">Số Tiền</th>
                   <th className="py-3 px-4">Trạng Thái</th>
                   <th className="py-3 px-4">Minh Chứng Nộp</th>
-                  <th className="py-3 px-4 text-right">Thao Tác</th>
+                  {isAdminMode && <th className="py-3 px-4 text-right">Thao Tác</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5 dark:divide-white/5 font-medium">
                 {sortedAndFilteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400 font-bold">
+                    <td colSpan={isAdminMode ? 7 : 6} className="py-12 text-center text-slate-400 font-bold">
                       Không tìm thấy sinh viên nào theo điều kiện lọc này.
                     </td>
                   </tr>
@@ -1519,39 +1525,41 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                           )}
                         </td>
 
-                        {/* Thao tác (Duyệt nộp và xóa sinh viên) */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleStudentPaid(student)}
-                              disabled={updatingStudentId === student.id}
-                              title={student.paid ? 'Đánh dấu sinh viên này chưa nộp' : 'Duyệt hoàn thành nộp quỹ'}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-                                student.paid
-                                  ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
-                                  : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
-                              } disabled:opacity-40`}
-                            >
-                              {updatingStudentId === student.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : student.paid ? (
-                                'Đánh Dấu Chưa Nộp'
-                              ) : (
-                                'Duyệt Đã Nộp ✓'
-                              )}
-                            </button>
+                        {/* Thao tác (Chỉ dành cho Admin & Thủ quỹ đã mở khóa) */}
+                        {isAdminMode && (
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStudentPaid(student)}
+                                disabled={updatingStudentId === student.id}
+                                title={student.paid ? 'Đánh dấu sinh viên này chưa nộp' : 'Duyệt hoàn thành nộp quỹ'}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
+                                  student.paid
+                                    ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
+                                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
+                                } disabled:opacity-40`}
+                              >
+                                {updatingStudentId === student.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : student.paid ? (
+                                  'Đánh Dấu Chưa Nộp'
+                                ) : (
+                                  'Duyệt Đã Nộp ✓'
+                                )}
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => handleOpenDeleteStudentModal(student)}
-                              title="Xóa sinh viên này khỏi quỹ"
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDeleteStudentModal(student)}
+                                title="Xóa sinh viên này khỏi quỹ"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     )
                   })
@@ -1578,25 +1586,27 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                const session = getAdminSession()
-                if (session && session.expiresAt > Date.now()) {
-                  setExpenseAdminUser('admin')
-                  setExpenseAdminPass(session.adminPassword)
-                }
-                setExpenseSpentAt(new Date().toISOString().split('T')[0])
-                setShowAddExpenseModal(true)
-                setExpenseError('')
-                setOcrError('')
-                setOcrSuccessMsg('')
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-black shadow-md transition shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-              <span>+ Đưa Bill Mới Vào</span>
-            </button>
+            {isAdminMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  const session = getAdminSession()
+                  if (session && session.expiresAt > Date.now()) {
+                    setExpenseAdminUser('admin')
+                    setExpenseAdminPass(session.adminPassword)
+                  }
+                  setExpenseSpentAt(new Date().toISOString().split('T')[0])
+                  setShowAddExpenseModal(true)
+                  setExpenseError('')
+                  setOcrError('')
+                  setOcrSuccessMsg('')
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-black shadow-md transition shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+                <span>+ Đưa Bill Mới Vào</span>
+              </button>
+            )}
           </div>
 
           {!(fund.expenses && fund.expenses.length > 0) ? (
@@ -1609,28 +1619,25 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                   Chưa có hóa đơn chi tiêu nào
                 </h4>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Lớp chưa phát sinh khoản chi nào hoặc thủ quỹ chưa tải hóa đơn lên. Hãy bấm "+ Đưa Bill Mới Vào" để thêm bill chi tiêu.
+                  Lớp chưa phát sinh khoản chi nào hoặc thủ quỹ chưa tải hóa đơn lên.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!isAdminMode && !isCurrentAdminSessionValid()) {
-                    setShowAdminPassModal(true)
-                    setAdminPassError('Vui lòng mở khóa bằng tài khoản Admin hoặc mã Thủ quỹ trước khi nộp bill.')
-                    return
-                  }
-                  const session = getAdminSession()
-                  if (session && session.expiresAt > Date.now()) {
-                    setExpenseAdminUser('admin')
-                    setExpenseAdminPass(session.adminPassword)
-                  }
-                  setShowAddExpenseModal(true)
-                }}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md transition"
-              >
-                + Đưa Bill Chi Tiêu Đầu Tiên
-              </button>
+              {isAdminMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const session = getAdminSession()
+                    if (session && session.expiresAt > Date.now()) {
+                      setExpenseAdminUser('admin')
+                      setExpenseAdminPass(session.adminPassword)
+                    }
+                    setShowAddExpenseModal(true)
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md transition"
+                >
+                  + Đưa Bill Chi Tiêu Đầu Tiên
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1643,7 +1650,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                     <th className="py-3 px-4">Người Chi</th>
                     <th className="py-3 px-4">Số Tiền Trừ Quỹ</th>
                     <th className="py-3 px-4 text-center">Ảnh Hóa Đơn (Bill)</th>
-                    <th className="py-3 px-4 text-right">Thao Tác</th>
+                    {isAdminMode && <th className="py-3 px-4 text-right">Thao Tác</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/5 dark:divide-white/5">
@@ -1701,28 +1708,30 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                           <span className="text-[10px] text-slate-400 italic">Không có ảnh</span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpenseToDelete(exp)
-                            const session = getAdminSession()
-                            if (session && session.expiresAt > Date.now()) {
-                              setDeleteExpenseUser('admin')
-                              setDeleteExpensePass(session.adminPassword)
-                            } else {
-                              setDeleteExpenseUser('')
-                              setDeleteExpensePass('')
-                            }
-                            setDeleteExpenseError('')
-                            setShowDeleteExpenseModal(true)
-                          }}
-                          title="Xóa hóa đơn chi tiêu này"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
+                      {isAdminMode && (
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpenseToDelete(exp)
+                              const session = getAdminSession()
+                              if (session && session.expiresAt > Date.now()) {
+                                setDeleteExpenseUser('admin')
+                                setDeleteExpensePass(session.adminPassword)
+                              } else {
+                                setDeleteExpenseUser('')
+                                setDeleteExpensePass('')
+                              }
+                              setDeleteExpenseError('')
+                              setShowDeleteExpenseModal(true)
+                            }}
+                            title="Xóa hóa đơn chi tiêu này"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1953,15 +1962,34 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       </div>
                     </div>
 
-                    {/* KHU VỰC GỬI ẢNH MINH CHỨNG CHUYỂN TIỀN */}
+                    {/* KHU VỰC GỬI ẢNH MINH CHỨNG CHUYỂN TIỀN (OCR ĐỐI SOÁT 4 YẾU TỐ) */}
                     <div className="rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/80 bg-indigo-50/40 dark:bg-indigo-950/30 p-4 space-y-3">
                       <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-black text-xs">
                         <UploadCloud className="h-4 w-4 text-indigo-600" />
-                        <span>Gửi Ảnh Minh Chứng / Biên Lai Chuyển Khoản</span>
+                        <span>Gửi Ảnh Minh Chứng / Biên Lai (OCR Đối Soát 4 Yếu Tố)</span>
                       </div>
                       <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                        Sau khi chuyển tiền trên app ngân hàng, bạn hãy gửi ảnh biên lai giao dịch. Hệ thống và AI sẽ tự động đọc mã <strong>{paymentData.paymentCode}</strong> và xác minh hoàn tất cho bạn.
+                        Sau khi chuyển tiền, bạn hãy gửi ảnh biên lai. Hệ thống OCR sẽ tự động đọc và đối soát chính xác <strong>4 yếu tố tiền bạc</strong> để bảo đảm minh bạch tuyệt đối:
                       </p>
+
+                      <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-indigo-100 dark:border-indigo-900/40 text-[10px]">
+                        <div>
+                          <span className="text-slate-400 block font-bold">1. Mã nộp tiền:</span>
+                          <strong className="text-indigo-600 dark:text-indigo-400 font-mono font-black">{paymentData.paymentCode}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block font-bold">2. Đúng số tiền:</span>
+                          <strong className="text-emerald-600 font-black">{paymentData.amount.toLocaleString('vi-VN')} đ</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block font-bold">3. Người nhận:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 font-bold">{paymentData.accountName}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block font-bold">4. Số tài khoản:</span>
+                          <strong className="text-slate-800 dark:text-slate-200 font-mono font-bold">{paymentData.bankAccount} ({paymentData.bankName})</strong>
+                        </div>
+                      </div>
 
                       {proofImagePreview ? (
                         <div className="relative rounded-2xl overflow-hidden border border-black/10 bg-black flex items-center justify-center p-1">
@@ -1991,7 +2019,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                               Bấm chọn ảnh biên lai chuyển tiền
                             </span>
                             <span className="text-xs text-slate-400 font-medium"> hoặc chụp màn hình</span>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Hỗ trợ JPG, PNG, WebP (Ảnh màn hình ngân hàng)</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Hỗ trợ JPG, PNG, WebP (Ảnh màn hình ngân hàng rõ nét)</p>
                           </div>
                           <input
                             type="file"
@@ -2005,7 +2033,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       {proofVerifyError && (
                         <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-200 text-xs font-bold flex items-start gap-2 animate-in shake">
                           <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
-                          <span className="leading-relaxed">{proofVerifyError}</span>
+                          <div className="leading-relaxed whitespace-pre-line">{proofVerifyError}</div>
                         </div>
                       )}
 
@@ -2018,12 +2046,12 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                         {isVerifyingProof ? (
                           <>
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>AI đang phân tích biên lai & xác minh (xếp hàng tự động)...</span>
+                            <span>OCR đang quét & đối soát 4 yếu tố tiền bạc...</span>
                           </>
                         ) : (
                           <>
                             <CheckCircle2 className="h-4 w-4" />
-                            <span>Xác Nhận & Kiểm Tra Minh Chứng Bằng AI</span>
+                            <span>Kiểm Tra & Đối Soát Biên Lai Bằng OCR</span>
                           </>
                         )}
                       </button>
@@ -2079,27 +2107,39 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             </p>
 
             <form onSubmit={handleUnlockAdminMode} className="space-y-3">
-              <input
-                type="text"
-                required
-                placeholder="admin hoặc thuquy"
-                value={adminModeUsername}
-                onChange={(e) => {
-                  setAdminModeUsername(e.target.value)
-                  if (adminPassError) setAdminPassError('')
-                }}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:border-indigo-500"
-              />
-              <input
-                type="password"
-                placeholder="Mật khẩu ngày hoặc mã thủ quỹ..."
-                value={adminPassInput}
-                onChange={(e) => {
-                  setAdminPassInput(e.target.value)
-                  if (adminPassError) setAdminPassError('')
-                }}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:border-indigo-500"
-              />
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Tài khoản:
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nhập tài khoản..."
+                  value={adminModeUsername}
+                  onChange={(e) => {
+                    setAdminModeUsername(e.target.value)
+                    if (adminPassError) setAdminPassError('')
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Mật khẩu:
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Nhập mật khẩu..."
+                  value={adminPassInput}
+                  onChange={(e) => {
+                    setAdminPassInput(e.target.value)
+                    if (adminPassError) setAdminPassError('')
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:border-indigo-500"
+                />
+              </div>
 
               {adminPassError && (
                 <p className="text-xs text-rose-500 font-bold">{adminPassError}</p>
@@ -2109,7 +2149,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 type="submit"
                 className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black shadow-xs transition"
               >
-                Xác Nhận Mở Quyền
+                Xác Nhận Đăng Nhập
               </button>
             </form>
           </div>

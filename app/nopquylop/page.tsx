@@ -682,14 +682,16 @@ export default function NopQuyLopHomePage() {
                         <Share2 className="h-4 w-4" />
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenDeleteModal(fund)}
-                        title="Xóa đợt thu quỹ (Chỉ dành cho Admin)"
-                        className="p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 transition"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {isAdminVerified && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDeleteModal(fund)}
+                          title="Xóa đợt thu quỹ (Chỉ dành cho Admin)"
+                          className="p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 transition"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
