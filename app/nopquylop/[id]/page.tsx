@@ -1835,7 +1835,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               <div className="space-y-4">
                 {autoPaidSuccess ? (
                   <div className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-center space-y-3 animate-in zoom-in-95">
-                    <CheckCircle2 className="h-14 w-14 text-emerald-600 mx-auto animate-bounce" />
+                    <CheckCircle2 className="h-14 w-14 text-emerald-600 mx-auto" />
                     <h4 className="font-black text-emerald-900 dark:text-emerald-200 text-lg">
                       XÁC NHẬN NỘP TIỀN THÀNH CÔNG!
                     </h4>
@@ -1962,33 +1962,11 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       </div>
                     </div>
 
-                    {/* KHU VỰC GỬI ẢNH MINH CHỨNG CHUYỂN TIỀN (OCR ĐỐI SOÁT 4 YẾU TỐ) */}
+                    {/* KHU VỰC GỬI ẢNH MINH CHỨNG CHUYỂN TIỀN */}
                     <div className="rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/80 bg-indigo-50/40 dark:bg-indigo-950/30 p-4 space-y-3">
-                      <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-black text-xs">
+                      <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-black text-sm">
                         <UploadCloud className="h-4 w-4 text-indigo-600" />
-                        <span>Gửi Ảnh Minh Chứng / Biên Lai (OCR Đối Soát 4 Yếu Tố)</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                        Sau khi chuyển tiền, bạn hãy gửi ảnh biên lai. Hệ thống OCR sẽ tự động đọc và đối soát chính xác <strong>4 yếu tố tiền bạc</strong> để bảo đảm minh bạch tuyệt đối:
-                      </p>
-
-                      <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-indigo-100 dark:border-indigo-900/40 text-[10px]">
-                        <div>
-                          <span className="text-slate-400 block font-bold">1. Mã nộp tiền:</span>
-                          <strong className="text-indigo-600 dark:text-indigo-400 font-mono font-black">{paymentData.paymentCode}</strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block font-bold">2. Đúng số tiền:</span>
-                          <strong className="text-emerald-600 font-black">{paymentData.amount.toLocaleString('vi-VN')} đ</strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block font-bold">3. Người nhận:</span>
-                          <strong className="text-slate-800 dark:text-slate-200 font-bold">{paymentData.accountName}</strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block font-bold">4. Số tài khoản:</span>
-                          <strong className="text-slate-800 dark:text-slate-200 font-mono font-bold">{paymentData.bankAccount} ({paymentData.bankName})</strong>
-                        </div>
+                        <span>Nộp ảnh minh chứng</span>
                       </div>
 
                       {proofImagePreview ? (
@@ -2046,12 +2024,12 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                         {isVerifyingProof ? (
                           <>
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>OCR đang quét & đối soát 4 yếu tố tiền bạc...</span>
+                            <span>Đang kiểm tra minh chứng...</span>
                           </>
                         ) : (
                           <>
                             <CheckCircle2 className="h-4 w-4" />
-                            <span>Kiểm Tra & Đối Soát Biên Lai Bằng OCR</span>
+                            <span>Kiểm tra minh chứng</span>
                           </>
                         )}
                       </button>

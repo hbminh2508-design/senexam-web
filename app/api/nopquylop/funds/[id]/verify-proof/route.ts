@@ -143,7 +143,7 @@ NHIỆM VỤ:
 3. "detectedRecipientAccount": Số tài khoản nhận tiền (chuỗi chỉ gồm các số, ví dụ "00222085").
 4. "detectedRecipientName": Tên người thụ hưởng nhận tiền (viết hoa, ví dụ "TRAN DUY KHUONG" hoặc "TRẦN DUY KHƯƠNG").
 5. "detectedBank": Tên ngân hàng nhận (ví dụ "VietABank", "VAB", "Ngân hàng Việt Á"...).
-6. "detectedTransferContent": Nội dung chuyển khoản / Lời nhắn / Ghi chú giao dịch.
+6. "detectedTransferContent": Nội dung chuyển khoản / Lời nhắn / Ghi chú giao dịch (Lưu ý: nội dung có thể có dấu gạch ngang hoặc không có dấu gạch ngang do ngân hàng hạn chế ký tự đặc biệt).
 7. "detectedTransactionStatus": Trạng thái giao dịch (ví dụ "Thành công", "Đã chuyển tiền", "Giao dịch thành công").
 8. "isBankingReceipt": true/false (đây có phải là biên lai chuyển tiền / hóa đơn giao dịch ngân hàng hợp lệ không).
 
@@ -233,20 +233,44 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc codeblock markdown, KHÔ
     const failedReasons: string[] = []
 
     // YẾU TỐ 1: KIỂM TRA ĐÚNG MÃ CHUYỂN KHOẢN (paymentCode)
-    // Mã nộp quỹ ME2-... bắt buộc phải xuất hiện trong nội dung chuyển khoản hoặc text biên lai
+    // Hỗ trợ cả trường hợp có gạch ngang (ME2-25024004-OEM2) lẫn không có gạch ngang (ME2 25024004 OEM2 hoặc ME225024004OEM2)
     const cleanTargetCode = cleanAlphaNumeric(paymentCode)
     const cleanDetectedContent = cleanAlphaNumeric(detectedContent)
     const cleanFullText = cleanAlphaNumeric(fullRawText)
+    const rawLowerText = fullRawText.toLowerCase()
+    const rawLowerContent = detectedContent.toLowerCase()
+
+    const codeWithoutDashes = paymentCode.replace(/-/g, '').toLowerCase()
+    const codeWithSpaces = paymentCode.replace(/-/g, ' ').toLowerCase()
+
+    // Tách các thành phần của mã (ví dụ: ["me2", "25024004", "oem2"])
+    const codeParts = paymentCode
+      .split('-')
+      .map((p) => cleanAlphaNumeric(p))
+      .filter((p) => p.length >= 2)
+
+    // Nếu mã có nhiều phần, kiểm tra tất cả các phần có xuất hiện trong nội dung hoặc text biên lai
+    const allPartsPresent =
+      codeParts.length >= 2 &&
+      codeParts.every(
+        (part) => cleanDetectedContent.includes(part) || cleanFullText.includes(part)
+      )
 
     const codeMatched =
       Boolean(cleanTargetCode) &&
       (cleanDetectedContent.includes(cleanTargetCode) ||
         cleanFullText.includes(cleanTargetCode) ||
-        fullRawText.toLowerCase().includes(paymentCode.toLowerCase()))
+        rawLowerContent.includes(paymentCode.toLowerCase()) ||
+        rawLowerText.includes(paymentCode.toLowerCase()) ||
+        rawLowerContent.includes(codeWithoutDashes) ||
+        rawLowerText.includes(codeWithoutDashes) ||
+        rawLowerContent.includes(codeWithSpaces) ||
+        rawLowerText.includes(codeWithSpaces) ||
+        allPartsPresent)
 
     if (!codeMatched) {
       failedReasons.push(
-        `Không tìm thấy mã nộp tiền "${paymentCode}" trong nội dung chuyển khoản của biên lai.`
+        `Không tìm thấy mã nộp tiền "${paymentCode}" (hoặc dạng không gạch ngang "${paymentCode.replace(/-/g, ' ')}") trong nội dung chuyển khoản của biên lai.`
       )
     }
 
