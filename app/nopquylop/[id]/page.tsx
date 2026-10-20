@@ -92,26 +92,40 @@ function compressImageFile(
 }
 
 // Helper fetch an toàn không gây lỗi 'The string did not match the expected pattern' trên WebKit/Safari
-async function safeFetchJson(url: string, options?: RequestInit) {
-  const res = await fetch(url, options)
-  const text = await res.text()
-  let json: any = {}
+async function safeFetchJson(url: string, options?: RequestInit, timeoutMs = 15000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    json = JSON.parse(text)
-  } catch {
-    throw new Error(text && text.length < 200 ? text : `Máy chủ trả về mã lỗi ${res.status}`)
+    const res = await fetch(url, {
+      ...options,
+      signal: options?.signal || controller.signal,
+    })
+    clearTimeout(timer)
+    const text = await res.text()
+    let json: any = {}
+    try {
+      json = JSON.parse(text)
+    } catch {
+      throw new Error(text && text.length < 200 ? text : `Máy chủ trả về mã lỗi ${res.status}`)
+    }
+    if (!res.ok) {
+      const errorMsg =
+        (Array.isArray(json.reasons) && json.reasons.length > 0
+          ? json.reasons.join('\n• ')
+          : '') ||
+        json.message ||
+        json.error ||
+        `Yêu cầu không thành công (${res.status})`
+      throw new Error(errorMsg)
+    }
+    return json
+  } catch (err: any) {
+    clearTimeout(timer)
+    if (err?.name === 'AbortError') {
+      throw new Error('Yêu cầu vượt quá thời gian chờ (Timeout). Dữ liệu của bạn đã được đưa vào hàng chờ xử lý!')
+    }
+    throw err
   }
-  if (!res.ok) {
-    const errorMsg =
-      (Array.isArray(json.reasons) && json.reasons.length > 0
-        ? json.reasons.join('\n• ')
-        : '') ||
-      json.message ||
-      json.error ||
-      `Yêu cầu không thành công (${res.status})`
-    throw new Error(errorMsg)
-  }
-  return json
 }
 
 interface Student {
@@ -123,6 +137,9 @@ interface Student {
   paymentCode?: string
   proofImage?: string
   note?: string
+  verificationStatus?: 'pending' | 'verified' | 'failed'
+  verificationError?: string
+  submittedAt?: string
 }
 
 interface FundExpense {
@@ -204,6 +221,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [isVerifyingProof, setIsVerifyingProof] = useState(false)
   const [proofVerifyError, setProofVerifyError] = useState('')
   const [proofSuccessMessage, setProofSuccessMessage] = useState('')
+  const [isQueued, setIsQueued] = useState(false)
+  const [queuePosition, setQueuePosition] = useState(1)
+  const [queueCountdown, setQueueCountdown] = useState(300)
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false)
+  const [queueProcessMsg, setQueueProcessMsg] = useState('')
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null)
+  const [manualVerifyingId, setManualVerifyingId] = useState<string | null>(null)
 
   // Admin Mode & Session 30 phút
   const [isAdminMode, setIsAdminMode] = useState(false)
@@ -214,8 +238,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [adminPassError, setAdminPassError] = useState('')
   const [updatingStudentId, setUpdatingStudentId] = useState<string | null>(null)
 
-  // Main Tabs: Sinh viên nộp quỹ vs Hóa đơn chi tiêu
-  const [mainTab, setMainTab] = useState<'students' | 'expenses'>('students')
+  // Main Tabs: Sinh viên nộp quỹ vs Hóa đơn chi tiêu vs Hàng chờ minh chứng
+  const [mainTab, setMainTab] = useState<'students' | 'expenses' | 'queue'>('students')
 
   // Quản lý Hóa đơn chi tiêu (Bill)
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false)
@@ -658,7 +682,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     return () => clearInterval(timer)
   }, [sessionExpiresAt, showPayModal, fundId])
 
-  // Kiểm tra trạng thái nộp tiền (nếu thủ quỹ ở máy khác bấm duyệt)
+  // Kiểm tra trạng thái nộp tiền (nếu thủ quỹ ở máy khác bấm duyệt hoặc AI hàng chờ xử lý xong)
   useEffect(() => {
     if (!showPayModal || !paymentData || paymentData.alreadyPaid || autoPaidSuccess) return
 
@@ -670,10 +694,16 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         const json = await res.json()
         if (json.paid) {
           setAutoPaidSuccess(true)
+          setIsQueued(false)
           try {
             localStorage.removeItem(`nopquylop_session_${fundId}`)
           } catch {}
           fetchFund()
+        } else if (json.status === 'failed') {
+          setIsQueued(false)
+          if (json.verificationError) {
+            setProofVerifyError(json.verificationError)
+          }
         }
       } catch (err) {
         console.warn('Lỗi kiểm tra trạng thái:', err)
@@ -682,6 +712,32 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
 
     return () => clearInterval(timer)
   }, [showPayModal, paymentData, autoPaidSuccess, fundId])
+
+  // Định kỳ mỗi 5 phút tự động quét hàng chờ minh chứng
+  useEffect(() => {
+    if (!fundId) return
+    const timer = setInterval(() => {
+      fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
+        .then(() => fetchFund())
+        .catch(() => {})
+    }, 5 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [fundId])
+
+  // Đếm ngược 5 phút khi người dùng ở trong hàng chờ
+  useEffect(() => {
+    if (!isQueued) return
+    const timer = setInterval(() => {
+      setQueueCountdown((prev) => {
+        if (prev <= 1) {
+          handleTriggerQueuePoll()
+          return 300
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [isQueued, paymentData, fundId])
 
   // Quỹ Thử Nghiệm nội bộ của Hoàng Bình Minh
   const isTestFund = useMemo(() => {
@@ -700,6 +756,20 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
     return now - due > ONE_WEEK_MS
   }, [fund?.dueDate])
+
+  // Danh sách sinh viên đang trong hàng chờ xác minh minh chứng
+  const pendingQueueList = useMemo(() => {
+    if (!fund || !Array.isArray(fund.students)) return []
+    return fund.students.filter(
+      (s) => s.verificationStatus === 'pending' && !s.paid && Boolean(s.proofImage)
+    )
+  }, [fund])
+
+  const formatSeconds = (sec: number): string => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
 
   // Thống kê
   const stats = useMemo(() => {
@@ -855,34 +925,135 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
 
   const handleSubmitProof = async () => {
     if (!paymentData || !proofImagePreview) {
-      setProofVerifyError('Vui lòng chọn hoặc chụp ảnh biên lai chuyển khoản trước!')
+      setProofVerifyError('Vui lòng chọn hoặc kéo thả ảnh biên lai chuyển khoản trước!')
       return
     }
 
     setIsVerifyingProof(true)
     setProofVerifyError('')
     try {
-      const json = await safeFetchJson(`/api/nopquylop/funds/${fundId}/verify-proof`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: paymentData.student.id,
-          paymentCode: paymentData.paymentCode,
-          image: proofImagePreview,
-        }),
-      })
+      const json = await safeFetchJson(
+        `/api/nopquylop/funds/${fundId}/verify-proof`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: paymentData.student.id,
+            paymentCode: paymentData.paymentCode,
+            image: proofImagePreview,
+          }),
+        },
+        14000
+      )
+
+      if (json.inQueue) {
+        setIsQueued(true)
+        setQueuePosition(json.queuePosition || 1)
+        setQueueCountdown(300)
+        setProofSuccessMessage(
+          json.message ||
+            'Minh chứng đã được lưu an toàn vào Hàng chờ! Hệ thống sẽ tự động đối soát sau mỗi 5 phút hoặc Thủ quỹ sẽ duyệt trực tiếp cho bạn.'
+        )
+        try {
+          localStorage.setItem(
+            `nopquylop_session_${fundId}`,
+            JSON.stringify({
+              paymentData: { ...paymentData, inQueue: true, proofImage: proofImagePreview },
+              expiresAt: sessionExpiresAt || Date.now() + 10 * 60 * 1000,
+            })
+          )
+        } catch {}
+        await fetchFund()
+        return
+      }
 
       // Xác minh thành công!
       setAutoPaidSuccess(true)
+      setIsQueued(false)
       setProofSuccessMessage(json.message || 'Xác minh thành công!')
       try {
         localStorage.removeItem(`nopquylop_session_${fundId}`)
       } catch {}
       await fetchFund()
     } catch (err: any) {
-      setProofVerifyError(err.message || 'Lỗi kết nối kiểm tra minh chứng. Vui lòng thử lại!')
+      // Khi timeout hoặc mạng chập chờn, minh chứng đã được lưu vào CSDL
+      setIsQueued(true)
+      setQueueCountdown(300)
+      setProofVerifyError('')
+      setProofSuccessMessage(
+        'Minh chứng của bạn đã được ghi nhận vào Hàng chờ! Hệ thống sẽ tự động quét đối soát sau mỗi 5 phút hoặc Thủ quỹ sẽ duyệt trực tiếp cho bạn.'
+      )
+      await fetchFund()
     } finally {
       setIsVerifyingProof(false)
+    }
+  }
+
+  // Quét hàng chờ thủ công hoặc khi hết 5 phút
+  const handleTriggerQueuePoll = async () => {
+    if (!paymentData) return
+    try {
+      await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' }).catch(() => {})
+      const res = await fetch(
+        `/api/nopquylop/funds/${fundId}/pay-status?studentId=${paymentData.student.id}&code=${paymentData.paymentCode}`
+      )
+      const data = await res.json()
+      if (data.paid) {
+        setIsQueued(false)
+        setAutoPaidSuccess(true)
+        setProofSuccessMessage('Minh chứng của bạn đã được hệ thống xác minh thành công!')
+        try {
+          localStorage.removeItem(`nopquylop_session_${fundId}`)
+        } catch {}
+        await fetchFund()
+      } else if (data.status === 'failed') {
+        setIsQueued(false)
+        setProofVerifyError(data.verificationError || 'Minh chứng không hợp lệ. Vui lòng kiểm tra lại ảnh biên lai!')
+      }
+    } catch {}
+  }
+
+  // Admin / Thủ quỹ bấm AI kiểm tra người tiếp theo trong hàng chờ
+  const handleProcessQueueNext = async () => {
+    setIsProcessingQueue(true)
+    setQueueProcessMsg('')
+    try {
+      const res = await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
+      const data = await res.json()
+      setQueueProcessMsg(data.message || 'Đã chạy kiểm tra người tiếp theo trong hàng chờ')
+      await fetchFund()
+    } catch (err: any) {
+      setQueueProcessMsg(err.message || 'Lỗi khi gọi AI kiểm tra hàng chờ')
+    } finally {
+      setIsProcessingQueue(false)
+    }
+  }
+
+  // Thủ quỹ / Admin Kiểm Tra Chay (Duyệt thủ công hoặc từ chối)
+  const handleManualVerify = async (studentId: string, action: 'approve' | 'reject') => {
+    const session = getAdminSession()
+    const pass = adminPassInput.trim() || (session ? session.adminPassword : '') || ''
+    const user = adminModeUsername.trim() || (session ? session.adminUsername : 'thuquy')
+
+    setManualVerifyingId(studentId)
+    try {
+      const json = await safeFetchJson(`/api/nopquylop/funds/${fundId}/queue/manual-verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId,
+          action,
+          adminUsername: user,
+          adminPassword: pass,
+          adminPasscode: pass,
+        }),
+      })
+      alert(json.message || (action === 'approve' ? 'Đã duyệt nộp tiền thành công!' : 'Đã từ chối minh chứng!'))
+      await fetchFund()
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi duyệt thủ công')
+    } finally {
+      setManualVerifyingId(null)
     }
   }
 
@@ -1335,13 +1506,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         </section>
 
-        {/* CHUYỂN TAB CHÍNH: DANH SÁCH SINH VIÊN vs HÓA ĐƠN CHI TIÊU */}
+        {/* CHUYỂN TAB CHÍNH: DANH SÁCH SINH VIÊN vs HÓA ĐƠN CHI TIÊU vs HÀNG CHỜ MINH CHỨNG */}
         <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-3">
-          <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/5 dark:bg-white/5">
+          <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/5 dark:bg-white/5 overflow-x-auto">
             <button
               type="button"
               onClick={() => setMainTab('students')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition whitespace-nowrap ${
                 mainTab === 'students'
                   ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
@@ -1354,7 +1525,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             <button
               type="button"
               onClick={() => setMainTab('expenses')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition whitespace-nowrap ${
                 mainTab === 'expenses'
                   ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-sm'
                   : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
@@ -1363,10 +1534,49 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               <Receipt className="h-4 w-4" />
               <span>Khoản Chi & Hóa Đơn ({(fund.expenses || []).length})</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setMainTab('queue')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs transition whitespace-nowrap relative ${
+                mainTab === 'queue'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+              }`}
+            >
+              <Clock className="h-4 w-4" />
+              <span>Hàng Chờ Minh Chứng</span>
+              {pendingQueueList.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black animate-pulse">
+                  {pendingQueueList.length}
+                </span>
+              )}
+            </button>
           </div>
 
-          {isAdminMode && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {mainTab === 'queue' && (
+              <button
+                type="button"
+                onClick={handleProcessQueueNext}
+                disabled={isProcessingQueue || pendingQueueList.length === 0}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-black shadow-md shadow-amber-500/20 transition disabled:opacity-50"
+              >
+                {isProcessingQueue ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Đang AI quét...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    <span>⚡ AI Quét Người Tiếp Theo</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {isAdminMode && mainTab === 'expenses' && (
               <button
                 type="button"
                 onClick={() => {
@@ -1386,8 +1596,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 <Plus className="h-4 w-4" />
                 <span>+ Đưa Bill Vào Trừ Quỹ</span>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </section>
 
         {/* TAB 1: DANH SÁCH SINH VIÊN NỘP TIỀN */}
@@ -1828,6 +2038,205 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         </section>
       </div>
     )}
+
+    {/* TAB 3: HÀNG CHỜ XÁC MINH MINH CHỨNG */}
+    {mainTab === 'queue' && (
+      <div className="space-y-6">
+        <section className="p-6 rounded-3xl bg-amber-500/10 border border-amber-500/20 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                <Clock className="h-5 w-5 text-amber-600" />
+                Hàng Chờ Xác Minh Minh Chứng ({pendingQueueList.length} người đang đợi)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                Hệ thống tự động xếp hàng tuần tự (FIFO) và quét mỗi 5 phút một lần bằng AI <code className="font-mono bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded text-[11px]">gemini-3.5-flash-lite</code> nhằm chống nghẽn server và không vượt hạn mức 15 lượt/phút. Tiền bạc và biên lai được lưu an toàn tuyệt đối.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleProcessQueueNext}
+                disabled={isProcessingQueue || pendingQueueList.length === 0}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-md transition disabled:opacity-50"
+              >
+                {isProcessingQueue ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Đang AI quét...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    <span>⚡ AI Quét Người Tiếp Theo</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fetchFund()}
+                className="p-2.5 rounded-2xl border border-black/10 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition"
+                title="Làm mới hàng chờ"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {queueProcessMsg && (
+            <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+              <Sparkles className="h-4 w-4 text-indigo-500 shrink-0" />
+              <span>{queueProcessMsg}</span>
+            </div>
+          )}
+        </section>
+
+        {pendingQueueList.length === 0 ? (
+          <div className="p-12 text-center rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 bg-white/50 dark:bg-slate-900/40 space-y-3">
+            <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">
+              Hàng chờ hiện đang trống!
+            </h4>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              Tất cả các bạn nộp minh chứng đều đã được hệ thống AI hoặc Thủ quỹ xác minh thành công.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingQueueList.map((st, idx) => (
+              <div
+                key={st.id}
+                className="p-5 rounded-3xl border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-slate-900 shadow-sm space-y-4 relative overflow-hidden"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-600 font-black text-xs flex items-center justify-center">
+                      #{idx + 1}
+                    </span>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white">
+                        {st.name}
+                      </h4>
+                      <p className="text-xs text-slate-400 font-mono">
+                        MSSV: {st.mssv || '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 text-[10px] font-black uppercase">
+                    Đang Đợi Duyệt
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 text-xs space-y-1.5 font-medium">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Mã chuyển khoản:</span>
+                    <strong className="font-mono text-indigo-600 dark:text-indigo-400 font-black">
+                      {st.paymentCode || '—'}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Mức nộp:</span>
+                    <span className="font-black text-emerald-600">
+                      {fund.amountPerPerson.toLocaleString('vi-VN')} đ
+                    </span>
+                  </div>
+                  {st.submittedAt && (
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400">Thời gian gửi:</span>
+                      <span className="text-slate-500">
+                        {new Date(st.submittedAt).toLocaleTimeString('vi-VN')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {st.proofImage && (
+                  <div className="flex items-center gap-3 p-2 rounded-2xl border border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5">
+                    <img
+                      src={st.proofImage}
+                      alt="Biên lai"
+                      className="h-16 w-16 object-cover rounded-xl border border-black/10 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">
+                        Ảnh biên lai chuyển khoản
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveViewerImage({
+                            url: st.proofImage!,
+                            title: `Minh chứng: ${st.name}`,
+                            subtitle: `MSSV: ${st.mssv || '—'}`,
+                            code: st.paymentCode,
+                            date: st.submittedAt,
+                            badge: 'Hàng chờ xác minh',
+                          })
+                        }
+                        className="mt-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>Xem ảnh phóng to</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-black/5 dark:border-white/5 flex items-center justify-between gap-2">
+                  {isAdminMode ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleManualVerify(st.id, 'approve')}
+                        disabled={manualVerifyingId === st.id}
+                        className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        {manualVerifyingId === st.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>✓ Duyệt Hợp Lệ (Kiểm Tra Chay)</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const reason = prompt('Nhập lý do từ chối biên lai (tùy chọn):', 'Biên lai mờ hoặc sai thông tin')
+                          if (reason !== null) {
+                            handleManualVerify(st.id, 'reject')
+                          }
+                        }}
+                        disabled={manualVerifyingId === st.id}
+                        className="py-2 px-3 rounded-xl border border-rose-300 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 font-bold text-xs transition"
+                      >
+                        ✕ Từ Chối
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPassModal(true)}
+                      className="w-full py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs transition flex items-center justify-center gap-1.5"
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>Mở khóa Thủ quỹ để duyệt chay</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
     </>
   )}
   </main>
@@ -2173,24 +2582,63 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                         </div>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={handleSubmitProof}
-                        disabled={isVerifyingProof || !proofImagePreview}
-                        className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {isVerifyingProof ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>Đang kiểm tra minh chứng...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-4 w-4" />
-                            <span>Kiểm tra minh chứng</span>
-                          </>
-                        )}
-                      </button>
+                      {/* TRẠNG THÁI HÀNG CHỜ XÁC MINH (KHI HỆ THỐNG > 15 LƯỢT / PHÚT HOẶC QUÁ TẢI) */}
+                      {isQueued && (
+                        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 text-xs space-y-2.5 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                              <Clock className="h-4 w-4 animate-spin text-amber-600" />
+                              ĐÃ LƯU VÀO HÀNG CHỜ #{queuePosition}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-mono text-[10px] font-bold">
+                              {formatSeconds(queueCountdown)}
+                            </span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                            Minh chứng và mã chuyển khoản của bạn đã được lưu an toàn tuyệt đối. Do giới hạn 15 lượt/phút hoặc hệ thống đang đông, hệ thống sẽ tự động quét đối soát sau mỗi 5 phút hoặc Thủ quỹ sẽ duyệt trực tiếp cho bạn!
+                          </p>
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={handleTriggerQueuePoll}
+                              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition shadow-xs flex items-center gap-1"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              <span>Kiểm tra hàng chờ ngay</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {!isQueued ? (
+                        <button
+                          type="button"
+                          onClick={handleSubmitProof}
+                          disabled={isVerifyingProof || !proofImagePreview}
+                          className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isVerifyingProof ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Đang kiểm tra minh chứng (gemini-3.5-flash-lite)...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span>Kiểm tra minh chứng</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleTriggerQueuePoll}
+                          className="w-full py-3.5 px-4 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
+                        >
+                          <Clock className="h-4 w-4 animate-spin" />
+                          <span>Đang xếp hàng chờ (Tự động quét sau {formatSeconds(queueCountdown)})</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 pt-1">

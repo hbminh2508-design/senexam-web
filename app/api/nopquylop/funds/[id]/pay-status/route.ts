@@ -51,10 +51,12 @@ export async function GET(
           (studentId && (s.id === studentId || s.mssv === studentId))
       )
 
-      if (student && student.paid) {
+      if (student) {
         return NextResponse.json({
-          paid: true,
-          status: 'paid',
+          paid: Boolean(student.paid),
+          status: student.paid ? 'paid' : (student.verificationStatus || 'pending'),
+          verificationStatus: student.verificationStatus,
+          verificationError: student.verificationError,
           paidAt: student.paidAt,
           studentId: student.id,
         })

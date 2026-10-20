@@ -11,6 +11,9 @@ export interface FundStudent {
   paymentCode?: string
   proofImage?: string
   note?: string
+  verificationStatus?: 'pending' | 'verified' | 'failed'
+  verificationError?: string
+  submittedAt?: string
 }
 
 export interface FundExpense {
@@ -356,7 +359,11 @@ export async function updateStudentPayment(
   studentIdOrMssv: string,
   paid: boolean,
   paymentCode?: string,
-  proofImage?: string
+  proofImage?: string,
+  extra?: {
+    verificationStatus?: 'pending' | 'verified' | 'failed'
+    verificationError?: string
+  }
 ): Promise<{ success: boolean; student?: FundStudent; fund?: ClassFund }> {
   const fund = await getFundById(fundId)
   if (!fund) return { success: false }
@@ -370,6 +377,14 @@ export async function updateStudentPayment(
   student.paidAt = paid ? (student.paidAt || new Date().toISOString()) : undefined
   if (paymentCode) student.paymentCode = paymentCode
   if (proofImage !== undefined) student.proofImage = proofImage
+  if (extra?.verificationStatus) {
+    student.verificationStatus = extra.verificationStatus
+  } else if (paid) {
+    student.verificationStatus = 'verified'
+  }
+  if (extra?.verificationError !== undefined) {
+    student.verificationError = extra.verificationError
+  }
   fund.updatedAt = new Date().toISOString()
 
   // Cập nhật Supabase
@@ -395,6 +410,101 @@ export async function updateStudentPayment(
   }
 
   return { success: true, student, fund }
+}
+
+// 4.1. Lưu minh chứng vào Hàng chờ (Đảm bảo KHÔNG BAO GIỜ mất dữ liệu)
+export async function saveStudentProofQueue(
+  fundId: string,
+  studentIdOrMssv: string,
+  paymentCode: string,
+  proofImage: string
+): Promise<{ success: boolean; student?: FundStudent; queuePosition?: number }> {
+  const fund = await getFundById(fundId)
+  if (!fund) return { success: false }
+
+  const student = fund.students.find(
+    (s) => s.id === studentIdOrMssv || s.mssv === studentIdOrMssv
+  )
+  if (!student) return { success: false }
+
+  student.proofImage = proofImage
+  student.paymentCode = paymentCode
+  student.verificationStatus = 'pending'
+  student.submittedAt = new Date().toISOString()
+  student.verificationError = undefined
+  fund.updatedAt = new Date().toISOString()
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin()
+    await supabaseAdmin
+      .from('class_funds')
+      .update({
+        students: fund.students,
+        updated_at: fund.updatedAt,
+      })
+      .eq('id', fundId)
+  } catch {}
+
+  const local = readLocalFunds()
+  const idx = local.findIndex((f) => f.id === fundId)
+  if (idx >= 0) {
+    local[idx] = fund
+    writeLocalFunds(local)
+  }
+
+  const pendingStudents = fund.students.filter(
+    (s) => s.verificationStatus === 'pending' && !s.paid
+  )
+  const queuePosition = pendingStudents.findIndex((s) => s.id === student.id) + 1
+
+  return { success: true, student, queuePosition: Math.max(1, queuePosition) }
+}
+
+// 4.2. Ghi nhận kết quả xác minh
+export async function markStudentVerificationResult(
+  fundId: string,
+  studentIdOrMssv: string,
+  success: boolean,
+  errorMessage?: string
+): Promise<{ success: boolean; student?: FundStudent }> {
+  const fund = await getFundById(fundId)
+  if (!fund) return { success: false }
+
+  const student = fund.students.find(
+    (s) => s.id === studentIdOrMssv || s.mssv === studentIdOrMssv
+  )
+  if (!student) return { success: false }
+
+  if (success) {
+    student.paid = true
+    student.paidAt = new Date().toISOString()
+    student.verificationStatus = 'verified'
+    student.verificationError = undefined
+  } else {
+    student.verificationStatus = 'failed'
+    student.verificationError = errorMessage || 'Không vượt qua đối soát minh chứng'
+  }
+  fund.updatedAt = new Date().toISOString()
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin()
+    await supabaseAdmin
+      .from('class_funds')
+      .update({
+        students: fund.students,
+        updated_at: fund.updatedAt,
+      })
+      .eq('id', fundId)
+  } catch {}
+
+  const local = readLocalFunds()
+  const idx = local.findIndex((f) => f.id === fundId)
+  if (idx >= 0) {
+    local[idx] = fund
+    writeLocalFunds(local)
+  }
+
+  return { success: true, student }
 }
 
 // 5. Xóa đợt thu quỹ (Chỉ dành cho Admin)
