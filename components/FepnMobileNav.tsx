@@ -215,7 +215,8 @@ export default function FepnMobileNav({
               <button
                 type="button"
                 onClick={() => setShowDrawer(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 hover:bg-black/10 transition"
+                className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 hover:bg-black/10 transition focus-visible:ring-2 focus-visible:ring-sky-500 outline-none"
+                aria-label="Đóng menu"
               >
                 <X className="h-4 w-4" />
               </button>
