@@ -245,6 +245,10 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [adminPassError, setAdminPassError] = useState('')
   const [updatingStudentId, setUpdatingStudentId] = useState<string | null>(null)
 
+  // Phân trang danh sách sinh viên: 5 | 10 | 25 | Tất cả
+  const [pageSize, setPageSize] = useState<number | 'all'>(10)
+  const [currentPage, setCurrentPage] = useState(1)
+
   // Main Tabs: Sinh viên nộp quỹ vs Hóa đơn chi tiêu vs Hàng chờ minh chứng
   const [mainTab, setMainTab] = useState<'students' | 'expenses' | 'queue'>('students')
 
@@ -880,6 +884,22 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     return list
   }, [fund, searchTerm, activeTab, isFundOverdueOneWeek])
 
+  // Tính toán phân trang sinh viên (5, 10, 25, hoặc Tất cả)
+  const totalStudentCount = sortedAndFilteredStudents.length
+  const effectivePageSize = pageSize === 'all' ? (totalStudentCount || 1) : pageSize
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(totalStudentCount / effectivePageSize))
+  const validPage = Math.min(currentPage, totalPages)
+
+  const paginatedStudents = useMemo(() => {
+    if (pageSize === 'all') return sortedAndFilteredStudents
+    const start = (validPage - 1) * pageSize
+    return sortedAndFilteredStudents.slice(start, start + pageSize)
+  }, [sortedAndFilteredStudents, pageSize, validPage])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, activeTab, pageSize])
+
   // Xử lý nộp tiền (sinh mã QR)
   const handleVerifyStudentPayment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -910,7 +930,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       setPaymentData(json)
-      const expires = Date.now() + 10 * 60 * 1000
+      const expires = Number(json.sessionExpiresAt) || (Date.now() + 10 * 60 * 1000)
       setSessionExpiresAt(expires)
       try {
         localStorage.setItem(
@@ -1573,27 +1593,6 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           </div>
 
           <div className="flex items-center gap-2">
-            {mainTab === 'queue' && (
-              <button
-                type="button"
-                onClick={handleProcessQueueNext}
-                disabled={isProcessingQueue || pendingQueueList.length === 0}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black shadow-sm transition disabled:opacity-50"
-              >
-                {isProcessingQueue ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Đang duyệt...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Duyệt Hàng Chờ</span>
-                  </>
-                )}
-              </button>
-            )}
-
             {isAdminMode && mainTab === 'expenses' && (
               <button
                 type="button"
@@ -1737,8 +1736,9 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                     </td>
                   </tr>
                 ) : (
-                  sortedAndFilteredStudents.map((student, idx) => {
+                  paginatedStudents.map((student, idx) => {
                     const isOverdueStudent = !student.paid && isFundOverdueOneWeek
+                    const globalIdx = pageSize === 'all' ? idx : (validPage - 1) * pageSize + idx
 
                     return (
                       <tr
@@ -1758,7 +1758,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                               !
                             </span>
                           ) : (
-                            <span className="text-slate-400">{idx + 1}</span>
+                            <span className="text-slate-400">{globalIdx + 1}</span>
                           )}
                         </td>
 
@@ -1885,6 +1885,89 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Thanh điều khiển phân trang: 5, 10, 25, hoặc Tất cả */}
+          <div className="p-4 border-t border-black/5 dark:border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="flex flex-wrap items-center gap-3 text-slate-500 font-medium">
+              <span>
+                Hiển thị{' '}
+                <strong className="text-slate-900 dark:text-white font-black">
+                  {totalStudentCount === 0 ? 0 : (pageSize === 'all' ? 1 : (validPage - 1) * pageSize + 1)}
+                </strong>
+                {' - '}
+                <strong className="text-slate-900 dark:text-white font-black">
+                  {pageSize === 'all' ? totalStudentCount : Math.min(validPage * pageSize, totalStudentCount)}
+                </strong>{' '}
+                / <strong className="text-slate-900 dark:text-white font-black">{totalStudentCount}</strong> bạn
+              </span>
+
+              <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-black/10 sm:dark:border-white/10">
+                <span className="text-[11px] text-slate-400">Xem mỗi trang:</span>
+                <div className="inline-flex rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 p-0.5">
+                  {[5, 10, 25, 'all'].map((sz) => (
+                    <button
+                      key={String(sz)}
+                      type="button"
+                      onClick={() => setPageSize(sz as any)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                        pageSize === sz
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {sz === 'all' ? 'Tất cả' : sz}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {pageSize !== 'all' && totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={validPage <= 1}
+                  className="px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 transition"
+                >
+                  ‹ Trước
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => p === 1 || p === totalPages || Math.abs(p - validPage) <= 1)
+                    .map((p, i, arr) => {
+                      const prev = arr[i - 1]
+                      return (
+                        <span key={p} className="flex items-center">
+                          {prev && p - prev > 1 && <span className="px-1 text-slate-400">…</span>}
+                          <button
+                            type="button"
+                            onClick={() => setCurrentPage(p)}
+                            className={`h-8 w-8 rounded-xl font-black text-xs transition ${
+                              validPage === p
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        </span>
+                      )
+                    })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={validPage >= totalPages}
+                  className="px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 transition"
+                >
+                  Tiếp ›
+                </button>
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -2073,34 +2156,9 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               </h3>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleProcessQueueNext}
-                disabled={isProcessingQueue || pendingQueueList.length === 0}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition disabled:opacity-50"
-              >
-                {isProcessingQueue ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Đang duyệt...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Duyệt Hàng Chờ</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fetchFund()}
-                className="p-2.5 rounded-2xl border border-black/10 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition"
-                title="Làm mới hàng chờ"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </button>
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 px-3.5 py-1.5 rounded-xl border border-amber-500/20">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              <span>Hệ thống tự động duyệt tuần tự 1 phút / lần</span>
             </div>
           </div>
 

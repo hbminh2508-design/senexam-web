@@ -437,9 +437,6 @@ export default function NopQuyLopHomePage() {
                 <span className="text-base font-black tracking-tight text-slate-900 dark:text-white">
                   Quỹ Lớp ME2
                 </span>
-                <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase border border-indigo-200 dark:border-indigo-800">
-                  Công Khai Minh Bạch
-                </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
                 Hệ thống theo dõi & nộp quỹ lớp tự động
@@ -492,7 +489,7 @@ export default function NopQuyLopHomePage() {
 
       {/* Hero Banner & Stats */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-8">
-        <section className="relative overflow-hidden rounded-[32px] border border-blue-500/20 bg-blue-600 dark:bg-blue-700 p-6 sm:p-10 text-white shadow-lg">
+        <section className="relative overflow-hidden rounded-[32px] border border-slate-700/50 dark:border-white/10 bg-gradient-to-br from-slate-900/90 via-slate-850/85 to-slate-900/90 backdrop-blur-xl p-6 sm:p-10 text-white shadow-xl">
           <div className="relative z-10 max-w-3xl space-y-2">
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight">
               Trang dành cho việc thu quỹ ME 2
@@ -501,14 +498,14 @@ export default function NopQuyLopHomePage() {
 
           {/* Quick Stats Grid */}
           <div className="relative z-10 grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 border-t border-white/10 mt-6">
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+            <div className="p-4 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md">
               <span className="text-[11px] text-slate-300 font-bold uppercase block mb-1">
                 Số Đợt Thu Quỹ
               </span>
               <span className="text-xl sm:text-2xl font-black text-white">{totalFundsCount}</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+            <div className="p-4 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md">
               <span className="text-[11px] text-slate-300 font-bold uppercase block mb-1">
                 Tổng Tiền Đã Thu
               </span>
@@ -517,14 +514,14 @@ export default function NopQuyLopHomePage() {
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+            <div className="p-4 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md">
               <span className="text-[11px] text-slate-300 font-bold uppercase block mb-1">
                 Cơ Chế Kiểm Tra
               </span>
-              <span className="text-xl sm:text-2xl font-black text-indigo-300">Họ Tên / MSSV</span>
+              <span className="text-xl sm:text-2xl font-black text-sky-300">Họ Tên / MSSV</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+            <div className="p-4 rounded-2xl bg-white/[0.06] border border-white/10 backdrop-blur-md">
               <span className="text-[11px] text-rose-300 font-bold uppercase block mb-1 flex items-center gap-1">
                 <Flame className="h-3.5 w-3.5 text-rose-400" /> Trễ Hạn &gt; 1 Tuần
               </span>
@@ -619,17 +616,13 @@ export default function NopQuyLopHomePage() {
                             <Flame className="h-3 w-3" /> {fund.overdueOneWeekStudents} Trễ &gt; 1 tuần
                           </span>
                         ) : fund.isPastDueDate ? (
-                          <span className="px-2.5 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 text-[10px] font-bold text-[10px]">
+                          <span className="px-2.5 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
                             Đã qua hạn nộp
                           </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold text-[10px]">
-                            Đang thu quỹ
-                          </span>
-                        )}
+                        ) : null}
                       </div>
 
-                      <h3 className="text-lg font-black text-slate-900 dark:text-white leading-snug group-hover:text-indigo-600 transition-colors">
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white leading-snug group-hover:text-blue-600 transition-colors">
                         {fund.title}
                       </h3>
 
@@ -643,7 +636,7 @@ export default function NopQuyLopHomePage() {
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/5 dark:border-white/5 text-xs">
                         <div>
                           <span className="text-[10px] uppercase font-bold text-slate-400 block">Mức nộp/người</span>
-                          <span className="font-black text-indigo-600 dark:text-indigo-400 text-sm">
+                          <span className="font-black text-blue-600 dark:text-blue-400 text-sm">
                             {fund.amountPerPerson.toLocaleString('vi-VN')} đ
                           </span>
                         </div>
@@ -667,7 +660,7 @@ export default function NopQuyLopHomePage() {
                         </div>
                         <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 rounded-full transition-all duration-500"
+                            className="h-full bg-blue-600 rounded-full transition-all duration-500"
                             style={{ width: `${fund.progressPercent}%` }}
                           />
                         </div>
@@ -690,7 +683,7 @@ export default function NopQuyLopHomePage() {
                     <div className="flex items-center gap-2 pt-4 border-t border-black/5 dark:border-white/5">
                       <Link
                         href={`/nopquylop/${fund.id}`}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-xs transition"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-xs transition"
                       >
                         <span>Vào Xem & Nộp Quỹ</span>
                         <ChevronRight className="h-4 w-4" />

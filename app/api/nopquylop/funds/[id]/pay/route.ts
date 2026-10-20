@@ -93,10 +93,30 @@ export async function POST(
       })
     }
 
-    // Sinh mã nộp tiền riêng biệt cho mỗi người
-    const randSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
-    const studentTag = matchedStudent.mssv ? matchedStudent.mssv.replace(/\s+/g, '') : `SV${matchedStudent.id}`
-    const paymentCode = isTestFund ? `TEST-MINH-${randSuffix}` : `ME2-${studentTag}-${randSuffix}`
+    // Sinh mã nộp tiền hoặc giữ nguyên mã cũ nếu còn trong thời gian chờ giao dịch (10 phút)
+    const TEN_MINUTES_MS = 10 * 60 * 1000
+    const now = Date.now()
+    const existingCode = matchedStudent.paymentCode
+    const existingCreatedAt = (matchedStudent as any).paymentCodeCreatedAt || 0
+    const isCodeStillValid = Boolean(
+      existingCode &&
+      existingCreatedAt &&
+      now - existingCreatedAt < TEN_MINUTES_MS
+    )
+
+    let paymentCode = existingCode
+    let codeCreatedAt = existingCreatedAt
+
+    if (!isCodeStillValid || !paymentCode) {
+      const randSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
+      const studentTag = matchedStudent.mssv ? matchedStudent.mssv.replace(/\s+/g, '') : `SV${matchedStudent.id}`
+      paymentCode = isTestFund ? `TEST-MINH-${randSuffix}` : `ME2-${studentTag}-${randSuffix}`
+      codeCreatedAt = now
+      matchedStudent.paymentCode = paymentCode
+      ;(matchedStudent as any).paymentCodeCreatedAt = codeCreatedAt
+    }
+
+    const sessionExpiresAt = codeCreatedAt + TEN_MINUTES_MS
 
     // Thông tin ngân hàng: Tách biệt hoàn toàn với SenExam
     // 1. Ưu tiên tài khoản cấu hình trong đợt quỹ này (fund.bankAccount, fund.accountName, fund.bankName)
@@ -149,6 +169,8 @@ export async function POST(
       bankAccount: accountNo,
       accountName,
       transferNote,
+      sessionExpiresAt,
+      isReusedCode: isCodeStillValid,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Lỗi xử lý sinh mã nộp tiền' }, { status: 500 })
