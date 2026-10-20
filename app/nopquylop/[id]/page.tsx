@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, use } from 'react'
+import { useState, useEffect, useMemo, use, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -199,6 +199,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null)
   const [timeLeftStr, setTimeLeftStr] = useState<string>('10:00')
   const [proofImagePreview, setProofImagePreview] = useState<string | null>(null)
+  const [isDraggingProof, setIsDraggingProof] = useState(false)
+  const proofFileInputRef = useRef<HTMLInputElement | null>(null)
   const [isVerifyingProof, setIsVerifyingProof] = useState(false)
   const [proofVerifyError, setProofVerifyError] = useState('')
   const [proofSuccessMessage, setProofSuccessMessage] = useState('')
@@ -799,9 +801,12 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleProofImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const processProofFile = async (file: File) => {
     if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setProofVerifyError('Vui lòng chọn hoặc kéo thả tệp hình ảnh (JPG, PNG, WebP)!')
+      return
+    }
     setProofVerifyError('')
 
     try {
@@ -813,6 +818,38 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         setProofImagePreview(reader.result as string)
       }
       reader.readAsDataURL(file)
+    }
+  }
+
+  const handleProofImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      await processProofFile(file)
+    }
+    e.target.value = ''
+  }
+
+  const handleProofDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingProof(true)
+  }
+
+  const handleProofDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Chỉ tắt khi rời khỏi container thực sự
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setIsDraggingProof(false)
+  }
+
+  const handleProofDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingProof(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) {
+      await processProofFile(file)
     }
   }
 
@@ -2040,11 +2077,27 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                       </div>
                     </div>
 
-                    {/* KHU VỰC GỬI ẢNH MINH CHỨNG CHUYỂN TIỀN */}
-                    <div className="rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-900/80 bg-indigo-50/40 dark:bg-indigo-950/30 p-4 space-y-3">
-                      <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-black text-sm">
-                        <UploadCloud className="h-4 w-4 text-indigo-600" />
-                        <span>Nộp ảnh minh chứng</span>
+                    {/* KHU VỰC GỬI ẢNH MINH CHỨNG CHUYỂN TIỀN (HỖ TRỢ KÉO THẢ & CHỌN FILE) */}
+                    <div
+                      onDragOver={handleProofDragOver}
+                      onDragLeave={handleProofDragLeave}
+                      onDrop={handleProofDrop}
+                      className={`rounded-2xl border-2 border-dashed transition-all p-4 space-y-3 ${
+                        isDraggingProof
+                          ? 'border-indigo-500 bg-indigo-100/70 dark:bg-indigo-900/60 ring-2 ring-indigo-400 ring-offset-2 scale-[1.01]'
+                          : 'border-indigo-200 dark:border-indigo-900/80 bg-indigo-50/40 dark:bg-indigo-950/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-black text-sm">
+                        <div className="flex items-center gap-2">
+                          <UploadCloud className={`h-4 w-4 ${isDraggingProof ? 'animate-bounce text-indigo-600' : 'text-indigo-600'}`} />
+                          <span>Nộp ảnh minh chứng</span>
+                        </div>
+                        {isDraggingProof && (
+                          <span className="text-xs text-indigo-600 dark:text-indigo-300 font-bold animate-pulse">
+                            Thả ảnh vào đây!
+                          </span>
+                        )}
                       </div>
 
                       {proofImagePreview ? (
@@ -2054,30 +2107,57 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                             alt="Biên lai chuyển khoản"
                             className="max-h-60 object-contain rounded-xl"
                           />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setProofImagePreview(null)
-                              setProofVerifyError('')
-                            }}
-                            className="absolute top-2 right-2 px-3 py-1.5 rounded-xl bg-black/80 hover:bg-black text-white text-[11px] font-bold transition shadow-md"
-                          >
-                            ✕ Đổi ảnh khác
-                          </button>
+                          <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => proofFileInputRef.current?.click()}
+                              className="px-3 py-1.5 rounded-xl bg-black/80 hover:bg-black text-white text-[11px] font-bold transition shadow-md"
+                            >
+                              Đổi ảnh
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProofImagePreview(null)
+                                setProofVerifyError('')
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-bold transition shadow-md"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <input
+                            ref={proofFileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleProofImageChange}
+                          />
                         </div>
                       ) : (
-                        <label className="flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 cursor-pointer transition">
-                          <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+                        <label
+                          className={`flex flex-col items-center justify-center gap-2 p-5 rounded-2xl border border-dashed cursor-pointer transition ${
+                            isDraggingProof
+                              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/40 shadow-inner'
+                              : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
+                          }`}
+                        >
+                          <div className={`h-11 w-11 rounded-2xl flex items-center justify-center transition-transform ${
+                            isDraggingProof
+                              ? 'bg-indigo-600 text-white scale-110 shadow-md shadow-indigo-500/30'
+                              : 'bg-indigo-500/10 text-indigo-600'
+                          }`}>
                             <ImageIcon className="h-5 w-5" />
                           </div>
                           <div className="text-center">
-                            <span className="text-xs font-bold text-indigo-600 hover:underline">
-                              Bấm chọn ảnh biên lai chuyển tiền
+                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                              {isDraggingProof ? 'Thả ảnh biên lai ngay tại đây' : 'Kéo thả ảnh biên lai vào khung'}
                             </span>
-                            <span className="text-xs text-slate-400 font-medium"> hoặc chụp màn hình</span>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Hỗ trợ JPG, PNG, WebP (Ảnh màn hình ngân hàng rõ nét)</p>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium"> hoặc bấm để chọn tệp</span>
+                            <p className="text-[10px] text-slate-400 mt-1">Hỗ trợ JPG, PNG, WebP (Ảnh màn hình ngân hàng rõ nét)</p>
                           </div>
                           <input
+                            ref={proofFileInputRef}
                             type="file"
                             accept="image/*"
                             className="hidden"

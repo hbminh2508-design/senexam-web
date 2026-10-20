@@ -69,12 +69,22 @@ export async function POST(
       const rawImage = String(body.image || '')
 
       if (rawImage) {
-        const match = rawImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/)
-        if (match) {
-          mimeType = match[1]
-          base64Data = match[2]
+        if (rawImage.includes(';base64,')) {
+          const parts = rawImage.split(';base64,')
+          base64Data = parts[1].trim()
+          const mimeMatch = parts[0].match(/data:([a-zA-Z0-9\/\-+.]+)/)
+          if (mimeMatch) {
+            mimeType = mimeMatch[1]
+          }
+        } else if (rawImage.startsWith('data:')) {
+          const commaIdx = rawImage.indexOf(',')
+          if (commaIdx !== -1) {
+            base64Data = rawImage.slice(commaIdx + 1).trim()
+          } else {
+            base64Data = rawImage.trim()
+          }
         } else {
-          base64Data = rawImage
+          base64Data = rawImage.trim()
         }
       }
     }
@@ -161,33 +171,64 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc codeblock markdown, KHÔ
   "isBankingReceipt": true
 }`
 
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+    const modelsToTry = [
+      'gemini-3.8-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+    ]
     let ocrRawResult = ''
     let lastError: any = null
 
     for (const modelName of modelsToTry) {
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          const model = genAI.getGenerativeModel({ model: modelName })
+          const model = genAI.getGenerativeModel({
+            model: modelName,
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
+          })
           const result = await model.generateContent([
-            ocrPrompt,
             {
               inlineData: {
                 data: base64Data,
-                mimeType: mimeType,
+                mimeType: mimeType || 'image/jpeg',
               },
             },
+            { text: ocrPrompt },
           ])
           ocrRawResult = result.response.text()
           if (ocrRawResult) break
         } catch (err: any) {
           lastError = err
+          console.warn(`[OCR verify-proof] model ${modelName} error on attempt ${attempt}:`, err?.message || err)
+          // Fallback thử gọi trực tiếp không kèm responseMimeType nếu model không hỗ trợ
+          if (err?.message?.includes('responseMimeType') || err?.message?.includes('generationConfig')) {
+            try {
+              const plainModel = genAI.getGenerativeModel({ model: modelName })
+              const plainResult = await plainModel.generateContent([
+                {
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType || 'image/jpeg',
+                  },
+                },
+                { text: ocrPrompt },
+              ])
+              ocrRawResult = plainResult.response.text()
+              if (ocrRawResult) break
+            } catch (err2: any) {
+              lastError = err2
+            }
+          }
           if (
             err?.message?.includes('429') ||
             err?.message?.includes('quota') ||
             err?.message?.includes('overloaded')
           ) {
-            await sleep(attempt * 1200)
+            await sleep(attempt * 1000)
             continue
           }
           break
@@ -197,10 +238,12 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc codeblock markdown, KHÔ
     }
 
     if (!ocrRawResult) {
+      console.error('[OCR verify-proof] All models failed. Last error:', lastError)
       return NextResponse.json(
         {
           error:
             'Hệ thống OCR tạm thời quá tải hoặc không đọc được ảnh. Vui lòng chụp rõ nét toàn bộ màn hình biên lai chuyển khoản và thử lại, hoặc liên hệ Thủ quỹ!',
+          detail: lastError?.message || undefined,
         },
         { status: 503 }
       )
@@ -331,12 +374,16 @@ TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON (KHÔNG bọc codeblock markdown, KHÔ
 
     // YẾU TỐ 4: KIỂM TRA ĐÚNG SỐ TÀI KHOẢN NHẬN & NGÂN HÀNG
     const targetAccount = (fund.bankAccount || (isTestFund ? '0336062007' : '00222085')).replace(/\D/g, '')
+    const targetAccountNoLeadingZero = targetAccount.replace(/^0+/, '')
     const cleanDetectedAcc = detectedRecipientAccount.replace(/\D/g, '')
     const cleanFullTextDigits = fullRawText.replace(/\D/g, '')
 
     const accountMatched =
-      (cleanDetectedAcc.length > 0 && cleanDetectedAcc.includes(targetAccount)) ||
-      cleanFullTextDigits.includes(targetAccount)
+      (cleanDetectedAcc.length > 0 &&
+        (cleanDetectedAcc.includes(targetAccount) ||
+          (targetAccountNoLeadingZero.length >= 6 && cleanDetectedAcc.includes(targetAccountNoLeadingZero)))) ||
+      cleanFullTextDigits.includes(targetAccount) ||
+      (targetAccountNoLeadingZero.length >= 6 && cleanFullTextDigits.includes(targetAccountNoLeadingZero))
 
     // Kiểm tra tên ngân hàng (VietABank hoặc MBBank)
     const bankKeywords = isTestFund
