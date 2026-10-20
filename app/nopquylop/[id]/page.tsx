@@ -181,6 +181,12 @@ interface ImageViewerData {
   code?: string
 }
 
+function formatSeconds(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
 export default function FundDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params)
   const fundId = resolvedParams.id
@@ -636,6 +642,106 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // Quỹ Thử Nghiệm nội bộ của Hoàng Bình Minh
+  const isTestFund = useMemo(() => {
+    return Boolean(
+      (fund as any)?.isTestFund ||
+      fund?.id === 'quy-test-hoang-binh-minh' ||
+      fund?.id?.includes('test')
+    )
+  }, [fund?.id, fund])
+
+  // Tính toán thời gian quá hạn 1 tuần
+  const isFundOverdueOneWeek = useMemo(() => {
+    if (!fund?.dueDate) return false
+    const now = Date.now()
+    const due = new Date(fund.dueDate).getTime()
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
+    return now - due > ONE_WEEK_MS
+  }, [fund?.dueDate])
+
+  // Danh sách sinh viên đang trong hàng chờ xác minh minh chứng
+  const pendingQueueList = useMemo(() => {
+    if (!fund || !Array.isArray(fund.students)) return []
+    return fund.students.filter(
+      (s) => s.verificationStatus === 'pending' && !s.paid && Boolean(s.proofImage)
+    )
+  }, [fund])
+
+  // Thống kê
+  const stats = useMemo(() => {
+    if (!fund) return { total: 0, paid: 0, unpaid: 0, overdue: 0, collected: 0, target: 0, percent: 0 }
+    const total = fund.students.length
+    const paid = fund.students.filter((s) => s.paid).length
+    const unpaid = total - paid
+    const overdue = fund.students.filter((s) => !s.paid && isFundOverdueOneWeek).length
+    const collected = paid * fund.amountPerPerson
+    const target = total * fund.amountPerPerson
+    const percent = target > 0 ? Math.round((collected / target) * 100) : 0
+    return { total, paid, unpaid, overdue, collected, target, percent }
+  }, [fund, isFundOverdueOneWeek])
+
+  // Quét hàng chờ thủ công hoặc khi hết 1 phút
+  const handleTriggerQueuePoll = async () => {
+    if (!paymentData) return
+    try {
+      await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' }).catch(() => {})
+      const res = await fetch(
+        `/api/nopquylop/funds/${fundId}/pay-status?studentId=${paymentData.student.id}&code=${paymentData.paymentCode}`
+      )
+      const data = await res.json()
+      if (data.paid) {
+        setIsQueued(false)
+        setAutoPaidSuccess(true)
+        setProofSuccessMessage('Minh chứng của bạn đã được hệ thống xác minh thành công!')
+        try {
+          localStorage.removeItem(`nopquylop_session_${fundId}`)
+        } catch {}
+        await fetchFund()
+      } else if (data.status === 'failed') {
+        setIsQueued(false)
+        setProofVerifyError(data.verificationError || 'Minh chứng không hợp lệ. Vui lòng kiểm tra lại ảnh biên lai!')
+      }
+    } catch {}
+  }
+
+  // Duyệt tuần tự liên tục từng người cho đến khi hết hàng chờ hoặc tạm chạm giới hạn
+  const handleAutoProcessQueue = async () => {
+    if (isProcessingQueue) return
+    setIsProcessingQueue(true)
+    setQueueProcessMsg('')
+    try {
+      let keepGoing = true
+      while (keepGoing) {
+        const res = await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
+        const data = await res.json()
+        await fetchFund()
+
+        if (!data || data.remaining <= 0) {
+          setQueueProcessMsg('Đã hoàn tất duyệt toàn bộ hàng chờ!')
+          keepGoing = false
+        } else if (data.rateLimited) {
+          setQueueProcessMsg('Hệ thống tạm nghỉ 1 phút trước khi duyệt lượt tiếp theo...')
+          setQueueCountdown(60)
+          keepGoing = false
+        } else {
+          setQueueProcessMsg(`Đã duyệt cho ${data.student?.name || '1 bạn'}. Còn lại ${data.remaining} người...`)
+          // Nghỉ 1.5 giây giữa các lượt duyệt để tránh ùn ứ và giữ kết nối mượt mà
+          await new Promise((r) => setTimeout(r, 1500))
+        }
+      }
+    } catch (err: any) {
+      setQueueProcessMsg(err.message || 'Lỗi khi duyệt hàng chờ')
+    } finally {
+      setIsProcessingQueue(false)
+    }
+  }
+
+  // Admin / Thủ quỹ bấm duyệt người tiếp theo hoặc kích hoạt duyệt hàng chờ
+  const handleProcessQueueNext = async () => {
+    await handleAutoProcessQueue()
+  }
+
   useEffect(() => {
     fetchFund()
   }, [fundId])
@@ -736,51 +842,6 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     }, 1000)
     return () => clearInterval(timer)
   }, [isQueued, paymentData, fundId])
-
-  // Quỹ Thử Nghiệm nội bộ của Hoàng Bình Minh
-  const isTestFund = useMemo(() => {
-    return Boolean(
-      (fund as any)?.isTestFund ||
-      fund?.id === 'quy-test-hoang-binh-minh' ||
-      fund?.id?.includes('test')
-    )
-  }, [fund?.id, fund])
-
-  // Tính toán thời gian quá hạn 1 tuần
-  const isFundOverdueOneWeek = useMemo(() => {
-    if (!fund?.dueDate) return false
-    const now = Date.now()
-    const due = new Date(fund.dueDate).getTime()
-    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
-    return now - due > ONE_WEEK_MS
-  }, [fund?.dueDate])
-
-  // Danh sách sinh viên đang trong hàng chờ xác minh minh chứng
-  const pendingQueueList = useMemo(() => {
-    if (!fund || !Array.isArray(fund.students)) return []
-    return fund.students.filter(
-      (s) => s.verificationStatus === 'pending' && !s.paid && Boolean(s.proofImage)
-    )
-  }, [fund])
-
-  const formatSeconds = (sec: number): string => {
-    const m = Math.floor(sec / 60)
-    const s = sec % 60
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  }
-
-  // Thống kê
-  const stats = useMemo(() => {
-    if (!fund) return { total: 0, paid: 0, unpaid: 0, overdue: 0, collected: 0, target: 0, percent: 0 }
-    const total = fund.students.length
-    const paid = fund.students.filter((s) => s.paid).length
-    const unpaid = total - paid
-    const overdue = fund.students.filter((s) => !s.paid && isFundOverdueOneWeek).length
-    const collected = paid * fund.amountPerPerson
-    const target = total * fund.amountPerPerson
-    const percent = target > 0 ? Math.round((collected / target) * 100) : 0
-    return { total, paid, unpaid, overdue, collected, target, percent }
-  }, [fund, isFundOverdueOneWeek])
 
   // SẮP XẾP DANH SÁCH:
   // QUY TẮC BẮT BUỘC: "chậm nộp quá 1 tuần tên sẽ bị bôi đỏ và đưa lên đầu danh sách"
@@ -985,67 +1046,6 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setIsVerifyingProof(false)
     }
-  }
-
-  // Quét hàng chờ thủ công hoặc khi hết 1 phút
-  const handleTriggerQueuePoll = async () => {
-    if (!paymentData) return
-    try {
-      await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' }).catch(() => {})
-      const res = await fetch(
-        `/api/nopquylop/funds/${fundId}/pay-status?studentId=${paymentData.student.id}&code=${paymentData.paymentCode}`
-      )
-      const data = await res.json()
-      if (data.paid) {
-        setIsQueued(false)
-        setAutoPaidSuccess(true)
-        setProofSuccessMessage('Minh chứng của bạn đã được hệ thống xác minh thành công!')
-        try {
-          localStorage.removeItem(`nopquylop_session_${fundId}`)
-        } catch {}
-        await fetchFund()
-      } else if (data.status === 'failed') {
-        setIsQueued(false)
-        setProofVerifyError(data.verificationError || 'Minh chứng không hợp lệ. Vui lòng kiểm tra lại ảnh biên lai!')
-      }
-    } catch {}
-  }
-
-  // Duyệt tuần tự liên tục từng người cho đến khi hết hàng chờ hoặc tạm chạm giới hạn
-  const handleAutoProcessQueue = async () => {
-    if (isProcessingQueue) return
-    setIsProcessingQueue(true)
-    setQueueProcessMsg('')
-    try {
-      let keepGoing = true
-      while (keepGoing) {
-        const res = await fetch(`/api/nopquylop/funds/${fundId}/queue/process`, { method: 'POST' })
-        const data = await res.json()
-        await fetchFund()
-
-        if (!data || data.remaining <= 0) {
-          setQueueProcessMsg('Đã hoàn tất duyệt toàn bộ hàng chờ!')
-          keepGoing = false
-        } else if (data.rateLimited) {
-          setQueueProcessMsg('Hệ thống tạm nghỉ 1 phút trước khi duyệt lượt tiếp theo...')
-          setQueueCountdown(60)
-          keepGoing = false
-        } else {
-          setQueueProcessMsg(`Đã duyệt cho ${data.student?.name || '1 bạn'}. Còn lại ${data.remaining} người...`)
-          // Nghỉ 1.5 giây giữa các lượt duyệt để tránh ùn ứ và giữ kết nối mượt mà
-          await new Promise((r) => setTimeout(r, 1500))
-        }
-      }
-    } catch (err: any) {
-      setQueueProcessMsg(err.message || 'Lỗi khi duyệt hàng chờ')
-    } finally {
-      setIsProcessingQueue(false)
-    }
-  }
-
-  // Admin / Thủ quỹ bấm duyệt người tiếp theo hoặc kích hoạt duyệt hàng chờ
-  const handleProcessQueueNext = async () => {
-    await handleAutoProcessQueue()
   }
 
   // Thủ quỹ / Admin Kiểm Tra Chay (Duyệt thủ công hoặc từ chối)
