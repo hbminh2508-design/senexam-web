@@ -77,39 +77,24 @@ CREATE POLICY "class_funds_public_update" ON public.class_funds
   FOR UPDATE USING (true);
 
 -- 4. DỮ LIỆU KHỞI TẠO MẪU CHO LỚP ME2 (Nếu chưa có dữ liệu)
-INSERT INTO public.class_funds (
-  id,
-  title,
-  class_name,
-  amount_per_person,
-  due_date,
-  bank_name,
-  bank_account,
-  account_name,
-  description,
-  admin_passcode,
-  students
-)
+
+-- 4. BUCKET LƯU ẢNH BILL CHI TIÊU
+-- Route server upload bằng SUPABASE_SERVICE_ROLE_KEY; ảnh chỉ đọc được bằng URL public.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
-  'me2-hk2-2026',
-  'Quỹ Lớp Học Kỳ 2 (2025 - 2026)',
-  'ME2',
-  100000,
-  (CURRENT_DATE - INTERVAL '9 days')::text, -- Đặt quá hạn > 7 ngày để kiểm thử tính năng cảnh báo đỏ & ưu tiên lên đầu
-  'MBBANK',
-  '0988776655',
-  'BUI HOANG BINH MINH',
-  'Thu tiền quỹ phục vụ photo tài liệu ôn tập, sinh hoạt ngoại khóa và quỹ thực hành xưởng ME2.',
-  'me2@2026',
-  '[
-    {"id": "1", "name": "Nguyễn Văn An", "mssv": "20221001", "paid": true, "paidAt": "2026-10-09T08:00:00Z", "paymentCode": "NOPQUYAN1001"},
-    {"id": "2", "name": "Trần Thị Bích", "mssv": "20221002", "paid": true, "paidAt": "2026-10-11T10:30:00Z", "paymentCode": "NOPQUYBICH02"},
-    {"id": "3", "name": "Lê Hoàng Cường", "mssv": "20221003", "paid": false},
-    {"id": "4", "name": "Phạm Minh Đức", "mssv": "20221004", "paid": false},
-    {"id": "5", "name": "Hoàng Quốc Hưng", "mssv": "20221005", "paid": false},
-    {"id": "6", "name": "Vũ Thùy Linh", "mssv": "20221006", "paid": true, "paidAt": "2026-10-14T15:20:00Z", "paymentCode": "NOPQUYLINH06"},
-    {"id": "7", "name": "Đặng Tuấn Nam", "mssv": "20221007", "paid": false},
-    {"id": "8", "name": "Bùi Thị Phương", "mssv": "20221008", "paid": false}
-  ]'::jsonb
+  'nopquylop-bills',
+  'nopquylop-bills',
+  true,
+  8388608,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "nopquylop_bills_public_read" ON storage.objects;
+CREATE POLICY "nopquylop_bills_public_read" ON storage.objects
+  FOR SELECT USING (bucket_id = 'nopquylop-bills');
+
+-- Chỉ server service-role được upload/xóa ảnh bill. Không mở INSERT/DELETE cho anon.
