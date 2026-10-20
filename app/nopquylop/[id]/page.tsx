@@ -200,6 +200,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [adminRemainingTime, setAdminRemainingTime] = useState('')
   const [showAdminPassModal, setShowAdminPassModal] = useState(false)
+  const [adminModeUsername, setAdminModeUsername] = useState('thuquy')
   const [adminPassInput, setAdminPassInput] = useState('')
   const [adminPassError, setAdminPassError] = useState('')
   const [updatingStudentId, setUpdatingStudentId] = useState<string | null>(null)
@@ -394,6 +395,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     const session = getAdminSession()
     const pass = expenseAdminPass.trim() || (session ? session.adminPassword : '') || adminPassInput.trim() || ''
     const user = expenseAdminUser.trim() || (session ? session.adminUsername : 'admin')
+    const isAdmin = user === 'admin' && isValidAdminDailyPassword(pass)
+    const isTreasurer = ['thuquy', 'thủ quỹ', 'treasurer'].includes(user.toLowerCase()) && pass === fund?.adminPasscode
 
     const amt = Number(expenseAmount.replace(/[^0-9]/g, ''))
     if (!amt || amt <= 0) {
@@ -488,12 +491,11 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
     const session = getAdminSession()
     const pass = deleteExpensePass.trim() || (session ? session.adminPassword : '') || adminPassInput.trim() || ''
     const user = deleteExpenseUser.trim() || (session ? session.adminUsername : 'admin')
+    const isAdmin = user === 'admin' && isValidAdminDailyPassword(pass)
+    const isTreasurer = ['thuquy', 'thủ quỹ', 'treasurer'].includes(user.toLowerCase()) && pass === fund?.adminPasscode
 
-    const isValidAdmin = isValidAdminDailyPassword(pass)
-    const isValidTreasurer = Boolean(fund?.adminPasscode && pass === fund.adminPasscode.trim())
-
-    if (!isValidAdmin && !isValidTreasurer) {
-      setDeleteExpenseError('Tài khoản hoặc mã bảo mật không chính xác!')
+    if (!isValidAdmin && !isValidTreasurer && !isAdmin && !isTreasurer) {
+      setDeleteExpenseError("Chỉ Admin hoặc Thủ quỹ mới được xóa bill!");
       return
     }
 
@@ -510,7 +512,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         }),
       })
 
-      if (pass) saveAdminSession(pass)
+      if (pass) saveAdminSession(pass);
       setShowDeleteExpenseModal(false)
       setExpenseToDelete(null)
       await fetchFund()
@@ -569,7 +571,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   const handleExpenseImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setExpenseError('')
+    setExpenseError("");
     setOcrError('')
     setOcrSuccessMsg('')
     try {
@@ -884,14 +886,18 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   // Xác nhận passcode thủ quỹ hoặc mật khẩu Admin
   const handleUnlockAdminMode = (e: React.FormEvent) => {
     e.preventDefault()
-    const cleanPass = adminPassInput.trim()
-    const isValidDaily = isValidAdminDailyPassword(cleanPass)
-    const isFundPassMatch = Boolean(fund?.adminPasscode && cleanPass === fund.adminPasscode.trim())
-    const noPassRequired = !fund?.adminPasscode
+    const cleanPass = adminPassInput.trim();
+    const username = (adminModeUsername || "").trim().toLowerCase();
+    const isValidDaily = isValidAdminDailyPassword(cleanPass);
+    const isFundPassMatch = Boolean(fund?.adminPasscode && cleanPass === fund.adminPasscode.trim());
+    const isAdmin = (username === "admin" && isValidDaily) || isValidDaily;
+    const isTreasurer = (["thuquy", "thủ quỹ", "treasurer"].includes(username) && isFundPassMatch) || isFundPassMatch || (!fund?.adminPasscode && cleanPass);
 
-    if (isValidDaily || isFundPassMatch || (noPassRequired && cleanPass)) {
-      saveAdminSession(cleanPass)
+    if (isAdmin || isTreasurer) {
+      saveAdminSession(cleanPass);
       setIsAdminMode(true)
+      setExpenseAdminUser(isAdmin ? 'admin' : 'thuquy')
+      setExpenseAdminPass(adminPassInput)
       setShowAdminPassModal(false)
       setAdminPassError('')
 
@@ -901,7 +907,7 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         executeToggleStudentPaid(target, cleanPass)
       }
     } else {
-      setAdminPassError('Mã bảo mật thủ quỹ hoặc mật khẩu Admin không chính xác!')
+      setAdminPassError("Tài khoản hoặc mã bảo mật không hợp lệ (admin + mật khẩu ngày, hoặc thuquy + mã thủ quỹ).");
     }
   }
 
@@ -1267,6 +1273,11 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             <button
               type="button"
               onClick={() => {
+                if (!isAdminMode && !isCurrentAdminSessionValid()) {
+                  setShowAdminPassModal(true)
+                  setAdminPassError('Vui lòng mở khóa bằng tài khoản Admin hoặc mã Thủ quỹ trước khi nộp bill.')
+                  return
+                }
                 const session = getAdminSession()
                 if (session && session.expiresAt > Date.now()) {
                   setExpenseAdminUser('admin')
@@ -1604,6 +1615,11 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               <button
                 type="button"
                 onClick={() => {
+                  if (!isAdminMode && !isCurrentAdminSessionValid()) {
+                    setShowAdminPassModal(true)
+                    setAdminPassError('Vui lòng mở khóa bằng tài khoản Admin hoặc mã Thủ quỹ trước khi nộp bill.')
+                    return
+                  }
                   const session = getAdminSession()
                   if (session && session.expiresAt > Date.now()) {
                     setExpenseAdminUser('admin')
@@ -2059,13 +2075,24 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
             </div>
 
             <p className="text-xs text-slate-500">
-              Nhập mã bảo mật của thủ quỹ lớp hoặc mật khẩu Admin để mở khóa quyền duyệt nộp tiền và quản lý quỹ.
+              Chỉ Admin hoặc Thủ quỹ được mở khóa quyền duyệt nộp và quản lý quỹ.
             </p>
 
             <form onSubmit={handleUnlockAdminMode} className="space-y-3">
               <input
+                type="text"
+                required
+                placeholder="admin hoặc thuquy"
+                value={adminModeUsername}
+                onChange={(e) => {
+                  setAdminModeUsername(e.target.value)
+                  if (adminPassError) setAdminPassError('')
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:border-indigo-500"
+              />
+              <input
                 type="password"
-                placeholder="Nhập mã bảo mật thủ quỹ hoặc admin..."
+                placeholder="Mật khẩu ngày hoặc mã thủ quỹ..."
                 value={adminPassInput}
                 onChange={(e) => {
                   setAdminPassInput(e.target.value)

@@ -43,6 +43,14 @@ export interface ClassFund {
   updatedAt: string
 }
 
+function normalizeExpenses(expenses: unknown): FundExpense[] {
+  if (!Array.isArray(expenses)) return []
+  return expenses.map((expense: any) => ({
+    ...expense,
+    billImageUrl: expense.billImageUrl || expense.receiptImage,
+  }))
+}
+
 export function packFundDescription(
   desc?: string,
   meta?: { initialBalance?: number; expenses?: FundExpense[] }
@@ -71,7 +79,7 @@ export function unpackFundDescription(rawDesc?: string): {
       const meta = JSON.parse(match[1])
       initialBalance = Number(meta.initialBalance) || 0
       if (Array.isArray(meta.expenses)) {
-        expenses = meta.expenses
+        expenses = normalizeExpenses(meta.expenses)
       }
     } catch {}
     cleanDescription = rawDesc.replace(/<!--METADATA:[\s\S]*?-->/g, '').trim()
@@ -159,7 +167,7 @@ export async function getAllFunds(): Promise<ClassFund[]> {
           adminPasscode: d.admin_passcode,
           initialBalance: d.initial_balance !== undefined ? Number(d.initial_balance) : initialBalance,
           students: Array.isArray(d.students) ? d.students : [],
-          expenses: Array.isArray(d.expenses) ? d.expenses : expenses,
+          expenses: Array.isArray(d.expenses) ? normalizeExpenses(d.expenses) : expenses,
           createdAt: d.created_at,
           updatedAt: d.updated_at,
         }
@@ -196,7 +204,7 @@ export async function getFundById(id: string): Promise<ClassFund | null> {
         adminPasscode: data.admin_passcode,
         initialBalance: data.initial_balance !== undefined ? Number(data.initial_balance) : initialBalance,
         students: Array.isArray(data.students) ? data.students : [],
-        expenses: Array.isArray(data.expenses) ? data.expenses : expenses,
+        expenses: Array.isArray(data.expenses) ? normalizeExpenses(data.expenses) : expenses,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       }

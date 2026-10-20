@@ -5,6 +5,7 @@ import {
   isValidAdminDailyPassword,
   isAuthorizedAdminOrTreasurer,
 } from '@/lib/nopQuyLopStore'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,22 +23,44 @@ export async function DELETE(
       return NextResponse.json({ error: 'Không tìm thấy quỹ lớp này' }, { status: 404 })
     }
 
-    const isAuth = isAuthorizedAdminOrTreasurer(fund, {
-      adminUsername,
-      adminPassword,
-      adminPasscode,
-    })
+    const username = String(adminUsername || '').trim().toLowerCase()
+    const password = String(adminPassword || adminPasscode || '').trim()
+    const isAuth =
+      isAuthorizedAdminOrTreasurer(fund, {
+        adminUsername,
+        adminPassword: password,
+        adminPasscode: password,
+      }) ||
+      (username === 'admin' && isValidAdminDailyPassword(password)) ||
+      (['thuquy', 'thủ quỹ', 'treasurer'].includes(username) &&
+        Boolean(fund.adminPasscode) &&
+        password === fund.adminPasscode)
 
     if (!isAuth) {
       return NextResponse.json(
-        { error: 'Bạn cần mã bảo mật Thủ Quỹ hoặc mật khẩu Admin để xóa khoản chi!' },
+        { error: 'Chỉ Admin hoặc Thủ quỹ mới được quyền xóa bill.' },
         { status: 401 }
       )
     }
 
+    const expense = fund?.expenses?.find((item) => item.id === expenseId)
+
     const res = await deleteExpenseFromFund(fundId, expenseId)
     if (!res.success) {
       return NextResponse.json({ error: 'Không thể xóa khoản chi này' }, { status: 500 })
+    }
+
+    if (expense?.billImageUrl) {
+      try {
+        const marker = '/storage/v1/object/public/nopquylop-bills/'
+        const markerIndex = expense.billImageUrl.indexOf(marker)
+        if (markerIndex >= 0) {
+          const path = decodeURIComponent(expense.billImageUrl.slice(markerIndex + marker.length))
+          await getSupabaseAdmin().storage.from('nopquylop-bills').remove([path])
+        }
+      } catch (storageError) {
+        console.warn('Không thể xóa ảnh bill trên Supabase Storage:', storageError)
+      }
     }
 
     return NextResponse.json({
