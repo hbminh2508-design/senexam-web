@@ -110,8 +110,22 @@ type SubmissionItem = {
   } | null
 }
 
-type FolderItem = SebFolderLike & {
-  children?: FolderItem[]
+interface SebChildFolder {
+  id: string
+  name: string
+  parent_id?: string | null
+  exam_count?: number
+  icon?: string
+  description?: string
+}
+
+interface SebParentFolder {
+  id: string
+  name: string
+  parent_id: string | null
+  icon?: string
+  description?: string
+  children: SebChildFolder[]
 }
 
 const EXAM_TYPES = ['Tất cả', 'THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL', 'ĐGTD']
@@ -172,14 +186,17 @@ function UnifiedHubContent() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
+  // Cây Thư Mục Mẹ - Con theo kiến trúc SEB
+  const [folders, setFolders] = useState<SebParentFolder[]>([])
+  const [folderSearch, setFolderSearch] = useState('')
+  const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({})
+  const [selectedChildId, setSelectedChildId] = useState<string>('')
+  const [selectedFolderObj, setSelectedFolderObj] = useState<SebChildFolder | null>(null)
+  const [mobileFolderOpen, setMobileFolderOpen] = useState(false)
+
   // Tab Kho Đề states
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedType, setSelectedType] = useState('Tất cả')
-  const [folders, setFolders] = useState<FolderItem[]>([])
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null)
-  const [selectedFolderObj, setSelectedFolderObj] = useState<FolderItem | null>(null)
-  const [mobileFolderOpen, setMobileFolderOpen] = useState(false)
 
   // Tuyển tập đề states
   const [collections, setCollections] = useState<ExamCollection[]>([])
@@ -271,25 +288,20 @@ function UnifiedHubContent() {
           user.email === 'admin@senexam.com'
         setIsAdmin(hasAdminRole)
 
-        // 1. Tải cây thư mục
-        const { data: foldersData } = await supabase
-          .from('seb_folders')
-          .select('*')
-          .order('order_index', { ascending: true })
-
-        if (foldersData) {
-          const parentFolders = foldersData.filter((f) => !f.parent_id)
-          const tree = parentFolders.map((p) => ({
-            ...p,
-            children: foldersData.filter((c) => c.parent_id === p.id),
-          }))
-          setFolders(tree)
-
-          const defaultExpanded: Record<string, boolean> = {}
-          parentFolders.forEach((p) => {
-            defaultExpanded[p.id] = true
+        // 1. Tải cây Thư mục Mẹ - Con (SEB folders)
+        try {
+          const fRes = await fetch('/api/seb/folders')
+          const fData = await fRes.json()
+          const folderTree: SebParentFolder[] = fData?.folders || []
+          setFolders(folderTree)
+          // Mở rộng tất cả thư mục mẹ mặc định
+          const initExp: Record<string, boolean> = {}
+          folderTree.forEach((p) => {
+            initExp[p.id] = true
           })
-          setExpandedFolders(defaultExpanded)
+          setExpandedParents(initExp)
+        } catch (fErr) {
+          console.warn('Lỗi tải danh mục thư mục đề thi:', fErr)
         }
 
         // 2. Tải danh sách tuyển tập đề
@@ -369,42 +381,81 @@ function UnifiedHubContent() {
     return ids
   }, [collections])
 
-  const toggleFolderExpand = (folderId: string) => {
-    setExpandedFolders((prev) => ({
+  // Đếm số lượng đề thi cho từng thư mục con
+  const folderExamCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    folders.forEach((parent) => {
+      ;(parent.children || []).forEach((child) => {
+        counts[child.id] = exams.filter((ex) => isExamInFolder(ex, child)).length
+      })
+    })
+    return counts
+  }, [folders, exams])
+
+  // Lọc cây thư mục theo ô tìm kiếm thư mục
+  const filteredFolders = useMemo(() => {
+    if (!folderSearch.trim()) return folders
+    const q = folderSearch.toLowerCase().trim()
+
+    return folders
+      .map((parent) => {
+        const parentMatches =
+          parent.name.toLowerCase().includes(q) ||
+          (parent.description && parent.description.toLowerCase().includes(q))
+        const matchingChildren = (parent.children || []).filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            (c.description && c.description.toLowerCase().includes(q))
+        )
+
+        if (parentMatches) {
+          return parent
+        }
+        if (matchingChildren.length > 0) {
+          return {
+            ...parent,
+            children: matchingChildren,
+          }
+        }
+        return null
+      })
+      .filter(Boolean) as SebParentFolder[]
+  }, [folders, folderSearch])
+
+  useEffect(() => {
+    if (folderSearch.trim()) {
+      const exp: Record<string, boolean> = {}
+      filteredFolders.forEach((p) => {
+        exp[p.id] = true
+      })
+      setExpandedParents((prev) => ({ ...prev, ...exp }))
+    }
+  }, [folderSearch, filteredFolders])
+
+  const toggleParent = (parentId: string) => {
+    setExpandedParents((prev) => ({
       ...prev,
-      [folderId]: !prev[folderId],
+      [parentId]: !prev[parentId],
     }))
   }
 
-  const handleSelectChildFolder = (child: FolderItem) => {
+  const handleSelectChild = (child: SebChildFolder) => {
     if (selectedChildId === child.id) {
-      setSelectedChildId(null)
+      setSelectedChildId('')
       setSelectedFolderObj(null)
     } else {
       setSelectedChildId(child.id)
       setSelectedFolderObj(child)
+      setActiveCollection(null)
     }
     setMobileFolderOpen(false)
-    setActiveCollection(null)
   }
 
-  const handleSelectParentFolder = (parent: FolderItem) => {
-    if (selectedChildId === parent.id) {
-      setSelectedChildId(null)
-      setSelectedFolderObj(null)
-    } else {
-      setSelectedChildId(parent.id)
-      setSelectedFolderObj(parent)
-    }
-    setMobileFolderOpen(false)
-    setActiveCollection(null)
-  }
-
-  const handleClearFolderFilter = () => {
-    setSelectedChildId(null)
+  const handleSelectAllExams = () => {
+    setSelectedChildId('')
     setSelectedFolderObj(null)
-    setMobileFolderOpen(false)
     setActiveCollection(null)
+    setMobileFolderOpen(false)
   }
 
   // Tra cứu mã truy cập đề riêng tư
@@ -947,15 +998,15 @@ function UnifiedHubContent() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Nút Đóng Gói Tuyển Tập Đề - Chỉ Admin Mới Thấy (chỉ logo) */}
+            {/* Nút Tạo Tuyển Tập Đề - Chỉ Admin Mới Thấy (hiện rõ nút chữ và icon như cũ) */}
             {isAdmin && activeTab === 'exams' && (
               <button
                 type="button"
                 onClick={handleOpenCreatePackageModal}
-                title="Đóng gói tuyển tập đề (Admin)"
-                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition hover:scale-105 cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2.5 text-xs font-bold shadow-sm transition hover:scale-105 cursor-pointer"
               >
-                <Package className="h-5 w-5" />
+                <Package className="h-4 w-4" />
+                <span>Tạo tuyển tập đề</span>
               </button>
             )}
 
@@ -1076,102 +1127,97 @@ function UnifiedHubContent() {
                 </div>
               )}
 
-              <div className="rounded-[26px] border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-4 shadow-sm backdrop-blur-xl space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
-                  <div className="flex items-center gap-2">
-                    <Folder className="h-4 w-4 text-indigo-500" />
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                      Cây Thư Mục Môn
-                    </span>
-                  </div>
-                  {selectedChildId && (
-                    <button
-                      onClick={handleClearFolderFilter}
-                      className="text-[11px] font-bold text-rose-500 hover:underline"
-                    >
-                      Bỏ lọc
-                    </button>
-                  )}
+              {/* Ô TÌM KIẾM MÔN & CÂY THƯ MỤC */}
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Lọc môn học..."
+                    value={folderSearch}
+                    onChange={(e) => setFolderSearch(e.target.value)}
+                    className="h-8 w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 pl-8 pr-2.5 text-xs outline-none focus:border-indigo-500"
+                  />
                 </div>
 
-                <div className="space-y-1.5 max-h-[65vh] overflow-y-auto pr-1">
-                  <button
-                    type="button"
-                    onClick={handleClearFolderFilter}
-                    className={`w-full flex items-center justify-between p-2 rounded-xl text-xs font-bold transition text-left ${
-                      selectedChildId === null
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Layers className="h-3.5 w-3.5" />
-                      <span>Tất cả môn học</span>
-                    </div>
-                    <span className="text-[10px] opacity-80">{exams.length} đề</span>
-                  </button>
+                {/* Nút Xem Tất Cả */}
+                <button
+                  type="button"
+                  onClick={handleSelectAllExams}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition ${
+                    !selectedChildId && !activeCollection
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    <span>Tất cả đề thi & tuyển tập</span>
+                  </span>
+                  <span className="text-[10px] opacity-75 font-mono">{exams.length}</span>
+                </button>
+              </div>
 
-                  {folders.map((parent) => {
-                    const isExpanded = !!expandedFolders[parent.id]
+              {/* Cây Thư Mục Mẹ - Con */}
+              <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-3 shadow-sm backdrop-blur-xl max-h-[500px] overflow-y-auto space-y-1">
+                {filteredFolders.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">Không tìm thấy thư mục</div>
+                ) : (
+                  filteredFolders.map((parent) => {
+                    const isExp = expandedParents[parent.id] ?? true
                     const hasChildren = parent.children && parent.children.length > 0
-                    const isParentSelected = selectedChildId === parent.id
 
                     return (
-                      <div key={parent.id} className="space-y-1">
-                        <div
-                          className={`flex items-center justify-between p-2 rounded-xl text-xs font-bold transition ${
-                            isParentSelected
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'text-slate-700 dark:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5'
-                          }`}
+                      <div key={parent.id} className="space-y-0.5">
+                        {/* Thư mục mẹ */}
+                        <button
+                          type="button"
+                          onClick={() => toggleParent(parent.id)}
+                          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition"
                         >
-                          <button
-                            type="button"
-                            onClick={() => handleSelectParentFolder(parent)}
-                            className="flex-1 flex items-center gap-2 text-left truncate"
-                          >
-                            {isExpanded ? (
-                              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                          <span className="flex items-center gap-1.5 truncate">
+                            {isExp ? (
+                              <FolderOpen className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                             ) : (
-                              <Folder className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                              <Folder className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                             )}
                             <span className="truncate">{parent.name}</span>
-                          </button>
-
+                          </span>
                           {hasChildren && (
-                            <button
-                              type="button"
-                              onClick={() => toggleFolderExpand(parent.id)}
-                              className="p-1 rounded-md hover:bg-black/10 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600"
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              ) : (
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              )}
-                            </button>
+                            <span className="text-slate-400">
+                              {isExp ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            </span>
                           )}
-                        </div>
+                        </button>
 
-                        {hasChildren && isExpanded && (
-                          <div className="pl-4 space-y-1 border-l-2 border-indigo-500/20 ml-3">
-                            {parent.children!.map((child) => {
-                              const isChildSelected = selectedChildId === child.id
+                        {/* Các thư mục con */}
+                        {isExp && hasChildren && (
+                          <div className="pl-3 space-y-0.5 border-l border-black/5 dark:border-white/5 ml-3">
+                            {parent.children.map((child) => {
+                              const isSelected = selectedChildId === child.id
+                              const count = folderExamCounts[child.id] || 0
+
                               return (
                                 <button
                                   key={child.id}
                                   type="button"
-                                  onClick={() => handleSelectChildFolder(child)}
-                                  className={`w-full flex items-center justify-between p-1.5 rounded-lg text-xs font-semibold transition text-left ${
-                                    isChildSelected
-                                      ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-500/30'
-                                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'
+                                  onClick={() => handleSelectChild(child)}
+                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition ${
+                                    isSelected
+                                      ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                                    <span className="truncate">{child.name}</span>
-                                  </div>
+                                  <span className="truncate">{child.name}</span>
+                                  <span
+                                    className={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${
+                                      isSelected
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-black/5 dark:bg-white/5 text-slate-400'
+                                    }`}
+                                  >
+                                    {count}
+                                  </span>
                                 </button>
                               )
                             })}
@@ -1179,8 +1225,8 @@ function UnifiedHubContent() {
                         )}
                       </div>
                     )
-                  })}
-                </div>
+                  })
+                )}
               </div>
 
               {/* KHỐI NHẬP MÃ TRUY CẬP ĐỀ THI */}
@@ -1213,6 +1259,25 @@ function UnifiedHubContent() {
                   </button>
                 </form>
               </div>
+
+              {/* Box Đóng gói đề (Admin only) */}
+              {isAdmin && (
+                <div className="rounded-[24px] border border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-500/10 p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                    <Package className="h-4 w-4" /> Quản Trị Tuyển Tập
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Đóng gói các đề thi liên quan theo môn và cấu hình trộn đề tự động cho thí sinh.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleOpenCreatePackageModal}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 text-xs font-bold transition shadow-sm cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Tạo tuyển tập đề
+                  </button>
+                </div>
+              )}
             </aside>
 
             {/* CỘT PHẢI: KHO ĐỀ & TUYỂN TẬP */}
@@ -1474,27 +1539,57 @@ function UnifiedHubContent() {
                           </div>
 
                           <div className="mt-4 pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setActiveCollection(col)}
-                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white py-2 text-xs font-bold transition shadow-xs cursor-pointer"
-                            >
-                              <BookOpen className="h-3.5 w-3.5" />
-                              <span>Mở tuyển tập</span>
-                            </button>
+                            {/* Nút Tuỳ Chỉnh Tuyển Tập Đề (Admin only: Sửa & Xóa) */}
+                            {isAdmin && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleOpenEditPackageModal(col)
+                                  }}
+                                  className="rounded-lg p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                                  title="Sửa tuyển tập"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteCollection(col.id)
+                                  }}
+                                  className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                                  title="Giải tán tuyển tập"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveCollection(col)
-                                setTimeout(() => handleOpenMixModal(), 100)
-                              }}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20 py-2 px-3 text-xs font-bold transition cursor-pointer"
-                              title="Trộn đề ôn luyện từ tuyển tập này"
-                            >
-                              <Shuffle className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">Trộn đề</span>
-                            </button>
+                            <div className="flex items-center gap-2 ml-auto">
+                              <button
+                                type="button"
+                                onClick={() => setActiveCollection(col)}
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 text-xs font-bold transition shadow-xs cursor-pointer"
+                              >
+                                <BookOpen className="h-3.5 w-3.5" />
+                                <span>Mở tuyển tập</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveCollection(col)
+                                  setTimeout(() => handleOpenMixModal(), 100)
+                                }}
+                                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20 py-2 px-3 text-xs font-bold transition cursor-pointer"
+                                title="Trộn đề ôn luyện từ tuyển tập này"
+                              >
+                                <Shuffle className="h-3.5 w-3.5" />
+                                <span>Trộn đề</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )
@@ -2045,7 +2140,7 @@ function UnifiedHubContent() {
                     className="text-lg font-black text-slate-900 dark:text-white"
                     style={{ fontFamily: 'var(--font-hub-heading)' }}
                   >
-                    {packagingEditingId ? 'Cập Nhật Tuyển Tập Đề' : 'Đóng Gói Tuyển Tập Đề Mới'}
+                    {packagingEditingId ? 'Cập Nhật Tuyển Tập Đề' : 'Tạo Tuyển Tập Đề Mới'}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Gộp các đề liên quan theo môn và cấu hình trọn gói cho học sinh.
@@ -2174,14 +2269,14 @@ function UnifiedHubContent() {
                 <button
                   type="button"
                   onClick={() => setShowAdminPackageModal(false)}
-                  className="rounded-xl border border-black/10 dark:border-white/15 px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5"
+                  className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={packagingLoading}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-50 cursor-pointer"
                 >
                   {packagingLoading ? (
                     <>
@@ -2562,7 +2657,7 @@ function UnifiedHubContent() {
                 <button
                   type="button"
                   onClick={() => setShowMixModal(false)}
-                  className="rounded-xl border border-black/10 dark:border-white/15 px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5"
+                  className="rounded-xl border border-black/10 dark:border-white/10 px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5"
                 >
                   Hủy
                 </button>
