@@ -47,6 +47,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
+import { normalizeLatexQuestion } from '@/lib/latexExamParser'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-newrev-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-newrev-body' })
@@ -162,17 +163,20 @@ function resolveStatementContent(qData: any, sub: string, sIdx: number) {
 }
 
 /**
- * Làm sạch phần câu hỏi cho dạng đúng sai
+ * Làm sạch phần câu hỏi: bóc tách macro \choice, \choiceTF nếu còn sót lại và tách văn bản đúng sai
  */
 function cleanQuestionPrompt(rawText: string, type: string) {
+  if (!rawText) return ''
+  const norm = normalizeLatexQuestion({ text: rawText, type })
+  let text = norm.text || rawText
   if (type === 'true_false') {
     const splitPattern = /(?:^|\n|\r|\s{2,}|\$\s*|\.\s+)(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i
-    const splitParts = rawText.split(splitPattern)
+    const splitParts = text.split(splitPattern)
     if (splitParts.length >= 5 && splitParts[0].trim()) {
       return splitParts[0].trim()
     }
   }
-  return rawText
+  return text
 }
 
 export default function NewHistorySubmissionReviewPage() {
@@ -512,9 +516,11 @@ export default function NewHistorySubmissionReviewPage() {
       const offset = computedOffsets[section.id] || 0
 
       for (let qIdx = 0; qIdx < qCount; qIdx++) {
-        const key = `${section.id}-${qIdx}`
+        const key = `${section.id || sIdx}-${qIdx}`
+        const altKey = `${section.id}-${qIdx}`
         const globalNum = offset + qIdx + 1
-        const qData = Array.isArray(section.questions) ? section.questions[qIdx] : null
+        const rawQData = Array.isArray(section.questions) ? section.questions[qIdx] : null
+        const qData = rawQData ? normalizeLatexQuestion(rawQData) : null
 
         let qType = qData?.type || section.type || 'single_choice'
         if (section.type === 'mixed' && section.mixedRanges && Array.isArray(section.mixedRanges)) {
@@ -529,24 +535,28 @@ export default function NewHistorySubmissionReviewPage() {
           qData?.correctAnswer ??
           (section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)])
         const correctAns =
-          submission?.answers?._effectiveCorrectAnswers?.[key] ?? origCorrectAns
+          submission?.answers?._effectiveCorrectAnswers?.[key] ??
+          (altKey !== key ? submission?.answers?._effectiveCorrectAnswers?.[altKey] : undefined) ??
+          origCorrectAns
 
         // XÁC ĐỊNH DANH SÁCH OPTIONS HIỂN THỊ THỰC TẾ (ĐỒNG BỘ ĐẢO ĐÁP ÁN)
         let effectiveOptions = rawOptions
 
         // 1. Ưu tiên cao nhất: Snapshot danh sách options thực tế lúc thi đã lưu
-        if (
-          submission?.answers?._effectiveOptionsMap?.[key] &&
-          Array.isArray(submission.answers._effectiveOptionsMap[key])
-        ) {
-          effectiveOptions = submission.answers._effectiveOptionsMap[key]
+        const snapshotOpts =
+          submission?.answers?._effectiveOptionsMap?.[key] ||
+          (altKey !== key ? submission?.answers?._effectiveOptionsMap?.[altKey] : null)
+        if (snapshotOpts && Array.isArray(snapshotOpts)) {
+          effectiveOptions = snapshotOpts
         }
         // 2. Ưu tiên nhì: Có lưu bản đồ thứ tự hoán vị option _shuffledOptionMap
         else if (
-          submission?.answers?._shuffledOptionMap?.[key] &&
+          (submission?.answers?._shuffledOptionMap?.[key] || (altKey !== key ? submission?.answers?._shuffledOptionMap?.[altKey] : null)) &&
           Array.isArray(rawOptions)
         ) {
-          const optOrder = submission.answers._shuffledOptionMap[key]
+          const optOrder =
+            submission.answers._shuffledOptionMap[key] ||
+            submission.answers._shuffledOptionMap[altKey]
           if (Array.isArray(optOrder) && optOrder.length === rawOptions.length) {
             effectiveOptions = optOrder.map((origIdx: number) => rawOptions[origIdx])
           }
@@ -581,8 +591,14 @@ export default function NewHistorySubmissionReviewPage() {
           }
         }
 
-        const studentAns = submission?.answers?.[key]
-        const earnedPoint = Number(submission?.detailed_scores?.[key] || 0)
+        const studentAns =
+          submission?.answers?.[key] ??
+          (altKey !== key ? submission?.answers?.[altKey] : undefined)
+        const earnedPoint = Number(
+          submission?.detailed_scores?.[key] ??
+            (altKey !== key ? submission?.detailed_scores?.[altKey] : 0) ??
+            0
+        )
         const isCorrect = earnedPoint > 0
         const isAnswered =
           studentAns !== undefined &&

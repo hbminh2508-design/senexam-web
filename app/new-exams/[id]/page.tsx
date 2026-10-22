@@ -13,6 +13,7 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
+import { normalizeLatexQuestion } from '@/lib/latexExamParser'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -461,7 +462,8 @@ export default function NewExamRoomPage() {
       const offset = (computedOffsets && computedOffsets[section.id]) || 0
       for (let i = 0; i < qCount; i++) {
         const key = `${section.id || sIdx}-${i}`
-        const qData = Array.isArray(section.questions) ? section.questions[i] : null
+        const rawQData = Array.isArray(section.questions) ? section.questions[i] : null
+        const qData = rawQData ? normalizeLatexQuestion(rawQData) : null
         let qType = qData?.type || section.type || 'single_choice'
         if (section.type === 'mixed' && section.mixedRanges && Array.isArray(section.mixedRanges)) {
           const range = section.mixedRanges.find(
@@ -799,7 +801,7 @@ export default function NewExamRoomPage() {
       let hasEssay = false
       const detailedScores: Record<string, number> = {}
 
-      activeSections.forEach((section: any) => {
+      activeSections.forEach((section: any, sIdx: number) => {
         const qCount = parseInt(section.questionCount) || (section.questions?.length) || 1
         const isAutoDivide = section.scoringMode !== 'custom' && section.scoringMode !== 'custom_points'
 
@@ -812,7 +814,7 @@ export default function NewExamRoomPage() {
         const perQuestionPoints = secPoints / qCount
 
         Array.from({ length: qCount }).forEach((_, qIdx) => {
-          const key = `${section.id}-${qIdx}`
+          const key = `${section.id || sIdx}-${qIdx}`
           const customVal = Number(section.customPoints?.[qIdx] ?? section.pointsPerQuestion?.[qIdx])
           const qPoint = isAutoDivide ? perQuestionPoints : (!isNaN(customVal) && customVal > 0 ? customVal : perQuestionPoints)
           let earned = 0
@@ -830,6 +832,7 @@ export default function NewExamRoomPage() {
             const qItem = flatQuestions.find((q: any) => q.key === key)
             const correctAns =
               qItem?.effectiveCorrectAnswer ??
+              qItem?.qData?.correctAnswer ??
               section.questions?.[qIdx]?.correctAnswer ??
               (section.correctAnswers?.[qIdx] || section.correctAnswers?.[String(qIdx)])
 
@@ -2200,7 +2203,7 @@ export default function NewExamRoomPage() {
             <div className="space-y-2 pt-2">
               {exam?.allow_review !== false ? (
                 <Link
-                  href={`/new-submissions/${submittedResult.submissionId}`}
+                  href={`/new-history-submissions/${submittedResult.submissionId}`}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white py-3 text-xs font-black uppercase tracking-wider shadow transition"
                 >
                   <Eye className="h-4 w-4" /> Xem Lời Giải & Chi Tiết
@@ -2211,7 +2214,7 @@ export default function NewExamRoomPage() {
                 </div>
               )}
               <Link
-                href="/new-history"
+                href="/new-sen-ground?tab=history"
                 className="w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2.5 text-xs font-bold transition hover:bg-black/10"
               >
                 Về Lịch Sử Bài Thi

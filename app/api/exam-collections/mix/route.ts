@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getExamCollectionsAsync } from '@/lib/examCollectionStore'
+import { normalizeLatexQuestion } from '@/lib/latexExamParser'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,7 +116,8 @@ export async function POST(request: Request) {
       const result: ExtractedQuestion[] = []
       struct.forEach((section: any) => {
         const questions = Array.isArray(section?.questions) ? section.questions : []
-        questions.forEach((q: any) => {
+        questions.forEach((rawQ: any) => {
+          const q = normalizeLatexQuestion(rawQ)
           const qType = String(q?.type || section?.type || 'single_choice').toLowerCase().trim()
           if (qType === 'true_false') {
             result.push({

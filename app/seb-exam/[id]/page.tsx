@@ -506,16 +506,17 @@ export default function SebExamRoomPage() {
           : (!isNaN(customPointsVal) && customPointsVal > 0 ? customPointsVal : defaultPointsPerQ)
 
         let earned = 0
+        const corrItem = section.questions?.[i]?.correctAnswer ?? correctMap[i] ?? correctMap[String(i)]
 
         if (qType === 'single_choice') {
           const userVal = String(answers[key] || '').trim().toUpperCase()
-          const corrVal = String(correctMap[i] || '').trim().toUpperCase()
+          const corrVal = String(corrItem || '').trim().toUpperCase()
           if (userVal && corrVal && userVal === corrVal) {
             earned = qPoint
           }
         } else if (qType === 'true_false') {
           const userObj = answers[key] || {}
-          const correctObj = correctMap[i] || {}
+          const correctObj = corrItem || {}
 
           let matchedSubCount = 0
           ;['a', 'b', 'c', 'd'].forEach((sub) => {
@@ -538,7 +539,7 @@ export default function SebExamRoomPage() {
           else if (matchedSubCount === 1) earned = qPoint * 0.1
         } else if (qType === 'short_answer') {
           const userAns = (answers[key] || '').toString().trim().toLowerCase().replace(/\s+/g, '')
-          const correctAns = (correctMap[i] || '').toString().trim().toLowerCase().replace(/\s+/g, '')
+          const correctAns = (corrItem || '').toString().trim().toLowerCase().replace(/\s+/g, '')
           const normUser = userAns.replace(',', '.')
           const normCorr = correctAns.replace(',', '.')
           if (userAns && (userAns === correctAns || normUser === normCorr)) {
@@ -546,7 +547,7 @@ export default function SebExamRoomPage() {
           }
         } else if (qType === 'essay') {
           const userAns = (answers[key] || '').toString().trim().toLowerCase()
-          const correctAns = (correctMap[i] || '').toString().trim().toLowerCase()
+          const correctAns = (corrItem || '').toString().trim().toLowerCase()
           if (correctAns && userAns === correctAns) {
             earned = qPoint
           }

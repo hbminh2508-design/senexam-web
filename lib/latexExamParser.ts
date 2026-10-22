@@ -687,3 +687,207 @@ export function parseLatexExamCode(
   result.parseTimeMs = Date.now() - startTime
   return result
 }
+
+/**
+ * Kiểm tra xem danh sách phương án có phải là văn bản giữ chỗ mặc định không
+ * Ví dụ: ['Phương án A', 'Phương án B', ...] hoặc ['Ý a)', 'Ý b)', ...] hoặc ['A', 'B', 'C', 'D']
+ */
+export function isPlaceholderOptions(opts: any): boolean {
+  if (!Array.isArray(opts) || opts.length === 0) return true
+  const placeholderRegex = /^(?:phương\s*án|phuong\s*an|đáp\s*án|dap\s*an|lựa\s*chọn|lua\s*chon|ý|cau|câu)?\s*[A-Da-d1-4][.)]?$/i
+  return opts.every((opt) => {
+    if (typeof opt !== 'string') return false
+    const s = opt.trim()
+    if (!s) return true
+    return placeholderRegex.test(s)
+  })
+}
+
+/**
+ * Chuẩn hóa một câu hỏi LaTeX (dùng cho phòng thi, xem lại lịch sử, trộn đề...):
+ * Tự động bóc tách các macro \choice, \choiceTF, \shortans còn lẫn trong thân đề bài,
+ * làm sạch question text và trích xuất danh sách options thực tế cùng đáp án đúng \True.
+ */
+export function normalizeLatexQuestion(rawQ: any): any {
+  if (!rawQ || typeof rawQ !== 'object') return rawQ
+
+  const q = { ...rawQ }
+  let text = q.text || q.content || q.prompt || q.question || ''
+  if (!text || typeof text !== 'string') return q
+
+  let type = q.type || 'single_choice'
+  let options = Array.isArray(q.options) ? [...q.options] : []
+  let correctAnswer = q.correctAnswer
+  let explanation = q.explanation || q.solution || ''
+  const isPlaceholder = isPlaceholderOptions(options)
+
+  // 1. Dọn dẹp môi trường lời giải nếu còn trong đề
+  const loigiaiEnvMatch = text.match(/\\begin\{loigiai\}([\s\S]*?)\\end\{loigiai\}/i)
+  if (loigiaiEnvMatch) {
+    if (!explanation) explanation = loigiaiEnvMatch[1].trim()
+    text = text.replace(loigiaiEnvMatch[0], '')
+  } else {
+    const loigiaiIdx = text.search(/\\loigiai\b/i)
+    if (loigiaiIdx !== -1) {
+      const brace = extractBalancedBraces(text, loigiaiIdx + 8)
+      if (brace) {
+        if (!explanation) explanation = brace.content.trim()
+        text = text.slice(0, loigiaiIdx) + text.slice(brace.endIndex)
+      }
+    }
+  }
+
+  // 2. Kiểm tra \shortans{...}
+  const shortansIdx = text.search(/\\shortans\b/i)
+  if (shortansIdx !== -1) {
+    let braceStart = shortansIdx + 9
+    const optBracket = extractBalancedBrackets(text, braceStart)
+    if (optBracket) braceStart = optBracket.endIndex
+    const brace = extractBalancedBraces(text, braceStart)
+    if (brace) {
+      if (
+        correctAnswer === undefined ||
+        correctAnswer === null ||
+        correctAnswer === '' ||
+        correctAnswer === 'A' ||
+        correctAnswer === '0'
+      ) {
+        correctAnswer = brace.content.replace(/\$/g, '').trim()
+      }
+      text = text.slice(0, shortansIdx) + text.slice(brace.endIndex)
+      type = 'short_answer'
+    }
+  }
+
+  // 3. Kiểm tra \choiceTF
+  const choiceTFIdx = text.search(/\\choiceTF\b/i)
+  if (choiceTFIdx !== -1) {
+    let searchStart = choiceTFIdx + 9
+    const optBracket = extractBalancedBrackets(text, searchStart)
+    if (optBracket) searchStart = optBracket.endIndex
+
+    const tfItems: string[] = []
+    const tfAnswers: Record<string, 'Đ' | 'S'> = { a: 'S', b: 'S', c: 'S', d: 'S' }
+    const keys: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd']
+    let lastEnd = searchStart
+    let foundTrue = false
+
+    for (let c = 0; c < 4; c++) {
+      const brace = extractBalancedBraces(text, lastEnd)
+      if (brace) {
+        const { text: cleanOpt, isTrue } = cleanOptionText(brace.content)
+        tfItems.push(cleanOpt)
+        if (isTrue) {
+          tfAnswers[keys[c]] = 'Đ'
+          foundTrue = true
+        }
+        lastEnd = brace.endIndex
+      } else {
+        break
+      }
+    }
+
+    if (tfItems.length > 0) {
+      if (isPlaceholder || options.length === 0) {
+        options = tfItems
+      }
+      if (foundTrue && (!correctAnswer || typeof correctAnswer !== 'object')) {
+        correctAnswer = tfAnswers
+      }
+      text = text.slice(0, choiceTFIdx) + text.slice(lastEnd)
+      type = 'true_false'
+    }
+  }
+
+  // 4. Kiểm tra \choice
+  const choiceIdx = text.search(/\\choice\b/i)
+  if (choiceIdx !== -1 && type !== 'true_false' && type !== 'short_answer') {
+    let searchStart = choiceIdx + 7
+    const optBracket = extractBalancedBrackets(text, searchStart)
+    if (optBracket) searchStart = optBracket.endIndex
+
+    const choiceItems: string[] = []
+    const choiceLetters = ['A', 'B', 'C', 'D']
+    let chosenLetter: string | null = null
+    let lastEnd = searchStart
+
+    for (let c = 0; c < 4; c++) {
+      const brace = extractBalancedBraces(text, lastEnd)
+      if (brace) {
+        const { text: cleanOpt, isTrue } = cleanOptionText(brace.content)
+        choiceItems.push(cleanOpt)
+        if (isTrue && !chosenLetter) {
+          chosenLetter = choiceLetters[c]
+        }
+        lastEnd = brace.endIndex
+      } else {
+        break
+      }
+    }
+
+    if (choiceItems.length > 0) {
+      if (isPlaceholder || options.length === 0) {
+        options = choiceItems
+      }
+      if (
+        chosenLetter &&
+        (correctAnswer === undefined ||
+          correctAnswer === null ||
+          correctAnswer === '' ||
+          isPlaceholder)
+      ) {
+        correctAnswer = chosenLetter
+      }
+      text = text.slice(0, choiceIdx) + text.slice(lastEnd)
+      type = 'single_choice'
+    }
+  }
+
+  // 5. Kiểm tra tasks environment
+  if ((isPlaceholder || options.length === 0) && type === 'single_choice') {
+    const tasksMatch = text.match(/\\begin\{tasks\}(?:\([^)]*\))?([\s\S]*?)\\end\{tasks\}/i)
+    if (tasksMatch) {
+      const taskItems = tasksMatch[1].split(/\\task\b/).filter((t) => t.trim().length > 0)
+      if (taskItems.length >= 2) {
+        let chosenLetter: string | null = null
+        options = taskItems.map((item, cIdx) => {
+          const { text: cleanOpt, isTrue } = cleanOptionText(item)
+          if (isTrue && !chosenLetter) {
+            chosenLetter = ['A', 'B', 'C', 'D'][cIdx] || 'A'
+          }
+          return cleanOpt
+        })
+        if (chosenLetter && (!correctAnswer || isPlaceholder)) {
+          correctAnswer = chosenLetter
+        }
+        text = text.replace(tasksMatch[0], '')
+      }
+    }
+  }
+
+  // 6. Kiểm tra dạng a) b) c) d) nếu là đề đúng sai mà options rỗng
+  if ((isPlaceholder || options.length === 0) && type === 'true_false') {
+    const tfParts = text.split(
+      /(?:^|\n|\r)\s*(?:\\item\s*)?(?:[a-d]\)|\([a-d]\)|[a-d]\.|\b[a-d]\/)\s*/i
+    )
+    if (tfParts.length >= 5) {
+      text = tfParts[0]
+      options = tfParts.slice(1, 5).map((p) => cleanLatexQuestionText(p))
+    }
+  }
+
+  // 7. Làm sạch văn bản câu hỏi
+  let cleanedText = cleanLatexQuestionText(text)
+  cleanedText = cleanedText
+    .replace(/^(?:\\textbf\{)?(?:Câu|Bài)\s*\d+[\s.:)]*/i, '')
+    .replace(/^\[[^\]]*\]/, '')
+    .trim()
+
+  q.text = cleanedText || text
+  q.type = type
+  q.options = options
+  q.correctAnswer = correctAnswer
+  if (explanation) q.explanation = explanation
+
+  return q
+}
