@@ -6625,7 +6625,7 @@ function UnifiedHubContent() {
                           </div>
 
                           <div className="mt-4 pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between gap-2">
-                            {/* Nút Quản Lý & Tuỳ Chỉnh Tuyển Tập Đề (Admin only: Quản lý & Xóa) */}
+                            {/* Nút Quản Lý & Tuỳ Chỉnh Tuyển Tập Đề (Admin only: Icon Quản lý & Xóa) */}
                             {isAdmin && (
                               <div className="flex items-center gap-1.5">
                                 <button
@@ -6634,11 +6634,10 @@ function UnifiedHubContent() {
                                     e.stopPropagation()
                                     handleOpenEditPackageModal(col)
                                   }}
-                                  className="inline-flex items-center gap-1 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 py-1.5 px-2.5 text-xs font-bold transition cursor-pointer"
-                                  title="Quản lý tuyển tập đề"
+                                  className="h-9 w-9 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 flex items-center justify-center transition active:scale-95 cursor-pointer"
+                                  title="Quản lý & chỉnh sửa tuyển tập"
                                 >
-                                  <Edit className="h-3.5 w-3.5" />
-                                  <span>Quản lý</span>
+                                  <Edit className="h-4 w-4" />
                                 </button>
                                 <button
                                   type="button"
@@ -6646,10 +6645,10 @@ function UnifiedHubContent() {
                                     e.stopPropagation()
                                     handleDeleteCollection(col.id)
                                   }}
-                                  className="rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 p-2 text-xs font-bold transition cursor-pointer"
+                                  className="h-9 w-9 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition active:scale-95 cursor-pointer"
                                   title="Giải tán tuyển tập"
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-4 w-4" />
                                 </button>
                               </div>
                             )}
@@ -6658,10 +6657,11 @@ function UnifiedHubContent() {
                               <button
                                 type="button"
                                 onClick={() => setActiveCollection(col)}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 text-xs font-bold transition shadow-xs cursor-pointer"
+                                className="h-9 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
+                                title="Mở tuyển tập đề"
                               >
-                                <BookOpen className="h-3.5 w-3.5" />
-                                <span>Mở tuyển tập</span>
+                                <BookOpen className="h-4 w-4 shrink-0" />
+                                <span>Mở</span>
                               </button>
 
                               <button
@@ -6670,11 +6670,10 @@ function UnifiedHubContent() {
                                   setActiveCollection(col)
                                   setTimeout(() => handleOpenMixModal(), 100)
                                 }}
-                                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20 py-2 px-3 text-xs font-bold transition cursor-pointer"
+                                className="h-9 w-9 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-500/20 flex items-center justify-center transition active:scale-95 cursor-pointer"
                                 title="Trộn đề ôn luyện từ tuyển tập này"
                               >
-                                <Shuffle className="h-3.5 w-3.5" />
-                                <span>Trộn đề</span>
+                                <Shuffle className="h-4 w-4" />
                               </button>
                             </div>
                           </div>
