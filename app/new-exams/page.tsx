@@ -547,8 +547,18 @@ export default function NewExamsPage() {
     }
 
     try {
-      const res = await fetch(`/api/exam-collections?id=${encodeURIComponent(colId)}`, {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const queryUrl = `/api/exam-collections?id=${encodeURIComponent(colId)}&userId=${encodeURIComponent(
+        currentUserId || ''
+      )}&userEmail=${encodeURIComponent(userEmail || '')}`
+
+      const res = await fetch(queryUrl, {
         method: 'DELETE',
+        headers,
       })
       const data = await res.json()
       if (data.success) {
@@ -580,15 +590,22 @@ export default function NewExamsPage() {
     setPackagingError('')
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch('/api/exam-collections', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           id: packagingEditingId || undefined,
           subject: packagingSubject.trim(),
           title: packagingTitle.trim() || `Tuyển tập đề ${packagingSubject.trim()}`,
           description: packagingDesc.trim(),
           exam_ids: packagingSelectedExamIds,
+          userId: currentUserId,
+          userEmail: userEmail,
         }),
       })
 
@@ -642,9 +659,14 @@ export default function NewExamsPage() {
     setMixError('')
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch('/api/exam-collections/mix', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           collection_id: activeCollection.id,
           include_choice: mixIncludeChoice,
@@ -653,6 +675,8 @@ export default function NewExamsPage() {
           question_count: mixQuestionCount,
           custom_duration: mixDuration,
           custom_title: mixTitle,
+          userId: currentUserId,
+          userEmail: userEmail,
         }),
       })
 

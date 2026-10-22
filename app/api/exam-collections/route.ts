@@ -9,27 +9,80 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-async function checkIsAdmin(request: Request): Promise<boolean> {
+async function checkIsAdmin(request: Request, body?: any): Promise<boolean> {
   try {
-    const user = await getUserFromRequest(request)
-    if (!user) return false
     const admin = getSupabaseAdmin()
-    const { data: profile } = await admin
-      .from('profiles')
-      .select('role, email')
-      .eq('id', user.id)
-      .maybeSingle()
 
-    const metaRole = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase().trim()
-    return (
-      profile?.role === 'admin' ||
-      profile?.role === 'collab' ||
-      metaRole === 'admin' ||
-      metaRole === 'collab' ||
-      profile?.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com' ||
-      user.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com'
-    )
-  } catch {
+    // 1. Thử lấy từ Bearer token
+    let userId: string | null = null
+    let userEmail: string | null = null
+
+    try {
+      const tokenUser = await getUserFromRequest(request)
+      if (tokenUser) {
+        userId = tokenUser.id
+        userEmail = tokenUser.email || null
+      }
+    } catch {
+      // Bỏ qua lỗi token, fallback sang param
+    }
+
+    // 2. Fallback lấy từ body hoặc query nếu có
+    if (!userId && body?.userId) userId = String(body.userId)
+    if (!userEmail && body?.userEmail) userEmail = String(body.userEmail)
+
+    try {
+      const url = new URL(request.url)
+      if (!userId && url.searchParams.get('userId')) userId = url.searchParams.get('userId')
+      if (!userEmail && url.searchParams.get('userEmail')) userEmail = url.searchParams.get('userEmail')
+    } catch {}
+
+    if (!userId && !userEmail) return false
+
+    // 3. Kiểm tra email đặc quyền siêu quản trị
+    const isSuperAdminEmail =
+      userEmail?.toLowerCase() === 'hoangbinhminh2508@gmail.com' ||
+      userEmail?.toLowerCase() === 'admin@senexam.me'
+    if (isSuperAdminEmail) return true
+
+    // 4. Kiểm tra trong bảng profiles của Supabase
+    if (userId) {
+      const { data: profile } = await admin
+        .from('profiles')
+        .select('role, email, is_admin')
+        .eq('id', userId)
+        .maybeSingle()
+
+      if (
+        profile?.role === 'admin' ||
+        profile?.role === 'collab' ||
+        profile?.is_admin === true ||
+        profile?.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com' ||
+        profile?.email?.toLowerCase() === 'admin@senexam.me'
+      ) {
+        return true
+      }
+    }
+
+    if (userEmail) {
+      const { data: profileByEmail } = await admin
+        .from('profiles')
+        .select('role, email, is_admin')
+        .eq('email', userEmail)
+        .maybeSingle()
+
+      if (
+        profileByEmail?.role === 'admin' ||
+        profileByEmail?.role === 'collab' ||
+        profileByEmail?.is_admin === true
+      ) {
+        return true
+      }
+    }
+
+    return false
+  } catch (err) {
+    console.warn('Lỗi checkIsAdmin exam-collections:', err)
     return false
   }
 }
@@ -47,12 +100,12 @@ export async function GET() {
 // POST: Admin đóng gói hoặc cập nhật tuyển tập đề (lưu lên Supabase online)
 export async function POST(request: Request) {
   try {
-    const isAdmin = await checkIsAdmin(request)
+    const body = await request.json()
+    const isAdmin = await checkIsAdmin(request, body)
     if (!isAdmin) {
       return NextResponse.json({ error: 'Chỉ quản trị viên mới có quyền đóng gói tuyển tập đề' }, { status: 403 })
     }
 
-    const body = await request.json()
     const { id, subject, title, description, exam_ids } = body
 
     if (!subject || !subject.trim()) {
