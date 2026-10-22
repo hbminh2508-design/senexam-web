@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getExamCollections, saveExamCollections, ExamCollection } from '@/lib/examCollectionStore'
+import {
+  getExamCollectionsAsync,
+  saveExamCollectionAsync,
+  deleteExamCollectionAsync,
+  ExamCollection,
+} from '@/lib/examCollectionStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,17 +34,17 @@ async function checkIsAdmin(request: Request): Promise<boolean> {
   }
 }
 
-// GET: Lấy danh sách toàn bộ các tuyển tập đề
+// GET: Lấy danh sách toàn bộ các tuyển tập đề (online Supabase + fallback cục bộ)
 export async function GET() {
   try {
-    const collections = getExamCollections()
+    const collections = await getExamCollectionsAsync()
     return NextResponse.json({ success: true, collections })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Lỗi đọc tuyển tập đề' }, { status: 500 })
   }
 }
 
-// POST: Admin đóng gói hoặc cập nhật tuyển tập đề
+// POST: Admin đóng gói hoặc cập nhật tuyển tập đề (lưu lên Supabase online)
 export async function POST(request: Request) {
   try {
     const isAdmin = await checkIsAdmin(request)
@@ -58,7 +63,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Vui lòng chọn ít nhất 1 đề thi để đóng gói' }, { status: 400 })
     }
 
-    const collections = getExamCollections()
+    const collections = await getExamCollectionsAsync()
     const cleanSubject = subject.trim()
     const cleanTitle = (title && title.trim()) || `Tuyển tập đề ${cleanSubject}`
     const collectionId = id || `col-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
@@ -75,22 +80,16 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     }
 
-    if (existingIndex >= 0) {
-      collections[existingIndex] = updatedItem
-    } else {
-      collections.unshift(updatedItem)
-    }
+    const updatedList = await saveExamCollectionAsync(updatedItem)
 
-    saveExamCollections(collections)
-
-    return NextResponse.json({ success: true, collection: updatedItem, collections })
+    return NextResponse.json({ success: true, collection: updatedItem, collections: updatedList })
   } catch (error: any) {
     console.error('Lỗi POST /api/exam-collections:', error)
     return NextResponse.json({ error: error?.message || 'Lỗi lưu tuyển tập đề' }, { status: 500 })
   }
 }
 
-// DELETE: Admin giải tán / xoá tuyển tập đề (đề thi sẽ trở lại danh sách gốc)
+// DELETE: Admin giải tán / xoá tuyển tập đề (đồng bộ xoá trên Supabase online)
 export async function DELETE(request: Request) {
   try {
     const isAdmin = await checkIsAdmin(request)
@@ -104,11 +103,9 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Thiếu mã tuyển tập đề cần xoá' }, { status: 400 })
     }
 
-    let collections = getExamCollections()
-    collections = collections.filter((c) => c.id !== id)
-    saveExamCollections(collections)
+    const updatedList = await deleteExamCollectionAsync(id)
 
-    return NextResponse.json({ success: true, collections })
+    return NextResponse.json({ success: true, collections: updatedList })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Lỗi xoá tuyển tập đề' }, { status: 500 })
   }

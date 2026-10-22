@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getExamCollections } from '@/lib/examCollectionStore'
+import { getExamCollectionsAsync } from '@/lib/examCollectionStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thiếu mã tuyển tập đề' }, { status: 400 })
     }
 
-    const collections = getExamCollections()
+    const collections = await getExamCollectionsAsync()
     const collection = collections.find((c) => c.id === collection_id)
     if (!collection) {
       return NextResponse.json({ error: 'Không tìm thấy tuyển tập đề' }, { status: 404 })
