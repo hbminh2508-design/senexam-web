@@ -129,33 +129,13 @@ type QuickAction = {
 
 const QUICK_ACTIONS: QuickAction[] = [
   {
-    key: 'new-exams',
-    title: 'Kho đề thi mới',
-    description: 'Khám phá ngân hàng đề thi bám sát ma trận 2026 và làm bài trực tuyến.',
-    href: '/new-exams',
-    tone: 'from-[#FFD166] via-[#F9A03F] to-[#EF476F]',
+    key: 'new-sen-ground',
+    title: 'Tạo đề, Khảo thí và Lịch sử làm bài',
+    description: 'Hợp nhất toàn diện: Soạn đề KaTeX & SEB, khảo thí kho đề tập trung và tra cứu toàn bộ lịch sử làm bài.',
+    href: '/new-sen-ground',
+    tone: 'from-[#4F46E5] via-[#7C3AED] to-[#EC4899]',
     badge: 'Mới',
     icon: Rocket,
-    category: 'study',
-  },
-  {
-    key: 'setup-course',
-    title: 'Soạn Đề & Khóa Học',
-    description: 'Soạn đề KaTeX trực tiếp, tải đề PDF & SEB, cấu hình kỳ thi và quản lý thí sinh.',
-    href: '/new-setup-courses',
-    tone: 'from-[#10B981] via-[#059669] to-[#047857]',
-    badge: 'Mới',
-    icon: Sparkles,
-    category: 'study',
-  },
-  {
-    key: 'new-history-submissions',
-    title: 'Lịch sử Bài nộp',
-    description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết, đối chiếu đáp án và tải đề thi PDF.',
-    href: '/new-exams-history-submissions?tab=history',
-    tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
-    badge: 'Hồ sơ',
-    icon: BadgeCheck,
     category: 'study',
   },
   {
@@ -1124,7 +1104,7 @@ function NewDashboardContent() {
               </button>
 
               <Link
-                href="/new-exams-history-submissions?tab=history"
+                href="/new-sen-ground?tab=history"
                 className="rounded-2xl border border-black/5 dark:border-white/5 bg-teal-500/10 dark:bg-teal-500/15 p-2.5 text-center active:scale-95 transition"
               >
                 <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300">
@@ -1158,7 +1138,7 @@ function NewDashboardContent() {
                 />
               </div>
               <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
-                <Link href="/new-exams-history-submissions?tab=history" className="text-teal-600 dark:text-teal-400 font-bold hover:underline">
+                <Link href="/new-sen-ground?tab=history" className="text-teal-600 dark:text-teal-400 font-bold hover:underline">
                   Xem chi tiết lịch sử bài làm →
                 </Link>
                 <span className="font-semibold">
@@ -1635,7 +1615,7 @@ function NewDashboardContent() {
           {/* 3 Metric Cards */}
           <div className="relative mt-6 grid gap-3.5 sm:grid-cols-3">
             <Link
-              href="/new-exams-history-submissions?tab=history"
+              href="/new-sen-ground?tab=history"
               className="rounded-2xl border border-black/10 dark:border-white/10 bg-amber-500/10 dark:bg-amber-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group"
             >
               <div className="flex items-center justify-between">
@@ -1794,7 +1774,7 @@ function NewDashboardContent() {
                         const Wrapper = isExternal ? 'a' : Link
                         const extraProps = isExternal
                           ? { target: '_blank', rel: 'noopener noreferrer' }
-                          : item.href === '/new-setup-courses' || item.href === '/new-setup-course'
+                          : item.href.startsWith('/new-sen-ground') || item.href === '/new-setup-courses' || item.href === '/new-setup-course'
                           ? { prefetch: false }
                           : {}
 
@@ -1954,26 +1934,19 @@ function NewDashboardContent() {
                 </Link>
               </div>
 
-              {/* Lối tắt: Kho đề, Soạn đề & Hồ sơ cá nhân */}
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {/* Lối tắt: Tạo đề, Khảo thí và Lịch sử làm bài & Hồ sơ */}
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Link
-                  href="/new-exams"
-                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
+                  href="/new-sen-ground"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 py-2 px-2.5 text-[11px] font-bold transition hover:bg-indigo-500/20 text-center"
                 >
-                  <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề & Khảo thí
-                </Link>
-                <Link
-                  href="/new-setup-courses"
-                  prefetch={false}
-                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 py-2 px-1.5 text-[11px] font-bold transition hover:bg-emerald-500/20 text-center"
-                >
-                  <Sparkles className="h-3.5 w-3.5" /> Soạn đề
+                  <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Tạo đề, Khảo thí & Lịch sử
                 </Link>
                 <Link
                   href="/new-profile"
-                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 py-2 px-1.5 text-[11px] font-bold transition hover:bg-indigo-500/20 text-center"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-2.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
                 >
-                  <User className="h-3.5 w-3.5" /> Hồ sơ
+                  <User className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" /> Hồ sơ
                 </Link>
               </div>
             </div>

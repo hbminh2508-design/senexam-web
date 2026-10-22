@@ -1,24 +1,43 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import ModernLoading from '@/app/components/ModernLoading'
 
-export default function NewHistorySubmissionsRedirectPage() {
+function HistorySubmissionsRedirectInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const search = window.location.search ? `${window.location.search}&tab=history` : '?tab=history'
-      router.replace(`/new-exams-history-submissions${search}`)
+    const params = new URLSearchParams(searchParams ? searchParams.toString() : '')
+    if (!params.has('tab')) {
+      params.set('tab', 'history')
     }
-  }, [router])
+    const query = params.toString() ? `?${params.toString()}` : ''
+    router.replace(`/new-sen-ground${query}`)
+  }, [router, searchParams])
 
   return (
     <ModernLoading
       themeColor="teal"
-      title="SenExam Lịch Sử Bài Nộp"
-      subtitle="Đang chuyển hướng sang cổng Kho đề & Lịch sử thi thống nhất..."
+      title="Sen Ground: Tạo Đề, Khảo Thí & Lịch Sử"
+      subtitle="Đang chuyển hướng sang lịch sử bài làm..."
     />
+  )
+}
+
+export default function NewHistorySubmissionsRedirectPage() {
+  return (
+    <Suspense
+      fallback={
+        <ModernLoading
+          themeColor="teal"
+          title="Sen Ground: Tạo Đề, Khảo Thí & Lịch Sử"
+          subtitle="Đang chuyển hướng sang lịch sử bài làm..."
+        />
+      }
+    >
+      <HistorySubmissionsRedirectInner />
+    </Suspense>
   )
 }

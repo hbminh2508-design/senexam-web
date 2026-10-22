@@ -29,6 +29,7 @@ import {
   Settings,
   BadgeCheck,
   FileCheck,
+  Rocket,
 } from 'lucide-react'
 
 type FeatureItem = {
@@ -45,33 +46,13 @@ type FeatureItem = {
 const ALL_FEATURES: FeatureItem[] = [
   // 1. Học tập & Luyện thi
   {
-    key: 'exams',
-    title: 'Kho đề thi mới',
-    desc: 'Ngân hàng đề thi bám sát ma trận 2026, làm bài trực tuyến.',
-    href: '/new-exams',
-    tone: 'from-amber-400 to-rose-500',
+    key: 'sen-ground',
+    title: 'Tạo đề, Khảo thí và Lịch sử làm bài',
+    desc: 'Hợp nhất toàn diện: Soạn đề KaTeX & SEB, khảo thí kho đề tập trung và tra cứu toàn bộ lịch sử bài nộp.',
+    href: '/new-sen-ground',
+    tone: 'from-indigo-500 via-purple-500 to-pink-500',
     badge: 'Mới',
-    icon: FileText,
-    category: 'study',
-  },
-  {
-    key: 'setup-course',
-    title: 'Soạn đề & Khóa học',
-    desc: 'Soạn đề KaTeX, tải đề PDF & SEB, quản lý thí sinh làm bài.',
-    href: '/new-setup-courses',
-    tone: 'from-emerald-400 to-teal-600',
-    badge: 'Mới',
-    icon: Sparkles,
-    category: 'study',
-  },
-  {
-    key: 'history-submissions',
-    title: 'Lịch sử Bài nộp',
-    desc: 'Tra cứu bảng điểm, xem lại lời giải chi tiết và tải đề thi PDF.',
-    href: '/new-exams-history-submissions?tab=history',
-    tone: 'from-emerald-400 to-teal-600',
-    badge: 'Hồ sơ',
-    icon: BadgeCheck,
+    icon: Rocket,
     category: 'study',
   },
   {
@@ -290,7 +271,7 @@ export default function MobileBottomNav() {
   )
 
   const isHomeActive = pathname === '/' || pathname === '/new-dashboard' || pathname === '/dashboard'
-  const isExamsActive = pathname?.startsWith('/new-exams')
+  const isExamsActive = pathname?.startsWith('/new-sen-ground') || pathname?.startsWith('/new-exams')
   const isLibraryActive = pathname?.startsWith('/new-library')
 
   const filteredFeatures = useMemo(() => {
@@ -340,7 +321,7 @@ export default function MobileBottomNav() {
 
           {/* 2. Đề thi */}
           <Link
-            href="/new-exams"
+            href="/new-sen-ground"
             className={`flex flex-col items-center justify-center flex-1 py-1 rounded-full transition ${
               isExamsActive
                 ? 'text-pink-600 dark:text-pink-400 font-black'
@@ -348,7 +329,7 @@ export default function MobileBottomNav() {
             }`}
           >
             <FileText className="h-5 w-5 shrink-0 aspect-square" />
-            <span className="text-[10px] mt-0.5 tracking-tight">Kho đề</span>
+            <span className="text-[10px] mt-0.5 tracking-tight">Khảo thí</span>
           </Link>
 
           {/* 3. Nút trung tâm: Xem tất cả tính năng của web */}

@@ -163,7 +163,7 @@ export default function HomePage() {
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 mb-12">
           <Link
-            href="/new-exams"
+            href="/new-sen-ground"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/25 hover:scale-105 active:scale-95 transition"
           >
             <BookOpen className="h-4 w-4" />
@@ -302,7 +302,7 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/new-exams"
+              href="/new-sen-ground"
               className="inline-flex items-center gap-1 text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline pt-2"
             >
               Xem đề thi THPTQG <ChevronRight className="h-3.5 w-3.5" />
@@ -321,7 +321,7 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/new-exams"
+              href="/new-sen-ground"
               className="inline-flex items-center gap-1 text-xs font-black text-emerald-600 dark:text-emerald-400 hover:underline pt-2"
             >
               Xem đề thi HSA <ChevronRight className="h-3.5 w-3.5" />
@@ -340,7 +340,7 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/new-exams"
+              href="/new-sen-ground"
               className="inline-flex items-center gap-1 text-xs font-black text-amber-600 dark:text-amber-400 hover:underline pt-2"
             >
               Xem đề thi TSA <ChevronRight className="h-3.5 w-3.5" />
@@ -363,7 +363,7 @@ export default function HomePage() {
             <Link href="/home" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">
               Giới thiệu
             </Link>
-            <Link href="/new-exams" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">
+            <Link href="/new-sen-ground" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">
               Đề thi
             </Link>
             <Link href="/new-idp" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition">
