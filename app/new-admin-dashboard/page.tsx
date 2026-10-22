@@ -2253,8 +2253,27 @@ export default function NewAdminDashboardPage() {
                 title="Bấm để chuyển đổi mã build phiên bản"
                 className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
               >
-                {showFullVersion ? '2.0.2194023.7903.02' : '2.0'}
+                {showFullVersion ? '2.0.2194023.10483.01' : '2.0'}
               </button>
+            </div>
+
+            {/* Nút truy cập FEPN & SEB trên phiên bản web */}
+            <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-1.5">
+              <p className="text-xs font-bold text-slate-900 dark:text-white">Truy cập hệ thống mở rộng:</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/fepn-dashboard"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-sky-500/25 bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 py-2 text-xs font-bold transition shadow-xs text-center"
+                >
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" /> FEPN
+                </Link>
+                <Link
+                  href="/seb-dashboard"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-indigo-500/25 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 py-2 text-xs font-bold transition shadow-xs text-center"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" /> SEB
+                </Link>
+              </div>
             </div>
 
             <div className="pt-2 border-t border-black/10 dark:border-white/10">
@@ -2930,8 +2949,27 @@ export default function NewAdminDashboardPage() {
                     title="Bấm để chuyển đổi mã build phiên bản"
                     className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
                   >
-                    {showFullVersion ? '2.0.2194023.7903.02' : '2.0'}
+                    {showFullVersion ? '2.0.2194023.10483.01' : '2.0'}
                   </button>
+                </div>
+
+                {/* Nút truy cập FEPN & SEB trên phiên bản web */}
+                <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-1.5">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">Truy cập hệ thống mở rộng:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Link
+                      href="/fepn-dashboard"
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-sky-500/25 bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300 py-2.5 text-xs font-bold transition shadow-xs text-center"
+                    >
+                      <BookOpen className="h-4 w-4 shrink-0" /> FEPN Web
+                    </Link>
+                    <Link
+                      href="/seb-dashboard"
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-indigo-500/25 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 py-2.5 text-xs font-bold transition shadow-xs text-center"
+                    >
+                      <ShieldCheck className="h-4 w-4 shrink-0" /> SEB Web
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="pt-2 border-t border-black/10 dark:border-white/10">
