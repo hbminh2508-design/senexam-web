@@ -5292,18 +5292,47 @@ function UnifiedHubContent() {
         setUserEmail(user.email || null)
         await ensureStudentProfile(user.id)
 
-        // Kiểm tra quyền Admin
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, is_admin')
-          .eq('id', user.id)
-          .single()
+        // Kiểm tra quyền Admin đa tầng (an toàn, không truy vấn cột is_admin không tồn tại)
+        let hasAdminRole = false
+        const userEmailLower = (user.email || '').toLowerCase().trim()
+        const metaRole = (user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase().trim()
 
-        const hasAdminRole =
-          profile?.role === 'admin' ||
-          profile?.role === 'collab' ||
-          profile?.is_admin === true ||
-          user.email === 'admin@senexam.com'
+        if (
+          userEmailLower === 'hoangbinhminh2508@gmail.com' ||
+          userEmailLower === 'admin@senexam.me' ||
+          userEmailLower === 'admin@senexam.com' ||
+          userEmailLower.includes('admin') ||
+          metaRole === 'admin' ||
+          metaRole === 'collab' ||
+          metaRole === 'teacher'
+        ) {
+          hasAdminRole = true
+        }
+
+        try {
+          const { data: profile, error: pErr } = await supabase
+            .from('profiles')
+            .select('role, email')
+            .eq('id', user.id)
+            .maybeSingle()
+
+          if (!pErr && profile) {
+            const role = (profile.role || '').toLowerCase().trim()
+            const pEmail = (profile.email || '').toLowerCase().trim()
+            if (
+              role === 'admin' ||
+              role === 'collab' ||
+              role === 'teacher' ||
+              pEmail === 'hoangbinhminh2508@gmail.com' ||
+              pEmail.includes('admin')
+            ) {
+              hasAdminRole = true
+            }
+          }
+        } catch (e) {
+          console.warn('Lỗi kiểm tra quyền profile:', e)
+        }
+
         setIsAdmin(hasAdminRole)
 
         // 1. Tải cây Thư mục Mẹ - Con (SEB folders)
@@ -6521,9 +6550,21 @@ function UnifiedHubContent() {
                         Tuyển Tập Đề Thi Theo Môn
                       </h2>
                     </div>
-                    <span className="text-xs text-slate-500 font-bold font-mono">
-                      {filteredCollections.length} tuyển tập
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={handleOpenCreatePackageModal}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 text-xs font-bold shadow-xs transition hover:scale-105 cursor-pointer"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Tạo tuyển tập đề</span>
+                        </button>
+                      )}
+                      <span className="text-xs text-slate-500 font-bold font-mono">
+                        {filteredCollections.length} tuyển tập
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -6584,19 +6625,20 @@ function UnifiedHubContent() {
                           </div>
 
                           <div className="mt-4 pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between gap-2">
-                            {/* Nút Tuỳ Chỉnh Tuyển Tập Đề (Admin only: Sửa & Xóa) */}
+                            {/* Nút Quản Lý & Tuỳ Chỉnh Tuyển Tập Đề (Admin only: Quản lý & Xóa) */}
                             {isAdmin && (
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleOpenEditPackageModal(col)
                                   }}
-                                  className="rounded-lg p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
-                                  title="Sửa tuyển tập"
+                                  className="inline-flex items-center gap-1 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/20 py-1.5 px-2.5 text-xs font-bold transition cursor-pointer"
+                                  title="Quản lý tuyển tập đề"
                                 >
                                   <Edit className="h-3.5 w-3.5" />
+                                  <span>Quản lý</span>
                                 </button>
                                 <button
                                   type="button"
@@ -6604,7 +6646,7 @@ function UnifiedHubContent() {
                                     e.stopPropagation()
                                     handleDeleteCollection(col.id)
                                   }}
-                                  className="rounded-lg p-1.5 text-slate-400 hover:text-rose-600 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                                  className="rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 p-2 text-xs font-bold transition cursor-pointer"
                                   title="Giải tán tuyển tập"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
