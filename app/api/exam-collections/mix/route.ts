@@ -208,12 +208,12 @@ export async function POST(request: Request) {
     const newExamPayload: any = {
       title: examTitle,
       exam_type: 'THPTQG',
-      subject: collection.subject,
+      subjects: [collection.subject],
       duration: chosenDuration,
       format: 'katex',
       exam_structure: sections,
       is_hidden: true, // Ẩn khỏi bảng chung, chỉ thí sinh truy cập bài làm
-      created_by: user?.id || null,
+      created_by: user?.id || body?.userId || null,
       created_at: new Date().toISOString(),
     }
 
