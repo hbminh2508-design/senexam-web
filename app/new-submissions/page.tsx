@@ -9,8 +9,8 @@ export default function NewSubmissionsRedirectPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const search = window.location.search || ''
-      router.replace(`/new-history-submissions${search}`)
+      const search = window.location.search ? `${window.location.search}&tab=history` : '?tab=history'
+      router.replace(`/new-exams-history-submissions${search}`)
     }
   }, [router])
 

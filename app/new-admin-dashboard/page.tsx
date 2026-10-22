@@ -216,7 +216,7 @@ const ADMIN_ACTIONS: QuickAction[] = [
     key: 'act-history-submissions',
     title: 'Lịch Sử Bài Nộp Hệ Thống',
     description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết, đối chiếu đáp án toàn bộ thí sinh.',
-    href: '/new-history-submissions',
+    href: '/new-exams-history-submissions?tab=history',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     badge: 'Khảo Thí',
     icon: BadgeCheck,
@@ -287,7 +287,7 @@ const STUDENT_ACTIONS: QuickAction[] = [
     key: 'st-history',
     title: 'Lịch sử Bài nộp',
     description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết, đối chiếu đáp án và tải đề thi PDF.',
-    href: '/new-history-submissions',
+    href: '/new-exams-history-submissions?tab=history',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     badge: 'Hồ sơ',
     icon: BadgeCheck,
@@ -474,7 +474,7 @@ const TEACHER_ACTIONS: QuickAction[] = [
     key: 'tc-results',
     title: 'Lịch Sử Bài Nộp & Phổ Điểm',
     description: 'Theo dõi tiến độ nộp bài của học sinh, xuất bảng điểm và chấm điểm tự động.',
-    href: '/new-history-submissions',
+    href: '/new-exams-history-submissions?tab=history',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     badge: 'Bảng Điểm',
     icon: BadgeCheck,
@@ -2460,7 +2460,7 @@ export default function NewAdminDashboardPage() {
               </button>
 
               <Link
-                href="/new-history-submissions"
+                href="/new-exams-history-submissions?tab=history"
                 className="rounded-2xl border border-black/10 dark:border-white/10 bg-indigo-500/10 dark:bg-indigo-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group"
               >
                 <div className="flex items-center justify-between">

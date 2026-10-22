@@ -68,7 +68,7 @@ const ALL_FEATURES: FeatureItem[] = [
     key: 'history-submissions',
     title: 'Lịch sử Bài nộp',
     desc: 'Tra cứu bảng điểm, xem lại lời giải chi tiết và tải đề thi PDF.',
-    href: '/new-history-submissions',
+    href: '/new-exams-history-submissions?tab=history',
     tone: 'from-emerald-400 to-teal-600',
     badge: 'Hồ sơ',
     icon: BadgeCheck,

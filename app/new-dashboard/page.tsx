@@ -152,7 +152,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     key: 'new-history-submissions',
     title: 'Lịch sử Bài nộp',
     description: 'Tra cứu bảng điểm, xem lại lời giải chi tiết, đối chiếu đáp án và tải đề thi PDF.',
-    href: '/new-history-submissions',
+    href: '/new-exams-history-submissions?tab=history',
     tone: 'from-[#34D399] via-[#10B981] to-[#059669]',
     badge: 'Hồ sơ',
     icon: BadgeCheck,
@@ -1124,7 +1124,7 @@ function NewDashboardContent() {
               </button>
 
               <Link
-                href="/new-history-submissions"
+                href="/new-exams-history-submissions?tab=history"
                 className="rounded-2xl border border-black/5 dark:border-white/5 bg-teal-500/10 dark:bg-teal-500/15 p-2.5 text-center active:scale-95 transition"
               >
                 <div className="flex items-center justify-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300">
@@ -1158,7 +1158,7 @@ function NewDashboardContent() {
                 />
               </div>
               <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
-                <Link href="/new-history-submissions" className="text-teal-600 dark:text-teal-400 font-bold hover:underline">
+                <Link href="/new-exams-history-submissions?tab=history" className="text-teal-600 dark:text-teal-400 font-bold hover:underline">
                   Xem chi tiết lịch sử bài làm →
                 </Link>
                 <span className="font-semibold">
@@ -1225,16 +1225,10 @@ function NewDashboardContent() {
               <button
                 type="button"
                 onClick={() => setShowDailyStreakModal(true)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 text-white px-3 py-2 text-xs font-black shadow-xs active:scale-95 transition cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 text-white px-3 py-2 text-xs font-black shadow-xs active:scale-95 transition cursor-pointer"
               >
                 <Gift className="h-3.5 w-3.5" /> Điểm Danh Nhận Quà SC
               </button>
-              <Link
-                href="/new-history-submissions"
-                className="inline-flex items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold transition"
-              >
-                Lịch sử →
-              </Link>
             </div>
           </div>
 
@@ -1641,7 +1635,7 @@ function NewDashboardContent() {
           {/* 3 Metric Cards */}
           <div className="relative mt-6 grid gap-3.5 sm:grid-cols-3">
             <Link
-              href="/new-history-submissions"
+              href="/new-exams-history-submissions?tab=history"
               className="rounded-2xl border border-black/10 dark:border-white/10 bg-amber-500/10 dark:bg-amber-500/15 p-4 transition hover:scale-[1.02] cursor-pointer group"
             >
               <div className="flex items-center justify-between">
@@ -1960,19 +1954,13 @@ function NewDashboardContent() {
                 </Link>
               </div>
 
-              {/* Lối tắt: Lịch sử làm bài, Kho đề, Soạn đề & Hồ sơ cá nhân */}
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Link
-                  href="/new-history-submissions"
-                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
-                >
-                  <BadgeCheck className="h-3.5 w-3.5 text-teal-500" /> Lịch sử
-                </Link>
+              {/* Lối tắt: Kho đề, Soạn đề & Hồ sơ cá nhân */}
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Link
                   href="/new-exams"
                   className="inline-flex items-center justify-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 py-2 px-1.5 text-[11px] font-bold transition hover:bg-black/10 dark:hover:bg-white/10 text-center"
                 >
-                  <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề
+                  <Rocket className="h-3.5 w-3.5 text-indigo-500" /> Kho đề & Khảo thí
                 </Link>
                 <Link
                   href="/new-setup-courses"
@@ -2017,20 +2005,14 @@ function NewDashboardContent() {
                   : 'Điểm danh và làm bài thi mỗi ngày để tích lũy chuỗi học tập và nhận thưởng SenCash miễn phí.'}
               </p>
 
-              <div className="mt-3.5 flex items-center gap-2">
+              <div className="mt-3.5">
                 <button
                   type="button"
                   onClick={() => setShowDailyStreakModal(true)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 text-white px-3 py-2 text-xs font-black shadow-md hover:opacity-95 active:scale-95 transition cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 text-white px-3 py-2 text-xs font-black shadow-md hover:opacity-95 active:scale-95 transition cursor-pointer"
                 >
                   <Gift className="h-3.5 w-3.5" /> Điểm Danh & Nhận Quà SC
                 </button>
-                <Link
-                  href="/new-history-submissions"
-                  className="inline-flex items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 px-3 py-2 text-xs font-bold transition hover:bg-black/5"
-                >
-                  Lịch sử →
-                </Link>
               </div>
             </div>
 
