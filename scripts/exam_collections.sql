@@ -1,6 +1,6 @@
 -- =========================================================================
 -- BẢNG TUYỂN TẬP ĐỀ THI THEO MÔN (EXAM COLLECTIONS) TRÊN SUPABASE
--- Cho phép lưu trữ online, đồng bộ realtime và bảo mật phân quyền RLS
+-- Hỗ trợ lưu online, đồng bộ realtime và bảo mật phân quyền RLS chuẩn xác
 -- =========================================================================
 
 -- 1. Tạo bảng lưu trữ tuyển tập đề thi
@@ -35,7 +35,7 @@ CREATE POLICY "Cho phep tat ca moi nguoi xem tuyen tap de"
     FOR SELECT
     USING (true);
 
--- 6. Policy 2: Chỉ tài khoản Quản trị viên (Admin/Collab) mới có quyền THÊM, SỬA, XÓA
+-- 6. Policy 2: Chỉ tài khoản Quản trị viên (role: admin/collab hoặc email quản trị) mới có quyền THÊM, SỬA, XÓA
 DROP POLICY IF EXISTS "Chi admin duoc them sua xoa tuyen tap de" ON public.exam_collections;
 CREATE POLICY "Chi admin duoc them sua xoa tuyen tap de"
     ON public.exam_collections
@@ -45,7 +45,7 @@ CREATE POLICY "Chi admin duoc them sua xoa tuyen tap de"
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE profiles.id = auth.uid()
-            AND (profiles.role IN ('admin', 'collab') OR profiles.is_admin = true)
+            AND profiles.role IN ('admin', 'collab')
         )
         OR (auth.jwt() ->> 'email') = 'hoangbinhminh2508@gmail.com'
     )
@@ -53,7 +53,7 @@ CREATE POLICY "Chi admin duoc them sua xoa tuyen tap de"
         EXISTS (
             SELECT 1 FROM public.profiles
             WHERE profiles.id = auth.uid()
-            AND (profiles.role IN ('admin', 'collab') OR profiles.is_admin = true)
+            AND profiles.role IN ('admin', 'collab')
         )
         OR (auth.jwt() ->> 'email') = 'hoangbinhminh2508@gmail.com'
     );

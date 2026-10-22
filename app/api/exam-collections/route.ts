@@ -49,14 +49,13 @@ async function checkIsAdmin(request: Request, body?: any): Promise<boolean> {
     if (userId) {
       const { data: profile } = await admin
         .from('profiles')
-        .select('role, email, is_admin')
+        .select('role, email')
         .eq('id', userId)
         .maybeSingle()
 
       if (
         profile?.role === 'admin' ||
         profile?.role === 'collab' ||
-        profile?.is_admin === true ||
         profile?.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com' ||
         profile?.email?.toLowerCase() === 'admin@senexam.me'
       ) {
@@ -67,14 +66,13 @@ async function checkIsAdmin(request: Request, body?: any): Promise<boolean> {
     if (userEmail) {
       const { data: profileByEmail } = await admin
         .from('profiles')
-        .select('role, email, is_admin')
+        .select('role, email')
         .eq('email', userEmail)
         .maybeSingle()
 
       if (
         profileByEmail?.role === 'admin' ||
-        profileByEmail?.role === 'collab' ||
-        profileByEmail?.is_admin === true
+        profileByEmail?.role === 'collab'
       ) {
         return true
       }
