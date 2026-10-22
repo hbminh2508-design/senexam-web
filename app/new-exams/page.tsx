@@ -22,6 +22,7 @@ import {
   Loader2,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Sun,
   Moon,
   History,
@@ -182,6 +183,9 @@ export default function NewExamsPage() {
   const [mixTitle, setMixTitle] = useState('')
   const [mixError, setMixError] = useState('')
   const [mixLoading, setMixLoading] = useState(false)
+  // Tùy chọn chi tiết từng đề khi trộn
+  const [showDetailedMix, setShowDetailedMix] = useState(false)
+  const [examMixConfigs, setExamMixConfigs] = useState<Record<string, { enabled: boolean; count: number }>>({})
 
   // Nhập mã truy cập đề riêng tư
   const [accessCode, setAccessCode] = useState('')
@@ -512,6 +516,38 @@ export default function NewExamsPage() {
     return count
   }, [mixIncludeChoice, mixIncludeTF, mixIncludeSA, activeCollectionBreakdown])
 
+  // Tính số câu hỏi khả dụng của 1 đề cụ thể theo các dạng câu được tick
+  const getSingleExamAvailableCount = (ex: ExamItem) => {
+    const bd = getExamQuestionsBreakdown([ex])
+    let count = 0
+    if (mixIncludeChoice) count += bd.choiceCount
+    if (mixIncludeTF) count += bd.tfCount
+    if (mixIncludeSA) count += bd.saCount
+    return count
+  }
+
+  // Danh sách các đề được tick chọn trong tùy chọn chi tiết
+  const detailedSelectedExams = useMemo(() => {
+    return activeCollectionExams.filter((ex) => examMixConfigs[ex.id]?.enabled)
+  }, [activeCollectionExams, examMixConfigs])
+
+  // Tổng số câu hỏi được chỉ định lấy từ các đề đã tick
+  const detailedTotalQuestionsCount = useMemo(() => {
+    return detailedSelectedExams.reduce((sum, ex) => sum + (examMixConfigs[ex.id]?.count || 0), 0)
+  }, [detailedSelectedExams, examMixConfigs])
+
+  // Tổng thời gian các đề được chọn cộng lại + 30 phút trong chế độ chi tiết
+  const detailedSumDuration = useMemo(() => {
+    return detailedSelectedExams.reduce((sum, e) => sum + (e.duration || 50), 0)
+  }, [detailedSelectedExams])
+
+  const detailedMaxDuration = useMemo(() => {
+    const base = detailedSumDuration > 0 ? detailedSumDuration : activeCollectionSumDuration
+    return base + 30
+  }, [detailedSumDuration, activeCollectionSumDuration])
+
+  const effectiveMaxDuration = showDetailedMix ? detailedMaxDuration : activeCollectionMaxDuration
+
   // Mở modal đóng gói tuyển tập (Admin)
   const handleOpenCreatePackageModal = () => {
     setPackagingEditingId(null)
@@ -632,6 +668,19 @@ export default function NewExamsPage() {
     setMixIncludeChoice(true)
     setMixIncludeTF(true)
     setMixIncludeSA(true)
+    setShowDetailedMix(false)
+
+    // Khởi tạo cấu hình mặc định cho từng đề trong tuyển tập
+    const initialConfigs: Record<string, { enabled: boolean; count: number }> = {}
+    activeCollectionExams.forEach((ex) => {
+      const bd = getExamQuestionsBreakdown([ex])
+      initialConfigs[ex.id] = {
+        enabled: true,
+        count: bd.total,
+      }
+    })
+    setExamMixConfigs(initialConfigs)
+
     const available = activeCollectionBreakdown.total
     setMixQuestionCount(Math.min(40, Math.max(1, available)))
     setMixDuration(Math.min(activeCollectionSumDuration || 50, activeCollectionMaxDuration))
@@ -650,8 +699,13 @@ export default function NewExamsPage() {
       return
     }
 
-    if (currentMaxAvailableQuestions <= 0) {
+    if (!showDetailedMix && currentMaxAvailableQuestions <= 0) {
       setMixError('Không có câu hỏi nào thuộc các phần đã chọn để trộn.')
+      return
+    }
+
+    if (showDetailedMix && detailedTotalQuestionsCount <= 0) {
+      setMixError('Vui lòng chọn ít nhất 1 đề thi và đặt số câu hỏi muốn lấy lớn hơn 0.')
       return
     }
 
@@ -664,20 +718,31 @@ export default function NewExamsPage() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
+      const payload: any = {
+        collection_id: activeCollection.id,
+        include_choice: mixIncludeChoice,
+        include_true_false: mixIncludeTF,
+        include_short_answer: mixIncludeSA,
+        question_count: showDetailedMix ? detailedTotalQuestionsCount : mixQuestionCount,
+        custom_duration: mixDuration,
+        custom_title: mixTitle,
+        userId: currentUserId,
+        userEmail: userEmail,
+      }
+
+      if (showDetailedMix) {
+        payload.exam_configs = detailedSelectedExams
+          .filter((ex) => (examMixConfigs[ex.id]?.count || 0) > 0)
+          .map((ex) => ({
+            exam_id: ex.id,
+            count: examMixConfigs[ex.id].count,
+          }))
+      }
+
       const res = await fetch('/api/exam-collections/mix', {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          collection_id: activeCollection.id,
-          include_choice: mixIncludeChoice,
-          include_true_false: mixIncludeTF,
-          include_short_answer: mixIncludeSA,
-          question_count: mixQuestionCount,
-          custom_duration: mixDuration,
-          custom_title: mixTitle,
-          userId: currentUserId,
-          userEmail: userEmail,
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json()
@@ -742,15 +807,15 @@ export default function NewExamsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Nút Đóng Gói Tuyển Tập Đề - Chỉ Admin Mới Thấy */}
+            {/* Nút Đóng Gói Tuyển Tập Đề - Chỉ Admin Mới Thấy (chỉ logo) */}
             {isAdmin && (
               <button
                 type="button"
                 onClick={handleOpenCreatePackageModal}
-                className="inline-flex items-center gap-1.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2.5 text-xs font-bold shadow-sm transition cursor-pointer"
+                title="Đóng gói tuyển tập đề (Admin)"
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition hover:scale-105 cursor-pointer"
               >
-                <Package className="h-4 w-4" />
-                <span>Đóng gói tuyển tập đề</span>
+                <Package className="h-5 w-5" />
               </button>
             )}
 
@@ -1657,6 +1722,164 @@ export default function NewExamsPage() {
                 </div>
               </div>
 
+              {/* TÙY CHỌN CHI TIẾT TỪNG ĐỀ (NÚT CHI TIẾT) */}
+              <div className="pt-2 border-t border-black/10 dark:border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Tùy chọn chi tiết từng đề:
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      {showDetailedMix
+                        ? 'Đang bật: Chọn cụ thể đề nào và số câu lấy từ mỗi đề.'
+                        : 'Mặc định: Tự động gom & trộn đều từ toàn bộ tuyển tập.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !showDetailedMix
+                      setShowDetailedMix(next)
+                      if (next) {
+                        const hasAny = Object.values(examMixConfigs).some((c) => c.enabled && c.count > 0)
+                        if (!hasAny) {
+                          const initialConfigs: Record<string, { enabled: boolean; count: number }> = {}
+                          activeCollectionExams.forEach((ex) => {
+                            const avail = getSingleExamAvailableCount(ex)
+                            initialConfigs[ex.id] = { enabled: true, count: avail }
+                          })
+                          setExamMixConfigs(initialConfigs)
+                        }
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold transition hover:bg-indigo-500/20 cursor-pointer"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <span>{showDetailedMix ? 'Đóng chi tiết' : 'Chi tiết'}</span>
+                    {showDetailedMix ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+
+                {/* BẢNG TÙY CHỌN TỪNG ĐỀ (HIỆN KHI BẤM CHI TIẾT) */}
+                {showDetailedMix && (
+                  <div className="space-y-2.5 p-3 rounded-2xl border border-indigo-500/25 bg-indigo-500/5 dark:bg-indigo-500/10 animate-in fade-in">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <span>Chọn đề thi & số câu cần lấy:</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = { ...examMixConfigs }
+                            activeCollectionExams.forEach((ex) => {
+                              const avail = getSingleExamAvailableCount(ex)
+                              next[ex.id] = { enabled: true, count: avail }
+                            })
+                            setExamMixConfigs(next)
+                          }}
+                          className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                        >
+                          Chọn tất cả
+                        </button>
+                        <span className="text-slate-400">|</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = { ...examMixConfigs }
+                            activeCollectionExams.forEach((ex) => {
+                              next[ex.id] = { enabled: false, count: 0 }
+                            })
+                            setExamMixConfigs(next)
+                          }}
+                          className="text-[11px] text-slate-500 hover:underline cursor-pointer"
+                        >
+                          Bỏ chọn hết
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                      {activeCollectionExams.map((ex, idx) => {
+                        const cfg = examMixConfigs[ex.id] || { enabled: false, count: 0 }
+                        const available = getSingleExamAvailableCount(ex)
+                        const bd = getExamQuestionsBreakdown([ex])
+
+                        return (
+                          <div
+                            key={ex.id}
+                            className={`p-2.5 rounded-xl border transition ${
+                              cfg.enabled
+                                ? 'border-indigo-500/40 bg-white dark:bg-slate-800 shadow-2xs'
+                                : 'border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={cfg.enabled}
+                                onChange={(e) => {
+                                  const checked = e.target.checked
+                                  setExamMixConfigs((prev) => ({
+                                    ...prev,
+                                    [ex.id]: {
+                                      enabled: checked,
+                                      count: checked ? (prev[ex.id]?.count > 0 ? prev[ex.id].count : available) : 0,
+                                    },
+                                  }))
+                                }}
+                                className="mt-1 h-4 w-4 rounded accent-indigo-600 cursor-pointer"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                    Đề số {idx + 1}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                                    {ex.title}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                  Khả dụng: <span className="font-bold text-slate-700 dark:text-slate-300">{available} câu</span>
+                                  {' '}({bd.choiceCount} TN · {bd.tfCount} Đ/S · {bd.saCount} TLN) · {ex.duration || 50} phút
+                                </div>
+                              </div>
+
+                              {/* Input số câu lấy từ đề này */}
+                              {cfg.enabled && (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="text-[11px] text-slate-500">Lấy:</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={available}
+                                    value={cfg.count}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, Math.min(available, parseInt(e.target.value) || 0))
+                                      setExamMixConfigs((prev) => ({
+                                        ...prev,
+                                        [ex.id]: { enabled: true, count: val },
+                                      }))
+                                    }}
+                                    className="w-14 h-8 rounded-lg border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-1.5 text-center text-xs font-mono font-bold outline-none focus:border-indigo-500"
+                                  />
+                                  <span className="text-[11px] text-slate-500">câu</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    <div className="pt-1.5 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-bold border-t border-black/5 dark:border-white/5">
+                      <span>Đã chọn: {detailedSelectedExams.length} / {activeCollectionExams.length} đề thi</span>
+                      <span className="text-indigo-600 dark:text-indigo-400 font-mono">
+                        Tổng số câu lấy: {detailedTotalQuestionsCount} câu
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* PHẦN 2: TUỲ CHỌN SỐ CÂU HỎI ĐỂ TRỘN */}
               <div className="space-y-2 pt-2 border-t border-black/10 dark:border-white/10">
                 <div className="flex items-center justify-between">
@@ -1664,33 +1887,41 @@ export default function NewExamsPage() {
                     2. Số câu hỏi cần trộn:
                   </label>
                   <span className="text-xs font-mono font-black text-indigo-600 dark:text-indigo-400">
-                    {mixQuestionCount} câu (Tối đa: {currentMaxAvailableQuestions} câu)
+                    {showDetailedMix ? detailedTotalQuestionsCount : mixQuestionCount} câu (Tối đa: {currentMaxAvailableQuestions} câu)
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="1"
-                    max={Math.max(1, currentMaxAvailableQuestions)}
-                    value={Math.min(mixQuestionCount, Math.max(1, currentMaxAvailableQuestions))}
-                    onChange={(e) => setMixQuestionCount(Number(e.target.value))}
-                    disabled={currentMaxAvailableQuestions === 0}
-                    className="w-full accent-indigo-600 cursor-pointer"
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max={Math.max(1, currentMaxAvailableQuestions)}
-                    value={mixQuestionCount}
-                    onChange={(e) => setMixQuestionCount(Number(e.target.value))}
-                    disabled={currentMaxAvailableQuestions === 0}
-                    className="w-20 h-9 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-2 text-center text-xs font-mono font-bold outline-none"
-                  />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Tối đa là tổng số câu hỏi các đề có ở từng phần cộng dồn lại (đã trừ bớt nếu bỏ chọn phần tương ứng).
-                </p>
+                {showDetailedMix ? (
+                  <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-medium">
+                    Số câu hỏi đang được tính theo tùy chọn chi tiết từng đề ở trên ({detailedTotalQuestionsCount} câu từ {detailedSelectedExams.length} đề thi được chọn).
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="1"
+                        max={Math.max(1, currentMaxAvailableQuestions)}
+                        value={Math.min(mixQuestionCount, Math.max(1, currentMaxAvailableQuestions))}
+                        onChange={(e) => setMixQuestionCount(Number(e.target.value))}
+                        disabled={currentMaxAvailableQuestions === 0}
+                        className="w-full accent-indigo-600 cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        max={Math.max(1, currentMaxAvailableQuestions)}
+                        value={mixQuestionCount}
+                        onChange={(e) => setMixQuestionCount(Number(e.target.value))}
+                        disabled={currentMaxAvailableQuestions === 0}
+                        className="w-20 h-9 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-2 text-center text-xs font-mono font-bold outline-none"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Tối đa là tổng số câu hỏi các đề có ở từng phần cộng dồn lại (đã trừ bớt nếu bỏ chọn phần tương ứng).
+                    </p>
+                  </>
+                )}
               </div>
 
               {/* PHẦN 3: TUỲ CHỌN THỜI GIAN LÀM BÀI */}
@@ -1700,7 +1931,7 @@ export default function NewExamsPage() {
                     3. Thời gian làm bài thi (phút):
                   </label>
                   <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-400">
-                    {mixDuration} phút (Tối đa: {activeCollectionMaxDuration} phút)
+                    {mixDuration} phút (Tối đa: {effectiveMaxDuration} phút)
                   </span>
                 </div>
 
@@ -1708,23 +1939,23 @@ export default function NewExamsPage() {
                   <input
                     type="range"
                     min="5"
-                    max={activeCollectionMaxDuration}
-                    value={mixDuration}
+                    max={effectiveMaxDuration}
+                    value={Math.min(mixDuration, effectiveMaxDuration)}
                     onChange={(e) => setMixDuration(Number(e.target.value))}
                     className="w-full accent-amber-500 cursor-pointer"
                   />
                   <input
                     type="number"
                     min="5"
-                    max={activeCollectionMaxDuration}
-                    value={mixDuration}
+                    max={effectiveMaxDuration}
+                    value={Math.min(mixDuration, effectiveMaxDuration)}
                     onChange={(e) => setMixDuration(Number(e.target.value))}
                     className="w-20 h-9 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-2 text-center text-xs font-mono font-bold outline-none"
                   />
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Tối đa cho phép: Tổng thời gian các đề cộng lại ({activeCollectionSumDuration} phút) + 30 phút ={' '}
-                  {activeCollectionMaxDuration} phút.
+                  Tối đa cho phép: Tổng thời gian các đề {showDetailedMix ? 'được chọn' : ''} cộng lại ({showDetailedMix ? detailedSumDuration : activeCollectionSumDuration} phút) + 30 phút ={' '}
+                  {effectiveMaxDuration} phút.
                 </p>
               </div>
 
@@ -1759,7 +1990,11 @@ export default function NewExamsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={mixLoading || currentMaxAvailableQuestions === 0}
+                  disabled={
+                    mixLoading ||
+                    (!showDetailedMix && currentMaxAvailableQuestions === 0) ||
+                    (showDetailedMix && detailedTotalQuestionsCount === 0)
+                  }
                   className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 text-xs font-black uppercase tracking-wider shadow-sm transition disabled:opacity-50 cursor-pointer"
                 >
                   {mixLoading ? (

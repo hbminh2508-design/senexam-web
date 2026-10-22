@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       question_count,
       custom_duration,
       custom_title,
+      exam_configs, // Tuỳ chọn chi tiết: Array<{ exam_id: string; count: number }>
     } = body
 
     if (!collection_id) {
@@ -44,11 +45,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Tuyển tập này chưa có đề thi nào' }, { status: 400 })
     }
 
-    // 1. Tải toàn bộ đề thi trong tuyển tập
+    // Kiểm tra xem có cấu hình chi tiết từng đề không
+    const hasDetailedConfigs =
+      Array.isArray(exam_configs) &&
+      exam_configs.length > 0 &&
+      exam_configs.some((c: any) => Number(c.count) > 0)
+
+    // Xác định danh sách ID đề thi cần tải
+    let targetExamIds = collection.exam_ids
+    if (hasDetailedConfigs) {
+      const activeIds = exam_configs
+        .filter((c: any) => Number(c.count) > 0)
+        .map((c: any) => c.exam_id)
+      targetExamIds = targetExamIds.filter((id) => activeIds.includes(id))
+    }
+
+    if (targetExamIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Vui lòng chọn ít nhất 1 đề thi có số câu hỏi lớn hơn 0 để trộn' },
+        { status: 400 }
+      )
+    }
+
+    // 1. Tải toàn bộ đề thi cần dùng
     const { data: exams, error: exErr } = await admin
       .from('exams')
       .select('*')
-      .in('id', collection.exam_ids)
+      .in('id', targetExamIds)
 
     if (exErr || !exams || exams.length === 0) {
       return NextResponse.json({ error: 'Không thể tải đề thi thuộc tuyển tập' }, { status: 500 })
@@ -66,7 +89,7 @@ export async function POST(request: Request) {
       chosenDuration = 5
     }
 
-    // 3. Gom và phân loại toàn bộ câu hỏi từ các đề
+    // 3. Helper trích xuất câu hỏi từ đề
     interface ExtractedQuestion {
       type: 'choice' | 'true_false' | 'short_answer'
       qData: any
@@ -74,11 +97,7 @@ export async function POST(request: Request) {
       rawType: string
     }
 
-    const poolChoice: ExtractedQuestion[] = []
-    const poolTrueFalse: ExtractedQuestion[] = []
-    const poolShortAnswer: ExtractedQuestion[] = []
-
-    for (const ex of exams) {
+    function extractQuestionsFromExam(ex: any): ExtractedQuestion[] {
       let struct = ex.exam_structure
       if (typeof struct === 'string') {
         try {
@@ -91,31 +110,29 @@ export async function POST(request: Request) {
         struct = struct.sections
       }
 
-      if (!Array.isArray(struct)) continue
+      if (!Array.isArray(struct)) return []
 
-      struct.forEach((section: any, sIdx: number) => {
+      const result: ExtractedQuestion[] = []
+      struct.forEach((section: any) => {
         const questions = Array.isArray(section?.questions) ? section.questions : []
-        questions.forEach((q: any, qIdx: number) => {
-          let qType = String(q?.type || section?.type || 'single_choice').toLowerCase().trim()
-
-          // Kiểm tra xem câu này thuộc dạng nào
+        questions.forEach((q: any) => {
+          const qType = String(q?.type || section?.type || 'single_choice').toLowerCase().trim()
           if (qType === 'true_false') {
-            poolTrueFalse.push({
+            result.push({
               type: 'true_false',
               qData: q,
               sourceExamTitle: ex.title,
               rawType: qType,
             })
           } else if (qType === 'short_answer') {
-            poolShortAnswer.push({
+            result.push({
               type: 'short_answer',
               qData: q,
               sourceExamTitle: ex.title,
               rawType: qType,
             })
           } else {
-            // Trắc nghiệm (single_choice, multiple_choice hoặc mặc định)
-            poolChoice.push({
+            result.push({
               type: 'choice',
               qData: q,
               sourceExamTitle: ex.title,
@@ -124,38 +141,74 @@ export async function POST(request: Request) {
           }
         })
       })
+      return result
     }
 
-    // 4. Lọc kho câu hỏi theo các dạng thí sinh đã chọn
-    const allowedPool: ExtractedQuestion[] = []
-    if (include_choice) allowedPool.push(...poolChoice)
-    if (include_true_false) allowedPool.push(...poolTrueFalse)
-    if (include_short_answer) allowedPool.push(...poolShortAnswer)
+    let finalQuestions: ExtractedQuestion[] = []
 
-    const totalAvailable = allowedPool.length
-    if (totalAvailable === 0) {
-      return NextResponse.json(
-        { error: 'Không có câu hỏi nào phù hợp với các dạng câu đã chọn' },
-        { status: 400 }
-      )
+    if (hasDetailedConfigs) {
+      // 4A. LẤY CÂU HỎI THEO TÙY CHỌN CHI TIẾT TỪNG ĐỀ
+      for (const cfg of exam_configs) {
+        const ex = exams.find((e) => e.id === cfg.exam_id)
+        if (!ex) continue
+
+        const count = Number(cfg.count) || 0
+        if (count <= 0) continue
+
+        const examQuestions = extractQuestionsFromExam(ex)
+        const allowedQuestions = examQuestions.filter((q) => {
+          if (q.type === 'choice' && include_choice) return true
+          if (q.type === 'true_false' && include_true_false) return true
+          if (q.type === 'short_answer' && include_short_answer) return true
+          return false
+        })
+
+        const sampled = shuffleArray(allowedQuestions).slice(0, count)
+        finalQuestions.push(...sampled)
+      }
+
+      if (finalQuestions.length === 0) {
+        return NextResponse.json(
+          { error: 'Không có câu hỏi nào phù hợp với các dạng câu đã chọn từ các đề đã chỉ định' },
+          { status: 400 }
+        )
+      }
+    } else {
+      // 4B. LẤY CÂU HỎI TỔNG QUÁT TỪ TOÀN BỘ ĐỀ TRONG TUYỂN TẬP
+      const allowedPool: ExtractedQuestion[] = []
+      for (const ex of exams) {
+        const examQuestions = extractQuestionsFromExam(ex)
+        const allowedQuestions = examQuestions.filter((q) => {
+          if (q.type === 'choice' && include_choice) return true
+          if (q.type === 'true_false' && include_true_false) return true
+          if (q.type === 'short_answer' && include_short_answer) return true
+          return false
+        })
+        allowedPool.push(...allowedQuestions)
+      }
+
+      if (allowedPool.length === 0) {
+        return NextResponse.json(
+          { error: 'Không có câu hỏi nào phù hợp với các dạng câu đã chọn' },
+          { status: 400 }
+        )
+      }
+
+      let targetCount = Number(question_count) || Math.min(40, allowedPool.length)
+      if (targetCount > allowedPool.length) {
+        targetCount = allowedPool.length
+      }
+      if (targetCount < 1) {
+        targetCount = 1
+      }
+
+      finalQuestions = shuffleArray(allowedPool).slice(0, targetCount)
     }
 
-    // Số câu hỏi tối đa bằng tổng số câu của các phần đã tick chọn
-    let targetCount = Number(question_count) || Math.min(40, totalAvailable)
-    if (targetCount > totalAvailable) {
-      targetCount = totalAvailable
-    }
-    if (targetCount < 1) {
-      targetCount = 1
-    }
-
-    // 5. Trộn ngẫu nhiên câu hỏi (Shuffle)
-    const shuffledPool = shuffleArray(allowedPool).slice(0, targetCount)
-
-    // Phân bổ lại câu hỏi vào 3 phần chuẩn hóa nếu có
-    const selectedChoice = shuffledPool.filter((q) => q.type === 'choice').map((q) => q.qData)
-    const selectedTF = shuffledPool.filter((q) => q.type === 'true_false').map((q) => q.qData)
-    const selectedSA = shuffledPool.filter((q) => q.type === 'short_answer').map((q) => q.qData)
+    // 5. Phân bổ câu hỏi vào 3 phần chuẩn hóa nếu có
+    const selectedChoice = finalQuestions.filter((q) => q.type === 'choice').map((q) => q.qData)
+    const selectedTF = finalQuestions.filter((q) => q.type === 'true_false').map((q) => q.qData)
+    const selectedSA = finalQuestions.filter((q) => q.type === 'short_answer').map((q) => q.qData)
 
     const sections: any[] = []
 
