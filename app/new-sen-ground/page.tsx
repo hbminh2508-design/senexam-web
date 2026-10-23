@@ -81,6 +81,12 @@ import {
   Code,
   ImageIcon,
   Maximize2,
+  Menu,
+  ExternalLink,
+  GripVertical,
+  Mic,
+  MicOff,
+  FolderTree,
 } from 'lucide-react'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
@@ -5236,9 +5242,27 @@ function UnifiedHubContent() {
   const [libDocSearch, setLibDocSearch] = useState('')
   const [libVipFilter, setLibVipFilter] = useState<'all' | 'free' | 'vip'>('all')
   const [libExpandedParents, setLibExpandedParents] = useState<Record<string, boolean>>({})
-  const [libMobileTreeOpen, setLibMobileTreeOpen] = useState(false)
+   const [libMobileTreeOpen, setLibMobileTreeOpen] = useState(false)
   const [libPreviewDoc, setLibPreviewDoc] = useState<LibraryDocItem | null>(null)
   const [libPreviewFullscreen, setLibPreviewFullscreen] = useState(false)
+
+  // Cải tiến FEPN x SenExam: Thư mục cây to ẩn thành nút 3 gạch ngang khi chọn môn học -> Bấm vào hiện floating cây to
+  const [libFloatingTreeOpen, setLibFloatingTreeOpen] = useState(false)
+  const [libSmallTreeCategory, setLibSmallTreeCategory] = useState<'slides' | 'exercises' | 'videos' | 'exams' | string>('slides')
+  const [libActiveInlineDoc, setLibActiveInlineDoc] = useState<LibraryDocItem | null>(null)
+  const [libSplitRatio, setLibSplitRatio] = useState<'35:65' | '45:55' | '60:40'>('45:55')
+  const [libAudioRecordingEnabled, setLibAudioRecordingEnabled] = useState(false)
+  const [libToast, setLibToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null)
+
+  // Drag & Drop state
+  const [draggedItem, setDraggedItem] = useState<{
+    type: 'doc' | 'folder'
+    id: string
+    name?: string
+    sourceFolderId?: string | null
+    sourceCategory?: string
+  } | null>(null)
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null)
 
   // Modals quản lý Thư viện
   const [showLibCreateModal, setShowLibCreateModal] = useState(false)
@@ -5696,6 +5720,131 @@ function UnifiedHubContent() {
       videoDocs,
     }
   }, [filteredCurrentDocs, exams, libCurrentFolderId, currentLibFolder])
+
+  // Các thư mục con (nhánh nhỏ) do Admin tạo bên trong môn học hiện tại
+  const subjectSubFolders = useMemo(() => {
+    if (!libCurrentFolderId) return []
+    return libraryFolders.filter((f) => f.parent_id === libCurrentFolderId)
+  }, [libraryFolders, libCurrentFolderId])
+
+  // Toast thông báo Thư viện
+  const showLibToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setLibToast({ message, type })
+    setTimeout(() => {
+      setLibToast((current) => (current?.message === message ? null : current))
+    }, 3200)
+  }
+
+  // Tự động đồng bộ tài liệu xem trước trực tiếp khi môn hoặc danh mục thay đổi
+  useEffect(() => {
+    if (!libCurrentFolderId) {
+      setLibActiveInlineDoc(null)
+      return
+    }
+
+    let list: LibraryDocItem[] = []
+    if (libSmallTreeCategory === 'slides') list = subjectTreeBranches.slideDocs
+    else if (libSmallTreeCategory === 'exercises') list = subjectTreeBranches.exerciseDocs
+    else if (libSmallTreeCategory === 'videos') list = subjectTreeBranches.videoDocs
+    else if (typeof libSmallTreeCategory === 'string' && libSmallTreeCategory.startsWith('subfolder-')) {
+      const subId = libSmallTreeCategory.replace('subfolder-', '')
+      list = libraryDocs.filter((d) => d.folder_id === subId)
+    }
+
+    if (list.length > 0) {
+      if (!libActiveInlineDoc || !list.some((d) => d.id === libActiveInlineDoc.id)) {
+        setLibActiveInlineDoc(list[0])
+      }
+    } else {
+      if (libActiveInlineDoc && !list.some((d) => d.id === libActiveInlineDoc.id)) {
+        setLibActiveInlineDoc(null)
+      }
+    }
+  }, [libCurrentFolderId, libSmallTreeCategory, subjectTreeBranches, libraryDocs])
+
+  // Kéo thả: Di chuyển tài liệu sang thư mục / môn học khác
+  const handleMoveDocToFolder = async (docId: string, targetFolderId: string, targetFolderName?: string) => {
+    try {
+      setLibraryDocs((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, folder_id: targetFolderId } : d))
+      )
+      const { error } = await supabase
+        .from('library_documents')
+        .update({ folder_id: targetFolderId })
+        .eq('id', docId)
+      if (error) throw error
+      showLibToast(`Đã chuyển tài liệu sang "${targetFolderName || 'thư mục mới'}"!`, 'success')
+      await refreshLibraryData()
+    } catch (err: any) {
+      showLibToast(`Lỗi di chuyển tài liệu: ${err.message}`, 'error')
+      await refreshLibraryData()
+    }
+  }
+
+  // Kéo thả: Di chuyển thư mục / môn học sang thư mục mẹ khác
+  const handleMoveFolderToParent = async (folderId: string, newParentId: string | null, parentName?: string) => {
+    try {
+      setLibraryFolders((prev) =>
+        prev.map((f) => (f.id === folderId ? { ...f, parent_id: newParentId } : f))
+      )
+      const { error } = await supabase
+        .from('library_folders')
+        .update({ parent_id: newParentId })
+        .eq('id', folderId)
+      if (error) throw error
+      showLibToast(`Đã di chuyển môn/thư mục vào "${parentName || 'gốc'}"!`, 'success')
+      await refreshLibraryData()
+    } catch (err: any) {
+      showLibToast(`Lỗi di chuyển thư mục: ${err.message}`, 'error')
+      await refreshLibraryData()
+    }
+  }
+
+  // Kéo thả: Đổi danh mục cây nhỏ của tài liệu (Slide -> Bài tập -> Video)
+  const handleChangeDocCategory = async (docId: string, targetCategory: 'slides' | 'exercises' | 'videos') => {
+    try {
+      const desc = `[CATEGORY:${targetCategory}]`
+      setLibraryDocs((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, description: desc } : d))
+      )
+      const { error } = await supabase
+        .from('library_documents')
+        .update({ description: desc })
+        .eq('id', docId)
+      if (error) throw error
+      const catLabel =
+        targetCategory === 'slides'
+          ? 'Slide Bài Giảng'
+          : targetCategory === 'exercises'
+          ? 'Tài Liệu Bài Tập'
+          : 'Video Bài Giảng'
+      showLibToast(`Đã chuyển tài liệu sang mục "${catLabel}"!`, 'success')
+      await refreshLibraryData()
+    } catch (err: any) {
+      showLibToast(`Lỗi chuyển danh mục: ${err.message}`, 'error')
+      await refreshLibraryData()
+    }
+  }
+
+  // Gỡ đề thi khỏi môn học
+  const handleDetachExamFromSubject = async (examId: string) => {
+    if (!confirm('Bạn có muốn gỡ đề thi này khỏi môn học?')) return
+    try {
+      const matchDoc = libraryDocs.find(
+        (d) =>
+          d.folder_id === libCurrentFolderId &&
+          d.description &&
+          d.description.includes(`[ATTACHED_EXAM:${examId}]`)
+      )
+      if (matchDoc) {
+        await supabase.from('library_documents').delete().eq('id', matchDoc.id)
+      }
+      showLibToast('Đã gỡ đề thi khỏi môn học!', 'info')
+      await refreshLibraryData()
+    } catch (err: any) {
+      showLibToast(`Lỗi gỡ đề thi: ${err.message}`, 'error')
+    }
+  }
 
   // Tạo thư mục hoặc môn học mới
   const handleCreateLibFolderOrSubject = async (e: React.FormEvent) => {
@@ -7281,315 +7430,543 @@ function UnifiedHubContent() {
           </div>
         )}
 
-        {/* ==================================================== */}
+                {/* ==================================================== */}
         {/* NỘI DUNG CHÍNH TAB 2: THƯ VIỆN SEN ONLINE (FEPN x SENEXAM) */}
         {/* ==================================================== */}
         {activeTab === 'library' && (
-          <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[310px_1fr] gap-6 items-start animate-in fade-in">
-            {/* CỘT TRÁI: SIDEBAR CÂY THƯ MỤC & MÔN HỌC (ĐỘC LẬP VỚI KHO ĐỀ) */}
-            <aside
-              className={`space-y-4 md:block ${
-                libMobileTreeOpen
-                  ? 'fixed inset-0 z-50 bg-white/95 dark:bg-slate-900/95 p-6 overflow-y-auto backdrop-blur-xl'
-                  : 'hidden'
-              }`}
-            >
-              {libMobileTreeOpen && (
-                <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10 md:hidden">
-                  <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                    Cây Thư Viện Môn Học
-                  </h3>
-                  <button
-                    onClick={() => setLibMobileTreeOpen(false)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              )}
-
-              {/* Ô TÌM KIẾM MÔN & THƯ MỤC */}
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Lọc môn học & thư mục..."
-                    value={libFolderSearch}
-                    onChange={(e) => setLibFolderSearch(e.target.value)}
-                    className="h-8 w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 pl-8 pr-2.5 text-xs outline-none focus:border-violet-500"
-                  />
-                </div>
-
-                {/* Nút Xem Tất Cả */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectLibFolder(null)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                    libCurrentFolderId === null
-                      ? 'bg-violet-600 text-white shadow-sm'
-                      : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
-                  }`}
+          <div className="w-full space-y-6 animate-in fade-in">
+            {/* FLOATING DRAWER: THƯ MỤC CÂY TO (BẬT RA KHI BẤM NÚT 3 GẠCH NGANG HOẶC MOBILE) */}
+            {libFloatingTreeOpen && (
+              <div className="fixed inset-0 z-50 flex items-stretch justify-start bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div
+                  className="relative w-full max-w-sm sm:max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl p-5 overflow-y-auto border-r border-black/10 dark:border-white/10 space-y-4 animate-in slide-in-from-left duration-200 flex flex-col justify-between"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <span className="flex items-center gap-2">
-                    <BookOpen className="h-3.5 w-3.5" />
-                    <span>Tất cả tài liệu & môn học</span>
-                  </span>
-                  <span className="text-[10px] opacity-75 font-mono">{libraryDocs.length}</span>
-                </button>
-              </div>
+                  <div className="space-y-4">
+                    {/* Header Drawer */}
+                    <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
+                      <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+                        <FolderTree className="h-5 w-5" />
+                        <h3 className="font-black text-sm uppercase tracking-wider text-slate-900 dark:text-white">
+                          Cây Thư Viện Môn Học (Toàn Bộ)
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setLibFloatingTreeOpen(false)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                        title="Đóng cây thư mục"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
 
-              {/* Cây Thư Mục Mẹ - Con độc lập (như ảnh mẫu) */}
-              <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-3 shadow-sm backdrop-blur-xl max-h-[500px] overflow-y-auto space-y-1">
-                {filteredLibraryTree.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-400">
-                    Chưa có thư mục nào. Nhấn "+ Tạo Môn / Khối" để bắt đầu!
-                  </div>
-                ) : (
-                  filteredLibraryTree.map(({ parent, children }) => {
-                    const isExp = libExpandedParents[parent.id] ?? true
-                    const hasChildren = children && children.length > 0
+                    {/* Ô Tìm Kiếm */}
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Lọc môn học & khối chuyên đề..."
+                        value={libFolderSearch}
+                        onChange={(e) => setLibFolderSearch(e.target.value)}
+                        className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-violet-500"
+                      />
+                    </div>
 
-                    return (
-                      <div key={parent.id} className="space-y-0.5">
-                        {/* Thư mục mẹ */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLibExpandedParents((prev) => ({ ...prev, [parent.id]: !isExp }))
-                          }}
-                          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
-                        >
-                          <span className="flex items-center gap-1.5 truncate">
-                            {isExp ? (
-                              <FolderOpen className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                            ) : (
-                              <Folder className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                            )}
-                            <span className="truncate">{parent.name}</span>
-                          </span>
-                          {hasChildren && (
-                            <span className="text-slate-400">
-                              {isExp ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                            </span>
-                          )}
-                        </button>
+                    {/* Nút Xem Tất Cả Môn */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectLibFolder(null)
+                        setLibFloatingTreeOpen(false)
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        libCurrentFolderId === null
+                          ? 'bg-violet-600 text-white shadow-sm'
+                          : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <BookOpen className="h-3.5 w-3.5" />
+                        <span>Tất cả môn & tài liệu</span>
+                      </span>
+                      <span className="text-[10px] opacity-75 font-mono">{libraryDocs.length}</span>
+                    </button>
 
-                        {/* Các môn học / thư mục con */}
-                        {isExp && hasChildren && (
-                          <div className="pl-3 space-y-0.5 border-l border-black/5 dark:border-white/5 ml-3">
-                            {children.map((child) => {
-                              const isSelected = libCurrentFolderId === child.id
-                              const count = libraryFolderDocCounts[child.id] || 0
+                    {/* Cây Thư Mục Mẹ - Con trong Floating Drawer */}
+                    <div className="rounded-[22px] border border-black/10 dark:border-white/10 bg-slate-50/70 dark:bg-slate-800/50 p-2.5 shadow-inner max-h-[58vh] overflow-y-auto space-y-1">
+                      {filteredLibraryTree.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-400">
+                          Chưa có thư mục nào
+                        </div>
+                      ) : (
+                        filteredLibraryTree.map(({ parent, children }) => {
+                          const isExp = libExpandedParents[parent.id] ?? true
+                          const hasChildren = children && children.length > 0
+                          const isParentOver = dragOverTarget === `parent-${parent.id}`
 
-                              return (
+                          return (
+                            <div
+                              key={parent.id}
+                              className={`space-y-0.5 rounded-xl p-1 transition ${
+                                isParentOver ? 'ring-2 ring-violet-500 bg-violet-500/10' : ''
+                              }`}
+                              onDragOver={(e) => {
+                                if (draggedItem) {
+                                  e.preventDefault()
+                                  setDragOverTarget(`parent-${parent.id}`)
+                                }
+                              }}
+                              onDragLeave={() => {
+                                if (dragOverTarget === `parent-${parent.id}`) setDragOverTarget(null)
+                              }}
+                              onDrop={async (e) => {
+                                e.preventDefault()
+                                if (!draggedItem) return
+                                if (draggedItem.type === 'folder' && draggedItem.id !== parent.id) {
+                                  await handleMoveFolderToParent(draggedItem.id, parent.id, parent.name)
+                                } else if (draggedItem.type === 'doc') {
+                                  await handleMoveDocToFolder(draggedItem.id, parent.id, parent.name)
+                                }
+                                setDraggedItem(null)
+                                setDragOverTarget(null)
+                              }}
+                            >
+                              <div className="flex items-center justify-between group">
                                 <button
-                                  key={child.id}
                                   type="button"
                                   onClick={() => {
-                                    handleSelectLibFolder(child.id)
-                                    setLibMobileTreeOpen(false)
+                                    setLibExpandedParents((prev) => ({ ...prev, [parent.id]: !isExp }))
                                   }}
-                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
-                                    isSelected
-                                      ? 'bg-violet-600 text-white font-bold shadow-xs'
-                                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
-                                  }`}
+                                  className="flex-1 flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
                                 >
-                                  <span className="truncate">{child.name}</span>
-                                  <span
-                                    className={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${
-                                      isSelected
-                                        ? 'bg-white/20 text-white'
-                                        : 'bg-black/5 dark:bg-white/5 text-slate-400'
-                                    }`}
-                                  >
-                                    {count}
+                                  <span className="flex items-center gap-1.5 truncate">
+                                    {isExp ? (
+                                      <FolderOpen className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                                    ) : (
+                                      <Folder className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                                    )}
+                                    <span className="truncate">{parent.name}</span>
                                   </span>
+                                  {hasChildren && (
+                                    <span className="text-slate-400">
+                                      {isExp ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                    </span>
+                                  )}
                                 </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLibItem(parent.id, 'folder')}
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition"
+                                    title="Xóa khối này"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
 
-              {/* Nút Quản Trị Cho Admin / Teacher */}
-              {isAdmin && (
-                <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-3.5 space-y-2 backdrop-blur-xl">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
-                    Quản trị Thư viện
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLibCreateType('folder')
-                      setLibNewParentId(null)
-                      setShowLibCreateModal(true)
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
-                  >
-                    <FolderPlus className="h-3.5 w-3.5 text-amber-500" /> + Tạo Folder / Khối
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLibCreateType('subject')
-                      setLibNewParentId(libCurrentFolderId || null)
-                      setShowLibCreateModal(true)
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-white px-3 py-2 text-xs font-bold shadow-xs hover:bg-violet-700 transition cursor-pointer"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> + Tạo Môn học mới
-                  </button>
-                </div>
-              )}
-            </aside>
+                              {isExp && hasChildren && (
+                                <div className="pl-3 space-y-0.5 border-l border-black/5 dark:border-white/5 ml-3">
+                                  {children.map((child) => {
+                                    const isSelected = libCurrentFolderId === child.id
+                                    const count = libraryFolderDocCounts[child.id] || 0
+                                    const isChildOver = dragOverTarget === `child-${child.id}`
 
-            {/* CỘT PHẢI: KHÔNG GIAN NỘI DUNG MÔN HỌC & SƠ ĐỒ CÂY TÀI LIỆU, BÀI TẬP, ĐỀ THI */}
-            <div className="space-y-6">
-              {/* Header Môn Học / Thư Viện */}
-              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 sm:p-6 shadow-sm backdrop-blur-xl space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-slate-500 dark:text-slate-400">
-                      <button
-                        type="button"
-                        onClick={() => handleSelectLibFolder(null)}
-                        className="hover:text-violet-600 transition"
-                      >
-                        Thư viện Sen Online
-                      </button>
-                      {currentLibFolder && (
-                        <>
-                          <ChevronRight className="h-3 w-3" />
-                          <span className="text-violet-600 dark:text-violet-400 font-black">
-                            {currentLibFolder.name}
-                          </span>
-                        </>
+                                    return (
+                                      <div
+                                        key={child.id}
+                                        draggable={isAdmin}
+                                        onDragStart={(e) => {
+                                          e.stopPropagation()
+                                          e.dataTransfer.setData('text/plain', child.id)
+                                          setDraggedItem({
+                                            type: 'folder',
+                                            id: child.id,
+                                            name: child.name,
+                                            sourceFolderId: child.parent_id,
+                                          })
+                                        }}
+                                        onDragEnd={() => {
+                                          setDraggedItem(null)
+                                          setDragOverTarget(null)
+                                        }}
+                                        onDragOver={(e) => {
+                                          if (draggedItem) {
+                                            e.preventDefault()
+                                            setDragOverTarget(`child-${child.id}`)
+                                          }
+                                        }}
+                                        onDragLeave={() => {
+                                          if (dragOverTarget === `child-${child.id}`) setDragOverTarget(null)
+                                        }}
+                                        onDrop={async (e) => {
+                                          e.preventDefault()
+                                          e.stopPropagation()
+                                          if (draggedItem?.type === 'doc') {
+                                            await handleMoveDocToFolder(draggedItem.id, child.id, child.name)
+                                          }
+                                          setDraggedItem(null)
+                                          setDragOverTarget(null)
+                                        }}
+                                        className={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                                          isChildOver
+                                            ? 'ring-2 ring-violet-500 bg-violet-500/20'
+                                            : isSelected
+                                            ? 'bg-violet-600 text-white font-bold shadow-xs'
+                                            : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+                                        }`}
+                                        onClick={() => {
+                                          handleSelectLibFolder(child.id)
+                                          setLibFloatingTreeOpen(false)
+                                        }}
+                                      >
+                                        <span className="truncate flex items-center gap-1.5">
+                                          {isAdmin && (
+                                            <GripVertical className="h-3 w-3 text-slate-400 opacity-60 hover:opacity-100" />
+                                          )}
+                                          <span className="truncate">{child.name}</span>
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <span
+                                            className={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${
+                                              isSelected
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-black/5 dark:bg-white/5 text-slate-400'
+                                            }`}
+                                          >
+                                            {count}
+                                          </span>
+                                          {isAdmin && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleDeleteLibItem(child.id, 'folder')
+                                              }}
+                                              className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-rose-500 transition"
+                                              title="Xóa môn"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })
                       )}
                     </div>
-                    <h2
-                      className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white"
-                      style={{ fontFamily: 'var(--font-hub-heading)' }}
-                    >
-                      {currentLibFolder ? currentLibFolder.name : 'Tất Cả Môn Học & Kho Tài Liệu Số'}
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {currentLibFolder
-                        ? 'Sơ đồ cây môn học tích hợp: Tài liệu lý thuyết, bài tập rèn luyện và đề thi khảo thí vào nhanh.'
-                        : 'Khám phá toàn bộ chuyên đề ôn thi, tài liệu tóm tắt kiến thức và đề thi theo khối.'}
-                    </p>
                   </div>
 
-                  {/* Actions Bar */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {currentLibFolder && (
+                  {/* Admin Controls */}
+                  {isAdmin && (
+                    <div className="pt-3 border-t border-black/10 dark:border-white/10 space-y-2">
                       <button
                         type="button"
-                        onClick={() => handleSelectLibFolder(null)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                        onClick={() => {
+                          setLibCreateType('folder')
+                          setLibNewParentId(null)
+                          setShowLibCreateModal(true)
+                        }}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
                       >
-                        <ArrowLeft className="h-3.5 w-3.5" /> Tất cả môn
+                        <FolderPlus className="h-3.5 w-3.5 text-amber-500" /> + Tạo Khối / Thư Mục Cha
                       </button>
-                    )}
-
-                    {isAdmin && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLibUploadCategory('slides')
-                            setLibUploadTargetFolderId(libCurrentFolderId)
-                            setShowLibUploadModal(true)
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 text-white px-3.5 py-2 text-xs font-black shadow-md hover:bg-violet-700 transition cursor-pointer"
-                        >
-                          <UploadCloud className="h-3.5 w-3.5" /> Tải tài liệu
-                        </button>
-                        {currentLibFolder && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLibAttachTargetFolderId(currentLibFolder.id)
-                              setShowLibAttachExamModal(true)
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3.5 py-2 text-xs font-black shadow-xs hover:bg-amber-500/20 transition cursor-pointer"
-                          >
-                            <Zap className="h-3.5 w-3.5" /> Đính kèm đề thi
-                          </button>
-                        )}
-                        {currentLibFolder && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLibRenameTarget({ id: currentLibFolder.id, type: 'folder', name: currentLibFolder.name })
-                              setLibRenameValue(currentLibFolder.name)
-                              setShowLibRenameModal(true)
-                            }}
-                            className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-500 hover:text-black dark:hover:text-white transition cursor-pointer"
-                            title="Đổi tên môn học"
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        {currentLibFolder && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteLibItem(currentLibFolder.id, 'folder')}
-                            className="p-2 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
-                            title="Xóa môn học này"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Filter and Search inside Library */}
-                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
-                  <div className="relative w-full sm:max-w-md">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Tìm kiếm tài liệu, bài tập..."
-                      value={libDocSearch}
-                      onChange={(e) => setLibDocSearch(e.target.value)}
-                      className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 pl-9 pr-3 text-xs outline-none focus:border-violet-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 w-full sm:w-auto">
-                    {(['all', 'free', 'vip'] as const).map((tabKey) => (
                       <button
-                        key={tabKey}
                         type="button"
-                        onClick={() => setLibVipFilter(tabKey)}
-                        className={`flex-1 sm:flex-initial px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          libVipFilter === tabKey
-                            ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
-                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                        }`}
+                        onClick={() => {
+                          setLibCreateType('subject')
+                          setLibNewParentId(libCurrentFolderId || null)
+                          setShowLibCreateModal(true)
+                        }}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-white px-3 py-2 text-xs font-bold shadow-xs hover:bg-violet-700 transition cursor-pointer"
                       >
-                        {tabKey === 'all' ? 'Tất cả' : tabKey === 'free' ? 'Miễn phí' : '⭐ VIP'}
+                        <Plus className="h-3.5 w-3.5" /> + Tạo Môn Học Mới
                       </button>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
+                <div className="flex-1 cursor-pointer" onClick={() => setLibFloatingTreeOpen(false)} />
               </div>
+            )}
 
-              {/* TRƯỜNG HỢP 1: CHƯA CHỌN MÔN HỌC (HIỂN THỊ DANH SÁCH MÔN HỌC BUNG RA TẠI CHỖ) */}
-              {!currentLibFolder && (
+            {/* TOAST THÔNG BÁO THƯ VIỆN */}
+            {libToast && (
+              <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xs font-bold animate-in slide-in-from-bottom duration-200 border border-white/20">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                <span>{libToast.message}</span>
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* TRƯỜNG HỢP 1: CHƯA CHỌN MÔN (GIAO DIỆN TỔNG QUAN VỚI CÂY TO) */}
+            {/* ========================================================= */}
+            {!currentLibFolder ? (
+              <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[310px_1fr] gap-6 items-start">
+                {/* CỘT TRÁI: SIDEBAR CÂY THƯ MỤC TO BÊN NGOÀI */}
+                <aside className="space-y-4">
+                  {/* Ô Tìm Kiếm */}
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Lọc môn học & thư mục..."
+                        value={libFolderSearch}
+                        onChange={(e) => setLibFolderSearch(e.target.value)}
+                        className="h-8 w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 pl-8 pr-2.5 text-xs outline-none focus:border-violet-500"
+                      />
+                    </div>
+
+                    {/* Nút Xem Tất Cả */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectLibFolder(null)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer bg-violet-600 text-white shadow-sm"
+                    >
+                      <span className="flex items-center gap-2">
+                        <BookOpen className="h-3.5 w-3.5" />
+                        <span>Tất cả tài liệu & môn học</span>
+                      </span>
+                      <span className="text-[10px] opacity-75 font-mono">{libraryDocs.length}</span>
+                    </button>
+                  </div>
+
+                  {/* Cây Thư Mục Mẹ - Con */}
+                  <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-3 shadow-sm backdrop-blur-xl max-h-[500px] overflow-y-auto space-y-1">
+                    {filteredLibraryTree.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        Chưa có thư mục nào. Nhấn "+ Tạo Khối" để bắt đầu!
+                      </div>
+                    ) : (
+                      filteredLibraryTree.map(({ parent, children }) => {
+                        const isExp = libExpandedParents[parent.id] ?? true
+                        const hasChildren = children && children.length > 0
+                        const isParentOver = dragOverTarget === `parent-${parent.id}`
+
+                        return (
+                          <div
+                            key={parent.id}
+                            className={`space-y-0.5 rounded-xl transition ${isParentOver ? 'ring-2 ring-violet-500 bg-violet-500/10' : ''}`}
+                            onDragOver={(e) => {
+                              if (draggedItem) {
+                                e.preventDefault()
+                                setDragOverTarget(`parent-${parent.id}`)
+                              }
+                            }}
+                            onDragLeave={() => {
+                              if (dragOverTarget === `parent-${parent.id}`) setDragOverTarget(null)
+                            }}
+                            onDrop={async (e) => {
+                              e.preventDefault()
+                              if (!draggedItem) return
+                              if (draggedItem.type === 'folder' && draggedItem.id !== parent.id) {
+                                await handleMoveFolderToParent(draggedItem.id, parent.id, parent.name)
+                              } else if (draggedItem.type === 'doc') {
+                                await handleMoveDocToFolder(draggedItem.id, parent.id, parent.name)
+                              }
+                              setDraggedItem(null)
+                              setDragOverTarget(null)
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLibExpandedParents((prev) => ({ ...prev, [parent.id]: !isExp }))
+                              }}
+                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                            >
+                              <span className="flex items-center gap-1.5 truncate">
+                                {isExp ? (
+                                  <FolderOpen className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                                ) : (
+                                  <Folder className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                                )}
+                                <span className="truncate">{parent.name}</span>
+                              </span>
+                              {hasChildren && (
+                                <span className="text-slate-400">
+                                  {isExp ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </span>
+                              )}
+                            </button>
+
+                            {isExp && hasChildren && (
+                              <div className="pl-3 space-y-0.5 border-l border-black/5 dark:border-white/5 ml-3">
+                                {children.map((child) => {
+                                  const count = libraryFolderDocCounts[child.id] || 0
+                                  const isChildOver = dragOverTarget === `child-${child.id}`
+
+                                  return (
+                                    <div
+                                      key={child.id}
+                                      draggable={isAdmin}
+                                      onDragStart={(e) => {
+                                        e.stopPropagation()
+                                        e.dataTransfer.setData('text/plain', child.id)
+                                        setDraggedItem({
+                                          type: 'folder',
+                                          id: child.id,
+                                          name: child.name,
+                                          sourceFolderId: child.parent_id,
+                                        })
+                                      }}
+                                      onDragEnd={() => {
+                                        setDraggedItem(null)
+                                        setDragOverTarget(null)
+                                      }}
+                                      onDragOver={(e) => {
+                                        if (draggedItem) {
+                                          e.preventDefault()
+                                          setDragOverTarget(`child-${child.id}`)
+                                        }
+                                      }}
+                                      onDragLeave={() => {
+                                        if (dragOverTarget === `child-${child.id}`) setDragOverTarget(null)
+                                      }}
+                                      onDrop={async (e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        if (draggedItem?.type === 'doc') {
+                                          await handleMoveDocToFolder(draggedItem.id, child.id, child.name)
+                                        }
+                                        setDraggedItem(null)
+                                        setDragOverTarget(null)
+                                      }}
+                                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                                        isChildOver
+                                          ? 'ring-2 ring-violet-500 bg-violet-500/20'
+                                          : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+                                      }`}
+                                      onClick={() => handleSelectLibFolder(child.id)}
+                                    >
+                                      <span className="truncate flex items-center gap-1.5">
+                                        {isAdmin && (
+                                          <GripVertical className="h-3 w-3 text-slate-400 opacity-60" />
+                                        )}
+                                        <span className="truncate">{child.name}</span>
+                                      </span>
+                                      <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-md bg-black/5 dark:bg-white/5 text-slate-400">
+                                        {count}
+                                      </span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+
+                  {/* Quản Trị Cây To Cho Admin */}
+                  {isAdmin && (
+                    <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-3.5 space-y-2 backdrop-blur-xl">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                        Quản trị Thư viện
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLibCreateType('folder')
+                          setLibNewParentId(null)
+                          setShowLibCreateModal(true)
+                        }}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                      >
+                        <FolderPlus className="h-3.5 w-3.5 text-amber-500" /> + Tạo Folder / Khối
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLibCreateType('subject')
+                          setLibNewParentId(null)
+                          setShowLibCreateModal(true)
+                        }}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-white px-3 py-2 text-xs font-bold shadow-xs hover:bg-violet-700 transition cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> + Tạo Môn Học Mới
+                      </button>
+                    </div>
+                  )}
+                </aside>
+
+                {/* CỘT PHẢI: TẤT CẢ MÔN HỌC & TÀI LIỆU MỚI NHẤT */}
                 <div className="space-y-6">
-                  {/* Grid các môn học & Thư mục (Dạng Card bung ra tại chỗ) */}
+                  {/* Header Banner */}
+                  <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 sm:p-6 shadow-sm backdrop-blur-xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h2
+                          className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white"
+                          style={{ fontFamily: 'var(--font-hub-heading)' }}
+                        >
+                          Thư Viện Sen Online
+                        </h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Nền tảng học tập & khảo thí tích hợp: Slide bài giảng, bài tập rèn luyện và đề thi vào nhanh.
+                        </p>
+                      </div>
+
+                      {isAdmin && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLibUploadCategory('slides')
+                              setLibUploadTargetFolderId(null)
+                              setShowLibUploadModal(true)
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 text-white px-3.5 py-2 text-xs font-black shadow-md hover:bg-violet-700 transition cursor-pointer"
+                          >
+                            <UploadCloud className="h-3.5 w-3.5" /> Tải tài liệu
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Filter and Search */}
+                    <div className="flex flex-col sm:flex-row gap-3 items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                      <div className="relative w-full sm:max-w-md">
+                        <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Tìm kiếm tài liệu, môn học..."
+                          value={libDocSearch}
+                          onChange={(e) => setLibDocSearch(e.target.value)}
+                          className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 pl-9 pr-3 text-xs outline-none focus:border-violet-500"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 w-full sm:w-auto">
+                        {(['all', 'free', 'vip'] as const).map((tabKey) => (
+                          <button
+                            key={tabKey}
+                            type="button"
+                            onClick={() => setLibVipFilter(tabKey)}
+                            className={`flex-1 sm:flex-initial px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              libVipFilter === tabKey
+                                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            {tabKey === 'all' ? 'Tất cả' : tabKey === 'free' ? 'Miễn phí' : '⭐ VIP'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grid Các Môn Học */}
                   <div>
                     <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
-                      <Folder className="h-4 w-4 text-violet-500" /> Danh mục Môn học & Khối chuyên đề ({libraryFolders.length})
+                      <Folder className="h-4 w-4 text-violet-500" /> Danh Mục Môn Học & Khối Chuyên Đề ({libraryFolders.length})
                     </h3>
 
                     {libraryFolders.length === 0 ? (
@@ -7598,55 +7975,64 @@ function UnifiedHubContent() {
                           <BookOpen className="h-7 w-7" />
                         </div>
                         <h4 className="text-base font-bold">Thư viện hiện chưa có môn học nào</h4>
-                        <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                          Quản trị viên có thể bấm "+ Tạo Môn học mới" hoặc "+ Tạo Folder / Khối" để bắt đầu xây dựng cây học liệu.
+                        <p className="text-xs text-slate-400">
+                          Quản trị viên có thể nhấn "+ Tạo Môn Học Mới" để thêm môn đầu tiên.
                         </p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                         {libraryFolders.map((folder) => {
                           const docCount = libraryFolderDocCounts[folder.id] || 0
-                          const isRoot = !folder.parent_id
-                          const parentFolder = folder.parent_id
-                            ? libraryFolders.find((f) => f.id === folder.parent_id)
-                            : null
+                          const isOver = dragOverTarget === `grid-${folder.id}`
 
                           return (
                             <div
                               key={folder.id}
-                              className="group rounded-3xl border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-5 shadow-sm backdrop-blur-xl hover:shadow-md transition flex flex-col justify-between gap-4"
+                              onDragOver={(e) => {
+                                if (draggedItem) {
+                                  e.preventDefault()
+                                  setDragOverTarget(`grid-${folder.id}`)
+                                }
+                              }}
+                              onDragLeave={() => {
+                                if (dragOverTarget === `grid-${folder.id}`) setDragOverTarget(null)
+                              }}
+                              onDrop={async (e) => {
+                                e.preventDefault()
+                                if (draggedItem?.type === 'doc') {
+                                  await handleMoveDocToFolder(draggedItem.id, folder.id, folder.name)
+                                }
+                                setDraggedItem(null)
+                                setDragOverTarget(null)
+                              }}
+                              className={`rounded-2xl border bg-white/80 dark:bg-slate-900/80 p-4 shadow-sm backdrop-blur-xl flex flex-col justify-between gap-3 transition cursor-pointer hover:shadow-md ${
+                                isOver
+                                  ? 'border-violet-500 ring-2 ring-violet-500/40 bg-violet-500/10 scale-102'
+                                  : 'border-black/10 dark:border-white/10 hover:border-violet-500/30'
+                              }`}
+                              onClick={() => handleSelectLibFolder(folder.id)}
                             >
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 group-hover:scale-105 transition">
-                                    {isRoot ? <Folder className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+                                    <Folder className="h-5 w-5" />
                                   </div>
-                                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-slate-500">
-                                    {isRoot ? 'Khối / Thư mục' : parentFolder ? parentFolder.name : 'Môn học'}
-                                  </span>
+                                  <div>
+                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-1">
+                                      {folder.name}
+                                    </h4>
+                                    <span className="text-[11px] text-slate-400 font-mono">
+                                      {docCount} tài liệu
+                                    </span>
+                                  </div>
                                 </div>
-                                <h4
-                                  className="text-base font-black text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition"
-                                  style={{ fontFamily: 'var(--font-hub-heading)' }}
-                                >
-                                  {folder.name}
-                                </h4>
-                                <p className="text-xs text-slate-500 line-clamp-2">
-                                  Bao gồm tài liệu lý thuyết, bài tập chuyên đề và bộ đề thi khảo thí tích hợp.
-                                </p>
-                              </div>
 
-                              <div className="flex items-center justify-between pt-3 border-t border-black/5 dark:border-white/5">
-                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                                  {docCount} tài liệu
-                                </span>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                   {isAdmin && (
                                     <>
                                       <button
                                         type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
+                                        onClick={() => {
                                           setLibRenameTarget({ id: folder.id, type: 'folder', name: folder.name })
                                           setLibRenameValue(folder.name)
                                           setShowLibRenameModal(true)
@@ -7658,10 +8044,7 @@ function UnifiedHubContent() {
                                       </button>
                                       <button
                                         type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleDeleteLibItem(folder.id, 'folder')
-                                        }}
+                                        onClick={() => handleDeleteLibItem(folder.id, 'folder')}
                                         className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
                                         title="Xóa"
                                       >
@@ -7669,15 +8052,17 @@ function UnifiedHubContent() {
                                       </button>
                                     </>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectLibFolder(folder.id)}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-600 text-white text-xs font-black shadow-xs hover:bg-violet-700 transition cursor-pointer"
-                                  >
-                                    <span>Mở môn</span>
-                                    <ChevronRight className="h-3 w-3" />
-                                  </button>
                                 </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                                <span className="text-[11px] text-violet-600 dark:text-violet-400 font-bold flex items-center gap-1">
+                                  <Zap className="h-3 w-3" /> Chế độ tích hợp bài thi
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-300">
+                                  <span>Vào môn</span>
+                                  <ChevronRight className="h-3.5 w-3.5 text-violet-500" />
+                                </span>
                               </div>
                             </div>
                           )
@@ -7686,13 +8071,13 @@ function UnifiedHubContent() {
                     )}
                   </div>
 
-                  {/* Danh sách tài liệu mới tải lên */}
+                  {/* Danh Sách Tài Liệu Mới Cập Nhật */}
                   <div className="space-y-3">
                     <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                      <FileText className="h-4 w-4 text-violet-500" /> Tài liệu mới cập nhật ({filteredCurrentDocs.length})
+                      <FileText className="h-4 w-4 text-violet-500" /> Tài Liệu Mới Nhất ({libraryDocs.length})
                     </h3>
                     <div className="space-y-2.5">
-                      {filteredCurrentDocs.slice(0, 15).map((doc) => {
+                      {libraryDocs.slice(0, 10).map((doc) => {
                         const downloadUrl = `https://drive.google.com/uc?export=download&id=${doc.drive_file_id}`
                         const isLocked = doc.is_vip_only && !isVipUser && !isAdmin
                         const parentF = libraryFolders.find((f) => f.id === doc.folder_id)
@@ -7700,6 +8085,20 @@ function UnifiedHubContent() {
                         return (
                           <div
                             key={doc.id}
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', doc.id)
+                              setDraggedItem({
+                                type: 'doc',
+                                id: doc.id,
+                                name: doc.title,
+                                sourceFolderId: doc.folder_id,
+                              })
+                            }}
+                            onDragEnd={() => {
+                              setDraggedItem(null)
+                              setDragOverTarget(null)
+                            }}
                             className="group rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-3.5 shadow-sm backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-violet-500/30 transition"
                           >
                             <div className="flex items-center gap-3 min-w-0">
@@ -7708,17 +8107,17 @@ function UnifiedHubContent() {
                               </div>
                               <div className="truncate">
                                 <div className="flex items-center gap-2">
-                                  <p className="font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition">
+                                  <p className="font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-violet-600 transition">
                                     {doc.title}
                                   </p>
                                   {doc.is_vip_only && (
-                                    <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase">
+                                    <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase">
                                       <Crown className="h-2.5 w-2.5" /> VIP
                                     </span>
                                   )}
                                 </div>
                                 <span className="text-[11px] text-slate-400 font-semibold">
-                                  {parentF ? parentF.name : 'Thư viện chung'} • Cập nhật: {new Date(doc.created_at).toLocaleDateString('vi-VN')}
+                                  {parentF ? parentF.name : 'Thư viện chung'} • {new Date(doc.created_at).toLocaleDateString('vi-VN')}
                                 </span>
                               </div>
                             </div>
@@ -7757,320 +8156,696 @@ function UnifiedHubContent() {
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
+            ) : (
+              /* ========================================================= */
+              /* TRƯỜNG HỢP 2: ĐÃ CHỌN MÔN (GIAO THOA FEPN x SENEXAM)       */
+              /* CÂY TO ẨN THÀNH NÚT 3 GẠCH NGANG - XEM TRỰC TIẾP FILE      */
+              /* ========================================================= */
+              <div className="space-y-4">
+                {/* THANH TOP BAR MÔN HỌC (CHUẨN FEPN) */}
+                <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-3 sm:p-4 shadow-sm backdrop-blur-xl flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {/* NÚT 3 GẠCH NGANG BẬT FLOATING CÂY THƯ MỤC TO */}
+                    <button
+                      type="button"
+                      onClick={() => setLibFloatingTreeOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300 hover:bg-violet-500/20 transition font-bold text-xs cursor-pointer shadow-xs shrink-0"
+                      title="Mở toàn bộ cây thư viện môn học"
+                    >
+                      <Menu className="h-4 w-4" />
+                      <span className="hidden sm:inline">Cây Thư Mục</span>
+                    </button>
 
-              {/* TRƯỜNG HỢP 2: ĐÃ CHỌN MÔN HỌC (SƠ ĐỒ CÂY FEPN x SENEXAM) */}
-              {currentLibFolder && (
-                <div className="space-y-6">
-                  {/* NHÁNH 1: ĐỀ THI & KHẢO THÍ (CHẾ ĐỘ SƠ ĐỒ CÂY MANG THEO BÀI THI) */}
-                  <div className="rounded-3xl border border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-500/10 p-5 sm:p-6 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-indigo-500/15">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-xs">
-                          <Zap className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                            Đề Thi Khảo Thí & Vào Nhanh Bài Thi
-                          </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            Chế độ sơ đồ cây mang theo đề thi: Học lý thuyết xong có thể bấm vào thi khảo thí ngay lập tức.
-                          </p>
-                        </div>
-                      </div>
+                    {/* NÚT QUAY LẠI TẤT CẢ MÔN */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectLibFolder(null)}
+                      className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 text-slate-700 dark:text-slate-300 transition cursor-pointer shrink-0"
+                      title="Quay lại tất cả môn"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </button>
 
-                      {isAdmin && (
+                    {/* BADGE MÃ MÔN & TÊN MÔN HỌC */}
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="px-2.5 py-1 rounded-lg bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/25 text-xs font-mono font-black uppercase shrink-0">
+                        {currentLibFolder.name.split(' ')[0] || 'MÔN'}
+                      </span>
+                      <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate">
+                        {currentLibFolder.name}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* BỘ NÚT CHỌN TỈ LỆ CHIA FEPN & CÁC NÚT HÀNH ĐỘNG */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Nút tỉ lệ chia 35:65 | 45:55 | 60:40 giống FEPN */}
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-xs font-mono font-bold">
+                      {(['35:65', '45:55', '60:40'] as const).map((ratio) => (
+                        <button
+                          key={ratio}
+                          type="button"
+                          onClick={() => setLibSplitRatio(ratio)}
+                          className={`px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                            libSplitRatio === ratio
+                              ? 'bg-violet-600 text-white shadow-xs'
+                              : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          {ratio}
+                        </button>
+                      ))}
+                    </div>
+
+                    {isAdmin && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLibUploadCategory(
+                              libSmallTreeCategory === 'exercises'
+                                ? 'exercises'
+                                : libSmallTreeCategory === 'videos'
+                                ? 'videos'
+                                : 'slides'
+                            )
+                            setLibUploadTargetFolderId(currentLibFolder.id)
+                            setShowLibUploadModal(true)
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 text-white px-3 py-1.5 text-xs font-black shadow-xs hover:bg-violet-700 transition cursor-pointer"
+                        >
+                          <UploadCloud className="h-3.5 w-3.5" />
+                          <span>ĐĂNG TÀI LIỆU</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => {
                             setLibAttachTargetFolderId(currentLibFolder.id)
                             setShowLibAttachExamModal(true)
                           }}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1.5 text-xs font-black shadow-xs hover:bg-amber-500/20 transition cursor-pointer"
                         >
-                          <Plus className="h-3.5 w-3.5" /> Thêm đề thi
+                          <Zap className="h-3.5 w-3.5" />
+                          <span>ĐÍNH KÈM ĐỀ</span>
                         </button>
-                      )}
-                    </div>
 
-                    {subjectTreeBranches.attachedExams.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-slate-400 italic">
-                        Môn học này chưa gắn kết đề thi khảo thí nào. Quản trị viên có thể nhấn "Đính kèm đề thi" để liên kết.
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        {subjectTreeBranches.attachedExams.map((ex) => (
-                          <div
-                            key={ex.id}
-                            className="rounded-2xl border border-indigo-500/20 bg-white/90 dark:bg-slate-900/90 p-4 shadow-sm backdrop-blur-md flex flex-col justify-between gap-3 hover:border-indigo-500/40 transition"
-                          >
-                            <div className="space-y-1.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                                  {ex.exam_type || 'Đề khảo thí'}
-                                </span>
-                                <span className="text-[11px] font-mono text-slate-400">
-                                  {ex.duration || 50} phút
-                                </span>
-                              </div>
-                              <h5 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2">
-                                {ex.title}
-                              </h5>
-                              <p className="text-[11px] text-slate-500 line-clamp-1">
-                                {ex.description || 'Đề thi tích hợp trong lộ trình môn học.'}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
-                              <span className="text-[11px] font-bold text-slate-500">
-                                {ex.total_questions || 40} câu hỏi
-                              </span>
-                              <Link
-                                href={`/new-exams/${ex.id}`}
-                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-black shadow-md hover:scale-105 transition"
-                              >
-                                <Zap className="h-3.5 w-3.5" />
-                                <span>Vào nhanh bài thi</span>
-                              </Link>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* NHÁNH 2: BÀI GIẢNG & TÀI LIỆU LÝ THUYẾT */}
-                  <div className="rounded-3xl border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-5 sm:p-6 shadow-sm backdrop-blur-xl space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                          <FileText className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                            Tài Liệu & Bài Giảng Lý Thuyết ({subjectTreeBranches.slideDocs.length})
-                          </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            Slides, đề cương, sách giáo trình và tóm tắt kiến thức trọng tâm.
-                          </p>
-                        </div>
-                      </div>
-
-                      {isAdmin && (
                         <button
                           type="button"
                           onClick={() => {
-                            setLibUploadCategory('slides')
-                            setLibUploadTargetFolderId(currentLibFolder.id)
-                            setShowLibUploadModal(true)
+                            setLibRenameTarget({ id: currentLibFolder.id, type: 'folder', name: currentLibFolder.name })
+                            setLibRenameValue(currentLibFolder.name)
+                            setShowLibRenameModal(true)
                           }}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+                          className="p-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-500 hover:text-black dark:hover:text-white transition cursor-pointer"
+                          title="Đổi tên môn học"
                         >
-                          <Plus className="h-3.5 w-3.5" /> Tải tài liệu
+                          <Edit className="h-3.5 w-3.5" />
                         </button>
-                      )}
-                    </div>
 
-                    {subjectTreeBranches.slideDocs.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-slate-400 italic">
-                        Chưa có tài liệu lý thuyết nào trong môn học này.
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {subjectTreeBranches.slideDocs.map((doc) => {
-                          const downloadUrl = `https://drive.google.com/uc?export=download&id=${doc.drive_file_id}`
-                          const isLocked = doc.is_vip_only && !isVipUser && !isAdmin
-
-                          return (
-                            <div
-                              key={doc.id}
-                              className="group rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-violet-500/30 transition"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
-                                  <FileText className="h-5 w-5" />
-                                </div>
-                                <div className="truncate">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-violet-600 transition">
-                                      {doc.title}
-                                    </p>
-                                    {doc.is_vip_only && (
-                                      <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase">
-                                        <Crown className="h-2.5 w-2.5" /> VIP
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] text-slate-400 font-semibold">
-                                    Cập nhật: {new Date(doc.created_at).toLocaleDateString('vi-VN')}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 justify-end">
-                                {isLocked ? (
-                                  <Link
-                                    href="/new-vip"
-                                    className="inline-flex items-center gap-1 rounded-xl bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-black uppercase shadow-xs hover:bg-amber-400"
-                                  >
-                                    <Crown className="h-3 w-3" /> Mở khóa VIP
-                                  </Link>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => setLibPreviewDoc(doc)}
-                                      className="inline-flex items-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
-                                    >
-                                      <Eye className="h-3.5 w-3.5 text-violet-500" /> Xem thử
-                                    </button>
-                                    <a
-                                      href={downloadUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 text-xs font-bold shadow-xs hover:opacity-90 transition"
-                                    >
-                                      <Download className="h-3.5 w-3.5" /> Tải về
-                                    </a>
-                                  </>
-                                )}
-                                {isAdmin && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteLibItem(doc.id, 'doc')}
-                                    className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
-                                    title="Xóa tài liệu"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* NHÁNH 3: BÀI TẬP RÈN LUYỆN & CHUYÊN ĐỀ */}
-                  <div className="rounded-3xl border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-5 sm:p-6 shadow-sm backdrop-blur-xl space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                            Bài Tập Rèn Luyện & Chuyên Đề ({subjectTreeBranches.exerciseDocs.length})
-                          </h4>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            Phiếu bài tập tự luận, bài tập trắc nghiệm có lời giải chi tiết theo bài.
-                          </p>
-                        </div>
-                      </div>
-
-                      {isAdmin && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setLibUploadCategory('exercises')
-                            setLibUploadTargetFolderId(currentLibFolder.id)
-                            setShowLibUploadModal(true)
-                          }}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                          onClick={() => handleDeleteLibItem(currentLibFolder.id, 'folder')}
+                          className="p-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
+                          title="Xóa môn học này"
                         >
-                          <Plus className="h-3.5 w-3.5" /> Thêm bài tập
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      )}
-                    </div>
-
-                    {subjectTreeBranches.exerciseDocs.length === 0 ? (
-                      <div className="p-4 text-center text-xs text-slate-400 italic">
-                        Chưa có bài tập rèn luyện nào trong môn học này.
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {subjectTreeBranches.exerciseDocs.map((doc) => {
-                          const downloadUrl = `https://drive.google.com/uc?export=download&id=${doc.drive_file_id}`
-                          const isLocked = doc.is_vip_only && !isVipUser && !isAdmin
-
-                          return (
-                            <div
-                              key={doc.id}
-                              className="group rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-emerald-500/30 transition"
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-                                  <FileText className="h-5 w-5" />
-                                </div>
-                                <div className="truncate">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-emerald-600 transition">
-                                      {doc.title}
-                                    </p>
-                                    {doc.is_vip_only && (
-                                      <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase">
-                                        <Crown className="h-2.5 w-2.5" /> VIP
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[11px] text-slate-400 font-semibold">
-                                    Cập nhật: {new Date(doc.created_at).toLocaleDateString('vi-VN')}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 justify-end">
-                                {isLocked ? (
-                                  <Link
-                                    href="/new-vip"
-                                    className="inline-flex items-center gap-1 rounded-xl bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-black uppercase shadow-xs hover:bg-amber-400"
-                                  >
-                                    <Crown className="h-3 w-3" /> Mở khóa VIP
-                                  </Link>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => setLibPreviewDoc(doc)}
-                                      className="inline-flex items-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
-                                    >
-                                      <Eye className="h-3.5 w-3.5 text-emerald-500" /> Xem thử
-                                    </button>
-                                    <a
-                                      href={downloadUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 text-xs font-bold shadow-xs hover:opacity-90 transition"
-                                    >
-                                      <Download className="h-3.5 w-3.5" /> Tải về
-                                    </a>
-                                  </>
-                                )}
-                                {isAdmin && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteLibItem(doc.id, 'doc')}
-                                    className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
-                                    title="Xóa bài tập"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
-              )}
-            </div>
+
+                {/* KHÔNG GIAN CHÍNH: 2 CỘT (CÂY NHỎ BÊN TRÁI & XEM TRỰC TIẾP FILE BÊN PHẢI) */}
+                <div className="flex flex-col lg:flex-row gap-5 items-start">
+                  {/* CỘT TRÁI: THƯ MỤC CÂY NHỎ & THÀNH PHẦN MÔN HỌC */}
+                  <div
+                    className={`w-full space-y-4 transition-all duration-300 ${
+                      libSplitRatio === '35:65'
+                        ? 'lg:w-[35%]'
+                        : libSplitRatio === '60:40'
+                        ? 'lg:w-[60%]'
+                        : 'lg:w-[45%]'
+                    }`}
+                  >
+                    {/* Header Box Của Môn */}
+                    <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-4 shadow-sm backdrop-blur-xl space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono font-bold text-sky-600 dark:text-sky-400">
+                              {currentLibFolder.name.split(' ')[0] || 'MÔN'}
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-bold">
+                              3 Tín chỉ • Kỳ 3
+                            </span>
+                          </div>
+                          <h3
+                            className="text-base font-black text-slate-900 dark:text-white mt-0.5"
+                            style={{ fontFamily: 'var(--font-hub-heading)' }}
+                          >
+                            {currentLibFolder.name}
+                          </h3>
+                        </div>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLibUploadCategory('slides')
+                              setLibUploadTargetFolderId(currentLibFolder.id)
+                              setShowLibUploadModal(true)
+                            }}
+                            className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="h-3 w-3" /> Thêm file
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Hàng File Ghi Âm & Thư Mục Nhỏ */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-black/5 dark:border-white/5 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1 text-[11px]">
+                            {libAudioRecordingEnabled ? (
+                              <Mic className="h-3.5 w-3.5 text-rose-500" />
+                            ) : (
+                              <MicOff className="h-3.5 w-3.5 text-slate-400" />
+                            )}
+                            File Ghi Âm:
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setLibAudioRecordingEnabled((v) => !v)}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase transition cursor-pointer ${
+                              libAudioRecordingEnabled
+                                ? 'bg-rose-500/15 text-rose-600 border border-rose-500/30'
+                                : 'bg-black/5 dark:bg-white/5 text-slate-400'
+                            }`}
+                          >
+                            {libAudioRecordingEnabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}
+                          </button>
+                        </div>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLibCreateType('folder')
+                              setLibNewParentId(currentLibFolder.id)
+                              setShowLibCreateModal(true)
+                            }}
+                            className="text-[11px] font-bold text-slate-500 hover:text-violet-600 transition inline-flex items-center gap-1 cursor-pointer"
+                            title="Tạo nhánh thư mục nhỏ cho môn học"
+                          >
+                            <FolderPlus className="h-3 w-3" /> + Thư mục nhỏ
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CÂY THƯ MỤC NHỎ (TABS DANH MỤC: SLIDE, BÀI TẬP, VIDEO, BÀI THI, SUBFOLDERS) */}
+                    <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-2 shadow-sm backdrop-blur-xl">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        {/* Tab 1: Slide Bài Giảng */}
+                        <div
+                          onDragOver={(e) => {
+                            if (draggedItem?.type === 'doc') {
+                              e.preventDefault()
+                              setDragOverTarget('cat-slides')
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverTarget === 'cat-slides') setDragOverTarget(null)
+                          }}
+                          onDrop={async (e) => {
+                            e.preventDefault()
+                            if (draggedItem?.type === 'doc') {
+                              await handleChangeDocCategory(draggedItem.id, 'slides')
+                            }
+                            setDraggedItem(null)
+                            setDragOverTarget(null)
+                          }}
+                          className={`rounded-xl transition ${dragOverTarget === 'cat-slides' ? 'ring-2 ring-violet-500 bg-violet-500/20' : ''}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setLibSmallTreeCategory('slides')}
+                            className={`w-full p-2 rounded-xl text-center flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                              libSmallTreeCategory === 'slides'
+                                ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 font-bold shadow-xs'
+                                : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            <FileText className="h-4 w-4" />
+                            <span className="text-[11px] font-bold truncate">Slide Bài Giảng</span>
+                            <span className="text-[9px] font-mono opacity-70">
+                              ({subjectTreeBranches.slideDocs.length})
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Tab 2: Tài Liệu Bài Tập */}
+                        <div
+                          onDragOver={(e) => {
+                            if (draggedItem?.type === 'doc') {
+                              e.preventDefault()
+                              setDragOverTarget('cat-exercises')
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverTarget === 'cat-exercises') setDragOverTarget(null)
+                          }}
+                          onDrop={async (e) => {
+                            e.preventDefault()
+                            if (draggedItem?.type === 'doc') {
+                              await handleChangeDocCategory(draggedItem.id, 'exercises')
+                            }
+                            setDraggedItem(null)
+                            setDragOverTarget(null)
+                          }}
+                          className={`rounded-xl transition ${dragOverTarget === 'cat-exercises' ? 'ring-2 ring-violet-500 bg-violet-500/20' : ''}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setLibSmallTreeCategory('exercises')}
+                            className={`w-full p-2 rounded-xl text-center flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                              libSmallTreeCategory === 'exercises'
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold shadow-xs'
+                                : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="text-[11px] font-bold truncate">Tài Liệu Bài Tập</span>
+                            <span className="text-[9px] font-mono opacity-70">
+                              ({subjectTreeBranches.exerciseDocs.length})
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Tab 3: Video Bài Giảng */}
+                        <div
+                          onDragOver={(e) => {
+                            if (draggedItem?.type === 'doc') {
+                              e.preventDefault()
+                              setDragOverTarget('cat-videos')
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverTarget === 'cat-videos') setDragOverTarget(null)
+                          }}
+                          onDrop={async (e) => {
+                            e.preventDefault()
+                            if (draggedItem?.type === 'doc') {
+                              await handleChangeDocCategory(draggedItem.id, 'videos')
+                            }
+                            setDraggedItem(null)
+                            setDragOverTarget(null)
+                          }}
+                          className={`rounded-xl transition ${dragOverTarget === 'cat-videos' ? 'ring-2 ring-violet-500 bg-violet-500/20' : ''}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setLibSmallTreeCategory('videos')}
+                            className={`w-full p-2 rounded-xl text-center flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                              libSmallTreeCategory === 'videos'
+                                ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-bold shadow-xs'
+                                : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            <Video className="h-4 w-4" />
+                            <span className="text-[11px] font-bold truncate">Video Bài Giảng</span>
+                            <span className="text-[9px] font-mono opacity-70">
+                              ({subjectTreeBranches.videoDocs.length})
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Tab 4: Tài Liệu Bài Thi & Khảo Thí */}
+                        <button
+                          type="button"
+                          onClick={() => setLibSmallTreeCategory('exams')}
+                          className={`w-full p-2 rounded-xl text-center flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                            libSmallTreeCategory === 'exams'
+                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold shadow-xs'
+                              : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
+                          }`}
+                        >
+                          <Zap className="h-4 w-4" />
+                          <span className="text-[11px] font-bold truncate">Tài Liệu Bài Thi</span>
+                          <span className="text-[9px] font-mono opacity-70">
+                            ({subjectTreeBranches.attachedExams.length})
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Các Nhánh Thư Mục Con (Do Admin Tạo Riêng) */}
+                      {subjectSubFolders.length > 0 && (
+                        <div className="pt-2 mt-2 border-t border-black/5 dark:border-white/5 flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 px-1">
+                            Thư mục con:
+                          </span>
+                          {subjectSubFolders.map((sub) => {
+                            const isSubActive = libSmallTreeCategory === `subfolder-${sub.id}`
+                            const subDocsCount = libraryDocs.filter((d) => d.folder_id === sub.id).length
+
+                            return (
+                              <div
+                                key={sub.id}
+                                className={`group inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition cursor-pointer ${
+                                  isSubActive
+                                    ? 'bg-violet-600 text-white font-bold shadow-xs'
+                                    : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-black/10'
+                                }`}
+                                onClick={() => setLibSmallTreeCategory(`subfolder-${sub.id}`)}
+                              >
+                                <Folder className="h-3 w-3" />
+                                <span>{sub.name}</span>
+                                <span className="text-[10px] opacity-75 font-mono">({subDocsCount})</span>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeleteLibItem(sub.id, 'folder')
+                                    }}
+                                    className="p-0.5 hover:text-rose-400 opacity-60 group-hover:opacity-100 transition"
+                                    title="Xóa thư mục con"
+                                  >
+                                    <Trash2 className="h-2.5 w-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* DANH SÁCH THÀNH PHẦN TRONG NHÁNH ĐANG CHỌN (DOCUMENTS / EXAMS) */}
+                    <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+                      {/* TRƯỜNG HỢP A: TAB ĐỀ THI & KHẢO THÍ (VÀO NHANH BÀI THI) */}
+                      {libSmallTreeCategory === 'exams' ? (
+                        subjectTreeBranches.attachedExams.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-black/15 dark:border-white/15 p-6 text-center space-y-2">
+                            <Zap className="h-6 w-6 text-slate-400 mx-auto" />
+                            <p className="text-xs text-slate-400">
+                              Chưa có đề thi nào trong môn này.
+                            </p>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLibAttachTargetFolderId(currentLibFolder.id)
+                                  setShowLibAttachExamModal(true)
+                                }}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Đính kèm đề thi ngay
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          subjectTreeBranches.attachedExams.map((ex) => (
+                            <div
+                              key={ex.id}
+                              className="rounded-2xl border border-amber-500/20 bg-white/90 dark:bg-slate-900/90 p-3.5 shadow-sm space-y-3 hover:border-amber-500/40 transition"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                                      {ex.exam_type || 'Khảo thí'}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-slate-400">
+                                      {ex.duration || 50} phút • {ex.total_questions || 40} câu
+                                    </span>
+                                  </div>
+                                  <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white line-clamp-2">
+                                    {ex.title}
+                                  </h4>
+                                </div>
+
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDetachExamFromSubject(ex.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                                    title="Gỡ đề thi khỏi môn học"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                                <span className="text-[11px] text-slate-400 font-semibold">
+                                  Tự động đồng bộ đề thi
+                                </span>
+                                <Link
+                                  href={`/new-exams/${ex.id}`}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-xs shadow-md transition hover:scale-102"
+                                >
+                                  <Zap className="h-3.5 w-3.5" />
+                                  <span>Vào nhanh bài thi</span>
+                                </Link>
+                              </div>
+                            </div>
+                          ))
+                        )
+                      ) : (
+                        /* TRƯỜNG HỢP B: TÀI LIỆU DẠNG CARD CHUẨN FEPN (SLIDES, BÀI TẬP, VIDEO, SUBFOLDER) */
+                        (() => {
+                          const docList =
+                            libSmallTreeCategory === 'slides'
+                              ? subjectTreeBranches.slideDocs
+                              : libSmallTreeCategory === 'exercises'
+                              ? subjectTreeBranches.exerciseDocs
+                              : libSmallTreeCategory === 'videos'
+                              ? subjectTreeBranches.videoDocs
+                              : typeof libSmallTreeCategory === 'string' &&
+                                libSmallTreeCategory.startsWith('subfolder-')
+                              ? libraryDocs.filter(
+                                  (d) => d.folder_id === libSmallTreeCategory.replace('subfolder-', '')
+                                )
+                              : []
+
+                          if (docList.length === 0) {
+                            return (
+                              <div className="rounded-2xl border border-dashed border-black/15 dark:border-white/15 p-6 text-center space-y-2">
+                                <FileText className="h-6 w-6 text-slate-400 mx-auto" />
+                                <p className="text-xs text-slate-400">
+                                  Chưa có tài liệu nào trong danh mục này.
+                                </p>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLibUploadCategory(
+                                        libSmallTreeCategory === 'exercises'
+                                          ? 'exercises'
+                                          : libSmallTreeCategory === 'videos'
+                                          ? 'videos'
+                                          : 'slides'
+                                      )
+                                      setLibUploadTargetFolderId(currentLibFolder.id)
+                                      setShowLibUploadModal(true)
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" /> + Thêm file ngay
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          }
+
+                          return docList.map((doc) => {
+                            const isSelected = libActiveInlineDoc?.id === doc.id
+
+                            return (
+                              <div
+                                key={doc.id}
+                                draggable={true}
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData('text/plain', doc.id)
+                                  setDraggedItem({
+                                    type: 'doc',
+                                    id: doc.id,
+                                    name: doc.title,
+                                    sourceFolderId: doc.folder_id,
+                                  })
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedItem(null)
+                                  setDragOverTarget(null)
+                                }}
+                                onClick={() => setLibActiveInlineDoc(doc)}
+                                className={`group rounded-2xl border p-3 shadow-xs transition flex items-center justify-between gap-3 cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-sky-500/10 dark:bg-sky-500/15 border-sky-500 ring-1 ring-sky-500/50 shadow-sm'
+                                    : 'bg-white/80 dark:bg-slate-900/80 border-black/10 dark:border-white/10 hover:border-sky-500/40 hover:bg-black/5 dark:hover:bg-white/5'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  {/* Icon File Box Chuẩn FEPN */}
+                                  <div
+                                    className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${
+                                      isSelected
+                                        ? 'bg-sky-500 text-white'
+                                        : 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                                    }`}
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </div>
+
+                                  <div className="truncate">
+                                    <p
+                                      className={`text-xs sm:text-sm font-bold truncate transition ${
+                                        isSelected
+                                          ? 'text-sky-600 dark:text-sky-400'
+                                          : 'text-slate-900 dark:text-white'
+                                      }`}
+                                    >
+                                      {doc.title}
+                                    </p>
+                                    <span className="text-[10px] text-slate-400 font-medium block">
+                                      Tài liệu học tập • {new Date(doc.created_at).toLocaleDateString('vi-VN')}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteLibItem(doc.id, 'doc')}
+                                      className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                                      title="Xóa tài liệu"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                  <ChevronRight
+                                    className={`h-4 w-4 transition ${
+                                      isSelected
+                                        ? 'text-sky-500 translate-x-0.5'
+                                        : 'text-slate-400 group-hover:translate-x-0.5'
+                                    }`}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })
+                        })()
+                      )}
+                    </div>
+                  </div>
+
+                  {/* CỘT PHẢI: KHUNG XEM TRƯỚC FILE TRỰC TIẾP (CHUẨN FEPN) */}
+                  <div className="flex-1 w-full bg-white/90 dark:bg-slate-900/90 rounded-[28px] border border-black/10 dark:border-white/10 p-4 sm:p-5 shadow-sm backdrop-blur-xl flex flex-col space-y-3">
+                    {/* Header Khung Xem Trước (Badge + Tên File + 3 Nút FEPN) */}
+                    <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10 gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/25 shrink-0">
+                          {libSmallTreeCategory === 'slides'
+                            ? 'SLIDE'
+                            : libSmallTreeCategory === 'exercises'
+                            ? 'BÀI TẬP'
+                            : libSmallTreeCategory === 'videos'
+                            ? 'VIDEO'
+                            : 'TÀI LIỆU'}
+                        </span>
+                        <h3 className="font-bold text-sm sm:text-base truncate text-slate-900 dark:text-white">
+                          {libActiveInlineDoc ? libActiveInlineDoc.title : 'Chọn tài liệu để xem trực tiếp'}
+                        </h3>
+                      </div>
+
+                      {/* Bộ 3 Nút Hành Động Chuẩn FEPN: Mở tab mới, Tải file, Phóng to */}
+                      {libActiveInlineDoc && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* 1. Mở tab mới */}
+                          <a
+                            href={`https://drive.google.com/file/d/${libActiveInlineDoc.drive_file_id}/view`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-xl text-slate-500 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition"
+                            title="Mở trong tab mới"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+
+                          {/* 2. Tải file */}
+                          <a
+                            href={`https://drive.google.com/uc?export=download&id=${libActiveInlineDoc.drive_file_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-xl text-slate-500 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition"
+                            title="Tải tệp xuống"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+
+                          {/* 3. Phóng to toàn màn hình */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLibPreviewDoc(libActiveInlineDoc)
+                              setLibPreviewFullscreen(true)
+                            }}
+                            className="p-2 rounded-xl text-slate-500 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                            title="Phóng to toàn màn hình"
+                          >
+                            <Maximize2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* VÙNG NHÚNG XEM TRỰC TIẾP FILE GOOGLE DRIVE IFRAME */}
+                    <div className="w-full flex-1 rounded-2xl overflow-hidden border border-black/10 dark:border-white/10 bg-slate-950 relative min-h-[550px] lg:min-h-[700px]">
+                      {libActiveInlineDoc ? (
+                        <iframe
+                          src={`https://drive.google.com/file/d/${libActiveInlineDoc.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`}
+                          className="w-full h-full min-h-[550px] lg:min-h-[700px] border-none"
+                          allow="autoplay"
+                          title={libActiveInlineDoc.title}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/50">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-500">
+                            <BookOpen className="h-8 w-8" />
+                          </div>
+                          <h4 className="text-base font-bold text-slate-800 dark:text-slate-200">
+                            Chưa có tài liệu nào được chọn
+                          </h4>
+                          <p className="text-xs text-slate-400 max-w-sm">
+                            Vui lòng chọn một tài liệu ở danh sách bên trái để xem trước trực tiếp trên trang, hoặc tải tài liệu mới lên.
+                          </p>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLibUploadCategory('slides')
+                                setLibUploadTargetFolderId(currentLibFolder.id)
+                                setShowLibUploadModal(true)
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs hover:bg-violet-700 transition cursor-pointer"
+                            >
+                              <Plus className="h-3.5 w-3.5" /> + Tải tài liệu lên môn học
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
-
-        {/* ==================================================== */}
+{/* ==================================================== */}
         {/* NỘI DUNG CHÍNH TAB: TẠO ĐỀ & SOẠN ĐỀ (KATEX / PDF / SEB / AI) */}
         {/* ==================================================== */}
         {activeTab === 'create' && (
