@@ -271,8 +271,11 @@ export default function MobileBottomNav() {
   )
 
   const isHomeActive = pathname === '/' || pathname === '/new-dashboard' || pathname === '/dashboard'
-  const isExamsActive = pathname?.startsWith('/new-sen-ground') || pathname?.startsWith('/new-exams')
-  const isLibraryActive = pathname?.startsWith('/new-library')
+  const isLibraryActive =
+    pathname?.startsWith('/new-library') ||
+    (pathname?.startsWith('/new-sen-ground') && typeof window !== 'undefined' && window.location.search.includes('library'))
+  const isExamsActive =
+    (pathname?.startsWith('/new-sen-ground') && !isLibraryActive) || pathname?.startsWith('/new-exams')
 
   const filteredFeatures = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -346,7 +349,7 @@ export default function MobileBottomNav() {
 
           {/* 4. Thư viện */}
           <Link
-            href="/new-library"
+            href="/new-sen-ground?tab=library"
             className={`flex flex-col items-center justify-center flex-1 py-1 rounded-full transition ${
               isLibraryActive
                 ? 'text-pink-600 dark:text-pink-400 font-black'

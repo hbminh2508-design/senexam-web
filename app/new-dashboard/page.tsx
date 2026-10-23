@@ -189,15 +189,6 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'math_exam',
   },
   {
-    key: 'library',
-    title: 'Thư viện thông minh',
-    description: 'Kho tài liệu chuyên sâu được sắp xếp theo môn và mục tiêu thi cử.',
-    href: '/new-library',
-    tone: 'from-[#95D5B2] via-[#52B788] to-[#2D6A4F]',
-    icon: BookOpen,
-    category: 'study',
-  },
-  {
     key: 'senvideo',
     title: 'Sen Video',
     description: 'Video bài giảng ngắn gọn, sinh động giúp nắm bắt trọng tâm nhanh.',

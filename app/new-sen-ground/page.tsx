@@ -30,6 +30,8 @@ import {
   ShieldCheck,
   Folder,
   FolderOpen,
+  FolderPlus,
+  Video,
   Layers,
   Filter,
   X,
@@ -78,6 +80,7 @@ import {
   FileCode,
   Code,
   ImageIcon,
+  Maximize2,
 } from 'lucide-react'
 import { getModernThemeVars } from '@/app/components/modernTheme'
 import ModernLoading from '@/app/components/ModernLoading'
@@ -5189,18 +5192,78 @@ function getExamQuestionsBreakdown(examList: ExamItem[]) {
   return { choiceCount, tfCount, saCount, total: choiceCount + tfCount + saCount }
 }
 
+interface LibraryFolderItem {
+  id: string
+  name: string
+  parent_id: string | null
+  created_by: string | null
+  created_at: string
+}
+
+interface LibraryDocItem {
+  id: string
+  title: string
+  drive_file_id: string
+  folder_id: string | null
+  created_by: string | null
+  created_at: string
+  is_vip_only?: boolean
+  description?: string | null
+}
+
 function UnifiedHubContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [activeTab, setActiveTab] = useState<'exams' | 'create' | 'history'>('exams')
+  const [activeTab, setActiveTab] = useState<'exams' | 'library' | 'create' | 'history'>('exams')
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isVipUser, setIsVipUser] = useState(false)
   const [exams, setExams] = useState<ExamItem[]>([])
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  // ==========================================
+  // THƯ VIỆN SEN ONLINE (GIAO THOA FEPN & SENEXAM)
+  // ==========================================
+  const [libraryFolders, setLibraryFolders] = useState<LibraryFolderItem[]>([])
+  const [libraryDocs, setLibraryDocs] = useState<LibraryDocItem[]>([])
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const [libCurrentFolderId, setLibCurrentFolderId] = useState<string | null>(null)
+  const [libFolderSearch, setLibFolderSearch] = useState('')
+  const [libDocSearch, setLibDocSearch] = useState('')
+  const [libVipFilter, setLibVipFilter] = useState<'all' | 'free' | 'vip'>('all')
+  const [libExpandedParents, setLibExpandedParents] = useState<Record<string, boolean>>({})
+  const [libMobileTreeOpen, setLibMobileTreeOpen] = useState(false)
+  const [libPreviewDoc, setLibPreviewDoc] = useState<LibraryDocItem | null>(null)
+  const [libPreviewFullscreen, setLibPreviewFullscreen] = useState(false)
+
+  // Modals quản lý Thư viện
+  const [showLibCreateModal, setShowLibCreateModal] = useState(false)
+  const [libCreateType, setLibCreateType] = useState<'folder' | 'subject'>('subject')
+  const [libNewName, setLibNewName] = useState('')
+  const [libNewParentId, setLibNewParentId] = useState<string | null>(null)
+  const [libNewDesc, setLibNewDesc] = useState('')
+  const [libCreateLoading, setLibCreateLoading] = useState(false)
+  const [libCreateError, setLibCreateError] = useState('')
+
+  const [showLibUploadModal, setShowLibUploadModal] = useState(false)
+  const [libUploadTitle, setLibUploadTitle] = useState('')
+  const [libUploadCategory, setLibUploadCategory] = useState<'slides' | 'exercises' | 'videos'>('slides')
+  const [libUploadIsVip, setLibUploadIsVip] = useState(false)
+  const [libUploadTargetFolderId, setLibUploadTargetFolderId] = useState<string | null>(null)
+  const [libUploadFiles, setLibUploadFiles] = useState<File[]>([])
+  const [libUploadStatus, setLibUploadStatus] = useState<{ type: 'idle' | 'uploading' | 'success' | 'error'; message: string }>({ type: 'idle', message: '' })
+
+  const [showLibAttachExamModal, setShowLibAttachExamModal] = useState(false)
+  const [libAttachExamSearch, setLibAttachExamSearch] = useState('')
+  const [libAttachTargetFolderId, setLibAttachTargetFolderId] = useState<string | null>(null)
+
+  const [showLibRenameModal, setShowLibRenameModal] = useState(false)
+  const [libRenameTarget, setLibRenameTarget] = useState<{ id: string; type: 'folder' | 'doc'; name: string } | null>(null)
+  const [libRenameValue, setLibRenameValue] = useState('')
 
   // Cây Thư Mục Mẹ - Con theo kiến trúc SEB
   const [folders, setFolders] = useState<SebParentFolder[]>([])
@@ -5262,17 +5325,72 @@ function UnifiedHubContent() {
   const deferredQuery = useDeferredValue(searchQuery)
   const deferredHistoryQuery = useDeferredValue(historySearchQuery)
 
-  // Đọc tab từ search params
+  // Đọc tab & folder từ search params (hỗ trợ cả ?tab=... và ?exams, ?library, ?setup-courses, ?history)
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam === 'history') {
+    const folderParam = searchParams.get('folder')
+
+    if (folderParam) {
+      setLibCurrentFolderId(folderParam)
+    }
+
+    if (tabParam === 'history' || searchParams.has('history') || searchParams.has('=history')) {
       setActiveTab('history')
-    } else if (tabParam === 'create') {
+    } else if (
+      tabParam === 'setup-courses' ||
+      tabParam === 'create' ||
+      searchParams.has('setup-courses') ||
+      searchParams.has('=setup-courses') ||
+      searchParams.has('create')
+    ) {
       setActiveTab('create')
-    } else if (tabParam === 'exams') {
+    } else if (
+      tabParam === 'library' ||
+      tabParam === 'library-online' ||
+      searchParams.has('library') ||
+      searchParams.has('=library')
+    ) {
+      setActiveTab('library')
+    } else if (
+      tabParam === 'exams' ||
+      searchParams.has('exams') ||
+      searchParams.has('=exams')
+    ) {
       setActiveTab('exams')
     }
   }, [searchParams])
+
+  // Chuyển tab mượt mà và cập nhật URL sạch sẽ không reload server
+  const handleSwitchTab = (tab: 'exams' | 'library' | 'create' | 'history') => {
+    setActiveTab(tab)
+    const paramKey = tab === 'create' ? 'setup-courses' : tab
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      ;['tab', 'exams', 'setup-courses', 'history', 'library', '=exams', '=setup-courses', '=history', '=library'].forEach((k) =>
+        url.searchParams.delete(k)
+      )
+      url.searchParams.set('tab', paramKey)
+      if (tab !== 'library') {
+        url.searchParams.delete('folder')
+      }
+      window.history.replaceState(null, '', url.pathname + '?' + url.searchParams.toString())
+    }
+  }
+
+  // Chọn môn học / thư mục Thư viện và đồng bộ ID vào URL không chuyển trang
+  const handleSelectLibFolder = (folderId: string | null) => {
+    setLibCurrentFolderId(folderId)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', 'library')
+      if (folderId) {
+        url.searchParams.set('folder', folderId)
+      } else {
+        url.searchParams.delete('folder')
+      }
+      window.history.replaceState(null, '', url.pathname + '?' + url.searchParams.toString())
+    }
+  }
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -5312,11 +5430,14 @@ function UnifiedHubContent() {
         try {
           const { data: profile, error: pErr } = await supabase
             .from('profiles')
-            .select('role, email')
+            .select('role, email, vip_expires_at')
             .eq('id', user.id)
             .maybeSingle()
 
           if (!pErr && profile) {
+            if (profile.vip_expires_at && new Date(profile.vip_expires_at).getTime() > Date.now()) {
+              setIsVipUser(true)
+            }
             const role = (profile.role || '').toLowerCase().trim()
             const pEmail = (profile.email || '').toLowerCase().trim()
             if (
@@ -5397,6 +5518,27 @@ function UnifiedHubContent() {
         }
 
         setSubmissions((submissionsData as any) || [])
+
+        // 5. Tải Thư viện Sen Online (library_folders & library_documents)
+        try {
+          const [libFoldersRes, libDocsRes] = await Promise.all([
+            supabase.from('library_folders').select('*').order('name', { ascending: true }),
+            supabase.from('library_documents').select('*').order('created_at', { ascending: false }),
+          ])
+          if (libFoldersRes.data) {
+            setLibraryFolders(libFoldersRes.data as LibraryFolderItem[])
+            const initExp: Record<string, boolean> = {}
+            libFoldersRes.data.forEach((f: any) => {
+              if (!f.parent_id) initExp[f.id] = true
+            })
+            setLibExpandedParents(initExp)
+          }
+          if (libDocsRes.data) {
+            setLibraryDocs(libDocsRes.data as LibraryDocItem[])
+          }
+        } catch (libErr) {
+          console.warn('Lỗi tải dữ liệu thư viện:', libErr)
+        }
       } catch (e) {
         console.error('Lỗi khởi tạo new-exams-history-submissions:', e)
       } finally {
@@ -5406,6 +5548,303 @@ function UnifiedHubContent() {
 
     initData()
   }, [router])
+
+  // Làm mới dữ liệu Thư viện Sen Online
+  const refreshLibraryData = async () => {
+    try {
+      setLibraryLoading(true)
+      const [libFoldersRes, libDocsRes] = await Promise.all([
+        supabase.from('library_folders').select('*').order('name', { ascending: true }),
+        supabase.from('library_documents').select('*').order('created_at', { ascending: false }),
+      ])
+      if (libFoldersRes.data) setLibraryFolders(libFoldersRes.data as LibraryFolderItem[])
+      if (libDocsRes.data) setLibraryDocs(libDocsRes.data as LibraryDocItem[])
+    } catch (e) {
+      console.error('Error refreshing library:', e)
+    } finally {
+      setLibraryLoading(false)
+    }
+  }
+
+  // Tổ chức thư mục cây Thư viện Sen Online: Thư mục cha & Môn học con
+  const libraryTree = useMemo(() => {
+    const rootFolders = libraryFolders.filter((f) => !f.parent_id)
+    const childFolders = libraryFolders.filter((f) => !!f.parent_id)
+
+    const parents: {
+      parent: LibraryFolderItem
+      children: LibraryFolderItem[]
+    }[] = rootFolders.map((parent) => ({
+      parent,
+      children: childFolders.filter((c) => c.parent_id === parent.id),
+    }))
+
+    const orphanChildren = childFolders.filter((c) => !rootFolders.some((r) => r.id === c.parent_id))
+    if (orphanChildren.length > 0) {
+      parents.push({
+        parent: {
+          id: 'misc-group',
+          name: 'Môn học khác',
+          parent_id: null,
+          created_by: null,
+          created_at: '',
+        },
+        children: orphanChildren,
+      })
+    }
+
+    return parents
+  }, [libraryFolders])
+
+  const filteredLibraryTree = useMemo(() => {
+    if (!libFolderSearch.trim()) return libraryTree
+    const q = libFolderSearch.toLowerCase().trim()
+    return libraryTree
+      .map((group) => {
+        const matchParent = group.parent.name.toLowerCase().includes(q)
+        const matchedChildren = group.children.filter((c) => c.name.toLowerCase().includes(q))
+        if (matchParent) return group
+        if (matchedChildren.length > 0) {
+          return { ...group, children: matchedChildren }
+        }
+        return null
+      })
+      .filter(Boolean) as typeof libraryTree
+  }, [libraryTree, libFolderSearch])
+
+  // Đếm số tài liệu cho từng folder / môn học
+  const libraryFolderDocCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    libraryDocs.forEach((d) => {
+      if (d.folder_id) {
+        map[d.folder_id] = (map[d.folder_id] || 0) + 1
+      }
+    })
+    return map
+  }, [libraryDocs])
+
+  // Môn học / Thư mục hiện tại đang chọn
+  const currentLibFolder = useMemo(() => {
+    if (!libCurrentFolderId) return null
+    return libraryFolders.find((f) => f.id === libCurrentFolderId) || null
+  }, [libraryFolders, libCurrentFolderId])
+
+  // Danh sách tài liệu trong môn học đang chọn
+  const currentFolderDocs = useMemo(() => {
+    if (!libCurrentFolderId) return libraryDocs
+    return libraryDocs.filter((d) => d.folder_id === libCurrentFolderId)
+  }, [libraryDocs, libCurrentFolderId])
+
+  // Lọc tài liệu theo từ khóa và VIP
+  const filteredCurrentDocs = useMemo(() => {
+    return currentFolderDocs.filter((d) => {
+      const matchQ = d.title.toLowerCase().includes(libDocSearch.toLowerCase().trim())
+      if (!matchQ) return false
+      if (libVipFilter === 'vip') return Boolean(d.is_vip_only)
+      if (libVipFilter === 'free') return !d.is_vip_only
+      return true
+    })
+  }, [currentFolderDocs, libDocSearch, libVipFilter])
+
+  // Tách tài liệu theo các nhánh của sơ đồ cây FEPN x SenExam
+  const subjectTreeBranches = useMemo(() => {
+    // 1. Đề thi gắn kèm (Chế độ sơ đồ cây mang theo bài thi)
+    const attachedExamDocs = filteredCurrentDocs.filter((d) =>
+      Boolean(d.description && d.description.includes('[ATTACHED_EXAM:'))
+    )
+    const attachedExamIds = attachedExamDocs.map((d) => {
+      const match = d.description?.match(/\[ATTACHED_EXAM:([^\]]+)\]/)
+      return match ? match[1] : d.drive_file_id
+    })
+
+    const matchingExamsFromDb = exams.filter((ex) => {
+      if (attachedExamIds.includes(ex.id)) return true
+      if (libCurrentFolderId && currentLibFolder) {
+        if (ex.subject && currentLibFolder.name.toLowerCase().includes(ex.subject.toLowerCase())) {
+          return true
+        }
+      }
+      return false
+    })
+
+    // 2. Tài liệu lý thuyết / Slides
+    const slideDocs = filteredCurrentDocs.filter(
+      (d) =>
+        !d.description?.includes('[ATTACHED_EXAM:') &&
+        !d.description?.includes('[CATEGORY:exercises]') &&
+        !d.description?.includes('[CATEGORY:videos]')
+    )
+
+    // 3. Bài tập rèn luyện
+    const exerciseDocs = filteredCurrentDocs.filter((d) =>
+      Boolean(d.description && d.description.includes('[CATEGORY:exercises]'))
+    )
+
+    // 4. Video & Ghi âm bài giảng
+    const videoDocs = filteredCurrentDocs.filter((d) =>
+      Boolean(
+        d.description &&
+          (d.description.includes('[CATEGORY:videos]') || d.description.includes('[CATEGORY:recordings]'))
+      )
+    )
+
+    return {
+      attachedExams: matchingExamsFromDb,
+      attachedExamDocs,
+      slideDocs,
+      exerciseDocs,
+      videoDocs,
+    }
+  }, [filteredCurrentDocs, exams, libCurrentFolderId, currentLibFolder])
+
+  // Tạo thư mục hoặc môn học mới
+  const handleCreateLibFolderOrSubject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!libNewName.trim()) return
+    setLibCreateLoading(true)
+    setLibCreateError('')
+
+    try {
+      const { error } = await supabase.from('library_folders').insert({
+        name: libNewName.trim(),
+        parent_id: libCreateType === 'folder' ? null : libNewParentId,
+        created_by: currentUserId,
+      })
+      if (error) throw error
+
+      setLibNewName('')
+      setLibNewDesc('')
+      setShowLibCreateModal(false)
+      await refreshLibraryData()
+    } catch (err: any) {
+      setLibCreateError(err.message || 'Lỗi tạo thư mục/môn học')
+    } finally {
+      setLibCreateLoading(false)
+    }
+  }
+
+  // Tải tài liệu lên Google Drive và lưu vào Thư viện Sen Online
+  const handleUploadLibDoc = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (libUploadFiles.length === 0) return
+    const targetFolderId = libUploadTargetFolderId || libCurrentFolderId
+    if (!targetFolderId) {
+      alert('Vui lòng chọn môn học hoặc thư mục để lưu tài liệu!')
+      return
+    }
+
+    setLibUploadStatus({ type: 'uploading', message: 'Đang khởi tạo tải tệp lên Google Drive...' })
+
+    try {
+      for (let i = 0; i < libUploadFiles.length; i++) {
+        const file = libUploadFiles[i]
+        const title = libUploadTitle.trim() || file.name.replace(/\.[^/.]+$/, '')
+        setLibUploadStatus({
+          type: 'uploading',
+          message: `Đang tải tệp (${i + 1}/${libUploadFiles.length}): ${file.name}...`,
+        })
+
+        const uploadUrl = await initGoogleDriveUpload(file.name, file.type || 'application/pdf')
+        const uploaded = await uploadFileToGoogleDrive(uploadUrl, file, title)
+        const driveFileId = typeof uploaded === 'string' ? uploaded : uploaded?.id || ''
+
+        const desc = `[CATEGORY:${libUploadCategory}]`
+
+        const { error } = await supabase.from('library_documents').insert({
+          title,
+          drive_file_id: driveFileId,
+          folder_id: targetFolderId,
+          created_by: currentUserId,
+          is_vip_only: libUploadIsVip,
+          description: desc,
+        })
+
+        if (error) throw error
+      }
+
+      setLibUploadStatus({ type: 'success', message: 'Tải tài liệu lên thành công!' })
+      setTimeout(() => {
+        setShowLibUploadModal(false)
+        setLibUploadTitle('')
+        setLibUploadFiles([])
+        setLibUploadIsVip(false)
+        setLibUploadStatus({ type: 'idle', message: '' })
+        refreshLibraryData()
+      }, 1000)
+    } catch (err: any) {
+      setLibUploadStatus({ type: 'error', message: `Lỗi tải tệp: ${err.message}` })
+    }
+  }
+
+  // Đính kèm đề thi vào môn học (Vào nhanh bài thi)
+  const handleAttachExamToSubject = async (exam: ExamItem) => {
+    const targetFolderId = libAttachTargetFolderId || libCurrentFolderId
+    if (!targetFolderId) {
+      alert('Vui lòng chọn môn học để đính kèm đề thi!')
+      return
+    }
+
+    try {
+      const { error } = await supabase.from('library_documents').insert({
+        title: exam.title,
+        drive_file_id: exam.id,
+        folder_id: targetFolderId,
+        created_by: currentUserId,
+        is_vip_only: false,
+        description: `[ATTACHED_EXAM:${exam.id}] Đề thi khảo thí tích hợp`,
+      })
+      if (error) throw error
+      setShowLibAttachExamModal(false)
+      await refreshLibraryData()
+      alert(`Đã đính kèm đề thi "${exam.title}" vào môn học!`)
+    } catch (err: any) {
+      alert(`Lỗi đính kèm: ${err.message}`)
+    }
+  }
+
+  // Xóa thư mục / tài liệu
+  const handleDeleteLibItem = async (id: string, type: 'folder' | 'doc') => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${type === 'folder' ? 'môn học / thư mục' : 'tài liệu'} này?`)) return
+    try {
+      if (type === 'folder') {
+        const { error } = await supabase.from('library_folders').delete().eq('id', id)
+        if (error) throw error
+        if (libCurrentFolderId === id) handleSelectLibFolder(null)
+      } else {
+        const { error } = await supabase.from('library_documents').delete().eq('id', id)
+        if (error) throw error
+      }
+      await refreshLibraryData()
+    } catch (err: any) {
+      alert(`Lỗi xóa: ${err.message}`)
+    }
+  }
+
+  // Đổi tên thư mục / tài liệu
+  const handleRenameLibItem = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!libRenameTarget || !libRenameValue.trim()) return
+    try {
+      if (libRenameTarget.type === 'folder') {
+        const { error } = await supabase
+          .from('library_folders')
+          .update({ name: libRenameValue.trim() })
+          .eq('id', libRenameTarget.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('library_documents')
+          .update({ title: libRenameValue.trim() })
+          .eq('id', libRenameTarget.id)
+        if (error) throw error
+      }
+      setShowLibRenameModal(false)
+      setLibRenameTarget(null)
+      await refreshLibraryData()
+    } catch (err: any) {
+      alert(`Lỗi đổi tên: ${err.message}`)
+    }
+  }
 
   const toggleDarkMode = () => {
     const next = !isDark
@@ -5995,7 +6434,7 @@ function UnifiedHubContent() {
     return { total, highest, avg, highCount, totalMinutes }
   }, [submissions])
 
-  const activeThemeColor = activeTab === 'history' ? 'teal' : activeTab === 'create' ? 'emerald' : 'indigo'
+  const activeThemeColor = activeTab === 'history' ? 'teal' : activeTab === 'create' ? 'emerald' : activeTab === 'library' ? 'violet' : 'indigo'
   const themeVars = getModernThemeVars(activeThemeColor, isDark)
 
   if (loading) {
@@ -6032,11 +6471,13 @@ function UnifiedHubContent() {
             </Link>
             <div>
               <h1
-                className="text-2xl sm:text-3xl font-black leading-tight"
+                className="text-2xl sm:text-3xl font-black leading-tight text-slate-900 dark:text-white"
                 style={{ fontFamily: 'var(--font-hub-heading)' }}
               >
                 {activeTab === 'exams'
                   ? 'Kho Đề Thi & Khảo Thí'
+                  : activeTab === 'library'
+                  ? 'Thư Viện Sen Online'
                   : activeTab === 'create'
                   ? 'Tạo Đề KaTeX & Quản Trị Khóa Học'
                   : 'Lịch Sử Bài Nộp & Phân Tích Điểm'}
@@ -6044,6 +6485,8 @@ function UnifiedHubContent() {
               <p className="text-xs text-[#6B7280] dark:text-slate-400">
                 {activeTab === 'exams'
                   ? 'Quản lý tuyển tập đề theo môn, tổ chức theo khối thi và luyện thi thông minh.'
+                  : activeTab === 'library'
+                  ? 'Kho tài liệu số, bài giảng lý thuyết, bài tập chuyên đề và đề thi tích hợp theo môn.'
                   : activeTab === 'create'
                   ? 'Biên soạn đề KaTeX trực tiếp không cần PDF, quét AI đa tầng và cấu hình kỳ thi bảo mật.'
                   : 'Tra cứu kết quả thi, phân tích tiến độ điểm số và xem lại lời giải chi tiết.'}
@@ -6052,7 +6495,7 @@ function UnifiedHubContent() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Nút Tạo Tuyển Tập Đề - Chỉ Admin Mới Thấy (hiện rõ nút chữ và icon như cũ) */}
+            {/* Nút Tạo Tuyển Tập Đề - Chỉ Admin Mới Thấy */}
             {isAdmin && activeTab === 'exams' && (
               <button
                 type="button"
@@ -6073,6 +6516,18 @@ function UnifiedHubContent() {
               >
                 <Filter className="h-4 w-4 text-indigo-500" />
                 <span>{selectedFolderObj ? selectedFolderObj.name : 'Danh mục môn'}</span>
+              </button>
+            )}
+
+            {/* Nút bật/tắt Drawer trên Mobile (khi ở tab Thư Viện) */}
+            {activeTab === 'library' && (
+              <button
+                type="button"
+                onClick={() => setLibMobileTreeOpen(!libMobileTreeOpen)}
+                className="md:hidden flex h-10 px-3.5 items-center gap-1.5 rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 text-xs font-bold shadow-sm transition hover:scale-105"
+              >
+                <Folder className="h-4 w-4 text-violet-500" />
+                <span>{currentLibFolder ? currentLibFolder.name : 'Cây thư viện'}</span>
               </button>
             )}
 
@@ -6100,7 +6555,7 @@ function UnifiedHubContent() {
             {/* Nút Lịch Sử Bài Thi - Chỉ còn mỗi logo icon */}
             <button
               type="button"
-              onClick={() => setActiveTab(activeTab === 'exams' ? 'history' : 'exams')}
+              onClick={() => handleSwitchTab(activeTab === 'exams' ? 'history' : 'exams')}
               title={activeTab === 'exams' ? 'Xem lịch sử bài thi & điểm số' : 'Quay lại kho đề thi'}
               className={`flex h-10 w-10 items-center justify-center rounded-2xl border shadow-sm transition hover:scale-105 cursor-pointer ${
                 activeTab === 'history'
@@ -6123,11 +6578,12 @@ function UnifiedHubContent() {
           </div>
         </div>
 
-        {/* TAB CHUYỂN ĐỔI: KHẢO THÍ, TẠO ĐỀ & LỊCH SỬ BÀI NỘP */}
+        {/* TAB CHUYỂN ĐỔI: KHO ĐỀ, THƯ VIỆN, TẠO ĐỀ & LỊCH SỬ BÀI NỘP */}
         <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 max-w-fit overflow-x-auto">
+          {/* NÚT 1: KHO ĐỀ THI & TUYỂN TẬP */}
           <button
             type="button"
-            onClick={() => setActiveTab('exams')}
+            onClick={() => handleSwitchTab('exams')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
               activeTab === 'exams'
                 ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
@@ -6142,9 +6598,30 @@ function UnifiedHubContent() {
               </span>
             )}
           </button>
+
+          {/* NÚT 2: THƯ VIỆN SEN ONLINE (NẰM CẠNH NÚT KHO ĐỀ THI) */}
           <button
             type="button"
-            onClick={() => setActiveTab('create')}
+            onClick={() => handleSwitchTab('library')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+              activeTab === 'library'
+                ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <FolderOpen className="h-4 w-4 text-violet-500" />
+            <span>Thư Viện Sen Online</span>
+            {libraryDocs.length > 0 && (
+              <span className="rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 px-1.5 py-0.2 text-[10px] font-black">
+                {libraryDocs.length}
+              </span>
+            )}
+          </button>
+
+          {/* NÚT 3: TẠO & SOẠN ĐỀ */}
+          <button
+            type="button"
+            onClick={() => handleSwitchTab('create')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
               activeTab === 'create'
                 ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
@@ -6157,9 +6634,11 @@ function UnifiedHubContent() {
               KaTeX / AI
             </span>
           </button>
+
+          {/* NÚT 4: LỊCH SỬ BÀI NỘP */}
           <button
             type="button"
-            onClick={() => setActiveTab('history')}
+            onClick={() => handleSwitchTab('history')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
               activeTab === 'history'
                 ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs'
@@ -6798,6 +7277,795 @@ function UnifiedHubContent() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* NỘI DUNG CHÍNH TAB 2: THƯ VIỆN SEN ONLINE (FEPN x SENEXAM) */}
+        {/* ==================================================== */}
+        {activeTab === 'library' && (
+          <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[310px_1fr] gap-6 items-start animate-in fade-in">
+            {/* CỘT TRÁI: SIDEBAR CÂY THƯ MỤC & MÔN HỌC (ĐỘC LẬP VỚI KHO ĐỀ) */}
+            <aside
+              className={`space-y-4 md:block ${
+                libMobileTreeOpen
+                  ? 'fixed inset-0 z-50 bg-white/95 dark:bg-slate-900/95 p-6 overflow-y-auto backdrop-blur-xl'
+                  : 'hidden'
+              }`}
+            >
+              {libMobileTreeOpen && (
+                <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10 md:hidden">
+                  <h3 className="font-black text-sm uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Cây Thư Viện Môn Học
+                  </h3>
+                  <button
+                    onClick={() => setLibMobileTreeOpen(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Ô TÌM KIẾM MÔN & THƯ MỤC */}
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Lọc môn học & thư mục..."
+                    value={libFolderSearch}
+                    onChange={(e) => setLibFolderSearch(e.target.value)}
+                    className="h-8 w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 pl-8 pr-2.5 text-xs outline-none focus:border-violet-500"
+                  />
+                </div>
+
+                {/* Nút Xem Tất Cả */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectLibFolder(null)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    libCurrentFolderId === null
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    <span>Tất cả tài liệu & môn học</span>
+                  </span>
+                  <span className="text-[10px] opacity-75 font-mono">{libraryDocs.length}</span>
+                </button>
+              </div>
+
+              {/* Cây Thư Mục Mẹ - Con độc lập (như ảnh mẫu) */}
+              <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-3 shadow-sm backdrop-blur-xl max-h-[500px] overflow-y-auto space-y-1">
+                {filteredLibraryTree.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">
+                    Chưa có thư mục nào. Nhấn "+ Tạo Môn / Khối" để bắt đầu!
+                  </div>
+                ) : (
+                  filteredLibraryTree.map(({ parent, children }) => {
+                    const isExp = libExpandedParents[parent.id] ?? true
+                    const hasChildren = children && children.length > 0
+
+                    return (
+                      <div key={parent.id} className="space-y-0.5">
+                        {/* Thư mục mẹ */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLibExpandedParents((prev) => ({ ...prev, [parent.id]: !isExp }))
+                          }}
+                          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1.5 truncate">
+                            {isExp ? (
+                              <FolderOpen className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                            ) : (
+                              <Folder className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                            )}
+                            <span className="truncate">{parent.name}</span>
+                          </span>
+                          {hasChildren && (
+                            <span className="text-slate-400">
+                              {isExp ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Các môn học / thư mục con */}
+                        {isExp && hasChildren && (
+                          <div className="pl-3 space-y-0.5 border-l border-black/5 dark:border-white/5 ml-3">
+                            {children.map((child) => {
+                              const isSelected = libCurrentFolderId === child.id
+                              const count = libraryFolderDocCounts[child.id] || 0
+
+                              return (
+                                <button
+                                  key={child.id}
+                                  type="button"
+                                  onClick={() => {
+                                    handleSelectLibFolder(child.id)
+                                    setLibMobileTreeOpen(false)
+                                  }}
+                                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-violet-600 text-white font-bold shadow-xs'
+                                      : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
+                                  }`}
+                                >
+                                  <span className="truncate">{child.name}</span>
+                                  <span
+                                    className={`font-mono text-[10px] px-1.5 py-0.2 rounded-md ${
+                                      isSelected
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-black/5 dark:bg-white/5 text-slate-400'
+                                    }`}
+                                  >
+                                    {count}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Nút Quản Trị Cho Admin / Teacher */}
+              {isAdmin && (
+                <div className="rounded-[24px] border border-black/10 dark:border-white/10 bg-white/70 dark:bg-slate-900/70 p-3.5 space-y-2 backdrop-blur-xl">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                    Quản trị Thư viện
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLibCreateType('folder')
+                      setLibNewParentId(null)
+                      setShowLibCreateModal(true)
+                    }}
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                  >
+                    <FolderPlus className="h-3.5 w-3.5 text-amber-500" /> + Tạo Folder / Khối
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLibCreateType('subject')
+                      setLibNewParentId(libCurrentFolderId || null)
+                      setShowLibCreateModal(true)
+                    }}
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-white px-3 py-2 text-xs font-bold shadow-xs hover:bg-violet-700 transition cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> + Tạo Môn học mới
+                  </button>
+                </div>
+              )}
+            </aside>
+
+            {/* CỘT PHẢI: KHÔNG GIAN NỘI DUNG MÔN HỌC & SƠ ĐỒ CÂY TÀI LIỆU, BÀI TẬP, ĐỀ THI */}
+            <div className="space-y-6">
+              {/* Header Môn Học / Thư Viện */}
+              <div className="rounded-[28px] border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-5 sm:p-6 shadow-sm backdrop-blur-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-slate-500 dark:text-slate-400">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectLibFolder(null)}
+                        className="hover:text-violet-600 transition"
+                      >
+                        Thư viện Sen Online
+                      </button>
+                      {currentLibFolder && (
+                        <>
+                          <ChevronRight className="h-3 w-3" />
+                          <span className="text-violet-600 dark:text-violet-400 font-black">
+                            {currentLibFolder.name}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <h2
+                      className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white"
+                      style={{ fontFamily: 'var(--font-hub-heading)' }}
+                    >
+                      {currentLibFolder ? currentLibFolder.name : 'Tất Cả Môn Học & Kho Tài Liệu Số'}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {currentLibFolder
+                        ? 'Sơ đồ cây môn học tích hợp: Tài liệu lý thuyết, bài tập rèn luyện và đề thi khảo thí vào nhanh.'
+                        : 'Khám phá toàn bộ chuyên đề ôn thi, tài liệu tóm tắt kiến thức và đề thi theo khối.'}
+                    </p>
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {currentLibFolder && (
+                      <button
+                        type="button"
+                        onClick={() => handleSelectLibFolder(null)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" /> Tất cả môn
+                      </button>
+                    )}
+
+                    {isAdmin && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLibUploadCategory('slides')
+                            setLibUploadTargetFolderId(libCurrentFolderId)
+                            setShowLibUploadModal(true)
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 text-white px-3.5 py-2 text-xs font-black shadow-md hover:bg-violet-700 transition cursor-pointer"
+                        >
+                          <UploadCloud className="h-3.5 w-3.5" /> Tải tài liệu
+                        </button>
+                        {currentLibFolder && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLibAttachTargetFolderId(currentLibFolder.id)
+                              setShowLibAttachExamModal(true)
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3.5 py-2 text-xs font-black shadow-xs hover:bg-amber-500/20 transition cursor-pointer"
+                          >
+                            <Zap className="h-3.5 w-3.5" /> Đính kèm đề thi
+                          </button>
+                        )}
+                        {currentLibFolder && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLibRenameTarget({ id: currentLibFolder.id, type: 'folder', name: currentLibFolder.name })
+                              setLibRenameValue(currentLibFolder.name)
+                              setShowLibRenameModal(true)
+                            }}
+                            className="p-2 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-500 hover:text-black dark:hover:text-white transition cursor-pointer"
+                            title="Đổi tên môn học"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {currentLibFolder && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLibItem(currentLibFolder.id, 'folder')}
+                            className="p-2 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
+                            title="Xóa môn học này"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filter and Search inside Library */}
+                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                  <div className="relative w-full sm:max-w-md">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm tài liệu, bài tập..."
+                      value={libDocSearch}
+                      onChange={(e) => setLibDocSearch(e.target.value)}
+                      className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-white/90 dark:bg-slate-800/90 pl-9 pr-3 text-xs outline-none focus:border-violet-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 w-full sm:w-auto">
+                    {(['all', 'free', 'vip'] as const).map((tabKey) => (
+                      <button
+                        key={tabKey}
+                        type="button"
+                        onClick={() => setLibVipFilter(tabKey)}
+                        className={`flex-1 sm:flex-initial px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          libVipFilter === tabKey
+                            ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {tabKey === 'all' ? 'Tất cả' : tabKey === 'free' ? 'Miễn phí' : '⭐ VIP'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* TRƯỜNG HỢP 1: CHƯA CHỌN MÔN HỌC (HIỂN THỊ DANH SÁCH MÔN HỌC BUNG RA TẠI CHỖ) */}
+              {!currentLibFolder && (
+                <div className="space-y-6">
+                  {/* Grid các môn học & Thư mục (Dạng Card bung ra tại chỗ) */}
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                      <Folder className="h-4 w-4 text-violet-500" /> Danh mục Môn học & Khối chuyên đề ({libraryFolders.length})
+                    </h3>
+
+                    {libraryFolders.length === 0 ? (
+                      <div className="rounded-[28px] border border-dashed border-black/20 dark:border-white/20 bg-white/50 dark:bg-slate-900/50 p-10 text-center space-y-3">
+                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-500">
+                          <BookOpen className="h-7 w-7" />
+                        </div>
+                        <h4 className="text-base font-bold">Thư viện hiện chưa có môn học nào</h4>
+                        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                          Quản trị viên có thể bấm "+ Tạo Môn học mới" hoặc "+ Tạo Folder / Khối" để bắt đầu xây dựng cây học liệu.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {libraryFolders.map((folder) => {
+                          const docCount = libraryFolderDocCounts[folder.id] || 0
+                          const isRoot = !folder.parent_id
+                          const parentFolder = folder.parent_id
+                            ? libraryFolders.find((f) => f.id === folder.parent_id)
+                            : null
+
+                          return (
+                            <div
+                              key={folder.id}
+                              className="group rounded-3xl border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-5 shadow-sm backdrop-blur-xl hover:shadow-md transition flex flex-col justify-between gap-4"
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 group-hover:scale-105 transition">
+                                    {isRoot ? <Folder className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
+                                  </div>
+                                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-slate-500">
+                                    {isRoot ? 'Khối / Thư mục' : parentFolder ? parentFolder.name : 'Môn học'}
+                                  </span>
+                                </div>
+                                <h4
+                                  className="text-base font-black text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition"
+                                  style={{ fontFamily: 'var(--font-hub-heading)' }}
+                                >
+                                  {folder.name}
+                                </h4>
+                                <p className="text-xs text-slate-500 line-clamp-2">
+                                  Bao gồm tài liệu lý thuyết, bài tập chuyên đề và bộ đề thi khảo thí tích hợp.
+                                </p>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-3 border-t border-black/5 dark:border-white/5">
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                                  {docCount} tài liệu
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {isAdmin && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setLibRenameTarget({ id: folder.id, type: 'folder', name: folder.name })
+                                          setLibRenameValue(folder.name)
+                                          setShowLibRenameModal(true)
+                                        }}
+                                        className="p-1.5 text-slate-400 hover:text-black dark:hover:text-white transition cursor-pointer"
+                                        title="Đổi tên"
+                                      >
+                                        <Edit className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleDeleteLibItem(folder.id, 'folder')
+                                        }}
+                                        className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                                        title="Xóa"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectLibFolder(folder.id)}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-600 text-white text-xs font-black shadow-xs hover:bg-violet-700 transition cursor-pointer"
+                                  >
+                                    <span>Mở môn</span>
+                                    <ChevronRight className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Danh sách tài liệu mới tải lên */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <FileText className="h-4 w-4 text-violet-500" /> Tài liệu mới cập nhật ({filteredCurrentDocs.length})
+                    </h3>
+                    <div className="space-y-2.5">
+                      {filteredCurrentDocs.slice(0, 15).map((doc) => {
+                        const downloadUrl = `https://drive.google.com/uc?export=download&id=${doc.drive_file_id}`
+                        const isLocked = doc.is_vip_only && !isVipUser && !isAdmin
+                        const parentF = libraryFolders.find((f) => f.id === doc.folder_id)
+
+                        return (
+                          <div
+                            key={doc.id}
+                            className="group rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 p-3.5 shadow-sm backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-violet-500/30 transition"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+                                <FileText className="h-5 w-5" />
+                              </div>
+                              <div className="truncate">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition">
+                                    {doc.title}
+                                  </p>
+                                  {doc.is_vip_only && (
+                                    <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase">
+                                      <Crown className="h-2.5 w-2.5" /> VIP
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-slate-400 font-semibold">
+                                  {parentF ? parentF.name : 'Thư viện chung'} • Cập nhật: {new Date(doc.created_at).toLocaleDateString('vi-VN')}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 justify-end">
+                              {isLocked ? (
+                                <Link
+                                  href="/new-vip"
+                                  className="inline-flex items-center gap-1 rounded-xl bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-black uppercase shadow-xs hover:bg-amber-400"
+                                >
+                                  <Crown className="h-3 w-3" /> Mở khóa VIP
+                                </Link>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLibPreviewDoc(doc)}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                                  >
+                                    <Eye className="h-3.5 w-3.5 text-violet-500" /> Xem thử
+                                  </button>
+                                  <a
+                                    href={downloadUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 text-xs font-bold shadow-xs hover:opacity-90 transition"
+                                  >
+                                    <Download className="h-3.5 w-3.5" /> Tải về
+                                  </a>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TRƯỜNG HỢP 2: ĐÃ CHỌN MÔN HỌC (SƠ ĐỒ CÂY FEPN x SENEXAM) */}
+              {currentLibFolder && (
+                <div className="space-y-6">
+                  {/* NHÁNH 1: ĐỀ THI & KHẢO THÍ (CHẾ ĐỘ SƠ ĐỒ CÂY MANG THEO BÀI THI) */}
+                  <div className="rounded-3xl border border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-500/10 p-5 sm:p-6 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-indigo-500/15">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500 text-white shadow-xs">
+                          <Zap className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                            Đề Thi Khảo Thí & Vào Nhanh Bài Thi
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Chế độ sơ đồ cây mang theo đề thi: Học lý thuyết xong có thể bấm vào thi khảo thí ngay lập tức.
+                          </p>
+                        </div>
+                      </div>
+
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLibAttachTargetFolderId(currentLibFolder.id)
+                            setShowLibAttachExamModal(true)
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Thêm đề thi
+                        </button>
+                      )}
+                    </div>
+
+                    {subjectTreeBranches.attachedExams.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 italic">
+                        Môn học này chưa gắn kết đề thi khảo thí nào. Quản trị viên có thể nhấn "Đính kèm đề thi" để liên kết.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {subjectTreeBranches.attachedExams.map((ex) => (
+                          <div
+                            key={ex.id}
+                            className="rounded-2xl border border-indigo-500/20 bg-white/90 dark:bg-slate-900/90 p-4 shadow-sm backdrop-blur-md flex flex-col justify-between gap-3 hover:border-indigo-500/40 transition"
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                                  {ex.exam_type || 'Đề khảo thí'}
+                                </span>
+                                <span className="text-[11px] font-mono text-slate-400">
+                                  {ex.duration || 50} phút
+                                </span>
+                              </div>
+                              <h5 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2">
+                                {ex.title}
+                              </h5>
+                              <p className="text-[11px] text-slate-500 line-clamp-1">
+                                {ex.description || 'Đề thi tích hợp trong lộ trình môn học.'}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-black/5 dark:border-white/5">
+                              <span className="text-[11px] font-bold text-slate-500">
+                                {ex.total_questions || 40} câu hỏi
+                              </span>
+                              <Link
+                                href={`/new-exams/${ex.id}`}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xs font-black shadow-md hover:scale-105 transition"
+                              >
+                                <Zap className="h-3.5 w-3.5" />
+                                <span>Vào nhanh bài thi</span>
+                              </Link>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* NHÁNH 2: BÀI GIẢNG & TÀI LIỆU LÝ THUYẾT */}
+                  <div className="rounded-3xl border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-5 sm:p-6 shadow-sm backdrop-blur-xl space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                            Tài Liệu & Bài Giảng Lý Thuyết ({subjectTreeBranches.slideDocs.length})
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Slides, đề cương, sách giáo trình và tóm tắt kiến thức trọng tâm.
+                          </p>
+                        </div>
+                      </div>
+
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLibUploadCategory('slides')
+                            setLibUploadTargetFolderId(currentLibFolder.id)
+                            setShowLibUploadModal(true)
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Tải tài liệu
+                        </button>
+                      )}
+                    </div>
+
+                    {subjectTreeBranches.slideDocs.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 italic">
+                        Chưa có tài liệu lý thuyết nào trong môn học này.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {subjectTreeBranches.slideDocs.map((doc) => {
+                          const downloadUrl = `https://drive.google.com/uc?export=download&id=${doc.drive_file_id}`
+                          const isLocked = doc.is_vip_only && !isVipUser && !isAdmin
+
+                          return (
+                            <div
+                              key={doc.id}
+                              className="group rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-violet-500/30 transition"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+                                  <FileText className="h-5 w-5" />
+                                </div>
+                                <div className="truncate">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-violet-600 transition">
+                                      {doc.title}
+                                    </p>
+                                    {doc.is_vip_only && (
+                                      <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase">
+                                        <Crown className="h-2.5 w-2.5" /> VIP
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 font-semibold">
+                                    Cập nhật: {new Date(doc.created_at).toLocaleDateString('vi-VN')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 justify-end">
+                                {isLocked ? (
+                                  <Link
+                                    href="/new-vip"
+                                    className="inline-flex items-center gap-1 rounded-xl bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-black uppercase shadow-xs hover:bg-amber-400"
+                                  >
+                                    <Crown className="h-3 w-3" /> Mở khóa VIP
+                                  </Link>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => setLibPreviewDoc(doc)}
+                                      className="inline-flex items-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                                    >
+                                      <Eye className="h-3.5 w-3.5 text-violet-500" /> Xem thử
+                                    </button>
+                                    <a
+                                      href={downloadUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 text-xs font-bold shadow-xs hover:opacity-90 transition"
+                                    >
+                                      <Download className="h-3.5 w-3.5" /> Tải về
+                                    </a>
+                                  </>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLibItem(doc.id, 'doc')}
+                                    className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                                    title="Xóa tài liệu"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* NHÁNH 3: BÀI TẬP RÈN LUYỆN & CHUYÊN ĐỀ */}
+                  <div className="rounded-3xl border border-black/10 dark:border-white/10 bg-white/85 dark:bg-slate-900/85 p-5 sm:p-6 shadow-sm backdrop-blur-xl space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+                            Bài Tập Rèn Luyện & Chuyên Đề ({subjectTreeBranches.exerciseDocs.length})
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Phiếu bài tập tự luận, bài tập trắc nghiệm có lời giải chi tiết theo bài.
+                          </p>
+                        </div>
+                      </div>
+
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLibUploadCategory('exercises')
+                            setLibUploadTargetFolderId(currentLibFolder.id)
+                            setShowLibUploadModal(true)
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Thêm bài tập
+                        </button>
+                      )}
+                    </div>
+
+                    {subjectTreeBranches.exerciseDocs.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 italic">
+                        Chưa có bài tập rèn luyện nào trong môn học này.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {subjectTreeBranches.exerciseDocs.map((doc) => {
+                          const downloadUrl = `https://drive.google.com/uc?export=download&id=${doc.drive_file_id}`
+                          const isLocked = doc.is_vip_only && !isVipUser && !isAdmin
+
+                          return (
+                            <div
+                              key={doc.id}
+                              className="group rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-800/80 p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-emerald-500/30 transition"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                  <FileText className="h-5 w-5" />
+                                </div>
+                                <div className="truncate">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold text-sm truncate text-slate-900 dark:text-white group-hover:text-emerald-600 transition">
+                                      {doc.title}
+                                    </p>
+                                    {doc.is_vip_only && (
+                                      <span className="flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase">
+                                        <Crown className="h-2.5 w-2.5" /> VIP
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 font-semibold">
+                                    Cập nhật: {new Date(doc.created_at).toLocaleDateString('vi-VN')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 justify-end">
+                                {isLocked ? (
+                                  <Link
+                                    href="/new-vip"
+                                    className="inline-flex items-center gap-1 rounded-xl bg-amber-500 text-slate-950 px-3 py-1.5 text-xs font-black uppercase shadow-xs hover:bg-amber-400"
+                                  >
+                                    <Crown className="h-3 w-3" /> Mở khóa VIP
+                                  </Link>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => setLibPreviewDoc(doc)}
+                                      className="inline-flex items-center gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2.5 py-1.5 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                                    >
+                                      <Eye className="h-3.5 w-3.5 text-emerald-500" /> Xem thử
+                                    </button>
+                                    <a
+                                      href={downloadUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 text-xs font-bold shadow-xs hover:opacity-90 transition"
+                                    >
+                                      <Download className="h-3.5 w-3.5" /> Tải về
+                                    </a>
+                                  </>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLibItem(doc.id, 'doc')}
+                                    className="p-1.5 text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                                    title="Xóa bài tập"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -7781,7 +9049,456 @@ function UnifiedHubContent() {
         </div>
       )}
 
-      {/* MODAL XEM TRƯỚC FILE PDF */}
+      {/* ==================================================== */}
+      {/* MODALS CỦA THƯ VIỆN SEN ONLINE */}
+      {/* ==================================================== */}
+
+      {/* 1. MODAL XEM TRƯỚC TÀI LIỆU THƯ VIỆN (GOOGLE DRIVE PREVIEW) */}
+      {libPreviewDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md animate-in fade-in">
+          <div
+            className={`w-full rounded-3xl bg-white dark:bg-slate-900 border border-white/20 shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
+              libPreviewFullscreen ? 'h-[96vh] max-w-[96vw]' : 'h-[85vh] max-w-4xl'
+            }`}
+          >
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-black/10 dark:border-white/10 bg-slate-50 dark:bg-slate-800/80">
+              <div className="flex items-center gap-2.5 min-w-0 pr-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="truncate">
+                  <h3 className="font-bold text-sm truncate text-slate-900 dark:text-white">
+                    {libPreviewDoc.title}
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-semibold">
+                    Xem trước trực tuyến qua Google Drive
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLibPreviewFullscreen((v) => !v)}
+                  className="p-2 rounded-xl text-slate-500 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition cursor-pointer"
+                  title={libPreviewFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </button>
+                <a
+                  href={`https://drive.google.com/uc?export=download&id=${libPreviewDoc.drive_file_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs hover:bg-violet-700 transition"
+                >
+                  <Download className="h-3.5 w-3.5" /> Tải về
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setLibPreviewDoc(null)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition cursor-pointer"
+                  title="Đóng"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Iframe Preview */}
+            <div className="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative">
+              <iframe
+                src={`https://drive.google.com/file/d/${libPreviewDoc.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`}
+                className="w-full h-full border-none"
+                allow="autoplay"
+                title={libPreviewDoc.title}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MODAL TẠO THƯ MỤC / MÔN HỌC MỚI */}
+      {showLibCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-[28px] border border-white/20 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
+              <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+                <FolderPlus className="h-5 w-5" />
+                <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-hub-heading)' }}>
+                  {libCreateType === 'folder' ? 'Tạo Khối / Thư Mục Cha' : 'Tạo Môn Học Mới'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLibCreateModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Toggle Loại */}
+            <div className="flex rounded-xl bg-black/5 dark:bg-white/5 p-1 border border-black/5 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setLibCreateType('subject')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  libCreateType === 'subject'
+                    ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Môn học con
+              </button>
+              <button
+                type="button"
+                onClick={() => setLibCreateType('folder')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  libCreateType === 'folder'
+                    ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Khối / Thư mục cha
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateLibFolderOrSubject} className="space-y-3.5">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">
+                  Tên {libCreateType === 'folder' ? 'khối / thư mục cha' : 'môn học'}:
+                </label>
+                <input
+                  type="text"
+                  placeholder={libCreateType === 'folder' ? 'Ví dụ: Kỳ thi HSA, ĐHQGHN, Khối 12...' : 'Ví dụ: Tư duy Định lượng, Vật lí đại cương 3...'}
+                  value={libNewName}
+                  onChange={(e) => setLibNewName(e.target.value)}
+                  autoFocus
+                  required
+                  className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-bold outline-none focus:border-violet-500"
+                />
+              </div>
+
+              {libCreateType === 'subject' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">
+                    Thuộc Khối / Thư mục cha:
+                  </label>
+                  <select
+                    value={libNewParentId || ''}
+                    onChange={(e) => setLibNewParentId(e.target.value || null)}
+                    className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold outline-none focus:border-violet-500"
+                  >
+                    <option value="">(Cấp gốc độc lập - Không nằm trong khối)</option>
+                    {libraryFolders
+                      .filter((f) => !f.parent_id)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          📁 {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {libCreateError && (
+                <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-500 text-xs font-bold flex items-center gap-1.5">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{libCreateError}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLibCreateModal(false)}
+                  className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-4 py-2 text-xs font-bold hover:bg-black/10 transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={libCreateLoading || !libNewName.trim()}
+                  className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 text-xs font-black shadow-md transition disabled:opacity-50 cursor-pointer"
+                >
+                  {libCreateLoading ? 'Đang tạo...' : 'Tạo mới'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODAL TẢI TÀI LIỆU LÊN GOOGLE DRIVE */}
+      {showLibUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-[28px] border border-white/20 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
+              <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+                <UploadCloud className="h-6 w-6" />
+                <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-hub-heading)' }}>
+                  Tải Lên Tài Liệu & Bài Tập
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLibUploadModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadLibDoc} className="space-y-3.5">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">
+                  Môn học / Thư mục lưu trữ:
+                </label>
+                <select
+                  value={libUploadTargetFolderId || libCurrentFolderId || ''}
+                  onChange={(e) => setLibUploadTargetFolderId(e.target.value || null)}
+                  required
+                  className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold outline-none focus:border-violet-500"
+                >
+                  <option value="" disabled>-- Chọn môn học lưu tài liệu --</option>
+                  {libraryFolders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.parent_id ? '  ↳ 📚 ' : '📁 '} {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">
+                  Phân loại nội dung môn:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLibUploadCategory('slides')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold text-left transition cursor-pointer ${
+                      libUploadCategory === 'slides'
+                        ? 'border-violet-500 bg-violet-500/10 text-violet-600 dark:text-violet-400'
+                        : 'border-black/10 dark:border-white/10 hover:bg-black/5'
+                    }`}
+                  >
+                    📄 Bài giảng / Lý thuyết
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLibUploadCategory('exercises')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold text-left transition cursor-pointer ${
+                      libUploadCategory === 'exercises'
+                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'border-black/10 dark:border-white/10 hover:bg-black/5'
+                    }`}
+                  >
+                    📝 Bài tập rèn luyện
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">
+                  Tiêu đề tài liệu (Tùy chọn, để trống sẽ lấy tên tệp):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Chuyên đề Hàm số 12 có đáp án..."
+                  value={libUploadTitle}
+                  onChange={(e) => setLibUploadTitle(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs font-bold outline-none focus:border-violet-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">
+                  Chọn tệp PDF hoặc ảnh:
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  onChange={(e) => setLibUploadFiles(Array.from(e.target.files || []))}
+                  required
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-violet-500/10 file:text-violet-600 hover:file:bg-violet-500/20"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="libVipCheckbox"
+                  checked={libUploadIsVip}
+                  onChange={(e) => setLibUploadIsVip(e.target.checked)}
+                  className="h-4 w-4 rounded accent-amber-500"
+                />
+                <label htmlFor="libVipCheckbox" className="text-xs font-bold flex items-center gap-1 text-amber-600 dark:text-amber-400 cursor-pointer">
+                  <Crown className="h-3.5 w-3.5" /> Chỉ dành cho tài khoản VIP
+                </label>
+              </div>
+
+              {libUploadStatus.type !== 'idle' && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                    libUploadStatus.type === 'uploading'
+                      ? 'bg-violet-500/10 text-violet-600'
+                      : libUploadStatus.type === 'success'
+                      ? 'bg-emerald-500/10 text-emerald-600'
+                      : 'bg-rose-500/10 text-rose-500'
+                  }`}
+                >
+                  {libUploadStatus.type === 'uploading' && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {libUploadStatus.type === 'success' && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                  {libUploadStatus.type === 'error' && <AlertCircle className="h-4 w-4 text-rose-500" />}
+                  <span>{libUploadStatus.message}</span>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  disabled={libUploadStatus.type === 'uploading'}
+                  onClick={() => setShowLibUploadModal(false)}
+                  className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-4 py-2 text-xs font-bold disabled:opacity-50"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={libUploadStatus.type === 'uploading' || libUploadFiles.length === 0}
+                  className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 text-xs font-black shadow-md disabled:opacity-50 transition cursor-pointer"
+                >
+                  {libUploadStatus.type === 'uploading' ? 'Đang tải...' : 'Bắt đầu tải lên'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. MODAL ĐÍNH KÈM ĐỀ THI VÀO MÔN HỌC (VÀO NHANH BÀI THI) */}
+      {showLibAttachExamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg rounded-[28px] border border-white/20 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                <Zap className="h-5 w-5" />
+                <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-hub-heading)' }}>
+                  Đính Kèm Đề Thi Vào Môn Học
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLibAttachExamModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Chọn đề thi để tích hợp nút <strong>"Vào nhanh bài thi"</strong> trực tiếp trong sơ đồ cây môn học.
+            </p>
+
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Tìm tên đề thi, môn thi..."
+                value={libAttachExamSearch}
+                onChange={(e) => setLibAttachExamSearch(e.target.value)}
+                className="h-9 w-full rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
+              {exams
+                .filter((ex) => ex.title.toLowerCase().includes(libAttachExamSearch.toLowerCase().trim()))
+                .slice(0, 30)
+                .map((ex) => (
+                  <div
+                    key={ex.id}
+                    className="p-3 rounded-2xl border border-black/10 dark:border-white/10 hover:border-indigo-500/50 bg-white dark:bg-slate-800 flex items-center justify-between gap-3 transition"
+                  >
+                    <div className="min-w-0">
+                      <h5 className="font-bold text-xs truncate text-slate-900 dark:text-white">
+                        {ex.title}
+                      </h5>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                        <span>{ex.subject || 'Đề chung'}</span>
+                        <span>•</span>
+                        <span>{ex.duration || 50} phút</span>
+                        <span>•</span>
+                        <span>{ex.total_questions || 40} câu</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAttachExamToSubject(ex)}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shrink-0 transition cursor-pointer"
+                    >
+                      Đính kèm
+                    </button>
+                  </div>
+                ))}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-black/5 dark:border-white/5">
+              <button
+                type="button"
+                onClick={() => setShowLibAttachExamModal(false)}
+                className="px-4 py-2 rounded-xl bg-black/5 dark:bg-white/5 text-xs font-bold hover:bg-black/10 transition"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MODAL ĐỔI TÊN THƯ MỤC / TÀI LIỆU */}
+      {showLibRenameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-sm rounded-[28px] border border-white/20 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-violet-500">
+              <Edit className="h-5 w-5" />
+              <h3 className="text-base font-black text-slate-900 dark:text-white" style={{ fontFamily: 'var(--font-hub-heading)' }}>
+                Đổi Tên {libRenameTarget?.type === 'folder' ? 'Môn Học' : 'Tài Liệu'}
+              </h3>
+            </div>
+
+            <form onSubmit={handleRenameLibItem} className="space-y-4">
+              <input
+                type="text"
+                value={libRenameValue}
+                onChange={(e) => setLibRenameValue(e.target.value)}
+                autoFocus
+                required
+                className="w-full rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-xs font-bold outline-none focus:border-violet-500"
+              />
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowLibRenameModal(false)}
+                  className="rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-4 py-2 text-xs font-bold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 text-xs font-black shadow-md transition cursor-pointer"
+                >
+                  Lưu thay đổi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {previewPdfUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="max-w-4xl w-full h-[85vh] rounded-3xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 overflow-hidden flex flex-col shadow-2xl">

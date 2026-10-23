@@ -324,15 +324,6 @@ const STUDENT_ACTIONS: QuickAction[] = [
     category: 'math_exam',
   },
   {
-    key: 'st-library',
-    title: 'Thư viện thông minh',
-    description: 'Kho tài liệu chuyên sâu được sắp xếp theo môn và mục tiêu thi cử.',
-    href: '/new-library',
-    tone: 'from-[#95D5B2] via-[#52B788] to-[#2D6A4F]',
-    icon: BookOpen,
-    category: 'study',
-  },
-  {
     key: 'st-senvideo',
     title: 'Sen Video',
     description: 'Video bài giảng ngắn gọn, sinh động giúp nắm bắt trọng tâm nhanh.',
@@ -469,15 +460,6 @@ const TEACHER_ACTIONS: QuickAction[] = [
     badge: 'AI 2.0',
     icon: Brain,
     category: 'senai',
-  },
-  {
-    key: 'tc-library',
-    title: 'Thư Viện Tài Liệu Chuyên Môn',
-    description: 'Chia sẻ giáo trình, tài liệu chuyên sâu theo từng chương trình thi Bộ GD&ĐT.',
-    href: '/new-library',
-    tone: 'from-[#95D5B2] via-[#52B788] to-[#2D6A4F]',
-    icon: BookOpen,
-    category: 'study',
   },
   {
     key: 'tc-labs',
