@@ -241,6 +241,11 @@ export function middleware(request: NextRequest) {
       url.pathname = '/m/sen-ground'
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
+    if (pathname === '/setup-courses' || pathname === '/create' || pathname === '/new-setup-course' || pathname === '/new-setup-courses') {
+      url.pathname = '/m/sen-ground'
+      url.searchParams.set('tab', 'setup-courses')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
     if (pathname === '/login' || pathname === '/new-idp' || pathname === '/idp' || pathname === '/new-sign') {
       url.pathname = '/m/login'
       return applySecurityHeaders(NextResponse.rewrite(url))
@@ -263,9 +268,26 @@ export function middleware(request: NextRequest) {
 
   // 4.6 Chuyển hướng các đường dẫn cũ sang giao diện Mới (New UI) trên miền chính
   if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain && !isNopQuyLopSubdomain) {
-    // Tự động phục vụ giao diện mobile thuần khi thiết bị di động truy cập miền chính (rewrite nội bộ, không lỗi DNS)
+    // Tự động chuyển qua m.senexam.me khi phát hiện thiết bị di động truy cập miền chính
     const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(userAgent)
     if (isMobileDevice && !url.searchParams.has('desktop') && !pathname.startsWith('/api') && !pathname.startsWith('/auth') && !pathname.startsWith('/_next')) {
+      if (!hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !isMobileSubdomain) {
+        let targetPath = pathname
+        if (pathname === '/new-sen-ground' || pathname === '/sen-ground') targetPath = '/sen-ground'
+        else if (pathname === '/new-exams' || pathname === '/exams') targetPath = '/exams'
+        else if (pathname.startsWith('/new-exams/') || pathname.startsWith('/exams/')) targetPath = pathname.replace(/^\/new-exams/, '/exams')
+        else if (pathname === '/new-library' || pathname === '/library') targetPath = '/library'
+        else if (pathname === '/new-history' || pathname === '/history' || pathname === '/new-submissions' || pathname === '/submissions' || pathname === '/new-history-submissions') targetPath = '/history'
+        else if (pathname === '/new-setup-course' || pathname === '/setup-courses' || pathname === '/new-setup-courses') targetPath = '/setup-courses'
+        else if (pathname === '/new-pay' || pathname === '/pay' || pathname === '/vip' || pathname === '/new-vip' || pathname === '/exclusive-store' || pathname === '/codes') targetPath = '/pay'
+        else if (pathname === '/new-profile' || pathname === '/profile') targetPath = '/profile'
+        else if (pathname === '/new-idp' || pathname === '/idp' || pathname === '/login' || pathname === '/new-sign') targetPath = '/login'
+        else if (pathname === '/dashboard' || pathname === '/new-dashboard') targetPath = '/'
+
+        const targetUrl = new URL(targetPath + request.nextUrl.search, 'https://m.senexam.me')
+        return applySecurityHeaders(NextResponse.redirect(targetUrl, 307))
+      }
+
       if (pathname.startsWith('/new-exams/') || pathname.startsWith('/exams/')) {
         const id = pathname.replace(/^\/(?:new-)?exams\//, '')
         url.pathname = `/m/exams/${id}`
@@ -290,6 +312,11 @@ export function middleware(request: NextRequest) {
       ) {
         url.pathname = '/m/sen-ground'
         url.searchParams.set('tab', 'history')
+        return applySecurityHeaders(NextResponse.rewrite(url))
+      }
+      if (pathname === '/setup-courses' || pathname === '/new-setup-course' || pathname === '/new-setup-courses') {
+        url.pathname = '/m/sen-ground'
+        url.searchParams.set('tab', 'setup-courses')
         return applySecurityHeaders(NextResponse.rewrite(url))
       }
       if (pathname === '/new-sen-ground' || pathname === '/sen-ground') {
@@ -324,7 +351,6 @@ export function middleware(request: NextRequest) {
       if (pathname.startsWith('/m')) {
         return applySecurityHeaders(NextResponse.next())
       }
-      // Với các trang khác (ví dụ: /sengraph, /new-senai-studio, /nopquylop, /roadmap, /new-admin), để nguyên để người dùng vẫn sử dụng được bình thường
     }
     if (pathname === '/admin') {
       url.pathname = '/new-admin'

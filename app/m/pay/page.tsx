@@ -630,6 +630,11 @@ export default function MobilePayPage() {
           </div>
         </div>
       )}
+
+      {/* FOOTER MÃ PHIÊN BẢN */}
+      <div className="pt-2 text-center text-[10px] text-slate-400 font-mono">
+        SenExam VIP Store v2.0.2194024.10483.01
+      </div>
     </div>
   )
 }

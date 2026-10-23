@@ -9,6 +9,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
+import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, parseLatexExamCode } from '@/lib/latexExamParser'
 import {
   Clock,
@@ -29,7 +30,13 @@ import {
   FileText,
   ExternalLink,
   Zap,
+  Shuffle,
+  Eye,
+  EyeOff,
+  Sparkles,
 } from 'lucide-react'
+
+const MOBILE_VERSION = '2.0.2194024.10483.01'
 
 interface QuestionItem {
   id: string
@@ -40,6 +47,19 @@ interface QuestionItem {
   subQuestions?: { id: string; label: string; text: string; correct_answer?: boolean }[]
   correct_answer?: any
   explanation?: string
+}
+
+function SafeMathRenderer({ content, className }: { content: string; className?: string }) {
+  return (
+    <div className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, errorColor: '#ef4444', strict: false }]]}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
 }
 
 export default function MobileExamPage() {
@@ -61,7 +81,14 @@ export default function MobileExamPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [result, setResult] = useState<{ score: number; correct: number; total: number } | null>(null)
 
-  // 1. Tải đề thi từ Supabase và phân tích toàn diện (KaTeX + PDF)
+  // Chế độ Luyện tập vs Khảo thí & Đảo đề
+  const [isStudyMode, setIsStudyMode] = useState(false)
+  const [revealedAnswers, setRevealedAnswers] = useState<Record<string, boolean>>({})
+  const [shuffleQuestionsEnabled, setShuffleQuestionsEnabled] = useState(false)
+  const [shuffleOptionsEnabled, setShuffleOptionsEnabled] = useState(false)
+  const [isReviewMode, setIsReviewMode] = useState(false)
+
+  // Tải đề thi từ Supabase
   useEffect(() => {
     async function fetchExam() {
       if (!examId) return
@@ -104,9 +131,7 @@ export default function MobileExamPage() {
                 const q = normalizeLatexQuestion(rawQ)
                 const qText = q?.text || q?.question || q?.content || q?.prompt || `Câu hỏi số ${qNum}`
                 const qType = q?.type || sec.type || 'single_choice'
-                const opts = Array.isArray(q?.options) && q.options.length > 0
-                  ? q.options
-                  : ['A', 'B', 'C', 'D']
+                const opts = Array.isArray(q?.options) && q.options.length > 0 ? q.options : ['A', 'B', 'C', 'D']
 
                 flat.push({
                   id: q?.id || `q_${qNum}`,
@@ -115,7 +140,7 @@ export default function MobileExamPage() {
                   type: qType,
                   options: opts,
                   subQuestions: q?.subQuestions || q?.sub_questions || [],
-                  correct_answer: q?.correctAnswer || q?.correct_answer || q?.answer,
+                  correct_answer: q?.correctAnswer || q?.correct_answer || q?.answer || 'A',
                   explanation: q?.explanation || q?.solution || '',
                 })
               })
@@ -135,7 +160,6 @@ export default function MobileExamPage() {
           })
         }
 
-        // Nếu chưa có câu hỏi và có chuỗi nội dung raw LaTeX
         if (flat.length === 0 && data.content && typeof data.content === 'string') {
           try {
             const parsed = parseLatexExamCode(data.content)
@@ -147,20 +171,19 @@ export default function MobileExamPage() {
                   question: pq.text,
                   type: pq.type,
                   options: pq.options,
-                  correct_answer: pq.correctAnswer,
-                  explanation: pq.explanation,
+                  correct_answer: pq.correctAnswer || 'A',
+                  explanation: pq.solution || '',
                 })
               })
             }
           } catch (e) {
-            console.error('parseLatexExamCode error:', e)
+            console.warn('Lỗi parse raw LaTeX content:', e)
           }
         }
 
-        // Dự phòng cho đề PDF chỉ có tổng số câu
         if (flat.length === 0) {
-          const total = data.total_questions || 40
-          for (let i = 1; i <= total; i++) {
+          const totalQ = data.total_questions || 40
+          for (let i = 1; i <= totalQ; i++) {
             flat.push({
               id: `q_${i}`,
               number: i,
@@ -174,19 +197,15 @@ export default function MobileExamPage() {
 
         setQuestions(flat)
 
-        // Khôi phục nháp nếu có trong LocalStorage
-        const draft = localStorage.getItem(`m_senexam_draft_${examId}`)
-        if (draft) {
+        // Khôi phục bài làm từ localStorage
+        const savedAns = localStorage.getItem(`m_exam_ans_${examId}`)
+        if (savedAns) {
           try {
-            const parsed = JSON.parse(draft)
-            if (parsed.answers) setAnswers(parsed.answers)
-            if (parsed.bookmarked) setBookmarked(parsed.bookmarked)
-          } catch (e) {
-            console.error(e)
-          }
+            setAnswers(JSON.parse(savedAns))
+          } catch {}
         }
       } catch (err) {
-        console.error('Error fetching exam:', err)
+        console.error('Lỗi nạp đề thi:', err)
       } finally {
         setLoading(false)
       }
@@ -195,13 +214,13 @@ export default function MobileExamPage() {
     fetchExam()
   }, [examId, router])
 
-  // 2. Timer đếm ngược
+  // Timer đếm ngược
   useEffect(() => {
-    if (!hasStarted || loading || timeLeft <= 0 || result || isSubmitting) return
-
+    if (!hasStarted || result || isReviewMode) return
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
+          clearInterval(timer)
           handleSubmitExam()
           return 0
         }
@@ -210,16 +229,60 @@ export default function MobileExamPage() {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [hasStarted, loading, timeLeft, result, isSubmitting])
+  }, [hasStarted, result, isReviewMode])
 
-  // 3. Tự động lưu tiến độ vào LocalStorage
-  useEffect(() => {
-    if (!hasStarted || !examId) return
-    localStorage.setItem(
-      `m_senexam_draft_${examId}`,
-      JSON.stringify({ answers, bookmarked, updatedAt: Date.now() })
-    )
-  }, [answers, bookmarked, hasStarted, examId])
+  // Lưu tiến độ làm bài
+  const handleSelectOption = (qKey: string, val: any) => {
+    if (isReviewMode) return
+    setAnswers((prev) => {
+      const next = { ...prev, [qKey]: val }
+      localStorage.setItem(`m_exam_ans_${examId}`, JSON.stringify(next))
+      return next
+    })
+  }
+
+  // Nộp bài thi
+  const handleSubmitExam = async () => {
+    setShowSubmitConfirm(false)
+    setIsSubmitting(true)
+
+    let correctCount = 0
+    questions.forEach((q) => {
+      const studentAns = answers[`q_${q.number}`]
+      const actualCorrect = String(q.correct_answer || 'A').trim().toUpperCase()
+      if (studentAns && String(studentAns).trim().toUpperCase() === actualCorrect) {
+        correctCount++
+      }
+    })
+
+    const total = questions.length || 1
+    const rawScore = (correctCount / total) * 10
+    const finalScore = parseFloat(rawScore.toFixed(2))
+
+    setResult({ score: finalScore, correct: correctCount, total })
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('submissions').insert([
+          {
+            exam_id: examId,
+            user_id: user.id,
+            score: finalScore,
+            correct_count: correctCount,
+            total_questions: total,
+            answers: answers,
+            created_at: new Date().toISOString(),
+          },
+        ])
+      }
+    } catch (e) {
+      console.error('Lỗi lưu submission:', e)
+    } finally {
+      setIsSubmitting(false)
+      localStorage.removeItem(`m_exam_ans_${examId}`)
+    }
+  }
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60)
@@ -227,114 +290,23 @@ export default function MobileExamPage() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
   }
 
-  const answeredCount = Object.keys(answers).length
   const currentQ = questions[currentIndex]
-
-  // Kiểm tra đề thi PDF
-  const isPdfExam = useMemo(() => {
-    if (!exam) return false
-    const hasValidDriveId =
-      typeof exam.drive_file_id === 'string' &&
-      exam.drive_file_id.trim().length > 10 &&
-      !exam.drive_file_id.includes('null')
-    const hasValidPdfUrl =
-      typeof exam.pdf_url === 'string' &&
-      exam.pdf_url.trim().length > 10
-    return Boolean(hasValidDriveId || hasValidPdfUrl || exam.format === 'pdf')
-  }, [exam])
-
-  const pdfEmbedUrl = useMemo(() => {
-    if (!exam) return ''
-    if (exam.drive_file_id && exam.drive_file_id.length > 10) {
-      return `https://drive.google.com/file/d/${exam.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`
-    }
-    return exam.pdf_url || ''
-  }, [exam])
-
-  // Chọn đáp án trắc nghiệm
-  const handleSelectOption = (optIndex: number) => {
-    if (!currentQ) return
-    const key = `q_${currentQ.number}`
-    const letters = ['A', 'B', 'C', 'D', 'E', 'F']
-    const choice = letters[optIndex] || String(optIndex)
-    setAnswers((prev) => ({ ...prev, [key]: choice }))
-  }
-
-  // Chọn đáp án Đúng/Sai
-  const handleToggleTrueFalse = (subIndex: number, val: boolean) => {
-    if (!currentQ) return
-    const key = `q_${currentQ.number}_sub_${subIndex}`
-    setAnswers((prev) => ({ ...prev, [key]: val }))
-  }
-
-  // Điền đáp án ngắn
-  const handleShortAnswerChange = (val: string) => {
-    if (!currentQ) return
-    const key = `q_${currentQ.number}`
-    setAnswers((prev) => ({ ...prev, [key]: val }))
-  }
-
-  // Toggle Bookmark
-  const toggleBookmark = (qNum: number) => {
-    setBookmarked((prev) => ({ ...prev, [qNum]: !prev[qNum] }))
-  }
-
-  // Nộp bài và chấm điểm
-  const handleSubmitExam = async () => {
-    if (isSubmitting) return
-    setIsSubmitting(true)
-    setShowSubmitConfirm(false)
-
-    try {
-      let correct = 0
-      questions.forEach((q) => {
-        const key = `q_${q.number}`
-        const ans = answers[key]
-        if (ans && q.correct_answer && String(ans).trim().toUpperCase() === String(q.correct_answer).trim().toUpperCase()) {
-          correct++
-        }
-      })
-
-      const score = questions.length > 0 ? parseFloat(((correct / questions.length) * 10).toFixed(2)) : 0
-      setResult({ score, correct, total: questions.length })
-
-      // Lưu vào Supabase submissions
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('submissions').insert({
-          exam_id: examId,
-          user_id: user.id,
-          user_email: user.email,
-          answers,
-          score,
-          correct_count: correct,
-          total_questions: questions.length,
-          duration_seconds: (exam?.duration || 50) * 60 - timeLeft,
-          created_at: new Date().toISOString(),
-        })
-      }
-
-      localStorage.removeItem(`m_senexam_draft_${examId}`)
-    } catch (err) {
-      console.error('Submit error:', err)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+  const isPdfExam = Boolean(exam?.pdf_url || exam?.drive_file_id)
+  const answeredCount = Object.keys(answers).length
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-3">
-        <div className="w-10 h-10 border-4 border-violet-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs font-bold text-slate-500">Đang chuẩn bị đề thi cho điện thoại...</p>
-      </div>
+      <ModernLoading
+        title="SenExam 2.0 Mobile"
+        subtitle={`Đang tải đề thi (v${MOBILE_VERSION})...`}
+      />
     )
   }
 
   // ==========================================
-  // MÀN HÌNH CHƯA BẮT ĐẦU (SẴN SÀNG THI)
+  // MÀN HÌNH CHỜ TRƯỚC KHI BẮT ĐẦU
   // ==========================================
-  if (!hasStarted && !result) {
+  if (!hasStarted && !result && !isReviewMode) {
     return (
       <div className="flex-1 flex flex-col justify-between p-5 space-y-6 animate-in fade-in">
         <div className="space-y-4 pt-2">
@@ -352,7 +324,7 @@ export default function MobileExamPage() {
                 {exam?.exam_type || 'Đề Khảo Thí'}
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/5 dark:bg-white/10 text-slate-500">
-                {isPdfExam ? '📄 Đề PDF' : '✨ Đề KaTeX Trực Tiếp'}
+                {isPdfExam ? '📄 Đề PDF' : '✨ Đề KaTeX'}
               </span>
             </div>
             <h1 className="text-xl font-black text-slate-900 dark:text-white leading-tight">
@@ -374,31 +346,43 @@ export default function MobileExamPage() {
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-800 dark:text-violet-300 space-y-2">
-            <p className="font-bold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-violet-600" /> Tối ưu điện thoại:
-            </p>
-            <ul className="list-disc list-inside space-y-1 text-[11px] opacity-90">
-              {isPdfExam ? (
-                <>
-                  <li>Đề thi PDF hiển thị rộng rãi ở trên, chọn đáp án nhanh gọn ở dưới.</li>
-                  <li>Thu gọn tối đa thanh công cụ để tăng diện tích đọc đề PDF.</li>
-                </>
-              ) : (
-                <>
-                  <li>Công thức Toán KaTeX hiển thị sắc nét, tự co giãn chống tràn màn hình.</li>
-                  <li>Bấm chạm đáp án to rõ, phản hồi tức thì.</li>
-                </>
-              )}
-              <li>Tự động lưu bài làm và khôi phục khi reload.</li>
-            </ul>
+          {/* Tùy chọn Chế độ luyện tập & Đảo đề */}
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 space-y-2.5 shadow-xs">
+            <span className="text-[10px] font-black uppercase text-slate-400 block">Tùy Chọn Phòng Thi</span>
+            <label className="flex items-center justify-between cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+              <span>Chế độ Luyện tập (Xem giải thích ngay)</span>
+              <input
+                type="checkbox"
+                checked={isStudyMode}
+                onChange={(e) => setIsStudyMode(e.target.checked)}
+                className="rounded text-violet-600"
+              />
+            </label>
+            <label className="flex items-center justify-between cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+              <span>Đảo thứ tự câu hỏi</span>
+              <input
+                type="checkbox"
+                checked={shuffleQuestionsEnabled}
+                onChange={(e) => setShuffleQuestionsEnabled(e.target.checked)}
+                className="rounded text-violet-600"
+              />
+            </label>
+            <label className="flex items-center justify-between cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+              <span>Đảo thứ tự đáp án (A, B, C, D)</span>
+              <input
+                type="checkbox"
+                checked={shuffleOptionsEnabled}
+                onChange={(e) => setShuffleOptionsEnabled(e.target.checked)}
+                className="rounded text-violet-600"
+              />
+            </label>
           </div>
         </div>
 
         <button
           type="button"
           onClick={() => setHasStarted(true)}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm shadow-lg active:scale-98 transition flex items-center justify-center gap-2"
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm shadow-lg active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
         >
           <span>BẮT ĐẦU LÀM BÀI THI</span>
           <ChevronRight className="h-4 w-4" />
@@ -410,7 +394,7 @@ export default function MobileExamPage() {
   // ==========================================
   // MÀN HÌNH KẾT QUẢ SAU KHI NỘP BÀI
   // ==========================================
-  if (result) {
+  if (result && !isReviewMode) {
     const isGood = result.score >= 8.0
     const isPass = result.score >= 5.0
 
@@ -446,17 +430,27 @@ export default function MobileExamPage() {
         </div>
 
         <div className="space-y-2 pt-4">
+          <button
+            type="button"
+            onClick={() => {
+              setIsReviewMode(true)
+              setCurrentIndex(0)
+            }}
+            className="w-full py-3 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 active:scale-98 transition cursor-pointer"
+          >
+            <Eye className="h-4 w-4" /> Xem lại chi tiết bài làm (Review)
+          </button>
           <Link
             href="/m/sen-ground?tab=history"
-            className="w-full py-3 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 active:scale-98 transition"
+            className="w-full py-3 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-98 transition"
           >
-            <ListOrdered className="h-4 w-4" /> Xem lại lịch sử bài nộp
+            <ListOrdered className="h-4 w-4" /> Lịch sử bài nộp
           </Link>
           <Link
             href="/m"
-            className="w-full py-3 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-98 transition"
+            className="w-full py-2.5 text-slate-400 font-bold text-xs block text-center"
           >
-            <Home className="h-4 w-4" /> Về trang chủ mobile
+            Về trang chủ mobile
           </Link>
         </div>
       </div>
@@ -464,41 +458,70 @@ export default function MobileExamPage() {
   }
 
   // ==========================================
-  // GIAO DIỆN LÀM BÀI CHÍNH (MOBILE)
+  // GIAO DIỆN LÀM BÀI HOẶC XEM LẠI CHI TIẾT
   // ==========================================
+  const currentKey = `q_${currentQ?.number || currentIndex + 1}`
+  const selectedAns = answers[currentKey]
+  const isAnswerRevealed = revealedAnswers[currentKey] || isReviewMode
+  const correctAns = currentQ?.correct_answer || 'A'
+
   return (
-    <div className="flex-1 w-full flex flex-col justify-between bg-slate-50 dark:bg-slate-900 select-none">
+    <div className="flex-1 w-full flex flex-col justify-between bg-slate-50 dark:bg-slate-900 select-none pb-12">
       {/* 1. STICKY TOPBAR PHÒNG THI */}
       <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-black/10 dark:border-white/10 px-3.5 py-2 flex items-center justify-between shadow-xs">
         <button
           type="button"
-          onClick={() => setShowExitConfirm(true)}
+          onClick={() => {
+            if (isReviewMode) {
+              setIsReviewMode(false)
+            } else {
+              setShowExitConfirm(true)
+            }
+          }}
           className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition cursor-pointer"
           title="Thoát phòng thi"
         >
-          <X className="h-5 w-5" />
+          {isReviewMode ? <ArrowLeft className="h-5 w-5" /> : <X className="h-5 w-5" />}
         </button>
 
-        {/* ĐỒNG HỒ ĐẾM NGƯỢC */}
-        <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-mono font-black ${
-          timeLeft <= 180
-            ? 'bg-rose-500 text-white animate-pulse'
-            : timeLeft <= 600
-            ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
-            : 'bg-black/5 dark:bg-white/10 text-slate-800 dark:text-slate-200'
-        }`}>
-          <Clock className="h-3.5 w-3.5" />
-          <span>{formatTime(timeLeft)}</span>
-        </div>
+        {/* ĐỒNG HỒ ĐẾM NGƯỢC HOẶC HUY HIỆU REVIEW */}
+        {isReviewMode ? (
+          <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            Đang Xem Lại Bài
+          </span>
+        ) : (
+          <div
+            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-mono font-black ${
+              timeLeft <= 180
+                ? 'bg-rose-500 text-white animate-pulse'
+                : timeLeft <= 600
+                ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                : 'bg-black/5 dark:bg-white/10 text-slate-800 dark:text-slate-200'
+            }`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            <span>{formatTime(timeLeft)}</span>
+          </div>
+        )}
 
-        {/* NÚT NỘP BÀI */}
-        <button
-          type="button"
-          onClick={() => setShowSubmitConfirm(true)}
-          className="px-3 py-1.5 rounded-xl bg-violet-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
-        >
-          Nộp bài
-        </button>
+        {/* NÚT NỘP BÀI HOẶC THOÁT REVIEW */}
+        {isReviewMode ? (
+          <button
+            type="button"
+            onClick={() => router.push('/m/sen-ground?tab=history')}
+            className="px-3 py-1.5 rounded-xl bg-violet-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
+          >
+            Đóng
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowSubmitConfirm(true)}
+            className="px-3 py-1.5 rounded-xl bg-violet-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
+          >
+            Nộp bài
+          </button>
+        )}
       </header>
 
       {/* 2. PROGRESS BAR TIẾN ĐỘ */}
@@ -514,25 +537,18 @@ export default function MobileExamPage() {
       {/* ======================================================== */}
       {isPdfExam ? (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* KHUNG XEM ĐỀ PDF Ở TRÊN (TỐI ƯU CHIỀU CAO TỐI ĐA) */}
-          <div className="flex-1 w-full bg-slate-950 relative border-b border-black/10 dark:border-white/10 min-h-[50vh]">
-            {pdfEmbedUrl ? (
-              <iframe
-                src={pdfEmbedUrl}
-                className="w-full h-full border-none"
-                allow="autoplay"
-                title="Đề thi PDF"
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center p-6 text-center text-xs text-slate-400">
-                Đang nạp file PDF đề thi...
-              </div>
-            )}
+          {/* KHUNG XEM ĐỀ PDF Ở TRÊN */}
+          <div className="flex-1 w-full bg-slate-950 relative border-b border-black/10 dark:border-white/10 min-h-[52vh]">
+            <iframe
+              src={exam.pdf_url || `https://drive.google.com/file/d/${exam.drive_file_id}/preview#toolbar=0&navpanes=0`}
+              className="w-full h-full border-none"
+              allow="autoplay"
+              title="Đề thi PDF"
+            />
           </div>
 
-          {/* BẢNG CHỌN ĐÁP ÁN TINH GỌN Ở DƯỚI (CẮT BỚT CLUTTER TĂNG DIỆN TÍCH ĐỌC ĐỀ) */}
-          <div className="p-3 bg-white dark:bg-slate-900 border-t border-black/10 dark:border-white/10 space-y-2.5 shadow-lg shrink-0">
-            {/* Stepper Hàng Ngang Nhỏ Gọn */}
+          {/* BẢNG CHỌN ĐÁP ÁN TINH GỌN Ở DƯỚI */}
+          <div className="p-3 bg-white dark:bg-slate-900 border-t border-black/10 dark:border-white/10 space-y-2 shadow-lg shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <button
@@ -557,50 +573,42 @@ export default function MobileExamPage() {
                 </button>
               </div>
 
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => toggleBookmark(currentIndex + 1)}
-                  className={`p-1.5 rounded-lg transition ${
-                    bookmarked[currentIndex + 1] ? 'text-amber-500 bg-amber-500/15' : 'text-slate-400'
-                  }`}
-                  title="Bookmark"
-                >
-                  <Bookmark className="h-4 w-4" fill={bookmarked[currentIndex + 1] ? 'currentColor' : 'none'} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowPalette(true)}
-                  className="px-2.5 py-1 rounded-lg bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold text-[11px] flex items-center gap-1"
-                >
-                  <ListOrdered className="h-3.5 w-3.5" />
-                  <span>{answeredCount}/{questions.length}</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowPalette(true)}
+                className="px-2.5 py-1 rounded-lg bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold text-[11px] flex items-center gap-1"
+              >
+                <ListOrdered className="h-3.5 w-3.5" />
+                <span>{answeredCount}/{questions.length}</span>
+              </button>
             </div>
 
-            {/* HÀNG 4 NÚT ĐÁP ÁN (A, B, C, D) CHẠM CỰC NHANH */}
+            {/* HÀNG 4 NÚT ĐÁP ÁN TINH GỌN (A, B, C, D) */}
             <div className="grid grid-cols-4 gap-2">
-              {['A', 'B', 'C', 'D'].map((letter, optIdx) => {
-                const key = `q_${currentIndex + 1}`
-                const isSelected = answers[key] === letter
+              {['A', 'B', 'C', 'D'].map((letter) => {
+                const isSelected = selectedAns === letter
+                const isCorrect = isAnswerRevealed && letter === correctAns
+                const isWrong = isAnswerRevealed && isSelected && letter !== correctAns
 
                 return (
                   <button
                     key={letter}
                     type="button"
+                    disabled={isReviewMode}
                     onClick={() => {
-                      handleSelectOption(optIdx)
-                      // Tự động chuyển câu sau nếu chưa hết đề
-                      if (currentIndex < questions.length - 1) {
-                        setTimeout(() => setCurrentIndex((idx) => idx + 1), 180)
+                      handleSelectOption(currentKey, letter)
+                      if (!isReviewMode && currentIndex < questions.length - 1) {
+                        setTimeout(() => setCurrentIndex((idx) => idx + 1), 160)
                       }
                     }}
                     className={`h-11 rounded-xl font-black text-sm transition-all duration-150 flex items-center justify-center active:scale-95 cursor-pointer ${
-                      isSelected
-                        ? 'bg-violet-600 text-white shadow-md ring-2 ring-violet-500/50 scale-102'
-                        : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10'
+                      isCorrect
+                        ? 'bg-emerald-600 text-white shadow-md'
+                        : isWrong
+                        ? 'bg-rose-500 text-white shadow-md'
+                        : isSelected
+                        ? 'bg-violet-600 text-white shadow-md'
+                        : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     {letter}
@@ -612,289 +620,157 @@ export default function MobileExamPage() {
         </div>
       ) : (
         /* ======================================================== */
-        /* TRƯỜNG HỢP B: ĐỀ KATEX TRỰC TIẾP (HIỂN THỊ ĐẦY ĐỦ CÂU HỎI) */
+        /* TRƯỜNG HỢP B: ĐỀ KATEX (HIỂN THỊ CÂU HỎI & CÔNG THỨC)    */
         /* ======================================================== */
-        <div className="flex-1 p-4 space-y-4 overflow-y-auto pb-20">
+        <div className="flex-1 p-4 space-y-4 overflow-y-auto">
           {currentQ && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              {/* Header Câu Hỏi */}
-              <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-black text-violet-600 dark:text-violet-400">
-                    Câu {currentQ.number}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-bold">
-                    / {questions.length} câu
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase bg-black/5 dark:bg-white/5 text-slate-500">
-                    {currentQ.type === 'true_false'
-                      ? 'Đúng/Sai'
-                      : currentQ.type === 'short_answer'
-                      ? 'Điền số'
-                      : 'Trắc nghiệm'}
-                  </span>
-                </div>
+              <div className="flex items-center justify-between">
+                <span className="px-2.5 py-1 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 font-mono font-bold text-xs">
+                  Câu {currentIndex + 1} / {questions.length}
+                </span>
 
-                <button
-                  type="button"
-                  onClick={() => toggleBookmark(currentQ.number)}
-                  className={`p-1.5 rounded-xl transition cursor-pointer ${
-                    bookmarked[currentQ.number]
-                      ? 'text-amber-500 bg-amber-500/15'
-                      : 'text-slate-300 hover:text-slate-500'
-                  }`}
-                  title="Đánh dấu câu hỏi"
-                >
-                  <Bookmark className="h-4 w-4" fill={bookmarked[currentQ.number] ? 'currentColor' : 'none'} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {/* Nút Kiểm tra đáp án (Nếu bật Chế độ Luyện tập) */}
+                  {isStudyMode && !isReviewMode && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRevealedAnswers((prev) => ({ ...prev, [currentKey]: !prev[currentKey] }))
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-600 font-bold text-[11px] flex items-center gap-1 active:scale-95"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>{isAnswerRevealed ? 'Ẩn đáp án' : 'Xem đáp án'}</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPalette(true)}
+                    className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5 text-slate-500"
+                  >
+                    <ListOrdered className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
-              {/* Nội Dung Câu Hỏi (KaTeX & Markdown Tự Động Co Giãn) */}
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-relaxed overflow-x-auto pb-1">
-                <ReactMarkdown
-                  remarkPlugins={[remarkMath, remarkGfm]}
-                  rehypePlugins={[rehypeKatex]}
-                >
-                  {currentQ.question}
-                </ReactMarkdown>
+              {/* NỘI DUNG CÂU HỎI KATEX */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 shadow-xs text-sm font-medium text-slate-900 dark:text-white leading-relaxed">
+                <SafeMathRenderer content={currentQ.question} />
               </div>
 
-              {/* DANH SÁCH ĐÁP ÁN KATEX */}
-              {(!currentQ.type || currentQ.type === 'single_choice') && (
-                <div className="space-y-2.5 pt-1">
-                  {(currentQ.options || ['A', 'B', 'C', 'D']).map((optText, oIdx) => {
-                    const letters = ['A', 'B', 'C', 'D', 'E', 'F']
-                    const letter = letters[oIdx] || String(oIdx + 1)
-                    const key = `q_${currentQ.number}`
-                    const isSelected = answers[key] === letter
+              {/* CÁC PHƯƠNG ÁN LỰA CHỌN */}
+              <div className="space-y-2">
+                {currentQ.options.map((opt, optIdx) => {
+                  const letter = String.fromCharCode(65 + optIdx)
+                  const isSelected = selectedAns === letter
+                  const isCorrect = isAnswerRevealed && letter === correctAns
+                  const isWrong = isAnswerRevealed && isSelected && letter !== correctAns
 
-                    return (
-                      <button
-                        key={oIdx}
-                        type="button"
-                        onClick={() => handleSelectOption(oIdx)}
-                        className={`w-full min-h-[52px] p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all duration-150 active:scale-98 cursor-pointer ${
-                          isSelected
-                            ? 'border-violet-600 bg-violet-600/15 dark:bg-violet-600/25 ring-2 ring-violet-600/50 text-slate-900 dark:text-white shadow-sm'
-                            : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-black/20'
-                        }`}
-                      >
-                        <span
-                          className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition ${
-                            isSelected
-                              ? 'bg-violet-600 text-white'
-                              : 'bg-black/5 dark:bg-white/5 text-slate-500'
-                          }`}
-                        >
-                          {letter}
-                        </span>
-                        <div className="flex-1 text-xs font-semibold pt-1 overflow-x-auto">
-                          <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
-                            {optText}
-                          </ReactMarkdown>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* DẠNG ĐÚNG / SAI */}
-              {currentQ.type === 'true_false' && (
-                <div className="space-y-2.5 pt-1">
-                  {(currentQ.subQuestions?.length
-                    ? currentQ.subQuestions
-                    : [
-                        { id: '1', label: 'a)', text: 'Mệnh đề ý a của bài toán' },
-                        { id: '2', label: 'b)', text: 'Mệnh đề ý b của bài toán' },
-                        { id: '3', label: 'c)', text: 'Mệnh đề ý c của bài toán' },
-                        { id: '4', label: 'd)', text: 'Mệnh đề ý d của bài toán' },
-                      ]
-                  ).map((sub, sIdx) => {
-                    const key = `q_${currentQ.number}_sub_${sIdx}`
-                    const userVal = answers[key]
-
-                    return (
-                      <div
-                        key={sub.id || sIdx}
-                        className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 space-y-2"
-                      >
-                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                          <span className="font-black text-violet-600 mr-1.5">{sub.label}</span>
-                          {sub.text}
-                        </div>
-
-                        <div className="flex items-center gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleTrueFalse(sIdx, true)}
-                            className={`flex-1 py-2 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer ${
-                              userVal === true
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-slate-800'
-                            }`}
-                          >
-                            ĐÚNG
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleTrueFalse(sIdx, false)}
-                            className={`flex-1 py-2 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer ${
-                              userVal === false
-                                ? 'bg-rose-600 text-white shadow-xs'
-                                : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-slate-800'
-                            }`}
-                          >
-                            SAI
-                          </button>
-                        </div>
+                  return (
+                    <button
+                      key={letter}
+                      type="button"
+                      disabled={isReviewMode}
+                      onClick={() => handleSelectOption(currentKey, letter)}
+                      className={`w-full p-3.5 rounded-2xl border text-left transition-all duration-150 flex items-start gap-3 cursor-pointer ${
+                        isCorrect
+                          ? 'border-emerald-500 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 font-bold'
+                          : isWrong
+                          ? 'border-rose-500 bg-rose-500/15 text-rose-800 dark:text-rose-300 font-bold'
+                          : isSelected
+                          ? 'border-violet-600 bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold'
+                          : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200'
+                      }`}
+                    >
+                      <span className="w-6 h-6 rounded-lg bg-black/5 dark:bg-white/10 flex items-center justify-center font-black text-xs shrink-0">
+                        {letter}
+                      </span>
+                      <div className="text-xs leading-relaxed pt-0.5 flex-1">
+                        <SafeMathRenderer content={opt} />
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+                    </button>
+                  )
+                })}
+              </div>
 
-              {/* DẠNG ĐIỀN ĐÁP ÁN NGẮN */}
-              {currentQ.type === 'short_answer' && (
-                <div className="space-y-3 pt-2">
-                  <label className="text-xs font-bold text-slate-500 block">
-                    Nhập kết quả số hoặc phân số của bạn:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ví dụ: -2.5 hoặc 3/4..."
-                    value={answers[`q_${currentQ.number}`] || ''}
-                    onChange={(e) => handleShortAnswerChange(e.target.value)}
-                    className="w-full h-12 rounded-2xl border-2 border-violet-500/30 focus:border-violet-600 bg-white dark:bg-slate-800 px-4 text-base font-bold text-slate-900 dark:text-white outline-none shadow-xs"
-                  />
+              {/* LỜI GIẢI THÍCH CHI TIẾT KATEX (KHI REVEALED HOẶC REVIEW) */}
+              {isAnswerRevealed && currentQ.explanation && (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1.5 animate-in fade-in">
+                  <span className="font-black uppercase text-amber-600 dark:text-amber-400 block">
+                    💡 Hướng Dẫn Giải Chi Tiết
+                  </span>
+                  <SafeMathRenderer content={currentQ.explanation} />
                 </div>
               )}
             </div>
           )}
+
+          {/* THANH ĐIỀU HƯỚNG CÂU TRƯỚC / SAU */}
+          <div className="flex items-center justify-between pt-4">
+            <button
+              type="button"
+              disabled={currentIndex === 0}
+              onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+              className="px-4 py-2 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs disabled:opacity-30 active:scale-95 flex items-center gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" /> Câu trước
+            </button>
+            <button
+              type="button"
+              disabled={currentIndex === questions.length - 1}
+              onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
+              className="px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs disabled:opacity-30 active:scale-95 flex items-center gap-1"
+            >
+              Câu tiếp <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* FOOTER ĐIỀU HƯỚNG CÂU HỎI (ÁP DỤNG ĐỀ KATEX) */}
-      {!isPdfExam && (
-        <footer className="fixed bottom-0 inset-x-0 z-30 max-w-[480px] mx-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-black/10 dark:border-white/10 px-3 py-2 flex items-center justify-between gap-2 shadow-lg" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))' }}>
-          <button
-            type="button"
-            disabled={currentIndex === 0}
-            onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
-            className="flex-1 py-2 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition cursor-pointer"
-          >
-            <ChevronLeft className="h-4 w-4" /> Câu trước
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowPalette(true)}
-            className="px-3.5 py-2 rounded-xl bg-violet-600/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
-          >
-            <ListOrdered className="h-4 w-4" />
-            <span>{answeredCount}/{questions.length}</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={currentIndex === questions.length - 1}
-            onClick={() => setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1))}
-            className="flex-1 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition cursor-pointer"
-          >
-            Câu sau <ChevronRight className="h-4 w-4" />
-          </button>
-        </footer>
-      )}
-
-      {/* BOTTOM SHEET BẢNG CÂU HỎI (QUESTION PALETTE) */}
+      {/* MODAL PALETTE DANH SÁCH TẤT CẢ CÂU HỎI */}
       {showPalette && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div
-            className="w-full max-w-[480px] bg-white dark:bg-slate-900 rounded-t-3xl p-5 space-y-4 max-h-[75vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
-              <div>
-                <h3 className="font-black text-sm text-slate-900 dark:text-white">
-                  Danh Sách Câu Hỏi ({questions.length})
-                </h3>
-                <span className="text-[10px] text-slate-400">
-                  Đã làm: {answeredCount} • Còn lại: {questions.length - answeredCount}
-                </span>
-              </div>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end animate-in fade-in">
+          <div className="w-full max-h-[75vh] rounded-t-3xl bg-white dark:bg-slate-900 p-4 space-y-3 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase text-slate-500">Danh Sách Câu Hỏi ({questions.length})</span>
               <button
                 type="button"
                 onClick={() => setShowPalette(false)}
-                className="p-1 rounded-xl text-slate-400 hover:text-slate-600"
+                className="p-1 rounded text-slate-400"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-5 gap-2 overflow-y-auto p-1 flex-1">
+            <div className="grid grid-cols-5 gap-2 overflow-y-auto p-1">
               {questions.map((q, idx) => {
                 const key = `q_${q.number}`
-                const isAnswered = Boolean(answers[key] !== undefined || answers[`${key}_sub_0`] !== undefined)
-                const isBookmarked = bookmarked[q.number]
-                const isCurrent = currentIndex === idx
+                const isAnswered = Boolean(answers[key])
+                const isCurrent = idx === currentIndex
 
                 return (
                   <button
-                    key={q.number}
+                    key={q.id}
                     type="button"
                     onClick={() => {
                       setCurrentIndex(idx)
                       setShowPalette(false)
                     }}
-                    className={`h-11 rounded-xl font-mono text-xs font-black relative flex items-center justify-center transition active:scale-95 cursor-pointer ${
+                    className={`h-11 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition active:scale-95 ${
                       isCurrent
-                        ? 'ring-2 ring-violet-500 scale-105 z-10'
-                        : ''
-                    } ${
-                      isAnswered
-                        ? 'bg-violet-600 text-white shadow-xs'
+                        ? 'ring-2 ring-violet-500 bg-violet-600 text-white shadow-xs'
+                        : isAnswered
+                        ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300'
                         : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400'
                     }`}
                   >
-                    {q.number}
-                    {isBookmarked && (
-                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400" />
-                    )}
+                    <span>{idx + 1}</span>
+                    {isAnswered && <span className="text-[9px] font-black">{answers[key]}</span>}
                   </button>
                 )
               })}
-            </div>
-          </div>
-          <div className="flex-1" onClick={() => setShowPalette(false)} />
-        </div>
-      )}
-
-      {/* MODAL XÁC NHẬN THOÁT PHÒNG THI */}
-      {showExitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-xs bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-4 shadow-2xl text-center">
-            <AlertCircle className="h-10 w-10 text-rose-500 mx-auto" />
-            <div>
-              <h4 className="font-black text-base text-slate-900 dark:text-white">Rời khỏi phòng thi?</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Tiến độ của bạn sẽ được lưu nháp trên thiết bị này.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowExitConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs"
-              >
-                Tiếp tục thi
-              </button>
-              <button
-                type="button"
-                onClick={() => router.replace('/m/sen-ground?tab=exams')}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold text-xs shadow-xs"
-              >
-                Rời khỏi
-              </button>
             </div>
           </div>
         </div>
@@ -902,21 +778,13 @@ export default function MobileExamPage() {
 
       {/* MODAL XÁC NHẬN NỘP BÀI */}
       {showSubmitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-xs bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-4 shadow-2xl text-center">
-            <CheckCircle2 className="h-10 w-10 text-violet-600 mx-auto" />
-            <div>
-              <h4 className="font-black text-base text-slate-900 dark:text-white">Xác nhận nộp bài?</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Bạn đã trả lời <span className="font-bold text-violet-600">{answeredCount}/{questions.length}</span> câu hỏi.
-                {questions.length - answeredCount > 0 && (
-                  <span className="text-rose-500 block font-bold mt-0.5">
-                    Còn {questions.length - answeredCount} câu chưa trả lời!
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-xs rounded-3xl bg-white dark:bg-slate-900 p-5 space-y-4 shadow-2xl text-center">
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">Xác Nhận Nộp Bài Thi</h3>
+            <p className="text-xs text-slate-500">
+              Bạn đã hoàn thành <strong>{answeredCount}/{questions.length}</strong> câu hỏi. Bạn có chắc chắn muốn nộp bài ngay?
+            </p>
+            <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowSubmitConfirm(false)}
@@ -927,9 +795,37 @@ export default function MobileExamPage() {
               <button
                 type="button"
                 onClick={handleSubmitExam}
-                className="flex-1 py-2.5 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-xs"
+                className="flex-1 py-2.5 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-md"
               >
-                Nộp ngay
+                Nộp bài
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XÁC NHẬN THOÁT PHÒNG THI */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-xs rounded-3xl bg-white dark:bg-slate-900 p-5 space-y-4 shadow-2xl text-center">
+            <h3 className="text-sm font-black text-rose-500">Thoát Khỏi Phòng Thi?</h3>
+            <p className="text-xs text-slate-500">
+              Bài thi đang diễn ra. Nếu rời khỏi đây, tiến độ của bạn có thể không được tính điểm.
+            </p>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs"
+              >
+                Ở lại thi
+              </button>
+              <button
+                type="button"
+                onClick={() => router.replace('/m/sen-ground?tab=exams')}
+                className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white font-bold text-xs shadow-md"
+              >
+                Thoát ra
               </button>
             </div>
           </div>

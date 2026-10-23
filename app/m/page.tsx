@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   Zap,
   BookOpen,
@@ -26,7 +27,10 @@ import {
   Users,
   BarChart3,
   Compass,
+  Edit,
 } from 'lucide-react'
+
+const MOBILE_VERSION = '2.0.2194024.10483.01'
 
 interface ExamItem {
   id: string
@@ -129,6 +133,15 @@ export default function MobileDashboardPage() {
 
     loadData()
   }, [])
+
+  if (loading) {
+    return (
+      <ModernLoading
+        title="SenExam 2.0 Mobile"
+        subtitle={`Đang tải bảng điều khiển (v${MOBILE_VERSION})...`}
+      />
+    )
+  }
 
   const filteredExams = exams.filter((ex) => {
     const matchSub = selectedSubject === 'all' || (ex.subject && ex.subject.toLowerCase().includes(selectedSubject.toLowerCase()))
@@ -304,6 +317,17 @@ export default function MobileDashboardPage() {
             <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenGraph</span>
           </Link>
 
+          {/* Tạo Đề */}
+          <Link
+            href="/m/sen-ground?tab=setup-courses"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <Edit className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Tạo Đề</span>
+          </Link>
+
           {/* Thi SEB */}
           <a
             href="https://seb.thicu.tailieufepn.senexam.me"
@@ -453,7 +477,7 @@ export default function MobileDashboardPage() {
 
       {/* FOOTER BẢN QUYỀN MOBILE */}
       <footer className="pt-4 pb-2 text-center text-[10px] text-slate-400 space-y-1">
-        <p>SenExam Mobile Platform • Phiên bản thuần di động</p>
+        <p>SenExam Mobile Platform • Phiên bản thuần di động <span className="font-mono font-bold text-violet-600 dark:text-violet-400">v{MOBILE_VERSION}</span></p>
         <p>
           Mở trên máy tính?{' '}
           <a href="https://senexam.me?desktop=true" className="text-violet-600 dark:text-violet-400 underline font-bold">

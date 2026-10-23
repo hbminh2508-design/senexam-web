@@ -114,11 +114,14 @@ export default function MobileLoginPage() {
         </form>
       </div>
 
-      <div className="text-center text-xs text-slate-400 pb-2">
-        <span>Chưa có tài khoản? </span>
-        <a href="https://senexam.me/new-idp" className="text-violet-600 dark:text-violet-400 font-bold underline">
-          Đăng ký trên web
-        </a>
+      <div className="text-center text-xs text-slate-400 pb-2 space-y-1">
+        <div>
+          <span>Chưa có tài khoản? </span>
+          <a href="https://senexam.me/new-idp" className="text-violet-600 dark:text-violet-400 font-bold underline">
+            Đăng ký trên web
+          </a>
+        </div>
+        <div className="text-[10px] font-mono opacity-60">SenExam Mobile v2.0.2194024.10483.01</div>
       </div>
     </div>
   )

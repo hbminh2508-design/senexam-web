@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import ModernLoading from '@/app/components/ModernLoading'
 import {
   User,
   Crown,
@@ -19,6 +20,8 @@ import {
   GraduationCap,
   History,
   Lock,
+  Coins,
+  BadgeCheck,
 } from 'lucide-react'
 
 export default function MobileProfilePage() {
@@ -73,14 +76,18 @@ export default function MobileProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-8 h-8 border-3 border-violet-600 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <ModernLoading
+        isDark={isDark}
+        title="SenExam 2.0 Mobile"
+        subtitle="Đang tải hồ sơ thí sinh (v2.0.2194024.10483.01)..."
+      />
     )
   }
 
+  const senCash = profile?.sencash_balance || profile?.sen_cash || 0
+
   return (
-    <div className="flex-1 w-full p-4 space-y-4 animate-in fade-in">
+    <div className="flex-1 w-full p-4 space-y-4 animate-in fade-in pb-12">
       {/* 1. PROFILE HEADER CARD */}
       <div className="p-4 rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg space-y-3">
         <div className="flex items-center gap-3">
@@ -103,8 +110,11 @@ export default function MobileProfilePage() {
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-white/15 text-xs text-violet-100">
-          <span>Lớp: {profile?.grade || '12'}</span>
-          <span>Trường: {profile?.school || 'THPT'}</span>
+          <div className="flex items-center gap-1">
+            <Coins className="h-3.5 w-3.5 text-amber-300" />
+            <span>Ví Sen: <strong>{senCash.toLocaleString('vi-VN')} SC</strong></span>
+          </div>
+          <span>Lớp {profile?.grade || '12'} • {profile?.school || 'THPT'}</span>
         </div>
       </div>
 
@@ -119,7 +129,7 @@ export default function MobileProfilePage() {
               <Crown className="h-4 w-4" />
             </div>
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              Gói Hội Viên VIP & Nạp Ví Sen
+              Gói Hội Viên VIP & Ví SenCash
             </span>
           </div>
           <ChevronRight className="h-4 w-4 text-slate-400" />
@@ -134,7 +144,7 @@ export default function MobileProfilePage() {
               <History className="h-4 w-4" />
             </div>
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              Lịch Sử Làm Bài & Điểm Số
+              Lịch Sử Làm Bài & Bảng Điểm
             </span>
           </div>
           <ChevronRight className="h-4 w-4 text-slate-400" />
@@ -172,7 +182,18 @@ export default function MobileProfilePage() {
         </a>
       </div>
 
-      {/* 3. NÚT ĐĂNG XUẤT */}
+      {/* 3. THÔNG TIN PHIÊN BẢN MOBILE */}
+      <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <BadgeCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+          <span className="font-bold text-slate-700 dark:text-slate-300">Phiên bản Mobile</span>
+        </div>
+        <span className="font-mono font-bold text-[11px] text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-md">
+          2.0.2194024.10483.01
+        </span>
+      </div>
+
+      {/* 4. NÚT ĐĂNG XUẤT */}
       {user ? (
         <button
           type="button"
