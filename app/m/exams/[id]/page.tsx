@@ -9,6 +9,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
+import { normalizeLatexQuestion, parseLatexExamCode } from '@/lib/latexExamParser'
 import {
   Clock,
   ArrowLeft,
@@ -25,14 +26,17 @@ import {
   Home,
   Check,
   HelpCircle,
+  FileText,
+  ExternalLink,
+  Zap,
 } from 'lucide-react'
 
 interface QuestionItem {
   id: string
   number: number
   question: string
-  type?: 'single_choice' | 'true_false' | 'short_answer' | 'essay'
-  options?: string[]
+  type: 'single_choice' | 'true_false' | 'short_answer' | 'essay'
+  options: string[]
   subQuestions?: { id: string; label: string; text: string; correct_answer?: boolean }[]
   correct_answer?: any
   explanation?: string
@@ -57,7 +61,7 @@ export default function MobileExamPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [result, setResult] = useState<{ score: number; correct: number; total: number } | null>(null)
 
-  // 1. Tải đề thi từ Supabase
+  // 1. Tải đề thi từ Supabase và phân tích toàn diện (KaTeX + PDF)
   useEffect(() => {
     async function fetchExam() {
       if (!examId) return
@@ -77,43 +81,92 @@ export default function MobileExamPage() {
         setExam(data)
         setTimeLeft((data.duration || 50) * 60)
 
-        // Phân giải danh sách câu hỏi từ exam_structure hoặc content
+        // Phân tích cấu trúc câu hỏi
+        let struct = data.exam_structure
+        if (typeof struct === 'string') {
+          try {
+            struct = JSON.parse(struct)
+          } catch {
+            struct = []
+          }
+        }
+        if (!Array.isArray(struct) && struct && typeof struct === 'object' && Array.isArray(struct.sections)) {
+          struct = struct.sections
+        }
+
         let flat: QuestionItem[] = []
-        if (data.exam_structure && Array.isArray(data.exam_structure)) {
-          let qNum = 1
-          data.exam_structure.forEach((sec: any) => {
-            if (sec.questions && Array.isArray(sec.questions)) {
-              sec.questions.forEach((q: any) => {
+        let qNum = 1
+
+        if (Array.isArray(struct) && struct.length > 0) {
+          struct.forEach((sec: any) => {
+            if (sec && Array.isArray(sec.questions) && sec.questions.length > 0) {
+              sec.questions.forEach((rawQ: any) => {
+                const q = normalizeLatexQuestion(rawQ)
+                const qText = q?.text || q?.question || q?.content || q?.prompt || `Câu hỏi số ${qNum}`
+                const qType = q?.type || sec.type || 'single_choice'
+                const opts = Array.isArray(q?.options) && q.options.length > 0
+                  ? q.options
+                  : ['A', 'B', 'C', 'D']
+
                 flat.push({
-                  id: q.id || `q_${qNum}`,
+                  id: q?.id || `q_${qNum}`,
                   number: qNum++,
-                  question: q.question || q.content || 'Câu hỏi',
-                  type: q.type || sec.type || 'single_choice',
-                  options: q.options || ['A', 'B', 'C', 'D'],
-                  subQuestions: q.subQuestions || q.sub_questions || [],
-                  correct_answer: q.correct_answer || q.answer,
-                  explanation: q.explanation,
+                  question: qText,
+                  type: qType,
+                  options: opts,
+                  subQuestions: q?.subQuestions || q?.sub_questions || [],
+                  correct_answer: q?.correctAnswer || q?.correct_answer || q?.answer,
+                  explanation: q?.explanation || q?.solution || '',
                 })
               })
+            } else if (sec && parseInt(sec.questionCount) > 0) {
+              const count = parseInt(sec.questionCount)
+              for (let i = 0; i < count; i++) {
+                flat.push({
+                  id: `q_${qNum}`,
+                  number: qNum++,
+                  question: `Câu hỏi số ${qNum - 1}`,
+                  type: sec.type || 'single_choice',
+                  options: ['A', 'B', 'C', 'D'],
+                  correct_answer: sec.correctAnswers?.[i] || 'A',
+                })
+              }
             }
           })
         }
 
-        // Dự phòng nếu không có cấu trúc câu hỏi
+        // Nếu chưa có câu hỏi và có chuỗi nội dung raw LaTeX
+        if (flat.length === 0 && data.content && typeof data.content === 'string') {
+          try {
+            const parsed = parseLatexExamCode(data.content)
+            if (parsed.questions && parsed.questions.length > 0) {
+              parsed.questions.forEach((pq) => {
+                flat.push({
+                  id: pq.id || `q_${qNum}`,
+                  number: qNum++,
+                  question: pq.text,
+                  type: pq.type,
+                  options: pq.options,
+                  correct_answer: pq.correctAnswer,
+                  explanation: pq.explanation,
+                })
+              })
+            }
+          } catch (e) {
+            console.error('parseLatexExamCode error:', e)
+          }
+        }
+
+        // Dự phòng cho đề PDF chỉ có tổng số câu
         if (flat.length === 0) {
           const total = data.total_questions || 40
           for (let i = 1; i <= total; i++) {
             flat.push({
               id: `q_${i}`,
               number: i,
-              question: `Câu hỏi số ${i}: Chọn đáp án chính xác nhất trong các phương án sau:`,
+              question: `Câu hỏi số ${i}`,
               type: 'single_choice',
-              options: [
-                'Phương án A: Giá trị thỏa mãn điều kiện bài toán',
-                'Phương án B: Nghiệm của phương trình sai khác một hằng số',
-                'Phương án C: Tương quan nghịch biến trên tập xác định',
-                'Phương án D: Kết quả không tồn tại trong miền xác định',
-              ],
+              options: ['A', 'B', 'C', 'D'],
               correct_answer: 'A',
             })
           }
@@ -176,6 +229,27 @@ export default function MobileExamPage() {
 
   const answeredCount = Object.keys(answers).length
   const currentQ = questions[currentIndex]
+
+  // Kiểm tra đề thi PDF
+  const isPdfExam = useMemo(() => {
+    if (!exam) return false
+    const hasValidDriveId =
+      typeof exam.drive_file_id === 'string' &&
+      exam.drive_file_id.trim().length > 10 &&
+      !exam.drive_file_id.includes('null')
+    const hasValidPdfUrl =
+      typeof exam.pdf_url === 'string' &&
+      exam.pdf_url.trim().length > 10
+    return Boolean(hasValidDriveId || hasValidPdfUrl || exam.format === 'pdf')
+  }, [exam])
+
+  const pdfEmbedUrl = useMemo(() => {
+    if (!exam) return ''
+    if (exam.drive_file_id && exam.drive_file_id.length > 10) {
+      return `https://drive.google.com/file/d/${exam.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`
+    }
+    return exam.pdf_url || ''
+  }, [exam])
 
   // Chọn đáp án trắc nghiệm
   const handleSelectOption = (optIndex: number) => {
@@ -240,7 +314,6 @@ export default function MobileExamPage() {
         })
       }
 
-      // Xóa draft
       localStorage.removeItem(`m_senexam_draft_${examId}`)
     } catch (err) {
       console.error('Submit error:', err)
@@ -274,9 +347,14 @@ export default function MobileExamPage() {
           </button>
 
           <div className="space-y-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-violet-500/10 text-violet-600 dark:text-violet-400">
-              {exam?.exam_type || 'Đề Khảo Thí'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                {exam?.exam_type || 'Đề Khảo Thí'}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/5 dark:bg-white/10 text-slate-500">
+                {isPdfExam ? '📄 Đề PDF' : '✨ Đề KaTeX Trực Tiếp'}
+              </span>
+            </div>
             <h1 className="text-xl font-black text-slate-900 dark:text-white leading-tight">
               {exam?.title}
             </h1>
@@ -287,23 +365,32 @@ export default function MobileExamPage() {
 
           <div className="grid grid-cols-2 gap-3 pt-2">
             <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Thời gian làm bài</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Thời gian</span>
               <p className="text-lg font-black text-violet-600 dark:text-violet-400">{exam?.duration || 50} phút</p>
             </div>
             <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Tổng số câu hỏi</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Số câu hỏi</span>
               <p className="text-lg font-black text-sky-600 dark:text-sky-400">{questions.length} câu</p>
             </div>
           </div>
 
           <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-800 dark:text-violet-300 space-y-2">
             <p className="font-bold flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-violet-600" /> Tối ưu trải nghiệm mobile:
+              <CheckCircle2 className="h-4 w-4 text-violet-600" /> Tối ưu điện thoại:
             </p>
             <ul className="list-disc list-inside space-y-1 text-[11px] opacity-90">
-              <li>Vuốt hoặc bấm nút để chuyển câu linh hoạt.</li>
-              <li>Bảng câu hỏi dạng bottom sheet giúp nhảy câu nhanh.</li>
-              <li>Tự động lưu tiến độ làm bài chống mất dữ liệu khi mất mạng.</li>
+              {isPdfExam ? (
+                <>
+                  <li>Đề thi PDF hiển thị rộng rãi ở trên, chọn đáp án nhanh gọn ở dưới.</li>
+                  <li>Thu gọn tối đa thanh công cụ để tăng diện tích đọc đề PDF.</li>
+                </>
+              ) : (
+                <>
+                  <li>Công thức Toán KaTeX hiển thị sắc nét, tự co giãn chống tràn màn hình.</li>
+                  <li>Bấm chạm đáp án to rõ, phản hồi tức thì.</li>
+                </>
+              )}
+              <li>Tự động lưu bài làm và khôi phục khi reload.</li>
             </ul>
           </div>
         </div>
@@ -314,7 +401,7 @@ export default function MobileExamPage() {
           className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm shadow-lg active:scale-98 transition flex items-center justify-center gap-2"
         >
           <span>BẮT ĐẦU LÀM BÀI THI</span>
-          <ArrowLeft className="h-4 w-4 rotate-180" />
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
     )
@@ -377,12 +464,12 @@ export default function MobileExamPage() {
   }
 
   // ==========================================
-  // GIAO DIỆN LÀM BÀI CHÍNH (THUẦN MOBILE 100%)
+  // GIAO DIỆN LÀM BÀI CHÍNH (MOBILE)
   // ==========================================
   return (
-    <div className="flex-1 w-full flex flex-col justify-between bg-slate-50 dark:bg-slate-900 select-none pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]">
+    <div className="flex-1 w-full flex flex-col justify-between bg-slate-50 dark:bg-slate-900 select-none">
       {/* 1. STICKY TOPBAR PHÒNG THI */}
-      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-black/10 dark:border-white/10 px-3.5 py-2.5 flex items-center justify-between shadow-xs">
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-black/10 dark:border-white/10 px-3.5 py-2 flex items-center justify-between shadow-xs">
         <button
           type="button"
           onClick={() => setShowExitConfirm(true)}
@@ -414,7 +501,7 @@ export default function MobileExamPage() {
         </button>
       </header>
 
-      {/* 2. PROGRESS BAR TIẾN ĐỘ LÀM BÀI */}
+      {/* 2. PROGRESS BAR TIẾN ĐỘ */}
       <div className="w-full bg-slate-200 dark:bg-slate-800 h-1">
         <div
           className="bg-violet-600 h-full transition-all duration-300"
@@ -422,199 +509,304 @@ export default function MobileExamPage() {
         />
       </div>
 
-      {/* 3. KHÔNG GIAN CÂU HỎI HIỆN TẠI */}
-      <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-        {currentQ && (
-          <div className="space-y-4 animate-in fade-in duration-150">
-            {/* Header Câu Hỏi */}
-            <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-black text-violet-600 dark:text-violet-400">
-                  Câu {currentQ.number}
-                </span>
-                <span className="text-[10px] text-slate-400 font-bold">
-                  / {questions.length} câu
-                </span>
-                <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase bg-black/5 dark:bg-white/5 text-slate-500">
-                  {currentQ.type === 'true_false'
-                    ? 'Đúng/Sai'
-                    : currentQ.type === 'short_answer'
-                    ? 'Điền số'
-                    : 'Trắc nghiệm'}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toggleBookmark(currentQ.number)}
-                className={`p-1.5 rounded-xl transition cursor-pointer ${
-                  bookmarked[currentQ.number]
-                    ? 'text-amber-500 bg-amber-500/15'
-                    : 'text-slate-300 hover:text-slate-500'
-                }`}
-                title="Đánh dấu câu hỏi"
-              >
-                <Bookmark className="h-4 w-4" fill={bookmarked[currentQ.number] ? 'currentColor' : 'none'} />
-              </button>
-            </div>
-
-            {/* Nội Dung Câu Hỏi (KaTeX & Markdown Tự Động Co Giãn Mượt Mà) */}
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-relaxed overflow-x-auto pb-1">
-              <ReactMarkdown
-                remarkPlugins={[remarkMath, remarkGfm]}
-                rehypePlugins={[rehypeKatex]}
-              >
-                {currentQ.question}
-              </ReactMarkdown>
-            </div>
-
-            {/* DANH SÁCH ĐÁP ÁN THEO TỪNG LOẠI CÂU HỎI */}
-            {/* LOẠI 1: TRẮC NGHIỆM ĐƠN (SINGLE CHOICE) */}
-            {(!currentQ.type || currentQ.type === 'single_choice') && (
-              <div className="space-y-2.5 pt-1">
-                {(currentQ.options || ['A', 'B', 'C', 'D']).map((optText, oIdx) => {
-                  const letters = ['A', 'B', 'C', 'D', 'E', 'F']
-                  const letter = letters[oIdx] || String(oIdx + 1)
-                  const key = `q_${currentQ.number}`
-                  const isSelected = answers[key] === letter
-
-                  return (
-                    <button
-                      key={oIdx}
-                      type="button"
-                      onClick={() => handleSelectOption(oIdx)}
-                      className={`w-full min-h-[52px] p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all duration-150 active:scale-98 cursor-pointer ${
-                        isSelected
-                          ? 'border-violet-600 bg-violet-600/15 dark:bg-violet-600/25 ring-2 ring-violet-600/50 text-slate-900 dark:text-white shadow-sm'
-                          : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-black/20'
-                      }`}
-                    >
-                      <span
-                        className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition ${
-                          isSelected
-                            ? 'bg-violet-600 text-white'
-                            : 'bg-black/5 dark:bg-white/5 text-slate-500'
-                        }`}
-                      >
-                        {letter}
-                      </span>
-                      <div className="flex-1 text-xs font-semibold pt-1 overflow-x-auto">
-                        <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
-                          {optText}
-                        </ReactMarkdown>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* LOẠI 2: ĐÚNG / SAI (TRUE / FALSE) */}
-            {currentQ.type === 'true_false' && (
-              <div className="space-y-2.5 pt-1">
-                {(currentQ.subQuestions?.length
-                  ? currentQ.subQuestions
-                  : [
-                      { id: '1', label: 'a)', text: 'Mệnh đề ý a của bài toán' },
-                      { id: '2', label: 'b)', text: 'Mệnh đề ý b của bài toán' },
-                      { id: '3', label: 'c)', text: 'Mệnh đề ý c của bài toán' },
-                      { id: '4', label: 'd)', text: 'Mệnh đề ý d của bài toán' },
-                    ]
-                ).map((sub, sIdx) => {
-                  const key = `q_${currentQ.number}_sub_${sIdx}`
-                  const userVal = answers[key]
-
-                  return (
-                    <div
-                      key={sub.id || sIdx}
-                      className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 space-y-2"
-                    >
-                      <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                        <span className="font-black text-violet-600 mr-1.5">{sub.label}</span>
-                        {sub.text}
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTrueFalse(sIdx, true)}
-                          className={`flex-1 py-2 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer ${
-                            userVal === true
-                              ? 'bg-emerald-600 text-white shadow-xs'
-                              : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          ĐÚNG
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTrueFalse(sIdx, false)}
-                          className={`flex-1 py-2 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer ${
-                            userVal === false
-                              ? 'bg-rose-600 text-white shadow-xs'
-                              : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          SAI
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* LOẠI 3: ĐIỀN ĐÁP ÁN NGẮN (SHORT ANSWER) */}
-            {currentQ.type === 'short_answer' && (
-              <div className="space-y-3 pt-2">
-                <label className="text-xs font-bold text-slate-500 block">
-                  Nhập kết quả số hoặc phân số của bạn:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: -2.5 hoặc 3/4..."
-                  value={answers[`q_${currentQ.number}`] || ''}
-                  onChange={(e) => handleShortAnswerChange(e.target.value)}
-                  className="w-full h-12 rounded-2xl border-2 border-violet-500/30 focus:border-violet-600 bg-white dark:bg-slate-800 px-4 text-base font-bold text-slate-900 dark:text-white outline-none shadow-xs"
-                />
+      {/* ======================================================== */}
+      {/* TRƯỜNG HỢP A: ĐỀ PDF (PDF Ở TRÊN, CHỌN ĐÁP ÁN TINH GỌN Ở DƯỚI) */}
+      {/* ======================================================== */}
+      {isPdfExam ? (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* KHUNG XEM ĐỀ PDF Ở TRÊN (TỐI ƯU CHIỀU CAO TỐI ĐA) */}
+          <div className="flex-1 w-full bg-slate-950 relative border-b border-black/10 dark:border-white/10 min-h-[50vh]">
+            {pdfEmbedUrl ? (
+              <iframe
+                src={pdfEmbedUrl}
+                className="w-full h-full border-none"
+                allow="autoplay"
+                title="Đề thi PDF"
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center p-6 text-center text-xs text-slate-400">
+                Đang nạp file PDF đề thi...
               </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* 4. FIXED BOTTOM BAR ĐIỀU HƯỚNG CÂU HỎI */}
-      <footer className="fixed bottom-0 inset-x-0 z-30 max-w-[480px] mx-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-black/10 dark:border-white/10 px-3 py-2 flex items-center justify-between gap-2 shadow-lg" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))' }}>
-        <button
-          type="button"
-          disabled={currentIndex === 0}
-          onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
-          className="flex-1 py-2 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition cursor-pointer"
-        >
-          <ChevronLeft className="h-4 w-4" /> Câu trước
-        </button>
+          {/* BẢNG CHỌN ĐÁP ÁN TINH GỌN Ở DƯỚI (CẮT BỚT CLUTTER TĂNG DIỆN TÍCH ĐỌC ĐỀ) */}
+          <div className="p-3 bg-white dark:bg-slate-900 border-t border-black/10 dark:border-white/10 space-y-2.5 shadow-lg shrink-0">
+            {/* Stepper Hàng Ngang Nhỏ Gọn */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={currentIndex === 0}
+                  onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
+                  className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5 text-slate-600 disabled:opacity-30 active:scale-95"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-xs font-black text-violet-600 dark:text-violet-400 font-mono">
+                  Câu {currentIndex + 1}
+                </span>
+                <span className="text-[10px] text-slate-400">/{questions.length}</span>
+                <button
+                  type="button"
+                  disabled={currentIndex === questions.length - 1}
+                  onClick={() => setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1))}
+                  className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5 text-slate-600 disabled:opacity-30 active:scale-95"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
 
-        {/* NÚT MỞ BẢNG CÂU HỎI BOTTOM SHEET */}
-        <button
-          type="button"
-          onClick={() => setShowPalette(true)}
-          className="px-3.5 py-2 rounded-xl bg-violet-600/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
-        >
-          <ListOrdered className="h-4 w-4" />
-          <span>{answeredCount}/{questions.length}</span>
-        </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => toggleBookmark(currentIndex + 1)}
+                  className={`p-1.5 rounded-lg transition ${
+                    bookmarked[currentIndex + 1] ? 'text-amber-500 bg-amber-500/15' : 'text-slate-400'
+                  }`}
+                  title="Bookmark"
+                >
+                  <Bookmark className="h-4 w-4" fill={bookmarked[currentIndex + 1] ? 'currentColor' : 'none'} />
+                </button>
 
-        <button
-          type="button"
-          disabled={currentIndex === questions.length - 1}
-          onClick={() => setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1))}
-          className="flex-1 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition cursor-pointer"
-        >
-          Câu sau <ChevronRight className="h-4 w-4" />
-        </button>
-      </footer>
+                <button
+                  type="button"
+                  onClick={() => setShowPalette(true)}
+                  className="px-2.5 py-1 rounded-lg bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold text-[11px] flex items-center gap-1"
+                >
+                  <ListOrdered className="h-3.5 w-3.5" />
+                  <span>{answeredCount}/{questions.length}</span>
+                </button>
+              </div>
+            </div>
 
-      {/* 5. BOTTOM SHEET BẢNG CÂU HỎI (QUESTION PALETTE) */}
+            {/* HÀNG 4 NÚT ĐÁP ÁN (A, B, C, D) CHẠM CỰC NHANH */}
+            <div className="grid grid-cols-4 gap-2">
+              {['A', 'B', 'C', 'D'].map((letter, optIdx) => {
+                const key = `q_${currentIndex + 1}`
+                const isSelected = answers[key] === letter
+
+                return (
+                  <button
+                    key={letter}
+                    type="button"
+                    onClick={() => {
+                      handleSelectOption(optIdx)
+                      // Tự động chuyển câu sau nếu chưa hết đề
+                      if (currentIndex < questions.length - 1) {
+                        setTimeout(() => setCurrentIndex((idx) => idx + 1), 180)
+                      }
+                    }}
+                    className={`h-11 rounded-xl font-black text-sm transition-all duration-150 flex items-center justify-center active:scale-95 cursor-pointer ${
+                      isSelected
+                        ? 'bg-violet-600 text-white shadow-md ring-2 ring-violet-500/50 scale-102'
+                        : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10'
+                    }`}
+                  >
+                    {letter}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ======================================================== */
+        /* TRƯỜNG HỢP B: ĐỀ KATEX TRỰC TIẾP (HIỂN THỊ ĐẦY ĐỦ CÂU HỎI) */
+        /* ======================================================== */
+        <div className="flex-1 p-4 space-y-4 overflow-y-auto pb-20">
+          {currentQ && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Header Câu Hỏi */}
+              <div className="flex items-center justify-between pb-2 border-b border-black/5 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-black text-violet-600 dark:text-violet-400">
+                    Câu {currentQ.number}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-bold">
+                    / {questions.length} câu
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase bg-black/5 dark:bg-white/5 text-slate-500">
+                    {currentQ.type === 'true_false'
+                      ? 'Đúng/Sai'
+                      : currentQ.type === 'short_answer'
+                      ? 'Điền số'
+                      : 'Trắc nghiệm'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleBookmark(currentQ.number)}
+                  className={`p-1.5 rounded-xl transition cursor-pointer ${
+                    bookmarked[currentQ.number]
+                      ? 'text-amber-500 bg-amber-500/15'
+                      : 'text-slate-300 hover:text-slate-500'
+                  }`}
+                  title="Đánh dấu câu hỏi"
+                >
+                  <Bookmark className="h-4 w-4" fill={bookmarked[currentQ.number] ? 'currentColor' : 'none'} />
+                </button>
+              </div>
+
+              {/* Nội Dung Câu Hỏi (KaTeX & Markdown Tự Động Co Giãn) */}
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-relaxed overflow-x-auto pb-1">
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath, remarkGfm]}
+                  rehypePlugins={[rehypeKatex]}
+                >
+                  {currentQ.question}
+                </ReactMarkdown>
+              </div>
+
+              {/* DANH SÁCH ĐÁP ÁN KATEX */}
+              {(!currentQ.type || currentQ.type === 'single_choice') && (
+                <div className="space-y-2.5 pt-1">
+                  {(currentQ.options || ['A', 'B', 'C', 'D']).map((optText, oIdx) => {
+                    const letters = ['A', 'B', 'C', 'D', 'E', 'F']
+                    const letter = letters[oIdx] || String(oIdx + 1)
+                    const key = `q_${currentQ.number}`
+                    const isSelected = answers[key] === letter
+
+                    return (
+                      <button
+                        key={oIdx}
+                        type="button"
+                        onClick={() => handleSelectOption(oIdx)}
+                        className={`w-full min-h-[52px] p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all duration-150 active:scale-98 cursor-pointer ${
+                          isSelected
+                            ? 'border-violet-600 bg-violet-600/15 dark:bg-violet-600/25 ring-2 ring-violet-600/50 text-slate-900 dark:text-white shadow-sm'
+                            : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-black/20'
+                        }`}
+                      >
+                        <span
+                          className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition ${
+                            isSelected
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-black/5 dark:bg-white/5 text-slate-500'
+                          }`}
+                        >
+                          {letter}
+                        </span>
+                        <div className="flex-1 text-xs font-semibold pt-1 overflow-x-auto">
+                          <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
+                            {optText}
+                          </ReactMarkdown>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* DẠNG ĐÚNG / SAI */}
+              {currentQ.type === 'true_false' && (
+                <div className="space-y-2.5 pt-1">
+                  {(currentQ.subQuestions?.length
+                    ? currentQ.subQuestions
+                    : [
+                        { id: '1', label: 'a)', text: 'Mệnh đề ý a của bài toán' },
+                        { id: '2', label: 'b)', text: 'Mệnh đề ý b của bài toán' },
+                        { id: '3', label: 'c)', text: 'Mệnh đề ý c của bài toán' },
+                        { id: '4', label: 'd)', text: 'Mệnh đề ý d của bài toán' },
+                      ]
+                  ).map((sub, sIdx) => {
+                    const key = `q_${currentQ.number}_sub_${sIdx}`
+                    const userVal = answers[key]
+
+                    return (
+                      <div
+                        key={sub.id || sIdx}
+                        className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-black/10 dark:border-white/10 space-y-2"
+                      >
+                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                          <span className="font-black text-violet-600 mr-1.5">{sub.label}</span>
+                          {sub.text}
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleTrueFalse(sIdx, true)}
+                            className={`flex-1 py-2 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer ${
+                              userVal === true
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            ĐÚNG
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleTrueFalse(sIdx, false)}
+                            className={`flex-1 py-2 rounded-xl text-xs font-black transition active:scale-95 cursor-pointer ${
+                              userVal === false
+                                ? 'bg-rose-600 text-white shadow-xs'
+                                : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            SAI
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* DẠNG ĐIỀN ĐÁP ÁN NGẮN */}
+              {currentQ.type === 'short_answer' && (
+                <div className="space-y-3 pt-2">
+                  <label className="text-xs font-bold text-slate-500 block">
+                    Nhập kết quả số hoặc phân số của bạn:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: -2.5 hoặc 3/4..."
+                    value={answers[`q_${currentQ.number}`] || ''}
+                    onChange={(e) => handleShortAnswerChange(e.target.value)}
+                    className="w-full h-12 rounded-2xl border-2 border-violet-500/30 focus:border-violet-600 bg-white dark:bg-slate-800 px-4 text-base font-bold text-slate-900 dark:text-white outline-none shadow-xs"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* FOOTER ĐIỀU HƯỚNG CÂU HỎI (ÁP DỤNG ĐỀ KATEX) */}
+      {!isPdfExam && (
+        <footer className="fixed bottom-0 inset-x-0 z-30 max-w-[480px] mx-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-black/10 dark:border-white/10 px-3 py-2 flex items-center justify-between gap-2 shadow-lg" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))' }}>
+          <button
+            type="button"
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
+            className="flex-1 py-2 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition cursor-pointer"
+          >
+            <ChevronLeft className="h-4 w-4" /> Câu trước
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPalette(true)}
+            className="px-3.5 py-2 rounded-xl bg-violet-600/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
+          >
+            <ListOrdered className="h-4 w-4" />
+            <span>{answeredCount}/{questions.length}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={currentIndex === questions.length - 1}
+            onClick={() => setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1))}
+            className="flex-1 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition cursor-pointer"
+          >
+            Câu sau <ChevronRight className="h-4 w-4" />
+          </button>
+        </footer>
+      )}
+
+      {/* BOTTOM SHEET BẢNG CÂU HỎI (QUESTION PALETTE) */}
       {showPalette && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs animate-in fade-in">
           <div
@@ -639,7 +831,6 @@ export default function MobileExamPage() {
               </button>
             </div>
 
-            {/* LƯỚI MA TRẬN CÂU HỎI */}
             <div className="grid grid-cols-5 gap-2 overflow-y-auto p-1 flex-1">
               {questions.map((q, idx) => {
                 const key = `q_${q.number}`
@@ -678,7 +869,7 @@ export default function MobileExamPage() {
         </div>
       )}
 
-      {/* 6. MODAL XÁC NHẬN THOÁT PHÒNG THI */}
+      {/* MODAL XÁC NHẬN THOÁT PHÒNG THI */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="w-full max-w-xs bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-4 shadow-2xl text-center">
@@ -709,7 +900,7 @@ export default function MobileExamPage() {
         </div>
       )}
 
-      {/* 7. MODAL XÁC NHẬN NỘP BÀI */}
+      {/* MODAL XÁC NHẬN NỘP BÀI */}
       {showSubmitConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="w-full max-w-xs bg-white dark:bg-slate-900 rounded-3xl p-5 space-y-4 shadow-2xl text-center">
