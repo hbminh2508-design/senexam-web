@@ -175,6 +175,7 @@ export default function SenChatFloatingModal({
           </Link>
           <button
             type="button"
+            aria-label="Thu nhỏ"
             onClick={onClose}
             className="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition"
           >
@@ -304,6 +305,7 @@ export default function SenChatFloatingModal({
           />
           <button
             type="submit"
+            aria-label="Gửi tin nhắn"
             disabled={!input.trim() || loading}
             className="h-8 w-8 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white flex items-center justify-center transition hover:scale-105 active:scale-95 disabled:opacity-40 shrink-0"
           >
