@@ -175,6 +175,12 @@ export function middleware(request: NextRequest) {
   }
 
   // 4.5 Kiểm tra nếu truy cập qua các subdomain
+  const isMobileSubdomain =
+    hostname.startsWith('m.senexam.') ||
+    hostname.startsWith('m.') ||
+    hostname.startsWith('mobile.') ||
+    hostname.includes('m.localhost')
+
   const isSebSubdomain =
     hostname.startsWith('seb.thicu.tailieufepn.') ||
     hostname.startsWith('seb.') ||
@@ -199,8 +205,82 @@ export function middleware(request: NextRequest) {
     hostname.startsWith('nopquylop.') ||
     hostname.includes('nopquylop.senexam.')
 
+  // 4.5.1 DỰ ÁN LỚN: M.SENEXAM.ME - GIAO DIỆN THUẦN MOBILE 100%
+  if (isMobileSubdomain) {
+    if (pathname === '/' || pathname === '/dashboard') {
+      url.pathname = '/m'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/exams/') || pathname.startsWith('/new-exams/')) {
+      const examId = pathname.replace(/^\/(?:new-)?exams\//, '')
+      url.pathname = `/m/exams/${examId}`
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/exams' || pathname === '/new-exams') {
+      url.pathname = '/m/sen-ground'
+      url.searchParams.set('tab', 'exams')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/library' || pathname === '/new-library') {
+      url.pathname = '/m/sen-ground'
+      url.searchParams.set('tab', 'library')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (
+      pathname === '/history' ||
+      pathname === '/new-history' ||
+      pathname === '/submissions' ||
+      pathname === '/new-submissions' ||
+      pathname === '/new-history-submissions'
+    ) {
+      url.pathname = '/m/sen-ground'
+      url.searchParams.set('tab', 'history')
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/sen-ground' || pathname === '/new-sen-ground') {
+      url.pathname = '/m/sen-ground'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/login' || pathname === '/new-idp' || pathname === '/idp' || pathname === '/new-sign') {
+      url.pathname = '/m/login'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/pay' || pathname === '/new-pay' || pathname === '/vip' || pathname === '/new-vip') {
+      url.pathname = '/m/pay'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/profile' || pathname === '/new-profile') {
+      url.pathname = '/m/profile'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/m')) {
+      return applySecurityHeaders(NextResponse.next())
+    }
+    // Mặc định rewrite sang /m/...
+    url.pathname = `/m${pathname}`
+    return applySecurityHeaders(NextResponse.rewrite(url))
+  }
+
   // 4.6 Chuyển hướng các đường dẫn cũ sang giao diện Mới (New UI) trên miền chính
   if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain && !isNopQuyLopSubdomain) {
+    // Tự động chuyển hướng thiết bị di động truy cập miền chính sang m.senexam.me
+    const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(userAgent)
+    if (isMobileDevice && !url.searchParams.has('desktop')) {
+      if (hostname.includes('senexam.me')) {
+        let targetPath = '/m'
+        if (pathname.startsWith('/new-exams/') || pathname.startsWith('/exams/')) {
+          const id = pathname.replace(/^\/(?:new-)?exams\//, '')
+          targetPath = `/m/exams/${id}`
+        } else if (pathname === '/new-sen-ground' || pathname === '/sen-ground') {
+          targetPath = `/m/sen-ground`
+        } else if (pathname === '/new-pay' || pathname === '/vip') {
+          targetPath = `/m/pay`
+        } else if (pathname === '/new-profile') {
+          targetPath = `/m/profile`
+        }
+        return applySecurityHeaders(NextResponse.redirect(`https://m.senexam.me${targetPath}${url.search}`))
+      }
+    }
     if (pathname === '/admin') {
       url.pathname = '/new-admin'
       return applySecurityHeaders(NextResponse.redirect(url))

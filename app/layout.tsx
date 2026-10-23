@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import dynamic from "next/dynamic";
 import ClientErrorReporter from "./components/ClientErrorReporter";
-import MobileBottomNav from "./components/MobileBottomNav";
 import MobileBatteryManager from "./components/MobileBatteryManager";
 import GlobalCanvasEngine from "./components/GlobalCanvasEngine";
 import "./globals.css";
@@ -76,7 +75,7 @@ export default function RootLayout({
           strategy="lazyOnload"
         />
       </head>
-      <body className="app-shell min-h-screen flex flex-col bg-background text-foreground pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+      <body className="app-shell min-h-screen flex flex-col bg-background text-foreground">
         <GlobalCanvasEngine />
         <ClientErrorReporter />
         <MobileBatteryManager />
@@ -85,7 +84,6 @@ export default function RootLayout({
           {children}
         </main>
         <SenChatFloatingBubble />
-        <MobileBottomNav />
       </body>
     </html>
   );
