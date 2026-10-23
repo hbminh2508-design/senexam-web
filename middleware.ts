@@ -243,12 +243,16 @@ export function middleware(request: NextRequest) {
     }
     if (pathname === '/setup-courses' || pathname === '/create' || pathname === '/new-setup-course' || pathname === '/new-setup-courses') {
       url.pathname = '/m/sen-ground'
-      url.searchParams.set('tab', 'setup-courses')
+      url.searchParams.set('tab', 'exams')
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
-    if (pathname === '/login' || pathname === '/new-idp' || pathname === '/idp' || pathname === '/new-sign') {
-      url.pathname = '/m/login'
-      return applySecurityHeaders(NextResponse.rewrite(url))
+    if (pathname === '/login' || pathname === '/idp' || pathname === '/new-sign') {
+      url.pathname = '/new-idp'
+      url.searchParams.set('returnUrl', '/m')
+      return applySecurityHeaders(NextResponse.redirect(url))
+    }
+    if (pathname === '/new-idp') {
+      return applySecurityHeaders(NextResponse.next())
     }
     if (pathname === '/pay' || pathname === '/new-pay' || pathname === '/vip' || pathname === '/new-vip') {
       url.pathname = '/m/pay'
@@ -278,10 +282,8 @@ export function middleware(request: NextRequest) {
         else if (pathname.startsWith('/new-exams/') || pathname.startsWith('/exams/')) targetPath = pathname.replace(/^\/new-exams/, '/exams')
         else if (pathname === '/new-library' || pathname === '/library') targetPath = '/library'
         else if (pathname === '/new-history' || pathname === '/history' || pathname === '/new-submissions' || pathname === '/submissions' || pathname === '/new-history-submissions') targetPath = '/history'
-        else if (pathname === '/new-setup-course' || pathname === '/setup-courses' || pathname === '/new-setup-courses') targetPath = '/setup-courses'
         else if (pathname === '/new-pay' || pathname === '/pay' || pathname === '/vip' || pathname === '/new-vip' || pathname === '/exclusive-store' || pathname === '/codes') targetPath = '/pay'
         else if (pathname === '/new-profile' || pathname === '/profile') targetPath = '/profile'
-        else if (pathname === '/new-idp' || pathname === '/idp' || pathname === '/login' || pathname === '/new-sign') targetPath = '/login'
         else if (pathname === '/dashboard' || pathname === '/new-dashboard') targetPath = '/'
 
         const targetUrl = new URL(targetPath + request.nextUrl.search, 'https://m.senexam.me')
@@ -314,11 +316,6 @@ export function middleware(request: NextRequest) {
         url.searchParams.set('tab', 'history')
         return applySecurityHeaders(NextResponse.rewrite(url))
       }
-      if (pathname === '/setup-courses' || pathname === '/new-setup-course' || pathname === '/new-setup-courses') {
-        url.pathname = '/m/sen-ground'
-        url.searchParams.set('tab', 'setup-courses')
-        return applySecurityHeaders(NextResponse.rewrite(url))
-      }
       if (pathname === '/new-sen-ground' || pathname === '/sen-ground') {
         url.pathname = '/m/sen-ground'
         return applySecurityHeaders(NextResponse.rewrite(url))
@@ -341,8 +338,9 @@ export function middleware(request: NextRequest) {
         return applySecurityHeaders(NextResponse.rewrite(url))
       }
       if (pathname === '/new-idp' || pathname === '/idp' || pathname === '/login' || pathname === '/new-sign') {
-        url.pathname = `/m/login`
-        return applySecurityHeaders(NextResponse.rewrite(url))
+        url.pathname = `/new-idp`
+        url.searchParams.set('returnUrl', '/m')
+        return applySecurityHeaders(NextResponse.redirect(url))
       }
       if (pathname === '/' || pathname === '/dashboard' || pathname === '/new-dashboard') {
         url.pathname = '/m'

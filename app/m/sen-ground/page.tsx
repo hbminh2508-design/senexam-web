@@ -38,16 +38,13 @@ import {
   Maximize2,
   Minimize2,
   Trash2,
-  Edit,
-  Save,
-  FileUp,
   AlertCircle,
   HelpCircle,
   Check,
   Send,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10483.01'
+const MOBILE_VERSION = '2.0.2194024.10890.05'
 
 interface ExamItem {
   id: string
@@ -57,7 +54,6 @@ interface ExamItem {
   duration?: number
   total_questions?: number
   created_at: string
-  exam_structure?: any
 }
 
 interface FolderItem {
@@ -99,22 +95,21 @@ function MobileSenGroundContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const getInitialTab = (): 'exams' | 'library' | 'setup-courses' | 'history' => {
+  const getInitialTab = (): 'exams' | 'library' | 'history' => {
     const t = searchParams?.get('tab')
-    if (t === 'library' || t === 'exams' || t === 'setup-courses' || t === 'history') return t
-    if (searchParams?.has('setup-courses')) return 'setup-courses'
+    if (t === 'library' || t === 'exams' || t === 'history') return t
     if (searchParams?.has('exams')) return 'exams'
     if (searchParams?.has('library')) return 'library'
     if (searchParams?.has('history')) return 'history'
     return 'exams'
   }
 
-  const [activeTab, setActiveTab] = useState<'exams' | 'library' | 'setup-courses' | 'history'>(getInitialTab())
+  const [activeTab, setActiveTab] = useState<'exams' | 'library' | 'history'>(getInitialTab())
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  // 1. Data
+  // 1. Dữ liệu hệ thống
   const [exams, setExams] = useState<ExamItem[]>([])
   const [collections, setCollections] = useState<ExamCollection[]>([])
   const [folders, setFolders] = useState<FolderItem[]>([])
@@ -126,32 +121,19 @@ function MobileSenGroundContent() {
   const [selectedSubject, setSelectedSubject] = useState('all')
   const [activeCollection, setActiveCollection] = useState<ExamCollection | null>(null)
   const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false)
-  const [newColTitle, setNewColTitle] = useState('')
-  const [newColSubject, setNewColSubject] = useState('Toán')
-  const [newColSelectedExamIds, setNewColSelectedExamIds] = useState<string[]>([])
 
-  // 3. Tab Thư viện (FEPN x SenExam)
+  // 3. Tab Thư viện Sen Online (FEPN x SenExam)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
   const [folderHistory, setFolderHistory] = useState<string[]>([])
   const [libCategory, setLibCategory] = useState<'all' | 'slides' | 'exercises' | 'videos' | 'exams'>('all')
   const [libSearch, setLibSearch] = useState('')
   const [activePreviewDoc, setActivePreviewDoc] = useState<DocItem | null>(null)
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false)
   const [showFloatingTree, setShowFloatingTree] = useState(false)
   const [showCreateLibModal, setShowCreateLibModal] = useState(false)
   const [newLibName, setNewLibName] = useState('')
 
-  // 4. Tab Soạn đề (Setup Course)
-  const [newExamTitle, setNewExamTitle] = useState('')
-  const [newExamSubject, setNewExamSubject] = useState('Toán')
-  const [newExamDuration, setNewExamDuration] = useState(50)
-  const [newExamType, setNewExamType] = useState('Khảo thí')
-  const [newExamCodeLatex, setNewExamCodeLatex] = useState('')
-  const [newExamPdfUrl, setNewExamPdfUrl] = useState('')
-  const [shuffleQuestions, setShuffleQuestions] = useState(true)
-  const [shuffleOptions, setShuffleOptions] = useState(true)
-  const [isSavingExam, setIsSavingExam] = useState(false)
-
-  // 5. Tab Lịch sử
+  // 4. Tab Lịch sử
   const [historySearch, setHistorySearch] = useState('')
 
   const SUBJECTS = [
@@ -224,7 +206,7 @@ function MobileSenGroundContent() {
     loadAllData()
   }, [])
 
-  const handleTabChange = (tab: 'exams' | 'library' | 'setup-courses' | 'history') => {
+  const handleTabChange = (tab: 'exams' | 'library' | 'history') => {
     setActiveTab(tab)
     router.replace(`/m/sen-ground?tab=${tab}`, { scroll: false })
   }
@@ -314,63 +296,6 @@ function MobileSenGroundContent() {
     )
   }, [submissions, historySearch])
 
-  // Xử lý tạo đề thi trực tiếp (Setup course)
-  const handleSaveExamMobile = async () => {
-    if (!newExamTitle.trim()) {
-      alert('Vui lòng nhập tên đề thi!')
-      return
-    }
-    setIsSavingExam(true)
-    try {
-      let examStructure: any = []
-      if (newExamCodeLatex.trim()) {
-        examStructure = [
-          {
-            id: 'sec_1',
-            title: 'Phần I: Câu trắc nghiệm nhiều phương án lựa chọn',
-            type: 'single_choice',
-            questions: [
-              {
-                id: 'q_1',
-                text: newExamCodeLatex,
-                options: ['A', 'B', 'C', 'D'],
-                correctAnswer: 'A',
-              },
-            ],
-          },
-        ]
-      }
-
-      const newExamData = {
-        title: newExamTitle.trim(),
-        subject: newExamSubject,
-        duration: Number(newExamDuration) || 50,
-        exam_type: newExamType,
-        total_questions: examStructure.length > 0 ? 1 : 40,
-        exam_structure: examStructure,
-        pdf_url: newExamPdfUrl.trim() || null,
-        created_by: currentUserId,
-        created_at: new Date().toISOString(),
-      }
-
-      const { data, error } = await supabase.from('exams').insert([newExamData]).select().single()
-      if (error) throw error
-
-      alert('Tạo đề thi thành công!')
-      if (data) {
-        setExams((prev) => [data, ...prev])
-        router.push(`/m/exams/${data.id}`)
-      } else {
-        handleTabChange('exams')
-      }
-    } catch (err: any) {
-      console.error(err)
-      alert(`Lỗi khi tạo đề: ${err.message || 'Vui lòng thử lại!'}`)
-    } finally {
-      setIsSavingExam(false)
-    }
-  }
-
   // Xử lý tạo thư mục Thư viện
   const handleCreateFolder = async () => {
     if (!newLibName.trim()) return
@@ -393,65 +318,52 @@ function MobileSenGroundContent() {
     return (
       <ModernLoading
         title="SenExam 2.0 Mobile"
-        subtitle={`Đang nạp Sen Ground thuần Mobile (v${MOBILE_VERSION})...`}
+        subtitle={`Đang nạp dữ liệu Sen Ground (v${MOBILE_VERSION})...`}
       />
     )
   }
 
   return (
-    <div className="flex-1 w-full p-4 space-y-4">
-      {/* 1. HEADER 4 TABS ĐIỀU HƯỚNG CHUẨN PC */}
+    <div className="flex-1 w-full p-4 space-y-4 pb-12">
+      {/* 1. HEADER 3 TABS ĐIỀU HƯỚNG */}
       <div className="flex items-center gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/10">
         <button
           type="button"
           onClick={() => handleTabChange('exams')}
-          className={`flex-1 py-2 rounded-xl text-[11px] font-black transition flex items-center justify-center gap-1 active:scale-95 ${
+          className={`flex-1 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 active:scale-95 ${
             activeTab === 'exams'
               ? 'bg-violet-600 text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
           <Zap className="h-3.5 w-3.5" />
-          <span>Kho Đề</span>
+          <span>Kho Đề Thi</span>
         </button>
 
         <button
           type="button"
           onClick={() => handleTabChange('library')}
-          className={`flex-1 py-2 rounded-xl text-[11px] font-black transition flex items-center justify-center gap-1 active:scale-95 ${
+          className={`flex-1 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 active:scale-95 ${
             activeTab === 'library'
               ? 'bg-violet-600 text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
           <BookOpen className="h-3.5 w-3.5" />
-          <span>Thư Viện</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange('setup-courses')}
-          className={`flex-1 py-2 rounded-xl text-[11px] font-black transition flex items-center justify-center gap-1 active:scale-95 ${
-            activeTab === 'setup-courses'
-              ? 'bg-violet-600 text-white shadow-xs'
-              : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-          }`}
-        >
-          <Edit className="h-3.5 w-3.5" />
-          <span>Tạo Đề</span>
+          <span>Thư Viện Sen</span>
         </button>
 
         <button
           type="button"
           onClick={() => handleTabChange('history')}
-          className={`flex-1 py-2 rounded-xl text-[11px] font-black transition flex items-center justify-center gap-1 active:scale-95 ${
+          className={`flex-1 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 active:scale-95 ${
             activeTab === 'history'
               ? 'bg-violet-600 text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
           <History className="h-3.5 w-3.5" />
-          <span>Lịch Sử</span>
+          <span>Lịch Sử Thi</span>
         </button>
       </div>
 
@@ -484,18 +396,6 @@ function MobileSenGroundContent() {
             >
               <Layers className="h-4 w-4" />
             </button>
-
-            {/* Nút Tạo tuyển tập đề (Admin): Chỉ để icon */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowCreateCollectionModal(true)}
-                title="Tạo tuyển tập đề mới"
-                className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center active:scale-95 transition shadow-xs cursor-pointer shrink-0"
-              >
-                <Package className="h-4 w-4" />
-              </button>
-            )}
           </div>
 
           {/* Dải tuyển tập đề (Exam Collections) */}
@@ -519,7 +419,7 @@ function MobileSenGroundContent() {
                       </span>
                     </div>
 
-                    {/* Nút MỞ: Để icon quyển sách mở cạnh chữ "Mở" theo đúng yêu cầu */}
+                    {/* Nút MỞ: Có icon quyển sách mở cạnh chữ "Mở" */}
                     <button
                       type="button"
                       onClick={() => setActiveCollection(col)}
@@ -652,7 +552,7 @@ function MobileSenGroundContent() {
                   type="button"
                   onClick={() => setShowFloatingTree(true)}
                   className="p-1.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-200 active:scale-95 transition"
-                  title="Mở sơ đồ cây to"
+                  title="Mở sơ đồ cây môn học"
                 >
                   <Menu className="h-4 w-4" />
                 </button>
@@ -666,7 +566,7 @@ function MobileSenGroundContent() {
                     }}
                     className="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 font-bold active:scale-95"
                   >
-                    <ArrowLeft className="h-3.5 w-3.5" /> Tất cả
+                    <ArrowLeft className="h-3.5 w-3.5" /> Tất cả môn
                   </button>
                 )}
               </div>
@@ -796,14 +696,24 @@ function MobileSenGroundContent() {
                 )}
               </div>
 
-              {/* Preview file inline */}
+              {/* Xem trực tiếp tài liệu Google Drive / PDF inline */}
               {activePreviewDoc && (
-                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-violet-500/30 space-y-3 shadow-md animate-in fade-in">
+                <div className={`p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-violet-500/30 space-y-3 shadow-md animate-in fade-in ${
+                  isPreviewFullscreen ? 'fixed inset-0 z-50 rounded-none p-4' : ''
+                }`}>
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-black text-slate-900 dark:text-white truncate max-w-[200px]">
                       {activePreviewDoc.title}
                     </h4>
                     <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsPreviewFullscreen(!isPreviewFullscreen)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-black dark:hover:text-white"
+                        title="Phóng to"
+                      >
+                        {isPreviewFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                      </button>
                       <a
                         href={`https://drive.google.com/file/d/${activePreviewDoc.drive_file_id}/view`}
                         target="_blank"
@@ -824,7 +734,10 @@ function MobileSenGroundContent() {
                       </a>
                       <button
                         type="button"
-                        onClick={() => setActivePreviewDoc(null)}
+                        onClick={() => {
+                          setActivePreviewDoc(null)
+                          setIsPreviewFullscreen(false)
+                        }}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500"
                         title="Đóng"
                       >
@@ -833,7 +746,9 @@ function MobileSenGroundContent() {
                     </div>
                   </div>
 
-                  <div className="w-full h-80 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-slate-950">
+                  <div className={`w-full rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-slate-950 ${
+                    isPreviewFullscreen ? 'h-[calc(100vh-5rem)]' : 'h-80'
+                  }`}>
                     <iframe
                       src={`https://drive.google.com/file/d/${activePreviewDoc.drive_file_id}/preview#toolbar=0&navpanes=0`}
                       className="w-full h-full border-none"
@@ -931,129 +846,7 @@ function MobileSenGroundContent() {
       )}
 
       {/* ========================================================= */}
-      {/* TAB 3: SOẠN ĐỀ & TẠO ĐỀ THI (SETUP COURSES / CREATE)       */}
-      {/* ========================================================= */}
-      {activeTab === 'setup-courses' && (
-        <div className="space-y-4 animate-in fade-in">
-          <div className="p-4 rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-800 text-white shadow-lg space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
-              <Sparkles className="h-4 w-4" /> Soạn & Tạo Đề Khảo Thí Di Động
-            </div>
-            <p className="text-xs text-violet-100 leading-relaxed">
-              Tạo đề thi KaTeX hoặc tải PDF trực tiếp trên điện thoại, hỗ trợ đảo đề và xuất bài thi chuẩn hóa tức thì.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 space-y-3.5 shadow-xs">
-            {/* Tên đề thi */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-black uppercase text-slate-500 block">
-                Tên Đề Thi <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="VD: Đề Khảo Sát Toán 12 Cuối Kỳ II"
-                value={newExamTitle}
-                onChange={(e) => setNewExamTitle(e.target.value)}
-                className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none focus:border-violet-500 font-bold"
-              />
-            </div>
-
-            {/* Môn học & Thời gian */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-[11px] font-black uppercase text-slate-500 block">Môn Học</label>
-                <select
-                  value={newExamSubject}
-                  onChange={(e) => setNewExamSubject(e.target.value)}
-                  className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2 text-xs font-bold outline-none"
-                >
-                  {SUBJECTS.filter((s) => s.key !== 'all').map((s) => (
-                    <option key={s.key} value={s.key}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-black uppercase text-slate-500 block">Thời Gian (Phút)</label>
-                <input
-                  type="number"
-                  value={newExamDuration}
-                  onChange={(e) => setNewExamDuration(Number(e.target.value))}
-                  className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs font-mono font-bold outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Link File PDF đề thi */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-black uppercase text-slate-500 block">
-                File PDF Đề Thi (Link Google Drive / PDF Online)
-              </label>
-              <input
-                type="text"
-                placeholder="Dán link PDF Google Drive (nếu có)"
-                value={newExamPdfUrl}
-                onChange={(e) => setNewExamPdfUrl(e.target.value)}
-                className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none"
-              />
-            </div>
-
-            {/* Mã câu hỏi KaTeX / Nội dung câu hỏi */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-black uppercase text-slate-500 block">
-                Mã LaTeX / Câu Hỏi Trắc Nghiệm KaTeX
-              </label>
-              <textarea
-                rows={4}
-                placeholder="Nhập nội dung câu hỏi LaTeX (VD: Tính tích phân $\int_0^1 x^2 dx$)..."
-                value={newExamCodeLatex}
-                onChange={(e) => setNewExamCodeLatex(e.target.value)}
-                className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-3 text-xs outline-none font-mono"
-              />
-            </div>
-
-            {/* Tùy chọn Đảo đề & Đảo đáp án */}
-            <div className="pt-2 border-t border-black/5 dark:border-white/5 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={shuffleQuestions}
-                  onChange={(e) => setShuffleQuestions(e.target.checked)}
-                  className="rounded text-violet-600 focus:ring-0"
-                />
-                <span>Tự động đảo thứ tự câu hỏi cho thí sinh</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={shuffleOptions}
-                  onChange={(e) => setShuffleOptions(e.target.checked)}
-                  className="rounded text-violet-600 focus:ring-0"
-                />
-                <span>Tự động đảo vị trí đáp án (A, B, C, D)</span>
-              </label>
-            </div>
-
-            {/* Nút Tạo đề */}
-            <button
-              type="button"
-              disabled={isSavingExam}
-              onClick={handleSaveExamMobile}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-xs shadow-lg active:scale-98 transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-            >
-              <Save className="h-4 w-4" />
-              <span>{isSavingExam ? 'Đang lưu đề thi...' : 'HOÀN TẤT & LƯU ĐỀ THI'}</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* TAB 4: LỊCH SỬ THI CHI TIẾT (HISTORY)                     */}
+      {/* TAB 3: LỊCH SỬ THI CHI TIẾT (HISTORY)                     */}
       {/* ========================================================= */}
       {activeTab === 'history' && (
         <div className="space-y-4 animate-in fade-in">

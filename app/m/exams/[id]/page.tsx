@@ -36,7 +36,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10483.01'
+const MOBILE_VERSION = '2.0.2194024.10890.05'
 
 interface QuestionItem {
   id: string

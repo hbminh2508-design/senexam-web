@@ -30,7 +30,7 @@ import {
   Edit,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10483.01'
+const MOBILE_VERSION = '2.0.2194024.10890.05'
 
 interface ExamItem {
   id: string
@@ -317,39 +317,15 @@ export default function MobileDashboardPage() {
             <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenGraph</span>
           </Link>
 
-          {/* Tạo Đề */}
+          {/* Lớp Học / Quỹ Lớp */}
           <Link
-            href="/m/sen-ground?tab=setup-courses"
+            href="/nopquylop"
             className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
           >
             <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Edit className="h-4 w-4" />
+              <Users className="h-4 w-4" />
             </div>
-            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Tạo Đề</span>
-          </Link>
-
-          {/* Thi SEB */}
-          <a
-            href="https://seb.thicu.tailieufepn.senexam.me"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
-          >
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <ShieldCheck className="h-4 w-4" />
-            </div>
-            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Thi SEB</span>
-          </a>
-
-          {/* SenAI Studio */}
-          <Link
-            href="/new-senai-studio"
-            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
-          >
-            <div className="w-9 h-9 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 flex items-center justify-center">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenAI 2.0</span>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Lớp Học</span>
           </Link>
         </div>
       </div>
