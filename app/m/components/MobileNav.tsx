@@ -25,27 +25,33 @@ import {
   HelpCircle,
 } from 'lucide-react'
 
-// LOGO BIỂU TƯỢNG: CHỮ "AI" ĐÓNG TRONG MỘT HÌNH SAO LOGO AI
+// LOGO BIỂU TƯỢNG: NGÔI SAO 4 CẠNH CỦA GEMINI VỚI CHỮ "AI" ĐƯỢC ĐÓNG BÊN TRONG
 function StarAiIcon({ className = 'w-5 h-5', active = false }: { className?: string; active?: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="none">
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gemini4PointNavGradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#4285F4" />
+          <stop offset="45%" stopColor="#9B72CB" />
+          <stop offset="100%" stopColor="#D96570" />
+        </linearGradient>
+      </defs>
+      {/* Ngôi sao 4 cánh uốn cong hình tia sáng chuẩn Google Gemini */}
       <path
-        d="M12 1.8L14.6 7.2L20.5 7L17.2 11.8L21 16.2L15.2 17.5L14 23.2L10 18.8L4.2 19.2L7 14L3.2 9.8L9 9.4L12 1.8Z"
-        fill="currentColor"
-        fillOpacity={active ? 0.3 : 0.15}
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
+        d="M12 2C12 7.52 16.48 12 22 12C16.48 12 12 16.48 12 22C12 16.48 7.52 12 2 12C7.52 12 12 7.52 12 2Z"
+        fill="url(#gemini4PointNavGradient)"
+        filter={active ? 'drop-shadow(0 0 6px rgba(155, 114, 203, 0.6))' : undefined}
       />
+      {/* Chữ AI in đậm sắc nét đặt chính giữa ngôi sao */}
       <text
         x="12"
-        y="14.3"
+        y="14.4"
         textAnchor="middle"
-        fontSize="7.8"
+        fontSize="6.8"
         fontWeight="900"
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fill="currentColor"
-        letterSpacing="-0.4"
+        fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        fill="#FFFFFF"
+        letterSpacing="-0.3"
       >
         AI
       </text>
@@ -199,24 +205,33 @@ export default function MobileNav() {
             {/* Header popup SenAI */}
             <div className="p-3.5 border-b border-black/10 dark:border-white/10 flex items-center justify-between shrink-0 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-indigo-500/10">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-pink-600 text-white flex items-center justify-center shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-600 text-white flex items-center justify-center shadow-xs">
                   <StarAiIcon className="w-5 h-5 text-white" active />
                 </div>
                 <div>
                   <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1">
                     <span>SenAI 2.0 Trợ Lý</span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-pink-500 text-white uppercase">AI</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white uppercase font-black">Gemini</span>
                   </h3>
-                  <span className="text-[10px] text-slate-400">Hỗ trợ giải toán KaTeX & đề thi</span>
+                  <span className="text-[10px] text-slate-400">Giải toán KaTeX, phân tích đề & mẹo thi</span>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowSenAiModal(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-black dark:hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <Link
+                  href="/m/pay?tab=quota"
+                  onClick={() => setShowSenAiModal(false)}
+                  className="px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 dark:text-pink-400 font-bold text-[10px] hover:bg-pink-500/20 active:scale-95 transition"
+                >
+                  Nâng Quota
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowSenAiModal(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-black dark:hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Khung tin nhắn */}

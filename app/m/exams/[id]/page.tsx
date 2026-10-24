@@ -36,7 +36,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10890.05'
+const MOBILE_VERSION = '2.0.2194024.10890.04'
 
 interface QuestionItem {
   id: string
@@ -297,8 +297,8 @@ export default function MobileExamPage() {
   if (loading) {
     return (
       <ModernLoading
-        title="SenExam 2.0 Mobile"
-        subtitle={`Đang tải đề thi (v${MOBILE_VERSION})...`}
+        title="Phòng Khảo Thí Trực Tuyến Mobile"
+        subtitle={`Đang tải cấu trúc đề thi, công thức KaTeX & tài liệu câu hỏi (v${MOBILE_VERSION})...`}
       />
     )
   }

@@ -36,7 +36,7 @@ import {
   KeyRound,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10890.05'
+const MOBILE_VERSION = '2.0.2194024.10890.04'
 
 export default function MobileProfilePage() {
   const router = useRouter()
@@ -164,8 +164,8 @@ export default function MobileProfilePage() {
     return (
       <ModernLoading
         isDark={isDark}
-        title="SenExam 2.0 Mobile"
-        subtitle={`Đang nạp cài đặt cá nhân (v${MOBILE_VERSION})...`}
+        title="Hồ Sơ & Thiết Lập Cá Nhân"
+        subtitle={`Đang tải thông tin sĩ tử, trạng thái VIP & cấu hình hệ thống (v${MOBILE_VERSION})...`}
       />
     )
   }
@@ -175,6 +175,27 @@ export default function MobileProfilePage() {
 
   return (
     <div className="flex-1 w-full p-4 space-y-4 animate-in fade-in pb-16">
+      {/* 🌟 BANNER ĐẶC BIỆT: KỶ NIỆM 1 NĂM SINH NHẬT SENEXAM (2025 - 2026) */}
+      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-pink-500/15 to-purple-500/15 border border-amber-500/30 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl">🎂</span>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                Kỷ Niệm 1 Năm SenExam
+              </span>
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 font-black text-[9px]">
+                1st Year
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
+              Cảm ơn bạn đã đồng hành cùng SenExam trong 365 ngày ôn luyện!
+            </p>
+          </div>
+        </div>
+        <Sparkles className="h-4 w-4 text-amber-500 animate-pulse shrink-0" />
+      </div>
+
       {/* 1. PROFILE HEADER CARD */}
       <div className="p-4 rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-800 text-white shadow-lg space-y-3">
         <div className="flex items-center gap-3">
@@ -395,24 +416,61 @@ export default function MobileProfilePage() {
           <span className="text-xs font-bold text-sky-600">{soundEnabled ? 'Bật' : 'Tắt'}</span>
         </button>
 
-        {/* Chuyển qua bản Desktop */}
-        <a
-          href="https://senexam.me?desktop=true"
+        {/* Đổi mật khẩu qua Sen IDP */}
+        <Link
+          href="/new-change-password"
           className="flex items-center justify-between p-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
-              <Monitor className="h-4 w-4" />
+            <div className="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-600 flex items-center justify-center">
+              <KeyRound className="h-4 w-4" />
             </div>
             <div>
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                Chuyển Sang Bản Web Desktop
+                Đổi Mật Khẩu (SenExam IDP)
               </span>
-              <span className="text-[10px] text-slate-400">Mở toàn bộ giao diện máy tính senexam.me</span>
+              <span className="text-[10px] text-slate-400">Cập nhật thông tin bảo mật tài khoản</span>
             </div>
           </div>
           <ChevronRight className="h-4 w-4 text-slate-400" />
-        </a>
+        </Link>
+      </div>
+
+      {/* 5. LIÊN KẾT NHANH TÍNH NĂNG TỪ BẢN PC TỐI ƯU MOBILE */}
+      <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 space-y-2.5 shadow-xs">
+        <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Tiện Ích Tài Khoản
+        </h4>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <Link
+            href="/m/sen-ground?tab=history"
+            className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 flex items-center gap-2 font-bold transition"
+          >
+            <History className="h-4 w-4 text-emerald-500" />
+            <span>Lịch sử bài thi</span>
+          </Link>
+          <Link
+            href="/m/pay?tab=quota"
+            className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 flex items-center gap-2 font-bold transition"
+          >
+            <Sparkles className="h-4 w-4 text-pink-500" />
+            <span>Hạn mức SenAI</span>
+          </Link>
+          <Link
+            href="/m/pay?tab=giftcode"
+            className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 flex items-center gap-2 font-bold transition"
+          >
+            <BadgeCheck className="h-4 w-4 text-amber-500" />
+            <span>Đổi GiftCode</span>
+          </Link>
+          <Link
+            href="/m/pay?tab=wallet"
+            className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 flex items-center gap-2 font-bold transition"
+          >
+            <Wallet className="h-4 w-4 text-violet-500" />
+            <span>Ví SenCash</span>
+          </Link>
+        </div>
       </div>
 
       {/* 5. THÔNG TIN PHIÊN BẢN & MÃ PHIÊN BẢN MOBILE */}

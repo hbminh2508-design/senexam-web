@@ -6,7 +6,7 @@ import Link from 'next/link'
 import ModernLoading from '@/app/components/ModernLoading'
 import { ShieldCheck, ArrowRight, Lock } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10890.05'
+const MOBILE_VERSION = '2.0.2194024.10890.04'
 
 export default function MobileLoginPage() {
   const router = useRouter()

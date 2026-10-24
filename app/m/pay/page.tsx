@@ -1,9 +1,29 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import ModernLoading from '@/app/components/ModernLoading'
+import {
+  VIP_PLANS,
+  PREMIUM_PLANS,
+  PREMIUM_PLUS_PLANS,
+  SEN_ONE_PLANS,
+  SEN_ONE_LITE_PLANS,
+  LITE_PLANS,
+  type PlanGroup,
+  type VipPlan,
+} from '@/lib/vipMembership'
+import {
+  SENAI_PLANS,
+  SENAI_TIER_DAILY_LIMIT,
+  SENAI_TIER_LABEL,
+  getEffectiveSenaiTier,
+  type SenAiTierCode,
+  type SenAiPlan,
+} from '@/lib/senaiTiers'
+import { EXCLUSIVE_STORE_ITEMS } from '@/lib/exclusiveStore'
 import {
   Crown,
   Zap,
@@ -24,7 +44,13 @@ import {
   Star,
   Tag,
   Package,
+  Gem,
+  Award,
+  Infinity as InfinityIcon,
+  ShoppingBag,
 } from 'lucide-react'
+
+const MOBILE_VERSION = '2.0.2194024.10890.04'
 
 type TabKey = 'vip' | 'wallet' | 'quota' | 'giftcode' | 'exclusive'
 
@@ -35,13 +61,19 @@ export default function MobilePayPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [copied, setCopied] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState(false)
   const [senCashBalance, setSenCashBalance] = useState<number>(0)
   const [userProfile, setUserProfile] = useState<any>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   // VIP State
-  const [selectedVipGroup, setSelectedVipGroup] = useState<'vip' | 'premium' | 'lite'>('vip')
-  const [selectedDuration, setSelectedDuration] = useState<'month' | 'year' | 'lifetime'>('year')
+  const [selectedVipGroup, setSelectedVipGroup] = useState<PlanGroup>('vip')
+  const [selectedPlanCode, setSelectedPlanCode] = useState<string>('monthly')
+
+  // SenAI Quota State
+  const [todayQuestionsCount, setTodayQuestionsCount] = useState<number>(0)
+  const [todayGraphCount, setTodayGraphCount] = useState<number>(0)
 
   // Wallet State
   const [topupAmount, setTopupAmount] = useState<number>(50000)
@@ -52,17 +84,36 @@ export default function MobilePayPage() {
 
   // Payment Modal State
   const [qrModal, setQrModal] = useState<{
+    kind: 'vip' | 'sencash' | 'generic'
     title: string
     amount: number
-    content: string
+    orderCode: string
     qrUrl: string
+    orderId?: string
+    isPaid?: boolean
   } | null>(null)
 
+  const pollRef = useRef<NodeJS.Timeout | null>(null)
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    return () => stopPolling()
+  }, [])
+
+  // Nạp dữ liệu người dùng & quota
   useEffect(() => {
     async function loadUser() {
       try {
+        setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
+          setUserId(user.id)
           const { data: prof } = await supabase
             .from('profiles')
             .select('*')
@@ -72,9 +123,30 @@ export default function MobilePayPage() {
             setUserProfile(prof)
             setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
           }
+
+          // Lấy hạn mức quota câu hỏi
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.access_token) {
+            try {
+              const qRes = await fetch('/api/senai/quota', {
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              })
+              if (qRes.ok) {
+                const qData = await qRes.json()
+                setTodayQuestionsCount(qData.used ?? 0)
+                if (qData.graphUsed !== undefined) {
+                  setTodayGraphCount(qData.graphUsed)
+                }
+              }
+            } catch (e) {
+              console.warn('Quota load error:', e)
+            }
+          }
         }
       } catch (e) {
         console.error(e)
+      } finally {
+        setLoading(false)
       }
     }
     loadUser()
@@ -86,34 +158,225 @@ export default function MobilePayPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Khởi tạo thanh toán VietQR
-  const handleOpenPayment = async (title: string, amount: number, memoPrefix: string) => {
-    setLoading(true)
+  // Danh sách các gói VIP theo group đã chọn
+  const currentPlanList = React.useMemo(() => {
+    if (selectedVipGroup === 'vip') return VIP_PLANS
+    if (selectedVipGroup === 'premium') return PREMIUM_PLANS
+    if (selectedVipGroup === 'premium_plus') return PREMIUM_PLUS_PLANS
+    if (selectedVipGroup === 'sen_one') return SEN_ONE_PLANS
+    if (selectedVipGroup === 'sen_one_lite') return SEN_ONE_LITE_PLANS
+    return LITE_PLANS
+  }, [selectedVipGroup])
+
+  // Tự động chọn gói đầu tiên khi đổi nhóm
+  useEffect(() => {
+    if (currentPlanList.length > 0 && !currentPlanList.some((p) => p.code === selectedPlanCode)) {
+      setSelectedPlanCode(currentPlanList[0].code)
+    }
+  }, [selectedVipGroup, currentPlanList, selectedPlanCode])
+
+  // Polling trạng thái đơn hàng VIP
+  const startPollingVipOrder = (orderId: string, token: string) => {
+    stopPolling()
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/vip/order-status?orderId=${orderId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        if (data?.order?.status === 'paid') {
+          stopPolling()
+          setQrModal((prev) => (prev ? { ...prev, isPaid: true } : null))
+          // Refresh profile
+          if (userId) {
+            const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+            if (prof) setUserProfile(prof)
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi kiểm tra trạng thái đơn VIP:', err)
+      }
+    }, 2500)
+  }
+
+  // Polling trạng thái đơn nạp SenCash
+  const startPollingTopupOrder = (orderId: string, token: string) => {
+    stopPolling()
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/sencash/topup-status?orderId=${orderId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        if (data?.order?.status === 'paid') {
+          stopPolling()
+          setQrModal((prev) => (prev ? { ...prev, isPaid: true } : null))
+          if (userId) {
+            const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+            if (prof) {
+              setUserProfile(prof)
+              setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi kiểm tra trạng thái nạp SenCash:', err)
+      }
+    }, 2500)
+  }
+
+  // Mua gói VIP qua VietQR chuẩn PC
+  const handleBuyVip = async () => {
+    const plan = currentPlanList.find((p) => p.code === selectedPlanCode)
+    if (!plan) return
+
+    setActionLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const userId = user?.id || 'GUEST'
-      const orderCode = `SEN${Date.now().toString().slice(-6)}`
-      const memo = `${memoPrefix} ${orderCode}`
-      // VietQR chuẩn MB Bank SenExam
-      const qrUrl = `https://img.vietqr.io/image/MB-0348749830-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(memo)}&accountName=SENEXAM`
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/new-idp?returnUrl=/m/pay')
+        return
+      }
+
+      const res = await fetch('/api/vip/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          planGroup: selectedVipGroup,
+          planCode: plan.code,
+          returnUrl: `${window.location.origin}/m/pay?tab=vip`,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(data.error || 'Không thể tạo đơn hàng VIP.')
+        return
+      }
 
       setQrModal({
-        title,
-        amount,
-        content: memo,
-        qrUrl,
+        kind: 'vip',
+        title: `Nâng cấp ${plan.name}`,
+        amount: data.order?.amount_vnd || plan.priceVnd,
+        orderCode: data.order?.order_code || `VIP_${plan.code}`,
+        qrUrl: data.qrUrl,
+        orderId: data.order?.id,
       })
-    } catch (err) {
-      console.error(err)
-      alert('Không thể tạo mã thanh toán, vui lòng thử lại sau.')
+
+      if (data.order?.id) {
+        startPollingVipOrder(data.order.id, session.access_token)
+      }
+    } catch (err: any) {
+      alert(`Lỗi tạo đơn hàng: ${err.message}`)
     } finally {
-      setLoading(false)
+      setActionLoading(false)
     }
   }
 
+  // Nạp ví SenCash qua VietQR chuẩn PC
+  const handleCreateTopup = async () => {
+    setActionLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/new-idp?returnUrl=/m/pay?tab=wallet')
+        return
+      }
+
+      const res = await fetch('/api/sencash/create-topup-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          amountVnd: topupAmount,
+          returnUrl: `${window.location.origin}/m/pay?tab=wallet`,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(data.error || 'Không thể tạo đơn nạp ví SenCash.')
+        return
+      }
+
+      setQrModal({
+        kind: 'sencash',
+        title: `Nạp Ví Sen ${topupAmount.toLocaleString('vi-VN')}đ`,
+        amount: data.order?.amount_vnd || topupAmount,
+        orderCode: data.order?.order_code || `SC_${Date.now().toString().slice(-6)}`,
+        qrUrl: data.qrUrl,
+        orderId: data.order?.id,
+      })
+
+      if (data.order?.id) {
+        startPollingTopupOrder(data.order.id, session.access_token)
+      }
+    } catch (err: any) {
+      alert(`Lỗi tạo đơn nạp ví: ${err.message}`)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Mua gói SenAI bằng SenCash
+  const handleBuySenAiPlan = async (plan: SenAiPlan) => {
+    if (plan.priceSenCash > 0 && senCashBalance < plan.priceSenCash) {
+      alert(`Số dư SenCash không đủ (${senCashBalance} SC < ${plan.priceSenCash} SC). Vui lòng nạp thêm SenCash!`)
+      setActiveTab('wallet')
+      return
+    }
+
+    if (!confirm(`Bạn có chắc chắn muốn kích hoạt gói "${plan.label}" với ${plan.priceSenCash} SC?`)) {
+      return
+    }
+
+    setActionLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/new-idp?returnUrl=/m/pay?tab=quota')
+        return
+      }
+
+      const res = await fetch('/api/senai/purchase-tier', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ planCode: plan.code }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(data.error || 'Không thể kích hoạt gói SenAI.')
+        return
+      }
+
+      alert(`Kích hoạt thành công gói ${plan.label}!`)
+      if (userId) {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+        if (prof) {
+          setUserProfile(prof)
+          setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+        }
+      }
+    } catch (err: any) {
+      alert(`Lỗi khi kích hoạt: ${err.message}`)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Đổi mã quà tặng GiftCode
   const handleApplyGiftCode = async () => {
     if (!giftCode.trim()) return
-    setLoading(true)
+    setActionLoading(true)
     setGiftStatus(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -121,7 +384,7 @@ export default function MobilePayPage() {
         setGiftStatus('Vui lòng đăng nhập để đổi GiftCode.')
         return
       }
-      const res = await fetch('/api/giftcode/redeem', {
+      const res = await fetch('/api/gift-codes/redeem', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -133,15 +396,78 @@ export default function MobilePayPage() {
       if (res.ok && data.ok) {
         setGiftStatus(`Đổi mã thành công: ${data.message || 'Chúc mừng bạn!'}`)
         setGiftCode('')
+        if (userId) {
+          const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+          if (prof) {
+            setUserProfile(prof)
+            setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+          }
+        }
       } else {
         setGiftStatus(data.error || 'Mã GiftCode không hợp lệ hoặc đã hết lượt.')
       }
     } catch {
       setGiftStatus('Lỗi kết nối máy chủ khi đổi mã quà tặng.')
     } finally {
-      setLoading(false)
+      setActionLoading(false)
     }
   }
+
+  // Mua ưu đãi độc quyền
+  const handleBuyExclusiveDeal = async (item: any) => {
+    setActionLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/new-idp?returnUrl=/m/pay?tab=exclusive')
+        return
+      }
+      const res = await fetch('/api/exclusive-store/purchase', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ itemId: item.id }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(data.error || 'Không thể mở ưu đãi này.')
+        return
+      }
+      alert('Đã mở khóa ưu đãi thành công!')
+      if (userId) {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+        if (prof) {
+          setUserProfile(prof)
+          setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+        }
+      }
+    } catch (err: any) {
+      alert(`Lỗi giao dịch: ${err.message}`)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Giao diện loading chuẩn hóa theo đúng tên từng tính năng
+  if (loading) {
+    const loadingMeta =
+      activeTab === 'vip'
+        ? { title: 'Gói Hội Viên Sen VIP', subtitle: `Đang tải bảng giá và đặc quyền hội viên (v${MOBILE_VERSION})...` }
+        : activeTab === 'wallet'
+        ? { title: 'Ví Điện Tử SenCash', subtitle: `Đang tải số dư ví & thông tin nạp tiền (v${MOBILE_VERSION})...` }
+        : activeTab === 'quota'
+        ? { title: 'Hạn Mức Trợ Lý SenAI', subtitle: `Đang đồng bộ các gói câu hỏi SenAI & SenGraph (v${MOBILE_VERSION})...` }
+        : activeTab === 'giftcode'
+        ? { title: 'Đổi Mã Quà Tặng (GiftCode)', subtitle: `Đang tải cổng kích hoạt quà tặng (v${MOBILE_VERSION})...` }
+        : { title: 'Cửa Hàng Độc Quyền', subtitle: `Đang tải các ưu đãi đặc quyền (v${MOBILE_VERSION})...` }
+
+    return <ModernLoading title={loadingMeta.title} subtitle={loadingMeta.subtitle} />
+  }
+
+  const effectiveTier = getEffectiveSenaiTier(userProfile)
+  const dailyLimit = SENAI_TIER_DAILY_LIMIT[effectiveTier]
 
   return (
     <div className="flex-1 w-full p-4 space-y-4 animate-in fade-in pb-16">
@@ -167,7 +493,7 @@ export default function MobilePayPage() {
         </div>
       </div>
 
-      {/* 2. 5 TABS ĐIỀU HƯỚNG CỬA HÀNG */}
+      {/* 2. 5 TABS ĐIỀU HƯỚNG CỬA HÀNG ĐỒNG BỘ 100% NHƯ PC */}
       <div className="flex items-center gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/10 overflow-x-auto scrollbar-none">
         {[
           { key: 'vip', label: 'Gói VIP', icon: Crown },
@@ -197,75 +523,58 @@ export default function MobilePayPage() {
       </div>
 
       {/* ========================================================= */}
-      {/* TAB 1: CÁC GÓI HỘI VIÊN VIP                                */}
+      {/* TAB 1: CÁC GÓI HỘI VIÊN VIP (ĐỒNG BỘ 100% TỪ PC)         */}
       {/* ========================================================= */}
       {activeTab === 'vip' && (
         <div className="space-y-4 animate-in fade-in">
           {/* Banner VIP Mobile */}
           <div className="p-4 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-pink-600 text-white shadow-lg space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
-              <Crown className="h-4 w-4" /> Đặc Quyền Hội Viên Sen VIP
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
+                <Crown className="h-4 w-4" /> Đặc Quyền Hội Viên Sen VIP
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20">
+                1st Year Anniversary
+              </span>
             </div>
             <p className="text-xs text-amber-100 leading-relaxed">
-              Mở khóa toàn bộ đề thi khảo thí chuẩn Canvas, tải tài liệu không giới hạn và nhận lời giải thích KaTeX chuyên sâu.
+              Mở khóa toàn bộ đề thi chuẩn Canvas, tải tài liệu không giới hạn và nhận giải thích KaTeX chuyên sâu.
             </p>
           </div>
 
-          {/* Chọn loại gói VIP */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/5 dark:bg-white/5 rounded-2xl text-center">
+          {/* Chọn loại nhóm gói VIP theo bảng chuẩn PC */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
             {[
-              { key: 'vip', label: 'Sen VIP', sub: 'Khuyên dùng' },
-              { key: 'premium', label: 'Premium', sub: 'Chuyên sâu' },
-              { key: 'lite', label: 'Sen Lite', sub: 'Tiết kiệm' },
+              { key: 'vip', label: 'Sen VIP', badge: 'Phổ biến' },
+              { key: 'premium', label: 'Premium', badge: 'Đẳng cấp' },
+              { key: 'premium_plus', label: 'Premium+', badge: 'Vượt trội' },
+              { key: 'sen_one', label: 'Sen One', badge: 'All-in-One' },
+              { key: 'sen_one_lite', label: 'Sen One Lite', badge: 'Mới' },
+              { key: 'lite', label: 'Sen Lite', badge: 'Tiết kiệm' },
             ].map((g) => (
               <button
                 key={g.key}
                 type="button"
-                onClick={() => setSelectedVipGroup(g.key as any)}
-                className={`py-2 rounded-xl text-xs font-black transition ${
+                onClick={() => setSelectedVipGroup(g.key as PlanGroup)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer active:scale-95 ${
                   selectedVipGroup === g.key
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500'
+                    ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                    : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10'
                 }`}
               >
-                <div>{g.label}</div>
-                <div className="text-[9px] font-normal opacity-70">{g.sub}</div>
+                {g.label}
               </button>
             ))}
           </div>
 
-          {/* Danh sách các kỳ hạn */}
-          <div className="space-y-2.5">
-            {[
-              {
-                key: 'month',
-                title: 'Gói 1 Tháng',
-                price: selectedVipGroup === 'premium' ? '89.000đ' : selectedVipGroup === 'vip' ? '59.000đ' : '29.000đ',
-                rawPrice: selectedVipGroup === 'premium' ? 89000 : selectedVipGroup === 'vip' ? 59000 : 29000,
-                desc: 'Luyện thi cơ bản trong 30 ngày.',
-              },
-              {
-                key: 'year',
-                title: 'Gói 1 Năm (Khuyên Dùng)',
-                price: selectedVipGroup === 'premium' ? '299.000đ' : selectedVipGroup === 'vip' ? '199.000đ' : '99.000đ',
-                rawPrice: selectedVipGroup === 'premium' ? 299000 : selectedVipGroup === 'vip' ? 199000 : 99000,
-                badge: 'TIẾT KIỆM 70%',
-                desc: 'Đồng hành trọn vẹn cả năm học, giải chi tiết và SenAI.',
-              },
-              {
-                key: 'lifetime',
-                title: 'Hội Viên Vĩnh Viễn',
-                price: selectedVipGroup === 'premium' ? '699.000đ' : selectedVipGroup === 'vip' ? '499.000đ' : '249.000đ',
-                rawPrice: selectedVipGroup === 'premium' ? 699000 : selectedVipGroup === 'vip' ? 499000 : 249000,
-                badge: 'TRỌN ĐỜI',
-                desc: 'Mở khóa toàn bộ đặc quyền hiện tại và mọi bản nâng cấp tương lai.',
-              },
-            ].map((p) => {
-              const isSelected = selectedDuration === p.key
+          {/* Danh sách các kỳ hạn trong nhóm gói đã chọn */}
+          <div className="space-y-2">
+            {currentPlanList.map((p) => {
+              const isSelected = selectedPlanCode === p.code
               return (
                 <div
-                  key={p.key}
-                  onClick={() => setSelectedDuration(p.key as any)}
+                  key={p.code}
+                  onClick={() => setSelectedPlanCode(p.code)}
                   className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
                     isSelected
                       ? 'border-amber-500 bg-amber-500/10 ring-2 ring-amber-500/30 shadow-xs'
@@ -274,21 +583,18 @@ export default function MobilePayPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-xs font-black text-slate-900 dark:text-white">
-                          {p.title}
-                        </h4>
-                        {p.badge && (
-                          <span className="px-1.5 py-0.2 rounded-md bg-amber-500 text-slate-950 font-black text-[9px] uppercase">
-                            {p.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{p.desc}</p>
+                      <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                        {p.name}
+                      </h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Thời hạn: {p.durationDays} ngày sử dụng
+                      </p>
                     </div>
 
                     <div className="text-right">
-                      <span className="text-sm font-black text-amber-500">{p.price}</span>
+                      <span className="text-sm font-black text-amber-500">
+                        {p.priceVnd.toLocaleString('vi-VN')}đ
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -296,34 +602,21 @@ export default function MobilePayPage() {
             })}
           </div>
 
-          {/* Nút Thanh Toán */}
+          {/* Nút Tạo Đơn & Thanh Toán VietQR Tự Động */}
           <button
             type="button"
-            disabled={loading}
-            onClick={() => {
-              const currentPrice =
-                selectedDuration === 'lifetime'
-                  ? (selectedVipGroup === 'premium' ? 699000 : selectedVipGroup === 'vip' ? 499000 : 249000)
-                  : selectedDuration === 'year'
-                  ? (selectedVipGroup === 'premium' ? 299000 : selectedVipGroup === 'vip' ? 199000 : 99000)
-                  : (selectedVipGroup === 'premium' ? 89000 : selectedVipGroup === 'vip' ? 59000 : 29000)
-
-              handleOpenPayment(
-                `Gói ${selectedVipGroup.toUpperCase()} (${selectedDuration})`,
-                currentPrice,
-                `VIP_${selectedVipGroup.toUpperCase()}`
-              )
-            }}
+            disabled={actionLoading}
+            onClick={handleBuyVip}
             className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white font-black text-xs shadow-lg active:scale-98 transition flex items-center justify-center gap-2"
           >
-            <QrCode className="h-4 w-4" />
-            <span>THANH TOÁN QUA VIETQR TỰ ĐỘNG</span>
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+            <span>THANH TOÁN GÓI QUA VIETQR TỰ ĐỘNG</span>
           </button>
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* TAB 2: VÍ SEN (SENCASH & NẠP TIỀN)                        */}
+      {/* TAB 2: VÍ SEN (SENCASH & NẠP TIỀN QUA VIETQR)             */}
       {/* ========================================================= */}
       {activeTab === 'wallet' && (
         <div className="space-y-4 animate-in fade-in">
@@ -337,11 +630,11 @@ export default function MobilePayPage() {
               {senCashBalance.toLocaleString('vi-VN')} <span className="text-sm font-bold opacity-80">SC</span>
             </div>
             <p className="text-[11px] text-violet-200">
-              Quy đổi: 500 VND = 1 SC. Dùng để mở khóa đề thi lẻ, mua tài liệu VIP và đổi quà.
+              Quy đổi: 500 VND = 1 SC. Dùng để mở khóa đề thi lẻ, nâng cấp SenAI và đổi quà tặng.
             </p>
           </div>
 
-          {/* Chọn Mốc Nạp Tiền */}
+          {/* Chọn Mốc Nạp Tiền chuẩn PC */}
           <div className="space-y-2">
             <span className="text-xs font-black uppercase text-slate-500">Mốc Nạp Tiền Nhanh</span>
             <div className="grid grid-cols-3 gap-2">
@@ -385,76 +678,63 @@ export default function MobilePayPage() {
           {/* Nút Tạo QR Nạp Ví */}
           <button
             type="button"
-            disabled={loading}
-            onClick={() => {
-              handleOpenPayment(
-                `Nạp Ví Sen ${topupAmount.toLocaleString('vi-VN')}đ`,
-                topupAmount,
-                'SENCASH'
-              )
-            }}
+            disabled={actionLoading}
+            onClick={handleCreateTopup}
             className="w-full py-3.5 rounded-2xl bg-violet-600 text-white font-black text-xs shadow-lg active:scale-98 transition flex items-center justify-center gap-2"
           >
-            <QrCode className="h-4 w-4" />
+            {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
             <span>NẠP VÍ QUA VIETQR ({topupAmount.toLocaleString('vi-VN')}đ)</span>
           </button>
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* TAB 3: GÓI SENAI STUDIO & SENGRAPH                       */}
+      {/* TAB 3: HẠN MỨC SENAI (SENAI_PLANS TỪ LIB)                  */}
       {/* ========================================================= */}
       {activeTab === 'quota' && (
         <div className="space-y-4 animate-in fade-in">
+          {/* Card Quota hiện tại */}
           <div className="p-4 rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 text-white shadow-lg space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
-              <Sparkles className="h-4 w-4" /> Gói Hạn Mức SenAI Studio 2.0
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
+                <Sparkles className="h-4 w-4" /> Trợ Lý SenAI 2.0
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/20 font-bold">
+                Hạng: {SENAI_TIER_LABEL[effectiveTier]}
+              </span>
             </div>
-            <p className="text-xs text-indigo-100 leading-relaxed">
-              Trợ lý giải bài thi KaTeX từng bước, nhận diện công thức toán học từ hình ảnh và phân tích đồ thị hàm số SenGraph.
+            <div className="text-sm font-black">
+              Hôm nay đã dùng: <span className="text-amber-300 font-mono">{todayQuestionsCount}/{dailyLimit}</span> câu hỏi
+            </div>
+            <p className="text-[11px] text-indigo-100 leading-relaxed">
+              Kích hoạt gói hạn mức để thoải mái hỏi đáp KaTeX, dịch thuật, tóm tắt lý thuyết và vẽ đồ thị hàm số SenGraph.
             </p>
           </div>
 
+          {/* Danh mục gói SenAI mua bằng SenCash từ lib/senaiTiers */}
           <div className="space-y-2.5">
-            {[
-              {
-                code: 'plus',
-                name: 'Gói SenAI Plus',
-                price: '39.000đ/tháng',
-                rawPrice: 39000,
-                desc: '50 lượt hỏi bài/ngày + 1 lượt phân tích đồ thị SenGraph/ngày.',
-              },
-              {
-                code: 'ultra',
-                name: 'Gói SenAI Ultra',
-                price: '99.000đ/tháng',
-                rawPrice: 99000,
-                desc: '200 lượt hỏi bài/ngày + 5 lượt phân tích đồ thị SenGraph/ngày, phản hồi siêu tốc.',
-              },
-              {
-                code: 'max',
-                name: 'Gói SenAI Max Không Giới Hạn',
-                price: '199.000đ/tháng',
-                rawPrice: 199000,
-                desc: '500 lượt hỏi bài/ngày + 15 lượt phân tích đồ thị, xử lý bài vận dụng cao cực đại.',
-              },
-            ].map((p) => (
+            {SENAI_PLANS.map((p) => (
               <div
                 key={p.code}
                 className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 shadow-xs flex items-center justify-between gap-3"
               >
                 <div>
-                  <h4 className="text-xs font-black text-slate-900 dark:text-white">{p.name}</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{p.desc}</p>
+                  <h4 className="text-xs font-black text-slate-900 dark:text-white">{p.label}</h4>
+                  <span className="text-[10px] text-slate-400">
+                    {SENAI_TIER_DAILY_LIMIT[p.tier]} câu hỏi/ngày
+                  </span>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-xs font-black text-violet-600 block">{p.price}</span>
+                  <span className="text-xs font-black text-violet-600 dark:text-violet-400 block">
+                    {p.priceSenCash === 0 ? 'Miễn phí' : `${p.priceSenCash} SC`}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => handleOpenPayment(p.name, p.rawPrice, `AI_${p.code.toUpperCase()}`)}
+                    disabled={actionLoading}
+                    onClick={() => handleBuySenAiPlan(p)}
                     className="mt-1 px-3 py-1 rounded-xl bg-violet-600 text-white text-[10px] font-black active:scale-95 transition"
                   >
-                    Đăng ký
+                    Kích hoạt
                   </button>
                 </div>
               </div>
@@ -483,7 +763,7 @@ export default function MobilePayPage() {
             </label>
             <input
               type="text"
-              placeholder="VÍ DỤ: SENEXAM2026, VIPTEST..."
+              placeholder="VÍ DỤ: SENEXAM1YEAR, VIPTEST..."
               value={giftCode}
               onChange={(e) => setGiftCode(e.target.value.toUpperCase())}
               className="w-full h-11 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs font-mono font-bold tracking-widest outline-none focus:border-violet-500 uppercase"
@@ -495,11 +775,11 @@ export default function MobilePayPage() {
             )}
             <button
               type="button"
-              disabled={loading || !giftCode.trim()}
+              disabled={actionLoading || !giftCode.trim()}
               onClick={handleApplyGiftCode}
               className="w-full py-3 rounded-xl bg-violet-600 text-white font-black text-xs shadow-md active:scale-95 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               <span>KÍCH HOẠT QUÀ TẶNG</span>
             </button>
           </div>
@@ -507,7 +787,7 @@ export default function MobilePayPage() {
       )}
 
       {/* ========================================================= */}
-      {/* TAB 5: DEAL ĐỘC QUYỀN                                      */}
+      {/* TAB 5: DEAL ĐỘC QUYỀN (EXCLUSIVE STORE TỪ LIB)             */}
       {/* ========================================================= */}
       {activeTab === 'exclusive' && (
         <div className="space-y-4 animate-in fade-in">
@@ -521,38 +801,26 @@ export default function MobilePayPage() {
           </div>
 
           <div className="space-y-2.5">
-            {[
-              {
-                id: 'deal_1',
-                title: 'Tuyển Tập 100 Đề Toán Trọng Điểm 2026',
-                price: '49.000đ',
-                rawPrice: 49000,
-                desc: 'Kèm theo lời giải KaTeX và mã đề Canvas trực tuyến.',
-              },
-              {
-                id: 'deal_2',
-                title: 'Bộ Tài Liệu Ôn Thi HSA / TSA Độc Quyền',
-                price: '79.000đ',
-                rawPrice: 79000,
-                desc: 'Phần tư duy định lượng & định tính mới nhất.',
-              },
-            ].map((deal) => (
+            {EXCLUSIVE_STORE_ITEMS.slice(0, 8).map((deal) => (
               <div
                 key={deal.id}
                 className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 shadow-xs flex items-center justify-between gap-3"
               >
                 <div>
                   <h4 className="text-xs font-black text-slate-900 dark:text-white">{deal.title}</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{deal.desc}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{deal.description}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-xs font-black text-rose-500 block">{deal.price}</span>
+                  <span className="text-xs font-black text-rose-500 block">
+                    {deal.priceSenCash} SC
+                  </span>
                   <button
                     type="button"
-                    onClick={() => handleOpenPayment(deal.title, deal.rawPrice, 'DEAL')}
+                    disabled={actionLoading}
+                    onClick={() => handleBuyExclusiveDeal(deal)}
                     className="mt-1 px-3 py-1 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-white text-[10px] font-black active:scale-95 transition"
                   >
-                    Mua ngay
+                    Đổi ngay
                   </button>
                 </div>
               </div>
@@ -562,78 +830,111 @@ export default function MobilePayPage() {
       )}
 
       {/* ========================================================= */}
-      {/* MODAL THANH TOÁN VIETQR TỰ ĐỘNG                           */}
+      {/* MODAL THANH TOÁN VIETQR TỰ ĐỘNG CHUẨN PC VỚI POLLING     */}
       {/* ========================================================= */}
       {qrModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 p-5 space-y-4 shadow-2xl border border-black/10 dark:border-white/10 relative">
             <button
               type="button"
-              onClick={() => setQrModal(null)}
+              onClick={() => {
+                stopPolling()
+                setQrModal(null)
+              }}
               className="absolute top-4 right-4 p-1 rounded-full bg-black/5 dark:bg-white/5 text-slate-400 hover:text-black dark:hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
 
-            <div className="text-center space-y-1">
-              <span className="text-[10px] font-black uppercase text-violet-600 dark:text-violet-400">
-                Quét Mã VietQR
-              </span>
-              <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                {qrModal.title}
-              </h3>
-            </div>
-
-            {/* Ảnh VietQR */}
-            <div className="w-56 h-56 mx-auto rounded-2xl bg-white p-2 border border-slate-200 shadow-inner flex items-center justify-center">
-              <img
-                src={qrModal.qrUrl}
-                alt="VietQR Payment"
-                className="w-full h-full object-contain"
-              />
-            </div>
-
-            {/* Thông tin chuyển khoản */}
-            <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">Số tiền:</span>
-                <strong className="text-base font-black text-rose-500">
-                  {qrModal.amount.toLocaleString('vi-VN')}đ
-                </strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">Nội dung:</span>
-                <div className="flex items-center gap-1 font-mono font-bold text-violet-600">
-                  <span>{qrModal.content}</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(qrModal.content)}
-                    className="p-1 rounded text-slate-400 hover:text-black"
-                  >
-                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                  </button>
+            {qrModal.isPaid ? (
+              <div className="text-center py-6 space-y-3 animate-in zoom-in">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-600 mx-auto flex items-center justify-center">
+                  <CheckCircle2 className="h-10 w-10" />
                 </div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
+                  Thanh Toán Thành Công!
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Hệ thống đã tự động kích hoạt dịch vụ vào tài khoản của bạn.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopPolling()
+                    setQrModal(null)
+                  }}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-black text-xs shadow-md active:scale-95"
+                >
+                  Hoàn tất
+                </button>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="text-center space-y-1">
+                  <span className="text-[10px] font-black uppercase text-violet-600 dark:text-violet-400">
+                    Quét Mã VietQR Tự Động
+                  </span>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    {qrModal.title}
+                  </h3>
+                </div>
 
-            <p className="text-[10px] text-center text-slate-400 leading-tight">
-              Hệ thống tự động kích hoạt ngay sau 1-3 phút khi nhận được chuyển khoản.
-            </p>
+                {/* Ảnh VietQR */}
+                <div className="w-56 h-56 mx-auto rounded-2xl bg-white p-2 border border-slate-200 shadow-inner flex items-center justify-center">
+                  <img
+                    src={qrModal.qrUrl}
+                    alt="VietQR Payment"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
 
-            <button
-              type="button"
-              onClick={() => setQrModal(null)}
-              className="w-full py-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs"
-            >
-              Đóng cửa sổ
-            </button>
+                {/* Thông tin chuyển khoản */}
+                <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Số tiền:</span>
+                    <strong className="text-base font-black text-rose-500">
+                      {qrModal.amount.toLocaleString('vi-VN')}đ
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Nội dung CK:</span>
+                    <div className="flex items-center gap-1 font-mono font-bold text-violet-600">
+                      <span>{qrModal.orderCode}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(qrModal.orderCode)}
+                        className="p-1 rounded text-slate-400 hover:text-black"
+                      >
+                        {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-500 font-bold">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Đang tự động nhận diện thanh toán...</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopPolling()
+                    setQrModal(null)
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs"
+                >
+                  Đóng cửa sổ
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {/* FOOTER MÃ PHIÊN BẢN */}
       <div className="pt-2 text-center text-[10px] text-slate-400 font-mono">
-        SenExam VIP Store v2.0.2194024.10890.05
+        SenExam VIP Store v{MOBILE_VERSION}
       </div>
     </div>
   )

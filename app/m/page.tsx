@@ -28,9 +28,17 @@ import {
   BarChart3,
   Compass,
   Edit,
+  Calculator,
+  FlaskConical,
+  Gauge,
+  Video,
+  ShoppingBag,
+  Wind,
+  Mail,
+  GraduationCap,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10890.05'
+const MOBILE_VERSION = '2.0.2194024.10890.04'
 
 interface ExamItem {
   id: string
@@ -137,8 +145,8 @@ export default function MobileDashboardPage() {
   if (loading) {
     return (
       <ModernLoading
-        title="SenExam 2.0 Mobile"
-        subtitle={`Đang tải bảng điều khiển (v${MOBILE_VERSION})...`}
+        title="Bảng Điều Khiển SenExam Mobile"
+        subtitle={`Đang tải dữ liệu học tập & khảo thí trên điện thoại (v${MOBILE_VERSION})...`}
       />
     )
   }
@@ -151,6 +159,31 @@ export default function MobileDashboardPage() {
 
   return (
     <div className="flex-1 w-full p-4 space-y-4">
+      {/* 🌟 BANNER ĐẶC BIỆT: KỶ NIỆM 1 NĂM SINH NHẬT WEB SENEXAM (2025 - 2026) */}
+      <div className="relative overflow-hidden rounded-3xl p-4 bg-gradient-to-r from-amber-500/20 via-pink-500/20 to-purple-600/20 border border-amber-500/30 backdrop-blur-md shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-pink-500 flex items-center justify-center text-white text-lg shadow-md shrink-0">
+              🎂
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                  Kỷ Niệm 1 Năm SenExam
+                </span>
+                <span className="px-1.5 py-0.2 rounded-full bg-gradient-to-r from-amber-500 to-pink-500 text-white font-black text-[9px] uppercase shadow-xs">
+                  1st Anniversary
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-600 dark:text-slate-300 mt-0.5">
+                Hành trình 1 năm đồng hành cùng sĩ tử chinh phục điểm 9+ và kỳ thi quốc gia!
+              </p>
+            </div>
+          </div>
+          <Sparkles className="h-5 w-5 text-amber-500 animate-spin shrink-0" style={{ animationDuration: '6s' }} />
+        </div>
+      </div>
+
       {/* 1. TOP HEADER BAR */}
       <header className="flex items-center justify-between gap-3 pt-1">
         <div className="flex items-center gap-2.5">
@@ -325,7 +358,128 @@ export default function MobileDashboardPage() {
             <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <Users className="h-4 w-4" />
             </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Quỹ Lớp</span>
+          </Link>
+
+          {/* Hạn mức SenAI */}
+          <Link
+            href="/m/pay?tab=quota"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 flex items-center justify-center">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Hạn Mức AI</span>
+          </Link>
+
+          {/* Tính điểm thi */}
+          <Link
+            href="/new-mark-calculate"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <Calculator className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Tính Điểm</span>
+          </Link>
+
+          {/* Phòng thí nghiệm ảo */}
+          <Link
+            href="/new-labs"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <FlaskConical className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Lab Ảo</span>
+          </Link>
+
+          {/* Chế độ Focus */}
+          <Link
+            href="/new-focus"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Gauge className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Focus</span>
+          </Link>
+
+          {/* Sen Video */}
+          <Link
+            href="/new-video"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 flex items-center justify-center">
+              <Video className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Video</span>
+          </Link>
+
+          {/* SenRead */}
+          <Link
+            href="/read"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+              <BookOpen className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenRead</span>
+          </Link>
+
+          {/* Lịch Học & Lịch Thi */}
+          <Link
+            href="/new-schedule"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Calendar className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Lịch Thi</span>
+          </Link>
+
+          {/* Lớp Học Của Tôi */}
+          <Link
+            href="/new-student"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <GraduationCap className="h-4 w-4" />
+            </div>
             <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Lớp Học</span>
+          </Link>
+
+          {/* Cửa Hàng Độc Quyền */}
+          <Link
+            href="/new-exclusive-store"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+              <ShoppingBag className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Cửa Hàng</span>
+          </Link>
+
+          {/* Hòm Thư SenMail */}
+          <Link
+            href="/sen-mail"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center">
+              <Mail className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenMail</span>
+          </Link>
+
+          {/* Breathe-U */}
+          <Link
+            href="/breathe-u"
+            className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
+          >
+            <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+              <Wind className="h-4 w-4" />
+            </div>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Breathe-U</span>
           </Link>
         </div>
       </div>

@@ -44,7 +44,7 @@ import {
   Send,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10890.05'
+const MOBILE_VERSION = '2.0.2194024.10890.04'
 
 interface ExamItem {
   id: string
@@ -315,10 +315,26 @@ function MobileSenGroundContent() {
   }
 
   if (loading) {
+    const loadingMeta =
+      activeTab === 'library'
+        ? {
+            title: 'Thư Viện Sen Online',
+            subtitle: `Đang đồng bộ sơ đồ cây tài liệu, bài giảng & bài tập chuyên đề (v${MOBILE_VERSION})...`,
+          }
+        : activeTab === 'history'
+        ? {
+            title: 'Lịch Sử Thi & Kết Quả',
+            subtitle: `Đang tải bảng điểm, phân tích bài nộp & lời giải chi tiết (v${MOBILE_VERSION})...`,
+          }
+        : {
+            title: 'Kho Đề Thi & Khảo Thí',
+            subtitle: `Đang tải kho đề thi, tuyển tập đề & bộ lọc môn học (v${MOBILE_VERSION})...`,
+          }
+
     return (
       <ModernLoading
-        title="SenExam 2.0 Mobile"
-        subtitle={`Đang nạp dữ liệu Sen Ground (v${MOBILE_VERSION})...`}
+        title={loadingMeta.title}
+        subtitle={loadingMeta.subtitle}
       />
     )
   }
