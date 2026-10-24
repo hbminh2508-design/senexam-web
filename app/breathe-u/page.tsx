@@ -427,7 +427,7 @@ export default function BreatheUApplication() {
             {currentScreen === '1_splash' && (
               <div className="p-6 flex flex-col items-center justify-between flex-1 text-center bg-gradient-to-b from-emerald-50/60 via-white to-emerald-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-emerald-950/20">
                 <div className="w-full flex justify-start">
-                  <button type="button" onClick={() => navigateTo('4_home')} className="text-slate-400 hover:text-slate-600 p-1">
+                  <button type="button" onClick={() => navigateTo('4_home')} className="text-slate-400 hover:text-slate-600 p-1 focus-visible:ring-2" aria-label="Quay lại trang chủ">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                 </div>
@@ -470,7 +470,7 @@ export default function BreatheUApplication() {
               <div className="p-6 flex flex-col justify-between flex-1 bg-white dark:bg-slate-900">
                 <div className="space-y-6">
                   <div className="flex justify-between items-center">
-                    <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                    <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                       <ArrowLeft className="h-5 w-5" />
                     </button>
                     <BreatheLogo className="w-10 h-10" />
@@ -574,7 +574,7 @@ export default function BreatheUApplication() {
               <div className="p-6 flex flex-col justify-between flex-1 bg-white dark:bg-slate-900">
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                    <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                       <ArrowLeft className="h-5 w-5" />
                     </button>
                     <BreatheLogo className="w-10 h-10" />
@@ -842,7 +842,7 @@ export default function BreatheUApplication() {
             {currentScreen === '5_knowledge' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Kiến thức</h2>
@@ -915,7 +915,7 @@ export default function BreatheUApplication() {
             {currentScreen === '6_article' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Bài viết chuyên sâu</span>
@@ -1003,7 +1003,7 @@ export default function BreatheUApplication() {
             {currentScreen === '7_challenge' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Thử thách</h2>
@@ -1124,7 +1124,7 @@ export default function BreatheUApplication() {
             {currentScreen === '8_commitment' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-2">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Cam kết</h2>
@@ -1191,7 +1191,7 @@ export default function BreatheUApplication() {
             {currentScreen === '9_report' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Phản ánh</h2>
@@ -1332,7 +1332,7 @@ export default function BreatheUApplication() {
             {currentScreen === '10_community' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Cộng đồng</h2>
@@ -1437,7 +1437,7 @@ export default function BreatheUApplication() {
             {currentScreen === '11_map' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Bản đồ không khói thuốc</h2>
@@ -1533,7 +1533,7 @@ export default function BreatheUApplication() {
             {currentScreen === '12_profile' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Cá nhân</h2>
@@ -1657,7 +1657,7 @@ export default function BreatheUApplication() {
             {currentScreen === '13_achievement' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-3">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Thành tích</h2>
@@ -1718,7 +1718,7 @@ export default function BreatheUApplication() {
             {currentScreen === '14_settings' && (
               <div className="p-4 flex flex-col flex-1 pb-20 overflow-y-auto">
                 <div className="flex items-center justify-between mb-4">
-                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={goBack} className="p-1 text-slate-400 hover:text-slate-600 focus-visible:ring-2" aria-label="Quay lại">
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <h2 className="text-base font-black text-slate-900 dark:text-white">Cài đặt</h2>
