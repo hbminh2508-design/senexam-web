@@ -325,6 +325,7 @@ export default function NewProfilePage() {
             <button
               type="button"
               onClick={toggleDarkMode}
+              aria-label="Chuyển đổi giao diện Sáng/Tối"
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm transition hover:scale-105"
             >
               {isDark ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-indigo-500" />}
