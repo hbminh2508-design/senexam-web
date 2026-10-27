@@ -96,6 +96,11 @@ async function runMigration() {
 
       if (colRes.rows.length === 0) continue;
 
+      const colTypeMap = {};
+      for (const c of colRes.rows) {
+        colTypeMap[c.column_name] = c.udt_name;
+      }
+
       // Get primary key
       const pkRes = await sourceClient.query(`
         SELECT kcu.column_name
@@ -138,18 +143,31 @@ async function runMigration() {
         const cols = Object.keys(rows[0]);
         const colList = cols.map((c) => `"${c}"`).join(', ');
 
+        let successCount = 0;
         for (const row of rows) {
-          const values = cols.map((c) => row[c]);
+          const values = cols.map((c) => {
+            const val = row[c];
+            if (val === null || val === undefined) return null;
+            const udt = colTypeMap[c];
+            if (udt === 'json' || udt === 'jsonb') {
+              return typeof val === 'string' ? val : JSON.stringify(val);
+            }
+            if (typeof val === 'object' && !(val instanceof Date) && !Buffer.isBuffer(val) && !Array.isArray(val)) {
+              return JSON.stringify(val);
+            }
+            return val;
+          });
           const placeholders = cols.map((_, idx) => `$${idx + 1}`).join(', ');
           const insertSql = `INSERT INTO public."${table}" (${colList}) VALUES (${placeholders});`;
           try {
             await targetClient.query(insertSql, values);
+            successCount++;
           } catch (iErr) {
             console.warn(`    ⚠ Insert error on ${table}: ${iErr.message}`);
           }
         }
-        totalRowsMigrated += rows.length;
-        console.log(`  ✓ ${table}: Migrated ${rows.length} rows.`);
+        totalRowsMigrated += successCount;
+        console.log(`  ✓ ${table}: Migrated ${successCount}/${rows.length} rows.`);
       } else {
         console.log(`  ✓ ${table}: 0 rows (table structure created).`);
       }
