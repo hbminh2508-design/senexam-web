@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { queryDb } from '@/lib/db'
+import dns from 'dns'
+
+try {
+  dns.setDefaultResultOrder('ipv4first')
+} catch {}
 
 export const dynamic = 'force-dynamic'
 
@@ -100,32 +106,58 @@ export async function GET(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin()
 
-    // 3. Đảm bảo user đã tồn tại trong Supabase Auth
+    // 3. Đảm bảo user đã tồn tại (tra cứu DB nội bộ Azure trước trong 0ms)
     let userId: string | null = null
-    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers()
-    const found = existingUser?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+    try {
+      const localUsers = await queryDb<{ id: string }>(
+        'SELECT id FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1',
+        [email]
+      )
+      if (localUsers.length > 0) {
+        userId = localUsers[0].id
+      }
+    } catch {}
 
-    if (found) {
-      userId = found.id
-    } else {
-      // Tạo user mới trong Supabase Auth nếu chưa có
-      const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        email_confirm: true,
-        user_metadata: {
-          full_name: fullName,
-          avatar_url: avatarUrl,
-          name: fullName,
-          picture: avatarUrl,
-        },
-      })
-      if (!createErr && newUser?.user) {
-        userId = newUser.user.id
+    if (!userId) {
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers().catch(() => ({ data: null }))
+      const found = existingUser?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+      if (found) {
+        userId = found.id
+      } else {
+        // Tạo user mới trong Supabase Auth nếu chưa có
+        const { data: newUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          user_metadata: {
+            full_name: fullName,
+            avatar_url: avatarUrl,
+            name: fullName,
+            picture: avatarUrl,
+          },
+        }).catch(() => ({ data: null, error: null }))
+        if (!createErr && newUser?.user) {
+          userId = newUser.user.id
+        }
       }
     }
 
-    // Đảm bảo hồ sơ trong bảng `profiles`
+    // Đảm bảo hồ sơ trong bảng `profiles` (cập nhật DB nội bộ Azure và Supabase)
     if (userId) {
+      try {
+        await queryDb(
+          `INSERT INTO public.profiles (id, full_name, email, avatar_url, updated_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT (id) DO UPDATE SET
+             full_name = EXCLUDED.full_name,
+             email = EXCLUDED.email,
+             avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url),
+             updated_at = NOW()`,
+          [userId, fullName, email, avatarUrl]
+        )
+      } catch (dbErr) {
+        console.warn('Lỗi upsert local profile:', dbErr)
+      }
+
       try {
         await supabaseAdmin.from('profiles').upsert(
           {
@@ -142,7 +174,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. Sinh liên kết phiên đăng nhập trực tiếp (action_link) để client tự động nhận session
+    // 4. Sinh liên kết phiên đăng nhập (Ưu tiên token_hash để client verifyOtp 100% trên senexam.me)
     let redirectDestination = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}&source=${encodeURIComponent(source)}`
 
     try {
@@ -154,11 +186,20 @@ export async function GET(request: NextRequest) {
         },
       })
 
-      if (linkData?.properties?.action_link) {
+      if (linkData?.properties?.hashed_token) {
+        const tokenHash = linkData.properties.hashed_token
+        redirectDestination = `${origin}/auth/callback?token_hash=${encodeURIComponent(tokenHash)}&type=magiclink&email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}&source=${encodeURIComponent(source)}`
+        if (id_token) {
+          redirectDestination += `&google_id_token=${encodeURIComponent(id_token)}`
+        }
+      } else if (linkData?.properties?.action_link) {
         redirectDestination = linkData.properties.action_link
       }
     } catch (linkErr) {
       console.warn('Lỗi generateLink:', linkErr)
+      if (id_token) {
+        redirectDestination = `${origin}/auth/callback?google_id_token=${encodeURIComponent(id_token)}&email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}&source=${encodeURIComponent(source)}`
+      }
     }
 
     const response = NextResponse.redirect(redirectDestination)

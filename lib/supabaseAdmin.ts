@@ -1,4 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import dns from 'dns'
+
+try {
+  dns.setDefaultResultOrder('ipv4first')
+} catch {}
 
 const DEFAULT_URL = 'https://nphryrldlfiuvpuqjovr.supabase.co'
 const DEFAULT_KEY = Buffer.from('c2Jfc2VjcmV0X2pJSlhMdUo2clZrbDctZkQyNjFvNkFfTDdGM3g5aXE=', 'base64').toString('utf8')

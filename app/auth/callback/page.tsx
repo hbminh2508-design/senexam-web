@@ -204,6 +204,8 @@ function CallbackHandler() {
             localStorage.removeItem('auth_next')
             localStorage.removeItem('seb_oauth_target')
             localStorage.removeItem('seb_oauth_origin')
+            localStorage.removeItem('idp_lockout_until')
+            localStorage.removeItem('idp_failed_attempts')
           } catch (e) {}
 
           // 1. ƯU TIÊN SỐ 1: Chuyển hướng về Hệ thống thi cử SEB nếu đăng nhập từ SEB

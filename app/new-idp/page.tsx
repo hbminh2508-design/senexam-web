@@ -397,7 +397,7 @@ function IdpAuthContent() {
 
   // Đăng nhập bằng Google OAuth
   const handleGoogleAuth = async () => {
-    if (lockoutTimer > 0) return
+    clearFailedAttempts()
     setGoogleLoading(true)
     setErrorMsg('')
     try {
@@ -847,9 +847,13 @@ function IdpAuthContent() {
                 <span className="font-mono text-base font-black text-rose-600 dark:text-rose-400">
                   ⏳ {lockoutTimer} giây
                 </span>
-                <span className="text-[10px] uppercase tracking-wider text-rose-500 font-mono">
-                  Sen Protection Active
-                </span>
+                <button
+                  type="button"
+                  onClick={clearFailedAttempts}
+                  className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-700 dark:text-rose-200 text-[11px] font-bold transition"
+                >
+                  Mở khóa ngay
+                </button>
               </div>
             </div>
           )}
