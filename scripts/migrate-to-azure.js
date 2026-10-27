@@ -132,6 +132,15 @@ async function runMigration() {
 
       await targetClient.query(`CREATE TABLE IF NOT EXISTS public."${table}" (\n  ${colDefs.join(',\n  ')}\n);`);
 
+      // Ensure any newly added columns exist on target table
+      for (const col of colRes.rows) {
+        let type = col.data_type === 'USER-DEFINED' ? col.udt_name : col.data_type;
+        if (type === 'ARRAY') type = `${col.udt_name.replace(/^_/, '')}[]`;
+        try {
+          await targetClient.query(`ALTER TABLE public."${table}" ADD COLUMN IF NOT EXISTS "${col.column_name}" ${type};`);
+        } catch (_) {}
+      }
+
       // Copy data
       const dataRes = await sourceClient.query(`SELECT * FROM public."${table}"`);
       const rows = dataRes.rows;
