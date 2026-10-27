@@ -194,6 +194,7 @@ export default function FepnDeviceSecurityModal({
               type="button"
               onClick={onClose}
               className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              aria-label="Đóng"
             >
               <X className="h-5 w-5" />
             </button>
