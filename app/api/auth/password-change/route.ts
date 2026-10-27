@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { queryDb } from '@/lib/db'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
 
@@ -221,48 +222,93 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Chưa đăng nhập hoặc thiếu địa chỉ email' }, { status: 401 })
       }
 
-      // 1. Tra cứu qua bảng profiles
-      const { data: prof, error: profError } = await supabaseAdmin
-        .from('profiles')
-        .select('id, email, password_change_count')
-        .ilike('email', emailParam)
-        .maybeSingle()
-
-      if (prof?.id) {
-        targetUserId = prof.id
-        targetEmail = prof.email || emailParam
-      } else {
-        // 2. Tra cứu qua admin auth listUsers
-        const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
-        const found = usersData?.users?.find((u) => u.email?.toLowerCase() === emailParam)
-        if (found) {
-          targetUserId = found.id
-          targetEmail = found.email || emailParam
-        }
-
-        if (!targetUserId) {
-          return NextResponse.json(
-            {
-              error: 'Không tìm thấy tài khoản với email này trên hệ thống',
-              notFound: true,
-              debug: {
-                profError: profError?.message || null,
-                usersError: usersError?.message || null,
-                usersCount: usersData?.users?.length ?? null,
-              },
-            },
-            { status: 404 }
+      // 1. Tra cứu ưu tiên qua PostgreSQL nội bộ Azure (nhanh 0ms, không phụ thuộc DNS bên ngoài)
+      try {
+        const localProf = await queryDb(
+          'SELECT id, email, password_change_count FROM public.profiles WHERE LOWER(email) = LOWER($1) LIMIT 1',
+          [emailParam]
+        )
+        if (localProf.length > 0) {
+          targetUserId = localProf[0].id
+          targetEmail = localProf[0].email || emailParam
+        } else {
+          const localAuth = await queryDb(
+            'SELECT id, email FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1',
+            [emailParam]
           )
+          if (localAuth.length > 0) {
+            targetUserId = localAuth[0].id
+            targetEmail = localAuth[0].email || emailParam
+          }
+        }
+      } catch (dbErr) {
+        console.warn('[password-change] local db lookup failed:', dbErr)
+      }
+
+      // 2. Dự phòng: Tra cứu qua Supabase Client
+      if (!targetUserId) {
+        const { data: prof, error: profError } = await supabaseAdmin
+          .from('profiles')
+          .select('id, email, password_change_count')
+          .ilike('email', emailParam)
+          .maybeSingle()
+
+        if (prof?.id) {
+          targetUserId = prof.id
+          targetEmail = prof.email || emailParam
+        } else {
+          const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
+          const found = usersData?.users?.find((u) => u.email?.toLowerCase() === emailParam)
+          if (found) {
+            targetUserId = found.id
+            targetEmail = found.email || emailParam
+          }
+
+          if (!targetUserId) {
+            return NextResponse.json(
+              {
+                error: 'Không tìm thấy tài khoản với email này trên hệ thống',
+                notFound: true,
+                debug: {
+                  profError: profError?.message || null,
+                  usersError: usersError?.message || null,
+                  usersCount: usersData?.users?.length ?? null,
+                },
+              },
+              { status: 404 }
+            )
+          }
         }
       }
     }
 
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(targetUserId)
-    if (userError || !userData?.user) {
+    let user: any = null
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(targetUserId).catch(() => ({ data: null, error: null }))
+    if (userData?.user) {
+      user = userData.user
+    } else {
+      // Dự phòng từ database nội bộ Azure
+      try {
+        const localUsers = await queryDb(
+          'SELECT id, email, raw_user_meta_data, raw_app_meta_data FROM auth.users WHERE id = $1 LIMIT 1',
+          [targetUserId]
+        )
+        if (localUsers.length > 0) {
+          user = {
+            id: localUsers[0].id,
+            email: localUsers[0].email,
+            user_metadata: localUsers[0].raw_user_meta_data || {},
+            app_metadata: localUsers[0].raw_app_meta_data || {},
+            factors: [],
+          }
+        }
+      } catch {}
+    }
+
+    if (!user) {
       return NextResponse.json({ error: 'Không tìm thấy người dùng' }, { status: 404 })
     }
 
-    const user = userData.user
     targetEmail = user.email || targetEmail
     const userMetadata = user.user_metadata || {}
     const appMetadata = user.app_metadata || {}
