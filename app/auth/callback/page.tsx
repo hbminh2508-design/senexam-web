@@ -110,10 +110,62 @@ function CallbackHandler() {
           return
         }
 
-        // Kiểm tra session hiện tại (Supabase client tự động lấy token từ URL hash hoặc PKCE code)
-        const sessionRes = await supabase.auth.getSession().catch(() => null)
-        const session = sessionRes?.data?.session || null
-        const sessionError = sessionRes?.error || null
+        // Hỗ trợ Direct Google OAuth từ Azure
+        const googleIdToken = searchParams.get('google_id_token')
+        const tokenHash = searchParams.get('token_hash')
+        const emailOtp = searchParams.get('email_otp')
+        const emailParam = searchParams.get('email')
+
+        let session: any = null
+
+        if (googleIdToken) {
+          try {
+            const { data: idTokenData, error: idTokenErr } = await supabase.auth.signInWithIdToken({
+              provider: 'google',
+              token: googleIdToken,
+            })
+            if (!idTokenErr && idTokenData?.session) {
+              session = idTokenData.session
+            }
+          } catch (e) {
+            console.warn('signInWithIdToken error:', e)
+          }
+        }
+
+        if (!session && tokenHash) {
+          try {
+            const { data: otpData, error: otpErr } = await supabase.auth.verifyOtp({
+              token_hash: tokenHash,
+              type: 'magiclink',
+            })
+            if (!otpErr && otpData?.session) {
+              session = otpData.session
+            }
+          } catch (e) {
+            console.warn('verifyOtp tokenHash error:', e)
+          }
+        }
+
+        if (!session && emailOtp && emailParam) {
+          try {
+            const { data: emailData, error: emailErr } = await supabase.auth.verifyOtp({
+              email: emailParam,
+              token: emailOtp,
+              type: 'email',
+            })
+            if (!emailErr && emailData?.session) {
+              session = emailData.session
+            }
+          } catch (e) {
+            console.warn('verifyOtp email error:', e)
+          }
+        }
+
+        // Kiểm tra session hiện tại nếu chưa lấy được từ Direct OAuth
+        if (!session) {
+          const sessionRes = await supabase.auth.getSession().catch(() => null)
+          session = sessionRes?.data?.session || null
+        }
 
         const handleRedirect = (currentUser: any) => {
           // Dọn dẹp cookie và storage tạm thời
