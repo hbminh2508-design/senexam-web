@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import { isExamInFolder, SebFolderLike } from '@/lib/sebFolderUtils'
 import type { ExamCollection } from '@/lib/examCollectionStore'
+import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 
 import {
   ArrowLeft,
@@ -8803,13 +8804,11 @@ function UnifiedHubContent() {
                       )}
                     </div>
 
-                    {/* VÙNG NHÚNG XEM TRỰC TIẾP FILE GOOGLE DRIVE IFRAME */}
+                    {/* VÙNG XEM TÀI LIỆU AN TOÀN PROTECTED CANVAS (KHÔNG DÙNG GOOGLE DRIVE IFRAME) */}
                     <div className="w-full flex-1 rounded-2xl overflow-hidden border border-black/10 dark:border-white/10 bg-slate-950 relative min-h-[550px] lg:min-h-[700px]">
                       {libActiveInlineDoc ? (
-                        <iframe
-                          src={`https://drive.google.com/file/d/${libActiveInlineDoc.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`}
-                          className="w-full h-full min-h-[550px] lg:min-h-[700px] border-none"
-                          allow="autoplay"
+                        <ProtectedExamPdfViewer
+                          driveFileId={libActiveInlineDoc.drive_file_id}
                           title={libActiveInlineDoc.title}
                         />
                       ) : (
@@ -9880,12 +9879,10 @@ function UnifiedHubContent() {
               </div>
             </div>
 
-            {/* Iframe Preview */}
+            {/* Protected Canvas Preview (KHÔNG DÙNG GOOGLE DRIVE IFRAME) */}
             <div className="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative">
-              <iframe
-                src={`https://drive.google.com/file/d/${libPreviewDoc.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`}
-                className="w-full h-full border-none"
-                allow="autoplay"
+              <ProtectedExamPdfViewer
+                driveFileId={libPreviewDoc.drive_file_id}
                 title={libPreviewDoc.title}
               />
             </div>

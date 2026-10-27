@@ -14,6 +14,7 @@ import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion } from '@/lib/latexExamParser'
+import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -1848,22 +1849,12 @@ export default function NewExamRoomPage() {
           /* GIAO DIỆN XEM PDF NẾU ĐỀ THI LÀ PDF */
             <div className="flex-1 flex flex-col bg-slate-900 relative">
               {cachedPdfUrl ? (
-                <div className="relative w-full h-full flex flex-col">
-                  <div className="h-9 bg-slate-950 px-4 flex items-center justify-between text-xs text-slate-400 border-b border-white/10">
-                    <span className="font-bold flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5 text-amber-400" /> Đề thi đính kèm (PDF)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setPdfFullscreen(!pdfFullscreen)}
-                      className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
-                    >
-                      {pdfFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                      {pdfFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
-                    </button>
-                  </div>
-                  <iframe src={cachedPdfUrl} className="flex-1 w-full h-full border-none" title="Exam PDF" />
-                </div>
+                <ProtectedExamPdfViewer
+                  pdfUrl={cachedPdfUrl}
+                  title={examData?.title || 'Đề thi (PDF)'}
+                  isFullscreen={pdfFullscreen}
+                  onToggleFullscreen={() => setPdfFullscreen(!pdfFullscreen)}
+                />
               ) : (
                 <div className="flex-1 flex items-center justify-center p-6 text-center text-slate-400">
                   <div>

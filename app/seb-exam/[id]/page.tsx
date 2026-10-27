@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { ensureStudentProfile } from '@/lib/ensureProfile'
 import SebLogo from '@/components/SebLogo'
 import SebProctorCamera from '@/app/components/SebProctorCamera'
+import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 import {
   Clock,
   ArrowLeft,
@@ -1141,27 +1142,15 @@ export default function SebExamRoomPage() {
 
       {/* Main Split: Left PDF (nhúng an toàn) / Right Answer Sheet (Phiếu làm bài) */}
       <div className="flex-1 flex flex-col md:flex-row w-full overflow-hidden">
-        {/* CỘT TRÁI: ĐỀ THI PDF */}
-        <div className={`flex-1 h-[calc(100vh-3.5rem)] bg-slate-200 relative flex flex-col ${pdfFullscreen ? 'fixed inset-0 z-50' : ''}`}>
+        {/* CỘT TRÁI: ĐỀ THI PDF (PROTECTED CANVAS RENDERER - KHÔNG DÙNG GOOGLE DRIVE IFRAME) */}
+        <div className={`flex-1 h-[calc(100vh-3.5rem)] bg-slate-950 relative flex flex-col ${pdfFullscreen ? 'fixed inset-0 z-50' : ''}`}>
           {cachedPdfUrl ? (
-            <div className="flex-1 w-full h-full flex flex-col">
-              <div className="h-9 bg-slate-100 border-b border-slate-200 text-slate-700 px-4 flex items-center justify-between text-xs font-bold">
-                <span className="text-slate-600">Tài liệu đề thi</span>
-                <button
-                  type="button"
-                  onClick={() => setPdfFullscreen(!pdfFullscreen)}
-                  className="text-slate-600 hover:text-sky-600 flex items-center gap-1 transition"
-                >
-                  {pdfFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                  <span>{pdfFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}</span>
-                </button>
-              </div>
-              <iframe
-                src={cachedPdfUrl}
-                className="flex-1 w-full h-full border-none"
-                title="Đề thi PDF"
-              />
-            </div>
+            <ProtectedExamPdfViewer
+              pdfUrl={cachedPdfUrl}
+              title={examTitle || 'Đề thi SEB'}
+              isFullscreen={pdfFullscreen}
+              onToggleFullscreen={() => setPdfFullscreen(!pdfFullscreen)}
+            />
           ) : (
             <div className="flex-1 flex items-center justify-center p-6 text-slate-400 text-xs font-bold text-center">
               Đề thi hiển thị trực tiếp trên phiếu làm bài bên phải
