@@ -410,6 +410,18 @@ function NewDashboardContent() {
           } catch {}
         }
 
+        // Nếu chưa có session (có thể đang hydrate từ OAuth callback), kiểm tra lại sau 500ms
+        if (!user) {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+          if (disposed) return
+          const { data: retrySess } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
+          user = retrySess?.session?.user || null
+          if (!user) {
+            const { data: retryAuth } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }))
+            user = retryAuth?.user || null
+          }
+        }
+
         if (disposed) return
 
         if (!user) {

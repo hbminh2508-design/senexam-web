@@ -167,11 +167,19 @@ function IdpAuthContent() {
             setSuccessMsg('Đổi mật khẩu thành công! Tất cả thiết bị cũ đã được đăng xuất an toàn. Vui lòng đăng nhập lại với mật khẩu mới.')
           }
 
-          // Kiểm tra lockout còn hiệu lực không
-          const lockoutUntil = parseInt(localStorage.getItem('idp_lockout_until') || '0', 10)
-          const now = Date.now()
-          if (lockoutUntil > now) {
-            setLockoutTimer(Math.ceil((lockoutUntil - now) / 1000))
+          if (params.get('unlock') === '1' || params.get('reset') === '1') {
+            try {
+              localStorage.removeItem('idp_lockout_until')
+              localStorage.setItem('idp_failed_attempts', '0')
+            } catch {}
+            setLockoutTimer(0)
+          } else {
+            // Kiểm tra lockout còn hiệu lực không
+            const lockoutUntil = parseInt(localStorage.getItem('idp_lockout_until') || '0', 10)
+            const now = Date.now()
+            if (lockoutUntil > now) {
+              setLockoutTimer(Math.ceil((lockoutUntil - now) / 1000))
+            }
           }
         }
       } catch (paramErr) {
