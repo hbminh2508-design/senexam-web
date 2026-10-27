@@ -222,7 +222,7 @@ export async function GET(request: Request) {
       }
 
       // 1. Tra cứu qua bảng profiles
-      const { data: prof } = await supabaseAdmin
+      const { data: prof, error: profError } = await supabaseAdmin
         .from('profiles')
         .select('id, email, password_change_count')
         .ilike('email', emailParam)
@@ -233,19 +233,27 @@ export async function GET(request: Request) {
         targetEmail = prof.email || emailParam
       } else {
         // 2. Tra cứu qua admin auth listUsers
-        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers()
+        const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
         const found = usersData?.users?.find((u) => u.email?.toLowerCase() === emailParam)
         if (found) {
           targetUserId = found.id
           targetEmail = found.email || emailParam
         }
-      }
 
-      if (!targetUserId) {
-        return NextResponse.json(
-          { error: 'Không tìm thấy tài khoản với email này trên hệ thống', notFound: true },
-          { status: 404 }
-        )
+        if (!targetUserId) {
+          return NextResponse.json(
+            {
+              error: 'Không tìm thấy tài khoản với email này trên hệ thống',
+              notFound: true,
+              debug: {
+                profError: profError?.message || null,
+                usersError: usersError?.message || null,
+                usersCount: usersData?.users?.length ?? null,
+              },
+            },
+            { status: 404 }
+          )
+        }
       }
     }
 
