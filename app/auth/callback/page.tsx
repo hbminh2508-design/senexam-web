@@ -118,17 +118,23 @@ function CallbackHandler() {
 
         let session: any = null
 
+        let lastAuthError = ''
+
         if (googleIdToken) {
           try {
             const { data: idTokenData, error: idTokenErr } = await supabase.auth.signInWithIdToken({
               provider: 'google',
               token: googleIdToken,
             })
-            if (!idTokenErr && idTokenData?.session) {
+            if (idTokenErr) {
+              console.warn('signInWithIdToken error:', idTokenErr)
+              lastAuthError = idTokenErr.message
+            } else if (idTokenData?.session) {
               session = idTokenData.session
             }
-          } catch (e) {
-            console.warn('signInWithIdToken error:', e)
+          } catch (e: any) {
+            console.warn('signInWithIdToken catch:', e)
+            lastAuthError = e?.message || String(e)
           }
         }
 
@@ -140,9 +146,12 @@ function CallbackHandler() {
             })
             if (!otpErr && otpData?.session) {
               session = otpData.session
+            } else if (otpErr) {
+              lastAuthError = otpErr.message
             }
-          } catch (e) {
+          } catch (e: any) {
             console.warn('verifyOtp tokenHash error:', e)
+            lastAuthError = e?.message || String(e)
           }
         }
 
@@ -155,9 +164,12 @@ function CallbackHandler() {
             })
             if (!emailErr && emailData?.session) {
               session = emailData.session
+            } else if (emailErr) {
+              lastAuthError = emailErr.message
             }
-          } catch (e) {
+          } catch (e: any) {
             console.warn('verifyOtp email error:', e)
+            lastAuthError = e?.message || String(e)
           }
         }
 
@@ -252,9 +264,19 @@ function CallbackHandler() {
         }
 
         if (session?.user) {
-          await ensureStudentProfile(session.user.id)
+          try {
+            await ensureStudentProfile(session.user.id)
+          } catch {}
           if (active) {
             handleRedirect(session.user)
+          }
+          return
+        }
+
+        // Nếu có lỗi xác thực từ trước hoặc không lấy được session
+        if (lastAuthError) {
+          if (active) {
+            setErrorMsg(`Lỗi kết nối cơ sở dữ liệu: ${lastAuthError}. Vui lòng kiểm tra dự án trên Supabase Dashboard (nếu đang ở trạng thái Paused, hãy bấm Restore).`)
           }
           return
         }
@@ -262,7 +284,9 @@ function CallbackHandler() {
         // Lắng nghe sự kiện đăng nhập khi Supabase client hoàn thành xử lý background
         const authChangeRes = supabase.auth.onAuthStateChange(async (event, newSession) => {
           if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && newSession?.user) {
-            await ensureStudentProfile(newSession.user.id)
+            try {
+              await ensureStudentProfile(newSession.user.id)
+            } catch {}
             if (active) {
               handleRedirect(newSession.user)
             }
@@ -285,7 +309,7 @@ function CallbackHandler() {
               router.replace('/new-dashboard')
             }
           }
-        }, 3500)
+        }, 5000)
 
         return () => {
           try {
@@ -296,8 +320,6 @@ function CallbackHandler() {
       } catch (err: any) {
         if (active) {
           setErrorMsg(err.message || 'Không thể thiết lập phiên đăng nhập.')
-          const fallbackUrl = isSebFlow ? '/new-idp?service=seb' : isFepnFlow ? '/fepn-login' : '/new-idp'
-          setTimeout(() => router.replace(fallbackUrl), 3000)
         }
       }
     }
@@ -312,13 +334,20 @@ function CallbackHandler() {
   return (
     <div className="flex flex-col items-center gap-4 rounded-3xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 p-8 shadow-2xl backdrop-blur-2xl max-w-md w-full text-center">
       {errorMsg ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20">
             <AlertCircle className="h-7 w-7" />
           </div>
-          <h2 className="font-black text-lg text-rose-600 dark:text-rose-400">Đăng Nhập Thất Bại</h2>
+          <h2 className="font-black text-lg text-rose-600 dark:text-rose-400">Xác Thực Chưa Hoàn Tất</h2>
           <p className="text-xs text-[#4B5563] dark:text-slate-300 leading-relaxed">{errorMsg}</p>
-          <p className="text-[11px] text-[#6B7280] dark:text-slate-400">Đang chuyển hướng về trang đăng nhập...</p>
+          <div className="pt-2">
+            <button
+              onClick={() => router.replace('/new-idp')}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shadow-md shadow-indigo-900/20"
+            >
+              Quay lại trang Đăng nhập
+            </button>
+          </div>
         </div>
       ) : (
         <>

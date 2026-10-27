@@ -88,6 +88,7 @@ export default function SenChatFloatingBubble() {
     pathname?.startsWith('/new-setup-courses') ||
     pathname?.startsWith('/new-idp') ||
     pathname?.startsWith('/idp') ||
+    pathname?.startsWith('/auth') ||
     pathname?.startsWith('/new-sign') ||
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/seb-login') ||
