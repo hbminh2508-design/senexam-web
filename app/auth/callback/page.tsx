@@ -110,17 +110,30 @@ function CallbackHandler() {
           return
         }
 
-        // Hỗ trợ Direct Google OAuth từ Azure
+        // 1. Nếu có authorization code (PKCE flow từ Supabase OAuth), đổi session ngay
+        const code = searchParams.get('code')
+        let session: any = null
+
+        if (code) {
+          try {
+            const { data: codeData, error: codeErr } = await supabase.auth.exchangeCodeForSession(code)
+            if (!codeErr && codeData?.session) {
+              session = codeData.session
+            }
+          } catch (cErr) {
+            console.warn('exchangeCodeForSession error:', cErr)
+          }
+        }
+
+        // Hỗ trợ Direct Google OAuth từ Azure (nếu có id_token)
         const googleIdToken = searchParams.get('google_id_token')
         const tokenHash = searchParams.get('token_hash')
         const emailOtp = searchParams.get('email_otp')
         const emailParam = searchParams.get('email')
 
-        let session: any = null
-
         let lastAuthError = ''
 
-        if (googleIdToken) {
+        if (!session && googleIdToken) {
           try {
             const { data: idTokenData, error: idTokenErr } = await supabase.auth.signInWithIdToken({
               provider: 'google',
@@ -173,7 +186,7 @@ function CallbackHandler() {
           }
         }
 
-        // Kiểm tra session hiện tại nếu chưa lấy được từ Direct OAuth
+        // Kiểm tra session hiện tại từ Supabase client (cookie / URL hash / localStorage)
         if (!session) {
           const sessionRes = await supabase.auth.getSession().catch(() => null)
           session = sessionRes?.data?.session || null
