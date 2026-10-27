@@ -142,12 +142,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. Sinh liên kết / mã phiên an toàn (MagicLink Token) để kích hoạt phiên Supabase trên client
-    let tokenHash = ''
-    let emailOtp = ''
+    // 4. Sinh liên kết phiên đăng nhập trực tiếp (action_link) để client tự động nhận session
+    let redirectDestination = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}&source=${encodeURIComponent(source)}`
 
     try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+      const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
         type: 'magiclink',
         email,
         options: {
@@ -155,24 +154,14 @@ export async function GET(request: NextRequest) {
         },
       })
 
-      if (linkData?.properties) {
-        tokenHash = linkData.properties.hashed_token || ''
-        emailOtp = linkData.properties.email_otp || ''
+      if (linkData?.properties?.action_link) {
+        redirectDestination = linkData.properties.action_link
       }
     } catch (linkErr) {
       console.warn('Lỗi generateLink:', linkErr)
     }
 
-    // 5. Chuyển hướng về trang callback trên client để nạp session
-    const callbackTarget = new URL(`${origin}/auth/callback`)
-    if (id_token) callbackTarget.searchParams.set('google_id_token', id_token)
-    if (tokenHash) callbackTarget.searchParams.set('token_hash', tokenHash)
-    if (emailOtp) callbackTarget.searchParams.set('email_otp', emailOtp)
-    callbackTarget.searchParams.set('email', email)
-    callbackTarget.searchParams.set('next', nextPath)
-    callbackTarget.searchParams.set('source', source)
-
-    const response = NextResponse.redirect(callbackTarget.toString())
+    const response = NextResponse.redirect(redirectDestination)
 
     // Ghi đè cookie phân luồng
     const isSecure = proto === 'https'

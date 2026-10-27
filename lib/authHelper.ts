@@ -43,25 +43,8 @@ export async function signInWithGoogle(nextPath: string = '/new-dashboard') {
     localStorage.setItem('auth_next', nextPath)
   } catch (e) {}
 
-  const callbackUrl = `${origin}/auth/callback?source=${source}&next=${encodeURIComponent(nextPath)}`
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: callbackUrl,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'select_account',
-      },
-    },
-  })
-
-  if (error) {
-    console.error('Error signing in with Google:', error)
-    throw error
-  }
-
-  return data
+  // Chuyển hướng trực tiếp qua Azure Google OAuth (hiển thị 100% tên miền senexam.me trên màn hình Google)
+  window.location.href = `/api/auth/google/login?source=${encodeURIComponent(source)}&next=${encodeURIComponent(nextPath)}`
 }
 
 /**
