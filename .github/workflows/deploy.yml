@@ -1,0 +1,63 @@
+name: Build & Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚡ Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: 🚀 Build Next.js on GitHub (Fast Cloud Runner)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: https://senexam.me
+          NODE_ENV: production
+        run: npm run build
+
+      - name: 🗜️ Compress build artifacts
+        run: |
+          tar -czf next-build.tar.gz .next public package.json
+
+      - name: 📤 Transfer build artifacts to Azure VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AZURE_VM_HOST || '23.100.91.64' }}
+          username: ${{ secrets.AZURE_VM_USER || 'admin_sen' }}
+          password: ${{ secrets.AZURE_VM_PASSWORD }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          source: 'next-build.tar.gz'
+          target: '/tmp'
+
+      - name: 🔄 Extract build and reload PM2 on Azure
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AZURE_VM_HOST || '23.100.91.64' }}
+          username: ${{ secrets.AZURE_VM_USER || 'admin_sen' }}
+          password: ${{ secrets.AZURE_VM_PASSWORD }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          script: |
+            echo "Extracting new build to /var/www/senexam..."
+            tar -xzf /tmp/next-build.tar.gz -C /var/www/senexam
+            rm -f /tmp/next-build.tar.gz
+            cd /var/www/senexam
+            git pull origin main || true
+            pm2 reload senexam || pm2 restart senexam
+            echo "✅ Deploy completed successfully on Azure!"
