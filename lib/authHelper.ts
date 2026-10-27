@@ -33,9 +33,12 @@ export async function signInWithGoogle(nextPath: string = '/new-dashboard') {
   try {
     const hostParts = host.split('.')
     const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
+    const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(host)
+    const isLocal = host === 'localhost' || isIp
+    const cookieDomain = isLocal ? '' : `; domain=.${rootDomain}`
     const isSecure = window.location.protocol === 'https:' ? '; Secure' : ''
-    document.cookie = `auth_source=${source}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
-    document.cookie = `auth_next=${encodeURIComponent(nextPath)}; domain=.${rootDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+    document.cookie = `auth_source=${source}${cookieDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
+    document.cookie = `auth_next=${encodeURIComponent(nextPath)}${cookieDomain}; path=/; max-age=600${isSecure}; SameSite=Lax`
     localStorage.setItem('auth_source', source)
     localStorage.setItem('auth_next', nextPath)
   } catch (e) {}

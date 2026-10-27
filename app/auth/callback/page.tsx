@@ -20,7 +20,10 @@ const clearDomainCookie = (name: string) => {
   const host = window.location.hostname
   const hostParts = host.split('.')
   const rootDomain = hostParts.length >= 2 ? hostParts.slice(-2).join('.') : host
-  document.cookie = `${name}=; domain=.${rootDomain}; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+  const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(host)
+  if (!isIp && host !== 'localhost') {
+    document.cookie = `${name}=; domain=.${rootDomain}; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+  }
   document.cookie = `${name}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT`
 }
 
