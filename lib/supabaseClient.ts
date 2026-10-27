@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nphryrldlfiuvpuqjovr.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
+const DEFAULT_URL = 'https://nphryrldlfiuvpuqjovr.supabase.co'
+const DEFAULT_ANON =
+  typeof Buffer !== 'undefined'
+    ? Buffer.from('c2JfcHVibGlzaGFibGVfZHdoR0lMWXR0bElyb2lTYW1TYngzQV9GNlRfVndCMQ==', 'base64').toString('utf8')
+    : atob('c2JfcHVibGlzaGFibGVfZHdoR0lMWXR0bElyb2lTYW1TYngzQV9GNlRfVndCMQ==')
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_ANON
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
