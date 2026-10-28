@@ -2782,23 +2782,50 @@ export function SetupCourseMainContent({
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Môn học</label>
                   <select
-                    value={katexSubject}
+                    value={katexExamType === 'HSA' ? 'Đa môn HSA' : katexSubject}
                     onChange={(e) => setKatexSubject(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
+                    disabled={katexExamType === 'HSA'}
+                    className={`w-full rounded-2xl border px-4 py-2.5 text-xs font-bold outline-none ${
+                      katexExamType === 'HSA'
+                        ? 'bg-slate-200/80 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-white/5 cursor-not-allowed select-none opacity-80'
+                        : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 focus:border-indigo-500'
+                    }`}
                   >
-                    <option value="Toán học">Toán học</option>
-                    <option value="Vật lí">Vật lí</option>
-                    <option value="Hóa học">Hóa học</option>
-                    <option value="Sinh học">Sinh học</option>
-                    <option value="Tin học">Tin học</option>
+                    {katexExamType === 'HSA' ? (
+                      <option value="Đa môn HSA">Đa môn HSA (Toán, Văn, KHTN, KHXH)</option>
+                    ) : (
+                      <>
+                        <option value="Toán học">Toán học</option>
+                        <option value="Vật lí">Vật lí</option>
+                        <option value="Hóa học">Hóa học</option>
+                        <option value="Sinh học">Sinh học</option>
+                        <option value="Tin học">Tin học</option>
+                        <option value="Ngữ văn">Ngữ văn</option>
+                        <option value="Tiếng Anh">Tiếng Anh</option>
+                        <option value="Lịch sử">Lịch sử</option>
+                        <option value="Địa lí">Địa lí</option>
+                      </>
+                    )}
                   </select>
+                  {katexExamType === 'HSA' && (
+                    <span className="block text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold">
+                      🔒 Môn học bị khóa: HSA là kỳ thi đánh giá năng lực đa môn riêng biệt.
+                    </span>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Loại kỳ thi</label>
                   <select
                     value={katexExamType}
-                    onChange={(e) => setKatexExamType(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setKatexExamType(val)
+                      if (val === 'HSA') {
+                        setKatexSubject('Đa môn HSA')
+                        setKatexDuration('195')
+                      }
+                    }}
                     className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
                   >
                     {SETUP_EXAM_TYPES.map((t) => (
@@ -2808,15 +2835,23 @@ export function SetupCourseMainContent({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Thời gian làm bài (phút)</label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="180"
-                    value={katexDuration}
-                    onChange={(e) => setKatexDuration(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
-                  />
+                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                    Thời gian làm bài
+                  </label>
+                  {katexExamType === 'HSA' ? (
+                    <div className="w-full rounded-2xl border border-slate-300 dark:border-white/5 bg-slate-200/80 dark:bg-slate-800 px-4 py-2.5 text-xs font-bold text-slate-500 cursor-not-allowed select-none opacity-80">
+                      ⏱ Cố định chuẩn HSA: 195 phút (P1 75p, P2 60p, P3 60p)
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      min="5"
+                      max="180"
+                      value={katexDuration}
+                      onChange={(e) => setKatexDuration(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -2914,6 +2949,66 @@ export function SetupCourseMainContent({
                 </div>
               </div>
             </div>
+
+            {/* HƯỚNG DẪN ĐỊNH DẠNG ĐỀ THI CHUẨN HSA CHO GEMINI / AI GEN ĐỀ */}
+            {katexExamType === 'HSA' && (
+              <div className="rounded-3xl border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    <h3 className="text-xs sm:text-sm font-black uppercase text-amber-900 dark:text-amber-200">
+                      Cẩm nang nhận dạng tất cả các loại câu hỏi HSA ĐHQGHN (Dùng cho Gemini gen đề)
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const promptText = `Hãy tạo cho tôi đề thi chuẩn cấu trúc Đánh giá Năng lực HSA của Đại học Quốc gia Hà Nội (ĐHQGHN) định dạng LaTeX/KaTeX:
+- PHẦN 1 (Câu 1 - 50): Tư duy Định lượng (Toán học & Xử lý số liệu). Gồm 35 câu trắc nghiệm 4 lựa chọn (\\choice{A}{B}{C}{D}) và 15 câu điền số/trả lời ngắn (\\type{short_answer} hoặc \\ans{con_so}).
+- PHẦN 2 (Câu 51 - 100): Tư duy Định tính (Ngôn ngữ - Văn học). Gồm câu hỏi chọn từ không cùng nhóm, lỗi ngữ pháp, và các chùm bài đọc hiểu 5 câu (câu 81-85, 86-90) đặt trong môi trường \\begin{passage}...\\end{passage}.
+- PHẦN 3 (Câu 101 - 150): Khoa học hoặc Tiếng Anh (Vật lí, Hóa học, Sinh học, Lịch sử, Địa lí). Mỗi môn phân tách bằng chú thích % MÔN: VẬT LÍ (CÂU 101-110), % MÔN: HÓA HỌC (CÂU 111-120), v.v.
+Mỗi câu hỏi đặt trong \\begin{ex}...\\end{ex}, công thức toán đặt trong $...$, hình vẽ TikZ đặt trong \\begin{tikzpicture}...\\end{tikzpicture}.`
+                      navigator.clipboard.writeText(promptText)
+                      alert('Đã sao chép prompt mẫu HSA cho Gemini vào bộ nhớ tạm! Bạn chỉ cần dán vào Gemini để tạo đề chuẩn 100%.')
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Sao chép Prompt mẫu cho Gemini
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-700 dark:text-slate-300">
+                  <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-1.5">
+                    <span className="font-black text-indigo-700 dark:text-indigo-400 block uppercase">
+                      1. Định lượng (Câu 1 - 50)
+                    </span>
+                    <p className="text-[11px] leading-relaxed">
+                      • <strong>35 câu trắc nghiệm</strong>: Sử dụng lệnh <code className="text-amber-700">\choice&#123;A&#125;&#123;B&#125;&#123;C&#125;&#123;D&#125;</code>.<br />
+                      • <strong>15 câu điền số</strong>: Sử dụng <code className="text-amber-700">\type&#123;short_answer&#125;</code> hoặc <code className="text-amber-700">\ans&#123;3.5&#125;</code>.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-1.5">
+                    <span className="font-black text-emerald-700 dark:text-emerald-400 block uppercase">
+                      2. Định tính (Câu 51 - 100)
+                    </span>
+                    <p className="text-[11px] leading-relaxed">
+                      • <strong>Từ ngữ & Ngữ pháp (51 - 70)</strong>: Tìm từ không cùng nhóm, câu lỗi cú pháp.<br />
+                      • <strong>Chùm đọc hiểu (81 - 85, 86 - 90)</strong>: Đặt ngữ liệu trong <code className="text-emerald-700">\begin&#123;passage&#125;...\\end&#123;passage&#125;</code> để chia 2 cột.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-amber-200 dark:border-amber-900/40 space-y-1.5">
+                    <span className="font-black text-rose-700 dark:text-rose-400 block uppercase">
+                      3. Khoa học / Tự chọn (101 - 150)
+                    </span>
+                    <p className="text-[11px] leading-relaxed">
+                      • <strong>Phân môn nhận dạng</strong>: Ghi rõ <code className="text-rose-700">% MÔN: VẬT LÍ</code>, <code className="text-rose-700">% MÔN: HÓA HỌC</code>, <code className="text-rose-700">% MÔN: LỊCH SỬ</code> để hệ thống tự động gán môn học vào câu hỏi.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* BÀN PHÍM ẢO TOÁN HỌC TRỰC QUAN (VIRTUAL MATH KEYBOARD) */}
             <div className="sticky top-16 z-20 rounded-3xl border border-indigo-500/30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl p-4 shadow-xl">
