@@ -136,6 +136,7 @@ export default function FepnMobileNav({
                   ? 'text-sky-600 dark:text-sky-400 font-black'
                   : 'text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 font-bold'
               }`}
+              aria-label={left.label}
             >
               {left.icon}
               <span className="text-[11px] leading-tight">{left.label}</span>
@@ -145,6 +146,7 @@ export default function FepnMobileNav({
               type="button"
               onClick={left.onClick}
               className="flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition flex-1 py-1 font-bold"
+              aria-label={left.label}
             >
               {left.icon}
               <span className="text-[11px] leading-tight">{left.label}</span>
@@ -158,6 +160,7 @@ export default function FepnMobileNav({
                 href={centerButton.href}
                 className="-top-5 absolute flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 text-white shadow-lg shadow-sky-500/40 hover:scale-105 active:scale-95 transition border-4 border-slate-50 dark:border-slate-950 shrink-0"
                 title={centerButton.title || centerButton.label}
+                aria-label={centerButton.title || centerButton.label}
               >
                 {centerButton.icon}
               </Link>
@@ -167,6 +170,7 @@ export default function FepnMobileNav({
                 onClick={centerButton.onClick}
                 className="-top-5 absolute flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 text-white shadow-lg shadow-sky-500/40 hover:scale-105 active:scale-95 transition border-4 border-slate-50 dark:border-slate-950 shrink-0"
                 title={centerButton.title || centerButton.label}
+                aria-label={centerButton.title || centerButton.label}
               >
                 {centerButton.icon}
               </button>
@@ -182,6 +186,7 @@ export default function FepnMobileNav({
             onClick={() => setShowDrawer(true)}
             className="flex flex-col items-center justify-center gap-1 text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition flex-1 py-1 font-bold"
             title="Mở tất cả tính năng"
+            aria-label="Mở tất cả tính năng"
           >
             <LayoutGrid className="h-5 w-5" />
             <span className="text-[11px] leading-tight">Tính năng</span>
@@ -216,6 +221,7 @@ export default function FepnMobileNav({
                 type="button"
                 onClick={() => setShowDrawer(false)}
                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 hover:bg-black/10 transition"
+                aria-label="Đóng tính năng"
               >
                 <X className="h-4 w-4" />
               </button>
