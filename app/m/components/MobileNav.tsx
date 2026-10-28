@@ -160,20 +160,20 @@ export default function MobileNav() {
                 href={item.href}
                 className={`flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-2xl transition-all duration-200 active:scale-95 ${
                   isActive
-                    ? 'text-violet-600 dark:text-violet-400 font-black'
+                    ? 'text-sky-600 dark:text-sky-400 font-black'
                     : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               >
                 <div
                   className={`relative flex items-center justify-center w-7 h-7 rounded-xl transition-all duration-200 ${
                     isActive
-                      ? 'bg-violet-600/15 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 shadow-xs'
+                      ? 'bg-sky-500/15 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 shadow-xs'
                       : ''
                   }`}
                 >
                   <Icon className={`h-4.5 w-4.5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
                   {isActive && (
-                    <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-violet-600 dark:bg-violet-400 animate-pulse" />
+                    <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-sky-600 dark:bg-sky-400 animate-pulse" />
                   )}
                 </div>
                 <span className={`text-[9px] mt-0.5 tracking-tight ${isActive ? 'font-black' : 'font-semibold'}`}>

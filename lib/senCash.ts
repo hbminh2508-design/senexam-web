@@ -1,10 +1,13 @@
 import { supabase } from '@/lib/supabaseClient'
 
-// Tỉ giá cố định: 500đ = 1 SenCash (5,000đ = 10 SenCash tối thiểu), áp dụng đồng nhất
-// cho mọi mệnh giá VIP hiện có (3k/15k/39k/99k/390k đều chia hết cho 500).
+// Tỉ giá cố định: 500đ = 1 SenCash (PC).
+// Trên Mobile: Cash Mobile (SCm) với tỉ giá 1.000đ = 10 SCm (100đ = 1 SCm; 1 SenCash PC = 5 SCm Mobile).
 export const VND_PER_SENCASH = 500
-export const MIN_TOPUP_VND = 5_000
+export const VND_PER_SCM = 100
+export const SCM_PER_SENCASH = 5
+export const MIN_TOPUP_VND = 1_000
 export const TOPUP_PRESETS_VND = [5_000, 10_000, 20_000, 50_000, 100_000, 200_000]
+export const MOBILE_TOPUP_PRESETS_VND = [1_000, 5_000, 10_000, 20_000, 50_000, 100_000, 200_000]
 export const SENCASH_COST_PER_VIP_DOWNLOAD = 2
 
 export function vndToSenCash(vnd: number): number {
@@ -15,8 +18,25 @@ export function senCashToVnd(sc: number): number {
   return sc * VND_PER_SENCASH
 }
 
+// Chuyển đổi tương ứng với Cash Mobile (SCm)
+export function vndToScm(vnd: number): number {
+  return Math.floor(vnd / VND_PER_SCM)
+}
+
+export function scmToVnd(scm: number): number {
+  return scm * VND_PER_SCM
+}
+
+export function senCashToScm(sc: number): number {
+  return (sc || 0) * SCM_PER_SENCASH
+}
+
+export function scmToSenCash(scm: number): number {
+  return Math.floor((scm || 0) / SCM_PER_SENCASH)
+}
+
 export function isValidTopupAmount(vnd: number): boolean {
-  return Number.isInteger(vnd) && vnd >= MIN_TOPUP_VND && vnd % MIN_TOPUP_VND === 0
+  return Number.isInteger(vnd) && vnd >= MIN_TOPUP_VND && vnd % 1_000 === 0
 }
 
 export type SenCashOrderStatus = 'pending' | 'paid' | 'expired' | 'cancelled'

@@ -93,6 +93,12 @@ export default function MobileExamPage() {
     async function fetchExam() {
       if (!examId) return
       try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.replace(`/m/login?returnUrl=/m/exams/${examId}`)
+          return
+        }
+
         const { data, error } = await supabase
           .from('exams')
           .select('*')
@@ -320,7 +326,7 @@ export default function MobileExamPage() {
 
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-violet-500/10 text-violet-600 dark:text-violet-400">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400">
                 {exam?.exam_type || 'Đề Khảo Thí'}
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/5 dark:bg-white/10 text-slate-500">
@@ -338,7 +344,7 @@ export default function MobileExamPage() {
           <div className="grid grid-cols-2 gap-3 pt-2">
             <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Thời gian</span>
-              <p className="text-lg font-black text-violet-600 dark:text-violet-400">{exam?.duration || 50} phút</p>
+              <p className="text-lg font-black text-sky-600 dark:text-sky-400">{exam?.duration || 50} phút</p>
             </div>
             <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Số câu hỏi</span>
@@ -355,7 +361,7 @@ export default function MobileExamPage() {
                 type="checkbox"
                 checked={isStudyMode}
                 onChange={(e) => setIsStudyMode(e.target.checked)}
-                className="rounded text-violet-600"
+                className="rounded text-sky-600"
               />
             </label>
             <label className="flex items-center justify-between cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -364,7 +370,7 @@ export default function MobileExamPage() {
                 type="checkbox"
                 checked={shuffleQuestionsEnabled}
                 onChange={(e) => setShuffleQuestionsEnabled(e.target.checked)}
-                className="rounded text-violet-600"
+                className="rounded text-sky-600"
               />
             </label>
             <label className="flex items-center justify-between cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -373,7 +379,7 @@ export default function MobileExamPage() {
                 type="checkbox"
                 checked={shuffleOptionsEnabled}
                 onChange={(e) => setShuffleOptionsEnabled(e.target.checked)}
-                className="rounded text-violet-600"
+                className="rounded text-sky-600"
               />
             </label>
           </div>
@@ -382,7 +388,7 @@ export default function MobileExamPage() {
         <button
           type="button"
           onClick={() => setHasStarted(true)}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-sm shadow-lg active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-sm shadow-lg active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
         >
           <span>BẮT ĐẦU LÀM BÀI THI</span>
           <ChevronRight className="h-4 w-4" />
@@ -422,7 +428,7 @@ export default function MobileExamPage() {
             </div>
             <div className="p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10">
               <span className="text-[10px] text-slate-400 font-bold block">Tỉ lệ chính xác</span>
-              <p className="text-base font-black text-violet-600">
+              <p className="text-base font-black text-sky-600 dark:text-sky-400">
                 {Math.round((result.correct / result.total) * 100)}%
               </p>
             </div>
@@ -436,7 +442,7 @@ export default function MobileExamPage() {
               setIsReviewMode(true)
               setCurrentIndex(0)
             }}
-            className="w-full py-3 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 active:scale-98 transition cursor-pointer"
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 active:scale-98 transition cursor-pointer"
           >
             <Eye className="h-4 w-4" /> Xem lại chi tiết bài làm (Review)
           </button>
@@ -509,7 +515,7 @@ export default function MobileExamPage() {
           <button
             type="button"
             onClick={() => router.push('/m/sen-ground?tab=history')}
-            className="px-3 py-1.5 rounded-xl bg-violet-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
+            className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
           >
             Đóng
           </button>
@@ -517,7 +523,7 @@ export default function MobileExamPage() {
           <button
             type="button"
             onClick={() => setShowSubmitConfirm(true)}
-            className="px-3 py-1.5 rounded-xl bg-violet-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
           >
             Nộp bài
           </button>
@@ -527,7 +533,7 @@ export default function MobileExamPage() {
       {/* 2. PROGRESS BAR TIẾN ĐỘ */}
       <div className="w-full bg-slate-200 dark:bg-slate-800 h-1">
         <div
-          className="bg-violet-600 h-full transition-all duration-300"
+          className="bg-sky-600 h-full transition-all duration-300"
           style={{ width: `${(answeredCount / questions.length) * 100}%` }}
         />
       </div>
@@ -559,7 +565,7 @@ export default function MobileExamPage() {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="text-xs font-black text-violet-600 dark:text-violet-400 font-mono">
+                <span className="text-xs font-black text-sky-600 dark:text-sky-400 font-mono">
                   Câu {currentIndex + 1}
                 </span>
                 <span className="text-[10px] text-slate-400">/{questions.length}</span>
@@ -576,7 +582,7 @@ export default function MobileExamPage() {
               <button
                 type="button"
                 onClick={() => setShowPalette(true)}
-                className="px-2.5 py-1 rounded-lg bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold text-[11px] flex items-center gap-1"
+                className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold text-[11px] flex items-center gap-1"
               >
                 <ListOrdered className="h-3.5 w-3.5" />
                 <span>{answeredCount}/{questions.length}</span>
@@ -607,7 +613,7 @@ export default function MobileExamPage() {
                         : isWrong
                         ? 'bg-rose-500 text-white shadow-md'
                         : isSelected
-                        ? 'bg-violet-600 text-white shadow-md'
+                        ? 'bg-sky-600 text-white shadow-md'
                         : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300'
                     }`}
                   >
@@ -626,7 +632,7 @@ export default function MobileExamPage() {
           {currentQ && (
             <div className="space-y-4 animate-in fade-in duration-150">
               <div className="flex items-center justify-between">
-                <span className="px-2.5 py-1 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 font-mono font-bold text-xs">
+                <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono font-bold text-xs">
                   Câu {currentIndex + 1} / {questions.length}
                 </span>
 
@@ -680,7 +686,7 @@ export default function MobileExamPage() {
                           : isWrong
                           ? 'border-rose-500 bg-rose-500/15 text-rose-800 dark:text-rose-300 font-bold'
                           : isSelected
-                          ? 'border-violet-600 bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold'
+                          ? 'border-sky-600 bg-sky-500/10 text-sky-700 dark:text-sky-300 font-bold'
                           : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200'
                       }`}
                     >
@@ -721,7 +727,7 @@ export default function MobileExamPage() {
               type="button"
               disabled={currentIndex === questions.length - 1}
               onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
-              className="px-4 py-2 rounded-xl bg-violet-600 text-white font-bold text-xs disabled:opacity-30 active:scale-95 flex items-center gap-1"
+              className="px-4 py-2 rounded-xl bg-sky-600 text-white font-bold text-xs disabled:opacity-30 active:scale-95 flex items-center gap-1"
             >
               Câu tiếp <ChevronRight className="h-4 w-4" />
             </button>
@@ -760,9 +766,9 @@ export default function MobileExamPage() {
                     }}
                     className={`h-11 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition active:scale-95 ${
                       isCurrent
-                        ? 'ring-2 ring-violet-500 bg-violet-600 text-white shadow-xs'
+                        ? 'ring-2 ring-sky-500 bg-sky-600 text-white shadow-xs'
                         : isAnswered
-                        ? 'bg-violet-500/20 text-violet-700 dark:text-violet-300'
+                        ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300'
                         : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400'
                     }`}
                   >
@@ -795,7 +801,7 @@ export default function MobileExamPage() {
               <button
                 type="button"
                 onClick={handleSubmitExam}
-                className="flex-1 py-2.5 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-md"
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-xs shadow-md"
               >
                 Nộp bài
               </button>

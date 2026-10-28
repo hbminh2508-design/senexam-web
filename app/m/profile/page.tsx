@@ -66,8 +66,11 @@ export default function MobileProfilePage() {
       try {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          setUser(user)
+        if (!user) {
+          router.replace('/m/login?returnUrl=/m/profile')
+          return
+        }
+        setUser(user)
           const { data: p } = await supabase
             .from('profiles')
             .select('*')
@@ -83,7 +86,6 @@ export default function MobileProfilePage() {
             setGrade(p.grade || '12')
             setTargetScore(p.target_score || '27')
           }
-        }
       } catch (e) {
         console.error(e)
       } finally {
@@ -197,7 +199,7 @@ export default function MobileProfilePage() {
       </div>
 
       {/* 1. PROFILE HEADER CARD */}
-      <div className="p-4 rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-800 text-white shadow-lg space-y-3">
+      <div className="p-4 rounded-3xl bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 text-white shadow-lg space-y-3">
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white font-black text-xl shadow-md border border-white/20 shrink-0">
             {(fullName || user?.email || 'S').charAt(0).toUpperCase()}
@@ -213,20 +215,20 @@ export default function MobileProfilePage() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-violet-200 truncate mt-0.5">{user?.email || 'Chưa đăng nhập'}</p>
+            <p className="text-xs text-sky-200 truncate mt-0.5">{user?.email || 'Chưa đăng nhập'}</p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-white/15 text-xs text-violet-100">
+        <div className="flex items-center justify-between pt-2 border-t border-white/15 text-xs text-sky-100">
           <div className="flex items-center gap-1.5">
             <Coins className="h-4 w-4 text-amber-300" />
-            <span>Ví: <strong>{senCash.toLocaleString('vi-VN')} SC</strong></span>
+            <span>Ví Cash Mobile: <strong>{(senCash * 5).toLocaleString('vi-VN')} SCm</strong></span>
           </div>
           <Link
             href="/m/pay?tab=wallet"
             className="px-2.5 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-[10px] font-bold active:scale-95 transition"
           >
-            Nạp SenCash
+            Nạp Cash Mobile
           </Link>
         </div>
       </div>
@@ -260,7 +262,7 @@ export default function MobileProfilePage() {
       <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 space-y-3.5 shadow-xs">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-black uppercase text-slate-500 flex items-center gap-1.5">
-            <User className="h-4 w-4 text-violet-600" /> Hồ Sơ Thí Sinh
+            <User className="h-4 w-4 text-sky-600" /> Hồ Sơ Thí Sinh
           </h3>
           <span className="text-[10px] text-slate-400">Đồng bộ như PC</span>
         </div>
@@ -290,7 +292,7 @@ export default function MobileProfilePage() {
               placeholder="Nguyễn Văn A"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none focus:border-violet-600 font-bold"
+              className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none focus:border-sky-500 font-bold"
             />
           </div>
 
@@ -346,7 +348,7 @@ export default function MobileProfilePage() {
           <button
             type="submit"
             disabled={savingProfile || !user}
-            className="w-full py-3 rounded-xl bg-violet-600 text-white font-black text-xs shadow-md active:scale-98 transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-md active:scale-98 transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <Save className="h-4 w-4" />
             <span>{savingProfile ? 'Đang lưu hồ sơ...' : 'LƯU CẬP NHẬT HỒ SƠ'}</span>
@@ -363,7 +365,7 @@ export default function MobileProfilePage() {
           className="w-full flex items-center justify-between p-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition text-left cursor-pointer"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center">
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </div>
             <div>
@@ -373,7 +375,7 @@ export default function MobileProfilePage() {
               <span className="text-[10px] text-slate-400">Tự động thích ứng ban đêm</span>
             </div>
           </div>
-          <span className="text-xs font-bold text-violet-600">{isDark ? 'Bật' : 'Tắt'}</span>
+          <span className="text-xs font-bold text-sky-600">{isDark ? 'Bật' : 'Tắt'}</span>
         </button>
 
         {/* Eco Mode (Tiết kiệm pin cho mobile) */}
@@ -422,7 +424,7 @@ export default function MobileProfilePage() {
           className="flex items-center justify-between p-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center">
               <KeyRound className="h-4 w-4" />
             </div>
             <div>
@@ -467,8 +469,8 @@ export default function MobileProfilePage() {
             href="/m/pay?tab=wallet"
             className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 flex items-center gap-2 font-bold transition"
           >
-            <Wallet className="h-4 w-4 text-violet-500" />
-            <span>Ví SenCash</span>
+            <Wallet className="h-4 w-4 text-sky-500" />
+            <span>Cash Mobile</span>
           </Link>
         </div>
       </div>
@@ -476,10 +478,10 @@ export default function MobileProfilePage() {
       {/* 5. THÔNG TIN PHIÊN BẢN & MÃ PHIÊN BẢN MOBILE */}
       <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
-          <BadgeCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+          <BadgeCheck className="h-4 w-4 text-sky-600 dark:text-sky-400" />
           <span className="font-bold text-slate-700 dark:text-slate-300">Phiên bản Mobile chuẩn</span>
         </div>
-        <span className="font-mono font-bold text-[11px] text-violet-600 dark:text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-md">
+        <span className="font-mono font-bold text-[11px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md">
           {MOBILE_VERSION}
         </span>
       </div>
@@ -495,10 +497,10 @@ export default function MobileProfilePage() {
         </button>
       ) : (
         <Link
-          href="/new-idp?returnUrl=/m"
-          className="w-full py-3 rounded-2xl bg-violet-600 text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-98 transition"
+          href="/m/login?returnUrl=/m"
+          className="w-full py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-center gap-2 active:scale-98 transition"
         >
-          <Lock className="h-4 w-4" /> Đăng nhập qua SenExam IDP
+          <Lock className="h-4 w-4" /> Đăng nhập SenExam Mobile
         </Link>
       )}
     </div>

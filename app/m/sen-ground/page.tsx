@@ -169,22 +169,25 @@ function MobileSenGroundContent() {
         if (folderRes.data) setFolders(folderRes.data)
         if (docRes.data) setDocs(docRes.data)
 
-        if (userRes.data?.user) {
-          setCurrentUserId(userRes.data.user.id)
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', userRes.data.user.id)
-            .maybeSingle()
-          if (profile?.role === 'admin') setIsAdmin(true)
-
-          const { data: subData } = await supabase
-            .from('submissions')
-            .select('id, exam_id, score, correct_count, total_questions, created_at, exams(title, subject, duration)')
-            .eq('user_id', userRes.data.user.id)
-            .order('created_at', { ascending: false })
-          if (subData) setSubmissions(subData as any)
+        if (!userRes.data?.user) {
+          router.replace('/m/login?returnUrl=/m/sen-ground')
+          return
         }
+
+        setCurrentUserId(userRes.data.user.id)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userRes.data.user.id)
+          .maybeSingle()
+        if (profile?.role === 'admin') setIsAdmin(true)
+
+        const { data: subData } = await supabase
+          .from('submissions')
+          .select('id, exam_id, score, correct_count, total_questions, created_at, exams(title, subject, duration)')
+          .eq('user_id', userRes.data.user.id)
+          .order('created_at', { ascending: false })
+        if (subData) setSubmissions(subData as any)
 
         // Tải tuyển tập đề
         try {
@@ -348,7 +351,7 @@ function MobileSenGroundContent() {
           onClick={() => handleTabChange('exams')}
           className={`flex-1 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 active:scale-95 ${
             activeTab === 'exams'
-              ? 'bg-violet-600 text-white shadow-xs'
+              ? 'bg-sky-600 text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -361,7 +364,7 @@ function MobileSenGroundContent() {
           onClick={() => handleTabChange('library')}
           className={`flex-1 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 active:scale-95 ${
             activeTab === 'library'
-              ? 'bg-violet-600 text-white shadow-xs'
+              ? 'bg-sky-600 text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -374,7 +377,7 @@ function MobileSenGroundContent() {
           onClick={() => handleTabChange('history')}
           className={`flex-1 py-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 active:scale-95 ${
             activeTab === 'history'
-              ? 'bg-violet-600 text-white shadow-xs'
+              ? 'bg-sky-600 text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -397,7 +400,7 @@ function MobileSenGroundContent() {
                 placeholder="Tìm đề thi, khối thi..."
                 value={examSearch}
                 onChange={(e) => setExamSearch(e.target.value)}
-                className="w-full h-10 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-violet-500 focus:bg-white dark:focus:bg-slate-900"
+                className="w-full h-10 rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-sky-500 focus:bg-white dark:focus:bg-slate-900"
               />
             </div>
 
@@ -501,7 +504,7 @@ function MobileSenGroundContent() {
                 onClick={() => setSelectedSubject(sub.key)}
                 className={`px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition active:scale-95 ${
                   selectedSubject === sub.key
-                    ? 'bg-violet-600 text-white shadow-xs'
+                    ? 'bg-sky-600 text-white shadow-xs'
                     : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10'
                 }`}
               >
@@ -524,7 +527,7 @@ function MobileSenGroundContent() {
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-sky-500/10 text-sky-600 dark:text-sky-400">
                         {ex.exam_type || 'Đề Khảo Thí'}
                       </span>
                       <span className="text-[10px] text-slate-400 font-mono">
@@ -542,7 +545,7 @@ function MobileSenGroundContent() {
                     </span>
                     <Link
                       href={`/m/exams/${ex.id}`}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-xs active:scale-95 transition"
                     >
                       <Zap className="h-3 w-3" /> Vào thi ngay
                     </Link>
@@ -580,7 +583,7 @@ function MobileSenGroundContent() {
                       setActiveFolderId(null)
                       setActivePreviewDoc(null)
                     }}
-                    className="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 font-bold active:scale-95"
+                    className="inline-flex items-center gap-1 text-xs text-sky-600 dark:text-sky-400 font-bold active:scale-95"
                   >
                     <ArrowLeft className="h-3.5 w-3.5" /> Tất cả môn
                   </button>
@@ -591,7 +594,7 @@ function MobileSenGroundContent() {
                 <button
                   type="button"
                   onClick={() => setShowCreateLibModal(true)}
-                  className="px-2.5 py-1 rounded-xl bg-violet-600 text-white font-bold text-[10px] flex items-center gap-1 active:scale-95 transition"
+                  className="px-2.5 py-1 rounded-xl bg-sky-600 text-white font-bold text-[10px] flex items-center gap-1 active:scale-95 transition"
                 >
                   <Plus className="h-3 w-3" /> Tạo thư mục
                 </button>
@@ -599,7 +602,7 @@ function MobileSenGroundContent() {
             </div>
 
             <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-              <FolderOpen className="h-4 w-4 text-violet-600" />
+              <FolderOpen className="h-4 w-4 text-sky-600" />
               <span>{currentFolder ? currentFolder.name : 'Danh mục các môn học & chuyên đề'}</span>
             </h3>
           </div>
@@ -612,7 +615,7 @@ function MobileSenGroundContent() {
               placeholder="Tìm tài liệu học tập, bài giảng..."
               value={libSearch}
               onChange={(e) => setLibSearch(e.target.value)}
-              className="w-full h-9 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-violet-500"
+              className="w-full h-9 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-sky-500"
             />
           </div>
 
@@ -631,7 +634,7 @@ function MobileSenGroundContent() {
                     }}
                     className={`py-1.5 rounded-lg text-[9px] font-black uppercase transition ${
                       libCategory === cat
-                        ? 'bg-violet-600 text-white shadow-xs'
+                        ? 'bg-sky-600 text-white shadow-xs'
                         : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -691,12 +694,12 @@ function MobileSenGroundContent() {
                       onClick={() => setActivePreviewDoc(doc)}
                       className={`p-3 rounded-2xl border flex items-center justify-between gap-3 transition cursor-pointer ${
                         activePreviewDoc?.id === doc.id
-                          ? 'border-violet-500 bg-violet-500/10'
+                          ? 'border-sky-500 bg-sky-500/10'
                           : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-900'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <FileText className="h-4 w-4 text-violet-500 shrink-0" />
+                        <FileText className="h-4 w-4 text-sky-500 shrink-0" />
                         <div className="truncate">
                           <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
                             {doc.title}
@@ -714,7 +717,7 @@ function MobileSenGroundContent() {
 
               {/* Xem trực tiếp tài liệu Google Drive / PDF inline */}
               {activePreviewDoc && (
-                <div className={`p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-violet-500/30 space-y-3 shadow-md animate-in fade-in ${
+                <div className={`p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-sky-500/30 space-y-3 shadow-md animate-in fade-in ${
                   isPreviewFullscreen ? 'fixed inset-0 z-50 rounded-none p-4' : ''
                 }`}>
                   <div className="flex items-center justify-between">
@@ -792,7 +795,7 @@ function MobileSenGroundContent() {
                     className="w-full p-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 flex items-center justify-between text-left active:scale-98 transition shadow-xs cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
                         <Folder className="h-4 w-4" />
                       </div>
                       <div>
@@ -817,7 +820,7 @@ function MobileSenGroundContent() {
               <div className="w-4/5 max-w-xs h-full bg-white dark:bg-slate-900 p-4 space-y-4 shadow-2xl flex flex-col justify-between">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black uppercase text-violet-600 flex items-center gap-1">
+                    <span className="text-xs font-black uppercase text-sky-600 dark:text-sky-400 flex items-center gap-1">
                       <FolderOpen className="h-4 w-4" /> Sơ Đồ Cây Môn Học
                     </span>
                     <button
@@ -841,7 +844,7 @@ function MobileSenGroundContent() {
                         }}
                         className={`w-full p-2.5 rounded-xl text-left text-xs font-bold flex items-center justify-between transition ${
                           activeFolderId === f.id
-                            ? 'bg-violet-600 text-white'
+                            ? 'bg-sky-600 text-white'
                             : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
                         }`}
                       >
@@ -878,7 +881,7 @@ function MobileSenGroundContent() {
             </div>
             <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 text-center">
               <span className="text-[9px] text-slate-400 font-bold block">Điểm TB</span>
-              <p className="text-sm font-black text-violet-600">{historyStats.avg}</p>
+              <p className="text-sm font-black text-sky-600 dark:text-sky-400">{historyStats.avg}</p>
             </div>
             <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 text-center">
               <span className="text-[9px] text-slate-400 font-bold block">Tỉ lệ đạt</span>
@@ -894,7 +897,7 @@ function MobileSenGroundContent() {
               placeholder="Tìm theo tên bài thi, môn học..."
               value={historySearch}
               onChange={(e) => setHistorySearch(e.target.value)}
-              className="w-full h-9 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-violet-500"
+              className="w-full h-9 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-9 pr-3 text-xs outline-none focus:border-sky-500"
             />
           </div>
 
@@ -946,7 +949,7 @@ function MobileSenGroundContent() {
                       </span>
                       <Link
                         href={`/m/exams/${sub.exam_id}`}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline"
                       >
                         <RotateCcw className="h-3 w-3" /> Làm lại đề
                       </Link>

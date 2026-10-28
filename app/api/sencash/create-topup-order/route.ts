@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
     const { amountVnd } = await request.json()
     if (!isValidTopupAmount(amountVnd)) {
-      return NextResponse.json({ error: 'Số tiền nạp phải là bội số của 5.000đ, tối thiểu 5.000đ' }, { status: 400 })
+      return NextResponse.json({ error: 'Số tiền nạp phải là bội số của 1.000đ, tối thiểu 1.000đ' }, { status: 400 })
     }
 
     const bankBin = process.env.VIETQR_BANK_BIN

@@ -112,17 +112,20 @@ export default function MobilePayPage() {
       try {
         setLoading(true)
         const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          setUserId(user.id)
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .maybeSingle()
-          if (prof) {
-            setUserProfile(prof)
-            setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
-          }
+        if (!user) {
+          router.replace('/m/login?returnUrl=/m/pay')
+          return
+        }
+        setUserId(user.id)
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (prof) {
+          setUserProfile(prof)
+          setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+        }
 
           // Lấy hạn mức quota câu hỏi
           const { data: { session } } = await supabase.auth.getSession()
@@ -134,15 +137,11 @@ export default function MobilePayPage() {
               if (qRes.ok) {
                 const qData = await qRes.json()
                 setTodayQuestionsCount(qData.used ?? 0)
-                if (qData.graphUsed !== undefined) {
-                  setTodayGraphCount(qData.graphUsed)
-                }
               }
             } catch (e) {
               console.warn('Quota load error:', e)
             }
           }
-        }
       } catch (e) {
         console.error(e)
       } finally {
@@ -306,9 +305,9 @@ export default function MobilePayPage() {
 
       setQrModal({
         kind: 'sencash',
-        title: `Nạp Ví Sen ${topupAmount.toLocaleString('vi-VN')}đ`,
+        title: `Nạp Cash Mobile: +${(topupAmount / 100).toLocaleString('vi-VN')} SCm`,
         amount: data.order?.amount_vnd || topupAmount,
-        orderCode: data.order?.order_code || `SC_${Date.now().toString().slice(-6)}`,
+        orderCode: data.order?.order_code || `SCM_${Date.now().toString().slice(-6)}`,
         qrUrl: data.qrUrl,
         orderId: data.order?.id,
       })
@@ -458,7 +457,7 @@ export default function MobilePayPage() {
         : activeTab === 'wallet'
         ? { title: 'Ví Điện Tử SenCash', subtitle: `Đang tải số dư ví & thông tin nạp tiền (v${MOBILE_VERSION})...` }
         : activeTab === 'quota'
-        ? { title: 'Hạn Mức Trợ Lý SenAI', subtitle: `Đang đồng bộ các gói câu hỏi SenAI & SenGraph (v${MOBILE_VERSION})...` }
+        ? { title: 'Hạn Mức Trợ Lý SenAI', subtitle: `Đang đồng bộ các gói câu hỏi SenAI (v${MOBILE_VERSION})...` }
         : activeTab === 'giftcode'
         ? { title: 'Đổi Mã Quà Tặng (GiftCode)', subtitle: `Đang tải cổng kích hoạt quà tặng (v${MOBILE_VERSION})...` }
         : { title: 'Cửa Hàng Độc Quyền', subtitle: `Đang tải các ưu đãi đặc quyền (v${MOBILE_VERSION})...` }
@@ -497,7 +496,7 @@ export default function MobilePayPage() {
       <div className="flex items-center gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/10 overflow-x-auto scrollbar-none">
         {[
           { key: 'vip', label: 'Gói VIP', icon: Crown },
-          { key: 'wallet', label: 'Ví Sen', icon: Wallet },
+          { key: 'wallet', label: 'Cash Mobile', icon: Wallet },
           { key: 'quota', label: 'SenAI', icon: Sparkles },
           { key: 'giftcode', label: 'Mã Quà', icon: Gift },
           { key: 'exclusive', label: 'Deal Hot', icon: Tag },
@@ -511,7 +510,7 @@ export default function MobilePayPage() {
               onClick={() => setActiveTab(tab.key as TabKey)}
               className={`flex-1 min-w-[65px] py-2 rounded-xl text-[11px] font-black transition flex flex-col items-center justify-center gap-1 active:scale-95 ${
                 isActive
-                  ? 'bg-violet-600 text-white shadow-xs'
+                  ? 'bg-sky-600 text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -616,35 +615,39 @@ export default function MobilePayPage() {
       )}
 
       {/* ========================================================= */}
-      {/* TAB 2: VÍ SEN (SENCASH & NẠP TIỀN QUA VIETQR)             */}
+      {/* TAB 2: VÍ CASH MOBILE (SCm & NẠP TIỀN QUA VIETQR)          */}
       {/* ========================================================= */}
       {activeTab === 'wallet' && (
         <div className="space-y-4 animate-in fade-in">
-          {/* Card Số Dư Ví */}
-          <div className="p-4 rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white shadow-lg space-y-2">
+          {/* Card Số Dư Ví Cash Mobile */}
+          <div className="p-4 rounded-3xl bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 text-white shadow-lg space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-violet-200 uppercase tracking-wider">Số Dư Ví SenCash</span>
+              <span className="text-xs font-bold text-sky-200 uppercase tracking-wider">Số Dư Cash Mobile</span>
               <Coins className="h-5 w-5 text-amber-300" />
             </div>
             <div className="text-3xl font-black">
-              {senCashBalance.toLocaleString('vi-VN')} <span className="text-sm font-bold opacity-80">SC</span>
+              {((senCashBalance || 0) * 5).toLocaleString('vi-VN')} <span className="text-sm font-bold opacity-80">SCm</span>
             </div>
-            <p className="text-[11px] text-violet-200">
-              Quy đổi: 500 VND = 1 SC. Dùng để mở khóa đề thi lẻ, nâng cấp SenAI và đổi quà tặng.
+            <p className="text-[11px] text-sky-100 leading-relaxed">
+              Tỉ giá Cash Mobile: 1.000đ = 10 SCm (1 SCm = 100đ). Tương đương {(senCashBalance || 0).toLocaleString('vi-VN')} SC trên hệ sinh thái PC.
             </p>
           </div>
 
-          {/* Chọn Mốc Nạp Tiền chuẩn PC */}
+          {/* Chọn Mốc Nạp Tiền chuẩn Mobile */}
           <div className="space-y-2">
-            <span className="text-xs font-black uppercase text-slate-500">Mốc Nạp Tiền Nhanh</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase text-slate-500">Mốc Nạp Cash Mobile</span>
+              <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">1.000đ = 10 SCm</span>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { vnd: 10000, sc: 20 },
-                { vnd: 20000, sc: 40 },
-                { vnd: 50000, sc: 100, popular: true },
-                { vnd: 100000, sc: 200 },
-                { vnd: 200000, sc: 400 },
-                { vnd: 500000, sc: 1000 },
+                { vnd: 1000, scm: 10 },
+                { vnd: 5000, scm: 50 },
+                { vnd: 10000, scm: 100 },
+                { vnd: 20000, scm: 200 },
+                { vnd: 50000, scm: 500, popular: true },
+                { vnd: 100000, scm: 1000 },
+                { vnd: 200000, scm: 2000 },
               ].map((item) => {
                 const isSelected = topupAmount === item.vnd
                 return (
@@ -654,7 +657,7 @@ export default function MobilePayPage() {
                     onClick={() => setTopupAmount(item.vnd)}
                     className={`p-3 rounded-2xl border text-center transition-all cursor-pointer relative ${
                       isSelected
-                        ? 'border-violet-600 bg-violet-600/10 ring-2 ring-violet-500/40 shadow-xs'
+                        ? 'border-sky-600 bg-sky-500/10 ring-2 ring-sky-500/40 shadow-xs'
                         : 'border-black/10 dark:border-white/10 bg-white dark:bg-slate-900'
                     }`}
                   >
@@ -666,8 +669,8 @@ export default function MobilePayPage() {
                     <span className="text-xs font-black text-slate-900 dark:text-white block">
                       {item.vnd.toLocaleString('vi-VN')}đ
                     </span>
-                    <span className="text-[10px] text-amber-500 font-bold block mt-0.5">
-                      +{item.sc} SC
+                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-black block mt-0.5">
+                      +{item.scm} SCm
                     </span>
                   </button>
                 )
@@ -680,10 +683,10 @@ export default function MobilePayPage() {
             type="button"
             disabled={actionLoading}
             onClick={handleCreateTopup}
-            className="w-full py-3.5 rounded-2xl bg-violet-600 text-white font-black text-xs shadow-lg active:scale-98 transition flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-lg active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
           >
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-            <span>NẠP VÍ QUA VIETQR ({topupAmount.toLocaleString('vi-VN')}đ)</span>
+            <span>NẠP CASH MOBILE QUA VIETQR ({topupAmount.toLocaleString('vi-VN')}đ ➔ +{(topupAmount / 100).toLocaleString('vi-VN')} SCm)</span>
           </button>
         </div>
       )}
@@ -707,7 +710,7 @@ export default function MobilePayPage() {
               Hôm nay đã dùng: <span className="text-amber-300 font-mono">{todayQuestionsCount}/{dailyLimit}</span> câu hỏi
             </div>
             <p className="text-[11px] text-indigo-100 leading-relaxed">
-              Kích hoạt gói hạn mức để thoải mái hỏi đáp KaTeX, dịch thuật, tóm tắt lý thuyết và vẽ đồ thị hàm số SenGraph.
+              Kích hoạt gói hạn mức để thoải mái hỏi đáp KaTeX, dịch thuật, tóm tắt lý thuyết và giải đề cùng SenAI.
             </p>
           </div>
 
