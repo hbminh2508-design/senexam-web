@@ -390,6 +390,22 @@ function NewDashboardContent() {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
     if (dark) document.documentElement.classList.add('dark')
     setIsDark(dark)
+    if (typeof document !== 'undefined') {
+      const iconSelectors = ["link[rel*='icon']", "link[rel='shortcut icon']", "link[rel='apple-touch-icon']"]
+      let updated = false
+      iconSelectors.forEach((sel) => {
+        document.querySelectorAll<HTMLLinkElement>(sel).forEach((el) => {
+          el.href = '/logo.png'
+          updated = true
+        })
+      })
+      if (!updated) {
+        const newLink = document.createElement('link')
+        newLink.rel = 'icon'
+        newLink.href = '/logo.png'
+        document.head.appendChild(newLink)
+      }
+    }
     setIsEcoMode(isEcoModeActive())
     setChatBubbleEnabled(localStorage.getItem('sen_chat_bubble_disabled') !== '1')
     setDashboardStudioEnabled(localStorage.getItem('sen_dashboard_studio_disabled') !== '1')

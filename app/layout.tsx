@@ -47,6 +47,14 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "SenExam",
   description: "Thi cử và học tập trực tuyến",
+  icons: {
+    icon: [
+      { url: '/logo.png', sizes: 'any' },
+      { url: '/icon.png', sizes: '192x192', type: 'image/png' },
+    ],
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({

@@ -150,6 +150,24 @@ function IdpAuthContent() {
             setTargetService('senexam')
           }
 
+          if (typeof document !== 'undefined') {
+            const iconUrl = (serviceParam === 'seb' || nextParam.includes('seb')) ? '/seb-logo.png' : '/logo.png'
+            const iconSelectors = ["link[rel*='icon']", "link[rel='shortcut icon']", "link[rel='apple-touch-icon']"]
+            let updated = false
+            iconSelectors.forEach((sel) => {
+              document.querySelectorAll<HTMLLinkElement>(sel).forEach((el) => {
+                el.href = iconUrl
+                updated = true
+              })
+            })
+            if (!updated) {
+              const newLink = document.createElement('link')
+              newLink.rel = 'icon'
+              newLink.href = iconUrl
+              document.head.appendChild(newLink)
+            }
+          }
+
           if (nextParam) {
             setRedirectPath(nextParam)
           }

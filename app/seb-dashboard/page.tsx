@@ -94,6 +94,23 @@ export default function SebDashboardPage() {
 
   useEffect(() => {
     document.documentElement.classList.remove('dark')
+    if (typeof document !== 'undefined') {
+      document.title = 'Sen Exam Canvas - Safe Exam Browser'
+      const iconSelectors = ["link[rel*='icon']", "link[rel='shortcut icon']", "link[rel='apple-touch-icon']"]
+      let updated = false
+      iconSelectors.forEach((sel) => {
+        document.querySelectorAll<HTMLLinkElement>(sel).forEach((el) => {
+          el.href = '/seb-logo.png'
+          updated = true
+        })
+      })
+      if (!updated) {
+        const newLink = document.createElement('link')
+        newLink.rel = 'icon'
+        newLink.href = '/seb-logo.png'
+        document.head.appendChild(newLink)
+      }
+    }
 
     const initDashboard = async () => {
       try {
