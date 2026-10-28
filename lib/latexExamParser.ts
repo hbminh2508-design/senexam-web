@@ -177,12 +177,12 @@ export function preprocessLatexContent(raw: string): string {
     // 3. Xóa môi trường \begin{center} / \end{center} bọc quanh ảnh nếu có
     .replace(/\\begin\{center\}\s*(!\[[^\]]*\]\([^)]+\))\s*\\end\{center\}/gi, '$1')
 
-    // 4. Khối TikZ biểu đồ / đồ thị: không để lộ raw coordinates
-    .replace(/\\begin\{center\}\s*\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}\s*\\end\{center\}/gi, () => {
-      return '\n\n> 📊 *[Hình vẽ / Đồ thị minh họa đề thi]*\n\n'
+    // 4. Khối TikZ biểu đồ / đồ thị: chuyển thành code block tikz để render trực tiếp hình vẽ
+    .replace(/\\begin\{center\}\s*(\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\})\s*\\end\{center\}/gi, (_m, code) => {
+      return `\n\n\`\`\`tikz\n${code.trim()}\n\`\`\`\n\n`
     })
-    .replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/gi, () => {
-      return '\n\n> 📊 *[Hình vẽ / Đồ thị minh họa đề thi]*\n\n'
+    .replace(/(\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\})/gi, (_m, code) => {
+      return `\n\n\`\`\`tikz\n${code.trim()}\n\`\`\`\n\n`
     })
 
     // 5. Dọn dẹp các lệnh định dạng thừa

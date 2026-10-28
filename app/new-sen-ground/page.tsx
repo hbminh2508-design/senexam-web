@@ -102,6 +102,7 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 import { parseLatexExamCode, preprocessLatexContent } from '@/lib/latexExamParser'
+import TikzRenderer from '@/app/components/TikzRenderer'
 
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-hub-heading' })
@@ -180,6 +181,17 @@ const SafeMathRenderer = React.memo(
             remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}
             components={{
+              code: ({ className: codeClass, children, ...props }: any) => {
+                const isTikz = /language-tikz/i.test(codeClass || '')
+                if (isTikz) {
+                  return <TikzRenderer code={String(children).trim()} />
+                }
+                return (
+                  <code className={codeClass} {...props}>
+                    {children}
+                  </code>
+                )
+              },
               img: ({ node, ...props }) => (
                 <span className="block my-3 text-center">
                   <img
@@ -475,14 +487,18 @@ const MATH_KEYBOARD_TABS = [
   },
   {
     id: 'graphics',
-    name: 'Hình ảnh & Đồ thị',
+    name: '📐 Vẽ hình & Đồ thị',
     keys: [
+      { label: 'Vẽ Oxy & Hàm số', insert: '\n\\begin{tikzpicture}[scale=0.8]\n\\draw[->] (-3,0) -- (3,0) node[right]{$x$};\n\\draw[->] (0,-3) -- (0,3) node[above]{$y$};\n\\draw[domain=-2:2,smooth,variable=\\x,blue,thick] plot ({\\x},{\\x*\\x - 2});\n\\end{tikzpicture}\n', display: '\\text{Vẽ Oxy}' },
+      { label: 'Đường tròn Lượng giác', insert: '\n\\begin{tikzpicture}[scale=1]\n\\draw[->] (-1.5,0) -- (1.5,0) node[right]{$x$};\n\\draw[->] (0,-1.5) -- (0,1.5) node[above]{$y$};\n\\draw (0,0) circle (1);\n\\node[below right] at (0,0) {$O$};\n\\end{tikzpicture}\n', display: '\\text{Đường tròn}' },
+      { label: 'Hình chóp S.ABCD', insert: '\n\\begin{tikzpicture}[scale=0.8]\n\\coordinate (A) at (0,0); \\coordinate (B) at (4,-1); \\coordinate (C) at (2,-2); \\coordinate (S) at (2,3.5);\n\\draw[thick] (S)--(A) (S)--(B) (S)--(C) (A)--(C)--(B);\n\\draw[dashed] (A)--(B);\n\\node[above] at (S){$S$};\n\\node[left] at (A){$A$};\n\\node[right] at (B){$B$};\n\\node[below] at (C){$C$};\n\\end{tikzpicture}\n', display: '\\text{Hình chóp}' },
+      { label: 'Biểu đồ cột', insert: '\n\\begin{tikzpicture}[scale=0.8]\n\\draw[->] (0,0) -- (4.5,0) node[right]{$x$};\n\\draw[->] (0,0) -- (0,3.5) node[above]{$y$};\n\\draw[fill=blue!40] (0.4,0) rectangle (1.1,2.5);\n\\draw[fill=green!40] (1.5,0) rectangle (2.2,1.8);\n\\draw[fill=orange!40] (2.6,0) rectangle (3.3,3);\n\\end{tikzpicture}\n', display: '\\text{Cột}' },
+      { label: 'Trục số', insert: '\n\\begin{tikzpicture}\n\\draw[<->,thick] (-3,0) -- (3,0);\n\\foreach \\x in {-2,-1,0,1,2} \\draw (\\x,0.1) -- (\\x,-0.1) node[below]{$\\x$};\n\\end{tikzpicture}\n', display: '\\text{Trục số}' },
       { label: '\\includegraphics{URL}', insert: '\n\\begin{center}\n\\includegraphics{https://}\n\\end{center}\n', display: '\\text{Ảnh}' },
       { label: '\\includegraphics[80%]{URL}', insert: '\n\\begin{center}\n\\includegraphics[width=0.8\\linewidth]{https://}\n\\end{center}\n', display: '\\text{Ảnh 80\\%}' },
       { label: 'Căn giữa ảnh', insert: '\n\\begin{center}\n\\includegraphics{https://}\n\\end{center}\n', display: '\\text{Giữa ảnh}' },
       { label: '\\caption{...}', insert: '\n\\caption{Hình 1: Đồ thị minh họa}\n', display: '\\text{Chú thích}' },
       { label: 'Bảng dữ liệu', insert: '\n\\begin{tabular}{|c|c|}\n\\hline\nx & y \\\\\n\\hline\n0 & 1 \\\\\n\\hline\n\\end{tabular}\n', display: '\\text{Bảng}' },
-      { label: 'Đồ thị Oxy', insert: '\n\\begin{center}\n\\includegraphics{https://}\n\\end{center}\n', display: '\\text{Đồ thị}' },
       { label: '\\img{URL}', insert: '\n\\img{https://}\n', display: '\\text{\\img}' },
       { label: '![Ảnh](URL)', insert: '\n![Hình minh họa](https://)\n', display: '\\text{MD Ảnh}' },
     ],

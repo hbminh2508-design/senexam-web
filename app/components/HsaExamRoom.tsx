@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, Component } from 'react'
+import React, { useState, useEffect, useMemo, useRef, Component } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
@@ -8,26 +8,17 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 import { preprocessLatexContent } from '@/lib/latexExamParser'
+import TikzRenderer from '@/app/components/TikzRenderer'
 import {
   Clock,
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Bookmark,
-  CheckCircle2,
-  AlertTriangle,
   RotateCcw,
-  Sparkles,
-  Award,
-  Layers,
   Check,
   X,
   FileText,
-  HelpCircle,
-  ShieldCheck,
-  Compass,
-  ArrowRight,
-  BookOpen,
+  User,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -69,7 +60,7 @@ class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryS
   }
 }
 
-const SafeMathRenderer = React.memo(
+export const SafeMathRenderer = React.memo(
   ({ content, className }: { content: string; className?: string }) => {
     const rawStr = typeof content === 'string' ? content : String(content ?? '')
     const safeContent = preprocessLatexContent(rawStr)
@@ -90,18 +81,30 @@ const SafeMathRenderer = React.memo(
               ],
             ]}
             components={{
-              img: ({ node, ...props }) => (
-                <span className="block my-3 text-center">
+              // Render hình vẽ TikZ tự động
+              code: ({ className: codeClass, children, ...props }: any) => {
+                const isTikz = /language-tikz/i.test(codeClass || '')
+                if (isTikz) {
+                  return <TikzRenderer code={String(children).trim()} />
+                }
+                return (
+                  <code className={codeClass} {...props}>
+                    {children}
+                  </code>
+                )
+              },
+              img: ({ node, ...props }: any) => (
+                <span className="block my-2 text-center">
                   <img
                     {...props}
                     alt={props.alt || 'Hình minh họa câu hỏi'}
-                    className="max-h-[360px] max-w-full rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm mx-auto object-contain cursor-zoom-in hover:shadow-md transition bg-white"
+                    className="max-h-[340px] max-w-full border border-slate-300 mx-auto object-contain bg-white cursor-zoom-in"
                     onClick={() => {
                       if (props.src) window.open(props.src, '_blank')
                     }}
                   />
                   {props.alt && props.alt !== 'Hình minh họa câu hỏi' && (
-                    <span className="block text-[11px] text-slate-400 italic mt-1 font-sans">
+                    <span className="block text-[11px] text-slate-500 italic mt-0.5 font-sans">
                       {props.alt}
                     </span>
                   )}
@@ -131,20 +134,20 @@ export interface HsaExamRoomProps {
   onExit?: () => void
 }
 
-// 12 tổ hợp chuẩn HSA của ĐHQGHN cho Phần thi thứ 3
-export const HSA_SUBJECT_COMBINATIONS = [
-  { id: 'combo_1', name: '1. Vật lí - Hóa học - Sinh học', subjects: ['Vật lí', 'Hóa học', 'Sinh học'] },
-  { id: 'combo_2', name: '2. Vật lí - Hóa học - Lịch sử', subjects: ['Vật lí', 'Hóa học', 'Lịch sử'] },
-  { id: 'combo_3', name: '3. Vật lí - Hóa học - Địa lí', subjects: ['Vật lí', 'Hóa học', 'Địa lí'] },
-  { id: 'combo_4', name: '4. Vật lí - Sinh học - Lịch sử', subjects: ['Vật lí', 'Sinh học', 'Lịch sử'] },
-  { id: 'combo_5', name: '5. Vật lí - Sinh học - Địa lí', subjects: ['Vật lí', 'Sinh học', 'Địa lí'] },
-  { id: 'combo_6', name: '6. Vật lí - Lịch sử - Địa lí', subjects: ['Vật lí', 'Lịch sử', 'Địa lí'] },
-  { id: 'combo_7', name: '7. Hóa học - Sinh học - Lịch sử', subjects: ['Hóa học', 'Sinh học', 'Lịch sử'] },
-  { id: 'combo_8', name: '8. Hóa học - Sinh học - Địa lí', subjects: ['Hóa học', 'Sinh học', 'Địa lí'] },
-  { id: 'combo_9', name: '9. Hóa học - Lịch sử - Địa lí', subjects: ['Hóa học', 'Lịch sử', 'Địa lí'] },
-  { id: 'combo_10', name: '10. Sinh học - Lịch sử - Địa lí', subjects: ['Sinh học', 'Lịch sử', 'Địa lí'] },
-  { id: 'combo_11', name: '11. Tiếng Anh (Ngoại ngữ)', subjects: ['Tiếng Anh'] },
-  { id: 'combo_12', name: '12. Khoa học Tự nhiên & Xã hội Tổng hợp', subjects: ['Khoa học'] },
+// 12 TỔ HỢP TỰ CHỌN CHUẨN HSA ĐHQGHN (Phần 3 - Image 5)
+const HSA_SUBJECT_COMBINATIONS = [
+  { id: 'combo_1', code: 'Q01', name: 'LÍ - HÓA - SINH (TỰ CHỌN)', subjects: ['Vật lí', 'Hóa học', 'Sinh học'] },
+  { id: 'combo_2', code: 'Q02', name: 'LÍ - HÓA - SỬ (TỰ CHỌN)', subjects: ['Vật lí', 'Hóa học', 'Lịch sử'] },
+  { id: 'combo_3', code: 'Q03', name: 'LÍ - HÓA - ĐỊA (TỰ CHỌN)', subjects: ['Vật lí', 'Hóa học', 'Địa lí'] },
+  { id: 'combo_4', code: 'Q04', name: 'LÍ - SINH - SỬ (TỰ CHỌN)', subjects: ['Vật lí', 'Sinh học', 'Lịch sử'] },
+  { id: 'combo_5', code: 'Q05', name: 'LÍ - SINH - ĐỊA (TỰ CHỌN)', subjects: ['Vật lí', 'Sinh học', 'Địa lí'] },
+  { id: 'combo_6', code: 'Q06', name: 'HÓA - SINH - SỬ (TỰ CHỌN)', subjects: ['Hóa học', 'Sinh học', 'Lịch sử'] },
+  { id: 'combo_7', code: 'Q07', name: 'HÓA - SINH - ĐỊA (TỰ CHỌN)', subjects: ['Hóa học', 'Sinh học', 'Địa lí'] },
+  { id: 'combo_8', code: 'Q08', name: 'SỬ - ĐỊA - LÍ (TỰ CHỌN)', subjects: ['Lịch sử', 'Địa lí', 'Vật lí'] },
+  { id: 'combo_9', code: 'Q09', name: 'SỬ - ĐỊA - HÓA (TỰ CHỌN)', subjects: ['Lịch sử', 'Địa lí', 'Hóa học'] },
+  { id: 'combo_10', code: 'Q10', name: 'SỬ - ĐỊA - SINH (TỰ CHỌN)', subjects: ['Lịch sử', 'Địa lí', 'Sinh học'] },
+  { id: 'combo_11', code: 'Q11', name: 'TIẾNG ANH (TỰ CHỌN)', subjects: ['Tiếng Anh'] },
+  { id: 'combo_12', code: 'Q12', name: 'KHOA HỌC TỰ NHIÊN TOÀN DIỆN', subjects: ['Khoa học Tự nhiên'] },
 ]
 
 export default function HsaExamRoom({
@@ -154,16 +157,17 @@ export default function HsaExamRoom({
   onExit,
 }: HsaExamRoomProps) {
   // Trạng thái màn hình:
-  // 'transition': Màn hình chờ 120s trước phần thi
-  // 'exam': Màn hình làm bài thi chính thức
-  // 'choose_combo': Màn hình chọn tổ hợp phần 3
+  // 'transition': Màn hình chờ 120s trước phần thi (Image 1)
+  // 'exam': Màn hình làm bài thi chính thức (Image 2 & Image 3)
+  // 'warning_end': Màn hình nhắc nhở kết thúc phần thi (Image 4)
+  // 'choose_combo': Màn hình lựa chọn tổ hợp phần 3 (Image 5)
   // 'result': Bảng điểm kết quả chuẩn HSA
-  const [screenStage, setScreenStage] = useState<'transition' | 'exam' | 'choose_combo' | 'result'>('transition')
+  const [screenStage, setScreenStage] = useState<'transition' | 'exam' | 'warning_end' | 'choose_combo' | 'result'>('transition')
 
-  // Chỉ số phần thi hiện tại: 0 (P1: Định lượng), 1 (P2: Định tính), 2 (P3: Khoa học/Ngoại ngữ)
+  // Chỉ số phần thi hiện tại: 0 (P1: Định lượng), 1 (P2: Định tính), 2 (P3: Khoa học / Tiếng Anh)
   const [currentPartIdx, setCurrentPartIdx] = useState<number>(0)
 
-  // Thời gian đếm ngược 120 giây giữa các phần thi
+  // Thời gian đếm ngược 120 giây giữa các phần thi (Image 1)
   const [transitionTimeLeft, setTransitionTimeLeft] = useState<number>(120)
 
   // Thời gian đếm ngược của phần thi hiện tại (giây)
@@ -172,16 +176,12 @@ export default function HsaExamRoom({
   // Quản lý câu hỏi & đáp án
   const [currentQuestionNumber, setCurrentQuestionNumber] = useState<number>(1)
   const [answers, setAnswers] = useState<Record<string, any>>({})
-  const [bookmarked, setBookmarked] = useState<Record<number, boolean>>({})
-
-  // Modal cảnh báo nộp bài / kết thúc phần thi
-  const [showWarningEndSectionModal, setShowWarningEndSectionModal] = useState<boolean>(false)
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   // Tổ hợp được chọn cho Phần 3
   const [selectedComboId, setSelectedComboId] = useState<string>('combo_1')
 
-  // Kết quả sau khi nộp bài
+  // Bảng điểm kết quả
   const [hsaResult, setHsaResult] = useState<{
     scoreP1: number
     scoreP2: number
@@ -193,7 +193,7 @@ export default function HsaExamRoom({
     submissionId?: string
   } | null>(null)
 
-  // Bóc tách cấu trúc đề thi HSA từ database
+  // Bóc tách cấu trúc đề thi từ database
   const parsedSections = useMemo(() => {
     if (!exam?.exam_structure) return []
     let struct = exam.exam_structure
@@ -214,78 +214,36 @@ export default function HsaExamRoom({
     return struct
   }, [exam])
 
-  // Trích xuất các môn khoa học có sẵn trong đề thi (để lọc tổ hợp)
-  const availableScienceSubjects = useMemo(() => {
-    const subjects = new Set<string>()
-    if (Array.isArray(exam?.subjects)) {
-      exam.subjects.forEach((s: string) => subjects.add(s))
-    }
-    parsedSections.forEach((sec: any) => {
-      if (sec.subject) subjects.add(sec.subject)
-      if (Array.isArray(sec.subjects)) sec.subjects.forEach((s: string) => subjects.add(s))
-      if (Array.isArray(sec.questions)) {
-        sec.questions.forEach((q: any) => {
-          if (q.subject) subjects.add(q.subject)
-        })
-      }
-    })
-    return subjects
-  }, [exam, parsedSections])
-
-  // Lọc các tổ hợp có môn đã được cập nhật đề
-  const activeCombinations = useMemo(() => {
-    return HSA_SUBJECT_COMBINATIONS.map((combo) => {
-      const isAvailable =
-        availableScienceSubjects.size === 0 ||
-        combo.subjects.some((s) => availableScienceSubjects.has(s)) ||
-        combo.id === 'combo_1' ||
-        combo.id === 'combo_11'
-      return {
-        ...combo,
-        isAvailable,
-      }
-    })
-  }, [availableScienceSubjects])
-
-  // Chuẩn hóa 3 phần thi HSA (Phần 1: Định lượng, Phần 2: Định tính, Phần 3: Khoa học / Ngoại ngữ)
+  // Chuẩn hóa 3 phần thi HSA
   const hsaParts = useMemo(() => {
-    // Phần 1: Tư duy định lượng (Toán học - 50 câu, 75 phút)
     const p1Raw = parsedSections[0] || {}
     let p1Questions = Array.isArray(p1Raw.questions) ? p1Raw.questions : []
     if (p1Questions.length === 0 && Array.isArray(exam?.questions)) {
       p1Questions = exam.questions.slice(0, 50)
     }
 
-    // Phần 2: Tư duy định tính (Văn học / Ngôn ngữ - 50 câu, 60 phút)
     const p2Raw = parsedSections[1] || {}
     let p2Questions = Array.isArray(p2Raw.questions) ? p2Raw.questions : []
     if (p2Questions.length === 0 && Array.isArray(exam?.questions) && exam.questions.length > 50) {
       p2Questions = exam.questions.slice(50, 100)
     }
 
-    // Phần 3: Khoa học / Ngoại ngữ (50 câu, 60 phút)
     const p3Raw = parsedSections[2] || {}
     let p3Questions = Array.isArray(p3Raw.questions) ? p3Raw.questions : []
     if (p3Questions.length === 0 && Array.isArray(exam?.questions) && exam.questions.length > 100) {
       p3Questions = exam.questions.slice(100, 150)
     }
 
-    // Tạo danh sách câu hỏi mô phỏng nếu đề KaTeX chỉ có một phần
     const createPlaceholderQuestions = (startNum: number, count: number, sectionName: string) => {
       return Array.from({ length: count }).map((_, i) => {
         const num = startNum + i
         return {
           id: `hsa_q_${num}`,
           number: num,
-          text: `Câu hỏi số ${num} thuộc ${sectionName}. Hãy đọc kỹ đề bài và chọn một đáp án chính xác nhất.`,
-          options: [
-            'Phương án đáp án A chuẩn xác',
-            'Phương án đáp án B',
-            'Phương án đáp án C',
-            'Phương án đáp án D',
-          ],
+          text: `Câu hỏi số ${num} thuộc ${sectionName}. Hãy chọn một đáp án đúng nhất.`,
+          options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
           correctAnswer: 'A',
-          explanation: `Giải thích chi tiết cho câu hỏi ${num}: Áp dụng định lí và phương pháp giải chuẩn HSA để suy ra đáp án A.`,
+          explanation: `Giải thích chi tiết cho câu hỏi ${num}.`,
           points: 1,
           type: num % 10 === 0 ? 'short_answer' : 'single_choice',
         }
@@ -302,11 +260,10 @@ export default function HsaExamRoom({
         ? p2Questions.map((q: any, i: number) => ({
             ...q,
             number: 50 + i + 1,
-            // Thêm dữ liệu mẫu passage đoạn trích cho câu 81 - 85 nếu câu chưa có đoạn trích
             passage:
               q.passage ||
               (i >= 30 && i <= 34
-                ? 'Đọc đoạn trích sau và trả lời các câu hỏi từ 81 đến 85:\n\n"Gió theo lối gió, mây đường mây,\nDòng nước buồn thiu, hoa bắp lay...\nThuyền ai đậu bến sông trăng đó,\nCó chở trăng về kịp tối nay?"\n\n(Hàn Mặc Tử - Đây thôn Vĩ Dạ, NXB Văn học)'
+                ? 'Câu 81 - 85:\n\nĐọc đoạn trích dưới đây và trả lời 5 câu hỏi tiếp theo.\n\nMột đảo nhỏ xa xôi ngoài biển rộng\nVẫn tiếng làng tiếng nước của riêng ta\nTiếng chẳng mất khi Loa thành đã mất\nNàng Mỵ Châu quỳ xuống lạy cha già\nTiếng thao thức lòng trai ôm ngọc sáng\nDưới cát vùi sóng dập chẳng hề nguôi\nTiếng tủi cực kẻ ăn cầu ngủ quán\nThành Nguyễn Du văng vặc nỗi thương đời\nTrái đất rộng giàu sang bao thứ tiếng\nCao quý thâm trầm rực rỡ vui tươi\nTiếng Việt rung rinh nhịp đập trái tim người\nNhư tiếng sáo như dây đàn máu nhỏ\n\n(Lưu Quang Vũ, "Tiếng Việt", Gió và tình yêu thổi trên đất nước tôi, Nxb Hội Nhà văn, HN, 2010, tr. 104)'
                 : undefined),
           }))
         : createPlaceholderQuestions(51, 50, 'Phần 2: Tư duy định tính (Ngữ văn)')
@@ -319,8 +276,8 @@ export default function HsaExamRoom({
     return [
       {
         partId: 1,
-        title: '1. TƯ DUY ĐỊNH LƯỢNG',
-        subtitle: '(50 câu - 75 phút)',
+        title: 'TOÁN HỌC VÀ XỬ LÝ SỐ LIỆU (TƯ DUY ĐỊNH LƯỢNG)',
+        shortTitle: 'TƯ DUY ĐỊNH LƯỢNG',
         durationMinutes: 75,
         maxScore: 50,
         startNumber: 1,
@@ -329,8 +286,8 @@ export default function HsaExamRoom({
       },
       {
         partId: 2,
-        title: '2. TƯ DUY ĐỊNH TÍNH',
-        subtitle: '(50 câu - 60 phút)',
+        title: 'NGÔN NGỮ - VĂN HỌC (TƯ DUY ĐỊNH TÍNH)',
+        shortTitle: 'TƯ DUY ĐỊNH TÍNH',
         durationMinutes: 60,
         maxScore: 50,
         startNumber: 51,
@@ -339,8 +296,8 @@ export default function HsaExamRoom({
       },
       {
         partId: 3,
-        title: '3. KHOA HỌC / NGOẠI NGỮ',
-        subtitle: '(50 câu - 60 phút)',
+        title: 'KHOA HỌC hoặc TIẾNG ANH',
+        shortTitle: 'KHOA HỌC / NGOẠI NGỮ',
         durationMinutes: 60,
         maxScore: 50,
         startNumber: 101,
@@ -350,16 +307,9 @@ export default function HsaExamRoom({
     ]
   }, [parsedSections, exam])
 
-  // Phần thi hiện tại
   const currentPart = hsaParts[currentPartIdx] || hsaParts[0]
 
-  // Câu hỏi hiện tại
-  const currentQuestion = useMemo(() => {
-    const q = currentPart.questions.find((item: any) => item.number === currentQuestionNumber)
-    return q || currentPart.questions[0] || null
-  }, [currentPart, currentQuestionNumber])
-
-  // Danh sách các câu hỏi chưa làm trong phần thi hiện tại
+  // Danh sách các câu hỏi chưa làm trong phần hiện tại (dùng cho modal nhắc nhở)
   const unansweredQuestionsInCurrentPart = useMemo(() => {
     return currentPart.questions.filter((q: any) => {
       const val = answers[String(q.number)]
@@ -367,7 +317,7 @@ export default function HsaExamRoom({
     })
   }, [currentPart, answers])
 
-  // Bộ đếm thời gian cho màn hình chờ chuyển tiếp 120s
+  // Bộ đếm thời gian cho màn hình chờ 120s (Image 1)
   useEffect(() => {
     if (screenStage !== 'transition') return
 
@@ -385,7 +335,7 @@ export default function HsaExamRoom({
     return () => clearInterval(timer)
   }, [screenStage, currentPartIdx])
 
-  // Bộ đếm thời gian cho phần thi đang diễn ra
+  // Bộ đếm thời gian cho phần thi đang diễn ra (Image 2)
   useEffect(() => {
     if (screenStage !== 'exam' || partTimeLeft <= 0) return
 
@@ -393,7 +343,7 @@ export default function HsaExamRoom({
       setPartTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer)
-          handleConfirmEndSection()
+          setScreenStage('warning_end')
           return 0
         }
         return prev - 1
@@ -410,375 +360,427 @@ export default function HsaExamRoom({
     setScreenStage('exam')
   }
 
-  // Kết thúc phần thi hiện tại và chuyển sang phần tiếp theo hoặc nộp bài
+  // Xác nhận kết thúc phần thi
   const handleConfirmEndSection = async () => {
-    setShowWarningEndSectionModal(false)
-
     if (currentPartIdx === 0) {
-      // Kết thúc Phần 1 -> Chuyển sang Màn hình nghỉ 120s của Phần 2
       setCurrentPartIdx(1)
       setTransitionTimeLeft(120)
       setScreenStage('transition')
     } else if (currentPartIdx === 1) {
-      // Kết thúc Phần 2 -> Hiển thị Màn hình chọn tổ hợp cho Phần 3
       setScreenStage('choose_combo')
     } else {
-      // Kết thúc Phần 3 -> Chấm điểm toàn bài thi HSA
       await handleSubmitFullExam()
     }
   }
 
-  // Xác nhận tổ hợp môn Phần 3
-  const handleConfirmCombination = () => {
+  // Bắt đầu Phần 3 sau khi chọn tổ hợp
+  const handleStartPart3WithCombo = () => {
     setCurrentPartIdx(2)
     setTransitionTimeLeft(120)
     setScreenStage('transition')
   }
 
-  // Tính điểm và gửi bài nộp
+  // Chấm điểm và nộp bài
   const handleSubmitFullExam = async () => {
     setSubmitting(true)
     try {
-      let scoreP1 = 0
-      let scoreP2 = 0
-      let scoreP3 = 0
-      let correctCount = 0
-      let totalQuestionsCount = 0
+      let p1Correct = 0
+      let p2Correct = 0
+      let p3Correct = 0
 
-      const sectionScores = hsaParts.map((part, pIdx) => {
-        let partCorrect = 0
-        part.questions.forEach((q: any) => {
-          totalQuestionsCount++
-          const studentAns = String(answers[String(q.number)] || '').trim().toUpperCase()
-          const correctAns = String(q.correctAnswer || 'A').trim().toUpperCase()
-          if (studentAns && studentAns === correctAns) {
-            partCorrect++
-            correctCount++
-          }
-        })
-
-        const partScore = parseFloat(((partCorrect / (part.questions.length || 50)) * 50).toFixed(2))
-        if (pIdx === 0) scoreP1 = partScore
-        if (pIdx === 1) scoreP2 = partScore
-        if (pIdx === 2) scoreP3 = partScore
-
-        return {
-          name: part.title,
-          score: partScore,
-          maxScore: 50,
-          correct: partCorrect,
-          total: part.questions.length || 50,
-        }
+      hsaParts[0]?.questions.forEach((q: any) => {
+        if (answers[String(q.number)] && answers[String(q.number)] === q.correctAnswer) p1Correct++
+      })
+      hsaParts[1]?.questions.forEach((q: any) => {
+        if (answers[String(q.number)] && answers[String(q.number)] === q.correctAnswer) p2Correct++
+      })
+      hsaParts[2]?.questions.forEach((q: any) => {
+        if (answers[String(q.number)] && answers[String(q.number)] === q.correctAnswer) p3Correct++
       })
 
-      const totalScore = parseFloat((scoreP1 + scoreP2 + scoreP3).toFixed(2))
-
-      // Lưu kết quả vào cơ sở dữ liệu Supabase nếu có user
-      const { data: auth } = await supabase.auth.getUser()
-      let submissionId = ''
-      if (auth.user && exam?.id) {
-        const { data: subData } = await supabase
-          .from('submissions')
-          .insert({
-            exam_id: exam.id,
-            user_id: auth.user.id,
-            score: totalScore,
-            answers: answers,
-            detailed_scores: { scoreP1, scoreP2, scoreP3 },
-          })
-          .select('id')
-          .single()
-        if (subData) submissionId = subData.id
-      }
+      const totalCorrect = p1Correct + p2Correct + p3Correct
+      const totalScore = p1Correct + p2Correct + p3Correct
 
       setHsaResult({
-        scoreP1,
-        scoreP2,
-        scoreP3,
+        scoreP1: p1Correct,
+        scoreP2: p2Correct,
+        scoreP3: p3Correct,
         totalScore,
-        correctCount,
-        totalCount: totalQuestionsCount,
-        sectionScores,
-        submissionId,
+        correctCount: totalCorrect,
+        totalCount: 150,
+        sectionScores: [
+          { name: 'Tư duy định lượng (Toán học)', score: p1Correct, maxScore: 50, correct: p1Correct, total: 50 },
+          { name: 'Tư duy định tính (Ngữ văn)', score: p2Correct, maxScore: 50, correct: p2Correct, total: 50 },
+          { name: 'Khoa học / Tiếng Anh', score: p3Correct, maxScore: 50, correct: p3Correct, total: 50 },
+        ],
       })
       setScreenStage('result')
     } catch (err) {
-      console.error('HSA submission error:', err)
-      alert('Có sự cố khi tổng hợp điểm. Điểm số của bạn vẫn được lưu nháp!')
+      console.error('HSA submit error:', err)
       setScreenStage('result')
     } finally {
       setSubmitting(false)
     }
   }
 
-  // Định dạng thời gian mm:ss
+  // Cuộn tới câu hỏi khi bấm vào dải số câu hỏi
+  const scrollToQuestion = (qNum: number) => {
+    setCurrentQuestionNumber(qNum)
+    const el = document.getElementById(`hsa-q-item-${qNum}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
   const formatSeconds = (sec: number) => {
     const m = Math.floor(sec / 60)
     const s = sec % 60
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+    return `${m}:${s < 10 ? '0' : ''}${s}`
   }
 
-  // --------------------------------------------------------------------------
-  // MÀN HÌNH 1: MÀN HÌNH CHỜ NGHỈ 120 GIÂY GIỮA CÁC PHẦN THI (Image 1)
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // MÀN HÌNH 1: MÀN HÌNH CHỜ TRƯỚC PHẦN THI ĐỊNH LƯỢNG & ĐỊNH TÍNH (Image 1)
+  // ==========================================================================
   if (screenStage === 'transition') {
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col justify-between text-slate-800 font-sans select-none p-4 md:p-8">
-        {/* Top Header */}
-        <div className="w-full text-center py-4 border-b border-slate-300">
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-slate-800">
-            BÀI THI ĐÁNH GIÁ NĂNG LỰC HỌC SINH TRUNG HỌC PHỔ THÔNG
-          </h1>
-          <p className="text-sm font-bold text-slate-500 mt-1">
-            Trung tâm Khảo thí Đại học Quốc gia Hà Nội • Hệ thống Sen Portal Khảo thí
-          </p>
-        </div>
-
-        {/* Center Content */}
-        <div className="max-w-2xl w-full mx-auto my-auto bg-white rounded-3xl shadow-xl border border-slate-200 p-8 text-center flex flex-col items-center">
-          {/* Logo 3 khối [H] [S] [A] */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-16 h-16 rounded-xl bg-slate-600 flex items-center justify-center text-white text-3xl font-black shadow-md">
-              H
+      <div className="min-h-screen bg-[#3a6344] p-2 md:p-6 flex items-center justify-center font-sans select-none">
+        {/* Khung giao diện cửa sổ màu trắng */}
+        <div className="w-full max-w-5xl bg-white border border-[#b8b8b8] shadow-2xl flex flex-col min-h-[580px]">
+          {/* Header xám trên cùng */}
+          <div className="w-full bg-[#e6e6e6] border-b border-[#cccccc] px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full border border-green-600 bg-white flex items-center justify-center text-[10px] text-green-700 font-bold">
+                ✓
+              </div>
             </div>
-            <div className="w-16 h-16 rounded-xl bg-sky-600 flex items-center justify-center text-white text-3xl font-black shadow-md">
-              S
+            <div className="text-[12px] md:text-[13px] font-bold text-[#555555] uppercase tracking-wide">
+              {exam?.title || 'ĐỀ THI THAM KHẢO SỐ 2 - ĐÁNH GIÁ NĂNG LỰC HỌC SINH THPT 2025'}
             </div>
-            <div className="w-16 h-16 rounded-xl bg-rose-600 flex items-center justify-center text-white text-3xl font-black shadow-md">
-              A
+            <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
+              <User className="w-5 h-5" />
             </div>
           </div>
-          <h2 className="text-lg font-black uppercase text-slate-800 tracking-widest mb-6">
-            BÀI THI ĐÁNH GIÁ NĂNG LỰC
-          </h2>
 
-          {/* Phần thi sắp tới */}
-          <div className="w-full bg-sky-50 border border-sky-200 rounded-2xl p-4 mb-6 text-left">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black uppercase text-sky-700 tracking-wider">
-                Phần thi tiếp theo ({currentPartIdx + 1}/3):
-              </span>
-              <span className="text-xs font-bold text-sky-800 bg-sky-100 px-2.5 py-0.5 rounded-full">
-                {currentPart.durationMinutes} phút • 50 câu
-              </span>
+          {/* Phần thân căn giữa đúng 100% Ảnh 1 */}
+          <div className="flex-1 p-6 md:p-10 flex flex-col items-center justify-center text-center">
+            <p className="text-xs text-slate-700 font-medium mb-1">Bài thi bao gồm các phần:</p>
+            <p className="text-xs font-bold text-[#1a237e] uppercase">
+              TOÁN HỌC VÀ XỬ LÝ SỐ LIỆU (TƯ DUY ĐỊNH LƯỢNG)
+            </p>
+            <p className="text-xs font-bold text-[#1a237e] uppercase">
+              NGÔN NGỮ - VĂN HỌC (TƯ DUY ĐỊNH TÍNH)
+            </p>
+            <p className="text-xs font-bold text-[#1a237e] uppercase mb-3">
+              KHOA HỌC hoặc TIẾNG ANH
+            </p>
+
+            <p className="text-[11px] text-slate-600 mb-6">
+              Bạn phải làm tuần tự các phần thi ở trên và không thể quay lại phần thi đã làm trước đó.
+            </p>
+
+            {/* Hàng mũi tên chevron xanh lá cây (Image 1) */}
+            <div className="flex items-center gap-3 mb-6 flex-wrap justify-center">
+              {[...Array(9)].map((_, i) => (
+                <div key={i} className="w-8 h-8 border-2 border-[#5c9d5f] flex items-center justify-center text-[#5c9d5f] font-bold text-sm bg-white">
+                  ▶
+                </div>
+              ))}
             </div>
-            <h3 className="text-base font-black text-sky-950 mt-1">
+
+            {/* Tiêu đề phần thi chuẩn bị bắt đầu */}
+            <h2 className="text-sm md:text-base font-bold text-[#2d6a36] uppercase tracking-wide mb-2">
               {currentPart.title}
-            </h3>
+            </h2>
+            <p className="text-xs text-slate-700 mb-0.5">
+              Thời gian hoàn thành phần thi thứ {currentPartIdx + 1}: {currentPart.durationMinutes} phút
+            </p>
+            <p className="text-xs text-slate-700 mb-6">
+              Tổng điểm phần thi: {currentPart.maxScore} điểm
+            </p>
+
+            {/* Logo 3 khối vuông lớn: [H] xám, [S] xanh lá, [A] đỏ */}
+            <div className="flex items-center mb-6">
+              <div className="w-16 h-16 bg-[#666666] flex items-center justify-center text-white text-3xl font-serif font-bold shadow-xs">
+                H
+              </div>
+              <div className="w-16 h-16 bg-[#2d6a36] flex items-center justify-center text-white text-3xl font-serif font-bold shadow-xs">
+                S
+              </div>
+              <div className="w-16 h-16 bg-[#d32f2f] flex items-center justify-center text-white text-3xl font-serif font-bold shadow-xs">
+                A
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-700 mb-0.5">
+              Phần {currentPartIdx + 1} tự động bắt đầu sau 120 giây.
+            </p>
+            <p className="text-[11px] text-slate-700 mb-3">
+              Nếu đã sẵn sàng, bạn có thể bấm nút &lt;BẮT ĐẦU&gt; dưới đây để bắt đầu phần thi.
+            </p>
+
+            {/* Số đếm ngược to màu đỏ thẫm */}
+            <div className="text-2xl font-bold text-[#d32f2f] mb-4 font-mono">
+              {transitionTimeLeft}
+            </div>
+
+            {/* Nút bấm xanh lá cổ điển */}
+            <button
+              type="button"
+              onClick={handleStartCurrentPart}
+              className="px-6 py-1.5 bg-[#5c9d5f] hover:bg-[#4d8650] text-white font-bold text-xs rounded-xs border border-[#4d8650] shadow-xs uppercase tracking-wider cursor-pointer"
+            >
+              BẮT ĐẦU
+            </button>
           </div>
-
-          {/* Hộp hướng dẫn CHÚ Ý */}
-          <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-6 text-left space-y-2">
-            <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
-              CHÚ Ý:
-            </h4>
-            <ul className="text-xs md:text-sm font-semibold text-slate-700 space-y-2 list-none">
-              <li className="flex items-start gap-2">
-                <span className="text-sky-600 font-bold">•</span>
-                <span>Bạn có <strong>120 giây</strong> nghỉ ngơi trước khi bước vào phần thi tiếp theo.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-sky-600 font-bold">•</span>
-                <span>Đồng hồ đếm ngược sẽ tự động chuyển sang phần thi tiếp theo khi hết thời gian.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-sky-600 font-bold">•</span>
-                <span>Bạn có thể chuyển sang phần thi tiếp theo bất kỳ lúc nào bằng cách ấn nút <strong>&lt; BẮT ĐẦU &gt;</strong>.</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Đồng hồ đếm ngược chữ đỏ */}
-          <div className="text-lg md:text-xl font-black text-rose-600 mb-6 flex items-center gap-2">
-            <Clock className="w-6 h-6 animate-pulse" />
-            <span>Thời gian còn lại: <strong>{transitionTimeLeft}</strong> giây</span>
-          </div>
-
-          {/* Nút xanh lá < BẮT ĐẦU > */}
-          <button
-            type="button"
-            onClick={handleStartCurrentPart}
-            className="w-full max-w-sm py-3.5 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-          >
-            <span>&lt; BẮT ĐẦU &gt;</span>
-          </button>
-        </div>
-
-        {/* Bottom Footer Info */}
-        <div className="w-full text-center py-4 border-t border-slate-300 text-xs font-bold text-slate-600 flex items-center justify-between max-w-5xl mx-auto flex-wrap gap-2">
-          <span>Thí sinh: <strong>{studentInfo.name.toUpperCase()}</strong></span>
-          <span>SBD: <strong>{exam?.access_code || 'HSA-2026-DHQG'}</strong></span>
-          <span>Phòng thi: <strong>Sen Portal HSA Khảo Thí Quốc Gia</strong></span>
         </div>
       </div>
     )
   }
 
-  // --------------------------------------------------------------------------
-  // MÀN HÌNH 5: LỰA CHỌN PHẦN THI THỨ 3 (KHOA HỌC / NGOẠI NGỮ) (Image 5)
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // MÀN HÌNH 5: LỰA CHỌN PHẦN THI THỨ 3 (Image 5)
+  // ==========================================================================
   if (screenStage === 'choose_combo') {
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col justify-between text-slate-800 font-sans select-none p-4 md:p-8">
-        <div className="w-full text-center py-4 border-b border-slate-300">
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-slate-800">
-            LỰA CHỌN PHẦN THI THỨ 3
-          </h1>
-          <p className="text-sm font-bold text-slate-500 mt-1">
-            Thí sinh chọn 1 trong các tổ hợp môn sau đây cho Phần 3 (Khoa học & Ngoại ngữ)
-          </p>
-        </div>
-
-        <div className="max-w-4xl w-full mx-auto my-auto bg-white rounded-3xl shadow-xl border border-slate-200 p-6 md:p-8">
-          <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs font-bold text-amber-900 leading-relaxed">
-            💡 <strong>Quy định:</strong> Các tổ hợp được kích hoạt dựa trên dữ liệu đề thi đã cập nhật. Bạn chỉ có thể chọn tổ hợp có đủ các môn đã được tải lên hệ thống.
+      <div className="min-h-screen bg-[#3a6344] p-2 md:p-6 flex items-center justify-center font-sans select-none">
+        <div className="w-full max-w-5xl bg-white border border-[#b8b8b8] shadow-2xl flex flex-col min-h-[580px]">
+          {/* Header xám trên cùng */}
+          <div className="w-full bg-[#e6e6e6] border-b border-[#cccccc] px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full border border-green-600 bg-white flex items-center justify-center text-[10px] text-green-700 font-bold">
+                ✓
+              </div>
+            </div>
+            <div className="text-[12px] md:text-[13px] font-bold text-[#555555] uppercase tracking-wide">
+              {exam?.title || 'ĐỀ THI THAM KHẢO SỐ 2 - ĐÁNH GIÁ NĂNG LỰC HỌC SINH THPT 2025'}
+            </div>
+            <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
+              <User className="w-5 h-5" />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-            {activeCombinations.map((combo) => {
-              const isSelected = selectedComboId === combo.id
+          <div className="flex-1 p-6 md:p-8 flex flex-col">
+            {/* Hàng biểu tượng hình thoi caro xanh lá (Image 5) */}
+            <div className="flex items-center justify-center gap-4 mb-4 flex-wrap">
+              {[...Array(9)].map((_, i) => (
+                <div key={i} className="w-7 h-7 rotate-45 border border-[#2d6a36] bg-[#5c9d5f] flex items-center justify-center">
+                  <div className="w-3 h-3 bg-white" />
+                </div>
+              ))}
+            </div>
+
+            <div className="text-center mb-4">
+              <p className="text-xs font-bold text-slate-800">Kích chọn một trong các phần thi sau đây</p>
+              <p className="text-[11px] text-slate-600 italic">
+                (Phần thi được chọn có nền màu hồng, phần thi không được chọn có nền màu xanh)
+              </p>
+            </div>
+
+            {/* Danh sách 12 tổ hợp môn */}
+            <div className="space-y-2 max-w-3xl w-full mx-auto flex-1 overflow-y-auto pr-1">
+              {HSA_SUBJECT_COMBINATIONS.map((combo) => {
+                const isSelected = selectedComboId === combo.id
+                return (
+                  <button
+                    key={combo.id}
+                    type="button"
+                    onClick={() => setSelectedComboId(combo.id)}
+                    className={`w-full py-2.5 px-4 text-center text-xs font-bold transition flex items-center justify-center gap-2 border cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#fae1d0] text-[#7030a0] border-[#e8c0a8]'
+                        : 'bg-[#edf5fc] text-[#1b5b96] border-[#d6e5f5] hover:bg-[#e4eff9]'
+                    }`}
+                  >
+                    {isSelected && <span className="text-[#2d6a36] text-sm font-black">✔</span>}
+                    <span>
+                      {combo.code}: {combo.name}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="text-center pt-4 border-t border-slate-200 mt-4">
+              <button
+                type="button"
+                onClick={handleStartPart3WithCombo}
+                className="px-8 py-1.5 bg-[#5c9d5f] hover:bg-[#4d8650] text-white font-bold text-xs rounded-xs border border-[#4d8650] shadow-xs uppercase tracking-wider cursor-pointer"
+              >
+                BẮT ĐẦU PHẦN 3
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================================================
+  // MÀN HÌNH 4: NHẮC NHỞ TRƯỚC KHI NỘP BÀI / KẾT THÚC PHẦN THI (Image 4)
+  // ==========================================================================
+  if (screenStage === 'warning_end') {
+    const unansweredNumbers = unansweredQuestionsInCurrentPart.map((q: any) => q.number).join(', ')
+
+    return (
+      <div className="min-h-screen bg-[#3a6344] p-2 md:p-6 flex items-center justify-center font-sans select-none">
+        <div className="w-full max-w-5xl bg-white border border-[#b8b8b8] shadow-2xl flex flex-col min-h-[580px]">
+          {/* Header xám trên cùng */}
+          <div className="w-full bg-[#e6e6e6] border-b border-[#cccccc] px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-full border border-green-600 bg-white flex items-center justify-center text-[10px] text-green-700 font-bold">
+                ✓
+              </div>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3].map((num) => (
+                  <div key={num} className="w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold">
+                    ▶
+                  </div>
+                ))}
+                <span className="text-green-700 font-bold text-sm ml-1">{currentPartIdx + 1}</span>
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-[11px] font-bold text-[#555555] uppercase">
+                {exam?.title || 'ĐỀ THI THAM KHẢO SỐ 2 - ĐÁNH GIÁ NĂNG LỰC HỌC SINH THPT 2025'}
+              </div>
+              <div className="inline-block bg-[#5b9bd5] text-white px-2 py-0.5 text-[10px] font-bold uppercase mt-0.5">
+                {currentPart.title}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-red-600 font-bold font-mono text-sm">
+                {formatSeconds(partTimeLeft)}
+              </div>
+              <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
+                <User className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Dải số câu hỏi */}
+          <div className="w-full bg-[#f0f0f0] border-b border-[#cccccc] px-2 py-1.5 overflow-x-auto flex gap-1 items-center">
+            {currentPart.questions.map((q: any) => {
+              const qNum = q.number
+              const isAnswered = answers[String(qNum)] !== undefined && answers[String(qNum)] !== ''
               return (
-                <button
-                  key={combo.id}
-                  type="button"
-                  disabled={!combo.isAvailable}
-                  onClick={() => setSelectedComboId(combo.id)}
-                  className={`p-4 rounded-2xl border text-left transition flex items-center justify-between cursor-pointer ${
-                    isSelected
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black shadow-md ring-2 ring-emerald-500/20'
-                      : combo.isAvailable
-                      ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold'
-                      : 'border-slate-200 bg-slate-100/50 text-slate-400 cursor-not-allowed opacity-50'
+                <div
+                  key={qNum}
+                  className={`w-6 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 border ${
+                    isAnswered
+                      ? 'bg-[#555555] text-white border-[#333333]'
+                      : 'bg-white text-slate-800 border-slate-400'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`text-base font-black ${
-                        isSelected ? 'text-emerald-600' : 'text-slate-400'
-                      }`}
-                    >
-                      ◆
-                    </span>
-                    <span className="text-xs md:text-sm">{combo.name}</span>
-                  </div>
-
-                  {!combo.isAvailable && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
-                      Chưa có đề
-                    </span>
-                  )}
-                  {isSelected && (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  )}
-                </button>
+                  {qNum}
+                </div>
               )
             })}
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={handleConfirmCombination}
-              className="py-3 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm uppercase tracking-wider shadow-lg transition hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-2"
-            >
-              <span>&lt; XÁC NHẬN CHỌN TỔ HỢP &gt;</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+          {/* Nội dung cảnh báo kết thúc phần thi (Đúng chuẩn Ảnh 4) */}
+          <div className="flex-1 flex flex-col justify-end p-6 md:p-8 text-center pb-8">
+            {unansweredNumbers ? (
+              <p className="text-[12px] text-red-600 font-semibold mb-2">
+                Bạn chưa làm câu: {unansweredNumbers}
+              </p>
+            ) : (
+              <p className="text-[12px] text-green-700 font-semibold mb-2">
+                Bạn đã hoàn thành tất cả {currentPart.questions.length} câu hỏi của phần thi này!
+              </p>
+            )}
 
-        <div className="w-full text-center py-4 border-t border-slate-300 text-xs font-bold text-slate-600">
-          Thí sinh: <strong>{studentInfo.name.toUpperCase()}</strong> • Bài thi Đánh giá Năng lực HSA
+            <p className="text-[12px] text-slate-800 font-normal mb-1">
+              Khi đã kết thúc phần thi, bạn sẽ không quay lại phần thi được nữa.
+            </p>
+            <p className="text-[12px] text-slate-800 font-bold mb-4">
+              Bạn chắc chắn KẾT THÚC phần thi này?
+            </p>
+
+            {/* 2 nút Có và Không (Image 4) */}
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={handleConfirmEndSection}
+                className="px-6 py-1 bg-[#5b9bd5] hover:bg-[#4885c2] text-white text-xs font-bold border border-[#4885c2] rounded-xs cursor-pointer shadow-xs"
+              >
+                Có
+              </button>
+              <button
+                type="button"
+                onClick={() => setScreenStage('exam')}
+                className="px-6 py-1 bg-[#5b9bd5] hover:bg-[#4885c2] text-white text-xs font-bold border border-[#4885c2] rounded-xs cursor-pointer shadow-xs"
+              >
+                Không
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
-  // --------------------------------------------------------------------------
-  // MÀN HÌNH 6: BẢNG ĐIỂM KẾT QUẢ CHUẨN HSA (Thang 150 điểm)
-  // --------------------------------------------------------------------------
+  // ==========================================================================
+  // MÀN HÌNH KẾT QUẢ: BẢNG ĐIỂM CHUẨN HSA
+  // ==========================================================================
   if (screenStage === 'result' && hsaResult) {
-    const totalScore = hsaResult.totalScore
-    let rankTitle = 'Đạt Yêu Cầu'
-    let rankColor = 'text-sky-600'
-    let rankBg = 'bg-sky-50 border-sky-200'
-
-    if (totalScore >= 110) {
-      rankTitle = 'Xuất Sắc (Top Dẫn Đầu)'
-      rankColor = 'text-amber-600'
-      rankBg = 'bg-amber-50 border-amber-200'
-    } else if (totalScore >= 90) {
-      rankTitle = 'Giỏi (Cơ Hội Cao Tuyển Thẳng)'
-      rankColor = 'text-emerald-600'
-      rankBg = 'bg-emerald-50 border-emerald-200'
-    } else if (totalScore >= 75) {
-      rankTitle = 'Khá (Đạt Ngưỡng Sàn Đại Học)'
-      rankColor = 'text-indigo-600'
-      rankBg = 'bg-indigo-50 border-indigo-200'
-    }
-
     return (
-      <div className="min-h-screen bg-slate-100 flex flex-col justify-between text-slate-800 font-sans p-4 md:p-8">
-        <div className="w-full text-center py-4 border-b border-slate-300">
-          <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-slate-800">
-            KẾT QUẢ BÀI THI ĐÁNH GIÁ NĂNG LỰC HSA
-          </h1>
-          <p className="text-sm font-bold text-slate-500 mt-1">
-            Báo cáo điểm số chuẩn hóa • Trung tâm Khảo thí ĐHQG Hà Nội
-          </p>
-        </div>
-
-        <div className="max-w-3xl w-full mx-auto my-8 bg-white rounded-3xl shadow-xl border border-slate-200 p-6 md:p-8">
-          {/* Tổng điểm lớn */}
-          <div className="text-center pb-6 border-b border-slate-200">
-            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
-              TỔNG ĐIỂM BÀI THI HSA
-            </span>
-            <div className="text-5xl md:text-6xl font-black text-rose-600 my-2">
-              {totalScore} <span className="text-2xl text-slate-400 font-bold">/ 150</span>
-            </div>
-            <div className={`inline-block px-4 py-1.5 rounded-full border text-xs font-black ${rankColor} ${rankBg}`}>
-              Đánh giá: {rankTitle}
-            </div>
+      <div className="min-h-screen bg-[#3a6344] p-2 md:p-6 flex items-center justify-center font-sans select-none">
+        <div className="w-full max-w-4xl bg-white border border-[#b8b8b8] shadow-2xl p-6 md:p-8 flex flex-col">
+          <div className="text-center pb-4 border-b border-slate-300 mb-6">
+            <h1 className="text-lg md:text-xl font-bold uppercase text-slate-800 tracking-wider">
+              KẾT QUẢ BÀI THI ĐÁNH GIÁ NĂNG LỰC HỌC SINH THPT (HSA)
+            </h1>
+            <p className="text-xs text-slate-600 mt-1">
+              Trung tâm Khảo thí Đại học Quốc gia Hà Nội • Hệ thống Sen Portal Khảo Thí
+            </p>
           </div>
 
-          {/* Chi tiết từng phần thi */}
-          <div className="py-6 space-y-4">
-            <h3 className="text-xs font-black uppercase text-slate-500 tracking-wider">
-              CHI TIẾT ĐIỂM SỐ CÁC PHẦN THI (THANG 50 ĐIỂM MỖI PHẦN)
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {hsaResult.sectionScores.map((sec, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between"
-                >
-                  <div>
-                    <span className="text-[11px] font-black uppercase text-slate-500">
-                      Phần {idx + 1}
-                    </span>
-                    <h4 className="text-xs font-black text-slate-800 line-clamp-1 mt-0.5">
-                      {sec.name}
-                    </h4>
-                  </div>
-                  <div className="mt-4 flex items-baseline justify-between">
-                    <span className="text-2xl font-black text-sky-700">
-                      {sec.score}
-                    </span>
-                    <span className="text-xs font-bold text-slate-400">
-                      / 50 điểm
-                    </span>
-                  </div>
-                  <div className="mt-2 text-[11px] font-semibold text-slate-500">
-                    Đúng {sec.correct}/{sec.total} câu
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="bg-slate-50 border border-slate-300 p-4 mb-6 text-xs text-slate-800 space-y-1">
+            <p>Thí sinh: <strong>{studentInfo.name.toUpperCase()}</strong></p>
+            <p>Số báo danh: <strong>{exam?.access_code || 'HSA-2026-DHQG'}</strong></p>
+            <p>Đề thi: <strong>{exam?.title || 'Đề thi Khảo thí HSA'}</strong></p>
           </div>
 
-          {/* Thao tác */}
-          <div className="pt-6 border-t border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+          <div className="border border-slate-300 mb-6 overflow-hidden">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-[#e6e6e6] border-b border-slate-300 text-slate-800 font-bold">
+                  <th className="p-2.5 border-r border-slate-300">Phần thi</th>
+                  <th className="p-2.5 border-r border-slate-300 text-center">Số câu đúng</th>
+                  <th className="p-2.5 border-r border-slate-300 text-center">Điểm số</th>
+                  <th className="p-2.5 text-center">Thang điểm</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                <tr>
+                  <td className="p-2.5 border-r border-slate-300 font-medium">Phần 1: Tư duy định lượng (Toán học)</td>
+                  <td className="p-2.5 border-r border-slate-300 text-center font-bold text-blue-700">{hsaResult.scoreP1}/50</td>
+                  <td className="p-2.5 border-r border-slate-300 text-center font-bold">{hsaResult.scoreP1}</td>
+                  <td className="p-2.5 text-center text-slate-500">50</td>
+                </tr>
+                <tr>
+                  <td className="p-2.5 border-r border-slate-300 font-medium">Phần 2: Tư duy định tính (Ngữ văn)</td>
+                  <td className="p-2.5 border-r border-slate-300 text-center font-bold text-blue-700">{hsaResult.scoreP2}/50</td>
+                  <td className="p-2.5 border-r border-slate-300 text-center font-bold">{hsaResult.scoreP2}</td>
+                  <td className="p-2.5 text-center text-slate-500">50</td>
+                </tr>
+                <tr>
+                  <td className="p-2.5 border-r border-slate-300 font-medium">Phần 3: Khoa học / Ngoại ngữ</td>
+                  <td className="p-2.5 border-r border-slate-300 text-center font-bold text-blue-700">{hsaResult.scoreP3}/50</td>
+                  <td className="p-2.5 border-r border-slate-300 text-center font-bold">{hsaResult.scoreP3}</td>
+                  <td className="p-2.5 text-center text-slate-500">50</td>
+                </tr>
+                <tr className="bg-amber-50 font-bold">
+                  <td className="p-3 border-r border-slate-300 uppercase">TỔNG ĐIỂM CHUNG TOÀN BÀI THI</td>
+                  <td className="p-3 border-r border-slate-300 text-center text-emerald-700">{hsaResult.correctCount}/150</td>
+                  <td className="p-3 border-r border-slate-300 text-center text-red-600 text-base">{hsaResult.totalScore}</td>
+                  <td className="p-3 text-center text-slate-700">150</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-center gap-3">
             <button
               type="button"
               onClick={() => {
@@ -786,414 +788,242 @@ export default function HsaExamRoom({
                 setCurrentPartIdx(0)
                 setTransitionTimeLeft(120)
                 setAnswers({})
-                setBookmarked({})
               }}
-              className="px-5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-2 cursor-pointer"
+              className="px-6 py-2 bg-[#5c9d5f] hover:bg-[#4d8650] text-white text-xs font-bold rounded-xs cursor-pointer"
             >
-              <RotateCcw className="w-4 h-4" />
-              <span>Thi lại từ đầu</span>
+              Làm lại bài thi
             </button>
-
-            <div className="flex items-center gap-2">
-              {onExit ? (
-                <button
-                  type="button"
-                  onClick={onExit}
-                  className="px-6 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-xs uppercase tracking-wider transition cursor-pointer"
-                >
-                  Trở về Sen Portal
-                </button>
-              ) : (
-                <Link
-                  href="/new-sen-ground"
-                  className="px-6 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-xs uppercase tracking-wider transition cursor-pointer"
-                >
-                  Trở về Sen Portal
-                </Link>
-              )}
-            </div>
+            {onExit && (
+              <button
+                type="button"
+                onClick={onExit}
+                className="px-6 py-2 bg-[#5b9bd5] hover:bg-[#4885c2] text-white text-xs font-bold rounded-xs cursor-pointer"
+              >
+                Rời phòng thi
+              </button>
+            )}
           </div>
-        </div>
-
-        <div className="w-full text-center py-4 border-t border-slate-300 text-xs font-bold text-slate-600">
-          Sen Portal • Nền tảng khảo thí năng lực học sinh THPT Quốc Gia
         </div>
       </div>
     )
   }
 
-  // --------------------------------------------------------------------------
-  // MÀN HÌNH 2 & 3: GIAO DIỆN THI CHÍNH THỨC + SPLIT-SCREEN ĐOẠN TRÍCH (Image 2 & 3)
-  // --------------------------------------------------------------------------
-  const isSplitScreen = Boolean(currentQuestion?.passage)
+  // ==========================================================================
+  // MÀN HÌNH 2 & 3: GIAO DIỆN THI CHÍNH THỨC HSA (Images 2 & 3)
+  // ==========================================================================
+  const isPart2Literature = currentPartIdx === 1
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col justify-between text-slate-800 font-sans select-none">
-      {/* ================= TOP HEADER BAR ================= */}
-      <div className="w-full bg-white border-b border-slate-200 px-4 py-2.5 shadow-xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-3">
-          {/* 4 Tabs phần thi */}
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
-            {hsaParts.map((part, pIdx) => {
-              const isCurrent = currentPartIdx === pIdx
-              const isFinished = currentPartIdx > pIdx
-
-              return (
+    <div className="min-h-screen bg-[#3a6344] p-1 md:p-4 flex flex-col font-sans select-none">
+      <div className="w-full max-w-7xl mx-auto bg-white border border-[#b8b8b8] shadow-2xl flex flex-col h-[calc(100vh-2rem)]">
+        {/* ================= HEADER BAR (Images 2 & 3) ================= */}
+        <div className="w-full bg-[#e6e6e6] border-b border-[#cccccc] px-4 py-2 flex items-center justify-between shrink-0">
+          {/* Bên trái: Logo tròn + 3 ô vuông phần thi + số phần màu xanh lá */}
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full border border-green-600 bg-white flex items-center justify-center text-[10px] text-green-700 font-bold">
+              ✓
+            </div>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3].map((num) => (
                 <div
-                  key={part.partId}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-tight flex items-center gap-1.5 transition whitespace-nowrap ${
-                    isCurrent
-                      ? 'bg-sky-700 text-white shadow-sm'
-                      : isFinished
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'bg-slate-100 text-slate-400'
+                  key={num}
+                  className={`w-4 h-4 border border-black flex items-center justify-center text-[9px] font-bold ${
+                    currentPartIdx + 1 === num ? 'bg-slate-300' : 'bg-white'
                   }`}
                 >
-                  {isFinished && <Check className="w-3.5 h-3.5" />}
-                  <span>{part.title}</span>
-                  <span className="text-[10px] font-normal opacity-80">{part.subtitle}</span>
+                  ▶
                 </div>
-              )
-            })}
+              ))}
+              <span className="text-green-700 font-bold text-base ml-1">{currentPartIdx + 1}</span>
+            </div>
           </div>
 
-          {/* Right Timer & Nút kết thúc phần thi */}
+          {/* Ở giữa: Tiêu đề đề thi & Huy hiệu tên phần thi */}
+          <div className="text-center">
+            <div className="text-[11px] md:text-[12px] font-bold text-[#555555] uppercase">
+              {exam?.title || 'ĐỀ THI THAM KHẢO SỐ 2 - ĐÁNH GIÁ NĂNG LỰC HỌC SINH THPT 2025'}
+            </div>
+            <div className="inline-block bg-[#5b9bd5] text-white px-3 py-0.5 text-[10px] md:text-[11px] font-bold uppercase mt-0.5">
+              {currentPart.title}
+            </div>
+          </div>
+
+          {/* Bên phải: Đồng hồ đếm ngược số to đỏ + Avatar + Nút kết thúc */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-slate-100 px-3.5 py-1.5 rounded-xl border border-slate-200 font-mono text-sm font-black text-rose-600">
-              <Clock className="w-4 h-4 text-rose-500 animate-pulse" />
-              <span>Thời gian còn lại: <strong>{formatSeconds(partTimeLeft)}</strong></span>
+            <div className="text-red-600 font-bold font-mono text-base md:text-lg">
+              {formatSeconds(partTimeLeft)}
             </div>
-
+            <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
+              <User className="w-5 h-5" />
+            </div>
             <button
               type="button"
-              onClick={() => setShowWarningEndSectionModal(true)}
-              className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider shadow-sm transition hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5"
+              onClick={() => setScreenStage('warning_end')}
+              className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded-xs uppercase tracking-wider cursor-pointer"
+              title="Kết thúc phần thi hiện tại"
             >
-              <span>KẾT THÚC PHẦN THI</span>
+              Nộp bài
             </button>
           </div>
         </div>
-      </div>
 
-      {/* ================= QUESTION NAVIGATOR RIBBON (DẢI SỐ CÂU HỎI) ================= */}
-      <div className="w-full bg-white border-b border-slate-200 px-4 py-2 shadow-xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
-          {/* Paging navigation controls */}
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => setCurrentQuestionNumber(currentPart.startNumber)}
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 font-bold text-xs"
-              title="Về câu đầu tiên"
-            >
-              &lt;&lt;
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setCurrentQuestionNumber((prev) => Math.max(currentPart.startNumber, prev - 1))
-              }
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 font-bold text-xs"
-              title="Câu trước"
-            >
-              &lt;
-            </button>
-          </div>
+        {/* ================= QUESTION BAR: DẢI SỐ CÂU HỎI (Images 2 & 3) ================= */}
+        <div className="w-full bg-[#f0f0f0] border-b border-[#cccccc] px-3 py-1.5 overflow-x-auto flex gap-1 items-center shrink-0">
+          {currentPart.questions.map((q: any) => {
+            const qNum = q.number
+            const isAnswered = answers[String(qNum)] !== undefined && answers[String(qNum)] !== ''
+            const isViewing = currentQuestionNumber === qNum
 
-          {/* Circles for questions */}
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none flex-1 justify-start px-2">
-            {currentPart.questions.map((q: any) => {
-              const qNum = q.number
-              const isCurrent = currentQuestionNumber === qNum
-              const hasAnswered =
-                answers[String(qNum)] !== undefined &&
-                answers[String(qNum)] !== null &&
-                answers[String(qNum)] !== ''
-              const isMarked = bookmarked[qNum]
+            return (
+              <button
+                key={qNum}
+                type="button"
+                onClick={() => scrollToQuestion(qNum)}
+                className={`w-6 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 border cursor-pointer transition ${
+                  isViewing
+                    ? 'ring-2 ring-blue-600 ring-offset-0.5 bg-[#555555] text-white'
+                    : isAnswered
+                    ? 'bg-[#555555] text-white border-[#333333]'
+                    : 'bg-white text-slate-800 border-slate-400 hover:bg-slate-100'
+                }`}
+                title={`Chuyển tới Câu ${qNum}`}
+              >
+                {qNum}
+              </button>
+            )
+          })}
+        </div>
 
-              return (
-                <button
-                  key={qNum}
-                  type="button"
-                  onClick={() => setCurrentQuestionNumber(qNum)}
-                  className={`w-8 h-8 rounded-full text-xs font-black transition flex items-center justify-center shrink-0 cursor-pointer ${
-                    isCurrent
-                      ? 'bg-sky-600 text-white ring-2 ring-sky-400 ring-offset-1 shadow-md scale-105'
-                      : hasAnswered
-                      ? 'bg-emerald-600 text-white font-bold'
-                      : isMarked
-                      ? 'bg-amber-400 text-slate-900 border border-amber-500'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                  }`}
+        {/* ================= NỘI DUNG ĐỀ THI HSA ================= */}
+        <div className="flex-1 overflow-hidden flex flex-col bg-white">
+          {isPart2Literature ? (
+            /* Image 3: BỐ CỤC 2 CỘT CHUẨN HSA CHO PHẦN NGỮ VĂN */
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 divide-x divide-slate-300 h-full overflow-hidden">
+              {/* Cột trái: Đoạn trích ngữ liệu chung */}
+              <div className="h-full overflow-y-auto p-4 md:p-6 bg-[#edf2fa] text-xs md:text-sm text-slate-800 leading-relaxed font-serif">
+                <div className="font-sans font-bold text-slate-700 mb-2 italic">
+                  Câu 81 - 85:
+                </div>
+                <div className="font-sans font-bold text-slate-900 mb-3">
+                  Đọc đoạn trích dưới đây và trả lời 5 câu hỏi tiếp theo.
+                </div>
+                <div className="whitespace-pre-wrap italic leading-loose text-slate-900">
+                  <SafeMathRenderer
+                    content={
+                      currentPart.questions[30]?.passage ||
+                      `Một đảo nhỏ xa xôi ngoài biển rộng\nVẫn tiếng làng tiếng nước của riêng ta\nTiếng chẳng mất khi Loa thành đã mất\nNàng Mỵ Châu quỳ xuống lạy cha già\nTiếng thao thức lòng trai ôm ngọc sáng\nDưới cát vùi sóng dập chẳng hề nguôi\nTiếng tủi cực kẻ ăn cầu ngủ quán\nThành Nguyễn Du văng vặc nỗi thương đời\nTrái đất rộng giàu sang bao thứ tiếng\nCao quý thâm trầm rực rỡ vui tươi\nTiếng Việt rung rinh nhịp đập trái tim người\nNhư tiếng sáo như dây đàn máu nhỏ\n\n(Lưu Quang Vũ, "Tiếng Việt", Gió và tình yêu thổi trên đất nước tôi, Nxb Hội Nhà văn, HN, 2010, tr. 104)`
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Cột phải: Danh sách các câu hỏi con */}
+              <div className="h-full overflow-y-auto p-4 md:p-6 space-y-6 bg-white">
+                {currentPart.questions.map((q: any) => (
+                  <div key={q.id || q.number} id={`hsa-q-item-${q.number}`} className="pb-4 border-b border-slate-100 last:border-b-0">
+                    <div className="flex items-start gap-1.5 mb-2">
+                      <span className="bg-[#2d6a36] text-white text-[11px] font-bold px-1.5 py-0.5 rounded-xs shrink-0">
+                        Câu {q.number}.
+                      </span>
+                      <div className="text-xs md:text-[13px] font-bold text-slate-900 leading-snug flex-1">
+                        <SafeMathRenderer content={q.text} />
+                      </div>
+                    </div>
+
+                    {renderOptions(q)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Image 2: DANH SÁCH CÂU HỎI CUỘN LIÊN TỤC CHO PHẦN TOÁN & KHOA HỌC */
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+              {currentPart.questions.map((q: any) => (
+                <div
+                  key={q.id || q.number}
+                  id={`hsa-q-item-${q.number}`}
+                  className="pb-5 border-b border-slate-200 last:border-b-0"
                 >
-                  {qNum}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() =>
-                setCurrentQuestionNumber((prev) => Math.min(currentPart.endNumber, prev + 1))
-              }
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 font-bold text-xs"
-              title="Câu tiếp"
-            >
-              &gt;
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentQuestionNumber(currentPart.endNumber)}
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 font-bold text-xs"
-              title="Tới câu cuối cùng"
-            >
-              &gt;&gt;
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ================= MAIN QUESTION AREA (SPLIT-SCREEN OR FULL WIDTH) ================= */}
-      <div className="max-w-7xl w-full mx-auto p-4 md:p-6 flex-1">
-        {isSplitScreen ? (
-          /* Image 3: Split-Screen 2 cột đọc hiểu */
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full items-start">
-            {/* Cột trái: Đoạn trích ngữ liệu đọc hiểu */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col max-h-[70vh] overflow-y-auto">
-              <div className="pb-3 mb-3 border-b border-slate-200">
-                <span className="text-xs font-black uppercase text-sky-700 tracking-wider">
-                  Đọc đoạn trích sau và trả lời các câu hỏi liên quan:
-                </span>
-              </div>
-              <div className="text-slate-800 text-sm leading-relaxed font-serif whitespace-pre-wrap">
-                <SafeMathRenderer content={currentQuestion.passage} />
-              </div>
-            </div>
-
-            {/* Cột phải: Câu hỏi & Phương án trả lời */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col">
-              {/* Question Badge & Text */}
-              <div className="flex items-start gap-3 mb-6">
-                <span className="bg-emerald-600 text-white font-black text-xs px-3 py-1.5 rounded-xl shrink-0 uppercase tracking-wider">
-                  Câu {currentQuestion.number}.
-                </span>
-                <div className="text-sm md:text-base font-bold text-slate-800 leading-relaxed">
-                  <SafeMathRenderer content={currentQuestion.text} />
-                </div>
-              </div>
-
-              {/* Danh sách các đáp án (A) ○, (B) ○, (C) ○, (D) ○ */}
-              {renderQuestionInput(currentQuestion)}
-            </div>
-          </div>
-        ) : (
-          /* Image 2: Màn hình đơn bình thường */
-          <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200 p-6 md:p-8 shadow-sm">
-            {/* Question Badge & Text */}
-            <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-100">
-              <span className="bg-emerald-600 text-white font-black text-sm px-3.5 py-1.5 rounded-xl shrink-0 uppercase tracking-wider">
-                Câu {currentQuestion.number}.
-              </span>
-              <div className="text-sm md:text-base font-bold text-slate-800 leading-relaxed">
-                <SafeMathRenderer content={currentQuestion.text} />
-              </div>
-            </div>
-
-            {/* Danh sách các phương án */}
-            {renderQuestionInput(currentQuestion)}
-          </div>
-        )}
-      </div>
-
-      {/* ================= BOTTOM ACTION BAR ================= */}
-      <div className="w-full bg-white border-t border-slate-200 px-4 py-3 shadow-xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Nút câu trước */}
-          <button
-            type="button"
-            disabled={currentQuestionNumber <= currentPart.startNumber}
-            onClick={() => setCurrentQuestionNumber((prev) => Math.max(currentPart.startNumber, prev - 1))}
-            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span>&lt; Câu trước</span>
-          </button>
-
-          {/* Đánh dấu xem lại */}
-          <button
-            type="button"
-            onClick={() =>
-              setBookmarked((prev) => ({
-                ...prev,
-                [currentQuestionNumber]: !prev[currentQuestionNumber],
-              }))
-            }
-            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-              bookmarked[currentQuestionNumber]
-                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <Bookmark className="w-4 h-4" />
-            <span>Đánh dấu xem lại</span>
-          </button>
-
-          {/* Nút câu tiếp */}
-          <button
-            type="button"
-            disabled={currentQuestionNumber >= currentPart.endNumber}
-            onClick={() => setCurrentQuestionNumber((prev) => Math.min(currentPart.endNumber, prev + 1))}
-            className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-xs uppercase tracking-wider shadow-sm transition disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-          >
-            <span>Câu tiếp theo &gt;</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* ================= MÀN HÌNH 4: CẢNH BÁO KẾT THÚC PHẦN THI (Image 4) ================= */}
-      {showWarningEndSectionModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl border border-slate-200 text-center animate-in fade-in zoom-in-95">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-7 h-7" />
-            </div>
-
-            <h3 className="text-lg font-black uppercase text-rose-600 tracking-wider mb-2">
-              CẢNH BÁO KẾT THÚC PHẦN THI
-            </h3>
-
-            <p className="text-xs md:text-sm font-bold text-slate-700 mb-4 leading-relaxed">
-              Bạn có chắc chắn muốn kết thúc phần thi <strong>{currentPart.title}</strong> không?
-              <br />
-              <span className="text-rose-600 font-extrabold">
-                Sau khi kết thúc, bạn KHÔNG THỂ quay lại phần thi này nữa!
-              </span>
-            </p>
-
-            {/* Danh sách câu chưa làm màu đỏ */}
-            {unansweredQuestionsInCurrentPart.length > 0 ? (
-              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-5 text-left">
-                <span className="text-xs font-black text-rose-800 uppercase block mb-1">
-                  Các câu hỏi bạn CHƯA TRẢ LỜI ({unansweredQuestionsInCurrentPart.length} câu):
-                </span>
-                <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto pt-1">
-                  {unansweredQuestionsInCurrentPart.map((q: any) => (
-                    <span
-                      key={q.number}
-                      className="px-2 py-0.5 rounded-lg bg-rose-200 text-rose-900 font-black text-xs"
-                    >
-                      Câu {q.number}
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className="bg-[#2d6a36] text-white text-[11px] font-bold px-2 py-0.5 rounded-xs shrink-0">
+                      Câu {q.number}.
                     </span>
-                  ))}
+                    <div className="text-xs md:text-[13px] font-medium text-slate-900 leading-relaxed flex-1">
+                      <SafeMathRenderer content={q.text} />
+                    </div>
+                  </div>
+
+                  {renderOptions(q)}
                 </div>
-              </div>
-            ) : (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 mb-5 text-xs font-bold text-emerald-800 flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Bạn đã hoàn thành đầy đủ tất cả các câu hỏi của phần thi này!</span>
-              </div>
-            )}
-
-            <p className="text-xs font-semibold text-slate-500 mb-6">
-              Bạn có muốn tiếp tục kết thúc không?
-            </p>
-
-            <div className="flex items-center justify-center gap-4">
-              <button
-                type="button"
-                onClick={() => setShowWarningEndSectionModal(false)}
-                className="py-2.5 px-6 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-black text-xs uppercase tracking-wider transition cursor-pointer"
-              >
-                [ Không ]
-              </button>
-
-              <button
-                type="button"
-                onClick={handleConfirmEndSection}
-                className="py-2.5 px-8 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider shadow-lg transition hover:scale-105 active:scale-95 cursor-pointer"
-              >
-                [ Có ]
-              </button>
+              ))}
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 
-  // Hàm render phương án câu hỏi
-  function renderQuestionInput(question: any) {
+  // Hàm render phương án (A) ○, (B) ○, (C) ○, (D) ○ chuẩn 100% Ảnh 2 & 3
+  function renderOptions(question: any) {
     if (!question) return null
 
+    // Câu điền số / Trả lời ngắn
     if (question.type === 'short_answer') {
       const currentVal = answers[String(question.number)] || ''
       return (
-        <div className="space-y-4 pt-2">
-          <label className="block text-xs font-black text-slate-600 uppercase tracking-wide">
-            Điền đáp số câu trả lời của bạn:
-          </label>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-slate-500">Đáp án:</span>
-            <input
-              type="text"
-              value={currentVal}
-              onChange={(e) =>
-                setAnswers((prev) => ({
-                  ...prev,
-                  [String(question.number)]: e.target.value,
-                }))
-              }
-              placeholder="Nhập số thập phân hoặc số nguyên (Ví dụ: 3.5 hoặc -2)..."
-              className="max-w-md w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 focus:border-sky-600 font-mono text-sm font-bold outline-none"
-            />
-          </div>
+        <div className="pl-6 pt-1 flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-700">Đáp số:</span>
+          <input
+            type="text"
+            value={currentVal}
+            onChange={(e) =>
+              setAnswers((prev) => ({
+                ...prev,
+                [String(question.number)]: e.target.value,
+              }))
+            }
+            placeholder="Nhập số..."
+            className="w-40 px-2 py-1 border border-slate-400 bg-white font-mono text-xs outline-none focus:border-blue-600"
+          />
         </div>
       )
     }
 
+    // Câu trắc nghiệm 4 phương án
     const options = Array.isArray(question.options) ? question.options : []
     const selectedLetter = answers[String(question.number)]
 
     return (
-      <div className="space-y-3 pt-2">
+      <div className="pl-4 md:pl-6 space-y-1.5 pt-1">
         {options.map((optText: string, oIdx: number) => {
           const letter = String.fromCharCode(65 + oIdx)
           const isSelected = selectedLetter === letter
 
           return (
-            <button
+            <label
               key={oIdx}
-              type="button"
-              onClick={() =>
+              className="flex items-start gap-2 cursor-pointer hover:bg-slate-50 py-0.5 px-1 rounded-xs select-none"
+              onClick={() => {
                 setAnswers((prev) => ({
                   ...prev,
                   [String(question.number)]: letter,
                 }))
-              }
-              className={`w-full text-left p-3.5 rounded-2xl border transition flex items-start gap-3 cursor-pointer ${
-                isSelected
-                  ? 'border-sky-600 bg-sky-50 text-slate-900 shadow-xs ring-1 ring-sky-500'
-                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-              }`}
+              }}
             >
-              <div
-                className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold ${
-                  isSelected
-                    ? 'border-sky-600 bg-sky-600 text-white'
-                    : 'border-slate-400 text-slate-600'
-                }`}
-              >
-                {isSelected ? '●' : '○'}
+              <div className="flex items-center gap-1 shrink-0 font-bold text-xs text-slate-900 mt-0.5">
+                <span>({letter})</span>
+                <input
+                  type="radio"
+                  name={`hsa_q_${question.number}`}
+                  checked={isSelected}
+                  onChange={() => {}}
+                  className="w-3.5 h-3.5 accent-[#2d6a36] cursor-pointer"
+                />
               </div>
-
-              <div className="text-xs md:text-sm font-semibold leading-relaxed flex-1">
-                <span className="font-black text-slate-900 mr-2">({letter})</span>
+              <div className="text-xs text-slate-800 leading-relaxed flex-1">
                 <SafeMathRenderer content={optText} className="inline" />
               </div>
-            </button>
+            </label>
           )
         })}
       </div>

@@ -16,6 +16,7 @@ import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, preprocessLatexContent } from '@/lib/latexExamParser'
 import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
+import TikzRenderer from '@/app/components/TikzRenderer'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -90,6 +91,17 @@ const SafeMathRenderer = React.memo(
             remarkPlugins={remarkPlugins}
             rehypePlugins={rehypePlugins}
             components={{
+              code: ({ className: codeClass, children, ...props }: any) => {
+                const isTikz = /language-tikz/i.test(codeClass || '')
+                if (isTikz) {
+                  return <TikzRenderer code={String(children).trim()} />
+                }
+                return (
+                  <code className={codeClass} {...props}>
+                    {children}
+                  </code>
+                )
+              },
               img: ({ node, ...props }) => (
                 <span className="block my-3 text-center">
                   <img
@@ -963,7 +975,15 @@ export default function NewExamRoomPage() {
   }
 
   // PHÒNG THI ĐÁNH GIÁ NĂNG LỰC HSA (ĐHQGHN)
-  if (exam?.exam_type === 'HSA' && (!isExamVip || isUserVip)) {
+  const isHsaFormat = Boolean(
+    exam?.exam_type === 'HSA' ||
+    exam?.format === 'hsa' ||
+    String(exam?.title || '').toUpperCase().includes('HSA') ||
+    String(exam?.title || '').toUpperCase().includes('ĐÁNH GIÁ NĂNG LỰC') ||
+    String(exam?.title || '').toUpperCase().includes('ĐGNL')
+  )
+
+  if (isHsaFormat && (!isExamVip || isUserVip)) {
     return (
       <HsaExamRoom
         exam={exam}

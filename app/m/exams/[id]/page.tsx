@@ -12,6 +12,7 @@ import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, parseLatexExamCode, preprocessLatexContent } from '@/lib/latexExamParser'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
+import TikzRenderer from '@/app/components/TikzRenderer'
 import {
   Clock,
   ArrowLeft,
@@ -60,6 +61,17 @@ function SafeMathRenderer({ content, className }: { content: string; className?:
         remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[[rehypeKatex, { throwOnError: false, errorColor: '#ef4444', strict: false }]]}
         components={{
+          code: ({ className: codeClass, children, ...props }: any) => {
+            const isTikz = /language-tikz/i.test(codeClass || '')
+            if (isTikz) {
+              return <TikzRenderer code={String(children).trim()} />
+            }
+            return (
+              <code className={codeClass} {...props}>
+                {children}
+              </code>
+            )
+          },
           img: ({ node, ...props }) => (
             <span className="block my-2 text-center">
               <img
@@ -335,7 +347,15 @@ export default function MobileExamPage() {
   }
 
   // PHÒNG THI ĐÁNH GIÁ NĂNG LỰC HSA (ĐHQGHN)
-  if (exam?.exam_type === 'HSA') {
+  const isHsaFormat = Boolean(
+    exam?.exam_type === 'HSA' ||
+    exam?.format === 'hsa' ||
+    String(exam?.title || '').toUpperCase().includes('HSA') ||
+    String(exam?.title || '').toUpperCase().includes('ĐÁNH GIÁ NĂNG LỰC') ||
+    String(exam?.title || '').toUpperCase().includes('ĐGNL')
+  )
+
+  if (isHsaFormat) {
     return (
       <HsaExamRoom
         exam={exam}
