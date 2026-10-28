@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import ModernLoading from '@/app/components/ModernLoading'
+import { getUserScmBalance } from '@/lib/senCash'
 import {
   Zap,
   BookOpen,
@@ -63,6 +64,7 @@ export default function MobileDashboardPage() {
   const [userName, setUserName] = useState<string>('Sĩ Tử SenExam')
   const [isVip, setIsVip] = useState(false)
   const [senCash, setSenCash] = useState<number>(0)
+  const [scmBalance, setScmBalance] = useState<number>(0)
   const [submissionCount, setSubmissionCount] = useState<number>(0)
   const [highestScore, setHighestScore] = useState<number>(0)
 
@@ -98,10 +100,10 @@ export default function MobileDashboardPage() {
         const name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Sĩ Tử SenExam'
         setUserName(name)
 
-        // Check Profile & VIP & SenCash
+        // Check Profile & VIP & SenCash & SenCashMobile
         const { data: profile } = await supabase
           .from('profiles')
-          .select('is_vip, role, sencash_balance, sen_cash')
+          .select('is_vip, role, sencash_balance, sen_cash, sencash_mobile_balance')
           .eq('id', user.id)
           .maybeSingle()
         if (profile?.is_vip || profile?.role === 'admin') {
@@ -110,6 +112,8 @@ export default function MobileDashboardPage() {
         if (profile) {
           setSenCash(profile.sencash_balance || profile.sen_cash || 0)
         }
+        const mobileBalance = getUserScmBalance(user, profile)
+        setScmBalance(mobileBalance)
 
         // Submissions stats
         const { data: subs } = await supabase
@@ -155,9 +159,7 @@ export default function MobileDashboardPage() {
     )
   }
 
-  // Tỉ giá Cash Mobile: 1.000đ = 10 SCm (1 SenCash PC = 5 SCm Mobile)
-  const scmBalance = (senCash || 0) * 5
-
+  // Ví Cash Mobile (SCm) tách biệt với tỉ giá 1.000đ = 10 SCm (100đ = 1 SCm) độc quyền di động
   const filteredExams = exams.filter((ex) => {
     const matchSub = selectedSubject === 'all' || (ex.subject && ex.subject.toLowerCase().includes(selectedSubject.toLowerCase()))
     const matchQuery = !searchQuery.trim() || ex.title.toLowerCase().includes(searchQuery.toLowerCase())

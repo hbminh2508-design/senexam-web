@@ -15,6 +15,7 @@ import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion } from '@/lib/latexExamParser'
 import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
+import HsaExamRoom from '@/app/components/HsaExamRoom'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -926,6 +927,17 @@ export default function NewExamRoomPage() {
         isDark={isDark}
         title="SenExam Phòng Thi 2.0"
         subtitle="Đang chuẩn bị đề thi & kết nối phòng thi ảo an toàn..."
+      />
+    )
+  }
+
+  // PHÒNG THI ĐÁNH GIÁ NĂNG LỰC HSA (ĐHQGHN)
+  if (exam?.exam_type === 'HSA' && (!isExamVip || isUserVip)) {
+    return (
+      <HsaExamRoom
+        exam={exam}
+        studentInfo={studentInfo}
+        onExit={() => router.push('/new-sen-ground')}
       />
     )
   }

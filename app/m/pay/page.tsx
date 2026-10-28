@@ -293,6 +293,7 @@ export default function MobilePayPage() {
         },
         body: JSON.stringify({
           amountVnd: topupAmount,
+          platform: 'mobile',
           returnUrl: `${window.location.origin}/m/pay?tab=wallet`,
         }),
       })

@@ -6625,7 +6625,7 @@ function UnifiedHubContent() {
                 style={{ fontFamily: 'var(--font-hub-heading)' }}
               >
                 {activeTab === 'exams'
-                  ? 'Kho Đề Thi & Khảo Thí'
+                  ? 'Sen Portal • Khảo Thí Quốc Gia & Luyện Thi Chuẩn Hóa'
                   : activeTab === 'library'
                   ? 'Thư Viện Sen Online'
                   : activeTab === 'create'
@@ -6741,7 +6741,7 @@ function UnifiedHubContent() {
             }`}
           >
             <BookOpen className="h-4 w-4" />
-            <span>Kho Đề Thi & Tuyển Tập</span>
+            <span>Sen Portal Khảo Thí</span>
             {exams.length > 0 && (
               <span className="rounded-full bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.2 text-[10px] font-black">
                 {exams.length}
@@ -7315,19 +7315,46 @@ function UnifiedHubContent() {
 
               {/* PHẦN 2: DANH SÁCH ĐỀ THI ĐỘC LẬP / CÁC ĐỀ KHÔNG GỘP VÀO TUYỂN TẬP */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-indigo-500" />
                     <h2
                       className="text-base sm:text-lg font-black uppercase tracking-wider text-slate-800 dark:text-slate-200"
                       style={{ fontFamily: 'var(--font-hub-heading)' }}
                     >
-                      {activeCollection ? 'Các Đề Thi Khác' : 'Kho Đề Thi KaTeX Chuẩn'}
+                      {activeCollection ? 'Các Đề Thi Khác' : 'Sen Portal • Kho Đề Khảo Thí (100% KaTeX)'}
                     </h2>
                   </div>
-                  <span className="text-xs text-slate-500 font-bold font-mono">
-                    {filteredExams.length} đề thi
-                  </span>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {['Tất cả', 'HSA', 'THPTQG'].map((typeCode) => {
+                      const isActive = selectedType === typeCode
+                      const label =
+                        typeCode === 'Tất cả'
+                          ? 'Tất cả đề'
+                          : typeCode === 'HSA'
+                          ? 'Đề HSA ĐHQGHN'
+                          : 'Đề THPT Quốc Gia'
+
+                      return (
+                        <button
+                          key={typeCode}
+                          type="button"
+                          onClick={() => setSelectedType(typeCode)}
+                          className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                            isActive
+                              ? 'bg-sky-600 text-white shadow-xs'
+                              : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                    <span className="text-xs text-slate-500 font-bold font-mono pl-1">
+                      {filteredExams.length} đề thi
+                    </span>
+                  </div>
                 </div>
 
                 {filteredExams.length === 0 ? (

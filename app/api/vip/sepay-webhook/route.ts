@@ -23,7 +23,7 @@ type SepayPayload = {
   id?: number | string
 }
 
-const ORDER_CODE_RE = /(SENVIP|SENCASH|SENPREM|SENLITE|SENONEL|SENONE|SENPLUS|NOPQUY)[A-Z0-9]{6}/
+const ORDER_CODE_RE = /(SENVIP|SENCASH|SCM|SENPREM|SENLITE|SENONEL|SENONE|SENPLUS|NOPQUY)[A-Z0-9]{6}/
 
 async function handleVipOrder(supabaseAdmin: ReturnType<typeof getSupabaseAdmin>, orderCode: string, payload: SepayPayload) {
   const { data: order, error: fetchErr } = await supabaseAdmin
@@ -84,13 +84,36 @@ async function handleSenCashTopup(supabaseAdmin: ReturnType<typeof getSupabaseAd
   const amount = payload.transferAmount || 0
   if (amount < order.amount_vnd) return { ignored: 'amount_mismatch' }
 
-  const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
-    p_user_id: order.user_id,
-    p_delta: order.sencash_amount,
-    p_reason: 'topup',
-    p_reference: order.id,
-  })
-  if (rpcError) throw rpcError
+  const isMobile = orderCode.startsWith('SCM') || (order.order_code && order.order_code.startsWith('SCM'))
+
+  if (isMobile) {
+    // Nạp ví SenCashMobile (SCm) độc quyền di động
+    try {
+      const { data: userAuth } = await supabaseAdmin.auth.admin.getUserById(order.user_id)
+      const currentScm = Number(userAuth?.user?.user_metadata?.sencash_mobile_balance) || 0
+      const newScm = currentScm + order.sencash_amount
+      await supabaseAdmin.auth.admin.updateUserById(order.user_id, {
+        user_metadata: {
+          ...(userAuth?.user?.user_metadata || {}),
+          sencash_mobile_balance: newScm,
+        },
+      })
+      try {
+        await supabaseAdmin.from('profiles').update({ sencash_mobile_balance: newScm }).eq('id', order.user_id)
+      } catch {}
+    } catch (err: any) {
+      console.warn('Mobile SCm credit notice:', err.message)
+    }
+  } else {
+    // Nạp ví SenCash PC tiêu chuẩn
+    const { error: rpcError } = await supabaseAdmin.rpc('adjust_sencash_balance', {
+      p_user_id: order.user_id,
+      p_delta: order.sencash_amount,
+      p_reason: 'topup',
+      p_reference: order.id,
+    })
+    if (rpcError) throw rpcError
+  }
 
   await supabaseAdmin
     .from('sencash_topup_orders')

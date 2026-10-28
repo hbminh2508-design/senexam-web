@@ -31,8 +31,11 @@ export function senCashToScm(sc: number): number {
   return (sc || 0) * SCM_PER_SENCASH
 }
 
-export function scmToSenCash(scm: number): number {
-  return Math.floor((scm || 0) / SCM_PER_SENCASH)
+export function getUserScmBalance(user: any, profile?: any): number {
+  if (profile?.sencash_mobile_balance !== undefined && profile?.sencash_mobile_balance !== null) {
+    return Number(profile.sencash_mobile_balance) || 0
+  }
+  return Number(user?.user_metadata?.sencash_mobile_balance) || 0
 }
 
 export function isValidTopupAmount(vnd: number): boolean {

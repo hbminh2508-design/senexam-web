@@ -11,6 +11,7 @@ import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, parseLatexExamCode } from '@/lib/latexExamParser'
+import HsaExamRoom from '@/app/components/HsaExamRoom'
 import {
   Clock,
   ArrowLeft,
@@ -87,6 +88,7 @@ export default function MobileExamPage() {
   const [shuffleQuestionsEnabled, setShuffleQuestionsEnabled] = useState(false)
   const [shuffleOptionsEnabled, setShuffleOptionsEnabled] = useState(false)
   const [isReviewMode, setIsReviewMode] = useState(false)
+  const [studentUser, setStudentUser] = useState<any>(null)
 
   // Tải đề thi từ Supabase
   useEffect(() => {
@@ -98,6 +100,7 @@ export default function MobileExamPage() {
           router.replace(`/m/login?returnUrl=/m/exams/${examId}`)
           return
         }
+        setStudentUser(user)
 
         const { data, error } = await supabase
           .from('exams')
@@ -305,6 +308,21 @@ export default function MobileExamPage() {
       <ModernLoading
         title="Phòng Khảo Thí Trực Tuyến Mobile"
         subtitle={`Đang tải cấu trúc đề thi, công thức KaTeX & tài liệu câu hỏi (v${MOBILE_VERSION})...`}
+      />
+    )
+  }
+
+  // PHÒNG THI ĐÁNH GIÁ NĂNG LỰC HSA (ĐHQGHN)
+  if (exam?.exam_type === 'HSA') {
+    return (
+      <HsaExamRoom
+        exam={exam}
+        studentInfo={{
+          name: studentUser?.user_metadata?.full_name || studentUser?.email?.split('@')[0] || 'Thí sinh Mobile',
+          email: studentUser?.email || '',
+        }}
+        isMobileView={true}
+        onExit={() => router.push('/m/sen-ground')}
       />
     )
   }

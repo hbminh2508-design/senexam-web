@@ -512,6 +512,11 @@ function SetupCourseMainContent() {
   const [katexIsVip, setKatexIsVip] = useState(false)
   const [katexShuffleQuestions, setKatexShuffleQuestions] = useState(false)
   const [katexShuffleOptions, setKatexShuffleOptions] = useState(false)
+  const [hsaSelectedScienceSubjects, setHsaSelectedScienceSubjects] = useState<string[]>([
+    'Vật lí',
+    'Hóa học',
+    'Sinh học',
+  ])
 
   // ==========================================
   // STATE: MODAL CÀI ĐẶT ĐỀ THI (NÚT SLIDERS CẠNH THÙNG RÁC)
@@ -1137,7 +1142,8 @@ function SetupCourseMainContent() {
         : null
 
       // Đóng gói cấu trúc Sections chuẩn để new-exams/[id] đọc mượt mà
-      const parsedMaxScore = parseFloat(katexMaxScore) || 10
+      const isHsa = katexExamType === 'HSA'
+      const parsedMaxScore = isHsa ? 150 : (parseFloat(katexMaxScore) || 10)
       const correctAnswersMap: Record<string, any> = {}
       katexQuestions.forEach((q, idx) => {
         correctAnswersMap[idx] = q.correctAnswer
@@ -1147,31 +1153,82 @@ function SetupCourseMainContent() {
       const isMixed = distinctTypes.length > 1
       const defaultSecType = isMixed ? 'mixed' : (distinctTypes[0] || 'single_choice')
 
-      const examSections: SectionItem[] = [
-        {
-          id: 'sec-katex-main',
-          name: 'Phần thi KaTeX trực tiếp',
-          totalPoints: parsedMaxScore,
-          scoringMode: 'auto_divide',
-          questionCount: katexQuestions.length,
-          questionTypeMode: isMixed ? 'mixed' : 'uniform',
-          type: defaultSecType as any,
-          format: 'katex',
-          is_katex: true,
-          is_vip: katexIsVip,
-          shuffle_questions: katexShuffleQuestions,
-          shuffle_options: katexShuffleOptions,
-          instructions: 'Đề thi được soạn trực tiếp bằng KaTeX sắc nét, không dùng file PDF.',
-          correctAnswers: correctAnswersMap,
-          // Đính kèm danh sách câu hỏi KaTeX chi tiết
-          questions: katexQuestions as any,
-        } as any,
-      ]
+      const examSections: SectionItem[] = isHsa
+        ? [
+            {
+              id: 'sec_hsa_p1',
+              name: 'Phần 1: Tư duy định lượng (Toán học)',
+              totalPoints: 50,
+              scoringMode: 'auto_divide',
+              questionCount: katexQuestions.length >= 50 ? 50 : katexQuestions.length,
+              questionTypeMode: 'uniform',
+              type: 'single_choice',
+              format: 'katex',
+              is_katex: true,
+              is_vip: katexIsVip,
+              shuffle_questions: katexShuffleQuestions,
+              shuffle_options: katexShuffleOptions,
+              instructions: 'Phần thi Tư duy định lượng gồm 50 câu hỏi Toán học.',
+              questions: katexQuestions.slice(0, 50) as any,
+            } as any,
+            {
+              id: 'sec_hsa_p2',
+              name: 'Phần 2: Tư duy định tính (Ngữ văn)',
+              totalPoints: 50,
+              scoringMode: 'auto_divide',
+              questionCount: katexQuestions.length > 50 ? Math.min(50, katexQuestions.length - 50) : 50,
+              questionTypeMode: 'uniform',
+              type: 'single_choice',
+              format: 'katex',
+              is_katex: true,
+              is_vip: katexIsVip,
+              shuffle_questions: katexShuffleQuestions,
+              shuffle_options: katexShuffleOptions,
+              instructions: 'Phần thi Tư duy định tính gồm 50 câu hỏi Ngôn ngữ & Ngữ văn.',
+              questions: katexQuestions.length > 50 ? (katexQuestions.slice(50, 100) as any) : [],
+            } as any,
+            {
+              id: 'sec_hsa_p3',
+              name: 'Phần 3: Khoa học / Ngoại ngữ',
+              totalPoints: 50,
+              scoringMode: 'auto_divide',
+              questionCount: katexQuestions.length > 100 ? katexQuestions.length - 100 : 50,
+              questionTypeMode: 'uniform',
+              type: 'single_choice',
+              format: 'katex',
+              is_katex: true,
+              is_vip: katexIsVip,
+              shuffle_questions: katexShuffleQuestions,
+              shuffle_options: katexShuffleOptions,
+              instructions: 'Phần thi Khoa học tự nhiên & xã hội hoặc Ngoại ngữ.',
+              subjects: hsaSelectedScienceSubjects,
+              questions: katexQuestions.length > 100 ? (katexQuestions.slice(100) as any) : [],
+            } as any,
+          ]
+        : [
+            {
+              id: 'sec-katex-main',
+              name: 'Phần thi KaTeX trực tiếp',
+              totalPoints: parsedMaxScore,
+              scoringMode: 'auto_divide',
+              questionCount: katexQuestions.length,
+              questionTypeMode: isMixed ? 'mixed' : 'uniform',
+              type: defaultSecType as any,
+              format: 'katex',
+              is_katex: true,
+              is_vip: katexIsVip,
+              shuffle_questions: katexShuffleQuestions,
+              shuffle_options: katexShuffleOptions,
+              instructions: 'Đề thi được soạn trực tiếp bằng KaTeX sắc nét, không dùng file PDF.',
+              correctAnswers: correctAnswersMap,
+              questions: katexQuestions as any,
+            } as any,
+          ]
 
       const basePayload: any = {
         title: katexTitle.trim(),
         exam_type: katexExamType,
-        duration: parseInt(katexDuration) || 50,
+        duration: isHsa ? 195 : (parseInt(katexDuration) || 50),
         drive_file_id: null,
         format: 'katex',
         is_vip: katexIsVip,
@@ -1181,7 +1238,9 @@ function SetupCourseMainContent() {
         allow_review: katexAllowReview,
         is_hidden: isHiddenEffective,
         access_code: accessCode,
-        subjects: [katexSubject],
+        subjects: isHsa
+          ? Array.from(new Set([katexSubject, ...hsaSelectedScienceSubjects]))
+          : [katexSubject],
         max_attempts: 1,
         grading_method: 'highest',
         require_proctoring: false,
@@ -2739,25 +2798,144 @@ function SetupCourseMainContent() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Loại kỳ thi</label>
-                  <select
-                    value={katexExamType}
-                    onChange={(e) => setKatexExamType(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
-                  >
-                    {EXAM_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
+                <div className="sm:col-span-2 lg:col-span-4">
+                  <label className="block text-xs font-black text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
+                    Chọn Loại Đề Thi Khảo Thí Chuẩn Hóa *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Nút 1: THPTQG */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKatexExamType('THPTQG')
+                        setKatexDuration('50')
+                        setKatexMaxScore('10')
+                      }}
+                      className={`p-3.5 rounded-2xl border text-left transition flex items-center justify-between cursor-pointer ${
+                        katexExamType === 'THPTQG'
+                          ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500/30 font-black shadow-xs'
+                          : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <GraduationCap className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          <span className="text-xs">THPT Quốc Gia (Chuẩn 2025)</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                          Thang điểm 10 • 50 phút
+                        </p>
+                      </div>
+                      {katexExamType === 'THPTQG' && <CheckCircle2 className="h-4 w-4 text-indigo-600 shrink-0" />}
+                    </button>
+
+                    {/* Nút 2: HSA */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKatexExamType('HSA')
+                        setKatexDuration('195')
+                        setKatexMaxScore('150')
+                      }}
+                      className={`p-3.5 rounded-2xl border text-left transition flex items-center justify-between cursor-pointer ${
+                        katexExamType === 'HSA'
+                          ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500/30 font-black shadow-xs'
+                          : 'border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <Award className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-xs">Đánh Giá Năng Lực HSA (ĐHQGHN)</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                          Thang 150 điểm • 3 phần thi
+                        </p>
+                      </div>
+                      {katexExamType === 'HSA' && <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />}
+                    </button>
+
+                    {/* Nút 3: TSA (Làm mờ, sắp ra mắt) */}
+                    <button
+                      type="button"
+                      disabled
+                      className="p-3.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-100/60 dark:bg-slate-800/20 text-slate-400 dark:text-slate-500 opacity-60 cursor-not-allowed text-left flex items-center justify-between"
+                      title="Tính năng tạo đề Đánh giá tư duy TSA đang hoàn thiện và sẽ ra mắt trong bản cập nhật tới"
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <Brain className="h-4 w-4 text-slate-400" />
+                          <span className="text-xs">Đánh Giá Tư Duy TSA (ĐHBKHN)</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-normal mt-0.5">
+                          Thang điểm 100 • ĐH Bách Khoa
+                        </p>
+                      </div>
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        Sắp ra mắt
+                      </span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Cấu hình đặc thù khi chọn Đề HSA */}
+                {katexExamType === 'HSA' && (
+                  <div className="sm:col-span-2 lg:col-span-4 p-5 rounded-3xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Award className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                        <h4 className="text-xs font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
+                          Cấu Hình 3 Phần Thi Chuẩn HSA (Đại Học Quốc Gia Hà Nội)
+                        </h4>
+                      </div>
+                      <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-600 text-white">
+                        Tổng 150 điểm • 150 câu
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed font-semibold">
+                      Đề thi HSA gồm 3 phần thi độc lập: <strong>Phần 1: Toán (50đ)</strong>, <strong>Phần 2: Văn (50đ)</strong> và <strong>Phần 3: Khoa học / Ngoại ngữ (50đ)</strong>. Hãy tích chọn các môn khoa học mà đề này có câu hỏi để hệ thống kích hoạt tổ hợp tương ứng cho thí sinh:
+                    </p>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {['Vật lí', 'Hóa học', 'Sinh học', 'Lịch sử', 'Địa lí', 'Tiếng Anh'].map((sub) => {
+                        const checked = hsaSelectedScienceSubjects.includes(sub)
+                        return (
+                          <button
+                            key={sub}
+                            type="button"
+                            onClick={() => {
+                              if (checked) {
+                                if (hsaSelectedScienceSubjects.length <= 1) {
+                                  alert('Đề HSA cần ít nhất 1 môn trong phần Khoa học!')
+                                  return
+                                }
+                                setHsaSelectedScienceSubjects((prev) => prev.filter((s) => s !== sub))
+                              } else {
+                                setHsaSelectedScienceSubjects((prev) => [...prev, sub])
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                              checked
+                                ? 'bg-emerald-600 text-white shadow-xs font-black'
+                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10'
+                            }`}
+                          >
+                            <span>{checked ? '✓' : '+'}</span>
+                            <span>{sub}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Thời gian làm bài (phút)</label>
                   <input
                     type="number"
                     min="5"
-                    max="180"
+                    max="300"
                     value={katexDuration}
                     onChange={(e) => setKatexDuration(e.target.value)}
                     className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-4 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"

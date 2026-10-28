@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const user = await getUserFromRequest(request)
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
 
-    const { amountVnd } = await request.json()
+    const { amountVnd, platform } = await request.json()
     if (!isValidTopupAmount(amountVnd)) {
       return NextResponse.json({ error: 'Số tiền nạp phải là bội số của 1.000đ, tối thiểu 1.000đ' }, { status: 400 })
     }
@@ -22,9 +22,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Hệ thống thanh toán chưa được cấu hình' }, { status: 503 })
     }
 
-    const orderCode = generateOrderCode('SENCASH')
+    const isMobile = platform === 'mobile'
+    const prefix = isMobile ? 'SCM' : 'SENCASH'
+    const orderCode = generateOrderCode(prefix)
     const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000).toISOString()
-    const sencashAmount = vndToSenCash(amountVnd)
+    const sencashAmount = isMobile ? Math.floor(amountVnd / 100) : vndToSenCash(amountVnd)
 
     const { data: order, error } = await getSupabaseAdmin()
       .from('sencash_topup_orders')

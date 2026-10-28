@@ -116,9 +116,10 @@ function MobileSenGroundContent() {
   const [docs, setDocs] = useState<DocItem[]>([])
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([])
 
-  // 2. Tab Kho đề
+  // 2. Tab Kho đề (Sen Portal)
   const [examSearch, setExamSearch] = useState('')
   const [selectedSubject, setSelectedSubject] = useState('all')
+  const [selectedExamType, setSelectedExamType] = useState('all')
   const [activeCollection, setActiveCollection] = useState<ExamCollection | null>(null)
   const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false)
 
@@ -222,9 +223,16 @@ function MobileSenGroundContent() {
         (ex.subject && ex.subject.toLowerCase().includes(selectedSubject.toLowerCase()))
       const matchSearch =
         !examSearch.trim() || ex.title.toLowerCase().includes(examSearch.toLowerCase())
-      return matchSub && matchSearch
+      const matchType =
+        selectedExamType === 'all' ||
+        (selectedExamType === 'HSA'
+          ? ex.exam_type === 'HSA' || ex.title?.toLowerCase().includes('hsa') || ex.title?.toLowerCase().includes('đgnl')
+          : selectedExamType === 'THPTQG'
+          ? ex.exam_type === 'THPTQG' || ex.title?.toLowerCase().includes('thpt')
+          : true)
+      return matchSub && matchSearch && matchType
     })
-  }, [exams, selectedSubject, examSearch])
+  }, [exams, selectedSubject, examSearch, selectedExamType])
 
   // Thư viện phân cấp
   const currentFolder = folders.find((f) => f.id === activeFolderId)
@@ -356,7 +364,7 @@ function MobileSenGroundContent() {
           }`}
         >
           <Zap className="h-3.5 w-3.5" />
-          <span>Kho Đề Thi</span>
+          <span>Sen Portal</span>
         </button>
 
         <button
@@ -494,6 +502,28 @@ function MobileSenGroundContent() {
               </div>
             </div>
           )}
+
+          {/* Bộ lọc loại kỳ thi Sen Portal */}
+          <div className="flex items-center gap-1.5 p-1 bg-black/5 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/10">
+            {[
+              { key: 'all', label: 'Tất cả' },
+              { key: 'HSA', label: 'Đề HSA ĐHQGHN' },
+              { key: 'THPTQG', label: 'Đề THPTQG 2025' },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setSelectedExamType(t.key)}
+                className={`flex-1 py-1 rounded-lg text-[11px] font-black transition ${
+                  selectedExamType === t.key
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
           {/* Dải phân loại môn thi trượt ngang */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
