@@ -19,6 +19,7 @@ import {
 
 interface ProtectedDocViewerProps {
   documentId: string
+  driveFileId?: string
   title: string
   canDownload?: boolean
   isLoggedIn: boolean
@@ -28,6 +29,7 @@ interface ProtectedDocViewerProps {
 
 export default function ProtectedDocViewer({
   documentId,
+  driveFileId,
   title,
   canDownload = true,
   isLoggedIn,
@@ -326,21 +328,30 @@ export default function ProtectedDocViewer({
         )}
 
         {error && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center max-w-md py-20">
-            <div className="p-3 rounded-full bg-red-500/20 text-red-400">
-              <AlertTriangle className="w-8 h-8" />
+          driveFileId && !driveFileId.startsWith('azure:') ? (
+            <iframe
+              src={`https://drive.google.com/file/d/${driveFileId}/preview#toolbar=0&navpanes=0&scrollbar=0`}
+              className="w-full h-full min-h-[600px] border-none"
+              allow="autoplay"
+              title={title}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center max-w-md py-20">
+              <div className="p-3 rounded-full bg-red-500/20 text-red-400">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-red-400 mb-1">Không thể đọc tài liệu</h3>
+                <p className="text-xs text-slate-400">{error}</p>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition"
+              >
+                <RotateCw className="w-3.5 h-3.5" /> Thử lại
+              </button>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-red-400 mb-1">Không thể đọc tài liệu</h3>
-              <p className="text-xs text-slate-400">{error}</p>
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white transition"
-            >
-              <RotateCw className="w-3.5 h-3.5" /> Thử lại
-            </button>
-          </div>
+          )
         )}
 
         {!loading && !error && numPages > 0 && (

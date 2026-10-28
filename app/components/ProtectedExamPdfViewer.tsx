@@ -267,10 +267,23 @@ export default function ProtectedExamPdfViewer({
         )}
 
         {error && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-6 py-16 text-slate-400">
-            <AlertTriangle className="h-8 w-8 text-amber-500" />
-            <p className="text-xs text-red-400 max-w-sm">{error}</p>
-          </div>
+          (driveFileId || pdfUrl) ? (
+            <iframe
+              src={
+                driveFileId && !driveFileId.startsWith('azure:')
+                  ? `https://drive.google.com/file/d/${driveFileId}/preview#toolbar=0&navpanes=0&scrollbar=0`
+                  : pdfUrl || ''
+              }
+              className="w-full h-full min-h-[500px] border-none"
+              allow="autoplay"
+              title={title}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-6 py-16 text-slate-400">
+              <AlertTriangle className="h-8 w-8 text-amber-500" />
+              <p className="text-xs text-red-400 max-w-sm">{error}</p>
+            </div>
+          )
         )}
 
         {!loading && !error && numPages > 0 && (

@@ -584,6 +584,7 @@ export default function LibraryClient() {
       {activeDoc && (
         <ProtectedDocViewer
           documentId={activeDoc.id}
+          driveFileId={activeDoc.drive_file_id}
           title={activeDoc.title}
           canDownload={checkDocDownloadable(activeDoc)}
           isLoggedIn={!!currentUser}

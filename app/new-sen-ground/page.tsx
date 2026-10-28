@@ -8831,11 +8831,13 @@ function UnifiedHubContent() {
                       )}
                     </div>
 
-                    {/* VÙNG XEM TÀI LIỆU AN TOÀN PROTECTED CANVAS (KHÔNG DÙNG GOOGLE DRIVE IFRAME) */}
+                    {/* VÙNG NHÚNG XEM TRỰC TIẾP FILE GOOGLE DRIVE IFRAME */}
                     <div className="w-full flex-1 rounded-2xl overflow-hidden border border-black/10 dark:border-white/10 bg-slate-950 relative min-h-[550px] lg:min-h-[700px]">
                       {libActiveInlineDoc ? (
-                        <ProtectedExamPdfViewer
-                          driveFileId={libActiveInlineDoc.drive_file_id}
+                        <iframe
+                          src={`https://drive.google.com/file/d/${libActiveInlineDoc.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`}
+                          className="w-full h-full min-h-[550px] lg:min-h-[700px] border-none"
+                          allow="autoplay"
                           title={libActiveInlineDoc.title}
                         />
                       ) : (
@@ -9906,10 +9908,12 @@ function UnifiedHubContent() {
               </div>
             </div>
 
-            {/* Protected Canvas Preview (KHÔNG DÙNG GOOGLE DRIVE IFRAME) */}
-            <div className="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative">
-              <ProtectedExamPdfViewer
-                driveFileId={libPreviewDoc.drive_file_id}
+            {/* Iframe Preview Google Drive */}
+            <div className="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative min-h-[500px]">
+              <iframe
+                src={`https://drive.google.com/file/d/${libPreviewDoc.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`}
+                className="w-full h-full min-h-[500px] border-none"
+                allow="autoplay"
                 title={libPreviewDoc.title}
               />
             </div>
