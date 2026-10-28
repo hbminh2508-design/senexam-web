@@ -776,8 +776,8 @@ function IdpAuthContent() {
       style={{
         ...vars,
         background: isDark
-          ? 'radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.12), transparent 30%), radial-gradient(circle at 90% 20%, rgba(244, 63, 94, 0.08), transparent 30%), #0F172A'
-          : 'radial-gradient(circle at 10% 10%, rgba(254, 215, 170, 0.35), transparent 30%), radial-gradient(circle at 90% 20%, rgba(199, 210, 254, 0.35), transparent 30%), #F4F7FB',
+          ? 'radial-gradient(circle at 10% 10%, rgba(14, 165, 233, 0.15), transparent 30%), radial-gradient(circle at 90% 20%, rgba(56, 189, 248, 0.1), transparent 30%), #080C14'
+          : 'radial-gradient(circle at 10% 10%, rgba(186, 230, 253, 0.45), transparent 30%), radial-gradient(circle at 90% 20%, rgba(191, 219, 254, 0.4), transparent 30%), #F8FAFC',
         color: 'var(--text)',
       }}
     >

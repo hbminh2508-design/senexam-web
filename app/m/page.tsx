@@ -187,9 +187,13 @@ export default function MobileDashboardPage() {
       {/* 1. TOP HEADER BAR */}
       <header className="flex items-center justify-between gap-3 pt-1">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-pink-500 p-0.5 shadow-md flex items-center justify-center text-white font-black text-sm">
-            {userName.charAt(0).toUpperCase()}
-          </div>
+          <Link href="/m" className="shrink-0 group">
+            <img
+              src="/logo.png"
+              alt="SenExam Logo"
+              className="h-10 w-10 object-contain drop-shadow-md select-none transition group-hover:scale-105 active:scale-95"
+            />
+          </Link>
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] font-semibold text-slate-400">Xin chào 👋</span>

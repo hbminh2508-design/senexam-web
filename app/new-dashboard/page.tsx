@@ -900,7 +900,7 @@ function NewDashboardContent() {
     )
   }
 
-  const themeVars = getModernThemeVars('indigo', isDark)
+  const themeVars = getModernThemeVars('sky', isDark)
 
   return (
     <main
@@ -908,8 +908,8 @@ function NewDashboardContent() {
       style={{
         ...themeVars,
         background: isDark
-          ? 'radial-gradient(circle at 12% 8%, rgba(56, 189, 248, 0.15), transparent 35%), radial-gradient(circle at 88% 12%, rgba(168, 85, 247, 0.15), transparent 28%), radial-gradient(circle at 80% 75%, rgba(99, 102, 241, 0.18), transparent 32%), var(--bg)'
-          : 'radial-gradient(circle at 12% 8%, rgba(255, 187, 120, 0.45), transparent 35%), radial-gradient(circle at 88% 12%, rgba(94, 234, 212, 0.34), transparent 28%), radial-gradient(circle at 80% 75%, rgba(129, 140, 248, 0.32), transparent 32%), var(--bg)',
+          ? 'radial-gradient(circle at 12% 8%, rgba(56, 189, 248, 0.15), transparent 35%), radial-gradient(circle at 88% 12%, rgba(59, 130, 246, 0.12), transparent 28%), radial-gradient(circle at 80% 75%, rgba(14, 165, 233, 0.15), transparent 32%), var(--bg)'
+          : 'radial-gradient(circle at 12% 8%, rgba(186, 230, 253, 0.45), transparent 35%), radial-gradient(circle at 88% 12%, rgba(191, 219, 254, 0.4), transparent 28%), radial-gradient(circle at 80% 75%, rgba(224, 242, 254, 0.45), transparent 32%), var(--bg)',
       }}
     >
       <section className="mx-auto w-full max-w-7xl px-4 pb-12 pt-4 sm:pt-6 sm:px-6 lg:px-8">

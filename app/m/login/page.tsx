@@ -19,8 +19,12 @@ export default function MobileLoginPage() {
   return (
     <div className="flex-1 w-full p-5 flex flex-col justify-between animate-in fade-in">
       <div className="space-y-6 pt-12 text-center">
-        <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-xl">
-          <ShieldCheck className="h-8 w-8" />
+        <div className="w-20 h-20 mx-auto flex items-center justify-center">
+          <img
+            src="/logo.png"
+            alt="SenExam Logo"
+            className="w-full h-full object-contain drop-shadow-xl select-none"
+          />
         </div>
 
         <div className="space-y-1">

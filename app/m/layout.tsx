@@ -17,6 +17,13 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'SenExam Mobile | m.senexam.me',
   description: 'Giao diện thi cử và học tập thuần Mobile tối ưu 100% cho điện thoại',
+  icons: {
+    icon: [
+      { url: '/logo.png', sizes: 'any' },
+    ],
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
