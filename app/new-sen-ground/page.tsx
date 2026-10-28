@@ -101,7 +101,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
-import { parseLatexExamCode } from '@/lib/latexExamParser'
+import { parseLatexExamCode, preprocessLatexContent } from '@/lib/latexExamParser'
 
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-hub-heading' })
@@ -159,7 +159,8 @@ const SafeMathRenderer = React.memo(
     className?: string
     gfm?: boolean
   }) => {
-    const safeContent = typeof content === 'string' ? content : String(content ?? '')
+    const rawStr = typeof content === 'string' ? content : String(content ?? '')
+    const safeContent = preprocessLatexContent(rawStr)
     const remarkPlugins = gfm ? [remarkMath, remarkGfm] : [remarkMath]
     const rehypePlugins: any[] = [
       [
@@ -175,7 +176,29 @@ const SafeMathRenderer = React.memo(
     return (
       <MarkdownErrorBoundary resetKey={safeContent} fallback={<span className="text-xs font-mono">{safeContent}</span>}>
         <div className={className}>
-          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+          <ReactMarkdown
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={rehypePlugins}
+            components={{
+              img: ({ node, ...props }) => (
+                <span className="block my-3 text-center">
+                  <img
+                    {...props}
+                    alt={props.alt || 'Hình minh họa đề thi'}
+                    className="max-h-[380px] max-w-full rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm mx-auto object-contain cursor-zoom-in hover:shadow-md transition bg-white"
+                    onClick={() => {
+                      if (props.src) window.open(props.src, '_blank')
+                    }}
+                  />
+                  {props.alt && props.alt !== 'Hình minh họa đề thi' && (
+                    <span className="block text-[11px] text-slate-400 italic mt-1 font-sans">
+                      {props.alt}
+                    </span>
+                  )}
+                </span>
+              ),
+            }}
+          >
             {safeContent}
           </ReactMarkdown>
         </div>
@@ -448,6 +471,20 @@ const MATH_KEYBOARD_TABS = [
       { label: '\\perp', insert: '\\perp', display: '\\perp' },
       { label: '\\parallel', insert: '\\parallel', display: '\\parallel' },
       { label: '\\equiv', insert: '\\equiv', display: '\\equiv' },
+    ],
+  },
+  {
+    id: 'graphics',
+    name: 'Hình ảnh & Đồ thị',
+    keys: [
+      { label: '\\includegraphics{URL}', insert: '\n\\begin{center}\n\\includegraphics{https://}\n\\end{center}\n', display: '\\text{Ảnh}' },
+      { label: '\\includegraphics[80%]{URL}', insert: '\n\\begin{center}\n\\includegraphics[width=0.8\\linewidth]{https://}\n\\end{center}\n', display: '\\text{Ảnh 80\\%}' },
+      { label: 'Căn giữa ảnh', insert: '\n\\begin{center}\n\\includegraphics{https://}\n\\end{center}\n', display: '\\text{Giữa ảnh}' },
+      { label: '\\caption{...}', insert: '\n\\caption{Hình 1: Đồ thị minh họa}\n', display: '\\text{Chú thích}' },
+      { label: 'Bảng dữ liệu', insert: '\n\\begin{tabular}{|c|c|}\n\\hline\nx & y \\\\\n\\hline\n0 & 1 \\\\\n\\hline\n\\end{tabular}\n', display: '\\text{Bảng}' },
+      { label: 'Đồ thị Oxy', insert: '\n\\begin{center}\n\\includegraphics{https://}\n\\end{center}\n', display: '\\text{Đồ thị}' },
+      { label: '\\img{URL}', insert: '\n\\img{https://}\n', display: '\\text{\\img}' },
+      { label: '![Ảnh](URL)', insert: '\n![Hình minh họa](https://)\n', display: '\\text{MD Ảnh}' },
     ],
   },
 ]
@@ -3021,9 +3058,106 @@ export function SetupCourseMainContent({
                   {/* Nội dung câu hỏi & Xem trước trực tiếp (Live KaTeX Preview) */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                        Nội dung câu hỏi (hỗ trợ công thức $...$)
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                        <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                          Nội dung câu hỏi (hỗ trợ công thức $...$)
+                        </label>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* File input ẩn */}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id={`q-img-upload-${qIdx}`}
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              const reader = new FileReader()
+                              reader.onload = (ev) => {
+                                const dataUrl = ev.target?.result as string
+                                if (!dataUrl) return
+                                setKatexQuestions((prev) => {
+                                  const next = [...prev]
+                                  const curText = next[qIdx].text || ''
+                                  // Nếu câu hỏi có tikz, hỏi người dùng có muốn thay thế tikz không
+                                  if (/\\begin\{tikzpicture\}/i.test(curText)) {
+                                    const tikzCenterRegex = /\\begin\{center\}\s*\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}\s*\\end\{center\}/i
+                                    const tikzOnlyRegex = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/i
+                                    const imgTag = `\n\\begin{center}\n\\includegraphics{${dataUrl}}\n\\end{center}\n`
+                                    if (tikzCenterRegex.test(curText)) {
+                                      next[qIdx].text = curText.replace(tikzCenterRegex, imgTag)
+                                    } else if (tikzOnlyRegex.test(curText)) {
+                                      next[qIdx].text = curText.replace(tikzOnlyRegex, imgTag)
+                                    } else {
+                                      next[qIdx].text = curText + imgTag
+                                    }
+                                  } else {
+                                    next[qIdx].text = curText + `\n\\begin{center}\n\\includegraphics{${dataUrl}}\n\\end{center}\n`
+                                  }
+                                  return next
+                                })
+                              }
+                              reader.readAsDataURL(file)
+                              e.target.value = ''
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              document.getElementById(`q-img-upload-${qIdx}`)?.click()
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:text-indigo-600 transition border border-black/5 dark:border-white/5 cursor-pointer"
+                            title="Tải ảnh đồ thị / hình vẽ từ máy tính"
+                          >
+                            <ImageIcon className="h-3 w-3 text-indigo-500" /> + Tải ảnh
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const url = window.prompt('Nhập URL hình ảnh (https://...):')
+                              if (!url || !url.trim()) return
+                              setKatexQuestions((prev) => {
+                                const next = [...prev]
+                                const curText = next[qIdx].text || ''
+                                const imgTag = `\n\\begin{center}\n\\includegraphics{${url.trim()}}\n\\end{center}\n`
+                                if (/\\begin\{tikzpicture\}/i.test(curText)) {
+                                  const tikzCenterRegex = /\\begin\{center\}\s*\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}\s*\\end\{center\}/i
+                                  const tikzOnlyRegex = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/i
+                                  if (tikzCenterRegex.test(curText)) {
+                                    next[qIdx].text = curText.replace(tikzCenterRegex, imgTag)
+                                  } else if (tikzOnlyRegex.test(curText)) {
+                                    next[qIdx].text = curText.replace(tikzOnlyRegex, imgTag)
+                                  } else {
+                                    next[qIdx].text = curText + imgTag
+                                  }
+                                } else {
+                                  next[qIdx].text = curText + imgTag
+                                }
+                                return next
+                              })
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 hover:text-indigo-600 transition border border-black/5 dark:border-white/5 cursor-pointer"
+                            title="Chèn link hình ảnh URL"
+                          >
+                            <Code className="h-3 w-3 text-emerald-500" /> Link ảnh
+                          </button>
+
+                          {/* Nút dọn TikZ hoặc sourcepage nếu có */}
+                          {/\\begin\{tikzpicture\}/i.test(q.text || '') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                document.getElementById(`q-img-upload-${qIdx}`)?.click()
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition cursor-pointer animate-pulse"
+                              title="Câu hỏi này chứa mã TikZ. Bấm để chọn ảnh thay thế đồ thị này."
+                            >
+                              <Zap className="h-3 w-3" /> Thay TikZ bằng ảnh
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       <textarea
                         rows={4}
                         value={q.text}

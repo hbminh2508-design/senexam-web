@@ -13,13 +13,14 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
-import { normalizeLatexQuestion } from '@/lib/latexExamParser'
+import { normalizeLatexQuestion, preprocessLatexContent } from '@/lib/latexExamParser'
 import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
   children: React.ReactNode
+  resetKey?: any
 }
 
 interface ErrorBoundaryState {
@@ -38,6 +39,12 @@ class MarkdownErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryS
 
   componentDidCatch(error: any) {
     console.warn('LaTeX Markdown render error in exam room:', error)
+  }
+
+  componentDidUpdate(prevProps: ErrorBoundaryProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false })
+    }
   }
 
   render() {
@@ -62,6 +69,8 @@ const SafeMathRenderer = React.memo(
     className?: string
     gfm?: boolean
   }) => {
+    const rawStr = typeof content === 'string' ? content : String(content ?? '')
+    const safeContent = preprocessLatexContent(rawStr)
     const remarkPlugins = gfm ? [remarkMath, remarkGfm] : [remarkMath]
     const rehypePlugins: any[] = [
       [
@@ -75,10 +84,32 @@ const SafeMathRenderer = React.memo(
     ]
 
     return (
-      <MarkdownErrorBoundary fallback={<span className="text-xs font-mono">{content}</span>}>
+      <MarkdownErrorBoundary resetKey={safeContent} fallback={<span className="text-xs font-mono">{safeContent}</span>}>
         <div className={className}>
-          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
-            {content}
+          <ReactMarkdown
+            remarkPlugins={remarkPlugins}
+            rehypePlugins={rehypePlugins}
+            components={{
+              img: ({ node, ...props }) => (
+                <span className="block my-3 text-center">
+                  <img
+                    {...props}
+                    alt={props.alt || 'Hình minh họa câu hỏi'}
+                    className="max-h-[360px] max-w-full rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm mx-auto object-contain cursor-zoom-in hover:shadow-md transition bg-white"
+                    onClick={() => {
+                      if (props.src) window.open(props.src, '_blank')
+                    }}
+                  />
+                  {props.alt && props.alt !== 'Hình minh họa câu hỏi' && (
+                    <span className="block text-[11px] text-slate-400 italic mt-1 font-sans">
+                      {props.alt}
+                    </span>
+                  )}
+                </span>
+              ),
+            }}
+          >
+            {safeContent}
           </ReactMarkdown>
         </div>
       </MarkdownErrorBoundary>

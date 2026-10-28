@@ -147,25 +147,67 @@ export function cleanOptionText(raw: string): { text: string; isTrue: boolean } 
 }
 
 /**
+ * Chuẩn hóa và tiền xử lý nội dung LaTeX trước khi render sang ReactMarkdown / KaTeX.
+ * Hỗ trợ chuyển đổi các lệnh hình ảnh LaTeX sang Markdown Image:
+ * - \includegraphics[options]{url}
+ * - \includegraphics{url}
+ * - \img{url}, \image{url}, \fig{url}
+ * - Xóa các lệnh rác: \sourcepage{...}, \noindent, \centerline...
+ * - Xử lý khối TikZ thành khung đồ thị trực quan
+ */
+export function preprocessLatexContent(raw: string): string {
+  if (!raw || typeof raw !== 'string') return ''
+
+  let text = raw
+    // 1. Dọn dẹp lệnh \sourcepage{...} hoặc \sourcepage
+    .replace(/\\sourcepage(?:\{[^}]*\})?/gi, '')
+    .replace(/\\source(?:\{[^}]*\})?/gi, '')
+
+    // 2. Chuyển đổi các macro chèn ảnh LaTeX sang cú pháp Markdown Image
+    // Ví dụ: \includegraphics[width=0.8\linewidth]{https://...} hoặc \includegraphics{data:...}
+    .replace(/\\includegraphics(?:\s*\[[^\]]*\])?\s*\{([^}]+)\}/gi, '\n\n![]($1)\n\n')
+    // Ví dụ: \img{...}, \image{...}, \fig{...}
+    .replace(/\\(?:img|image|fig)\s*\{([^}]+)\}/gi, '\n\n![]($1)\n\n')
+    // \caption{...} và \label{...}
+    .replace(/\\caption\s*\{([^}]+)\}/gi, '\n\n*($1)*\n\n')
+    .replace(/\\label\s*\{[^}]*\}/gi, '')
+    // \centerline{\includegraphics...}
+    .replace(/\\centerline\s*\{\s*!\[([^\]]*)\]\(([^)]+)\)\s*\}/gi, '\n\n![$1]($2)\n\n')
+
+    // 3. Xóa môi trường \begin{center} / \end{center} bọc quanh ảnh nếu có
+    .replace(/\\begin\{center\}\s*(!\[[^\]]*\]\([^)]+\))\s*\\end\{center\}/gi, '$1')
+
+    // 4. Khối TikZ biểu đồ / đồ thị: không để lộ raw coordinates
+    .replace(/\\begin\{center\}\s*\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}\s*\\end\{center\}/gi, () => {
+      return '\n\n> 📊 *[Hình vẽ / Đồ thị minh họa đề thi]*\n\n'
+    })
+    .replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/gi, () => {
+      return '\n\n> 📊 *[Hình vẽ / Đồ thị minh họa đề thi]*\n\n'
+    })
+
+    // 5. Dọn dẹp các lệnh định dạng thừa
+    .replace(/\\(?:noindent|centering|hfill|smallskip|medskip|bigskip|par|vfill)\b/g, '')
+    .replace(/\\(?:vspace|hspace)\*?\{[^}]*\}/g, '')
+    .replace(/\\(?:newpage|clearpage)\b/g, '')
+
+    // 6. Dấu ngoặc kép tiếng Việt trong LaTeX
+    .replace(/``/g, '"')
+    .replace(/''/g, '"')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+
+  return text.trim()
+}
+
+/**
  * Dọn dẹp các lệnh định dạng thừa trong văn bản câu hỏi LaTeX
  */
 export function cleanLatexQuestionText(raw: string): string {
   let text = raw
     // Xóa comment % đến hết dòng
     .replace(/(^|[^\\])%.*$/gm, '$1')
-    // Xóa các lệnh định dạng trang/khoảng cách không cần thiết cho web KaTeX
-    .replace(/\\(?:noindent|centering|hfill|smallskip|medskip|bigskip|par|vfill)\b/g, '')
-    .replace(/\\(?:vspace|hspace)\*?\{[^}]*\}/g, '')
-    .replace(/\\(?:newpage|clearpage)/g, '')
-    // Chuẩn hóa dấu ngoặc kép tiếng Việt trong LaTeX
-    .replace(/``/g, '"')
-    .replace(/''/g, '"')
-    // Chuẩn hóa khoảng cách dòng
-    .replace(/\r\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
 
-  return text
+  return preprocessLatexContent(text)
 }
 
 /**

@@ -10,7 +10,7 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
-import { normalizeLatexQuestion, parseLatexExamCode } from '@/lib/latexExamParser'
+import { normalizeLatexQuestion, parseLatexExamCode, preprocessLatexContent } from '@/lib/latexExamParser'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
 import {
   Clock,
@@ -51,13 +51,35 @@ interface QuestionItem {
 }
 
 function SafeMathRenderer({ content, className }: { content: string; className?: string }) {
+  const rawStr = typeof content === 'string' ? content : String(content ?? '')
+  const safeContent = preprocessLatexContent(rawStr)
+
   return (
     <div className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[[rehypeKatex, { throwOnError: false, errorColor: '#ef4444', strict: false }]]}
+        components={{
+          img: ({ node, ...props }) => (
+            <span className="block my-2 text-center">
+              <img
+                {...props}
+                alt={props.alt || 'Hình minh họa câu hỏi'}
+                className="max-h-[300px] max-w-full rounded-xl border border-slate-200 dark:border-white/10 shadow-sm mx-auto object-contain cursor-zoom-in hover:shadow-md transition bg-white"
+                onClick={() => {
+                  if (props.src) window.open(props.src, '_blank')
+                }}
+              />
+              {props.alt && props.alt !== 'Hình minh họa câu hỏi' && (
+                <span className="block text-[10px] text-slate-400 italic mt-0.5 font-sans">
+                  {props.alt}
+                </span>
+              )}
+            </span>
+          ),
+        }}
       >
-        {content}
+        {safeContent}
       </ReactMarkdown>
     </div>
   )
