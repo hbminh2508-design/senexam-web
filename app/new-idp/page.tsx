@@ -806,6 +806,14 @@ function IdpAuthContent() {
       <div className="relative z-10 w-full max-w-[500px] flex flex-col items-center">
         {/* BRAND HEADER */}
         <div className="text-center space-y-2 mb-6">
+          <div className="mx-auto mb-2 flex items-center justify-center">
+            <img
+              src={targetService === 'seb' ? '/seb-logo.png' : '/logo.png'}
+              alt={targetService === 'seb' ? 'SEB Canvas Logo' : 'SenExam Logo'}
+              className="h-16 w-16 object-contain drop-shadow-md select-none transition-transform hover:scale-105"
+            />
+          </div>
+
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 shadow-sm backdrop-blur-xl">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
             <span>SenExam IDP</span>

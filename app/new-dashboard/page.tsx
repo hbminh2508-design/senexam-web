@@ -1504,6 +1504,11 @@ function NewDashboardContent() {
         {/* BRANDING NHẬN DIỆN THƯƠNG HIỆU & HẠNG THÀNH VIÊN ĐẶT NGOÀI KHUNG THẺ */}
         <div className="mb-3.5 flex items-center justify-between px-2">
           <div className="flex items-center gap-2.5">
+            <img
+              src="/logo.png"
+              alt="SenExam Logo"
+              className="h-8 w-8 object-contain drop-shadow-md shrink-0 select-none"
+            />
             {isVipUser ? (
               planTier === 'sen_one' ? (
                 <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-400/25 via-pink-400/25 to-indigo-500/25 dark:from-amber-500/20 dark:via-pink-500/20 dark:to-indigo-500/20 border border-amber-500/40 shadow-[0_2px_14px_rgba(245,158,11,0.25)] text-amber-950 dark:text-amber-200 backdrop-blur-md">

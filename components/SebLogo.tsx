@@ -15,38 +15,14 @@ export default function SebLogo({
 }: SebLogoProps) {
   return (
     <div className={`inline-flex items-center gap-2.5 select-none ${className}`}>
-      {/* Biểu tượng chữ S bảo mật cách điệu hình khiên */}
-      <div
-        className="relative flex items-center justify-center shrink-0 rounded-2xl bg-gradient-to-br from-sky-500 via-blue-600 to-indigo-700 shadow-md shadow-sky-500/20"
+      {/* Biểu tượng logo bảo mật SEB (Hoa sen bảo vệ) */}
+      <img
+        src="/seb-logo.png"
+        alt="SEB Canvas Logo"
+        className="shrink-0 object-contain drop-shadow-md select-none"
         style={{ width: size, height: size }}
-      >
-        <svg
-          viewBox="0 0 100 100"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="w-[62%] h-[62%]"
-        >
-          {/* Viền khiên bảo mật SEB */}
-          <path
-            d="M50 10 L82 24 V52 C82 72 68 87 50 93 C32 87 18 72 18 52 V24 L50 10Z"
-            stroke="white"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.3"
-          />
-          {/* Chữ S công nghệ cao */}
-          <path
-            d="M66 33 C62 27 54 26 47 27 C38 28.5 32 35 34 43 C35.5 50 43 53 52 55 C64 57.5 70 63 68 71 C66 80 56 84 46 83 C36 82 29 76 27 70"
-            stroke="white"
-            strokeWidth="9"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {/* Điểm sáng bảo mật nhỏ */}
-          <circle cx="70" cy="28" r="3.5" fill="#38bdf8" />
-        </svg>
-      </div>
+        loading="eager"
+      />
 
       {showText && (
         <div className="flex flex-col text-left leading-none">
