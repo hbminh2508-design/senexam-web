@@ -16,6 +16,7 @@ import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, preprocessLatexContent } from '@/lib/latexExamParser'
 import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
+import UniversityExamRoom from '@/app/components/UniversityExamRoom'
 import TikzRenderer from '@/app/components/TikzRenderer'
 
 interface ErrorBoundaryProps {
@@ -993,6 +994,34 @@ export default function NewExamRoomPage() {
     )
   }
 
+  // PHÒNG THI ĐẠI HỌC PORTAL UET (GIAO DIỆN GÓC VUÔNG, CUỘN LIÊN TỤC)
+  const isUniversityFormat = Boolean(
+    exam?.exam_type === 'UNIVERSITY' ||
+    exam?.format === 'university' ||
+    exam?.format === 'portal_uet' ||
+    String(exam?.title || '').toUpperCase().includes('PORTAL UET') ||
+    String(exam?.title || '').toUpperCase().includes('UET') ||
+    String(exam?.title || '').toUpperCase().includes('ĐẠI HỌC') ||
+    String(exam?.title || '').toUpperCase().includes('DAI HOC')
+  )
+
+  if (isUniversityFormat && (!isExamVip || isUserVip)) {
+    return (
+      <UniversityExamRoom
+        exam={exam}
+        studentInfo={{
+          id: studentInfo.id,
+          name: studentInfo.name,
+          email: studentInfo.email,
+          avatar: studentInfo.avatar,
+          studentId: '2202' + (studentInfo.id ? studentInfo.id.slice(0, 4) : '0001'),
+          school: 'Trường Đại học Công nghệ (VNU-UET)',
+        }}
+        onExit={() => router.push('/new-sen-ground')}
+      />
+    )
+  }
+
   // PHÒNG CHỜ BẮT ĐẦU THI
   if (!hasStarted) {
     return (
@@ -1271,7 +1300,7 @@ export default function NewExamRoomPage() {
               </div>
             </div>
           ) : (
-            <div className="mt-7 flex gap-3">
+            <div className="mt-7 flex flex-col sm:flex-row gap-2.5">
               <button
                 type="button"
                 onClick={() => {
@@ -1282,10 +1311,18 @@ export default function NewExamRoomPage() {
                     else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {})
                   } catch (e) {}
                 }}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition hover:scale-[1.01] active:scale-[0.99]"
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#111827] dark:bg-white text-white dark:text-slate-900 py-3.5 text-xs font-black uppercase tracking-wider shadow-lg transition hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               >
                 Bắt đầu làm bài thi ngay <ChevronRight className="h-4 w-4" />
               </button>
+
+              <Link
+                href={`/university-exams/${examId}`}
+                className="px-4 py-3.5 rounded-2xl border border-sky-600/30 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 text-xs font-bold transition hover:bg-sky-100 flex items-center justify-center gap-1.5 shrink-0"
+                title="Mở đề thi với giao diện Portal UET (Góc vuông, cuộn dọc Moodle)"
+              >
+                🎓 Giao diện Portal UET
+              </Link>
             </div>
           )}
         </div>

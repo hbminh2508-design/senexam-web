@@ -360,7 +360,7 @@ export interface SectionItem {
   }>
 }
 
-const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL', 'Kiểm tra 1 tiết', 'Học kỳ']
+const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL', 'Đại học (Portal UET)', 'Kiểm tra 1 tiết', 'Học kỳ']
 const EXAM_BLOCKS = [
   { code: 'A00', name: 'Toán, Vật lí, Hóa học' },
   { code: 'A01', name: 'Toán, Vật lí, Tiếng Anh' },
@@ -369,6 +369,7 @@ const EXAM_BLOCKS = [
   { code: 'D01', name: 'Ngữ văn, Toán, Tiếng Anh' },
   { code: 'HSA', name: 'Đánh giá năng lực (HSA)' },
   { code: 'TSA', name: 'Đánh giá tư duy (TSA)' },
+  { code: 'UET', name: 'Đại học (Portal UET)' },
 ]
 
 // BÀN PHÍM ẢO TOÁN HỌC (VIRTUAL MATH KEYBOARD) VỚI CÔNG THỨC RENDER ĐẸP
@@ -1283,7 +1284,9 @@ function SetupCourseMainContent() {
         exam_type: katexExamType,
         duration: isHsa ? 195 : (parseInt(katexDuration) || 50),
         drive_file_id: null,
-        format: 'katex',
+        format: (katexExamType === 'PORTAL_UET' || katexExamType.includes('Portal') || katexExamType.includes('Đại học'))
+          ? 'university'
+          : (isHsa ? 'hsa' : 'katex'),
         is_vip: katexIsVip,
         shuffle_questions: katexShuffleQuestions,
         shuffle_options: katexShuffleOptions,

@@ -242,6 +242,15 @@ export default function HsaExamRoom({
       allRawQuestions = [...exam.questions]
     }
 
+    // Sắp xếp câu hỏi theo thứ tự số câu đã đánh dấu để tránh lệch phần
+    if (allRawQuestions.some((q) => typeof q.number === 'number' || (typeof q.number === 'string' && !isNaN(Number(q.number))))) {
+      allRawQuestions.sort((a, b) => {
+        const numA = Number(a.number) || 0
+        const numB = Number(b.number) || 0
+        return numA - numB
+      })
+    }
+
     // 2. Tạo câu hỏi bù nếu đề chưa đủ 150 câu
     const createPlaceholderQuestions = (startNum: number, count: number, sectionName: string) => {
       return Array.from({ length: count }).map((_, i) => {
