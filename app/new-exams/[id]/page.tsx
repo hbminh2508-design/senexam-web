@@ -18,6 +18,7 @@ import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
 import UniversityExamRoom from '@/app/components/UniversityExamRoom'
 import TikzRenderer from '@/app/components/TikzRenderer'
+import { isUniversityExam } from '@/lib/universityExamHelper'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -994,16 +995,8 @@ export default function NewExamRoomPage() {
     )
   }
 
-  // PHÒNG THI ĐẠI HỌC PORTAL UET (GIAO DIỆN GÓC VUÔNG, CUỘN LIÊN TỤC)
-  const isUniversityFormat = Boolean(
-    exam?.exam_type === 'UNIVERSITY' ||
-    exam?.format === 'university' ||
-    exam?.format === 'portal_uet' ||
-    String(exam?.title || '').toUpperCase().includes('PORTAL UET') ||
-    String(exam?.title || '').toUpperCase().includes('UET') ||
-    String(exam?.title || '').toUpperCase().includes('ĐẠI HỌC') ||
-    String(exam?.title || '').toUpperCase().includes('DAI HOC')
-  )
+  // PHÒNG THI ĐẠI HỌC PORTAL UET (ĐỘC QUYỀN ĐỀ THI CÓ TAG ĐẠI HỌC)
+  const isUniversityFormat = isUniversityExam(exam)
 
   if (isUniversityFormat && (!isExamVip || isUserVip)) {
     return (
@@ -1316,13 +1309,17 @@ export default function NewExamRoomPage() {
                 Bắt đầu làm bài thi ngay <ChevronRight className="h-4 w-4" />
               </button>
 
-              <Link
-                href={`/university-exams/${examId}`}
-                className="px-4 py-3.5 rounded-2xl border border-sky-600/30 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 text-xs font-bold transition hover:bg-sky-100 flex items-center justify-center gap-1.5 shrink-0"
-                title="Mở đề thi với giao diện Portal UET (Góc vuông, cuộn dọc Moodle)"
-              >
-                🎓 Giao diện Portal UET
-              </Link>
+              {/* CHỈ HIỂN THỊ NÚT PORTAL UET CHO ĐỀ THI CÓ TAG ĐẠI HỌC */}
+              {isUniversityFormat && (
+                <Link
+                  href={`/university-exams/${examId}`}
+                  className="px-4 py-3.5 rounded-2xl border border-sky-600/30 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 text-xs font-bold transition hover:bg-sky-100 flex items-center justify-center gap-1.5 shrink-0"
+                  title="Mở đề thi với giao diện Portal UET (Góc vuông, cuộn dọc Moodle)"
+                >
+                  <img src="/uet-logo.png" alt="UET" className="w-4 h-4 object-contain inline" />
+                  <span>Portal UET</span>
+                </Link>
+              )}
             </div>
           )}
         </div>

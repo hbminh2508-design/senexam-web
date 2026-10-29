@@ -23,6 +23,11 @@ import {
   Send,
   AlertTriangle,
   ExternalLink,
+  Zap,
+  ShieldCheck,
+  BookOpen,
+  Wifi,
+  Sparkles,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -160,10 +165,16 @@ export default function UniversityExamRoom({
 }: UniversityExamRoomProps) {
   const router = useRouter()
 
-  // Giai đoạn: 'exam' (làm bài), 'summary' (bảng tóm tắt bài làm), 'review' (xem lại sau khi nộp)
-  const [viewState, setViewState] = useState<'exam' | 'summary' | 'review'>(
-    initialReviewData ? 'review' : 'exam'
+  // Giai đoạn: 'waiting' (chọn chế độ & quy chế), 'exam' (làm bài), 'summary' (bảng tóm tắt), 'review' (xem lại)
+  const [viewState, setViewState] = useState<'waiting' | 'exam' | 'summary' | 'review'>(
+    initialReviewData ? 'review' : 'waiting'
   )
+
+  // Chế độ thi: 'exam' (Thi thật - có thời gian) | 'practice' (Luyện tập - không giới hạn thời gian, xem lời giải tức thì)
+  const [examMode, setExamMode] = useState<'exam' | 'practice'>('exam')
+
+  // Trạng thái kiểm tra đáp án tức thì trong Chế độ Luyện tập: { [qNum]: boolean }
+  const [revealedInPractice, setRevealedInPractice] = useState<Record<number, boolean>>({})
 
   // Danh sách cờ đỏ (Flag question)
   const [flags, setFlags] = useState<Record<number, boolean>>({})
@@ -172,16 +183,19 @@ export default function UniversityExamRoom({
   const [answers, setAnswers] = useState<Record<number, any>>({})
 
   // Thời gian bắt đầu và kết thúc
-  const [startTime] = useState<Date>(new Date())
+  const [startTime, setStartTime] = useState<Date>(new Date())
   const [finishTime, setFinishTime] = useState<Date | null>(null)
 
-  // Thời gian làm bài còn lại (giây)
+  // Thời gian làm bài còn lại (giây) - Chỉ áp dụng trong Chế độ Thi thật
   const examDurationMinutes = Number(exam?.duration) > 0 ? Number(exam.duration) : 60
   const [timeLeft, setTimeLeft] = useState<number>(examDurationMinutes * 60)
 
   // Modal xác nhận nộp bài
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Trạng thái đồng bộ Supabase Online
+  const [isOnlineSynced, setIsOnlineSynced] = useState(true)
 
   // Kết quả sau khi nộp
   const [reviewResult, setReviewResult] = useState<any>(initialReviewData || null)
@@ -257,6 +271,8 @@ export default function UniversityExamRoom({
           const parsed = JSON.parse(saved)
           if (parsed.answers) setAnswers(parsed.answers)
           if (parsed.flags) setFlags(parsed.flags)
+          if (parsed.examMode) setExamMode(parsed.examMode)
+          if (parsed.revealedInPractice) setRevealedInPractice(parsed.revealedInPractice)
         }
       } catch {}
     }
@@ -272,16 +288,18 @@ export default function UniversityExamRoom({
           JSON.stringify({
             answers,
             flags,
+            examMode,
+            revealedInPractice,
             savedAt: Date.now(),
           })
         )
       } catch {}
     }
-  }, [answers, flags, exam?.id, studentInfo?.id, viewState])
+  }, [answers, flags, examMode, revealedInPractice, exam?.id, studentInfo?.id, viewState])
 
-  // Đếm ngược thời gian làm bài
+  // Đếm ngược thời gian làm bài (CHỈ KHI Ở CHẾ ĐỘ THI THẬT)
   useEffect(() => {
-    if (viewState !== 'exam' || timeLeft <= 0) return
+    if (viewState !== 'exam' || examMode !== 'exam' || timeLeft <= 0) return
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -295,11 +313,47 @@ export default function UniversityExamRoom({
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [viewState, timeLeft])
+  }, [viewState, examMode, timeLeft])
 
-  // Tự động nộp bài khi hết giờ
+  // Tự động nộp bài khi hết giờ (Chế độ thi thật)
   const handleAutoSubmit = () => {
     handleSubmitAllAndFinish()
+  }
+
+  // Bắt đầu làm bài thi (Chuyển từ Waiting sang Exam)
+  const handleStartAttempt = async (mode: 'exam' | 'practice') => {
+    setExamMode(mode)
+    setStartTime(new Date())
+    setTimeLeft(examDurationMinutes * 60)
+    setViewState('exam')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+
+    // ĐỒNG BỘ SUPABASE: Báo cáo trạng thái phiên làm bài online
+    if (studentInfo?.id && exam?.id) {
+      try {
+        await supabase
+          .from('submissions')
+          .insert({
+            exam_id: exam.id,
+            user_id: studentInfo.id,
+            score: 0,
+            earned_points: 0,
+            total_points: questions.length,
+            correct_count: 0,
+            total_questions: questions.length,
+            time_spent: 0,
+            details: {
+              status: 'in_progress',
+              mode: mode,
+              started_at: new Date().toISOString(),
+              client: 'portal_uet',
+            },
+          })
+        setIsOnlineSynced(true)
+      } catch (e) {
+        console.warn('Sync online attempt status:', e)
+      }
+    }
   }
 
   // Bật / tắt đặt cờ (Flag) cho câu hỏi
@@ -338,6 +392,17 @@ export default function UniversityExamRoom({
       delete next[qNum]
       return next
     })
+    if (examMode === 'practice') {
+      setRevealedInPractice((prev) => ({ ...prev, [qNum]: false }))
+    }
+  }
+
+  // Kiểm tra đáp án ngay (Chế độ Luyện tập)
+  const handleCheckPracticeQuestion = (qNum: number) => {
+    setRevealedInPractice((prev) => ({
+      ...prev,
+      [qNum]: true,
+    }))
   }
 
   // Xử lý nộp bài và chấm điểm Portal UET
@@ -368,7 +433,6 @@ export default function UniversityExamRoom({
             correctCount++
           }
         } else if (q.type === 'true_false' && Array.isArray(q.subQuestions)) {
-          // Đúng sai theo cụm 4 ý
           let trueCount = 0
           q.subQuestions.forEach((sub: any, sIdx: number) => {
             const subVal = userAns ? userAns[sIdx] : undefined
@@ -408,7 +472,7 @@ export default function UniversityExamRoom({
         }
       })
 
-      // Điểm số theo thang 10 (chuẩn đại học Việt Nam)
+      // Điểm số theo thang 10 (chuẩn đại học)
       const gradeOn10 = maxPoints > 0 ? (earnedPoints / maxPoints) * 10 : 0
       const durationSeconds = Math.round((end.getTime() - startTime.getTime()) / 1000)
 
@@ -426,10 +490,12 @@ export default function UniversityExamRoom({
         percentage: maxPoints > 0 ? Math.round((earnedPoints / maxPoints) * 100) : 0,
         correctCount,
         totalQuestions: questions.length,
+        examMode: examMode,
+        isOnline: true,
         questionResults,
       }
 
-      // Lưu vào Supabase bảng submissions nếu đã đăng nhập
+      // ĐỒNG BỘ SUPABASE: Lưu kết quả chính thức vào bảng submissions
       if (studentInfo.id) {
         try {
           await supabase.from('submissions').insert({
@@ -448,8 +514,9 @@ export default function UniversityExamRoom({
           // Xóa draft
           const draftKey = `uet_draft_${exam.id}_${studentInfo.id}`
           localStorage.removeItem(draftKey)
+          setIsOnlineSynced(true)
         } catch (err) {
-          console.error('Lỗi khi lưu submission Portal UET:', err)
+          console.error('Lỗi khi lưu submission Portal UET vào Supabase:', err)
         }
       }
 
@@ -481,26 +548,32 @@ export default function UniversityExamRoom({
   // Hiển thị phần lựa chọn phương án cho câu hỏi
   const renderQuestionInput = (q: any, isReview = false) => {
     const userVal = answers[q.number]
+    const isPracticeRevealed = examMode === 'practice' && revealedInPractice[q.number]
+    const effectiveReview = isReview || isPracticeRevealed
     const qRes = reviewResult?.questionResults?.find((r: any) => r.questionNumber === q.number)
 
     // Dạng 1: Trả lời ngắn (Short answer)
     if (q.type === 'short_answer') {
+      const isShortCorrect =
+        effectiveReview &&
+        String(userVal || '').trim().toLowerCase() === String(q.correctAnswer || '').trim().toLowerCase()
+
       return (
         <div className="mt-3 pt-3 border-t border-slate-200">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[13px] font-bold text-slate-800">Câu trả lời:</span>
-            {isReview ? (
+            {effectiveReview ? (
               <div className="flex items-center gap-2">
                 <span
                   className={`px-3 py-1 text-[13px] font-mono border rounded-none ${
-                    qRes?.isCorrect
+                    isShortCorrect
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-400 font-bold'
                       : 'bg-rose-50 text-rose-800 border-rose-400 font-bold'
                   }`}
                 >
                   {userVal ? String(userVal) : '(Bỏ trống)'}
                 </span>
-                {qRes?.isCorrect ? (
+                {isShortCorrect ? (
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 inline" />
                 ) : (
                   <XCircle className="w-5 h-5 text-rose-600 inline" />
@@ -601,7 +674,7 @@ export default function UniversityExamRoom({
             let isCorrectOption = false
             let isWrongSelection = false
 
-            if (isReview) {
+            if (effectiveReview) {
               const correctLetter = String(q.correctAnswer || 'A').toUpperCase()
               if (upperLetter === correctLetter) {
                 isCorrectOption = true
@@ -615,7 +688,7 @@ export default function UniversityExamRoom({
               <label
                 key={optIdx}
                 className={`flex items-start gap-2.5 p-2 transition cursor-pointer border rounded-none ${
-                  isReview
+                  effectiveReview
                     ? isCorrectOption
                       ? 'bg-emerald-50 border-emerald-500 text-slate-900 font-semibold'
                       : isWrongSelection
@@ -642,12 +715,12 @@ export default function UniversityExamRoom({
                   <UetSafeMath content={opt} className="inline" />
                 </div>
 
-                {isReview && isCorrectOption && (
+                {effectiveReview && isCorrectOption && (
                   <span className="text-emerald-700 text-xs font-bold shrink-0 flex items-center gap-1">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Đúng
                   </span>
                 )}
-                {isReview && isWrongSelection && (
+                {effectiveReview && isWrongSelection && (
                   <span className="text-rose-700 text-xs font-bold shrink-0 flex items-center gap-1">
                     <XCircle className="w-4 h-4 text-rose-600" /> Sai
                   </span>
@@ -657,9 +730,9 @@ export default function UniversityExamRoom({
           })}
         </div>
 
-        {/* Nút Xóa lựa chọn của tôi (Clear my choice) */}
-        {!isReview && hasAnswer && (
-          <div className="pt-1">
+        {/* Nút Xóa lựa chọn và Nút Kiểm tra trong Chế độ Luyện tập */}
+        <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+          {!isReview && hasAnswer && (
             <button
               type="button"
               onClick={() => handleClearChoice(q.number)}
@@ -667,8 +740,215 @@ export default function UniversityExamRoom({
             >
               Xoá lựa chọn của tôi
             </button>
+          )}
+
+          {/* CHẾ ĐỘ LUYỆN TẬP: Nút Kiểm tra đáp án tức thì */}
+          {examMode === 'practice' && !isReview && hasAnswer && !isPracticeRevealed && (
+            <button
+              type="button"
+              onClick={() => handleCheckPracticeQuestion(q.number)}
+              className="px-3 py-1 bg-[#003366] hover:bg-[#002244] text-white text-[11px] font-bold rounded-none border border-[#001933] cursor-pointer flex items-center gap-1 shadow-xs ml-auto"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" /> Kiểm tra câu này
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================================================
+  // VIEW 0: MÀN HÌNH CHỜ & LỰA CHỌN CHẾ ĐỘ THI (Waiting Screen)
+  // ==========================================================================
+  if (viewState === 'waiting') {
+    return (
+      <div className="min-h-screen bg-[#f8f9fa] font-sans text-slate-800 select-none">
+        {/* Top Navbar xanh Navy UET có LOGO CHÍNH THỨC */}
+        <div className="w-full bg-[#003366] text-white px-4 py-2.5 flex items-center justify-between border-b border-[#002244] shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-white border border-slate-300 p-0.5 rounded-none flex items-center justify-center shadow-xs shrink-0">
+              <img
+                src="/uet-logo.png"
+                alt="Logo Đại học Công nghệ"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <h1 className="text-xs md:text-sm font-bold tracking-wide uppercase">
+                HỆ THỐNG THI TRỰC TUYẾN - TRƯỜNG ĐẠI HỌC CÔNG NGHỆ (VNU-UET)
+              </h1>
+              <p className="text-[11px] text-slate-200">
+                CỔNG THÔNG TIN KHẢO THÍ PORTAL UET
+              </p>
+            </div>
           </div>
-        )}
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs bg-emerald-700/80 px-2.5 py-1 text-white border border-emerald-500/50">
+              <Wifi className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
+              <span>Hệ thống trực tuyến</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Breadcrumbs bar */}
+        <div className="w-full bg-[#e9ecef] border-b border-[#dee2e6] px-4 py-2 text-xs text-slate-600 flex items-center gap-1.5 flex-wrap">
+          <Link href="/new-sen-ground" className="text-[#0f6cbf] hover:underline">
+            Trang chủ
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-[#0f6cbf]">Các khóa học</span>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-slate-800 font-semibold">{exam?.title || 'Đề thi Đại học'}</span>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-slate-500">Phòng chờ thi</span>
+        </div>
+
+        {/* Thân trang phòng chờ */}
+        <div className="max-w-4xl mx-auto p-4 md:p-8">
+          <div className="bg-white border border-[#dee2e6] shadow-xs p-6 md:p-8 rounded-none">
+            {/* Header thông tin với logo UET lớn */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 pb-6 border-b border-slate-200 text-center sm:text-left">
+              <div className="w-20 h-20 bg-white border border-slate-300 p-1 rounded-none flex items-center justify-center shadow-xs shrink-0">
+                <img
+                  src="/uet-logo.png"
+                  alt="Logo Trường Đại học Công nghệ"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="flex-1">
+                <span className="inline-block bg-[#003366] text-white text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider mb-1">
+                  ĐỘC QUYỀN ĐỀ THI ĐẠI HỌC • PORTAL UET
+                </span>
+                <h2 className="text-lg md:text-xl font-bold text-slate-900 leading-snug">
+                  {exam?.title || 'BÀI KIỂM TRA ĐẠI HỌC TRỰC TUYẾN'}
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Học phần: {exam?.subjects?.[0] || 'Toán cao cấp / Kỹ thuật máy tính'} • Thí sinh: <strong>{studentInfo.name}</strong> ({studentInfo.studentId || studentInfo.email})
+                </p>
+              </div>
+            </div>
+
+            {/* Thông số bài kiểm tra */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-6">
+              <div className="border border-slate-200 p-3 bg-[#f8f9fa] text-center">
+                <span className="text-[11px] text-slate-500 block">Số câu hỏi</span>
+                <strong className="text-base text-slate-900">{questions.length} câu</strong>
+              </div>
+              <div className="border border-slate-200 p-3 bg-[#f8f9fa] text-center">
+                <span className="text-[11px] text-slate-500 block">Thời gian quy định</span>
+                <strong className="text-base text-red-600">{examDurationMinutes} phút</strong>
+              </div>
+              <div className="border border-slate-200 p-3 bg-[#f8f9fa] text-center">
+                <span className="text-[11px] text-slate-500 block">Thang điểm</span>
+                <strong className="text-base text-[#003366]">10,00 điểm</strong>
+              </div>
+              <div className="border border-slate-200 p-3 bg-[#f8f9fa] text-center">
+                <span className="text-[11px] text-slate-500 block">Phương pháp tính</span>
+                <strong className="text-base text-slate-900">Điểm cao nhất</strong>
+              </div>
+            </div>
+
+            {/* LỰA CHỌN CHẾ ĐỘ THI CHUẨN: THI THẬT vs LUYỆN TẬP */}
+            <div className="my-6 border border-slate-300 p-5 bg-[#fbfcfe]">
+              <h3 className="text-xs font-bold text-[#003366] uppercase tracking-wide mb-3 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-500" /> Lựa chọn chế độ làm bài:
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Lựa chọn 1: Thi thật */}
+                <div
+                  onClick={() => setExamMode('exam')}
+                  className={`p-4 border-2 transition cursor-pointer rounded-none relative ${
+                    examMode === 'exam'
+                      ? 'border-[#003366] bg-blue-50/60 shadow-xs'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="exam_mode_select"
+                      checked={examMode === 'exam'}
+                      onChange={() => setExamMode('exam')}
+                      className="mt-1 w-4 h-4 accent-[#003366] cursor-pointer"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                        <span>🛡️ Chế độ Thi thật (Tính giờ)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                        • <strong>Có tính thời gian đếm ngược</strong> ({examDurationMinutes} phút).<br />
+                        • Khóa đáp án và giải thích trong lúc làm bài.<br />
+                        • Nộp bài xong mới xem điểm và lời giải chi tiết.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lựa chọn 2: Luyện tập */}
+                <div
+                  onClick={() => setExamMode('practice')}
+                  className={`p-4 border-2 transition cursor-pointer rounded-none relative ${
+                    examMode === 'practice'
+                      ? 'border-[#003366] bg-amber-50/60 shadow-xs'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="exam_mode_select"
+                      checked={examMode === 'practice'}
+                      onChange={() => setExamMode('practice')}
+                      className="mt-1 w-4 h-4 accent-[#003366] cursor-pointer"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                        <span>⚡ Chế độ Luyện tập (Tự do)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                        • <strong>KHÔNG GIỚI HẠN THỜI GIAN</strong> (Làm bài thoải mái).<br />
+                        • Có nút "Kiểm tra" để biết Đúng/Sai ngay sau mỗi câu.<br />
+                        • Xem ngay lời giải Feedback KaTeX chi tiết để ôn tập.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quy định và cam kết */}
+            <div className="text-xs text-slate-600 space-y-1 mb-8 p-3 bg-slate-50 border border-slate-200">
+              <div className="font-bold text-slate-800">Quy chế bài kiểm tra trực tuyến:</div>
+              <p>• Các câu hỏi được hiển thị cuộn liên tục, thí sinh chỉ cần kéo xuống để làm câu tiếp theo.</p>
+              <p>• Hệ thống tự động lưu bản nháp trực tuyến lên Supabase để chống mất bài thi khi gặp sự cố mạng.</p>
+              <p>• Nhấn vào nút "Đặt cờ" để đánh dấu những câu cần xem lại trước khi nộp bài.</p>
+            </div>
+
+            {/* 2 nút Bắt đầu và Thoát */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
+              {onExit && (
+                <button
+                  type="button"
+                  onClick={onExit}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-[#e9ecef] hover:bg-[#dee2e6] text-slate-800 text-xs font-bold rounded-none border border-slate-300 cursor-pointer"
+                >
+                  Quay lại khóa học
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleStartAttempt(examMode)}
+                className="w-full sm:w-auto px-8 py-2.5 bg-[#003366] hover:bg-[#002244] text-white text-xs font-bold rounded-none border border-[#001933] shadow-xs cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2"
+              >
+                <span>Bắt đầu làm bài thi ({examMode === 'exam' ? 'Thi thật' : 'Luyện tập'})</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -679,11 +959,15 @@ export default function UniversityExamRoom({
   if (viewState === 'summary') {
     return (
       <div className="min-h-screen bg-[#f8f9fa] font-sans select-none text-slate-800">
-        {/* Header Portal UET Navy */}
+        {/* Header Portal UET Navy có Logo */}
         <div className="w-full bg-[#003366] text-white px-4 py-2.5 flex items-center justify-between border-b border-[#002244] shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white text-[#003366] font-bold font-serif flex items-center justify-center text-sm border border-slate-300">
-              UET
+            <div className="w-8 h-8 bg-white border border-slate-300 p-0.5 rounded-none flex items-center justify-center shadow-xs shrink-0">
+              <img
+                src="/uet-logo.png"
+                alt="Logo Đại học Công nghệ"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <h1 className="text-xs md:text-sm font-bold tracking-wide uppercase">
@@ -695,9 +979,15 @@ export default function UniversityExamRoom({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono bg-[#002244] px-2 py-1 text-amber-300 font-bold border border-slate-600">
-              {formatTime(timeLeft)}
-            </span>
+            {examMode === 'exam' ? (
+              <span className="text-xs font-mono bg-[#002244] px-2 py-1 text-amber-300 font-bold border border-slate-600">
+                {formatTime(timeLeft)}
+              </span>
+            ) : (
+              <span className="text-xs bg-amber-500 text-slate-900 font-bold px-2 py-1 border border-amber-600">
+                ⚡ Luyện tập tự do
+              </span>
+            )}
           </div>
         </div>
 
@@ -718,7 +1008,7 @@ export default function UniversityExamRoom({
         <div className="max-w-4xl mx-auto p-4 md:p-8">
           <div className="bg-white border border-[#dee2e6] shadow-xs p-6 rounded-none">
             <h2 className="text-lg md:text-xl font-bold text-[#003366] pb-3 border-b border-slate-200 mb-4">
-              Tóm tắt bài kiểm tra
+              Tóm tắt bài kiểm tra ({examMode === 'exam' ? 'Chế độ Thi thật' : 'Chế độ Luyện tập'})
             </h2>
 
             <div className="overflow-x-auto mb-6">
@@ -800,7 +1090,7 @@ export default function UniversityExamRoom({
                     Nộp bài và kết thúc tất cả?
                   </h3>
                   <p className="text-xs text-slate-600 mt-1">
-                    Khi bạn nộp bài, bạn sẽ không thể thay đổi câu trả lời của mình cho bài kiểm tra này nữa.
+                    Khi bạn nộp bài, hệ thống sẽ tính điểm và lưu kết quả bài kiểm tra lên máy chủ Portal UET.
                   </p>
                 </div>
               </div>
@@ -836,11 +1126,15 @@ export default function UniversityExamRoom({
   if (viewState === 'review' && reviewResult) {
     return (
       <div className="min-h-screen bg-[#f8f9fa] font-sans text-slate-800">
-        {/* Top Navbar xanh Navy UET */}
+        {/* Top Navbar xanh Navy UET có LOGO */}
         <div className="w-full bg-[#003366] text-white px-4 py-2.5 flex items-center justify-between border-b border-[#002244] shadow-xs sticky top-0 z-40">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white text-[#003366] font-bold font-serif flex items-center justify-center text-sm border border-slate-300">
-              UET
+            <div className="w-8 h-8 bg-white border border-slate-300 p-0.5 rounded-none flex items-center justify-center shadow-xs shrink-0">
+              <img
+                src="/uet-logo.png"
+                alt="Logo Đại học Công nghệ"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <h1 className="text-xs md:text-sm font-bold tracking-wide uppercase">
@@ -899,6 +1193,14 @@ export default function UniversityExamRoom({
                     </th>
                     <td className="p-2.5 text-slate-800 font-mono">
                       {formatDateString(startTime)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th className="p-2.5 bg-[#f8f9fa] border-r border-slate-300 font-bold text-slate-700">
+                      Chế độ
+                    </th>
+                    <td className="p-2.5 text-slate-800 font-bold">
+                      {reviewResult.examMode === 'practice' ? '⚡ Chế độ Luyện tập' : '🛡️ Chế độ Thi thật'}
                     </td>
                   </tr>
                   <tr>
@@ -1113,11 +1415,15 @@ export default function UniversityExamRoom({
   // ==========================================================================
   return (
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-slate-800 select-none">
-      {/* Top Navbar xanh Navy UET (#003366) */}
+      {/* Top Navbar xanh Navy UET (#003366) có LOGO */}
       <div className="w-full bg-[#003366] text-white px-4 py-2.5 flex items-center justify-between border-b border-[#002244] shadow-xs sticky top-0 z-40">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-white text-[#003366] font-bold font-serif flex items-center justify-center text-sm border border-slate-300">
-            UET
+          <div className="w-8 h-8 bg-white border border-slate-300 p-0.5 rounded-none flex items-center justify-center shadow-xs shrink-0">
+            <img
+              src="/uet-logo.png"
+              alt="Logo Đại học Công nghệ"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <h1 className="text-xs md:text-sm font-bold tracking-wide uppercase">
@@ -1131,6 +1437,21 @@ export default function UniversityExamRoom({
 
         {/* Thông tin sinh viên & Nút nộp bài */}
         <div className="flex items-center gap-3">
+          {/* Badge chế độ */}
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold border border-white/20 bg-white/10 text-white">
+            {examMode === 'practice' ? (
+              <>
+                <Zap className="w-3.5 h-3.5 text-amber-300" />
+                <span>Chế độ Luyện tập</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Chế độ Thi thật</span>
+              </>
+            )}
+          </div>
+
           <div className="hidden sm:flex items-center gap-2 text-right">
             <div className="text-[11px] text-slate-200 leading-tight">
               <div className="font-bold text-white">{studentInfo.name}</div>
@@ -1161,7 +1482,7 @@ export default function UniversityExamRoom({
           <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
           <span className="text-slate-800 font-semibold">{exam?.title || 'Đề thi Đại học'}</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-          <span className="text-slate-500">Bài làm</span>
+          <span className="text-slate-500">Bài làm ({examMode === 'practice' ? 'Luyện tập' : 'Thi thật'})</span>
         </div>
 
         <div className="text-[11px] text-slate-500 italic">
@@ -1176,6 +1497,11 @@ export default function UniversityExamRoom({
           {questions.map((q) => {
             const hasAnswer = answers[q.number] !== undefined && answers[q.number] !== null && answers[q.number] !== ''
             const isFlagged = flags[q.number]
+            const isPracticeRevealed = examMode === 'practice' && revealedInPractice[q.number]
+            const userVal = answers[q.number]
+            const isCorrectInPractice =
+              isPracticeRevealed &&
+              String(userVal || '').trim().toUpperCase() === String(q.correctAnswer || 'A').trim().toUpperCase()
 
             return (
               <div
@@ -1203,6 +1529,21 @@ export default function UniversityExamRoom({
                     <div className="text-slate-600 text-[11px]">
                       Đạt điểm {q.points || 1.0}
                     </div>
+
+                    {/* Huy hiệu trạng thái khi đang ở Chế độ Luyện tập */}
+                    {isPracticeRevealed && (
+                      <div className="pt-1">
+                        {isCorrectInPractice ? (
+                          <span className="inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 text-[10px]">
+                            ✔ Chính xác
+                          </span>
+                        ) : (
+                          <span className="inline-block px-1.5 py-0.5 bg-rose-100 text-rose-800 font-bold border border-rose-300 text-[10px]">
+                            ✖ Chưa đúng
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Nút Đặt cờ (Flag question) có icon cờ đỏ */}
@@ -1236,6 +1577,28 @@ export default function UniversityExamRoom({
 
                     {/* Vùng lựa chọn đáp án */}
                     {renderQuestionInput(q, false)}
+
+                    {/* HIỂN THỊ FEEDBACK LỜI GIẢI TỨC THÌ (CHỈ TRONG CHẾ ĐỘ LUYỆN TẬP KHI BẤM KIỂM TRA) */}
+                    {isPracticeRevealed && (
+                      <div className="mt-4 p-3 bg-[#fff3cd] border border-[#ffeeba] text-[#856404] text-xs rounded-none space-y-1.5 animate-in fade-in">
+                        <div className="font-bold">
+                          {isCorrectInPractice ? '✔ Câu trả lời của bạn là chính xác.' : '✖ Câu trả lời của bạn chưa chính xác.'}
+                        </div>
+                        {q.correctAnswer && (
+                          <div className="text-[12px]">
+                            Câu trả lời đúng là: <strong className="font-mono text-[#003366]">{q.correctAnswer}</strong>
+                          </div>
+                        )}
+                        {q.explanation && (
+                          <div className="pt-2 border-t border-[#ffe8a1] mt-2">
+                            <span className="font-bold block mb-1">Lời giải chi tiết:</span>
+                            <div className="text-slate-900 leading-relaxed">
+                              <UetSafeMath content={q.explanation} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1275,21 +1638,37 @@ export default function UniversityExamRoom({
               </div>
             </div>
 
-            {/* Đồng hồ đếm ngược viền đỏ đặc trưng Moodle UET */}
-            <div className="bg-red-50 border border-red-300 p-2 text-center rounded-none">
-              <div className="text-[10px] text-red-700 uppercase font-bold tracking-wider">
-                Thời gian còn lại
+            {/* ĐỒNG HỒ ĐẾM NGƯỢC (CHỈ KHI THI THẬT) HOẶC THÔNG BÁO TỰ DO (KHI LUYỆN TẬP) */}
+            {examMode === 'exam' ? (
+              <div className="bg-red-50 border border-red-300 p-2 text-center rounded-none">
+                <div className="text-[10px] text-red-700 uppercase font-bold tracking-wider">
+                  Thời gian còn lại
+                </div>
+                <div className="text-xl font-mono font-bold text-red-600 mt-0.5">
+                  {formatTime(timeLeft)}
+                </div>
               </div>
-              <div className="text-xl font-mono font-bold text-red-600 mt-0.5">
-                {formatTime(timeLeft)}
+            ) : (
+              <div className="bg-amber-50 border border-amber-300 p-2 text-center rounded-none">
+                <div className="text-[10px] text-amber-800 uppercase font-bold tracking-wider">
+                  Chế độ luyện tập
+                </div>
+                <div className="text-xs font-bold text-amber-700 mt-0.5">
+                  Không giới hạn thời gian
+                </div>
               </div>
-            </div>
+            )}
 
             {/* LƯỚI Ô VUÔNG SỐ CÂU HỎI (GÓC VUÔNG ROUNDED-NONE CHUẨN MOODLE) */}
             <div className="grid grid-cols-5 gap-1.5">
               {questions.map((q) => {
                 const hasAnswer = answers[q.number] !== undefined && answers[q.number] !== null && answers[q.number] !== ''
                 const isFlagged = flags[q.number]
+                const isPracticeRevealed = examMode === 'practice' && revealedInPractice[q.number]
+                const userVal = answers[q.number]
+                const isCorrect =
+                  isPracticeRevealed &&
+                  String(userVal || '').trim().toUpperCase() === String(q.correctAnswer || 'A').trim().toUpperCase()
 
                 return (
                   <button
@@ -1299,7 +1678,15 @@ export default function UniversityExamRoom({
                     className="relative w-full h-8 border border-slate-400 rounded-none text-xs font-bold flex flex-col items-stretch overflow-hidden cursor-pointer hover:border-[#003366] transition group"
                   >
                     {/* Nửa trên: Số câu hỏi */}
-                    <div className="flex-1 bg-white flex items-center justify-center text-slate-800 text-[11px]">
+                    <div
+                      className={`flex-1 flex items-center justify-center text-[11px] ${
+                        isPracticeRevealed
+                          ? isCorrect
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-rose-500 text-white'
+                          : 'bg-white text-slate-800'
+                      }`}
+                    >
                       {q.number}
                     </div>
 

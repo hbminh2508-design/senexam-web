@@ -1279,14 +1279,14 @@ function SetupCourseMainContent() {
             } as any,
           ]
 
+      const isUniv = katexExamType === 'PORTAL_UET' || katexExamType.includes('Portal') || katexExamType.includes('Đại học')
       const basePayload: any = {
         title: katexTitle.trim(),
-        exam_type: katexExamType,
+        exam_type: isUniv ? 'UNIVERSITY' : katexExamType,
         duration: isHsa ? 195 : (parseInt(katexDuration) || 50),
         drive_file_id: null,
-        format: (katexExamType === 'PORTAL_UET' || katexExamType.includes('Portal') || katexExamType.includes('Đại học'))
-          ? 'university'
-          : (isHsa ? 'hsa' : 'katex'),
+        format: isUniv ? 'university' : (isHsa ? 'hsa' : 'katex'),
+        tags: isUniv ? ['Đại học', 'Portal UET'] : [],
         is_vip: katexIsVip,
         shuffle_questions: katexShuffleQuestions,
         shuffle_options: katexShuffleOptions,

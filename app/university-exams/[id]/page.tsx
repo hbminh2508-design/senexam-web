@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabaseClient'
 import UniversityExamRoom from '@/app/components/UniversityExamRoom'
 import ModernLoading from '@/app/components/ModernLoading'
 import Link from 'next/link'
-import { ArrowLeft, BookOpen, Clock, AlertCircle } from 'lucide-react'
+import { ArrowLeft, BookOpen, Clock, AlertCircle, ShieldAlert, Lock } from 'lucide-react'
+import { isUniversityExam } from '@/lib/universityExamHelper'
 
 export default function UniversityExamPage() {
   const params = useParams()
@@ -19,6 +20,7 @@ export default function UniversityExamPage() {
   const [loading, setLoading] = useState(true)
   const [exam, setExam] = useState<any>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [isNotUniversityExam, setIsNotUniversityExam] = useState(false)
   const [studentInfo, setStudentInfo] = useState<{
     id?: string
     name: string
@@ -74,9 +76,17 @@ export default function UniversityExamPage() {
           return
         }
 
+        // 3. ĐỘC QUYỀN: Kiểm tra đề thi có TAG / diện Đề thi Đại học hay không
+        if (!isUniversityExam(examData)) {
+          setIsNotUniversityExam(true)
+          setExam(examData)
+          setLoading(false)
+          return
+        }
+
         setExam(examData)
 
-        // 3. Nếu là chế độ xem lại, tải submission tương ứng
+        // 4. Nếu là chế độ xem lại, tải submission tương ứng
         if (isReviewMode && auth?.user) {
           let query = supabase
             .from('submissions')
@@ -116,7 +126,49 @@ export default function UniversityExamPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
-        <ModernLoading text="Đang tải hệ thống thi trực tuyến Portal UET..." />
+        <ModernLoading text="Đang kết nối hệ thống thi trực tuyến Portal UET..." />
+      </div>
+    )
+  }
+
+  // MÀN HÌNH KHÓA ĐỘC QUYỀN NẾU ĐỀ KHÔNG CÓ TAG ĐẠI HỌC
+  if (isNotUniversityExam) {
+    return (
+      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4 font-sans text-slate-800">
+        <div className="bg-white border-2 border-[#003366] shadow-md max-w-lg w-full p-6 sm:p-8 text-center rounded-none">
+          <div className="w-16 h-16 mx-auto mb-4 border border-slate-300 p-1 bg-white flex items-center justify-center">
+            <img src="/uet-logo.png" alt="UET Logo" className="w-full h-full object-contain" />
+          </div>
+
+          <div className="inline-block px-2.5 py-0.5 bg-red-100 text-red-800 text-[11px] font-bold uppercase tracking-wider mb-2 border border-red-300">
+            Giao diện độc quyền Portal UET
+          </div>
+
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 mb-2">
+            Đề thi không thuộc danh mục Đại học
+          </h2>
+
+          <p className="text-xs text-slate-600 mb-6 leading-relaxed">
+            Giao diện Portal UET được thiết kế độc quyền dành riêng cho các đề thi có gắn thẻ <strong>TAG Đề thi Đại học</strong> (Toán cao cấp, Giải tích, Đại số tuyến tính, Kỹ thuật lập trình...).
+            <br />
+            Bài thi <em>"{exam?.title}"</em> thuộc dạng đề THPT / Khảo thí phổ thông nên vui lòng làm bài tại phòng thi tiêu chuẩn.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href={`/new-exams/${examId}`}
+              className="w-full sm:w-auto px-5 py-2.5 bg-[#003366] text-white text-xs font-bold rounded-none hover:bg-[#002244] shadow-xs cursor-pointer"
+            >
+              Làm tại phòng thi chuẩn
+            </Link>
+            <Link
+              href="/new-sen-ground"
+              className="w-full sm:w-auto px-5 py-2.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-none hover:bg-slate-300 cursor-pointer"
+            >
+              Về kho đề thi
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }

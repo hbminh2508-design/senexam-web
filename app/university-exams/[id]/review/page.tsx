@@ -7,6 +7,7 @@ import UniversityExamRoom from '@/app/components/UniversityExamRoom'
 import ModernLoading from '@/app/components/ModernLoading'
 import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
+import { isUniversityExam } from '@/lib/universityExamHelper'
 
 export default function UniversityExamReviewPage() {
   const params = useParams()
@@ -18,6 +19,7 @@ export default function UniversityExamReviewPage() {
   const [loading, setLoading] = useState(true)
   const [exam, setExam] = useState<any>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [isNotUniversityExam, setIsNotUniversityExam] = useState(false)
   const [studentInfo, setStudentInfo] = useState<{
     id?: string
     name: string
@@ -71,6 +73,13 @@ export default function UniversityExamReviewPage() {
           return
         }
 
+        if (!isUniversityExam(examData)) {
+          setIsNotUniversityExam(true)
+          setExam(examData)
+          setLoading(false)
+          return
+        }
+
         setExam(examData)
 
         // Tải submission gần nhất
@@ -110,6 +119,7 @@ export default function UniversityExamReviewPage() {
             percentage: singleSub.score ? Math.round((singleSub.score / 10) * 100) : 0,
             correctCount: singleSub.correct_count || 0,
             totalQuestions: singleSub.total_questions || 0,
+            examMode: singleSub.details?.mode || 'exam',
             questionResults: [],
           })
         } else {
@@ -130,6 +140,30 @@ export default function UniversityExamReviewPage() {
     return (
       <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
         <ModernLoading text="Đang tải kết quả bài kiểm tra Portal UET..." />
+      </div>
+    )
+  }
+
+  if (isNotUniversityExam) {
+    return (
+      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4 font-sans text-slate-800">
+        <div className="bg-white border-2 border-[#003366] shadow-md max-w-md w-full p-6 text-center rounded-none">
+          <div className="w-14 h-14 mx-auto mb-3 border border-slate-300 p-1 bg-white flex items-center justify-center">
+            <img src="/uet-logo.png" alt="UET Logo" className="w-full h-full object-contain" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900 mb-2">Đề thi không thuộc danh mục Đại học</h2>
+          <p className="text-xs text-slate-600 mb-6">
+            Giao diện xem lại Portal UET chỉ áp dụng độc quyền cho các đề thi có TAG Đại học.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <Link
+              href={`/new-exams/${examId}`}
+              className="px-4 py-2 bg-[#003366] text-white text-xs font-bold rounded-none hover:bg-[#002244]"
+            >
+              Về phòng thi chuẩn
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
