@@ -389,7 +389,8 @@ export default function FepnQrScannerModal({
           <button
             type="button"
             onClick={handleFinish}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            aria-label="Đóng"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
           >
             <X className="h-5 w-5" />
           </button>
