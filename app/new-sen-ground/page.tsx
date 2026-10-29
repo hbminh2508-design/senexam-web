@@ -1275,6 +1275,8 @@ export function SetupCourseMainContent({
       ]
 
       const isUniv = katexExamType === 'PORTAL_UET' || katexExamType.includes('Portal') || katexExamType.includes('Đại học')
+      const univSubjects = isUniv ? Array.from(new Set([katexSubject, 'Đại học', 'Portal UET'])) : [katexSubject]
+
       const basePayload: any = {
         title: katexTitle.trim(),
         exam_type: isUniv ? 'UNIVERSITY' : katexExamType,
@@ -1289,7 +1291,7 @@ export function SetupCourseMainContent({
         allow_review: katexAllowReview,
         is_hidden: isHiddenEffective,
         access_code: accessCode,
-        subjects: [katexSubject],
+        subjects: univSubjects,
         max_attempts: 1,
         grading_method: 'highest',
         require_proctoring: false,
@@ -1328,8 +1330,16 @@ export function SetupCourseMainContent({
       }
 
       if (firstError) {
-        console.warn('Lỗi lưu đề có max_score / shuffle / is_vip columns, thử fallback lưu cơ bản:', firstError.message)
+        console.warn('Lỗi lưu đề (có thể thiếu cột tags / max_score / shuffle / is_vip), thử fallback an toàn:', firstError.message)
         const safePayload = { ...basePayload }
+
+        // Bỏ cột tags nếu DB chưa cập nhật schema cache
+        if (firstError.message?.includes('tags') || firstError.message?.includes('schema cache')) {
+          delete safePayload.tags
+        }
+        if (firstError.message?.includes('format')) {
+          delete safePayload.format
+        }
         if (firstError.message?.includes('shuffle_questions') || firstError.message?.includes('shuffle_options')) {
           delete safePayload.shuffle_questions
           delete safePayload.shuffle_options
@@ -1343,6 +1353,17 @@ export function SetupCourseMainContent({
           .insert(safePayload)
           .select('*')
           .single()
+
+        if (fallbackError && fallbackError.message?.includes('tags')) {
+          delete safePayload.tags
+          const retryTags = await supabase
+            .from('exams')
+            .insert(safePayload)
+            .select('*')
+            .single()
+          fallbackData = retryTags.data
+          fallbackError = retryTags.error
+        }
 
         if (fallbackError && fallbackError.message?.includes('exams_exam_type_check')) {
           const safeType = getSafeExamType(katexExamType)
@@ -1358,6 +1379,7 @@ export function SetupCourseMainContent({
         if (fallbackError && (fallbackError.message?.includes('shuffle_questions') || fallbackError.message?.includes('shuffle_options'))) {
           delete safePayload.shuffle_questions
           delete safePayload.shuffle_options
+          delete safePayload.tags
           const retryRes3 = await supabase
             .from('exams')
             .insert(safePayload)
