@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import {
   Award,
@@ -16,29 +17,42 @@ import {
   FileCheck,
   RefreshCw,
   Lock,
-  Unlock,
-  Settings,
   Printer,
   ChevronRight,
-  Sparkles,
   Radio,
+  GraduationCap,
 } from 'lucide-react'
 
-export default function TongKetPage() {
+function TongKetContent() {
+  const searchParams = useSearchParams()
+  const classIdParam = searchParams.get('class') || searchParams.get('lop') || 'k70p_me2'
+
+  const [classes, setClasses] = useState<any[]>([])
+  const [selectedClassId, setSelectedClassId] = useState<string>(classIdParam)
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isRealtimeActive, setIsRealtimeActive] = useState(false)
   const [lastLivePing, setLastLivePing] = useState<string>('')
-  const [showAdminPanel, setShowAdminPanel] = useState(false)
-  const [adminPass, setAdminPass] = useState('')
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false)
-  const [adminMsg, setAdminMsg] = useState<string | null>(null)
 
-  const fetchResults = async (showLoadingIndicator = false) => {
+  // 1. Tải danh sách các lớp để có thể chuyển đổi xem kết quả
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch('/api/baucu?action=classes')
+      const json = await res.json()
+      if (json.success && Array.isArray(json.data)) {
+        setClasses(json.data)
+      }
+    } catch (e) {
+      console.error('Lỗi khi tải danh sách lớp:', e)
+    }
+  }
+
+  // 2. Tải kết quả của lớp đang chọn
+  const fetchResults = async (classId: string, showLoadingIndicator = false) => {
     if (showLoadingIndicator) setIsRefreshing(true)
     try {
-      const res = await fetch('/api/baucu')
+      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classId)}`)
       const json = await res.json()
       if (json.success) {
         setData(json.data)
@@ -52,37 +66,60 @@ export default function TongKetPage() {
     }
   }
 
+  useEffect(() => {
+    fetchClasses()
+  }, [])
+
+  useEffect(() => {
+    if (classIdParam && classIdParam !== selectedClassId) {
+      setSelectedClassId(classIdParam)
+    }
+  }, [classIdParam])
+
   // Supabase Realtime Listener + Polling dự phòng
   useEffect(() => {
-    fetchResults()
+    fetchResults(selectedClassId)
 
-    // Đăng ký nhận thông báo Realtime từ Supabase
+    // Đăng ký nhận thông báo Realtime từ Supabase cho lớp này
     let channel: any = null
     try {
       channel = supabase
-        .channel('fepn_election_live_channel')
+        .channel(`fepn_live_${selectedClassId}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'fepn_election_votes' },
+          {
+            event: '*',
+            schema: 'public',
+            table: 'fepn_election_votes',
+            filter: `election_id=eq.${selectedClassId}`,
+          },
           (payload) => {
-            console.log('[Realtime] Có phiếu bầu mới hoặc thay đổi phiếu:', payload)
-            fetchResults(false)
+            console.log('[Realtime] Có phiếu bầu mới cho lớp:', payload)
+            fetchResults(selectedClassId, false)
           }
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'fepn_election_candidates' },
+          {
+            event: '*',
+            schema: 'public',
+            table: 'fepn_election_candidates',
+            filter: `election_id=eq.${selectedClassId}`,
+          },
           (payload) => {
-            console.log('[Realtime] Danh sách ứng viên cập nhật:', payload)
-            fetchResults(false)
+            fetchResults(selectedClassId, false)
           }
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'fepn_election_settings' },
+          {
+            event: '*',
+            schema: 'public',
+            table: 'fepn_election_settings',
+            filter: `id=eq.${selectedClassId}`,
+          },
           (payload) => {
-            console.log('[Realtime] Trạng thái phiên bầu cử cập nhật:', payload)
-            fetchResults(false)
+            fetchResults(selectedClassId, false)
           }
         )
         .subscribe((status) => {
@@ -94,9 +131,9 @@ export default function TongKetPage() {
       console.warn('Realtime Supabase subscription error, using polling fallback', e)
     }
 
-    // Polling dự phòng mỗi 3.5 giây đảm bảo dữ liệu luôn tươi mới
+    // Polling dự phòng mỗi 3.5 giây
     const interval = setInterval(() => {
-      fetchResults(false)
+      fetchResults(selectedClassId, false)
     }, 3500)
 
     return () => {
@@ -105,72 +142,12 @@ export default function TongKetPage() {
         supabase.removeChannel(channel)
       }
     }
-  }, [])
-
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (adminPass === 'k71pme2' || adminPass === 'fepn2026' || adminPass === 'admin') {
-      setIsAdminUnlocked(true)
-      setAdminMsg(null)
-    } else {
-      setAdminMsg('Mật khẩu quản trị chưa chính xác.')
-    }
-  }
-
-  const handleToggleRegistration = async () => {
-    try {
-      const res = await fetch('/api/baucu', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'toggle_registration' }),
-      })
-      const json = await res.json()
-      alert(json.message)
-      await fetchResults(true)
-    } catch (e) {
-      alert('Lỗi thao tác')
-    }
-  }
-
-  const handleToggleVoting = async () => {
-    try {
-      const res = await fetch('/api/baucu', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'toggle_voting' }),
-      })
-      const json = await res.json()
-      alert(json.message)
-      await fetchResults(true)
-    } catch (e) {
-      alert('Lỗi thao tác')
-    }
-  }
-
-  const handleResetVotesForRound2 = async (keepCandidates: boolean) => {
-    const confirmText = keepCandidates
-      ? 'Bạn có chắc chắn muốn LÀM MỚI HÒM PHIẾU để BẦU VÒNG 2? (Danh sách ứng viên vẫn được giữ nguyên)'
-      : 'CẢNH BÁO: Bạn có chắc muốn XÓA TOÀN BỘ PHIẾU VÀ ỨNG VIÊN để làm lại từ đầu?'
-
-    if (!confirm(confirmText)) return
-
-    try {
-      const res = await fetch('/api/baucu', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reset_votes', keepCandidates }),
-      })
-      const json = await res.json()
-      alert(json.message)
-      await fetchResults(true)
-    } catch (e) {
-      alert('Lỗi khi reset hòm phiếu')
-    }
-  }
+  }, [selectedClassId])
 
   const summary = data?.summary
   const results = summary?.results || []
   const totalVoters = summary?.totalVoters || 0
+  const currentUnit = data?.unit || selectedClassId.toUpperCase()
 
   // Danh sách các ứng viên trúng cử chính thức
   const electedList: { positionTitle: string; candidateName: string; studentId: string; votes: number }[] = []
@@ -191,374 +168,262 @@ export default function TongKetPage() {
   const tiedPositions = results.filter((r: any) => r.hasTie)
 
   return (
-    <div className="flex-1 max-w-6xl mx-auto px-4 py-8 sm:py-12 space-y-10">
+    <div className="flex-1 max-w-6xl mx-auto px-4 py-8 sm:py-12 space-y-8">
       {/* Header kết quả */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider">
           <Award className="w-4 h-4 text-emerald-600" />
-          <span>BƯỚC 3: CÔNG BỐ KẾT QUẢ BIỂU QUYẾT TỔNG HỢP</span>
+          <span>BƯỚC 3: CÔNG BỐ KẾT QUẢ BIỂU QUYẾT TỔNG HỢP • LỚP {currentUnit}</span>
         </div>
-        <h1 className="text-2xl sm:text-4xl font-black text-[#002b66] uppercase font-serif">
+        <h1 className="text-2xl sm:text-3xl font-black text-[#002b66] uppercase">
           KẾT QUẢ BẦU CỬ BAN CÁN SỰ & BAN CHẤP HÀNH
         </h1>
-        <div className="inline-block px-3 py-1 bg-[#002b66] text-white text-xs font-bold uppercase tracking-wider rounded-md">
-          ĐƠN VỊ: K71-P-ME2 • NĂM HỌC 2026-2027
-        </div>
+        <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto">
+          Dữ liệu kết quả bầu cử chính thức của lớp <strong>{currentUnit}</strong> • Khóa QH-2026-I/CQ • Khoa Vật lý Kỹ thuật & Công nghệ Nano (FEPN - VNU-UET).
+        </p>
       </div>
 
-      {/* Thẻ thống kê tổng quan cử tri */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-xs">
-          <span className="text-xs text-slate-500 block">Số phiếu đã thu về</span>
-          <strong className="text-2xl sm:text-3xl font-black text-[#002b66]">{totalVoters}</strong>
-          <span className="text-[11px] text-slate-400 block mt-0.5">cử tri đã biểu quyết</span>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-xs">
-          <span className="text-xs text-slate-500 block">Trạng thái hòm phiếu</span>
-          <div className="mt-1">
-            {data?.isVotingOpen ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
-                ● Đang mở hòm phiếu
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-100 text-rose-800 text-xs font-bold rounded-full">
-                🔒 Đã đóng hòm phiếu
-              </span>
-            )}
+      {/* THANH CHUYỂN ĐỔI XEM KẾT QUẢ GIỮA CÁC LỚP */}
+      {classes.length > 1 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="w-4 h-4 text-[#002b66]" />
+            <span className="text-xs font-bold text-slate-600">Xem kết quả của lớp:</span>
+            <div className="flex flex-wrap gap-1.5">
+              {classes.map((c) => {
+                const isSelected = c.id === selectedClassId
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedClassId(c.id)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                      isSelected
+                        ? 'bg-[#002b66] text-white border-[#002b66]'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Lớp {c.unit}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 block mt-1">Cập nhật mỗi 3s</span>
+
+          <div className="text-[11px] text-slate-500 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-emerald-700 font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Realtime Online</span>
+            </span>
+            <span>• Cập nhật: {lastLivePing || 'Vừa xong'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* THANH THỐNG KÊ NHANH CỬ TRI ĐÃ BỎ PHIẾU */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-300 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-blue-100 text-[#002b66] flex items-center justify-center shrink-0">
+            <VoteIcon className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 font-bold uppercase">Tổng cử tri đã bỏ phiếu</div>
+            <div className="text-2xl font-black text-[#002b66] font-mono">{totalVoters} cử tri</div>
+          </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-xs">
-          <span className="text-xs text-slate-500 block">Số vị trí trúng cử</span>
-          <strong className="text-2xl sm:text-3xl font-black text-emerald-600">{electedList.length}</strong>
-          <span className="text-[11px] text-slate-400 block mt-0.5">nhân sự đã xác định</span>
+        <div className="bg-white border border-slate-300 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+            <Trophy className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 font-bold uppercase">Ứng viên đã trúng cử</div>
+            <div className="text-2xl font-black text-emerald-700 font-mono">
+              {electedList.length} nhân sự
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-xs">
-          <span className="text-xs text-slate-500 block">Vòng bầu hiện tại</span>
-          <strong className="text-2xl sm:text-3xl font-black text-amber-600">Vòng {data?.round || 1}</strong>
-          <span className="text-[11px] text-slate-400 block mt-0.5">
-            {tiedPositions.length > 0 ? 'Có vị trí hòa phiếu' : 'Tiến trình bình thường'}
-          </span>
+        <div className="bg-white border border-slate-300 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+            <Radio className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 font-bold uppercase">Trạng thái hòm phiếu</div>
+            <div className="text-xs font-bold text-slate-900 mt-1">
+              {data?.isVotingOpen ? (
+                <span className="text-emerald-700">● Đang mở nhận phiếu</span>
+              ) : (
+                <span className="text-slate-600">■ Đã đóng hòm phiếu</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* CẢNH BÁO NẾU CÓ CHỨC VỤ BỊ HÒA PHIẾU CẦN BẦU VÒNG 2 */}
       {tiedPositions.length > 0 && (
-        <div className="p-5 bg-amber-50 border-2 border-amber-400 rounded-2xl shadow-sm space-y-3">
-          <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm sm:text-base">
-            <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
-            <span>THÔNG BÁO HÒA PHIẾU - CẦN BIỂU QUYẾT BẦU LẠI THEO ĐIỀU 3</span>
+        <div className="p-5 bg-amber-50 border-2 border-amber-400 rounded-2xl text-xs text-amber-950 space-y-2">
+          <div className="flex items-center gap-2 font-black text-sm uppercase text-amber-900">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>KẾT QUẢ HÒA PHIẾU CẦN BẦU LẠI THEO ĐIỀU 3 KHOẢN 2 THỂ LỆ</span>
           </div>
-          <p className="text-xs sm:text-sm text-amber-800 leading-relaxed">
-            Hệ thống phát hiện có <strong>{tiedPositions.length} chức vụ</strong> có từ 2 ứng viên trở lên bằng phiếu ở vị trí dẫn đầu / tranh chấp chỉ tiêu:
+          <p>
+            Hiện tại ở lớp <strong>{currentUnit}</strong> có các chức vụ có từ 2 ứng viên trở lên đạt số phiếu cao nhất bằng nhau:
           </p>
-          <ul className="list-disc pl-5 text-xs text-amber-900 space-y-1 font-semibold">
-            {tiedPositions.map((p: any) => (
-              <li key={p.position.id}>
-                <strong>{p.position.title}:</strong> Bằng phiếu giữa các ứng viên{' '}
-                {p.tiedCandidates.map((c: any) => `${c.name} (${c.studentId})`).join(', ')}
+          <ul className="list-disc pl-5 font-semibold space-y-1">
+            {tiedPositions.map((r: any) => (
+              <li key={r.position.id}>
+                <strong>{r.position.title}:</strong> Hòa phiếu giữa các ứng viên:{' '}
+                {r.tiedCandidates.map((c: any) => `${c.name} (${c.studentId})`).join(', ')}.
               </li>
             ))}
           </ul>
-          <p className="text-xs text-amber-700 italic">
-            * Theo Điều 3 Khoản 2: "Nếu có từ 2 ứng viên trở lên bằng phiếu ở vị trí cao nhất, lớp sẽ bầu lại giữa các ứng viên này bằng một phiên mới, mỗi thành viên chỉ được chọn 1 ứng viên."
+          <p className="text-[11px] text-amber-800 pt-1">
+            Người điều hành có thể sử dụng chức năng &ldquo;Làm mới hòm phiếu (Bầu vòng 2)&rdquo; trong trang Quản trị để tiến hành biểu quyết phân định.
           </p>
         </div>
       )}
 
-      {/* ================= BẢNG DANH SÁCH BAN CÁN SỰ & BAN CHẤP HÀNH TRÚNG CỬ ================= */}
+      {/* DANH SÁCH BAN CÁN SỰ & BAN CHẤP HÀNH ĐẮC CỬ CHÍNH THỨC */}
       {electedList.length > 0 && (
-        <div className="bg-gradient-to-br from-[#002b66] to-[#00193d] text-white rounded-3xl p-6 sm:p-10 shadow-xl space-y-6">
-          <div className="text-center space-y-2 border-b border-white/20 pb-5">
-            <div className="flex items-center justify-center gap-2">
-              <Trophy className="w-8 h-8 text-yellow-400" />
-              <h2 className="text-xl sm:text-3xl font-black font-serif uppercase tracking-tight">
-                DANH SÁCH NHÂN SỰ TRÚNG CỬ CHÍNH THỨC
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-blue-200">
-              Ban Cán Sự & Ban Chấp Hành Lâm Thời Lớp K71-P-ME2 (Năm học 2026-2027)
-            </p>
+        <div className="bg-white border-2 border-emerald-500 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-slate-200">
+            <Crown className="w-6 h-6 text-amber-500" />
+            <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase">
+              DANH SÁCH NHÂN SỰ ĐẮC CỬ CHÍNH THỨC • LỚP {currentUnit}
+            </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {electedList.map((item, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {electedList.map((e, idx) => (
               <div
-                key={i}
-                className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 flex items-center gap-3.5 hover:bg-white/15 transition"
+                key={idx}
+                className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between gap-2"
               >
-                <div className="w-10 h-10 rounded-full bg-yellow-400 text-slate-900 flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
-                  <Crown className="w-5 h-5" />
-                </div>
-                <div className="overflow-hidden">
-                  <span className="text-[10px] font-bold text-yellow-300 uppercase tracking-wider block truncate">
-                    {item.positionTitle}
-                  </span>
-                  <strong className="text-sm sm:text-base font-extrabold text-white block truncate">
-                    {item.candidateName}
-                  </strong>
-                  <div className="text-[11px] text-blue-200 font-mono">
-                    MSSV: {item.studentId} • <span className="font-bold text-white">{item.votes} phiếu</span>
+                <div>
+                  <div className="text-[10px] font-black uppercase text-emerald-800">
+                    {e.positionTitle}
                   </div>
+                  <div className="font-extrabold text-sm text-slate-900">{e.candidateName}</div>
+                  <div className="font-mono text-[10px] text-slate-500">MSSV: {e.studentId}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                    {e.votes} phiếu
+                  </span>
                 </div>
               </div>
             ))}
           </div>
-
-          <p className="text-center text-xs text-blue-200 italic pt-2">
-            * Căn cứ Điều 3 Khoản 3: Nếu một ứng viên trúng cử nhiều chức vụ cùng lúc, ứng viên được chọn 1 chức vụ, các vị trí còn lại sẽ tiến hành bầu bổ sung.
-          </p>
         </div>
       )}
 
-      {/* ================= BIỂU ĐỒ & BẢNG KẾT QUẢ CHI TIẾT TỪNG CHỨC VỤ ================= */}
+      {/* BẢNG KẾT QUẢ CHI TIẾT TỪNG CHỨC VỤ */}
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
-          <div>
-            <h2 className="text-lg sm:text-xl font-black text-[#002b66] uppercase">
-              Bảng Tổng Hợp Phiếu Bầu Chi Tiết Từng Vị Trí
-            </h2>
-            <p className="text-xs text-slate-500">
-              Số liệu cập nhật tự động trực tiếp từ hòm phiếu biểu quyết
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fetchResults(true)}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>Làm mới</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>In kết quả</span>
-            </button>
-          </div>
-        </div>
-
-        {results.map((posRes: any) => {
-          const pos = posRes.position
-          const candidateList = posRes.candidates || []
-
-          return (
-            <div
-              key={pos.id}
-              className="bg-white border-2 border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4"
-            >
-              {/* Header vị trí */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                  <h3 className="text-base font-bold text-[#002b66] uppercase">
-                    {pos.title}
-                  </h3>
-                  <span className="text-xs text-slate-500">
-                    (Cơ cấu: 0{pos.quota} người • Tổng ứng viên: {posRes.candidatesCount})
-                  </span>
-                </div>
-
-                <div className="text-xs text-slate-600">
-                  Tổng lượt chọn: <strong>{posRes.totalVotesCastForPosition}</strong> lượt
-                </div>
-              </div>
-
-              {/* Danh sách ứng viên và thanh tỷ lệ % phiếu */}
-              {candidateList.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-2">
-                  Chưa có ứng viên nào cho vị trí này.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {candidateList.map((candRes: any, rankIdx: number) => {
-                    const c = candRes.candidate
-                    const isWinner = candRes.isElected
-                    const isTied = candRes.isTied
-
-                    return (
-                      <div
-                        key={c.id}
-                        className={`p-3.5 rounded-xl border transition ${
-                          isWinner
-                            ? 'bg-emerald-50/70 border-emerald-400 shadow-xs'
-                            : isTied
-                            ? 'bg-amber-50/70 border-amber-400 shadow-xs'
-                            : 'bg-slate-50/40 border-slate-200'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2.5">
-                            <span
-                              className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 ${
-                                isWinner
-                                  ? 'bg-emerald-600 text-white'
-                                  : isTied
-                                  ? 'bg-amber-600 text-white'
-                                  : 'bg-slate-200 text-slate-700'
-                              }`}
-                            >
-                              {rankIdx + 1}
-                            </span>
-                            <div>
-                              <span className="text-xs sm:text-sm font-bold text-slate-900">
-                                {c.name}
-                              </span>
-                              <span className="text-[11px] font-mono text-slate-500 ml-2">
-                                ({c.studentId})
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Huy hiệu trúng cử / hòa phiếu */}
-                          <div className="flex items-center gap-2">
-                            {isWinner && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-600 text-white text-[11px] font-bold rounded-full uppercase shadow-xs">
-                                <Trophy className="w-3 h-3 text-yellow-300" />
-                                <span>Trúng cử (Top 0{rankIdx + 1})</span>
-                              </span>
-                            )}
-                            {isTied && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-600 text-white text-[11px] font-bold rounded-full uppercase shadow-xs">
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>Hòa phiếu (Bầu lại)</span>
-                              </span>
-                            )}
-
-                            <div className="text-right">
-                              <span className="text-sm font-black text-[#002b66]">
-                                {candRes.voteCount} phiếu
-                              </span>
-                              <span className="text-xs text-slate-500 ml-1">
-                                ({candRes.percentage}%)
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Thanh progress bar tỷ lệ phần trăm */}
-                        <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-500 ${
-                              isWinner
-                                ? 'bg-emerald-500'
-                                : isTied
-                                ? 'bg-amber-500'
-                                : 'bg-[#002b66]'
-                            }`}
-                            style={{ width: `${Math.min(100, Math.max(candRes.percentage, 3))}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* ================= KHU VỰC QUẢN TRỊ DÀNH CHO NGƯỜI ĐIỀU HÀNH ================= */}
-      <div className="border border-slate-300 rounded-2xl p-5 bg-slate-50 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-slate-600" />
-            <h3 className="text-sm font-bold text-slate-800 uppercase">
-              Bảng Điều Khiển Của Người Điều Hành (Admin)
-            </h3>
-          </div>
-
+          <h2 className="text-base sm:text-lg font-black text-[#002b66] uppercase">
+            BẢNG TỔNG HỢP PHIẾU BẦU CHI TIẾT
+          </h2>
           <button
             type="button"
-            onClick={() => setShowAdminPanel(!showAdminPanel)}
-            className="text-xs font-semibold text-blue-700 hover:underline"
+            onClick={() => window.print()}
+            className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
           >
-            {showAdminPanel ? 'Ẩn bảng điều khiển' : 'Mở bảng điều khiển'}
+            <Printer className="w-3.5 h-3.5" />
+            <span>In biên bản</span>
           </button>
         </div>
 
-        {showAdminPanel && (
-          <div className="pt-3 border-t border-slate-200 space-y-4">
-            {!isAdminUnlocked ? (
-              <form onSubmit={handleAdminLogin} className="flex items-center gap-2 max-w-md">
-                <input
-                  type="password"
-                  placeholder="Nhập mật khẩu điều hành..."
-                  value={adminPass}
-                  onChange={(e) => setAdminPass(e.target.value)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white flex-1 outline-hidden"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#002b66] text-white text-xs font-bold rounded-lg cursor-pointer"
-                >
-                  Mở khóa
-                </button>
-                {adminMsg && <span className="text-[11px] text-red-600 block mt-1">{adminMsg}</span>}
-              </form>
-            ) : (
-              <div className="space-y-3">
-                <div className="text-xs text-emerald-700 font-bold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> Đã mở khóa quyền điều hành phiên bầu cử
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {results.map((posRes: any) => {
+            return (
+              <div
+                key={posRes.position.id}
+                className="bg-white border border-slate-300 rounded-2xl p-5 shadow-xs space-y-4"
+              >
+                <div className="flex justify-between items-start pb-3 border-b border-slate-200">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-blue-700">
+                      {posRes.position.categoryName}
+                    </span>
+                    <h3 className="text-base font-black text-[#002b66] uppercase">
+                      {posRes.position.title}
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      Chỉ tiêu: {posRes.position.quota} người • Tổng phiếu chức vụ:{' '}
+                      {posRes.totalVotesCastForPosition}
+                    </span>
+                  </div>
+
+                  {posRes.hasTie && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full">
+                      Hòa phiếu
+                    </span>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleToggleRegistration}
-                    className="px-4 py-2 bg-slate-800 hover:bg-black text-white text-xs font-bold rounded-lg transition"
-                  >
-                    {data?.isRegistrationOpen ? '🔒 Đóng nộp hồ sơ ứng cử' : '🔓 Mở nộp hồ sơ ứng cử'}
-                  </button>
+                {posRes.candidates.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-slate-400 italic">
+                    Không có ứng viên tham gia chức vụ này.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {posRes.candidates.map((candRes: any) => {
+                      return (
+                        <div key={candRes.candidate.id} className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <div className="flex items-center gap-1.5">
+                              {candRes.isElected && (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              )}
+                              <span
+                                className={`font-bold ${
+                                  candRes.isElected
+                                    ? 'text-emerald-900 font-extrabold'
+                                    : 'text-slate-800'
+                                }`}
+                              >
+                                {candRes.candidate.name}
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-500">
+                                ({candRes.candidate.studentId})
+                              </span>
+                            </div>
 
-                  <button
-                    type="button"
-                    onClick={handleToggleVoting}
-                    className="px-4 py-2 bg-[#002b66] hover:bg-[#001f4d] text-white text-xs font-bold rounded-lg transition"
-                  >
-                    {data?.isVotingOpen ? '🔒 Khóa hòm phiếu biểu quyết' : '🔓 Mở hòm phiếu biểu quyết'}
-                  </button>
+                            <div className="font-mono text-xs font-bold text-slate-700">
+                              {candRes.voteCount} phiếu{' '}
+                              <span className="text-slate-400 font-normal">({candRes.percentage}%)</span>
+                            </div>
+                          </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleResetVotesForRound2(true)}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition"
-                  >
-                    🔄 Làm mới hòm phiếu (Bầu vòng 2)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleResetVotesForRound2(false)}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition"
-                  >
-                    ⚠️ Xóa toàn bộ làm lại
-                  </button>
-                </div>
+                          {/* Progress bar */}
+                          <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                candRes.isElected ? 'bg-emerald-600' : 'bg-blue-600'
+                              }`}
+                              style={{ width: `${Math.min(candRes.percentage, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Điều hướng nhanh */}
-      <div className="flex items-center justify-between pt-4 border-t border-slate-200 text-xs">
-        <Link href="/baucu" className="text-blue-700 hover:underline font-bold">
-          ← Về trang chủ Thể lệ
-        </Link>
-        <Link href="/baucu/bophieu" className="text-emerald-700 hover:underline font-bold">
-          Tới hòm phiếu biểu quyết →
-        </Link>
+            )
+          })}
+        </div>
       </div>
     </div>
+  )
+}
+
+export default function TongKetPage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-xs text-slate-500">Đang tải kết quả tổng kết...</div>}>
+      <TongKetContent />
+    </Suspense>
   )
 }

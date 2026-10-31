@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import {
   Vote as VoteIcon,
   UserCheck,
@@ -15,11 +16,26 @@ import {
   ArrowRight,
   Lock,
   RotateCcw,
+  ShieldCheck,
+  FileText,
 } from 'lucide-react'
 
-export default function BoPhieuPage() {
+function BoPhieuContent() {
+  const searchParams = useSearchParams()
+  const classIdParam = searchParams.get('class') || searchParams.get('lop') || 'k70p_me2'
+  const isLockParam = searchParams.get('lock') === '1' || searchParams.get('lock') === 'true'
+
   const [electionData, setElectionData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+
+  // Lưu trạng thái đã bỏ phiếu vào cache
+  const [cachedVoteInfo, setCachedVoteInfo] = useState<{
+    voterName: string
+    voterStudentId: string
+    votedAt: string
+    receiptCode?: string
+    unit?: string
+  } | null>(null)
 
   // Thông tin cử tri
   const [voterName, setVoterName] = useState('')
@@ -37,9 +53,35 @@ export default function BoPhieuPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
+  // Kiểm tra cache localStorage khi tải trang
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (isLockParam) {
+        localStorage.setItem('fepn_locked_class', classIdParam)
+      }
+
+      const cacheKey = `fepn_voted_${classIdParam}`
+      const saved = localStorage.getItem(cacheKey)
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setCachedVoteInfo(parsed)
+          setVoterName(parsed.voterName || '')
+          setVoterStudentId(parsed.voterStudentId || '')
+        } catch {
+          setCachedVoteInfo({
+            voterName: 'Cử tri',
+            voterStudentId: '',
+            votedAt: new Date().toISOString(),
+          })
+        }
+      }
+    }
+  }, [classIdParam, isLockParam])
+
   const loadData = async () => {
     try {
-      const res = await fetch('/api/baucu')
+      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classIdParam)}`)
       const json = await res.json()
       if (json.success) {
         setElectionData(json.data)
@@ -53,7 +95,7 @@ export default function BoPhieuPage() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [classIdParam])
 
   // Kiểm tra xem MSSV đã bỏ phiếu chưa
   const handleVerifyVoter = async (e: React.FormEvent) => {
@@ -75,12 +117,24 @@ export default function BoPhieuPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'check_voter',
+          classId: classIdParam,
           studentId: cleanMssv,
         }),
       })
       const json = await res.json()
 
       if (json.hasVoted) {
+        // Lưu vào cache ngay để khóa màn hình
+        const votedState = {
+          voterName: cleanName,
+          voterStudentId: cleanMssv,
+          votedAt: new Date().toISOString(),
+          unit: electionData?.unit || 'K70P-ME2',
+        }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`fepn_voted_${classIdParam}`, JSON.stringify(votedState))
+        }
+        setCachedVoteInfo(votedState)
         setHasVotedBefore(true)
         setIsVerified(false)
       } else {
@@ -110,7 +164,7 @@ export default function BoPhieuPage() {
       // Nếu đang muốn chọn thêm nhưng đã đạt tối đa
       if (currentList.length >= maxAllowed) {
         if (maxAllowed === 1) {
-          // Nếu chỉ cho phép chọn 1 thì tự động đổi sang ứng viên mới (Radio behaviour)
+          // Tự động đổi sang ứng viên mới (Radio behaviour)
           return {
             ...prev,
             [posId]: [candId],
@@ -132,20 +186,43 @@ export default function BoPhieuPage() {
     setSubmitting(true)
     setErrorMsg(null)
 
+    const cleanName = voterName.trim()
+    const cleanMssv = voterStudentId.trim().toUpperCase()
+
     try {
       const res = await fetch('/api/baucu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'vote',
-          voterName: voterName.trim(),
-          voterStudentId: voterStudentId.trim().toUpperCase(),
+          classId: classIdParam,
+          voterName: cleanName,
+          voterStudentId: cleanMssv,
           selections,
         }),
       })
 
       const json = await res.json()
       if (json.success) {
+        const receiptCode = `FE-${(electionData?.unit || classIdParam).toUpperCase()}-${cleanMssv}-${Date.now()
+          .toString(36)
+          .toUpperCase()}`
+
+        const voteRecord = {
+          voterName: cleanName,
+          voterStudentId: cleanMssv,
+          votedAt: new Date().toISOString(),
+          receiptCode,
+          unit: electionData?.unit || 'K70P-ME2',
+        }
+
+        // Lưu vĩnh viễn vào cache localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`fepn_voted_${classIdParam}`, JSON.stringify(voteRecord))
+          document.cookie = `fepn_voted_${classIdParam}=1; path=/; max-age=2592000`
+        }
+
+        setCachedVoteInfo(voteRecord)
         setSubmitSuccess(true)
         setShowConfirmModal(false)
       } else {
@@ -162,146 +239,144 @@ export default function BoPhieuPage() {
 
   const positions = electionData?.positions || []
   const candidates = electionData?.candidates || []
+  const currentUnit = electionData?.unit || 'K70P-ME2'
 
-  // MÀN HÌNH BỎ PHIẾU THÀNH CÔNG
-  if (submitSuccess) {
+  // ================= 1. TRƯỜNG HỢP ĐÃ BẦU RỒI ĐƯỢC LƯU TRONG CACHE =================
+  // Dù có thoát, reset tab, tải lại trang hay khởi động lại máy, trạng thái này vẫn được giữ nguyên
+  if (cachedVoteInfo) {
     return (
       <div className="flex-1 flex items-center justify-center p-4 py-12">
-        <div className="max-w-md w-full bg-white border-2 border-emerald-500 rounded-3xl p-6 sm:p-8 text-center shadow-xl space-y-4 animate-in fade-in zoom-in-95">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-10 h-10" />
+        <div className="max-w-md w-full bg-white border-2 border-emerald-500 rounded-3xl p-6 sm:p-8 text-center shadow-lg space-y-5 animate-in fade-in zoom-in-95">
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-200">
+            <ShieldCheck className="w-10 h-10" />
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase">
-            BỎ PHIẾU THÀNH CÔNG!
-          </h2>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-700 text-left space-y-1">
-            <p>Cử tri: <strong>{voterName}</strong></p>
-            <p>MSSV: <strong className="font-mono">{voterStudentId.toUpperCase()}</strong></p>
-            <p>Đơn vị: <strong>K71-P-ME2 • NH 2026-2027</strong></p>
-            <p className="text-[11px] text-slate-500 pt-1">
-              Hệ thống đã ghi nhận lá phiếu của bạn vào hòm phiếu an toàn. Mỗi MSSV chỉ được gửi biểu quyết 1 lần duy nhất.
+          <div className="space-y-1">
+            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              TRẠNG THÁI: ĐÃ HOÀN TẤT BIỂU QUYẾT
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase pt-2">
+              BẠN ĐÃ BỎ PHIẾU THÀNH CÔNG!
+            </h2>
+            <p className="text-xs text-slate-500">
+              Lá phiếu của bạn đã được hệ thống ghi nhận vào hòm phiếu an toàn.
             </p>
           </div>
 
-          <p className="text-xs text-slate-500">
-            Cảm ơn bạn đã thực hiện quyền biểu quyết dân chủ cho tập thể lớp K71-P-ME2!
-          </p>
+          {/* Chi tiết thông tin đã lưu trong cache */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 text-left space-y-2">
+            <div className="flex justify-between pb-1.5 border-b border-slate-200">
+              <span className="text-slate-500">Họ và tên cử tri:</span>
+              <strong className="text-slate-900">{cachedVoteInfo.voterName}</strong>
+            </div>
 
-          <div className="pt-2 flex flex-col gap-2">
-            <Link
-              href="/baucu/tongket"
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 uppercase"
-            >
-              <Award className="w-4 h-4" />
-              <span>Xem Bảng Tổng Kết Kết Quả</span>
-            </Link>
+            {cachedVoteInfo.voterStudentId && (
+              <div className="flex justify-between pb-1.5 border-b border-slate-200">
+                <span className="text-slate-500">Mã sinh viên (MSSV):</span>
+                <strong className="font-mono text-blue-900">{cachedVoteInfo.voterStudentId}</strong>
+              </div>
+            )}
 
-            <Link
-              href="/baucu"
-              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
-            >
-              Về trang chủ Bầu cử FEPN
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
+            <div className="flex justify-between pb-1.5 border-b border-slate-200">
+              <span className="text-slate-500">Đơn vị lớp:</span>
+              <strong className="text-[#002b66]">{cachedVoteInfo.unit || currentUnit}</strong>
+            </div>
 
-  // MÀN HÌNH NẾU ĐÃ BỎ PHIẾU TRƯỚC ĐÓ (Điều 2 Khoản 1)
-  if (hasVotedBefore) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-4 py-12">
-        <div className="max-w-md w-full bg-white border-2 border-amber-500 rounded-3xl p-6 sm:p-8 text-center shadow-xl space-y-4 animate-in fade-in zoom-in-95">
-          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto">
-            <Lock className="w-8 h-8" />
-          </div>
+            <div className="flex justify-between pb-1.5 border-b border-slate-200">
+              <span className="text-slate-500">Thời gian ghi nhận:</span>
+              <span className="font-mono text-slate-600">
+                {new Date(cachedVoteInfo.votedAt).toLocaleString('vi-VN')}
+              </span>
+            </div>
 
-          <h2 className="text-xl font-black text-slate-900 uppercase">
-            BẠN ĐÃ BỎ PHIẾU RỒI!
-          </h2>
+            {cachedVoteInfo.receiptCode && (
+              <div className="flex justify-between pt-1">
+                <span className="text-slate-500">Mã biên nhận:</span>
+                <span className="font-mono text-[10px] text-emerald-800 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-sm">
+                  {cachedVoteInfo.receiptCode}
+                </span>
+              </div>
+            )}
 
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 text-left space-y-1">
-            <p>Họ tên: <strong>{voterName}</strong></p>
-            <p>MSSV: <strong className="font-mono">{voterStudentId.toUpperCase()}</strong></p>
-            <p className="text-[11px] text-amber-800 pt-1 leading-relaxed">
-              Theo <strong>Điều 2 Khoản 1 Thể lệ bầu cử</strong>: Mỗi thành viên trong lớp chỉ được gửi phiếu bầu <strong>1 lần duy nhất</strong>. Hệ thống đã khóa hòm phiếu đối với MSSV này để chống bỏ phiếu trùng lặp.
-            </p>
-          </div>
-
-          <div className="pt-2 flex flex-col gap-2">
-            <Link
-              href="/baucu/tongket"
-              className="w-full py-3 bg-[#002b66] hover:bg-[#001f4d] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 uppercase"
-            >
-              <Award className="w-4 h-4" />
-              <span>Xem Kết quả Bầu cử Tổng kết</span>
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => {
-                setHasVotedBefore(false)
-                setIsVerified(false)
-                setVoterStudentId('')
-              }}
-              className="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-800"
-            >
-              Đổi sang MSSV khác
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ================= MÀN HÌNH CHÍNH =================
-  return (
-    <div className="flex-1 max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-8">
-      {/* Tiêu đề */}
-      <div className="text-center space-y-1.5">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-[#002b66] text-xs font-bold uppercase tracking-wider">
-          <VoteIcon className="w-4 h-4" />
-          <span>BƯỚC 2: PHIẾU BỎ BIỂU QUYẾT TRỰC TUYẾN</span>
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-[#002b66] uppercase font-serif">
-          HÒM PHIẾU BẦU CỬ K71-P-ME2
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500">
-          Vui lòng kiểm tra kỹ số lượng ứng viên được phép chọn tại mỗi chức vụ theo quy định Điều 2 Thể lệ.
-        </p>
-      </div>
-
-      {/* Kiểm tra nếu hòm phiếu đang đóng */}
-      {electionData && !electionData.isVotingOpen && (
-        <div className="p-4 bg-red-50 border border-red-300 rounded-2xl text-xs text-red-900 flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-          <div>
-            <strong>Hòm phiếu hiện đang đóng!</strong> Người điều hành lớp chưa mở thời gian biểu quyết hoặc đã hết thời gian bỏ phiếu. Vui lòng theo dõi thông báo trực tiếp tại lớp.
-          </div>
-        </div>
-      )}
-
-      {/* BƯỚC 1: XÁC MINH CỬ TRI (HỌ TÊN + MSSV) */}
-      {!isVerified ? (
-        <div className="bg-white border-2 border-[#002b66]/30 rounded-2xl p-6 sm:p-8 shadow-sm max-w-xl mx-auto space-y-5">
-          <div className="flex items-center gap-2.5 pb-3 border-b border-slate-200">
-            <UserCheck className="w-6 h-6 text-[#002b66]" />
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Xác thực Danh tính Cử tri
-              </h2>
-              <p className="text-[11px] text-slate-500">
-                Nhập thông tin sinh viên để mở hòm phiếu điện tử
-              </p>
+            <div className="pt-2 text-[11px] text-slate-500 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+              <span>
+                Theo Điều 2 Thể lệ, mỗi cử tri chỉ được bỏ phiếu 1 lần duy nhất để tránh phiếu ma.
+              </span>
             </div>
           </div>
 
+          <div className="pt-2 flex flex-col gap-2">
+            <Link
+              href={`/baucu/tongket?class=${encodeURIComponent(classIdParam)}`}
+              className="w-full py-3 bg-[#002b66] hover:bg-[#001f4d] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 uppercase"
+            >
+              <Award className="w-4 h-4" />
+              <span>Xem Bảng Tổng Kết Kết Quả ({currentUnit})</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ================= 2. TRƯỜNG HỢP HÒM PHIẾU ĐANG KHÓA =================
+  if (electionData && !electionData.isVotingOpen) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4 py-16">
+        <div className="max-w-md w-full bg-white border border-amber-300 rounded-3xl p-6 sm:p-8 text-center shadow-md space-y-4">
+          <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto">
+            <Lock className="w-7 h-7" />
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 uppercase">
+            Hòm Phiếu Hiện Đang Đóng ({currentUnit})
+          </h2>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Người điều hành lớp <strong>{currentUnit}</strong> hiện chưa mở cổng tiếp nhận phiếu biểu quyết hoặc phiên bầu cử đã kết thúc. Vui lòng theo dõi hiệu lệnh của ban tổ chức tại lớp.
+          </p>
+          <div className="pt-2">
+            <Link
+              href={`/baucu/tongket?class=${encodeURIComponent(classIdParam)}`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold"
+            >
+              <Award className="w-4 h-4" />
+              <span>Xem kết quả tổng kết lớp {currentUnit}</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ================= 3. TRƯỜNG HỢP BỎ PHIẾU BÌNH THƯỜNG =================
+  return (
+    <div className="flex-1 max-w-5xl mx-auto px-4 py-8 sm:py-12 space-y-8">
+      {/* Tiêu đề trang */}
+      <div className="text-center space-y-2">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-[#002b66] text-xs font-bold uppercase tracking-wider">
+          <VoteIcon className="w-4 h-4" />
+          <span>BƯỚC 2: PHIẾU BIỂU QUYẾT ĐIỆN TỬ • LỚP {currentUnit}</span>
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-black text-[#002b66] uppercase">
+          BỎ PHIẾU BAN CÁN SỰ & BAN CHẤP HÀNH
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto leading-relaxed">
+          Hòm phiếu điện tử chính thức của lớp <strong>{currentUnit}</strong>. Thông tin xác thực qua MSSV. Mỗi sinh viên biểu quyết 1 lần duy nhất theo đúng Điều 2 Thể lệ.
+        </p>
+      </div>
+
+      {/* BƯỚC 1: XÁC THỰC CỬ TRI (NHẬP HỌ TÊN VÀ MSSV) */}
+      {!isVerified ? (
+        <div className="max-w-md mx-auto bg-white border border-slate-300 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="text-center pb-2 border-b border-slate-100">
+            <span className="text-xs font-black uppercase text-[#002b66]">
+              Bước 1: Xác thực tư cách cử tri lớp {currentUnit}
+            </span>
+          </div>
+
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-xs font-semibold text-rose-800 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
@@ -309,15 +384,15 @@ export default function BoPhieuPage() {
           <form onSubmit={handleVerifyVoter} className="space-y-4 text-xs">
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Họ và tên của bạn <span className="text-red-500">*</span>
+                Họ và tên sinh viên <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={voterName}
                 onChange={(e) => setVoterName(e.target.value)}
-                placeholder="Ví dụ: Trần Văn Bình"
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-hidden bg-slate-50/50"
+                placeholder="Ví dụ: Nguyễn Văn An"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-hidden bg-slate-50/50"
               />
             </div>
 
@@ -330,172 +405,153 @@ export default function BoPhieuPage() {
                 required
                 value={voterStudentId}
                 onChange={(e) => setVoterStudentId(e.target.value.toUpperCase())}
-                placeholder="Ví dụ: 26020456"
-                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-hidden bg-slate-50/50"
+                placeholder="Ví dụ: 26020123"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-hidden bg-slate-50/50"
               />
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                * Mỗi MSSV chỉ được gửi biểu quyết 1 lần duy nhất theo Điều 2 Thể lệ.
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                Hệ thống đối chiếu MSSV để ngăn chặn phiếu bầu trùng lặp hoặc phiếu ma.
               </span>
             </div>
 
             <button
               type="submit"
-              disabled={checkingVoter || (electionData && !electionData.isVotingOpen)}
-              className="w-full py-3 bg-[#002b66] hover:bg-[#001f4d] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+              disabled={checkingVoter}
+              className="w-full py-3 bg-[#002b66] hover:bg-[#001f4d] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer uppercase"
             >
-              {checkingVoter ? 'Đang kiểm tra...' : 'Xác thực & Mở phiếu bầu'}
+              {checkingVoter ? (
+                <span>Đang kiểm tra dữ liệu cử tri...</span>
+              ) : (
+                <>
+                  <span>Tiếp tục vào bỏ phiếu</span>
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
         </div>
       ) : (
-        /* BƯỚC 2: PHIẾU BẦU CHO TỪNG CHỨC VỤ */
+        /* BƯỚC 2: PHIẾU BẦU TRỰC TUYẾN CHÍNH THỨC */
         <div className="space-y-6">
-          {/* Thanh thông tin cử tri đã xác thực */}
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Thanh thông tin cử tri đang thực hiện */}
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-[#002b66] text-white flex items-center justify-center font-bold">
-                {voterName.charAt(0)}
-              </span>
+              <CheckCircle2 className="w-5 h-5 text-blue-700 shrink-0" />
               <div>
-                <div className="font-bold text-slate-900">{voterName}</div>
-                <div className="font-mono text-blue-700 font-bold">MSSV: {voterStudentId}</div>
+                <span className="text-slate-500">Cử tri đã xác thực: </span>
+                <strong className="text-slate-900">{voterName}</strong> (MSSV:{' '}
+                <strong className="font-mono text-blue-900">{voterStudentId}</strong>) • Lớp:{' '}
+                <strong className="text-[#002b66]">{currentUnit}</strong>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg text-[11px]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Đã xác thực cử tri
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsVerified(false)}
-                className="text-[11px] text-slate-500 hover:text-slate-800 underline"
-              >
-                Đổi thông tin
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsVerified(false)}
+              className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
+            >
+              Đổi thông tin
+            </button>
           </div>
 
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-xs font-semibold text-rose-800 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="p-4 bg-rose-50 border border-rose-300 rounded-2xl text-xs text-rose-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* DANH SÁCH CÁC CHỨC VỤ BỎ PHIẾU */}
+          {/* Danh sách 8 chức vụ để tích chọn ứng viên */}
           <div className="space-y-6">
-            {positions.map((pos: any, idx: number) => {
-              const candidatesForPos = candidates.filter((c: any) => c.positionIds?.includes(pos.id))
-              const selectedList = selections[pos.id] || []
+            {positions.map((pos: any, posIdx: number) => {
+              const candForPos = candidates.filter((c: any) => c.positionIds.includes(pos.id))
+              const selectedCandIds = selections[pos.id] || []
 
-              // ÁP DỤNG CHÍNH XÁC ĐIỀU 2 THỂ LỆ:
-              // - Có từ 5 người ứng cử trở lên -> chọn tối đa 3 ứng viên
-              // - Có dưới 5 người ứng cử -> chọn tối đa 1 ứng viên (trừ Lớp phó quota=2 thì tối đa 2)
+              // Tính số lượng tối đa theo Điều 2
               let maxAllowed = 1
-              if (candidatesForPos.length >= 5) {
+              if (candForPos.length >= 5) {
                 maxAllowed = 3
               } else if (pos.quota > 1) {
                 maxAllowed = pos.quota
               }
 
-              const isReachedLimit = selectedList.length >= maxAllowed
+              const isReachedMax = selectedCandIds.length >= maxAllowed
 
               return (
                 <div
                   key={pos.id}
-                  className="bg-white border-2 border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4"
+                  className="bg-white border border-slate-300 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4"
                 >
-                  {/* Header chức vụ + Quy định giới hạn */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                  {/* Header chức vụ */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-[#002b66] text-white text-xs font-bold flex items-center justify-center">
-                          {idx + 1}
-                        </span>
-                        <h2 className="text-base font-extrabold text-[#002b66] uppercase">
-                          {pos.title}
-                        </h2>
-                        <span className="text-xs text-slate-500">
-                          (Cơ cấu: 0{pos.quota} người)
-                        </span>
+                      <div className="text-[11px] font-black uppercase text-blue-700 tracking-wider">
+                        {pos.categoryName} • Chỉ tiêu: {pos.quota} người
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5 pl-8">
-                        {pos.description}
-                      </p>
+                      <h3 className="text-base sm:text-lg font-black text-[#002b66] uppercase">
+                        {posIdx + 1}. {pos.title}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">{pos.description}</p>
                     </div>
 
-                    {/* Huy hiệu hướng dẫn số lựa chọn theo Điều 2 */}
-                    <div className="sm:text-right shrink-0">
-                      <div className="inline-block px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700">
-                        {candidatesForPos.length >= 5 ? (
-                          <span className="text-blue-800 font-bold">
-                            Chức vụ ≥ 5 ứng viên: Chọn tối đa 3 người
-                          </span>
-                        ) : (
-                          <span className="text-slate-800 font-bold">
-                            Chức vụ &lt; 5 ứng viên: Chọn tối đa {maxAllowed} người
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
-                        Đã chọn: <strong className={isReachedLimit ? 'text-blue-700' : 'text-slate-700'}>{selectedList.length}/{maxAllowed}</strong> ứng viên
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
+                          selectedCandIds.length === 0
+                            ? 'bg-slate-100 text-slate-600'
+                            : selectedCandIds.length === maxAllowed
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        Đã chọn: {selectedCandIds.length}/{maxAllowed}
+                      </span>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        {candForPos.length >= 5 ? '≥ 5 ứng viên (chọn tối đa 3)' : `Chọn tối đa ${maxAllowed}`}
                       </div>
                     </div>
                   </div>
 
                   {/* Danh sách ứng viên của chức vụ này */}
-                  {candidatesForPos.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-slate-400 italic bg-slate-50 rounded-xl">
-                      Hiện chưa có ứng viên nào ứng cử chức vụ này. Bạn có thể bỏ qua hoặc bầu bổ sung sau.
+                  {candForPos.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-400 italic bg-slate-50 rounded-xl">
+                      Hiện chưa có ứng viên nào ghi danh chức vụ này. Bạn có thể bỏ qua hoặc bầu bổ sung sau.
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {candidatesForPos.map((cand: any) => {
-                        const isChosen = selectedList.includes(cand.id)
-
+                      {candForPos.map((c: any) => {
+                        const isSelected = selectedCandIds.includes(c.id)
                         return (
                           <div
-                            key={cand.id}
-                            onClick={() => handleToggleCandidate(pos.id, cand.id, maxAllowed)}
-                            className={`p-3.5 border-2 rounded-xl transition cursor-pointer flex items-start gap-3 select-none ${
-                              isChosen
-                                ? 'bg-blue-50/80 border-[#002b66] shadow-xs'
-                                : 'bg-white border-slate-200 hover:border-slate-300'
+                            key={c.id}
+                            onClick={() => handleToggleCandidate(pos.id, c.id, maxAllowed)}
+                            className={`p-3.5 rounded-xl border-2 transition cursor-pointer flex items-start gap-3 select-none ${
+                              isSelected
+                                ? 'bg-blue-50/70 border-[#002b66] shadow-xs'
+                                : 'bg-slate-50/60 border-slate-200 hover:border-blue-300'
                             }`}
                           >
-                            {/* Checkbox / Radio vuông tròn to dễ bấm trên Mobile */}
-                            <div className="pt-0.5 shrink-0">
-                              <div
-                                className={`w-5 h-5 rounded-md border flex items-center justify-center transition ${
-                                  isChosen
-                                    ? 'bg-[#002b66] border-[#002b66] text-white'
-                                    : 'border-slate-400 bg-white'
-                                }`}
-                              >
-                                {isChosen && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                              </div>
+                            <div
+                              className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border ${
+                                isSelected
+                                  ? 'bg-[#002b66] border-[#002b66] text-white'
+                                  : 'bg-white border-slate-300'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                             </div>
 
-                            <div className="flex-1 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs sm:text-sm font-bold text-slate-900">
-                                  {cand.name}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-bold text-xs text-slate-900 truncate">
+                                  {c.name}
                                 </span>
-                                <span className="text-[10px] font-mono text-blue-700 font-semibold bg-blue-100/60 px-1.5 py-0.2 rounded">
-                                  {cand.studentId}
+                                <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                                  {c.studentId}
                                 </span>
                               </div>
-
-                              {cand.slogan && (
-                                <p className="text-[11px] text-slate-600 italic">
-                                  "{cand.slogan}"
-                                </p>
-                              )}
-
-                              {cand.bio && (
-                                <p className="text-[10px] text-slate-400 line-clamp-1">
-                                  {cand.bio}
+                              {c.slogan && (
+                                <p className="text-[11px] text-slate-600 italic line-clamp-2 mt-1">
+                                  &ldquo;{c.slogan}&rdquo;
                                 </p>
                               )}
                             </div>
@@ -509,90 +565,85 @@ export default function BoPhieuPage() {
             })}
           </div>
 
-          {/* Nút gửi phiếu to nổi bật ở chân trang */}
-          <div className="p-6 bg-white border border-slate-300 rounded-2xl text-center space-y-3 shadow-xs">
-            <p className="text-xs text-slate-600">
-              Kiểm tra lại toàn bộ lựa chọn trước khi nhấn nút nộp. Sau khi gửi, phiếu bầu của bạn sẽ được niêm phong vào hệ thống.
-            </p>
+          {/* Nút gửi phiếu cuối cùng */}
+          <div className="sticky bottom-4 z-30 bg-white/95 backdrop-blur-md border-2 border-[#002b66]/30 rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-xs text-slate-600">
+              Cử tri: <strong>{voterName}</strong> (MSSV: <strong className="font-mono">{voterStudentId}</strong>) • Lớp:{' '}
+              <strong className="text-[#002b66]">{currentUnit}</strong>
+            </div>
 
             <button
               type="button"
               onClick={() => setShowConfirmModal(true)}
-              disabled={electionData && !electionData.isVotingOpen}
-              className="w-full sm:w-auto px-10 py-3.5 bg-[#002b66] hover:bg-[#001f4d] disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-md transition hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 mx-auto"
+              className="w-full sm:w-auto px-8 py-3 bg-[#002b66] hover:bg-[#001f4d] text-white font-extrabold text-xs rounded-xl shadow-md transition hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
             >
               <VoteIcon className="w-4 h-4" />
-              <span>GỬI PHIẾU BẦU CỬ CHÍNH THỨC</span>
-              <ChevronRight className="w-4 h-4" />
+              <span>GỬI PHIẾU BIỂU QUYẾT CHÍNH THỨC</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* ================= MODAL XÁC NHẬN NỘP PHIẾU ================= */}
+      {/* MODAL XÁC NHẬN NỘP PHIẾU */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 text-[#002b66] flex items-center justify-center shrink-0">
-                <VoteIcon className="w-5 h-5" />
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowConfirmModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center space-y-1">
+              <div className="w-12 h-12 bg-blue-100 text-[#002b66] rounded-full flex items-center justify-center mx-auto mb-2">
+                <VoteIcon className="w-6 h-6" />
               </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Xác nhận gửi phiếu bầu?
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Cử tri: <strong>{voterName}</strong> (MSSV: {voterStudentId})
-                </p>
-              </div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase">
+                XÁC NHẬN GỬI PHIẾU BIỂU QUYẾT
+              </h3>
+              <p className="text-xs text-slate-500">
+                Lớp {currentUnit} • Năm học {electionData?.academicYear || '2026-2027'}
+              </p>
             </div>
 
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-56 overflow-y-auto text-xs space-y-2">
-              <div className="font-bold text-slate-700">Tóm tắt các ứng viên bạn đã chọn:</div>
-              {positions.map((pos: any) => {
-                const selectedList = selections[pos.id] || []
-                const names = candidates
-                  .filter((c: any) => selectedList.includes(c.id))
-                  .map((c: any) => c.name)
-
-                return (
-                  <div key={pos.id} className="border-b border-slate-200 pb-1.5 last:border-0">
-                    <span className="font-semibold text-[#002b66]">{pos.title}:</span>{' '}
-                    {names.length > 0 ? (
-                      <span className="text-slate-800 font-medium">{names.join(', ')}</span>
-                    ) : (
-                      <span className="text-slate-400 italic">(Để trống)</span>
-                    )}
-                  </div>
-                )
-              })}
+            <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs text-amber-900 space-y-1">
+              <p className="font-bold flex items-center gap-1">
+                <ShieldAlert className="w-4 h-4 text-amber-700" />
+                <span>Lưu ý quan trọng theo Điều 2 Thể lệ:</span>
+              </p>
+              <p>
+                Mỗi cử tri chỉ được gửi phiếu <strong>1 lần duy nhất</strong>. Sau khi nộp, hệ thống sẽ lưu vào cache và cơ sở dữ liệu để khóa vĩnh viễn, bạn không thể sửa đổi hoặc gửi thêm lần thứ hai!
+              </p>
             </div>
 
-            <p className="text-[11px] text-slate-500 italic">
-              * Theo thể lệ, bạn không thể sửa đổi sau khi đã gửi phiếu.
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="pt-2 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowConfirmModal(false)}
-                disabled={submitting}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
               >
-                Xem lại
+                Kiểm tra lại phiếu
               </button>
               <button
                 type="button"
-                onClick={handleSubmitFinalVote}
                 disabled={submitting}
-                className="px-5 py-2 bg-[#002b66] hover:bg-[#001f4d] text-white font-bold text-xs rounded-lg shadow-xs transition"
+                onClick={handleSubmitFinalVote}
+                className="px-5 py-2.5 bg-[#002b66] hover:bg-[#001f4d] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5"
               >
-                {submitting ? 'Đang gửi phiếu...' : 'Đồng ý nộp phiếu'}
+                {submitting ? 'Đang gửi...' : 'Đồng ý nộp phiếu'}
               </button>
             </div>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+export default function BoPhieuPage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-xs text-slate-500">Đang tải hòm phiếu...</div>}>
+      <BoPhieuContent />
+    </Suspense>
   )
 }

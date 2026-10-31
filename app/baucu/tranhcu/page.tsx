@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import {
   UserCheck,
   Award,
@@ -11,15 +12,17 @@ import {
   Users,
   AlertCircle,
   Vote as VoteIcon,
-  Sparkles,
-  ArrowRight,
   Phone,
   Mail,
   FileText,
   BadgeCheck,
+  GraduationCap,
 } from 'lucide-react'
 
-export default function TranhCuPage() {
+function TranhCuContent() {
+  const searchParams = useSearchParams()
+  const classIdParam = searchParams.get('class') || searchParams.get('lop') || 'k70p_me2'
+
   const [electionData, setElectionData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -36,7 +39,7 @@ export default function TranhCuPage() {
 
   const loadData = async () => {
     try {
-      const res = await fetch('/api/baucu')
+      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classIdParam)}`)
       const json = await res.json()
       if (json.success) {
         setElectionData(json.data)
@@ -50,7 +53,7 @@ export default function TranhCuPage() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [classIdParam])
 
   const handleTogglePosition = (posId: string) => {
     setSelectedPositions((prev) =>
@@ -79,6 +82,7 @@ export default function TranhCuPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'register_candidate',
+          classId: classIdParam,
           name: name.trim(),
           studentId: studentId.trim(),
           phone: phone.trim(),
@@ -113,6 +117,7 @@ export default function TranhCuPage() {
 
   const positions = electionData?.positions || []
   const candidates = electionData?.candidates || []
+  const currentUnit = electionData?.unit || 'K70P-ME2'
 
   return (
     <div className="flex-1 max-w-6xl mx-auto px-4 py-8 sm:py-12 space-y-10">
@@ -120,13 +125,13 @@ export default function TranhCuPage() {
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-[#002b66] text-xs font-bold uppercase tracking-wider">
           <UserCheck className="w-4 h-4" />
-          <span>BƯỚC 1: TIẾP NHẬN HỒ SƠ TRANH CỬ</span>
+          <span>BƯỚC 1: TIẾP NHẬN HỒ SƠ TRANH CỬ • LỚP {currentUnit}</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-[#002b66] uppercase font-serif">
+        <h1 className="text-2xl sm:text-3xl font-black text-[#002b66] uppercase">
           GHI DANH ỨNG CỬ BAN CÁN SỰ & BAN CHẤP HÀNH
         </h1>
         <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto">
-          Các bạn sinh viên có nguyện vọng cống hiến cho tập thể lớp <strong>K71-P-ME2</strong> vui lòng điền thông tin bên dưới để hệ thống ghi nhận vào hòm phiếu biểu quyết.
+          Các bạn sinh viên có nguyện vọng cống hiến cho tập thể lớp <strong>{currentUnit}</strong> vui lòng điền thông tin bên dưới để hệ thống ghi nhận vào hòm phiếu biểu quyết.
         </p>
       </div>
 
@@ -135,7 +140,7 @@ export default function TranhCuPage() {
         <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
           <div>
-            <strong>Thông báo:</strong> Người điều hành hiện đã đóng tiếp nhận hồ sơ tranh cử để tiến hành bỏ phiếu. Nếu bạn cần bổ sung danh sách, vui lòng liên hệ người điều hành tại lớp.
+            <strong>Thông báo:</strong> Người điều hành lớp {currentUnit} hiện đã đóng tiếp nhận hồ sơ tranh cử để tiến hành bỏ phiếu. Nếu bạn cần bổ sung danh sách, vui lòng liên hệ ban tổ chức tại lớp.
           </div>
         </div>
       )}
@@ -147,7 +152,7 @@ export default function TranhCuPage() {
           <div className="flex items-center gap-2 pb-3 border-b border-slate-200 mb-4">
             <BadgeCheck className="w-5 h-5 text-[#002b66]" />
             <h2 className="text-base font-bold text-slate-900 uppercase">
-              Phiếu Đăng Ký Ứng Cử
+              Phiếu Đăng Ký Ứng Cử (Lớp {currentUnit})
             </h2>
           </div>
 
@@ -197,9 +202,6 @@ export default function TranhCuPage() {
                 placeholder="Ví dụ: 26020123"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-hidden bg-slate-50/50"
               />
-              <span className="text-[11px] text-slate-400 mt-0.5 block">
-                MSSV dùng để định danh duy nhất trong hệ thống.
-              </span>
             </div>
 
             {/* Số điện thoại & Email */}
@@ -215,42 +217,40 @@ export default function TranhCuPage() {
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Email VNU/Cá nhân</label>
+                <label className="block font-bold text-slate-700 mb-1">Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="an@vnu.edu.vn"
+                  placeholder="sv@vnu.edu.vn"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-hidden bg-slate-50/50"
                 />
               </div>
             </div>
 
-            {/* Danh sách chức vụ muốn ứng cử */}
+            {/* Chọn các chức vụ ứng cử */}
             <div>
-              <label className="block font-bold text-slate-700 mb-1">
-                Chức vụ ứng cử <span className="text-red-500">*</span> (Có thể chọn nhiều chức vụ)
+              <label className="block font-bold text-slate-700 mb-1.5">
+                Chức vụ mong muốn ứng cử <span className="text-red-500">*</span>
               </label>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2.5 bg-slate-50">
+              <div className="space-y-1.5 max-h-56 overflow-y-auto p-2 border border-slate-200 rounded-xl bg-slate-50/60">
                 {positions.map((pos: any) => {
                   const isChecked = selectedPositions.includes(pos.id)
                   return (
                     <label
                       key={pos.id}
-                      className={`flex items-start gap-2 p-2 rounded-lg border transition cursor-pointer ${
-                        isChecked
-                          ? 'bg-blue-50 border-blue-400 text-blue-900 font-semibold'
-                          : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-800'
+                      className={`flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition select-none ${
+                        isChecked ? 'bg-blue-100/70 border border-blue-300' : 'hover:bg-slate-100 border border-transparent'
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => handleTogglePosition(pos.id)}
-                        className="mt-0.5 w-4 h-4 accent-[#002b66] cursor-pointer"
+                        className="mt-0.5 rounded-sm border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
-                      <div className="flex-1">
-                        <div className="text-xs font-bold leading-tight">{pos.title}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-slate-800 text-xs">{pos.title}</div>
                         <div className="text-[10px] text-slate-500">{pos.categoryName}</div>
                       </div>
                     </label>
@@ -259,16 +259,16 @@ export default function TranhCuPage() {
               </div>
             </div>
 
-            {/* Chương trình hành động / Lời hứa */}
+            {/* Slogan tranh cử */}
             <div>
               <label className="block font-bold text-slate-700 mb-1">
                 Lời hứa tranh cử / Chương trình hành động ngắn
               </label>
-              <textarea
-                rows={2}
+              <input
+                type="text"
                 value={slogan}
                 onChange={(e) => setSlogan(e.target.value)}
-                placeholder="Ví dụ: Quyết tâm xây dựng tập thể K71-P-ME2 đoàn kết, học tốt, phong trào hàng đầu Khoa FEPN..."
+                placeholder="Ví dụ: Tận tụy vì tập thể, hỗ trợ tài liệu học tập tối đa cho cả lớp!"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-hidden bg-slate-50/50"
               />
             </div>
@@ -276,124 +276,120 @@ export default function TranhCuPage() {
             {/* Giới thiệu bản thân */}
             <div>
               <label className="block font-bold text-slate-700 mb-1">
-                Giới thiệu bản thân (Kinh nghiệm cán sự, sở trường)
+                Giới thiệu ngắn bản thân (kinh nghiệm, sở trường)
               </label>
               <textarea
                 rows={2}
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                placeholder="Ví dụ: Từng là lớp trưởng cấp 3, năng nổ trong các hoạt động Đoàn Hội, hòa đồng..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-hidden bg-slate-50/50"
+                placeholder="Kinh nghiệm làm cán sự cấp 3, sở trường tin học văn phòng..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-hidden bg-slate-50/50 resize-none"
               />
             </div>
 
-            {/* Nút gửi */}
             <button
               type="submit"
               disabled={submitting || (electionData && !electionData.isRegistrationOpen)}
-              className="w-full py-2.5 bg-[#002b66] hover:bg-[#001f4d] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+              className="w-full py-2.5 bg-[#002b66] hover:bg-[#001f4d] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer uppercase"
             >
-              {submitting ? 'Đang gửi hồ sơ...' : 'Xác nhận nộp hồ sơ ứng cử'}
+              {submitting ? (
+                <span>Đang gửi hồ sơ...</span>
+              ) : (
+                <>
+                  <UserCheck className="w-4 h-4" />
+                  <span>XÁC NHẬN GHI DANH ỨNG CỬ</span>
+                </>
+              )}
             </button>
           </form>
         </div>
 
         {/* ================= DANH SÁCH ỨNG VIÊN ĐÃ GHI DANH (7 Cột) ================= */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-900 uppercase">
-                Danh Sách Ứng Viên Đã Ghi Danh ({candidates.length})
-              </h2>
-              <p className="text-xs text-slate-500">
-                Các ứng viên sẽ tự động xuất hiện trên lá phiếu biểu quyết
-              </p>
-            </div>
-
-            <Link
-              href="/baucu/bophieu"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5"
-            >
-              <VoteIcon className="w-4 h-4" />
-              <span>Tới hòm phiếu</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {candidates.length === 0 ? (
-            <div className="p-8 text-center bg-white border border-dashed border-slate-300 rounded-2xl space-y-3">
-              <Users className="w-10 h-10 text-slate-400 mx-auto" />
-              <div className="text-xs text-slate-500">
-                Chưa có sinh viên nào ghi danh ứng cử. Hãy là người đầu tiên nộp hồ sơ bằng biểu mẫu bên cạnh!
+        <div className="lg:col-span-7 space-y-4">
+          <div className="bg-white border border-slate-300 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-700" />
+                <h2 className="text-base font-bold text-slate-900 uppercase">
+                  Danh Sách Ứng Viên Lớp {currentUnit} ({candidates.length})
+                </h2>
               </div>
+
+              <Link
+                href={`/baucu/bophieu?class=${encodeURIComponent(classIdParam)}&lock=1`}
+                className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1"
+              >
+                <span>Hòm phiếu</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Nhóm hiển thị theo từng chức vụ */}
-              {positions.map((pos: any) => {
-                const candidatesForPos = candidates.filter((c: any) => c.positionIds?.includes(pos.id))
-                return (
-                  <div key={pos.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                        <h3 className="text-sm font-bold text-[#002b66] uppercase">
-                          {pos.title}
-                        </h3>
-                        <span className="text-[11px] text-slate-400 font-normal">
-                          (Cơ cấu: 0{pos.quota} người)
+
+            {loading ? (
+              <div className="py-12 text-center text-xs text-slate-400">
+                Đang tải danh sách ứng viên...
+              </div>
+            ) : candidates.length === 0 ? (
+              <div className="py-12 text-center space-y-2">
+                <Users className="w-10 h-10 text-slate-300 mx-auto" />
+                <p className="text-xs text-slate-500 font-medium">
+                  Chưa có ứng viên nào ghi danh cho lớp {currentUnit}. Hãy là người đầu tiên!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {candidates.map((cand: any) => (
+                  <div
+                    key={cand.id}
+                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-blue-300 transition shadow-2xs space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h3 className="font-extrabold text-sm text-[#002b66]">{cand.name}</h3>
+                        <span className="font-mono text-[11px] text-slate-500 block">
+                          MSSV: {cand.studentId}
                         </span>
                       </div>
-                      <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-                        {candidatesForPos.length} ứng viên
-                      </span>
+                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs shrink-0">
+                        {cand.name.charAt(0)}
+                      </div>
                     </div>
 
-                    {candidatesForPos.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic py-2 pl-4">
-                        Chưa có ứng viên nào ứng cử vị trí này.
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {candidatesForPos.map((cand: any) => (
-                          <div
-                            key={cand.id}
-                            className="p-3 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-white hover:border-blue-300 transition space-y-1.5"
+                    {/* Danh sách chức vụ ứng cử */}
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {cand.positionIds.map((pId: string) => {
+                        const posObj = positions.find((p: any) => p.id === pId)
+                        return (
+                          <span
+                            key={pId}
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200"
                           >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <div className="text-xs font-bold text-slate-900">{cand.name}</div>
-                                <div className="text-[11px] font-mono text-blue-700 font-semibold">
-                                  MSSV: {cand.studentId}
-                                </div>
-                              </div>
-                              <span className="w-6 h-6 rounded-full bg-blue-100 text-[#002b66] font-bold text-[10px] flex items-center justify-center">
-                                {cand.name.charAt(0)}
-                              </span>
-                            </div>
+                            {posObj?.title || pId}
+                          </span>
+                        )
+                      })}
+                    </div>
 
-                            {cand.slogan && (
-                              <p className="text-[11px] text-slate-700 italic border-l-2 border-l-blue-400 pl-2 py-0.5">
-                                "{cand.slogan}"
-                              </p>
-                            )}
-
-                            {cand.bio && (
-                              <p className="text-[10px] text-slate-500 line-clamp-2">
-                                {cand.bio}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    {/* Slogan */}
+                    {cand.slogan && (
+                      <p className="text-xs text-slate-600 italic line-clamp-2 pt-1">
+                        &ldquo;{cand.slogan}&rdquo;
+                      </p>
                     )}
                   </div>
-                )
-              })}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function TranhCuPage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-xs text-slate-500">Đang tải trang ứng cử...</div>}>
+      <TranhCuContent />
+    </Suspense>
   )
 }

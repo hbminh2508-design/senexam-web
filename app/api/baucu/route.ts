@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
+  getAllClasses,
+  createClassElection,
   getElectionData,
   registerCandidate,
   submitVote,
@@ -9,29 +11,40 @@ import {
   resetVotes,
   deleteCandidate,
   deleteSingleVote,
+  deleteClassElection,
 } from '@/lib/baucuService'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/baucu
-// Lấy toàn bộ trạng thái bầu cử và kết quả tổng hợp
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
+    const action = searchParams.get('action')
+
+    // 1. Lấy danh sách tất cả các lớp bầu cử
+    if (action === 'classes') {
+      const classes = await getAllClasses()
+      return NextResponse.json({ success: true, data: classes })
+    }
+
+    // 2. Lấy dữ liệu chi tiết của 1 lớp
+    const classIdParam = searchParams.get('class') || searchParams.get('lop') || 'k70p_me2'
     const checkStudentId = searchParams.get('check_mssv')
     const isAdmin = searchParams.get('admin') === 'true'
 
-    const data = await getElectionData()
+    const data = await getElectionData(classIdParam)
     const summary = computeResults(data)
 
     let hasVoted = false
     if (checkStudentId) {
-      hasVoted = await hasStudentVoted(checkStudentId)
+      hasVoted = await hasStudentVoted(data.id, checkStudentId)
     }
 
     return NextResponse.json({
       success: true,
       data: {
+        id: data.id,
         unit: data.unit,
         academicYear: data.academicYear,
         title: data.title,
@@ -43,7 +56,7 @@ export async function GET(request: Request) {
         round: data.round || 1,
         hasVoted,
         summary,
-        // Chỉ gửi chi tiết danh sách phiếu cử tri khi trang Admin yêu cầu
+        // Chỉ gửi danh sách chi tiết phiếu cho admin
         votes: isAdmin ? data.votes : undefined,
       },
     })
@@ -57,15 +70,43 @@ export async function GET(request: Request) {
 }
 
 // POST /api/baucu
-// Xử lý đăng ký ứng cử, bỏ phiếu và quản trị
 export async function POST(request: Request) {
   try {
     const body = await request.json()
     const action = body?.action
+    const classId = body?.classId || body?.class || body?.lop || 'k70p_me2'
 
-    // 1. Đăng ký ứng cử viên
+    // 1. Tạo thêm bầu cử lớp mới
+    if (action === 'create_class') {
+      const unit = body?.unit
+      if (!unit || !unit.trim()) {
+        return NextResponse.json({ success: false, message: 'Vui lòng nhập tên lớp cần tạo.' }, { status: 400 })
+      }
+      const newClassData = await createClassElection({
+        unit: unit.trim(),
+        academicYear: body?.academicYear,
+        title: body?.title,
+      })
+      return NextResponse.json({
+        success: true,
+        message: `Đã khởi tạo thành công phiên bầu cử cho lớp ${newClassData.unit}!`,
+        data: newClassData,
+      })
+    }
+
+    // 2. Xóa lớp bầu cử
+    if (action === 'delete_class') {
+      const targetId = body?.classId
+      if (!targetId) {
+        return NextResponse.json({ success: false, message: 'Thiếu classId' }, { status: 400 })
+      }
+      await deleteClassElection(targetId)
+      return NextResponse.json({ success: true, message: 'Đã xóa phiên bầu cử của lớp.' })
+    }
+
+    // 3. Đăng ký ứng cử viên cho lớp
     if (action === 'register_candidate') {
-      const res = await registerCandidate({
+      const res = await registerCandidate(classId, {
         name: body.name,
         studentId: body.studentId,
         phone: body.phone,
@@ -77,9 +118,9 @@ export async function POST(request: Request) {
       return NextResponse.json(res)
     }
 
-    // 2. Bỏ phiếu bầu cử
+    // 4. Bỏ phiếu bầu cử cho lớp
     if (action === 'vote') {
-      const res = await submitVote({
+      const res = await submitVote(classId, {
         voterName: body.voterName,
         voterStudentId: body.voterStudentId,
         selections: body.selections || {},
@@ -87,74 +128,82 @@ export async function POST(request: Request) {
       return NextResponse.json(res)
     }
 
-    // 3. Kiểm tra xem MSSV đã bỏ phiếu chưa
+    // 5. Kiểm tra MSSV đã bỏ phiếu cho lớp chưa
     if (action === 'check_voter') {
       const studentId = body?.studentId || ''
-      const hasVoted = await hasStudentVoted(studentId)
+      const hasVoted = await hasStudentVoted(classId, studentId)
       return NextResponse.json({ success: true, hasVoted })
     }
 
-    // 4. Quản trị: Đổi trạng thái mở/đóng đăng ký
+    // 6. Quản trị: Đổi trạng thái mở/đóng đăng ký
     if (action === 'toggle_registration') {
-      const data = await getElectionData()
-      const updated = await updateElectionState({ isRegistrationOpen: !data.isRegistrationOpen })
+      const data = await getElectionData(classId)
+      const updated = await updateElectionState(classId, { isRegistrationOpen: !data.isRegistrationOpen })
       return NextResponse.json({
         success: true,
         isRegistrationOpen: updated.isRegistrationOpen,
-        message: updated.isRegistrationOpen ? 'Đã mở đăng ký ứng cử' : 'Đã đóng đăng ký ứng cử',
+        message: updated.isRegistrationOpen
+          ? `Đã mở tiếp nhận ứng cử lớp ${updated.unit}`
+          : `Đã đóng tiếp nhận ứng cử lớp ${updated.unit}`,
       })
     }
 
-    // 5. Quản trị: Đổi trạng thái mở/đóng bỏ phiếu
+    // 7. Quản trị: Đổi trạng thái mở/đóng bỏ phiếu
     if (action === 'toggle_voting') {
-      const data = await getElectionData()
-      const updated = await updateElectionState({ isVotingOpen: !data.isVotingOpen })
+      const data = await getElectionData(classId)
+      const updated = await updateElectionState(classId, { isVotingOpen: !data.isVotingOpen })
       return NextResponse.json({
         success: true,
         isVotingOpen: updated.isVotingOpen,
-        message: updated.isVotingOpen ? 'Đã mở hòm phiếu bầu cử' : 'Đã đóng hòm phiếu bầu cử',
+        message: updated.isVotingOpen
+          ? `Đã mở hòm phiếu bầu cử lớp ${updated.unit}`
+          : `Đã đóng hòm phiếu bầu cử lớp ${updated.unit}`,
       })
     }
 
-    // 6. Quản trị: Xóa ứng viên
+    // 8. Quản trị: Xóa ứng viên
     if (action === 'delete_candidate') {
       const candidateId = body?.candidateId
       if (!candidateId) {
         return NextResponse.json({ success: false, message: 'Thiếu candidateId' }, { status: 400 })
       }
-      await deleteCandidate(candidateId)
-      return NextResponse.json({ success: true, message: 'Đã xóa ứng viên' })
+      await deleteCandidate(classId, candidateId)
+      return NextResponse.json({ success: true, message: 'Đã xóa ứng viên khỏi danh sách.' })
     }
 
-    // 7. Quản trị: Xóa 1 phiếu bầu gian lận theo Điều 5
+    // 9. Quản trị: Xóa 1 phiếu bầu gian lận
     if (action === 'delete_vote') {
       const voteId = body?.voteId
       if (!voteId) {
         return NextResponse.json({ success: false, message: 'Thiếu voteId' }, { status: 400 })
       }
-      await deleteSingleVote(voteId)
-      return NextResponse.json({ success: true, message: 'Đã xóa phiếu bầu thành công' })
+      await deleteSingleVote(classId, voteId)
+      return NextResponse.json({ success: true, message: 'Đã hủy phiếu bầu gian lận thành công.' })
     }
 
-    // 8. Quản trị: Reset phiếu bầu (chuẩn bị bầu vòng 2 hoặc làm mới)
+    // 10. Quản trị: Reset phiếu bầu (chuẩn bị bầu vòng 2 hoặc làm mới)
     if (action === 'reset_votes') {
       const keepCandidates = body?.keepCandidates !== false
-      await resetVotes(keepCandidates)
+      await resetVotes(classId, keepCandidates)
       return NextResponse.json({
         success: true,
-        message: keepCandidates ? 'Đã làm mới hòm phiếu (giữ lại ứng viên)!' : 'Đã xóa toàn bộ phiếu và ứng viên!',
+        message: keepCandidates
+          ? 'Đã làm mới hòm phiếu (giữ nguyên danh sách ứng viên)!'
+          : 'Đã xóa toàn bộ phiếu và danh sách ứng viên!',
       })
     }
 
-    // 9. Quản trị: Cập nhật cấu hình chung
+    // 11. Quản trị: Cập nhật cấu hình chung
     if (action === 'update_settings') {
       const updates: any = {}
       if (typeof body.isRegistrationOpen === 'boolean') updates.isRegistrationOpen = body.isRegistrationOpen
       if (typeof body.isVotingOpen === 'boolean') updates.isVotingOpen = body.isVotingOpen
       if (typeof body.round === 'number') updates.round = body.round
       if (body.title) updates.title = body.title
-      const updated = await updateElectionState(updates)
-      return NextResponse.json({ success: true, data: updated, message: 'Cập nhật cài đặt thành công' })
+      if (body.unit) updates.unit = body.unit
+      if (body.academicYear) updates.academicYear = body.academicYear
+      const updated = await updateElectionState(classId, updates)
+      return NextResponse.json({ success: true, data: updated, message: 'Cập nhật cài đặt thành công!' })
     }
 
     return NextResponse.json({ success: false, message: 'Hành động không hợp lệ' }, { status: 400 })

@@ -1,0 +1,78 @@
+{
+  "id": "k71p_me2",
+  "unit": "K71-P-ME2",
+  "academicYear": "2026-2027",
+  "title": "BẦU CỬ BAN CHẤP HÀNH LÂM THỜI & BAN CÁN SỰ K71-P-ME2",
+  "positions": [
+    {
+      "id": "lop_truong",
+      "title": "Lớp trưởng",
+      "category": "bcs",
+      "categoryName": "Ban Cán Sự Lớp",
+      "quota": 1,
+      "description": "Chỉ đạo toàn diện hoạt động của lớp, đại diện liên lạc với Cố vấn học tập và Khoa FEPN."
+    },
+    {
+      "id": "lop_pho",
+      "title": "Lớp phó",
+      "category": "bcs",
+      "categoryName": "Ban Cán Sự Lớp",
+      "quota": 2,
+      "description": "Phụ trách học tập, đời sống, phong trào và hỗ trợ Lớp trưởng điều hành lớp."
+    },
+    {
+      "id": "bi_thu",
+      "title": "Bí thư Chi đoàn",
+      "category": "doan",
+      "categoryName": "Ban Chấp Hành Chi Đoàn",
+      "quota": 1,
+      "description": "Lãnh đạo công tác Đoàn, tư tưởng chính trị, phong trào thanh niên và giới thiệu Đoàn viên ưu tú."
+    },
+    {
+      "id": "pho_bi_thu",
+      "title": "Phó Bí thư Chi đoàn",
+      "category": "doan",
+      "categoryName": "Ban Chấp Hành Chi Đoàn",
+      "quota": 1,
+      "description": "Hỗ trợ Bí thư Chi đoàn, phụ trách tổ chức sinh hoạt Đoàn định kỳ và các cuộc thi thanh niên."
+    },
+    {
+      "id": "uv_chi_doan",
+      "title": "Ủy viên BCH Chi đoàn",
+      "category": "doan",
+      "categoryName": "Ban Chấp Hành Chi Đoàn",
+      "quota": 1,
+      "description": "Phụ trách công tác kiểm tra, phong trào tình nguyện và các hoạt động xung kích của Chi đoàn."
+    },
+    {
+      "id": "chi_hoi_truong",
+      "title": "Chi Hội Trưởng",
+      "category": "hoi",
+      "categoryName": "Ban Chấp Hành Chi Hội Sinh Viên",
+      "quota": 1,
+      "description": "Chỉ đạo phong trào Hội Sinh viên, phong trào \"Sinh viên 5 tốt\" và các hoạt động thể thao - văn nghệ."
+    },
+    {
+      "id": "chi_hoi_pho",
+      "title": "Chi Hội Phó",
+      "category": "hoi",
+      "categoryName": "Ban Chấp Hành Chi Hội Sinh Viên",
+      "quota": 1,
+      "description": "Đồng hành cùng Chi Hội trưởng triển khai hoạt động hỗ trợ học tập, sinh viên nghiên cứu khoa học."
+    },
+    {
+      "id": "uv_chi_hoi",
+      "title": "Ủy viên BCH Chi hội",
+      "category": "hoi",
+      "categoryName": "Ban Chấp Hành Chi Hội Sinh Viên",
+      "quota": 1,
+      "description": "Phụ trách công tác hội viên, truyền thông sự kiện và quản lý phong trào Hội."
+    }
+  ],
+  "candidates": [],
+  "votes": [],
+  "isRegistrationOpen": true,
+  "isVotingOpen": true,
+  "round": 1,
+  "updatedAt": "2026-10-31T06:00:00.000Z"
+}

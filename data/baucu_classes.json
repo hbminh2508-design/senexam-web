@@ -1,0 +1,26 @@
+[
+  {
+    "id": "k70p_me2",
+    "unit": "K70P-ME2",
+    "academicYear": "2026-2027",
+    "title": "BẦU CỬ BAN CHẤP HÀNH LÂM THỜI & BAN CÁN SỰ K70P-ME2",
+    "isRegistrationOpen": true,
+    "isVotingOpen": true,
+    "round": 1,
+    "totalCandidates": 0,
+    "totalVotes": 0,
+    "updatedAt": "2026-10-31T06:00:00.000Z"
+  },
+  {
+    "id": "k71p_me2",
+    "unit": "K71-P-ME2",
+    "academicYear": "2026-2027",
+    "title": "BẦU CỬ BAN CHẤP HÀNH LÂM THỜI & BAN CÁN SỰ K71-P-ME2",
+    "isRegistrationOpen": true,
+    "isVotingOpen": true,
+    "round": 1,
+    "totalCandidates": 0,
+    "totalVotes": 0,
+    "updatedAt": "2026-10-31T06:00:00.000Z"
+  }
+]
