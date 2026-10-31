@@ -330,6 +330,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
 
               {isBetaTester && (
                 <button
+                  aria-label="Mở SenAI Studio"
                   onClick={() => router.push('/senai-studio')}
                   title="Mở SenAI Studio"
                   className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"}
@@ -339,11 +340,19 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 </button>
               )}
 
-              <button onClick={() => setIsFullscreen(!isFullscreen)} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
+              <button
+                aria-label={isFullscreen ? "Thu nhỏ" : "Phóng to"}
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"}
+                style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
 
-              <button onClick={handleToggleChat} className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"} style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
+              <button
+                aria-label="Đóng Chat"
+                onClick={handleToggleChat}
+                className={newUiEnabled ? "p-2 rounded-xl transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]" : "p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-colors"}
+                style={newUiEnabled ? { color: 'var(--text-muted)' } : undefined}>
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -436,6 +445,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
                 style={newUiEnabled ? { border: '1px solid var(--border)', color: 'var(--text)' } : undefined}
               />
               <button
+                aria-label="Gửi tin nhắn"
                 type="submit"
                 disabled={!chatInput.trim() || isChatLoading}
                 className={`absolute right-2 p-2.5 rounded-full transition-transform active:scale-95 shadow-md flex items-center justify-center disabled:opacity-50 disabled:shadow-none ${newUiEnabled ? 'text-white' : (isOnlineMode ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-700 hover:bg-slate-800 text-white')}`}
@@ -468,6 +478,7 @@ export default function ChatOffline({ userName, avoid, hidden }: { userName: str
       )}
 
       <button
+        aria-label={isChatOpen ? "Đóng Chat" : "Mở Chat"}
         onClick={handleToggleChat}
         className={`pointer-events-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-full text-white font-black transition-all duration-300 hover:scale-105 active:scale-95 z-[100] border border-white/30 shadow-[0_10px_35px_rgba(79,70,229,0.45)]
           ${isChatOpen
