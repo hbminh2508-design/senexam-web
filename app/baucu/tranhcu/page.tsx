@@ -37,9 +37,12 @@ function TranhCuContent() {
   const [slogan, setSlogan] = useState('')
   const [bio, setBio] = useState('')
 
-  const loadData = async () => {
+  const loadData = async (showLoading = false) => {
+    if (showLoading) setLoading(true)
     try {
-      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classIdParam)}`)
+      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classIdParam)}&_t=${Date.now()}`, {
+        cache: 'no-store',
+      })
       const json = await res.json()
       if (json.success) {
         setElectionData(json.data)
@@ -47,12 +50,17 @@ function TranhCuContent() {
     } catch (e) {
       console.error('Lỗi khi tải ứng viên:', e)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadData()
+    loadData(true)
+    // Tự động làm mới danh sách ứng viên mỗi 3 giây
+    const interval = setInterval(() => {
+      loadData(false)
+    }, 3000)
+    return () => clearInterval(interval)
   }, [classIdParam])
 
   const handleTogglePosition = (posId: string) => {

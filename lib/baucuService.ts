@@ -130,12 +130,15 @@ export const DEFAULT_POSITIONS: Position[] = [
   },
 ]
 
-// Chuẩn hóa tên lớp thành slug id (ví dụ: "K70P-ME2" -> "k70p_me2")
+// Chuẩn hóa tên lớp thành slug id (ví dụ: "K70P-ME2" -> "k70p_me2", "K71P-EE" -> "k71p-ee")
 export function normalizeClassId(unit: string): string {
   if (!unit) return 'k70p_me2'
-  const normalized = unit
-    .toLowerCase()
-    .trim()
+  const trimmed = unit.toLowerCase().trim()
+  // Nếu đã là slug hợp lệ giữ nguyên dạng (ví dụ k71p-ee, k70p_me2, k71p_me2)
+  if (/^[a-z0-9]+[_-][a-z0-9_-]+$/.test(trimmed)) {
+    return trimmed
+  }
+  const normalized = trimmed
     .replace(/[^a-z0-9_-]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '')
@@ -172,15 +175,37 @@ export function createInitialElectionData(unitName: string = 'K70P-ME2', academi
 export async function getAllClasses(): Promise<ElectionClassInfo[]> {
   const classesMap = new Map<string, ElectionClassInfo>()
 
-  // 1. Thử lấy từ Supabase fepn_election_settings
+  // 1. Lấy đồng thời danh sách lớp, ứng viên và phiếu bầu từ Supabase
   try {
-    const { data: remoteSettings, error } = await supabase
-      .from('fepn_election_settings')
-      .select('id, unit, academic_year, title, is_registration_open, is_voting_open, round, updated_at')
-      .order('updated_at', { ascending: false })
+    const [settingsRes, candidatesRes, votesRes] = await Promise.all([
+      supabase
+        .from('fepn_election_settings')
+        .select('id, unit, academic_year, title, is_registration_open, is_voting_open, round, updated_at')
+        .order('updated_at', { ascending: false }),
+      supabase.from('fepn_election_candidates').select('id, election_id'),
+      supabase.from('fepn_election_votes').select('id, election_id'),
+    ])
 
-    if (!error && Array.isArray(remoteSettings) && remoteSettings.length > 0) {
-      for (const s of remoteSettings) {
+    const candCountMap = new Map<string, number>()
+    if (Array.isArray(candidatesRes.data)) {
+      for (const cand of candidatesRes.data) {
+        if (cand.election_id) {
+          candCountMap.set(cand.election_id, (candCountMap.get(cand.election_id) || 0) + 1)
+        }
+      }
+    }
+
+    const voteCountMap = new Map<string, number>()
+    if (Array.isArray(votesRes.data)) {
+      for (const v of votesRes.data) {
+        if (v.election_id) {
+          voteCountMap.set(v.election_id, (voteCountMap.get(v.election_id) || 0) + 1)
+        }
+      }
+    }
+
+    if (!settingsRes.error && Array.isArray(settingsRes.data) && settingsRes.data.length > 0) {
+      for (const s of settingsRes.data) {
         classesMap.set(s.id, {
           id: s.id,
           unit: s.unit || s.id.toUpperCase(),
@@ -189,8 +214,8 @@ export async function getAllClasses(): Promise<ElectionClassInfo[]> {
           isRegistrationOpen: s.is_registration_open ?? true,
           isVotingOpen: s.is_voting_open ?? true,
           round: s.round || 1,
-          totalCandidates: 0,
-          totalVotes: 0,
+          totalCandidates: candCountMap.get(s.id) || 0,
+          totalVotes: voteCountMap.get(s.id) || 0,
           updatedAt: s.updated_at || new Date().toISOString(),
         })
       }
@@ -199,7 +224,7 @@ export async function getAllClasses(): Promise<ElectionClassInfo[]> {
     // Supabase offline / fallback
   }
 
-  // 2. Đọc file index baucu_classes.json local
+  // 2. Đọc file index baucu_classes.json local (dự phòng khi offline)
   try {
     const raw = await fs.readFile(CLASSES_INDEX_PATH, 'utf-8')
     const localClasses: ElectionClassInfo[] = JSON.parse(raw)
@@ -207,16 +232,20 @@ export async function getAllClasses(): Promise<ElectionClassInfo[]> {
       if (!classesMap.has(c.id)) {
         classesMap.set(c.id, c)
       } else {
-        // Cập nhật thông tin nếu có
         const existing = classesMap.get(c.id)!
-        classesMap.set(c.id, { ...existing, unit: c.unit || existing.unit })
+        classesMap.set(c.id, {
+          ...existing,
+          unit: c.unit || existing.unit,
+          totalCandidates: Math.max(existing.totalCandidates, c.totalCandidates || 0),
+          totalVotes: Math.max(existing.totalVotes, c.totalVotes || 0),
+        })
       }
     }
   } catch {
     // Chưa có file index
   }
 
-  // 3. Đảm bảo luôn có lớp mặc định K70P-ME2 và K71-P-ME2 nếu hệ thống trống
+  // 3. Đảm bảo luôn có các lớp mặc định nếu hệ thống trống
   if (!classesMap.has('k70p_me2')) {
     classesMap.set('k70p_me2', {
       id: 'k70p_me2',
@@ -248,18 +277,6 @@ export async function getAllClasses(): Promise<ElectionClassInfo[]> {
   }
 
   const list = Array.from(classesMap.values())
-
-  // Cập nhật số lượng ứng viên và cử tri thực tế cho từng lớp
-  for (const c of list) {
-    try {
-      const classData = await getElectionData(c.id)
-      c.totalCandidates = classData.candidates.length
-      c.totalVotes = classData.votes.length
-      c.isRegistrationOpen = classData.isRegistrationOpen
-      c.isVotingOpen = classData.isVotingOpen
-      c.round = classData.round
-    } catch {}
-  }
 
   // Lưu lại cache local
   try {
@@ -407,6 +424,11 @@ export async function getElectionData(classIdParam?: string): Promise<ElectionDa
         updatedAt: s.updated_at || new Date().toISOString(),
       }
 
+      // Nếu positions trên Supabase từng bị rỗng, tự động cập nhật lại đầy đủ 8 chức vụ
+      if (!Array.isArray(s.positions) || s.positions.length === 0) {
+        supabase.from('fepn_election_settings').update({ positions: DEFAULT_POSITIONS }).eq('id', classId).then(() => {})
+      }
+
       await saveElectionData(syncedData, false)
       return syncedData
     }
@@ -518,9 +540,21 @@ export async function registerCandidate(
 
   await saveElectionData(data, false)
 
-  // Đồng bộ Supabase
+  // Đồng bộ Supabase: Đảm bảo bản ghi settings tồn tại trước khi chèn candidate (tránh lỗi Foreign Key)
   try {
-    await supabase.from('fepn_election_candidates').upsert({
+    await supabase.from('fepn_election_settings').upsert({
+      id: classId,
+      unit: data.unit,
+      academic_year: data.academicYear,
+      title: data.title,
+      is_registration_open: data.isRegistrationOpen,
+      is_voting_open: data.isVotingOpen,
+      round: data.round || 1,
+      positions: data.positions,
+      updated_at: data.updatedAt,
+    })
+
+    const { error: candErr } = await supabase.from('fepn_election_candidates').upsert({
       id: candidateObj.id,
       election_id: classId,
       name: candidateObj.name,
@@ -532,6 +566,9 @@ export async function registerCandidate(
       bio: candidateObj.bio,
       created_at: candidateObj.registeredAt,
     })
+    if (candErr) {
+      console.error('Lỗi khi upsert Supabase candidate:', candErr)
+    }
   } catch (err) {
     console.warn('Lưu Supabase candidate fallback:', err)
   }
@@ -645,6 +682,19 @@ export async function submitVote(
 
   // Lưu Supabase bảng fepn_election_votes (Kích hoạt Realtime tới Trang 3 ngay lập tức!)
   try {
+    // Đảm bảo settings record tồn tại trước khi chèn phiếu (tránh lỗi foreign key constraint)
+    await supabase.from('fepn_election_settings').upsert({
+      id: classId,
+      unit: data.unit,
+      academic_year: data.academicYear,
+      title: data.title,
+      is_registration_open: data.isRegistrationOpen,
+      is_voting_open: data.isVotingOpen,
+      round: data.round || 1,
+      positions: data.positions,
+      updated_at: data.updatedAt,
+    })
+
     const { error: insErr } = await supabase.from('fepn_election_votes').insert({
       id: voteId,
       election_id: classId,
@@ -659,6 +709,9 @@ export async function submitVote(
         success: false,
         message: `MSSV ${cleanMssv} đã có phiếu bầu được ghi nhận trong cơ sở dữ liệu lớp ${data.unit}!`,
       }
+    }
+    if (insErr) {
+      console.error('Lỗi khi chèn Supabase vote:', insErr)
     }
   } catch (err) {
     console.warn('Lưu Supabase vote fallback:', err)

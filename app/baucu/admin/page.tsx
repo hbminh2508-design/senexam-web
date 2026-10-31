@@ -103,8 +103,8 @@ function BauCuAdminContent() {
   }
 
   // Tải dữ liệu của lớp đang chọn
-  const fetchAdminData = async (classId: string) => {
-    setLoading(true)
+  const fetchAdminData = async (classId: string, showLoading = true) => {
+    if (showLoading) setLoading(true)
     try {
       const res = await fetch(`/api/baucu?class=${encodeURIComponent(classId)}&admin=true&_t=${Date.now()}`, {
         cache: 'no-store',
@@ -116,19 +116,27 @@ function BauCuAdminContent() {
     } catch (e) {
       console.error('Lỗi khi tải dữ liệu admin:', e)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchClassesList()
+      const listInterval = setInterval(() => {
+        fetchClassesList()
+      }, 5000)
+      return () => clearInterval(listInterval)
     }
   }, [isAuthenticated])
 
   useEffect(() => {
     if (isAuthenticated && selectedClassId) {
-      fetchAdminData(selectedClassId)
+      fetchAdminData(selectedClassId, true)
+      const dataInterval = setInterval(() => {
+        fetchAdminData(selectedClassId, false)
+      }, 3500)
+      return () => clearInterval(dataInterval)
     }
   }, [isAuthenticated, selectedClassId])
 

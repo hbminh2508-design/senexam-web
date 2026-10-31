@@ -75,6 +75,10 @@ function BauCuHomeContent() {
       setCurrentOrigin(window.location.origin)
     }
     fetchClasses()
+    const interval = setInterval(() => {
+      fetchClasses()
+    }, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
