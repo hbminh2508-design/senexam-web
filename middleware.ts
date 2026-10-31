@@ -207,6 +207,10 @@ export function middleware(request: NextRequest) {
 
   // 4.5.1 DỰ ÁN LỚN: M.SENEXAM.ME - GIAO DIỆN THUẦN MOBILE 100%
   if (isMobileSubdomain) {
+    // Miễn trừ hoàn toàn hệ thống Bầu cử FEPN (không bắt đăng nhập, không rewrite)
+    if (pathname.startsWith('/baucu') || pathname.startsWith('/api/baucu')) {
+      return applySecurityHeaders(NextResponse.next())
+    }
     if (pathname === '/' || pathname === '/dashboard') {
       url.pathname = '/m'
       return applySecurityHeaders(NextResponse.rewrite(url))
@@ -274,7 +278,7 @@ export function middleware(request: NextRequest) {
   if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain && !isNopQuyLopSubdomain) {
     // Tự động chuyển qua m.senexam.me khi phát hiện thiết bị di động truy cập miền chính
     const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(userAgent)
-    if (isMobileDevice && !url.searchParams.has('desktop') && !pathname.startsWith('/api') && !pathname.startsWith('/auth') && !pathname.startsWith('/_next')) {
+    if (isMobileDevice && !url.searchParams.has('desktop') && !pathname.startsWith('/api') && !pathname.startsWith('/auth') && !pathname.startsWith('/_next') && !pathname.startsWith('/baucu')) {
       if (!hostname.includes('localhost') && !hostname.includes('127.0.0.1') && !isMobileSubdomain) {
         let targetPath = pathname
         if (pathname === '/new-sen-ground' || pathname === '/sen-ground') targetPath = '/sen-ground'

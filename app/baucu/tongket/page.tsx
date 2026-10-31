@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { supabase } from '@/lib/supabaseClient'
 import {
   Award,
   Vote as VoteIcon,
@@ -20,12 +21,15 @@ import {
   Printer,
   ChevronRight,
   Sparkles,
+  Radio,
 } from 'lucide-react'
 
 export default function TongKetPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isRealtimeActive, setIsRealtimeActive] = useState(false)
+  const [lastLivePing, setLastLivePing] = useState<string>('')
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [adminPass, setAdminPass] = useState('')
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false)
@@ -38,6 +42,7 @@ export default function TongKetPage() {
       const json = await res.json()
       if (json.success) {
         setData(json.data)
+        setLastLivePing(new Date().toLocaleTimeString('vi-VN'))
       }
     } catch (err) {
       console.error('Lỗi khi tải kết quả tổng kết:', err)
@@ -47,13 +52,59 @@ export default function TongKetPage() {
     }
   }
 
-  // Tự động polling cập nhật mỗi 3 giây theo thời gian thực
+  // Supabase Realtime Listener + Polling dự phòng
   useEffect(() => {
     fetchResults()
+
+    // Đăng ký nhận thông báo Realtime từ Supabase
+    let channel: any = null
+    try {
+      channel = supabase
+        .channel('fepn_election_live_channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'fepn_election_votes' },
+          (payload) => {
+            console.log('[Realtime] Có phiếu bầu mới hoặc thay đổi phiếu:', payload)
+            fetchResults(false)
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'fepn_election_candidates' },
+          (payload) => {
+            console.log('[Realtime] Danh sách ứng viên cập nhật:', payload)
+            fetchResults(false)
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'fepn_election_settings' },
+          (payload) => {
+            console.log('[Realtime] Trạng thái phiên bầu cử cập nhật:', payload)
+            fetchResults(false)
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setIsRealtimeActive(true)
+          }
+        })
+    } catch (e) {
+      console.warn('Realtime Supabase subscription error, using polling fallback', e)
+    }
+
+    // Polling dự phòng mỗi 3.5 giây đảm bảo dữ liệu luôn tươi mới
     const interval = setInterval(() => {
       fetchResults(false)
-    }, 3000)
-    return () => clearInterval(interval)
+    }, 3500)
+
+    return () => {
+      clearInterval(interval)
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
   }, [])
 
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -195,7 +246,42 @@ export default function TongKetPage() {
         </div>
       </div>
 
-      {/* CẢNH BÁO BẰNG PHIẾU CẦN BẦU LẠI THEO ĐIỀU 3 KHOẢN 2 */}
+      {/* Thanh trạng thái Live Realtime và Công cụ điều hành */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-blue-900 to-[#002b66] text-white p-3.5 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-2.5">
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <div className="text-xs sm:text-sm font-semibold flex items-center gap-2">
+            <span>Supabase Realtime Live</span>
+            <span className="text-blue-200 text-xs hidden sm:inline">• Nhảy số tức thì khi có cử tri nộp phiếu</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {lastLivePing && (
+            <span className="text-[11px] text-blue-200 hidden md:inline">
+              Cập nhật: {lastLivePing}
+            </span>
+          )}
+          <button
+            onClick={() => fetchResults(true)}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Đang tải...' : 'Làm mới'}</span>
+          </button>
+          <Link
+            href="/baucu/admin"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-xs font-bold transition shadow-xs"
+          >
+            <Settings className="w-3.5 h-3.5 text-slate-900" />
+            <span>Trang Admin Điều Hành</span>
+          </Link>
+        </div>
+      </div>
       {tiedPositions.length > 0 && (
         <div className="p-5 bg-amber-50 border-2 border-amber-400 rounded-2xl shadow-sm space-y-3">
           <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm sm:text-base">

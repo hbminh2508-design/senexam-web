@@ -8,6 +8,7 @@ import {
   updateElectionState,
   resetVotes,
   deleteCandidate,
+  deleteSingleVote,
 } from '@/lib/baucuService'
 
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const checkStudentId = searchParams.get('check_mssv')
+    const isAdmin = searchParams.get('admin') === 'true'
 
     const data = await getElectionData()
     const summary = computeResults(data)
@@ -41,6 +43,8 @@ export async function GET(request: Request) {
         round: data.round || 1,
         hasVoted,
         summary,
+        // Chỉ gửi chi tiết danh sách phiếu cử tri khi trang Admin yêu cầu
+        votes: isAdmin ? data.votes : undefined,
       },
     })
   } catch (error: any) {
@@ -122,7 +126,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: 'Đã xóa ứng viên' })
     }
 
-    // 7. Quản trị: Reset phiếu bầu (chuẩn bị bầu vòng 2 hoặc làm mới)
+    // 7. Quản trị: Xóa 1 phiếu bầu gian lận theo Điều 5
+    if (action === 'delete_vote') {
+      const voteId = body?.voteId
+      if (!voteId) {
+        return NextResponse.json({ success: false, message: 'Thiếu voteId' }, { status: 400 })
+      }
+      await deleteSingleVote(voteId)
+      return NextResponse.json({ success: true, message: 'Đã xóa phiếu bầu thành công' })
+    }
+
+    // 8. Quản trị: Reset phiếu bầu (chuẩn bị bầu vòng 2 hoặc làm mới)
     if (action === 'reset_votes') {
       const keepCandidates = body?.keepCandidates !== false
       await resetVotes(keepCandidates)
@@ -130,6 +144,17 @@ export async function POST(request: Request) {
         success: true,
         message: keepCandidates ? 'Đã làm mới hòm phiếu (giữ lại ứng viên)!' : 'Đã xóa toàn bộ phiếu và ứng viên!',
       })
+    }
+
+    // 9. Quản trị: Cập nhật cấu hình chung
+    if (action === 'update_settings') {
+      const updates: any = {}
+      if (typeof body.isRegistrationOpen === 'boolean') updates.isRegistrationOpen = body.isRegistrationOpen
+      if (typeof body.isVotingOpen === 'boolean') updates.isVotingOpen = body.isVotingOpen
+      if (typeof body.round === 'number') updates.round = body.round
+      if (body.title) updates.title = body.title
+      const updated = await updateElectionState(updates)
+      return NextResponse.json({ success: true, data: updated, message: 'Cập nhật cài đặt thành công' })
     }
 
     return NextResponse.json({ success: false, message: 'Hành động không hợp lệ' }, { status: 400 })
