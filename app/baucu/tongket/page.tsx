@@ -109,12 +109,11 @@ export default function TongKetPage() {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    // Mật khẩu điều hành đơn giản cho ban cán sự / người điều hành
     if (adminPass === 'k71pme2' || adminPass === 'fepn2026' || adminPass === 'admin') {
       setIsAdminUnlocked(true)
       setAdminMsg(null)
     } else {
-      setAdminMsg('Mật khẩu quản trị chưa chính xác. (Mặc định: k71pme2 hoặc fepn2026)')
+      setAdminMsg('Mật khẩu quản trị chưa chính xác.')
     }
   }
 
@@ -246,42 +245,6 @@ export default function TongKetPage() {
         </div>
       </div>
 
-      {/* Thanh trạng thái Live Realtime và Công cụ điều hành */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-blue-900 to-[#002b66] text-white p-3.5 rounded-2xl shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-          </span>
-          <div className="text-xs sm:text-sm font-semibold flex items-center gap-2">
-            <span>Supabase Realtime Live</span>
-            <span className="text-blue-200 text-xs hidden sm:inline">• Nhảy số tức thì khi có cử tri nộp phiếu</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {lastLivePing && (
-            <span className="text-[11px] text-blue-200 hidden md:inline">
-              Cập nhật: {lastLivePing}
-            </span>
-          )}
-          <button
-            onClick={() => fetchResults(true)}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>{isRefreshing ? 'Đang tải...' : 'Làm mới'}</span>
-          </button>
-          <Link
-            href="/baucu/admin"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-xs font-bold transition shadow-xs"
-          >
-            <Settings className="w-3.5 h-3.5 text-slate-900" />
-            <span>Trang Admin Điều Hành</span>
-          </Link>
-        </div>
-      </div>
       {tiedPositions.length > 0 && (
         <div className="p-5 bg-amber-50 border-2 border-amber-400 rounded-2xl shadow-sm space-y-3">
           <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm sm:text-base">

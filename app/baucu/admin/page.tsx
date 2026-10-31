@@ -87,7 +87,7 @@ export default function BauCuAdminPage() {
       sessionStorage.setItem('fepn_admin_auth', 'true')
       setAuthError(null)
     } else {
-      setAuthError('Mật khẩu quản trị chưa chính xác. (Mặc định: k71pme2 hoặc fepn2026)')
+      setAuthError('Mật khẩu quản trị chưa chính xác. Vui lòng kiểm tra lại.')
     }
   }
 
@@ -314,7 +314,7 @@ export default function BauCuAdminPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Nhập mật khẩu (k71pme2 / fepn2026)"
+                placeholder="Nhập mật khẩu quản trị..."
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-[#002b66] text-sm"
               />
             </div>
