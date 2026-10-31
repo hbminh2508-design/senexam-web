@@ -229,6 +229,7 @@ export default function MobileBottomNav() {
     (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
 
   const isFepn = Boolean(
+    pathname?.startsWith('/baucu') ||
     pathname?.startsWith('/fepn-') ||
     pathname?.startsWith('/tsv-fepn') ||
     (typeof window !== 'undefined' &&

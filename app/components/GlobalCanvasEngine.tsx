@@ -68,8 +68,9 @@ export default function GlobalCanvasEngine() {
     }
     window.addEventListener('resize', handleResize, { passive: true })
 
-    // Tách biệt hoàn toàn FEPN (không render canvas SenExam trên phân hệ FEPN)
+    // Tách biệt hoàn toàn FEPN & Bầu Cử (không render canvas hạt nền SenExam trên phân hệ FEPN / Bầu cử)
     const isFepn = Boolean(
+      pathname.startsWith('/baucu') ||
       pathname.startsWith('/fepn-') ||
       pathname.startsWith('/tsv-fepn') ||
       (typeof window !== 'undefined' &&
@@ -205,6 +206,7 @@ export default function GlobalCanvasEngine() {
   }, [pathname, isDark])
 
   const isFepn = Boolean(
+    pathname.startsWith('/baucu') ||
     pathname.startsWith('/fepn-') ||
     pathname.startsWith('/tsv-fepn')
   )

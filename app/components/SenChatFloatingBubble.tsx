@@ -52,8 +52,9 @@ export default function SenChatFloatingBubble() {
     typeof window !== 'undefined' &&
     (window.location.hostname.includes('breathu') || window.location.hostname.includes('breatheu'))
 
-  // 8. Hệ thống FEPN độc lập (loại bỏ hoàn toàn các yếu tố SenExam như bong bóng chat):
+  // 8. Hệ thống FEPN & Bầu Cử độc lập (loại bỏ hoàn toàn các yếu tố SenExam như bong bóng chat SenAI):
   const isFepn = Boolean(
+    pathname?.startsWith('/baucu') ||
     pathname?.startsWith('/fepn-') ||
     pathname?.startsWith('/tsv-fepn') ||
     (typeof window !== 'undefined' &&
