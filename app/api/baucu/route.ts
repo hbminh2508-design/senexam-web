@@ -25,7 +25,14 @@ export async function GET(request: Request) {
     // 1. Lấy danh sách tất cả các lớp bầu cử
     if (action === 'classes') {
       const classes = await getAllClasses()
-      return NextResponse.json({ success: true, data: classes })
+      return NextResponse.json(
+        { success: true, data: classes },
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          },
+        }
+      )
     }
 
     // 2. Lấy dữ liệu chi tiết của 1 lớp
@@ -41,25 +48,32 @@ export async function GET(request: Request) {
       hasVoted = await hasStudentVoted(data.id, checkStudentId)
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: data.id,
-        unit: data.unit,
-        academicYear: data.academicYear,
-        title: data.title,
-        positions: data.positions,
-        candidates: data.candidates,
-        totalVotes: data.votes.length,
-        isRegistrationOpen: data.isRegistrationOpen,
-        isVotingOpen: data.isVotingOpen,
-        round: data.round || 1,
-        hasVoted,
-        summary,
-        // Chỉ gửi danh sách chi tiết phiếu cho admin
-        votes: isAdmin ? data.votes : undefined,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          id: data.id,
+          unit: data.unit,
+          academicYear: data.academicYear,
+          title: data.title,
+          positions: data.positions,
+          candidates: data.candidates,
+          totalVotes: data.votes.length,
+          isRegistrationOpen: data.isRegistrationOpen,
+          isVotingOpen: data.isVotingOpen,
+          round: data.round || 1,
+          hasVoted,
+          summary,
+          // Chỉ gửi danh sách chi tiết phiếu cho admin
+          votes: isAdmin ? data.votes : undefined,
+        },
       },
-    })
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
+      }
+    )
   } catch (error: any) {
     console.error('Error in GET /api/baucu:', error)
     return NextResponse.json(

@@ -86,7 +86,9 @@ function BauCuAdminContent() {
   // Tải danh sách lớp
   const fetchClassesList = async () => {
     try {
-      const res = await fetch('/api/baucu?action=classes')
+      const res = await fetch(`/api/baucu?action=classes&_t=${Date.now()}`, {
+        cache: 'no-store',
+      })
       const json = await res.json()
       if (json.success && Array.isArray(json.data)) {
         setClasses(json.data)
@@ -104,7 +106,9 @@ function BauCuAdminContent() {
   const fetchAdminData = async (classId: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classId)}&admin=true`)
+      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classId)}&admin=true&_t=${Date.now()}`, {
+        cache: 'no-store',
+      })
       const json = await res.json()
       if (json.success) {
         setData(json.data)

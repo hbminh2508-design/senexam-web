@@ -35,7 +35,9 @@ function BauCuHomeContent() {
   // 1. Tải danh sách tất cả các lớp
   const fetchClasses = async () => {
     try {
-      const res = await fetch('/api/baucu?action=classes')
+      const res = await fetch(`/api/baucu?action=classes&_t=${Date.now()}`, {
+        cache: 'no-store',
+      })
       const json = await res.json()
       if (json.success && Array.isArray(json.data) && json.data.length > 0) {
         setClasses(json.data)
@@ -54,7 +56,9 @@ function BauCuHomeContent() {
   const fetchElectionData = async (classId: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classId)}`)
+      const res = await fetch(`/api/baucu?class=${encodeURIComponent(classId)}&_t=${Date.now()}`, {
+        cache: 'no-store',
+      })
       const json = await res.json()
       if (json.success) {
         setData(json.data)

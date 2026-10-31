@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS public.fepn_election_settings (
   updated_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
+-- Tự động thêm cột updated_at và created_at nếu bảng cũ đã tồn tại trước đó
+ALTER TABLE public.fepn_election_settings ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.fepn_election_settings ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT timezone('utc'::text, now());
+
 -- Khởi tạo sẵn bản ghi mẫu cho lớp K70P-ME2 và K71-P-ME2 (nếu chưa có)
 INSERT INTO public.fepn_election_settings (id, unit, academic_year, title, is_registration_open, is_voting_open, round)
 VALUES 

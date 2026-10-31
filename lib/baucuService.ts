@@ -177,7 +177,7 @@ export async function getAllClasses(): Promise<ElectionClassInfo[]> {
     const { data: remoteSettings, error } = await supabase
       .from('fepn_election_settings')
       .select('id, unit, academic_year, title, is_registration_open, is_voting_open, round, updated_at')
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
 
     if (!error && Array.isArray(remoteSettings) && remoteSettings.length > 0) {
       for (const s of remoteSettings) {
