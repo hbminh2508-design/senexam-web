@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Radio,
   GraduationCap,
+  Check,
 } from 'lucide-react'
 
 function TongKetContent() {
@@ -287,35 +288,61 @@ function TongKetContent() {
 
       {/* DANH SÁCH BAN CÁN SỰ & BAN CHẤP HÀNH ĐẮC CỬ CHÍNH THỨC */}
       {electedList.length > 0 && (
-        <div className="bg-white border-2 border-emerald-500 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-200">
-            <Crown className="w-6 h-6 text-amber-500" />
-            <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase">
-              DANH SÁCH NHÂN SỰ ĐẮC CỬ CHÍNH THỨC • LỚP {currentUnit}
-            </h2>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+            <div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <h2 className="text-base sm:text-lg font-bold text-[#002b66] uppercase">
+                  Danh Sách Nhân Sự Trúng Cử • Lớp {currentUnit}
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Căn cứ kết quả kiểm phiếu theo Điều 3 Thể lệ bầu cử
+              </p>
+            </div>
+            <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-xs font-semibold self-start sm:self-auto">
+              Đã xác định: {electedList.length} nhân sự
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {electedList.map((e, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between gap-2"
-              >
-                <div>
-                  <div className="text-[10px] font-black uppercase text-emerald-800">
-                    {e.positionTitle}
-                  </div>
-                  <div className="font-extrabold text-sm text-slate-900">{e.candidateName}</div>
-                  <div className="font-mono text-[10px] text-slate-500">MSSV: {e.studentId}</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
-                    {e.votes} phiếu
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs sm:text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th className="p-3 w-12 text-center">STT</th>
+                  <th className="p-3">Chức vụ trúng cử</th>
+                  <th className="p-3">Họ và tên</th>
+                  <th className="p-3">MSSV</th>
+                  <th className="p-3 text-right">Số phiếu</th>
+                  <th className="p-3 text-center">Kết quả</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {electedList.map((e, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/70 transition">
+                    <td className="p-3 text-center font-mono text-slate-400 font-medium">{idx + 1}</td>
+                    <td className="p-3 font-bold text-[#002b66]">{e.positionTitle}</td>
+                    <td className="p-3 font-semibold text-slate-900">{e.candidateName}</td>
+                    <td className="p-3 font-mono font-medium text-blue-700">{e.studentId}</td>
+                    <td className="p-3 text-right font-bold text-slate-900">
+                      {e.votes} <span className="text-xs font-normal text-slate-500">phiếu</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-md">
+                        <Check className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Trúng cử</span>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+
+          <p className="text-[11px] text-slate-500 italic pt-1 border-t border-slate-100">
+            * Căn cứ Điều 3 Khoản 3: Nếu một ứng viên trúng cử nhiều chức vụ, ứng viên được chọn 1 chức vụ, các vị trí còn lại sẽ tiến hành bầu bổ sung.
+          </p>
         </div>
       )}
 

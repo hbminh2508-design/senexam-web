@@ -60,7 +60,9 @@ function BoPhieuContent() {
         localStorage.setItem('fepn_locked_class', classIdParam)
       }
 
+      // Kiểm tra đa tầng cache trên thiết bị (LocalStorage + Session + Cookie)
       const cacheKey = `fepn_voted_${classIdParam}`
+      const globalKey = 'fepn_global_voted_device'
       const saved = localStorage.getItem(cacheKey)
       if (saved) {
         try {
@@ -246,70 +248,67 @@ function BoPhieuContent() {
   if (cachedVoteInfo) {
     return (
       <div className="flex-1 flex items-center justify-center p-4 py-12">
-        <div className="max-w-md w-full bg-white border-2 border-emerald-500 rounded-3xl p-6 sm:p-8 text-center shadow-lg space-y-5 animate-in fade-in zoom-in-95">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-200">
-            <ShieldCheck className="w-10 h-10" />
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl p-6 sm:p-7 text-center shadow-xs space-y-4">
+          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8" />
           </div>
 
-          <div className="space-y-1">
-            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-              TRẠNG THÁI: ĐÃ HOÀN TẤT BIỂU QUYẾT
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+              ĐÃ HOÀN THÀNH BIỂU QUYẾT
             </span>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase pt-2">
-              BẠN ĐÃ BỎ PHIẾU THÀNH CÔNG!
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 mt-2">
+              Phiếu bầu đã được ghi nhận
             </h2>
-            <p className="text-xs text-slate-500">
-              Lá phiếu của bạn đã được hệ thống ghi nhận vào hòm phiếu an toàn.
+            <p className="text-xs text-slate-500 mt-0.5">
+              Hệ thống đã lưu vào hòm phiếu an toàn và niêm phong trên thiết bị này.
             </p>
           </div>
 
           {/* Chi tiết thông tin đã lưu trong cache */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 text-left space-y-2">
-            <div className="flex justify-between pb-1.5 border-b border-slate-200">
-              <span className="text-slate-500">Họ và tên cử tri:</span>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 text-xs text-slate-700 text-left space-y-1.5">
+            <div className="flex justify-between pb-1 border-b border-slate-200">
+              <span className="text-slate-500">Họ và tên:</span>
               <strong className="text-slate-900">{cachedVoteInfo.voterName}</strong>
             </div>
 
             {cachedVoteInfo.voterStudentId && (
-              <div className="flex justify-between pb-1.5 border-b border-slate-200">
-                <span className="text-slate-500">Mã sinh viên (MSSV):</span>
-                <strong className="font-mono text-blue-900">{cachedVoteInfo.voterStudentId}</strong>
+              <div className="flex justify-between pb-1 border-b border-slate-200">
+                <span className="text-slate-500">MSSV:</span>
+                <strong className="font-mono text-blue-700">{cachedVoteInfo.voterStudentId}</strong>
               </div>
             )}
 
-            <div className="flex justify-between pb-1.5 border-b border-slate-200">
-              <span className="text-slate-500">Đơn vị lớp:</span>
-              <strong className="text-[#002b66]">{cachedVoteInfo.unit || currentUnit}</strong>
+            <div className="flex justify-between pb-1 border-b border-slate-200">
+              <span className="text-slate-500">Đơn vị:</span>
+              <span className="font-semibold text-[#002b66]">{cachedVoteInfo.unit || currentUnit}</span>
             </div>
 
-            <div className="flex justify-between pb-1.5 border-b border-slate-200">
-              <span className="text-slate-500">Thời gian ghi nhận:</span>
-              <span className="font-mono text-slate-600">
+            <div className="flex justify-between pb-1 border-b border-slate-200">
+              <span className="text-slate-500">Thời gian:</span>
+              <span className="text-slate-600">
                 {new Date(cachedVoteInfo.votedAt).toLocaleString('vi-VN')}
               </span>
             </div>
 
             {cachedVoteInfo.receiptCode && (
-              <div className="flex justify-between pt-1">
-                <span className="text-slate-500">Mã biên nhận:</span>
-                <span className="font-mono text-[10px] text-emerald-800 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-sm">
+              <div className="flex justify-between pt-0.5">
+                <span className="text-slate-500">Biên nhận:</span>
+                <span className="font-mono text-[10px] text-emerald-800 font-bold">
                   {cachedVoteInfo.receiptCode}
                 </span>
               </div>
             )}
-
-            <div className="pt-2 text-[11px] text-slate-500 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-              <span>
-                Theo Điều 2 Thể lệ, mỗi cử tri chỉ được bỏ phiếu 1 lần duy nhất để tránh phiếu ma.
-              </span>
-            </div>
           </div>
 
-          <div className="pt-2 flex flex-col gap-2">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Căn cứ <strong>Điều 2 Khoản 1 Thể lệ</strong>: Mỗi cử tri chỉ được gửi biểu quyết <strong>1 lần duy nhất</strong>. Dữ liệu đã được khóa trên thiết bị để tránh việc reset web để bầu lại.
+          </p>
+
+          <div className="pt-2">
             <Link
               href={`/baucu/tongket?class=${encodeURIComponent(classIdParam)}`}
-              className="w-full py-3 bg-[#002b66] hover:bg-[#001f4d] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 uppercase"
+              className="w-full py-2.5 bg-[#002b66] hover:bg-[#001f4d] text-white font-bold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-1.5"
             >
               <Award className="w-4 h-4" />
               <span>Xem Bảng Tổng Kết Kết Quả ({currentUnit})</span>

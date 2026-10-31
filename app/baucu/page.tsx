@@ -145,7 +145,7 @@ function BauCuHomeContent() {
           <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
             <Link
               href={`/baucu/bophieu?class=${encodeURIComponent(selectedClassId)}&lock=1`}
-              className="px-6 py-2.5 bg-[#002b66] hover:bg-[#001f4d] text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition hover:scale-105 active:scale-95 flex items-center gap-2"
+              className="px-6 py-2.5 bg-[#002b66] hover:bg-[#001f4d] text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition  flex items-center gap-2"
             >
               <VoteIcon className="w-4 h-4" />
               <span>VÀO BỎ PHIẾU ({data?.unit || selectedClass.unit})</span>
@@ -154,7 +154,7 @@ function BauCuHomeContent() {
 
             <Link
               href={`/baucu/tranhcu?class=${encodeURIComponent(selectedClassId)}`}
-              className="px-5 py-2.5 bg-white hover:bg-slate-50 text-[#002b66] border border-blue-300 font-bold text-xs sm:text-sm rounded-xl shadow-xs transition hover:scale-105 active:scale-95 flex items-center gap-2"
+              className="px-5 py-2.5 bg-white hover:bg-slate-50 text-[#002b66] border border-blue-300 font-bold text-xs sm:text-sm rounded-xl shadow-xs transition  flex items-center gap-2"
             >
               <UserCheck className="w-4 h-4 text-blue-600" />
               <span>Ghi danh ứng cử</span>
@@ -162,7 +162,7 @@ function BauCuHomeContent() {
 
             <Link
               href={`/baucu/tongket?class=${encodeURIComponent(selectedClassId)}`}
-              className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs sm:text-sm rounded-xl shadow-xs transition hover:scale-105 active:scale-95 flex items-center gap-2"
+              className="px-5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs sm:text-sm rounded-xl shadow-xs transition  flex items-center gap-2"
             >
               <Award className="w-4 h-4 text-emerald-600" />
               <span>Kết quả tổng kết</span>
@@ -173,7 +173,7 @@ function BauCuHomeContent() {
 
       {/* ================= KHỐI TÙY CHỌN CÁC LỚP BẦU CỬ ================= */}
       <section className="max-w-6xl mx-auto px-4 pt-8">
-        <div className="bg-white border-2 border-blue-100 rounded-2xl p-5 sm:p-6 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-2">
               <Layers className="w-5 h-5 text-[#002b66]" />
