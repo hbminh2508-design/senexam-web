@@ -327,6 +327,7 @@ export default function FepnAudioLectureViewer({
 
             <button
               type="button"
+              aria-label={isPlaying ? 'Tạm dừng' : 'Phát bản ghi âm'}
               onClick={togglePlay}
               className="h-12 w-12 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white flex items-center justify-center shadow-lg shadow-sky-500/30 hover:scale-105 transition"
               title={isPlaying ? 'Tạm dừng' : 'Phát bản ghi âm'}
@@ -372,6 +373,7 @@ export default function FepnAudioLectureViewer({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              aria-label={isMuted ? 'Bật âm thanh' : 'Tắt tiếng'}
               onClick={toggleMute}
               className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition"
               title={isMuted ? 'Bật âm thanh' : 'Tắt tiếng'}
