@@ -183,6 +183,7 @@ export default function FepnDeviceSecurityModal({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
+              aria-label="Làm mới danh sách"
               onClick={fetchSessions}
               disabled={loading}
               className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
@@ -192,6 +193,7 @@ export default function FepnDeviceSecurityModal({
             </button>
             <button
               type="button"
+              aria-label="Đóng"
               onClick={onClose}
               className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
             >
@@ -323,6 +325,7 @@ export default function FepnDeviceSecurityModal({
                     {!session.isCurrentDevice && (
                       <button
                         type="button"
+                        aria-label="Đăng xuất thiết bị này từ xa"
                         onClick={() => handleRevokeSingle(session.id || session.device_id, session.device_name)}
                         disabled={revokingId === (session.id || session.device_id)}
                         className="px-3 py-1.5 rounded-xl border border-rose-200 hover:bg-rose-50 text-rose-600 text-xs font-bold transition flex items-center gap-1 shrink-0 disabled:opacity-50"

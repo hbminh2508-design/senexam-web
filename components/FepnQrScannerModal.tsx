@@ -388,6 +388,7 @@ export default function FepnQrScannerModal({
           </div>
           <button
             type="button"
+            aria-label="Đóng"
             onClick={handleFinish}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
           >
@@ -647,6 +648,7 @@ export default function FepnQrScannerModal({
                 </span>
                 <button
                   type="button"
+                  aria-label="Sao chép mã"
                   onClick={handleCopyCode}
                   className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition"
                   title="Sao chép mã"
