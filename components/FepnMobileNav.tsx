@@ -214,6 +214,7 @@ export default function FepnMobileNav({
               </div>
               <button
                 type="button"
+                aria-label="Đóng bảng tính năng"
                 onClick={() => setShowDrawer(false)}
                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-black/5 dark:bg-white/5 text-slate-500 hover:bg-black/10 transition"
               >

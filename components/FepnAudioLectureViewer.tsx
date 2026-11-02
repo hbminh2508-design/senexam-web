@@ -372,6 +372,7 @@ export default function FepnAudioLectureViewer({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              aria-label={isMuted || volume === 0 ? 'Bật âm thanh' : 'Tắt tiếng'}
               onClick={toggleMute}
               className="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white transition"
               title={isMuted ? 'Bật âm thanh' : 'Tắt tiếng'}
