@@ -1,6 +1,6 @@
 'use client'
 
-import type React from 'react'
+import React, { useEffect } from 'react'
 
 interface ModernLoadingProps {
   themeColor?: string
@@ -15,6 +15,7 @@ interface ModernLoadingProps {
  * Shared SenExam 2.0 Modern Loading Screen
  * Unified squircle 'S' card with ambient pulse glow, spinning accent ring,
  * feature-specific title & subtitle, and animated shimmer bar.
+ * Also broadcasts loading event so SenChatFloatingBubble is hidden during loading.
  */
 export default function ModernLoading({
   themeColor,
@@ -27,8 +28,19 @@ export default function ModernLoading({
   const displayTitle = title || 'SenExam'
   const displaySubtitle = subtitle || label || 'Đang tải dữ liệu & tối ưu trải nghiệm...'
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('sen-loading-state', { detail: { isLoading: true } }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('sen-loading-state', { detail: { isLoading: false } }))
+    }
+  }, [])
+
   const content = (
-    <div className="relative flex flex-col items-center gap-4 rounded-3xl border border-sky-100 dark:border-sky-950/40 bg-white/95 dark:bg-slate-900/95 px-8 py-7 shadow-[0_20px_50px_rgba(2,132,199,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-2xl max-w-sm w-full mx-4 text-center">
+    <div
+      data-sen-loading="true"
+      className="relative flex flex-col items-center gap-4 rounded-3xl border border-sky-100 dark:border-sky-950/40 bg-white/95 dark:bg-slate-900/95 px-8 py-7 shadow-[0_20px_50px_rgba(2,132,199,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] backdrop-blur-2xl max-w-sm w-full mx-4 text-center"
+    >
       <div className="relative flex h-20 w-20 items-center justify-center shrink-0">
         <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-sky-400 via-blue-500 to-indigo-600 opacity-25 blur-md animate-pulse" />
         <img
@@ -59,7 +71,7 @@ export default function ModernLoading({
 
   if (!fullScreen) {
     return (
-      <div className={`w-full py-8 grid place-items-center ${isDark ? 'dark' : ''}`}>
+      <div data-sen-loading="true" className={`w-full py-8 grid place-items-center ${isDark ? 'dark' : ''}`}>
         {content}
       </div>
     )
@@ -67,6 +79,7 @@ export default function ModernLoading({
 
   return (
     <div
+      data-sen-loading="true"
       className={`min-h-screen grid place-items-center bg-[#F8FAFC] dark:bg-[#080C14] text-slate-900 dark:text-slate-100 transition-colors ${
         isDark !== undefined ? (isDark ? 'dark' : '') : ''
       }`}

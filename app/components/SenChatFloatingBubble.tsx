@@ -98,6 +98,40 @@ export default function SenChatFloatingBubble() {
   )
 
   const [disabledBySetting, setDisabledBySetting] = useState(false)
+  const [isPageLoading, setIsPageLoading] = useState(false)
+
+  // Tu dong kiem tra va an SenAI khi bat ky trang nao dang loading
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const checkDomLoading = () => {
+      const hasLoadingEl = Boolean(document.querySelector('[data-sen-loading="true"]'))
+      setIsPageLoading(hasLoadingEl)
+    }
+
+    checkDomLoading()
+
+    const handleLoadingEvent = (e: Event) => {
+      const customEvt = e as CustomEvent<{ isLoading?: boolean }>
+      if (typeof customEvt.detail?.isLoading === 'boolean') {
+        setIsPageLoading(customEvt.detail.isLoading)
+      } else {
+        checkDomLoading()
+      }
+    }
+
+    window.addEventListener('sen-loading-state', handleLoadingEvent)
+
+    const observer = new MutationObserver(() => {
+      checkDomLoading()
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    return () => {
+      window.removeEventListener('sen-loading-state', handleLoadingEvent)
+      observer.disconnect()
+    }
+  }, [pathname])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -132,7 +166,7 @@ export default function SenChatFloatingBubble() {
     }
   }, [])
 
-  if (isExcluded || disabledBySetting) return null
+  if (isExcluded || disabledBySetting || isPageLoading) return null
 
   return (
     <>
