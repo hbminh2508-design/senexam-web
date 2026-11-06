@@ -226,6 +226,7 @@ export default function MobileNav() {
                 </Link>
                 <button
                   type="button"
+                  aria-label="Đóng"
                   onClick={() => setShowSenAiModal(false)}
                   className="p-1.5 rounded-xl text-slate-400 hover:text-black dark:hover:text-white"
                 >
@@ -295,6 +296,7 @@ export default function MobileNav() {
               />
               <button
                 type="button"
+                aria-label="Gửi tin nhắn"
                 disabled={aiLoading || !aiInput.trim()}
                 onClick={() => handleSendAi()}
                 className="w-10 h-10 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white flex items-center justify-center disabled:opacity-50 active:scale-95 transition shrink-0"
