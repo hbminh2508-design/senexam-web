@@ -1359,6 +1359,7 @@ function NewDashboardContent() {
               <button
                 type="button"
                 onClick={toggleDarkMode}
+                aria-label={isDark ? 'Bật giao diện sáng' : 'Bật giao diện tối'}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-3 py-1.5 text-xs font-bold transition hover:bg-black/10"
               >
                 {isDark ? <Sun className="h-3.5 w-3.5 text-amber-400" /> : <Moon className="h-3.5 w-3.5 text-indigo-500" />}
@@ -1504,6 +1505,7 @@ function NewDashboardContent() {
               <button
                 type="button"
                 onClick={handleLogout}
+                aria-label="Đăng xuất khỏi tài khoản"
                 className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-2 text-xs font-bold transition border border-rose-500/20"
               >
                 <LogOut className="h-3.5 w-3.5" /> Đăng xuất khỏi tài khoản
@@ -2144,6 +2146,7 @@ function NewDashboardContent() {
                 <button
                   type="button"
                   onClick={toggleDarkMode}
+                  aria-label={isDark ? 'Bật giao diện sáng' : 'Bật giao diện tối'}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 px-3 py-1.5 text-xs font-bold transition hover:bg-black/10"
                 >
                   {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />}
@@ -2289,6 +2292,7 @@ function NewDashboardContent() {
                 <button
                   type="button"
                   onClick={handleLogout}
+                  aria-label="Đăng xuất khỏi tài khoản"
                   className="w-full flex items-center justify-center gap-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 py-2.5 text-xs font-bold transition border border-rose-500/20"
                 >
                   <LogOut className="h-4 w-4" /> Đăng xuất khỏi tài khoản
@@ -2342,6 +2346,7 @@ function NewDashboardContent() {
                   setMfaSecret('')
                   setMfaSetupCode('')
                 }}
+                aria-label="Đóng cửa sổ"
                 className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="h-4 w-4" />
@@ -2406,6 +2411,7 @@ function NewDashboardContent() {
                 <button
                   type="button"
                   onClick={() => setShowMfaEnrollModal(false)}
+                  aria-label="Hủy thiết lập bảo mật 2 lớp"
                   className="flex-1 py-2.5 rounded-xl border border-black/10 dark:border-white/15 text-xs font-bold hover:bg-black/5 transition cursor-pointer"
                 >
                   Hủy
