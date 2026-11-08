@@ -134,17 +134,14 @@ export function extendVipExpiry(_currentIso: string | null | undefined, duration
 }
 
 // Kiểm tra xem người dùng có đang hoạt động trên chính gói này không
+// Cho phép gia hạn / cộng dồn thời hạn (stacking duration) thay vì chặn người dùng
 export function isSameActivePlan(
   profile: { vip_expires_at?: string | null; plan_tier?: string | null; vip_plan_code?: string | null } | null | undefined,
   targetGroup: PlanGroup,
   targetPlanCode: string
 ): boolean {
-  if (!profile?.vip_expires_at) return false
-  const expiry = new Date(profile.vip_expires_at).getTime()
-  if (expiry <= Date.now()) return false
-  const currentGroup = profile.plan_tier || 'vip'
-  const currentCode = profile.vip_plan_code || 'monthly'
-  return currentGroup === targetGroup && currentCode === targetPlanCode
+  // Luôn trả về false để người dùng có thể thoải mái gia hạn tiếp kỳ hạn gói VIP / Premium / Sen One
+  return false
 }
 
 // URL ảnh QR VietQR — endpoint công khai của VietQR.io, không cần API key để tạo ảnh tĩnh

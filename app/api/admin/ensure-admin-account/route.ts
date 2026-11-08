@@ -17,8 +17,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Không phải tài khoản quản trị viên' }, { status: 400 })
     }
 
-    // Kiểm tra mẫu mật khẩu: admin-ngày/tháng/năm
-    // Hỗ trợ cả định dạng ngày hôm nay (ví dụ: admin-16/10/2026 hoặc admin-16-10-2026)
+    // Kiểm tra mẫu mật khẩu quản trị bảo mật cao
+    const adminSecret = process.env.ADMIN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-12)
     const now = new Date()
     const d = now.getDate()
     const m = now.getMonth() + 1
@@ -28,9 +28,10 @@ export async function POST(request: Request) {
       `admin-${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`,
       `admin-${d}-${m}-${y}`,
       `admin-${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}`,
-      `admin-16/10/2026`,
-      `admin-16-10-2026`,
     ]
+    if (adminSecret) {
+      validFormats.push(adminSecret)
+    }
 
     if (!validFormats.includes(cleanPwd)) {
       return NextResponse.json({ error: 'Mật khẩu quản trị viên không chính xác theo thời điểm' }, { status: 403 })

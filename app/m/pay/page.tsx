@@ -24,6 +24,7 @@ import {
   type SenAiPlan,
 } from '@/lib/senaiTiers'
 import { EXCLUSIVE_STORE_ITEMS } from '@/lib/exclusiveStore'
+import { getUserScmBalance } from '@/lib/senCash'
 import {
   Crown,
   Zap,
@@ -64,6 +65,7 @@ export default function MobilePayPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [senCashBalance, setSenCashBalance] = useState<number>(0)
+  const [scmBalance, setScmBalance] = useState<number>(0)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
@@ -125,6 +127,7 @@ export default function MobilePayPage() {
         if (prof) {
           setUserProfile(prof)
           setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+          setScmBalance(getUserScmBalance(user, prof))
         }
 
           // Lấy hạn mức quota câu hỏi
@@ -364,6 +367,7 @@ export default function MobilePayPage() {
         if (prof) {
           setUserProfile(prof)
           setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+          setScmBalance(getUserScmBalance(user, prof))
         }
       }
     } catch (err: any) {
@@ -441,6 +445,7 @@ export default function MobilePayPage() {
         if (prof) {
           setUserProfile(prof)
           setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
+          setScmBalance(getUserScmBalance(user, prof))
         }
       }
     } catch (err: any) {
@@ -627,10 +632,10 @@ export default function MobilePayPage() {
               <Coins className="h-5 w-5 text-amber-300" />
             </div>
             <div className="text-3xl font-black">
-              {((senCashBalance || 0) * 5).toLocaleString('vi-VN')} <span className="text-sm font-bold opacity-80">SCm</span>
+              {scmBalance.toLocaleString('vi-VN')} <span className="text-sm font-bold opacity-80">SCm</span>
             </div>
             <p className="text-[11px] text-sky-100 leading-relaxed">
-              Tỉ giá Cash Mobile: 1.000đ = 10 SCm (1 SCm = 100đ). Tương đương {(senCashBalance || 0).toLocaleString('vi-VN')} SC trên hệ sinh thái PC.
+              Ví Cash Mobile (SCm) độc lập chuyên biệt: 1.000đ = 10 SCm (1 SCm = 100đ). Số dư SenCash PC: {senCashBalance.toLocaleString('vi-VN')} SC.
             </p>
           </div>
 

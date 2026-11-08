@@ -12,6 +12,8 @@ import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, parseLatexExamCode, preprocessLatexContent } from '@/lib/latexExamParser'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
+import UniversityExamRoom from '@/app/components/UniversityExamRoom'
+import { isUniversityExam } from '@/lib/universityExamHelper'
 import TikzRenderer from '@/app/components/TikzRenderer'
 import {
   Clock,
@@ -342,6 +344,23 @@ export default function MobileExamPage() {
       <ModernLoading
         title="Phòng Khảo Thí Trực Tuyến Mobile"
         subtitle={`Đang tải cấu trúc đề thi, công thức KaTeX & tài liệu câu hỏi (v${MOBILE_VERSION})...`}
+      />
+    )
+  }
+
+  // PHÒNG THI ĐẠI HỌC PORTAL UET CHO MOBILE
+  const isUniversityFormat = isUniversityExam(exam)
+  if (isUniversityFormat) {
+    return (
+      <UniversityExamRoom
+        exam={exam}
+        studentInfo={{
+          id: studentUser?.id,
+          name: studentUser?.user_metadata?.full_name || studentUser?.email?.split('@')[0] || 'Sinh viên UET',
+          email: studentUser?.email || '',
+          studentId: studentUser?.user_metadata?.student_id || studentUser?.user_metadata?.mssv || '',
+        }}
+        onExit={() => router.push('/m/sen-ground?tab=exams')}
       />
     )
   }

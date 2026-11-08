@@ -35,7 +35,10 @@ export function getUserScmBalance(user: any, profile?: any): number {
   if (profile?.sencash_mobile_balance !== undefined && profile?.sencash_mobile_balance !== null) {
     return Number(profile.sencash_mobile_balance) || 0
   }
-  return Number(user?.user_metadata?.sencash_mobile_balance) || 0
+  if (profile?.scm_balance !== undefined && profile?.scm_balance !== null) {
+    return Number(profile.scm_balance) || 0
+  }
+  return Number(user?.user_metadata?.sencash_mobile_balance) || Number(user?.user_metadata?.scm_balance) || 0
 }
 
 export function isValidTopupAmount(vnd: number): boolean {

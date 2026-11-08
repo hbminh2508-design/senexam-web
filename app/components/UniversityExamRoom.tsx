@@ -28,6 +28,7 @@ import {
   BookOpen,
   Wifi,
   Sparkles,
+  ListOrdered,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -77,7 +78,7 @@ export const UetSafeMath = React.memo(
 
     return (
       <MarkdownErrorBoundary resetKey={safeContent} fallback={<span className="text-xs font-mono">{safeContent}</span>}>
-        <div className={className}>
+        <div className={`${className || ''} overflow-x-auto max-w-full`}>
           <ReactMarkdown
             remarkPlugins={[remarkMath, remarkGfm]}
             rehypePlugins={[
@@ -178,6 +179,7 @@ export default function UniversityExamRoom({
 
   // Danh sách cờ đỏ (Flag question)
   const [flags, setFlags] = useState<Record<number, boolean>>({})
+  const [showMobilePalette, setShowMobilePalette] = useState(false)
 
   // Đáp án của sinh viên { [questionNumber]: answerValue }
   const [answers, setAnswers] = useState<Record<number, any>>({})
@@ -1491,7 +1493,7 @@ export default function UniversityExamRoom({
       </div>
 
       {/* Main Layout 2 Cột: Cột chính cuộn liên tục + Cột điều hướng sticky */}
-      <div className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="max-w-7xl mx-auto p-4 md:p-6 pb-24 lg:pb-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* CỘT TRÁI (3/4): DANH SÁCH CÂU HỎI CUỘN DỌC LIÊN TỤC */}
         <div className="lg:col-span-3 space-y-6">
           {questions.map((q) => {
@@ -1735,6 +1737,106 @@ export default function UniversityExamRoom({
           </div>
         </div>
       </div>
+
+      {/* THANH ĐIỀU HƯỚNG NHANH CHO MOBILE (PORTAL UET MOBILE BAR) */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#003366] text-white px-3 py-2 border-t-2 border-[#002244] shadow-2xl flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {examMode === 'exam' ? (
+            <span className="text-xs font-mono font-bold bg-[#002244] px-2 py-1 text-amber-300 border border-slate-600">
+              ⏱ {formatTime(timeLeft)}
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold bg-amber-500 text-slate-900 px-2 py-1">
+              ⚡ Luyện tập
+            </span>
+          )}
+          <span className="text-[11px] text-slate-200">
+            {Object.keys(answers).length}/{questions.length} đã làm
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowMobilePalette(!showMobilePalette)}
+            className="px-2.5 py-1.5 bg-[#0f6cbf] hover:bg-[#0c599f] text-white text-xs font-bold rounded-none border border-blue-300 flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+          >
+            <ListOrdered className="w-3.5 h-3.5" />
+            <span>Bảng câu ({questions.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewState('summary')}
+            className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-none border border-red-900 shadow-xs uppercase tracking-wider cursor-pointer active:scale-95"
+          >
+            Nộp bài
+          </button>
+        </div>
+      </div>
+
+      {/* POPUP / MODAL BẢNG ĐIỀU HƯỚNG CÂU HỎI TRÊN MOBILE */}
+      {showMobilePalette && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end justify-center p-0 animate-in fade-in">
+          <div className="bg-white border-t-4 border-[#003366] shadow-2xl w-full max-h-[75vh] p-4 flex flex-col rounded-none animate-in slide-in-from-bottom-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 bg-[#003366]" />
+                <h3 className="text-sm font-bold text-[#003366] uppercase">
+                  Danh sách câu hỏi Portal UET
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMobilePalette(false)}
+                className="p-1 text-slate-500 hover:text-black font-bold text-xs"
+              >
+                ✕ Đóng
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 pr-1 pb-4">
+              <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+                {questions.map((q) => {
+                  const hasAnswer = answers[q.number] !== undefined && answers[q.number] !== null && answers[q.number] !== ''
+                  const isFlagged = flags[q.number]
+                  return (
+                    <button
+                      key={q.number}
+                      type="button"
+                      onClick={() => {
+                        scrollToQuestion(q.number)
+                        setShowMobilePalette(false)
+                      }}
+                      className="relative h-10 border border-slate-400 rounded-none text-xs font-bold flex flex-col items-stretch overflow-hidden cursor-pointer active:scale-95 transition"
+                    >
+                      <div className="flex-1 flex items-center justify-center bg-white text-slate-800 text-xs font-mono font-bold">
+                        {q.number}
+                      </div>
+                      <div className={`h-3 ${hasAnswer ? 'bg-slate-600' : 'bg-slate-100'}`} />
+                      {isFlagged && (
+                        <div className="absolute top-0 right-0 w-0 h-0 border-t-[10px] border-t-red-600 border-l-[10px] border-l-transparent" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 bg-slate-600 inline-block" /> Đã làm
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 bg-slate-100 border border-slate-400 inline-block" /> Chưa làm
+              </span>
+              <span className="flex items-center gap-1 text-red-600 font-bold">
+                🚩 Có cờ
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

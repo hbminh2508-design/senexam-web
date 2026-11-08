@@ -36,6 +36,7 @@ import {
   GraduationCap,
   ExternalLink,
   Gift,
+  Box,
 } from 'lucide-react'
 
 const MOBILE_VERSION = '2.0.2194024.10890.04'
@@ -366,27 +367,29 @@ export default function MobileDashboardPage() {
             <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Cash Mobile</span>
           </Link>
 
-          {/* Nộp Quỹ Lớp */}
+          {/* SenAI Studio */}
           <Link
-            href="/nopquylop"
+            href="/new-senai-studio"
             className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
           >
             <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Users className="h-4 w-4" />
+              <Sparkles className="h-4 w-4" />
             </div>
-            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Quỹ Lớp</span>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenAI Studio</span>
           </Link>
 
-          {/* Tài Liệu FEPN */}
-          <Link
-            href="/tsv-fepn"
+          {/* SenGraph 2D & 3D */}
+          <a
+            href="https://sengraph.senexam.me"
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
           >
             <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
-              <GraduationCap className="h-4 w-4" />
+              <Box className="h-4 w-4" />
             </div>
-            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">TSV FEPN</span>
-          </Link>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenGraph</span>
+          </a>
 
           {/* Hạn mức SenAI */}
           <Link
