@@ -346,6 +346,50 @@ export default function VnuTestExamRoom({
 
       const totalCount = questions.length || 1
       const totalScore = Number(((correctCount / totalCount) * 10).toFixed(2))
+      const timeSpentSeconds = Math.max(1, (examDurationMinutes * 60) - timeLeft)
+
+      // Đồng bộ nộp bài vào bảng submissions của Supabase để hiện trên Lịch sử làm bài
+      try {
+        const { data: authData } = await supabase.auth.getUser()
+        const currentUserId = authData?.user?.id || studentInfo?.id
+
+        if (currentUserId && exam?.id) {
+          const insertPayload: any = {
+            exam_id: exam.id,
+            user_id: currentUserId,
+            score: totalScore,
+            correct_count: correctCount,
+            total_questions: totalCount,
+            answers: answers,
+            time_spent: timeSpentSeconds,
+            is_graded: true,
+            created_at: new Date().toISOString(),
+          }
+
+          const { error: insertErr } = await supabase
+            .from('submissions')
+            .insert(insertPayload)
+
+          if (insertErr) {
+            console.warn('Lỗi khi nộp bài VNU TEST (có thể thiếu cột), thử payload cơ bản:', insertErr.message)
+            const minPayload: any = {
+              exam_id: exam.id,
+              user_id: currentUserId,
+              score: totalScore,
+              answers: answers,
+              is_graded: true,
+            }
+            await supabase.from('submissions').insert(minPayload)
+          }
+
+          // Xóa draft tạm nếu có
+          try {
+            localStorage.removeItem(`vnu_test_draft_${exam.id}_${currentUserId}`)
+          } catch {}
+        }
+      } catch (subErr) {
+        console.error('Lỗi khi lưu submission VNU TEST vào Supabase:', subErr)
+      }
 
       setVnuResult({
         totalScore,
@@ -655,7 +699,7 @@ export default function VnuTestExamRoom({
             </table>
           </div>
 
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-3 flex-wrap">
             <button
               type="button"
               onClick={() => {
@@ -668,6 +712,12 @@ export default function VnuTestExamRoom({
             >
               Làm lại bài thi
             </button>
+            <Link
+              href="/new-sen-ground?tab=history"
+              className="px-6 py-2 bg-[#2d6a36] hover:bg-[#23532a] text-white text-xs font-bold rounded-xs cursor-pointer inline-flex items-center gap-1"
+            >
+              Xem lịch sử bài thi
+            </Link>
             {onExit && (
               <button
                 type="button"

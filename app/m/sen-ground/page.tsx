@@ -185,7 +185,7 @@ function MobileSenGroundContent() {
 
         const { data: subData } = await supabase
           .from('submissions')
-          .select('id, exam_id, score, correct_count, total_questions, created_at, exams(title, subject, duration)')
+          .select('id, exam_id, score, correct_count, total_questions, created_at, exams(title, subject, duration, exam_type, format, tags)')
           .eq('user_id', userRes.data.user.id)
           .order('created_at', { ascending: false })
         if (subData) setSubmissions(subData as any)
@@ -953,9 +953,32 @@ function MobileSenGroundContent() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="truncate">
-                        <h5 className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {sub.exams?.title || 'Đề thi đã hoàn thành'}
-                        </h5>
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                          {(() => {
+                            const isVnu = (
+                              (sub.exams?.exam_type || '').toUpperCase().includes('VNU') ||
+                              (sub.exams?.title || '').toUpperCase().includes('VNU') ||
+                              (sub.exams?.format || '').toLowerCase().includes('vnu') ||
+                              (Array.isArray(sub.exams?.tags) && sub.exams.tags.some((t: any) => String(t).toUpperCase().includes('VNU')))
+                            )
+                            if (isVnu) {
+                              return (
+                                <span className="px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[9px] font-black uppercase inline-flex items-center gap-1">
+                                  <img src="/vnu-idt-logo.png" alt="VNU IDT" className="w-2.5 h-2.5 object-contain inline" />
+                                  VNU TEST
+                                </span>
+                              )
+                            }
+                            return (
+                              <span className="px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[9px] font-black uppercase">
+                                {sub.exams?.exam_type || 'THPTQG'}
+                              </span>
+                            )
+                          })()}
+                          <h5 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {sub.exams?.title || 'Đề thi đã hoàn thành'}
+                          </h5>
+                        </div>
                         <span className="text-[10px] text-slate-400">
                           {new Date(sub.created_at).toLocaleString('vi-VN')} • Đúng {sub.correct_count}/{sub.total_questions} câu
                         </span>

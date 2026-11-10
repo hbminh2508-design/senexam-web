@@ -6717,9 +6717,18 @@ function UnifiedHubContent() {
       list = list.filter((item) => {
         const type = (item.exams?.exam_type || '').toUpperCase()
         const title = (item.exams?.title || '').toUpperCase()
-        if (chartExamFilter === 'THPTQG') return type.includes('THPT') || title.includes('THPT')
-        if (chartExamFilter === 'HSA') return type.includes('HSA') || title.includes('HSA') || type.includes('ĐGNL') || title.includes('ĐGNL')
-        if (chartExamFilter === 'TSA') return type.includes('TSA') || title.includes('TSA') || type.includes('ĐGTD') || title.includes('ĐGTD')
+        const format = (item.exams?.format || '').toUpperCase()
+        const tags = Array.isArray(item.exams?.tags) ? item.exams.tags.map((t: any) => String(t).toUpperCase()) : []
+        const isVnu = (
+          type.includes('VNU') ||
+          title.includes('VNU') ||
+          format.includes('VNU') ||
+          tags.some((t: string) => t.includes('VNU'))
+        )
+        if (chartExamFilter === 'VNU TEST') return isVnu
+        if (chartExamFilter === 'THPTQG') return !isVnu && (type.includes('THPT') || title.includes('THPT'))
+        if (chartExamFilter === 'HSA') return !isVnu && (type.includes('HSA') || title.includes('HSA') || type.includes('ĐGNL') || title.includes('ĐGNL'))
+        if (chartExamFilter === 'TSA') return !isVnu && (type.includes('TSA') || title.includes('TSA') || type.includes('ĐGTD') || title.includes('ĐGTD'))
         return type.includes(chartExamFilter.toUpperCase())
       })
     }
@@ -6806,9 +6815,18 @@ function UnifiedHubContent() {
       result = result.filter((item) => {
         const type = (item.exams?.exam_type || '').toUpperCase()
         const title = (item.exams?.title || '').toUpperCase()
-        if (historySelectedType === 'THPTQG') return type.includes('THPT') || title.includes('THPT')
-        if (historySelectedType === 'HSA') return type.includes('HSA') || title.includes('HSA') || type.includes('ĐGNL') || title.includes('ĐGNL')
-        if (historySelectedType === 'TSA') return type.includes('TSA') || title.includes('TSA') || type.includes('ĐGTD') || title.includes('ĐGTD')
+        const format = (item.exams?.format || '').toUpperCase()
+        const tags = Array.isArray(item.exams?.tags) ? item.exams.tags.map((t: any) => String(t).toUpperCase()) : []
+        const isVnu = (
+          type.includes('VNU') ||
+          title.includes('VNU') ||
+          format.includes('VNU') ||
+          tags.some((t: string) => t.includes('VNU'))
+        )
+        if (historySelectedType === 'VNU TEST') return isVnu
+        if (historySelectedType === 'THPTQG') return !isVnu && (type.includes('THPT') || title.includes('THPT'))
+        if (historySelectedType === 'HSA') return !isVnu && (type.includes('HSA') || title.includes('HSA') || type.includes('ĐGNL') || title.includes('ĐGNL'))
+        if (historySelectedType === 'TSA') return !isVnu && (type.includes('TSA') || title.includes('TSA') || type.includes('ĐGTD') || title.includes('ĐGTD'))
         return type.includes(historySelectedType.toUpperCase())
       })
     }
@@ -9239,7 +9257,7 @@ function UnifiedHubContent() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl">
-                      {['Tất cả', 'THPTQG', 'HSA', 'TSA'].map((tab) => (
+                      {['Tất cả', 'THPTQG', 'HSA', 'TSA', 'VNU TEST'].map((tab) => (
                         <button
                           key={tab}
                           onClick={() => setChartExamFilter(tab)}
@@ -9473,9 +9491,27 @@ function UnifiedHubContent() {
 
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-black uppercase">
-                                {exam?.exam_type || 'THPTQG'}
-                              </span>
+                              {(() => {
+                                const isVnu = (
+                                  (exam?.exam_type || '').toUpperCase().includes('VNU') ||
+                                  (exam?.title || '').toUpperCase().includes('VNU') ||
+                                  (exam?.format || '').toLowerCase().includes('vnu') ||
+                                  (Array.isArray(exam?.tags) && exam.tags.some((t: any) => String(t).toUpperCase().includes('VNU')))
+                                )
+                                if (isVnu) {
+                                  return (
+                                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center gap-1">
+                                      <img src="/vnu-idt-logo.png" alt="VNU IDT" className="w-3.5 h-3.5 object-contain inline" />
+                                      VNU TEST
+                                    </span>
+                                  )
+                                }
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 text-[10px] font-black uppercase">
+                                    {exam?.exam_type || 'THPTQG'}
+                                  </span>
+                                )
+                              })()}
                               {exam?.subject && (
                                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
                                   {exam.subject}
