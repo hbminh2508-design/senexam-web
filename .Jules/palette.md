@@ -1,0 +1,1 @@
+## 2024-05-15 - Initial Journal Entry\n**Learning:** This repository uses a lot of icon-only buttons that are missing `aria-label` attributes.\n**Action:** Prioritize adding `aria-label` to icon-only buttons for accessibility.
