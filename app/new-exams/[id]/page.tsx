@@ -1017,25 +1017,8 @@ export default function NewExamRoomPage() {
     )
   }
 
-  // PHÒNG THI ĐẠI HỌC PORTAL UET (ĐỘC QUYỀN ĐỀ THI CÓ TAG ĐẠI HỌC)
+  // KIỂM TRA ĐỀ THI ĐẠI HỌC PORTAL UET (ĐỂ HIỂN THỊ NÚT CHUYỂN TÙY CHỌN TẠI SẢNH CHỜ)
   const isUniversityFormat = isUniversityExam(exam)
-
-  if (isUniversityFormat && (!isExamVip || isUserVip)) {
-    return (
-      <UniversityExamRoom
-        exam={exam}
-        studentInfo={{
-          id: studentInfo.id,
-          name: studentInfo.name,
-          email: studentInfo.email,
-          avatar: studentInfo.avatar,
-          studentId: '2202' + (studentInfo.id ? studentInfo.id.slice(0, 4) : '0001'),
-          school: 'Trường Đại học Công nghệ (VNU-UET)',
-        }}
-        onExit={() => router.push('/new-sen-ground')}
-      />
-    )
-  }
 
   // PHÒNG CHỜ BẮT ĐẦU THI
   if (!hasStarted) {

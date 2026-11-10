@@ -10,13 +10,22 @@ export function isUniversityExam(exam: any): boolean {
 
   // 0. BẢO VỆ TUYỆT ĐỐI: Nếu là đề thi THPTQG / HSA / TSA / SPT thì KHÔNG BAO GIỜ là Portal UET
   const examType = String(exam.exam_type || '').toUpperCase().trim()
+  const title = String(exam.title || '').toUpperCase().trim()
+
   if (
-    examType === 'THPTQG' ||
-    examType === 'THPT' ||
+    examType.includes('THPT') ||
     examType === 'HSA' ||
     examType === 'TSA' ||
     examType === 'SPT' ||
-    examType === 'ĐGNL'
+    examType === 'ĐGNL' ||
+    examType.includes('1 TIẾT') ||
+    examType.includes('HỌC KỲ') ||
+    title.includes('THPT') ||
+    title.includes('THPTQG') ||
+    title.includes('TRUNG HỌC PHỔ THÔNG') ||
+    title.includes('LỚP 12') ||
+    title.includes('LỚP 11') ||
+    title.includes('LỚP 10')
   ) {
     return false
   }

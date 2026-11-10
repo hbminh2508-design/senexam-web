@@ -349,22 +349,8 @@ export default function MobileExamPage() {
     )
   }
 
-  // PHÒNG THI ĐẠI HỌC PORTAL UET CHO MOBILE
+  // KIỂM TRA ĐỀ THI ĐẠI HỌC PORTAL UET (ĐỂ HIỂN THỊ NÚT TÙY CHỌN TẠI SẢNH CHỜ MOBILE)
   const isUniversityFormat = isUniversityExam(exam)
-  if (isUniversityFormat) {
-    return (
-      <UniversityExamRoom
-        exam={exam}
-        studentInfo={{
-          id: studentUser?.id,
-          name: studentUser?.user_metadata?.full_name || studentUser?.email?.split('@')[0] || 'Sinh viên UET',
-          email: studentUser?.email || '',
-          studentId: studentUser?.user_metadata?.student_id || studentUser?.user_metadata?.mssv || '',
-        }}
-        onExit={() => router.push('/m/sen-ground?tab=exams')}
-      />
-    )
-  }
 
   // PHÒNG THI VNU TEST (ĐHQGHN - 1 PHẦN DUY NHẤT, THỜI GIAN TỰ CHỌN, FULL SCREEN)
   const isVnuTestFormat = Boolean(
@@ -491,14 +477,26 @@ export default function MobileExamPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setHasStarted(true)}
-          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-sm shadow-lg active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <span>BẮT ĐẦU LÀM BÀI THI</span>
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setHasStarted(true)}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-sm shadow-lg active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>BẮT ĐẦU LÀM BÀI THI</span>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+
+          {isUniversityFormat && (
+            <Link
+              href={`/university-exams/${examId}`}
+              className="w-full py-3 rounded-2xl border border-sky-600/30 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 font-bold text-xs transition hover:bg-sky-100 flex items-center justify-center gap-2"
+            >
+              <img src="/uet-logo.png" alt="UET" className="w-4 h-4 object-contain" />
+              <span>Chuyển sang giao diện Portal UET</span>
+            </Link>
+          )}
+        </div>
       </div>
     )
   }
