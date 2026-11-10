@@ -12,6 +12,7 @@ import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, parseLatexExamCode, preprocessLatexContent } from '@/lib/latexExamParser'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
+import VnuTestExamRoom from '@/app/components/VnuTestExamRoom'
 import UniversityExamRoom from '@/app/components/UniversityExamRoom'
 import { isUniversityExam } from '@/lib/universityExamHelper'
 import TikzRenderer from '@/app/components/TikzRenderer'
@@ -365,8 +366,34 @@ export default function MobileExamPage() {
     )
   }
 
+  // PHÒNG THI VNU TEST (ĐHQGHN - 1 PHẦN DUY NHẤT, THỜI GIAN TỰ CHỌN, FULL SCREEN)
+  const isVnuTestFormat = Boolean(
+    exam?.exam_type === 'VNU_TEST' ||
+    exam?.exam_type === 'VNU TEST' ||
+    exam?.format === 'vnu_test' ||
+    exam?.format === 'vnutest' ||
+    (Array.isArray(exam?.tags) && exam.tags.some((t: string) => String(t).toUpperCase().includes('VNU TEST'))) ||
+    String(exam?.title || '').toUpperCase().includes('VNU TEST') ||
+    String(exam?.title || '').toUpperCase().includes('VNUTEST')
+  )
+
+  if (isVnuTestFormat) {
+    return (
+      <VnuTestExamRoom
+        exam={exam}
+        studentInfo={{
+          id: studentUser?.id,
+          name: studentUser?.user_metadata?.full_name || studentUser?.email?.split('@')[0] || 'Thí sinh VNU TEST',
+          email: studentUser?.email || '',
+        }}
+        isMobileView={true}
+        onExit={() => router.push('/m/sen-ground')}
+      />
+    )
+  }
+
   // PHÒNG THI ĐÁNH GIÁ NĂNG LỰC HSA (ĐHQGHN)
-  const isHsaFormat = Boolean(
+  const isHsaFormat = !isVnuTestFormat && Boolean(
     exam?.exam_type === 'HSA' ||
     exam?.format === 'hsa' ||
     String(exam?.title || '').toUpperCase().includes('HSA') ||

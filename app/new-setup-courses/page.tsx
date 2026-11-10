@@ -360,7 +360,7 @@ export interface SectionItem {
   }>
 }
 
-const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL', 'Đại học (Portal UET)', 'Kiểm tra 1 tiết', 'Học kỳ']
+const EXAM_TYPES = ['THPTQG', 'HSA', 'TSA', 'SPT', 'ĐGNL', 'VNU TEST', 'Đại học (Portal UET)', 'Kiểm tra 1 tiết', 'Học kỳ']
 const EXAM_BLOCKS = [
   { code: 'A00', name: 'Toán, Vật lí, Hóa học' },
   { code: 'A01', name: 'Toán, Vật lí, Tiếng Anh' },
@@ -1196,7 +1196,8 @@ function SetupCourseMainContent() {
         : null
 
       // Đóng gói cấu trúc Sections chuẩn để new-exams/[id] đọc mượt mà
-      const isHsa = katexExamType === 'HSA'
+      const isVnuTest = katexExamType === 'VNU_TEST' || katexExamType === 'VNU TEST' || katexExamType.includes('VNU TEST')
+      const isHsa = !isVnuTest && katexExamType === 'HSA'
       const parsedMaxScore = isHsa ? 150 : (parseFloat(katexMaxScore) || 10)
       const correctAnswersMap: Record<string, any> = {}
       katexQuestions.forEach((q, idx) => {
@@ -1282,15 +1283,15 @@ function SetupCourseMainContent() {
       const isUniv = katexExamType === 'PORTAL_UET' || katexExamType.includes('Portal') || katexExamType.includes('Đại học')
       const univSubjects = isUniv
         ? Array.from(new Set([katexSubject, 'Đại học', 'Portal UET']))
-        : (isHsa ? Array.from(new Set([katexSubject, ...hsaSelectedScienceSubjects])) : [katexSubject])
+        : (isVnuTest ? Array.from(new Set([katexSubject, 'VNU TEST'])) : (isHsa ? Array.from(new Set([katexSubject, ...hsaSelectedScienceSubjects])) : [katexSubject]))
 
       const basePayload: any = {
         title: katexTitle.trim(),
-        exam_type: isUniv ? 'UNIVERSITY' : katexExamType,
+        exam_type: isUniv ? 'UNIVERSITY' : (isVnuTest ? 'VNU_TEST' : katexExamType),
         duration: isHsa ? 195 : (parseInt(katexDuration) || 50),
         drive_file_id: null,
-        format: isUniv ? 'university' : (isHsa ? 'hsa' : 'katex'),
-        tags: isUniv ? ['Đại học', 'Portal UET'] : [],
+        format: isUniv ? 'university' : (isVnuTest ? 'vnu_test' : (isHsa ? 'hsa' : 'katex')),
+        tags: isUniv ? ['Đại học', 'Portal UET'] : (isVnuTest ? ['VNU TEST', 'ĐHQGHN'] : []),
         is_vip: katexIsVip,
         shuffle_questions: katexShuffleQuestions,
         shuffle_options: katexShuffleOptions,
@@ -1309,6 +1310,7 @@ function SetupCourseMainContent() {
       // Hàm chuẩn hóa an toàn exam_type phòng trường hợp DB có check constraint cũ (chỉ cho phép THPTQG, HSA, TSA, SPT)
       const getSafeExamType = (val: string) => {
         const upper = (val || '').toUpperCase().trim()
+        if (upper.includes('VNU')) return 'HSA'
         if (upper.includes('HSA')) return 'HSA'
         if (upper.includes('TSA')) return 'TSA'
         if (upper.includes('SPT')) return 'SPT'
@@ -1316,7 +1318,7 @@ function SetupCourseMainContent() {
         return 'THPTQG'
       }
 
-      // Thử lưu với max_score, nếu bảng exams chưa có cột max_score hoặc vướng check constraint exam_type
+      // Thử lưu với max_score, nếu bảng exams chưa có cột max_score hoặc vướng check constraint / schema cache
       let data: any = null
       let { data: firstData, error: firstError } = await supabase
         .from('exams')
@@ -1324,34 +1326,20 @@ function SetupCourseMainContent() {
         .select('*')
         .single()
 
-      // Nếu lỗi do ràng buộc exams_exam_type_check
-      if (firstError && firstError.message?.includes('exams_exam_type_check')) {
-        const safeType = getSafeExamType(katexExamType)
-        const retryRes = await supabase
-          .from('exams')
-          .insert({ ...basePayload, exam_type: safeType, max_score: parsedMaxScore })
-          .select('*')
-          .single()
-        firstData = retryRes.data
-        firstError = retryRes.error
-      }
-
       if (firstError) {
-        console.warn('Lỗi lưu đề (có thể thiếu cột tags / max_score / shuffle / is_vip), thử fallback an toàn:', firstError.message)
+        console.warn('Lỗi lưu đề (có thể vướng check constraint hoặc schema cache thiếu cột), thử fallback an toàn:', firstError.message)
         const safePayload = { ...basePayload }
 
-        if (firstError.message?.includes('tags') || firstError.message?.includes('schema cache')) {
-          delete safePayload.tags
-        }
-        if (firstError.message?.includes('format')) {
-          delete safePayload.format
-        }
-        if (firstError.message?.includes('shuffle_questions') || firstError.message?.includes('shuffle_options')) {
-          delete safePayload.shuffle_questions
-          delete safePayload.shuffle_options
-        }
-        if (firstError.message?.includes('is_vip')) {
-          delete safePayload.is_vip
+        // Bỏ các cột có thể chưa được sync trong schema cache
+        delete safePayload.tags
+        delete safePayload.format
+        delete safePayload.shuffle_questions
+        delete safePayload.shuffle_options
+        delete safePayload.is_vip
+
+        // Nếu vướng ràng buộc exam_type, chuẩn hóa về giá trị hợp lệ của DB cũ
+        if (firstError.message?.includes('exams_exam_type_check')) {
+          safePayload.exam_type = getSafeExamType(katexExamType)
         }
 
         let { data: fallbackData, error: fallbackError } = await supabase
@@ -1360,39 +1348,15 @@ function SetupCourseMainContent() {
           .select('*')
           .single()
 
-        if (fallbackError && fallbackError.message?.includes('tags')) {
-          delete safePayload.tags
-          const retryTags = await supabase
-            .from('exams')
-            .insert(safePayload)
-            .select('*')
-            .single()
-          fallbackData = retryTags.data
-          fallbackError = retryTags.error
-        }
-
         if (fallbackError && fallbackError.message?.includes('exams_exam_type_check')) {
-          const safeType = getSafeExamType(katexExamType)
-          const retryRes2 = await supabase
-            .from('exams')
-            .insert({ ...safePayload, exam_type: safeType })
-            .select('*')
-            .single()
-          fallbackData = retryRes2.data
-          fallbackError = retryRes2.error
-        }
-
-        if (fallbackError && (fallbackError.message?.includes('shuffle_questions') || fallbackError.message?.includes('shuffle_options'))) {
-          delete safePayload.shuffle_questions
-          delete safePayload.shuffle_options
-          delete safePayload.tags
-          const retryRes3 = await supabase
+          safePayload.exam_type = getSafeExamType(katexExamType)
+          const retryRes = await supabase
             .from('exams')
             .insert(safePayload)
             .select('*')
             .single()
-          fallbackData = retryRes3.data
-          fallbackError = retryRes3.error
+          fallbackData = retryRes.data
+          fallbackError = retryRes.error
         }
 
         if (fallbackError) throw fallbackError
@@ -1486,6 +1450,25 @@ function SetupCourseMainContent() {
         questionTypeMode: 'uniform',
         type: 'short_answer',
         instructions: 'Thí sinh nhập đáp số tính toán.',
+        instructionImage: '',
+        correctAnswers: {},
+        pointsPerQuestion: {},
+      },
+    ])
+  }
+
+  const handleLoadPresetVnuTest = () => {
+    setKatexExamType('VNU TEST')
+    setExamSections([
+      {
+        id: 'sec_vnu_all',
+        name: 'VNU TEST - Toàn bộ bài thi (Chung 1 phần)',
+        totalPoints: 10.0,
+        scoringMode: 'auto_divide',
+        questionCount: 40,
+        questionTypeMode: 'mixed',
+        type: 'single_choice',
+        instructions: 'Bài thi chuẩn VNU TEST chung một phần duy nhất từ câu 1 đến câu cuối.',
         instructionImage: '',
         correctAnswers: {},
         pointsPerQuestion: {},
@@ -3787,6 +3770,13 @@ Mỗi câu hỏi đặt trong \\begin{ex}...\\end{ex}, công thức toán đặt
                     className="rounded-xl border border-teal-500/30 bg-white/80 dark:bg-slate-800/80 px-3 py-1.5 text-xs font-bold text-teal-600 dark:text-teal-400 transition hover:bg-teal-500/20 shadow-2xs"
                   >
                     ⚡ Mẫu HSA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLoadPresetVnuTest}
+                    className="rounded-xl border border-sky-500/30 bg-white/80 dark:bg-slate-800/80 px-3 py-1.5 text-xs font-bold text-sky-600 dark:text-sky-400 transition hover:bg-sky-500/20 shadow-2xs"
+                  >
+                    🏛️ Mẫu VNU TEST
                   </button>
                 </div>
               </div>

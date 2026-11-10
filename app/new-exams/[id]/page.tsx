@@ -16,6 +16,7 @@ import ModernLoading from '@/app/components/ModernLoading'
 import { normalizeLatexQuestion, preprocessLatexContent } from '@/lib/latexExamParser'
 import ProtectedExamPdfViewer from '@/app/components/ProtectedExamPdfViewer'
 import HsaExamRoom from '@/app/components/HsaExamRoom'
+import VnuTestExamRoom from '@/app/components/VnuTestExamRoom'
 import UniversityExamRoom from '@/app/components/UniversityExamRoom'
 import TikzRenderer from '@/app/components/TikzRenderer'
 import { isUniversityExam } from '@/lib/universityExamHelper'
@@ -976,8 +977,29 @@ export default function NewExamRoomPage() {
     )
   }
 
+  // PHÒNG THI VNU TEST (ĐHQGHN - GIAO DIỆN HSA 1 PHẦN DUY NHẤT, THỜI GIAN TỰ CHỌN, FULL SCREEN)
+  const isVnuTestFormat = Boolean(
+    exam?.exam_type === 'VNU_TEST' ||
+    exam?.exam_type === 'VNU TEST' ||
+    exam?.format === 'vnu_test' ||
+    exam?.format === 'vnutest' ||
+    (Array.isArray(exam?.tags) && exam.tags.some((t: string) => String(t).toUpperCase().includes('VNU TEST'))) ||
+    String(exam?.title || '').toUpperCase().includes('VNU TEST') ||
+    String(exam?.title || '').toUpperCase().includes('VNUTEST')
+  )
+
+  if (isVnuTestFormat && (!isExamVip || isUserVip)) {
+    return (
+      <VnuTestExamRoom
+        exam={exam}
+        studentInfo={studentInfo}
+        onExit={() => router.push('/new-sen-ground')}
+      />
+    )
+  }
+
   // PHÒNG THI ĐÁNH GIÁ NĂNG LỰC HSA (ĐHQGHN)
-  const isHsaFormat = Boolean(
+  const isHsaFormat = !isVnuTestFormat && Boolean(
     exam?.exam_type === 'HSA' ||
     exam?.format === 'hsa' ||
     String(exam?.title || '').toUpperCase().includes('HSA') ||
