@@ -19,7 +19,8 @@ export type SystemRelease = {
 
 export type ReleaseLogAction = 'set_version' | 'enable_test' | 'disable_test' | 'publish_stable' | 'publish_beta'
 
-export const CURRENT_APP_VERSION = pkg.version as string
+export const CURRENT_APP_VERSION = '2.0.2194023.10599.01'
+export const CURRENT_SEMVER_VERSION = (pkg.version as string) || '2.0.2194023'
 const ACK_VERSION_KEY = 'senexam_ack_version'
 
 export async function fetchSystemRelease(): Promise<SystemRelease | null> {

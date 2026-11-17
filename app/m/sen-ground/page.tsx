@@ -44,7 +44,7 @@ import {
   Send,
 } from 'lucide-react'
 
-const MOBILE_VERSION = '2.0.2194024.10890.04'
+const MOBILE_VERSION = '2.0.2194023.10599.01'
 
 interface ExamItem {
   id: string
