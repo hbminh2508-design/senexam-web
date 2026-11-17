@@ -497,28 +497,51 @@ export default function UniversityExamRoom({
         questionResults,
       }
 
-      // ĐỒNG BỘ SUPABASE: Lưu kết quả chính thức vào bảng submissions
+      // ĐỒNG BỘ SUPABASE: Lưu kết quả chính thức qua API bảo mật máy chủ (chống can thiệp điểm & chống nộp đúp)
       if (studentInfo.id) {
         try {
-          await supabase.from('submissions').insert({
-            exam_id: exam.id,
-            user_id: studentInfo.id,
-            answers: answers,
-            score: Math.round(gradeOn10 * 100) / 100,
-            earned_points: earnedPoints,
-            total_points: maxPoints,
-            correct_count: correctCount,
-            total_questions: questions.length,
-            time_spent: durationSeconds,
-            details: resultPayload,
+          const idempotencyKey = `uet_${studentInfo.id}_${exam.id}_${Date.now()}`
+          const apiRes = await fetch('/api/exams/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              examId: exam.id,
+              userId: studentInfo.id,
+              answers: answers,
+              timeSpent: durationSeconds,
+              idempotencyKey,
+            }),
           })
+
+          if (!apiRes.ok) {
+            throw new Error(`API submit returned status ${apiRes.status}`)
+          }
 
           // Xóa draft
           const draftKey = `uet_draft_${exam.id}_${studentInfo.id}`
           localStorage.removeItem(draftKey)
           setIsOnlineSynced(true)
-        } catch (err) {
-          console.error('Lỗi khi lưu submission Portal UET vào Supabase:', err)
+        } catch (apiErr) {
+          console.warn('Lỗi khi nộp qua API máy chủ, tự động fallback Supabase client:', apiErr)
+          try {
+            await supabase.from('submissions').insert({
+              exam_id: exam.id,
+              user_id: studentInfo.id,
+              answers: answers,
+              score: Math.round(gradeOn10 * 100) / 100,
+              earned_points: earnedPoints,
+              total_points: maxPoints,
+              correct_count: correctCount,
+              total_questions: questions.length,
+              time_spent: durationSeconds,
+              details: resultPayload,
+            })
+            const draftKey = `uet_draft_${exam.id}_${studentInfo.id}`
+            localStorage.removeItem(draftKey)
+            setIsOnlineSynced(true)
+          } catch (dbFallbackErr) {
+            console.error('Lỗi lưu submission vào Supabase:', dbFallbackErr)
+          }
         }
       }
 

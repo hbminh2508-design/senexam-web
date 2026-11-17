@@ -267,20 +267,34 @@ export default function SebExamRoomPage() {
           setIsAdmin(true)
         }
 
-        const { data, error } = await supabase.from('exams').select('*').eq('id', examId).single()
-        if (error || !data) {
-          alert('Không tìm thấy đề thi hoặc đề thi đã bị gỡ!')
-          router.replace('/seb-dashboard')
-          return
+        let examRecord: any = null
+        try {
+          const apiRes = await fetch(`/api/exams/${examId}`)
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json()
+            if (apiJson.exam) examRecord = apiJson.exam
+          }
+        } catch (apiErr) {
+          console.warn('Fallback sang Supabase trực tiếp khi fetch API đề thi:', apiErr)
         }
 
-        setExam(data)
-        setTimeLeft((data.duration || 50) * 60)
+        if (!examRecord) {
+          const { data, error } = await supabase.from('exams').select('*').eq('id', examId).single()
+          if (error || !data) {
+            alert('Không tìm thấy đề thi hoặc đề thi đã bị gỡ!')
+            router.replace('/seb-dashboard')
+            return
+          }
+          examRecord = data
+        }
 
-        if (data.drive_file_id) {
-          setCachedPdfUrl(`https://drive.google.com/file/d/${data.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`)
-        } else if (data.pdf_url) {
-          setCachedPdfUrl(data.pdf_url)
+        setExam(examRecord)
+        setTimeLeft((examRecord.duration || 50) * 60)
+
+        if (examRecord.drive_file_id) {
+          setCachedPdfUrl(`https://drive.google.com/file/d/${examRecord.drive_file_id}/preview#toolbar=0&navpanes=0&scrollbar=0`)
+        } else if (examRecord.pdf_url) {
+          setCachedPdfUrl(examRecord.pdf_url)
         }
 
         // Khôi phục bài nháp nếu có
@@ -580,47 +594,52 @@ export default function SebExamRoomPage() {
     setSubmitting(true)
 
     try {
-      const { score: calculatedScore, detailedScores } = calculateScore()
+      const { score: localCalculatedScore, detailedScores } = calculateScore()
+      let finalSubmissionId = 'done'
+      let finalScore = localCalculatedScore
 
-      // 1. Dữ liệu chuẩn tương thích hoàn toàn với bảng submissions của SenExam
-      const coreSubmission = {
-        user_id: currentUser.id,
-        exam_id: examId,
-        score: calculatedScore,
-        answers: answers,
-        detailed_scores: detailedScores,
-        is_graded: true,
-      }
+      // 1. Thử nộp bài và chấm điểm chính thức qua API bảo mật máy chủ (chống sửa điểm & chống double submit)
+      try {
+        const idempotencyKey = `seb_${currentUser.id}_${examId}_${Date.now()}`
+        const res = await fetch('/api/exams/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            examId,
+            userId: currentUser.id,
+            answers,
+            tabSwitches,
+            blurCount: tabSwitches,
+            idempotencyKey,
+          }),
+        })
 
-      // 2. Thử ghi kèm telemetry mở rộng (nếu CSDL đã có cột)
-      let subData: any = null
-      const enhancedSubmission = {
-        ...coreSubmission,
-        total_questions: questionMeta.totalCount,
-        tab_switches: tabSwitches,
-        blur_count: tabSwitches,
-        submitted_at: new Date().toISOString(),
-      }
-
-      const { data: firstTryData, error: firstTryErr } = await supabase
-        .from('submissions')
-        .insert(enhancedSubmission)
-        .select('*')
-        .maybeSingle()
-
-      if (firstTryErr) {
-        console.warn('Lỗi ghi telemetry mở rộng, tự động fallback sang schema chuẩn SenExam:', firstTryErr.message)
-        // Fallback an toàn tuyệt đối: chỉ gửi các cột chắc chắn có trong bảng submissions
-        const { data: fallbackData, error: fallbackErr } = await supabase
+        if (res.ok) {
+          const resData = await res.json()
+          if (resData.success) {
+            finalSubmissionId = resData.submissionId || 'done'
+            finalScore = resData.score ?? localCalculatedScore
+          }
+        } else {
+          throw new Error('API submit status ' + res.status)
+        }
+      } catch (serverSubmitErr) {
+        console.warn('Nộp qua API máy chủ gặp sự cố, tự động fallback ghi nhận trực tiếp:', serverSubmitErr)
+        // Fallback ghi nhận trực tiếp vào bảng submissions
+        const coreSubmission = {
+          user_id: currentUser.id,
+          exam_id: examId,
+          score: localCalculatedScore,
+          answers: answers,
+          detailed_scores: detailedScores,
+          is_graded: true,
+        }
+        const { data: fallbackData } = await supabase
           .from('submissions')
           .insert(coreSubmission)
-          .select('*')
-          .single()
-
-        if (fallbackErr) throw fallbackErr
-        subData = fallbackData
-      } else {
-        subData = firstTryData
+          .select('id')
+          .maybeSingle()
+        if (fallbackData?.id) finalSubmissionId = fallbackData.id
       }
 
       // Xóa bản nháp
@@ -628,8 +647,8 @@ export default function SebExamRoomPage() {
       localStorage.removeItem(draftKey)
 
       setSubmittedResult({
-        submissionId: subData?.id || 'done',
-        score: calculatedScore,
+        submissionId: finalSubmissionId,
+        score: finalScore,
       })
       setShowSubmitModal(false)
     } catch (err: any) {
