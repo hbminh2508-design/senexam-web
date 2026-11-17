@@ -1,40 +1,53 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSupabaseAdmin, requireAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { username, password } = body
+    const serverSecret = process.env.ADMIN_SECRET
+    if (!serverSecret || serverSecret.length < 16) {
+      return NextResponse.json(
+        { error: 'ADMIN_SECRET chưa được cấu hình an toàn trên máy chủ (yêu cầu tối thiểu 16 ký tự)' },
+        { status: 500 }
+      )
+    }
+
+    const body = await request.json().catch(() => ({}))
+    const { username, password, adminSecret } = body
+
+    const authHeader = request.headers.get('x-admin-secret') || ''
+    const providedSecret = (adminSecret || authHeader).trim()
+
+    // Kiểm tra quyền: Bắt buộc khớp ADMIN_SECRET hoặc đã đăng nhập phiên Admin hợp lệ
+    const authenticatedAdmin = await requireAdmin(request)
+    const isSecretAuthorized = providedSecret === serverSecret
+
+    if (!authenticatedAdmin && !isSecretAuthorized) {
+      return NextResponse.json(
+        { error: 'Từ chối truy cập: Khóa quản trị bí mật không chính xác hoặc chưa xác thực' },
+        { status: 401 }
+      )
+    }
 
     const cleanUser = (username || '').trim().toLowerCase()
     const cleanPwd = (password || '').trim()
 
     // Kiểm tra định dạng tài khoản admin
-    const isAdminUsername = cleanUser === 'admin' || cleanUser === 'admin@senexam.me' || cleanUser === 'admin@senexam.edu.vn'
+    const isAdminUsername =
+      cleanUser === 'admin' ||
+      cleanUser === 'admin@senexam.me' ||
+      cleanUser === 'admin@senexam.edu.vn'
+
     if (!isAdminUsername) {
-      return NextResponse.json({ error: 'Không phải tài khoản quản trị viên' }, { status: 400 })
+      return NextResponse.json({ error: 'Không phải tài khoản quản trị viên hợp lệ' }, { status: 400 })
     }
 
-    // Kiểm tra mẫu mật khẩu quản trị bảo mật cao
-    const adminSecret = process.env.ADMIN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(-12)
-    const now = new Date()
-    const d = now.getDate()
-    const m = now.getMonth() + 1
-    const y = now.getFullYear()
-    const validFormats = [
-      `admin-${d}/${m}/${y}`,
-      `admin-${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`,
-      `admin-${d}-${m}-${y}`,
-      `admin-${String(d).padStart(2, '0')}-${String(m).padStart(2, '0')}-${y}`,
-    ]
-    if (adminSecret) {
-      validFormats.push(adminSecret)
-    }
-
-    if (!validFormats.includes(cleanPwd)) {
-      return NextResponse.json({ error: 'Mật khẩu quản trị viên không chính xác theo thời điểm' }, { status: 403 })
+    if (!cleanPwd || cleanPwd.length < 12) {
+      return NextResponse.json(
+        { error: 'Mật khẩu quản trị viên mới phải có độ dài tối thiểu 12 ký tự để đảm bảo an toàn' },
+        { status: 400 }
+      )
     }
 
     const supabaseAdmin = getSupabaseAdmin()

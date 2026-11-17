@@ -1,34 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { getSupabaseAdmin, requireAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUserFromRequest(request)
+    const admin = await requireAdmin(request)
+    if (!admin) {
+      return NextResponse.json({ error: 'Không có quyền thực hiện thao tác này' }, { status: 403 })
+    }
+
     const body = await request.json().catch(() => ({}))
     const confirmCode = body.confirmCode
 
+    // Bắt buộc cả quyền Quản trị viên VÀ mã xác thực phòng ngừa thao tác nhầm
+    if (confirmCode !== 'CONFIRM_CLEAN_SENEXAM_LIBRARY_2026') {
+      return NextResponse.json(
+        { error: 'Mã xác nhận bảo mật thao tác dọn thư viện không chính xác' },
+        { status: 400 }
+      )
+    }
+
     const supabaseAdmin = getSupabaseAdmin()
-
-    // Cho phép nếu là Admin đăng nhập HOẶC gửi mã xác nhận bảo mật
-    let isAuthorized = false
-    if (confirmCode === 'CONFIRM_CLEAN_SENEXAM_LIBRARY_2026') {
-      isAuthorized = true
-    } else if (user) {
-      const { data: profile } = await supabaseAdmin
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle()
-      if (profile?.role === 'admin') {
-        isAuthorized = true
-      }
-    }
-
-    if (!isAuthorized) {
-      return NextResponse.json({ error: 'Không có quyền thực hiện thao tác này' }, { status: 403 })
-    }
 
     // 1. Quét sạch bảng library_documents (Tài liệu thư viện cũ)
     const { count: docCount, error: docError } = await supabaseAdmin
@@ -52,16 +45,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: folderError.message }, { status: 500 })
     }
 
-    // 🔒 TUYỆT ĐỐI KHÔNG ĐỤNG ĐẾN: fepn_subjects, fepn_materials, exams, profiles
-
     return NextResponse.json({
       success: true,
-      message: 'Đã quét sạch toàn bộ dữ liệu thư viện cũ thành công! TSV.FEPN được giữ nguyên 100%.',
+      message: `Đã dọn dẹp sạch toàn bộ thư viện: xóa ${docCount || 0} tài liệu và ${folderCount || 0} thư mục cũ.`,
       deletedDocuments: docCount || 0,
       deletedFolders: folderCount || 0,
     })
   } catch (err: any) {
-    console.error('Lỗi clean library:', err)
-    return NextResponse.json({ error: err?.message || 'Lỗi xử lý hệ thống' }, { status: 500 })
+    console.error('Lỗi API /api/admin/clean-library:', err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Lỗi hệ thống khi dọn thư viện' },
+      { status: 500 }
+    )
   }
 }

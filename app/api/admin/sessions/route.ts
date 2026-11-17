@@ -1,28 +1,16 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { getSupabaseAdmin, requireAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   try {
-    const caller = await getUserFromRequest(request)
+    const caller = await requireAdmin(request)
     if (!caller) {
-      return NextResponse.json({ error: 'Chưa đăng nhập hoặc phiên làm việc đã hết hạn' }, { status: 401 })
+      return NextResponse.json({ error: 'Chỉ Quản trị viên mới có quyền xem danh sách phiên' }, { status: 403 })
     }
 
     const supabaseAdmin = getSupabaseAdmin()
-    const { data: callerProfile, error: callerErr } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', caller.id)
-      .maybeSingle()
-
-    if (callerErr) throw callerErr
-    const callerRole = callerProfile?.role
-    const isSuperAdmin = caller.email && ['admin@senexam.me', 'hoangbinhminh2508@gmail.com'].includes(caller.email.toLowerCase())
-    if (callerRole !== 'admin' && callerRole !== 'collab' && !isSuperAdmin) {
-      return NextResponse.json({ error: 'Chỉ Quản trị viên mới có quyền xem danh sách phiên' }, { status: 403 })
-    }
 
     // Lấy danh sách phiên từ bảng fepn_user_sessions (hoặc bảng user_sessions)
     let sessions: any[] = []
@@ -86,24 +74,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const caller = await getUserFromRequest(request)
+    const caller = await requireAdmin(request)
     if (!caller) {
-      return NextResponse.json({ error: 'Chưa đăng nhập hoặc phiên làm việc đã hết hạn' }, { status: 401 })
+      return NextResponse.json({ error: 'Chỉ Quản trị viên mới có quyền quản lý phiên' }, { status: 403 })
     }
 
     const supabaseAdmin = getSupabaseAdmin()
-    const { data: callerProfile, error: callerErr } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', caller.id)
-      .maybeSingle()
-
-    if (callerErr) throw callerErr
-    const callerRole = callerProfile?.role
-    const isSuperAdmin = caller.email && ['admin@senexam.me', 'hoangbinhminh2508@gmail.com'].includes(caller.email.toLowerCase())
-    if (callerRole !== 'admin' && callerRole !== 'collab' && !isSuperAdmin) {
-      return NextResponse.json({ error: 'Chỉ Quản trị viên mới có quyền quản lý phiên' }, { status: 403 })
-    }
 
     const body = await request.json()
     const { action, sessionId, userId } = body

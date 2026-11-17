@@ -1,32 +1,16 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { getSupabaseAdmin, requireAdmin } from '@/lib/supabaseAdmin'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
   try {
-    const caller = await getUserFromRequest(request)
+    const caller = await requireAdmin(request)
     if (!caller) {
-      return NextResponse.json({ error: 'Chưa đăng nhập hoặc phiên làm việc đã hết hạn' }, { status: 401 })
+      return NextResponse.json({ error: 'Chỉ Quản trị viên (Admin) hoặc Cộng tác viên mới có quyền cấp tài khoản' }, { status: 403 })
     }
 
     const supabaseAdmin = getSupabaseAdmin()
-    const { data: callerProfile, error: callerErr } = await supabaseAdmin
-      .from('profiles')
-      .select('role, email')
-      .eq('id', caller.id)
-      .maybeSingle()
-
-    if (callerErr) throw callerErr
-    const callerRole = callerProfile?.role
-    const callerEmail = (caller.email || callerProfile?.email || '').toLowerCase()
-    const isSuperEmail =
-      callerEmail === 'admin@senexam.me' ||
-      callerEmail === 'hoangbinhminh2508@gmail.com'
-
-    if (callerRole !== 'admin' && callerRole !== 'collab' && !isSuperEmail) {
-      return NextResponse.json({ error: 'Chỉ Quản trị viên (Admin) hoặc Cộng tác viên mới có quyền cấp tài khoản' }, { status: 403 })
-    }
 
     const body = await request.json()
     const {
