@@ -1,8 +1,13 @@
 const { Client } = require('pg');
 
 async function sync() {
+  const connectionString = process.env.DATABASE_URL || process.env.SOURCE_DB_URL;
+  if (!connectionString) {
+    console.error('❌ Missing DATABASE_URL or SOURCE_DB_URL environment variable.');
+    process.exit(1);
+  }
   const client = new Client({
-    connectionString: 'postgresql://postgres.nphryrldlfiuvpuqjovr:Dawnhoang2007%40@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres',
+    connectionString,
     ssl: { rejectUnauthorized: false }
   });
   await client.connect();

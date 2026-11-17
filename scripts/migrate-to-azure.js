@@ -6,13 +6,11 @@
 const { Client } = require('pg');
 
 const SOURCE_URL = process.env.SOURCE_DB_URL;
-const TARGET_URL =
-  process.env.TARGET_DB_URL ||
-  'postgresql://senexam_admin:SenExam%402026%21Azure@localhost:5432/senexam_db';
+const TARGET_URL = process.env.TARGET_DB_URL;
 
-if (!SOURCE_URL) {
-  console.error('❌ Error: Missing SOURCE_DB_URL environment variable.');
-  console.error('Usage: SOURCE_DB_URL="postgresql://..." node scripts/migrate-to-azure.js');
+if (!SOURCE_URL || !TARGET_URL) {
+  console.error('❌ Error: Missing SOURCE_DB_URL or TARGET_DB_URL environment variable.');
+  console.error('Usage: SOURCE_DB_URL="postgresql://..." TARGET_DB_URL="postgresql://..." node scripts/migrate-to-azure.js');
   process.exit(1);
 }
 

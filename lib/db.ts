@@ -1,13 +1,13 @@
 import { Pool } from 'pg'
 
-const connectionString =
-  process.env.DATABASE_URL ||
-  'postgresql://senexam_admin:SenExam%402026%21Azure@localhost:5432/senexam_db'
-
 let pool: Pool | null = null
 
 export function getDbPool(): Pool {
   if (!pool) {
+    const connectionString = process.env.DATABASE_URL
+    if (!connectionString) {
+      throw new Error('[db] Missing DATABASE_URL environment variable')
+    }
     pool = new Pool({
       connectionString,
       max: 20,
@@ -19,8 +19,8 @@ export function getDbPool(): Pool {
 }
 
 export async function queryDb<T = any>(text: string, params?: any[]): Promise<T[]> {
-  const p = getDbPool()
   try {
+    const p = getDbPool()
     const res = await p.query(text, params)
     return res.rows
   } catch (err: any) {
