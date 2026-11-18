@@ -13,6 +13,7 @@ import {
   applyPremiumPlusPurchasePerks,
   applySenOnePurchasePerks,
 } from '@/lib/vipSenaiGift'
+import { FEATURE_FLAGS } from '@/lib/featureFlags'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,21 @@ export async function POST(request: Request) {
   try {
     const user = await getUserFromRequest(request)
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+
+    // BẢO VỆ NGĂN CÁCH TIỀN TỆ: Khách hàng Mobile phải dùng cổng ví Cash Mobile (SCm)
+    const platformHeader = request.headers.get('x-senexam-platform')
+    const referer = request.headers.get('referer') || ''
+    const isMobileClient = platformHeader === 'mobile' || referer.includes('/m/')
+
+    if (isMobileClient && FEATURE_FLAGS.ENFORCE_MOBILE_WALLET_ISOLATION) {
+      return NextResponse.json(
+        {
+          error: 'Vui lòng sử dụng cổng thanh toán Cash Mobile (SCm) tại /api/scm/purchase-deal',
+          isMobileContext: true,
+        },
+        { status: 403 }
+      )
+    }
 
     const body = await request.json()
     const { dealId, dealType, planCode, blackFridayDeal } = body

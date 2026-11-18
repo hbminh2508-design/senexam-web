@@ -1,11 +1,23 @@
 import { supabase } from '@/lib/supabaseClient'
+export {
+  VND_PER_SENCASH,
+  VND_PER_SCM,
+  SCM_PER_SENCASH,
+  MIN_TOPUP_VND,
+  vndToScm,
+  scmToVnd,
+  senCashToScm,
+} from './scmUtils.mjs'
+import {
+  VND_PER_SENCASH,
+  VND_PER_SCM,
+  SCM_PER_SENCASH,
+  MIN_TOPUP_VND,
+  vndToScm,
+  scmToVnd,
+  senCashToScm,
+} from './scmUtils.mjs'
 
-// Tỉ giá cố định: 500đ = 1 SenCash (PC).
-// Trên Mobile: Cash Mobile (SCm) với tỉ giá 1.000đ = 10 SCm (100đ = 1 SCm; 1 SenCash PC = 5 SCm Mobile).
-export const VND_PER_SENCASH = 500
-export const VND_PER_SCM = 100
-export const SCM_PER_SENCASH = 5
-export const MIN_TOPUP_VND = 1_000
 export const TOPUP_PRESETS_VND = [5_000, 10_000, 20_000, 50_000, 100_000, 200_000]
 export const MOBILE_TOPUP_PRESETS_VND = [1_000, 5_000, 10_000, 20_000, 50_000, 100_000, 200_000]
 export const SENCASH_COST_PER_VIP_DOWNLOAD = 2
@@ -16,19 +28,6 @@ export function vndToSenCash(vnd: number): number {
 
 export function senCashToVnd(sc: number): number {
   return sc * VND_PER_SENCASH
-}
-
-// Chuyển đổi tương ứng với Cash Mobile (SCm)
-export function vndToScm(vnd: number): number {
-  return Math.floor(vnd / VND_PER_SCM)
-}
-
-export function scmToVnd(scm: number): number {
-  return scm * VND_PER_SCM
-}
-
-export function senCashToScm(sc: number): number {
-  return (sc || 0) * SCM_PER_SENCASH
 }
 
 export function getUserScmBalance(user: any, profile?: any): number {
@@ -85,3 +84,38 @@ export async function fetchMyTransactions(userId: string): Promise<SenCashTransa
   if (error) throw error
   return (data || []) as SenCashTransaction[]
 }
+
+export type ScmTransaction = {
+  id: string
+  user_id: string
+  amount: number
+  balance_after: number
+  transaction_type: 'topup' | 'senai_quota' | 'exclusive_deal' | 'admin_gift' | 'refund'
+  description: string
+  idempotency_key?: string
+  reference_id: string | null
+  created_at: string
+}
+
+export async function fetchScmBalance(userId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('scm_balance, sencash_mobile_balance')
+    .eq('id', userId)
+    .maybeSingle()
+  if (error) return 0
+  return Number(data?.scm_balance ?? data?.sencash_mobile_balance ?? 0)
+}
+
+export async function fetchMyScmTransactions(userId: string): Promise<ScmTransaction[]> {
+  const { data, error } = await supabase
+    .from('mobile_sencash_transactions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (error) return []
+  return (data || []) as ScmTransaction[]
+}
+

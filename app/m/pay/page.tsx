@@ -24,7 +24,13 @@ import {
   type SenAiPlan,
 } from '@/lib/senaiTiers'
 import { EXCLUSIVE_STORE_ITEMS } from '@/lib/exclusiveStore'
-import { getUserScmBalance } from '@/lib/senCash'
+import {
+  getUserScmBalance,
+  SCM_PER_SENCASH,
+  fetchScmBalance,
+  fetchMyScmTransactions,
+  type ScmTransaction,
+} from '@/lib/senCash'
 import {
   Crown,
   Zap,
@@ -63,8 +69,8 @@ export default function MobilePayPage() {
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
-  const [senCashBalance, setSenCashBalance] = useState<number>(0)
   const [scmBalance, setScmBalance] = useState<number>(0)
+  const [scmTransactions, setScmTransactions] = useState<ScmTransaction[]>([])
   const [userProfile, setUserProfile] = useState<any>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
@@ -125,8 +131,10 @@ export default function MobilePayPage() {
           .maybeSingle()
         if (prof) {
           setUserProfile(prof)
-          setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
-          setScmBalance(getUserScmBalance(user, prof))
+          const scm = await fetchScmBalance(user.id)
+          setScmBalance(scm)
+          const txs = await fetchMyScmTransactions(user.id)
+          setScmTransactions(txs)
         }
 
           // Lấy hạn mức quota câu hỏi
@@ -200,7 +208,7 @@ export default function MobilePayPage() {
     }, 2500)
   }
 
-  // Polling trạng thái đơn nạp SenCash
+  // Polling trạng thái đơn nạp Cash Mobile (SCm)
   const startPollingTopupOrder = (orderId: string, token: string) => {
     stopPolling()
     pollRef.current = setInterval(async () => {
@@ -213,15 +221,16 @@ export default function MobilePayPage() {
           stopPolling()
           setQrModal((prev) => (prev ? { ...prev, isPaid: true } : null))
           if (userId) {
+            const scm = await fetchScmBalance(userId)
+            setScmBalance(scm)
+            const txs = await fetchMyScmTransactions(userId)
+            setScmTransactions(txs)
             const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
-            if (prof) {
-              setUserProfile(prof)
-              setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
-            }
+            if (prof) setUserProfile(prof)
           }
         }
       } catch (err) {
-        console.error('Lỗi kiểm tra trạng thái nạp SenCash:', err)
+        console.error('Lỗi kiểm tra trạng thái nạp Cash Mobile:', err)
       }
     }, 2500)
   }
@@ -277,7 +286,7 @@ export default function MobilePayPage() {
     }
   }
 
-  // Nạp ví SenCash qua VietQR chuẩn PC
+  // Nạp ví Cash Mobile (SCm) qua VietQR
   const handleCreateTopup = async () => {
     setActionLoading(true)
     try {
@@ -287,22 +296,21 @@ export default function MobilePayPage() {
         return
       }
 
-      const res = await fetch('/api/sencash/create-topup-order', {
+      const res = await fetch('/api/scm/create-topup-order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
+          'x-senexam-platform': 'mobile',
         },
         body: JSON.stringify({
           amountVnd: topupAmount,
-          platform: 'mobile',
-          returnUrl: `${window.location.origin}/m/pay?tab=wallet`,
         }),
       })
 
       const data = await res.json()
       if (!res.ok || data.error) {
-        alert(data.error || 'Không thể tạo đơn nạp ví SenCash.')
+        alert(data.error || 'Không thể tạo đơn nạp ví Cash Mobile.')
         return
       }
 
@@ -325,15 +333,16 @@ export default function MobilePayPage() {
     }
   }
 
-  // Mua gói SenAI bằng SenCash
+  // Mua gói SenAI bằng Cash Mobile (SCm)
   const handleBuySenAiPlan = async (plan: SenAiPlan) => {
-    if (plan.priceSenCash > 0 && senCashBalance < plan.priceSenCash) {
-      alert(`Số dư SenCash không đủ (${senCashBalance} SC < ${plan.priceSenCash} SC). Vui lòng nạp thêm SenCash!`)
+    const priceScm = (plan.priceSenCash || 0) * SCM_PER_SENCASH
+    if (priceScm > 0 && scmBalance < priceScm) {
+      alert(`Số dư Cash Mobile không đủ (${scmBalance.toLocaleString('vi-VN')} SCm < ${priceScm.toLocaleString('vi-VN')} SCm). Vui lòng nạp thêm Cash Mobile!`)
       setActiveTab('wallet')
       return
     }
 
-    if (!confirm(`Bạn có chắc chắn muốn kích hoạt gói "${plan.label}" với ${plan.priceSenCash} SC?`)) {
+    if (!confirm(`Bạn có chắc chắn muốn kích hoạt gói "${plan.label}" với ${priceScm.toLocaleString('vi-VN')} SCm?`)) {
       return
     }
 
@@ -345,13 +354,17 @@ export default function MobilePayPage() {
         return
       }
 
-      const res = await fetch('/api/senai/purchase-tier', {
+      const res = await fetch('/api/scm/purchase-senai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
+          'x-senexam-platform': 'mobile',
         },
-        body: JSON.stringify({ planCode: plan.code }),
+        body: JSON.stringify({
+          planCode: plan.code,
+          idempotencyKey: `scm_senai_${userId}_${plan.code}_${Date.now()}`
+        }),
       })
 
       const data = await res.json()
@@ -363,11 +376,11 @@ export default function MobilePayPage() {
       alert(`Kích hoạt thành công gói ${plan.label}!`)
       if (userId) {
         const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
-        if (prof) {
-          setUserProfile(prof)
-          setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
-          setScmBalance(getUserScmBalance(user, prof))
-        }
+        if (prof) setUserProfile(prof)
+        const scm = await fetchScmBalance(userId)
+        setScmBalance(scm)
+        const txs = await fetchMyScmTransactions(userId)
+        setScmTransactions(txs)
       }
     } catch (err: any) {
       alert(`Lỗi khi kích hoạt: ${err.message}`)
@@ -401,10 +414,11 @@ export default function MobilePayPage() {
         setGiftCode('')
         if (userId) {
           const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
-          if (prof) {
-            setUserProfile(prof)
-            setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
-          }
+          if (prof) setUserProfile(prof)
+          const scm = await fetchScmBalance(userId)
+          setScmBalance(scm)
+          const txs = await fetchMyScmTransactions(userId)
+          setScmTransactions(txs)
         }
       } else {
         setGiftStatus(data.error || 'Mã GiftCode không hợp lệ hoặc đã hết lượt.')
@@ -416,8 +430,19 @@ export default function MobilePayPage() {
     }
   }
 
-  // Mua ưu đãi độc quyền
+  // Mua ưu đãi độc quyền bằng Cash Mobile (SCm)
   const handleBuyExclusiveDeal = async (item: any) => {
+    const priceScm = (item.discountedPrice || item.priceSenCash || item.price || 0) * SCM_PER_SENCASH
+    if (priceScm > 0 && scmBalance < priceScm) {
+      alert(`Số dư Cash Mobile không đủ (${scmBalance.toLocaleString('vi-VN')} SCm < ${priceScm.toLocaleString('vi-VN')} SCm). Vui lòng nạp thêm Cash Mobile!`)
+      setActiveTab('wallet')
+      return
+    }
+
+    if (!confirm(`Bạn có chắc chắn muốn mở khóa ưu đãi "${item.title}" với ${priceScm.toLocaleString('vi-VN')} SCm?`)) {
+      return
+    }
+
     setActionLoading(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -425,13 +450,17 @@ export default function MobilePayPage() {
         router.push('/new-idp?returnUrl=/m/pay?tab=exclusive')
         return
       }
-      const res = await fetch('/api/exclusive-store/purchase', {
+      const res = await fetch('/api/scm/purchase-deal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
+          'x-senexam-platform': 'mobile',
         },
-        body: JSON.stringify({ itemId: item.id }),
+        body: JSON.stringify({
+          dealId: item.id,
+          idempotencyKey: `scm_deal_${userId}_${item.id}_${Date.now()}`
+        }),
       })
       const data = await res.json()
       if (!res.ok || data.error) {
@@ -441,11 +470,11 @@ export default function MobilePayPage() {
       alert('Đã mở khóa ưu đãi thành công!')
       if (userId) {
         const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
-        if (prof) {
-          setUserProfile(prof)
-          setSenCashBalance(prof.sencash_balance || prof.sen_cash || 0)
-          setScmBalance(getUserScmBalance(user, prof))
-        }
+        if (prof) setUserProfile(prof)
+        const scm = await fetchScmBalance(userId)
+        setScmBalance(scm)
+        const txs = await fetchMyScmTransactions(userId)
+        setScmTransactions(txs)
       }
     } catch (err: any) {
       alert(`Lỗi giao dịch: ${err.message}`)
@@ -460,7 +489,7 @@ export default function MobilePayPage() {
       activeTab === 'vip'
         ? { title: 'Gói Hội Viên Sen VIP', subtitle: `Đang tải bảng giá và đặc quyền hội viên (v${MOBILE_VERSION})...` }
         : activeTab === 'wallet'
-        ? { title: 'Ví Điện Tử SenCash', subtitle: `Đang tải số dư ví & thông tin nạp tiền (v${MOBILE_VERSION})...` }
+        ? { title: 'Ví Cash Mobile (SCm)', subtitle: `Đang tải số dư ví & thông tin nạp tiền (v${MOBILE_VERSION})...` }
         : activeTab === 'quota'
         ? { title: 'Hạn Mức Trợ Lý SenAI', subtitle: `Đang đồng bộ các gói câu hỏi SenAI (v${MOBILE_VERSION})...` }
         : activeTab === 'giftcode'
@@ -490,10 +519,10 @@ export default function MobilePayPage() {
           </h1>
         </div>
 
-        {/* Số dư SenCash */}
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-black">
-          <Coins className="h-3.5 w-3.5" />
-          <span>{senCashBalance.toLocaleString('vi-VN')} SC</span>
+        {/* Số dư Cash Mobile */}
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-xs font-black">
+          <Wallet className="h-3.5 w-3.5" />
+          <span>{scmBalance.toLocaleString('vi-VN')} SCm</span>
         </div>
       </div>
 
@@ -634,7 +663,7 @@ export default function MobilePayPage() {
               {scmBalance.toLocaleString('vi-VN')} <span className="text-sm font-bold opacity-80">SCm</span>
             </div>
             <p className="text-[11px] text-sky-100 leading-relaxed">
-              Ví Cash Mobile (SCm) độc lập chuyên biệt: 1.000đ = 10 SCm (1 SCm = 100đ). Số dư SenCash PC: {senCashBalance.toLocaleString('vi-VN')} SC.
+              Ví Cash Mobile (SCm) độc lập chuyên biệt: 1.000đ = 10 SCm (1 SCm = 100đ). Dùng để kích hoạt gói SenAI và mở khóa các đặc quyền trên Mobile.
             </p>
           </div>
 
@@ -693,6 +722,33 @@ export default function MobilePayPage() {
             {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
             <span>NẠP CASH MOBILE QUA VIETQR ({topupAmount.toLocaleString('vi-VN')}đ ➔ +{(topupAmount / 100).toLocaleString('vi-VN')} SCm)</span>
           </button>
+
+          {/* Lịch Sử Biến Động Số Dư SCm */}
+          <div className="space-y-2 pt-2">
+            <span className="text-xs font-black uppercase text-slate-500">Lịch Sử Giao Dịch Cash Mobile</span>
+            {scmTransactions.length === 0 ? (
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 text-center text-xs text-slate-400 font-medium">
+                Chưa có giao dịch Cash Mobile nào phát sinh.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {scmTransactions.map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">{tx.description || tx.transaction_type}</p>
+                      <span className="text-[10px] text-slate-400">{new Date(tx.created_at).toLocaleString('vi-VN')}</span>
+                    </div>
+                    <span className={`font-mono font-black ${tx.amount > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {tx.amount > 0 ? `+${tx.amount.toLocaleString('vi-VN')}` : tx.amount.toLocaleString('vi-VN')} SCm
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -719,7 +775,7 @@ export default function MobilePayPage() {
             </p>
           </div>
 
-          {/* Danh mục gói SenAI mua bằng SenCash từ lib/senaiTiers */}
+          {/* Danh mục gói SenAI mua bằng Cash Mobile (SCm) */}
           <div className="space-y-2.5">
             {SENAI_PLANS.map((p) => (
               <div
@@ -734,7 +790,7 @@ export default function MobilePayPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-xs font-black text-violet-600 dark:text-violet-400 block">
-                    {p.priceSenCash === 0 ? 'Miễn phí' : `${p.priceSenCash} SC`}
+                    {p.priceSenCash === 0 ? 'Miễn phí' : `${(p.priceSenCash * SCM_PER_SENCASH).toLocaleString('vi-VN')} SCm`}
                   </span>
                   <button
                     type="button"
@@ -761,7 +817,7 @@ export default function MobilePayPage() {
               <Gift className="h-4 w-4" /> Kích Hoạt Mã Quà Tặng
             </div>
             <p className="text-xs text-emerald-100 leading-relaxed">
-              Nhập mã sự kiện hoặc mã quà tặng từ Fanpage SenExam để nhận ngày VIP hoặc SenCash miễn phí.
+              Nhập mã sự kiện hoặc mã quà tặng từ Fanpage SenExam để nhận ngày VIP hoặc quà tặng miễn phí.
             </p>
           </div>
 
@@ -820,7 +876,7 @@ export default function MobilePayPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-xs font-black text-rose-500 block">
-                    {deal.priceSenCash} SC
+                    {((deal.priceSenCash || 0) * SCM_PER_SENCASH).toLocaleString('vi-VN')} SCm
                   </span>
                   <button
                     type="button"

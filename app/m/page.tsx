@@ -63,7 +63,6 @@ export default function MobileDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState<string>('Sĩ Tử SenExam')
   const [isVip, setIsVip] = useState(false)
-  const [senCash, setSenCash] = useState<number>(0)
   const [scmBalance, setScmBalance] = useState<number>(0)
   const [submissionCount, setSubmissionCount] = useState<number>(0)
   const [highestScore, setHighestScore] = useState<number>(0)
@@ -100,17 +99,14 @@ export default function MobileDashboardPage() {
         const name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Sĩ Tử SenExam'
         setUserName(name)
 
-        // Check Profile & VIP & SenCash & SenCashMobile
+        // Check Profile & VIP & Cash Mobile (SCm)
         const { data: profile } = await supabase
           .from('profiles')
-          .select('is_vip, role, sencash_balance, sen_cash, sencash_mobile_balance')
+          .select('is_vip, role, scm_balance, sencash_mobile_balance')
           .eq('id', user.id)
           .maybeSingle()
         if (profile?.is_vip || profile?.role === 'admin') {
           setIsVip(true)
-        }
-        if (profile) {
-          setSenCash(profile.sencash_balance || profile.sen_cash || 0)
         }
         const mobileBalance = getUserScmBalance(user, profile)
         setScmBalance(mobileBalance)

@@ -172,7 +172,6 @@ export default function MobileProfilePage() {
     )
   }
 
-  const senCash = profile?.sencash_balance || profile?.sen_cash || 0
   const scmBalance = getUserScmBalance(user, profile)
   const isVip = Boolean(profile?.is_vip || profile?.role === 'admin')
 
@@ -223,7 +222,7 @@ export default function MobileProfilePage() {
         <div className="flex items-center justify-between pt-2 border-t border-white/15 text-xs text-sky-100">
           <div className="flex items-center gap-1.5">
             <Coins className="h-4 w-4 text-amber-300" />
-            <span>Ví Cash Mobile: <strong>{scmBalance.toLocaleString('vi-VN')} SCm</strong> <span className="opacity-70 text-[10px]">({senCash.toLocaleString('vi-VN')} SC PC)</span></span>
+            <span>Ví Cash Mobile: <strong>{scmBalance.toLocaleString('vi-VN')} SCm</strong></span>
           </div>
           <Link
             href="/m/pay?tab=wallet"

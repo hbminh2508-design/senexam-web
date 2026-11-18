@@ -99,7 +99,23 @@ async function handleSenCashTopup(supabaseAdmin: ReturnType<typeof getSupabaseAd
         },
       })
       try {
-        await supabaseAdmin.from('profiles').update({ sencash_mobile_balance: newScm }).eq('id', order.user_id)
+        await supabaseAdmin
+          .from('profiles')
+          .update({
+            sencash_mobile_balance: newScm,
+            scm_balance: newScm,
+          })
+          .eq('id', order.user_id)
+
+        // Ghi sổ cái giao dịch Mobile (Ledger)
+        await supabaseAdmin.from('mobile_sencash_transactions').insert({
+          user_id: order.user_id,
+          amount: order.sencash_amount,
+          balance_after: newScm,
+          transaction_type: 'topup',
+          description: `Nạp Cash Mobile qua đơn ${order.order_code}`,
+          reference_id: order.id,
+        })
       } catch {}
     } catch (err: any) {
       console.warn('Mobile SCm credit notice:', err.message)
