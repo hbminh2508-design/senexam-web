@@ -36,8 +36,7 @@ import {
   Wallet,
   KeyRound,
 } from 'lucide-react'
-
-const MOBILE_VERSION = '2.0.2194023.10599.01'
+import { APP_VERSION as MOBILE_VERSION } from '@/lib/version'
 
 export default function MobileProfilePage() {
   const router = useRouter()

@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false, // Ẩn header X-Powered-By chống thu thập dấu vết công nghệ
   compress: true, // Nén Brotli & Gzip giúp máy chủ tiết kiệm băng thông và giảm dung lượng buffer RAM
   productionBrowserSourceMaps: false, // Không sinh source maps ở production để giải phóng RAM tối đa cho máy chủ
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 31536000,
+  },
   async redirects() {
     return [
       {

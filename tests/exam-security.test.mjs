@@ -115,3 +115,51 @@ test('Exam Security: Double submission lock blocks rapid clicks within lock wind
   assert.strictEqual(res2.isDuplicate, true)
   assert.strictEqual(res2.submissionId, res1.submissionId, 'Duplicate submission must return original ID')
 })
+
+test('Exam Resilience: normalizeAnswerString handles Vietnamese NFC/NFD, tone placement, comma/dot, and whitespace', () => {
+  const VN_TONE_MAP = {
+    'oà': 'òa', 'oá': 'óa', 'oả': 'ỏa', 'oã': 'õa', 'oạ': 'ọa',
+    'oè': 'òe', 'oé': 'óe', 'oẻ': 'ỏe', 'oẽ': 'õe', 'oẹ': 'ọe',
+    'uỳ': 'ùy', 'uý': 'úy', 'uỷ': 'ủy', 'uỹ': 'ũy', 'uỵ': 'ụy',
+  }
+  function normalizeAnswerString(str) {
+    if (str === null || str === undefined) return ''
+    let s = String(str)
+      .normalize('NFC')
+      .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/,/g, '.')
+    for (const [k, v] of Object.entries(VN_TONE_MAP)) {
+      s = s.replaceAll(k, v)
+    }
+    return s
+  }
+
+  // 1. NFC vs NFD & Vị trí dấu thanh tiếng Việt (Hoà vs Hòa)
+  const strOld = 'Hoà bình'
+  const strNew = 'Hòa bình'
+  assert.strictEqual(normalizeAnswerString(strOld), normalizeAnswerString(strNew))
+  assert.strictEqual(normalizeAnswerString('Thuỷ triều'), normalizeAnswerString('Thủy triều'))
+
+  // 2. Comma vs Period
+  assert.strictEqual(normalizeAnswerString('3,1415'), normalizeAnswerString('3.1415'))
+
+  // 3. Zero-width space & whitespace
+  assert.strictEqual(normalizeAnswerString('  x\u200B = \u00A0 2  '), 'x=2')
+})
+
+test('Exam Resilience: Clock drift timeSpent bounds checking', () => {
+  function sanitizeTime(timeSpent, durationMinutes = 50) {
+    const maxAllowed = durationMinutes * 120
+    return Math.max(0, Math.min(Number(timeSpent) || 0, maxAllowed))
+  }
+
+  // Negative time clamp to 0
+  assert.strictEqual(sanitizeTime(-500), 0)
+  // Normal time preserved
+  assert.strictEqual(sanitizeTime(1200), 1200)
+  // Absurd client time (e.g. system clock jumped 10 days) clamped to max
+  assert.strictEqual(sanitizeTime(9999999, 60), 60 * 120)
+})

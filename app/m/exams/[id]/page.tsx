@@ -40,8 +40,7 @@ import {
   EyeOff,
   Sparkles,
 } from 'lucide-react'
-
-const MOBILE_VERSION = '2.0.2194023.10599.01'
+import { APP_VERSION as MOBILE_VERSION } from '@/lib/version'
 
 interface QuestionItem {
   id: string

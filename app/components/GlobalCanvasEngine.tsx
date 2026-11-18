@@ -181,7 +181,16 @@ export default function GlobalCanvasEngine() {
         ctx.fill()
       }
 
-      animId = requestAnimationFrame(render)
+      // Kiểm tra tùy chọn giảm chuyển động (prefers-reduced-motion) để tối ưu Accessibility & PIN
+    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) {
+      return () => {
+        if (resizeRafId !== null) cancelAnimationFrame(resizeRafId)
+        window.removeEventListener('resize', handleResize)
+      }
+    }
+
+    animId = requestAnimationFrame(render)
     }
 
     const handleVisibility = () => {
@@ -194,6 +203,15 @@ export default function GlobalCanvasEngine() {
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
+
+    // Kiểm tra tùy chọn giảm chuyển động (prefers-reduced-motion) để tối ưu Accessibility & PIN
+    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) {
+      return () => {
+        if (resizeRafId !== null) cancelAnimationFrame(resizeRafId)
+        window.removeEventListener('resize', handleResize)
+      }
+    }
 
     animId = requestAnimationFrame(render)
 

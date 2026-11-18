@@ -16,6 +16,32 @@ function cleanOldLocks() {
   }
 }
 
+// Bảng chuẩn hóa vị trí dấu thanh tiếng Việt (kiểu gõ cũ vs mới: hoà -> hòa, thuỷ -> thủy)
+const VN_TONE_MAP: Record<string, string> = {
+  'oà': 'òa', 'oá': 'óa', 'oả': 'ỏa', 'oã': 'õa', 'oạ': 'ọa',
+  'oè': 'òe', 'oé': 'óe', 'oẻ': 'ỏe', 'oẽ': 'õe', 'oẹ': 'ọe',
+  'uỳ': 'ùy', 'uý': 'úy', 'uỷ': 'ủy', 'uỹ': 'ũy', 'uỵ': 'ụy',
+}
+
+/**
+ * Chuẩn hóa chuỗi đáp án (hỗ trợ Tiếng Việt có dấu NFC, đồng nhất vị trí dấu thanh, loại bỏ khoảng trắng thừa/zero-width, đổi dấu phẩy sang chấm)
+ */
+export function normalizeAnswerString(str: any): string {
+  if (str === null || str === undefined) return ''
+  let s = String(str)
+    .normalize('NFC')
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '') // Khử zero-width space, non-breaking space
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/,/g, '.')
+
+  for (const [k, v] of Object.entries(VN_TONE_MAP)) {
+    s = s.replaceAll(k, v)
+  }
+  return s
+}
+
 export async function POST(request: Request) {
   try {
     cleanOldLocks()
@@ -35,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thiếu thông tin examId' }, { status: 400 })
     }
 
-    // Xác thực người dùng (từ token Bearer hoặc từ session)
+    // 1. Xác thực người dùng (từ token Bearer hoặc từ session, với fallback profile check)
     const userFromToken = await getUserFromRequest(request)
     const effectiveUserId = userFromToken?.id || userId
 
@@ -43,20 +69,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Chưa đăng nhập hoặc không xác định được thí sinh' }, { status: 401 })
     }
 
-    // Khóa chống nộp bài hai lần: theo idempotencyKey hoặc theo user+exam trong vòng 10 giây
+    const supabaseAdmin = getSupabaseAdmin()
+
+    // Kiểm tra tính hợp lệ của thí sinh nếu token đã hết hạn trong ca thi kéo dài
+    if (!userFromToken) {
+      const { data: userProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('id', effectiveUserId)
+        .maybeSingle()
+      if (!userProfile) {
+        return NextResponse.json({ error: 'Thí sinh không hợp lệ hoặc tài khoản đã bị khóa' }, { status: 401 })
+      }
+    }
+
+    // 2. Khóa chống nộp bài hai lần (Idempotency Guard)
     const lockKey = idempotencyKey || `${effectiveUserId}_${examId}`
     const existingLock = submissionLocks.get(lockKey)
     if (existingLock && Date.now() - existingLock.timestamp < 10000) {
       return NextResponse.json({
         ...existingLock.result,
-        message: 'Bài thi đã được ghi nhận thành công (chặn nộp trùng lặp).',
+        message: 'Bài thi đã được ghi nhận thành công (chặn nộp trùng lặp do kết nối kép).',
         isDuplicatePrevented: true,
       })
     }
 
-    const supabaseAdmin = getSupabaseAdmin()
-
-    // 1. Tải đề thi gốc từ Supabase để lấy đáp án chuẩn từ máy chủ (Server-side Truth)
+    // 3. Tải đề thi gốc từ Supabase (Server-side Truth)
     const { data: exam, error: examErr } = await supabaseAdmin
       .from('exams')
       .select('*')
@@ -83,7 +121,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Chấm điểm hoàn toàn trên Server (Chống sửa điểm và rò rỉ đáp án)
+    // 4. Chấm điểm hoàn toàn trên Server
     let calculatedScore = 0
     let earnedPoints = 0
     let totalPoints = 0
@@ -95,7 +133,6 @@ export async function POST(request: Request) {
     const sections: any[] = Array.isArray(examStructure.sections) ? examStructure.sections : []
 
     if (sections.length > 0) {
-      // Cấu trúc phân phần chuẩn (SEB / HSA / TSA / University)
       sections.forEach((section: any) => {
         const qCount = parseInt(section.questionCount) || (Array.isArray(section.questions) ? section.questions.length : 0)
         totalQuestions += qCount
@@ -119,8 +156,8 @@ export async function POST(request: Request) {
           const qType = section.questions?.[i]?.type || section.type || 'single_choice'
 
           if (qType === 'single_choice' || qType === 'multiple_choice') {
-            const u = String(userAns || '').trim().toUpperCase()
-            const c = String(corrItem || '').trim().toUpperCase()
+            const u = String(userAns || '').normalize('NFC').trim().toUpperCase()
+            const c = String(corrItem || '').normalize('NFC').trim().toUpperCase()
             if (u && c && u === c) {
               qEarned = pointsPerQ
               correctCount++
@@ -130,8 +167,8 @@ export async function POST(request: Request) {
             const cObj = (typeof corrItem === 'object' && corrItem) ? corrItem : {}
             let matchedSubs = 0
             ;['a', 'b', 'c', 'd'].forEach((sub) => {
-              const uVal = String(uObj[sub] || '').toUpperCase()
-              const cVal = String(cObj[sub] || '').toUpperCase()
+              const uVal = String(uObj[sub] || '').normalize('NFC').toUpperCase()
+              const cVal = String(cObj[sub] || '').normalize('NFC').toUpperCase()
               const isUTrue = uVal === 'Đ' || uVal === 'T' || uVal === 'TRUE' || uVal === '1'
               const isUFalse = uVal === 'S' || uVal === 'F' || uVal === 'FALSE' || uVal === '0'
               const isCTrue = cVal === 'Đ' || cVal === 'T' || cVal === 'TRUE' || cVal === '1'
@@ -144,8 +181,8 @@ export async function POST(request: Request) {
             else if (matchedSubs === 2) qEarned = pointsPerQ * 0.25
             else if (matchedSubs === 1) qEarned = pointsPerQ * 0.1
           } else if (qType === 'short_answer') {
-            const u = String(userAns || '').trim().toLowerCase().replace(/\s+/g, '').replace(',', '.')
-            const c = String(corrItem || '').trim().toLowerCase().replace(/\s+/g, '').replace(',', '.')
+            const u = normalizeAnswerString(userAns)
+            const c = normalizeAnswerString(corrItem)
             if (u && c && u === c) {
               qEarned = pointsPerQ
               correctCount++
@@ -157,11 +194,9 @@ export async function POST(request: Request) {
         }
       })
 
-      // Quy đổi điểm theo thang 10 hoặc thang bài thi
       calculatedScore = totalPoints > 0 ? (earnedPoints / totalPoints) * 10 : 0
       calculatedScore = Math.round(calculatedScore * 100) / 100
     } else {
-      // Đề thi phẳng hoặc câu hỏi từ bảng questions
       const { data: dbQuestions } = await supabaseAdmin
         .from('questions')
         .select('id, correct_answer')
@@ -173,8 +208,8 @@ export async function POST(request: Request) {
       const ptsPerQ = totalQuestions > 0 ? 10 / totalQuestions : 0
 
       qList.forEach((q, idx) => {
-        const u = String(answers[q.id] ?? answers[idx] ?? '').trim().toUpperCase()
-        const c = String(q.correct_answer || '').trim().toUpperCase()
+        const u = String(answers[q.id] ?? answers[idx] ?? '').normalize('NFC').trim().toUpperCase()
+        const c = String(q.correct_answer || '').normalize('NFC').trim().toUpperCase()
         if (u && c && u === c) {
           earnedPoints += ptsPerQ
           correctCount++
@@ -184,7 +219,11 @@ export async function POST(request: Request) {
       calculatedScore = Math.round(earnedPoints * 100) / 100
     }
 
-    // 3. Ghi vào bảng submissions qua Supabase Admin
+    // Giới hạn thời gian làm bài hợp lý (chống sai lệch đồng hồ client âm hoặc quá lớn)
+    const maxAllowedSeconds = (exam.duration || 180) * 120
+    const sanitizedTimeSpent = Math.max(0, Math.min(Number(timeSpent) || 0, maxAllowedSeconds))
+
+    // 5. Ghi vào bảng submissions qua Supabase Admin
     const submissionPayload = {
       exam_id: examId,
       user_id: effectiveUserId,
@@ -195,9 +234,9 @@ export async function POST(request: Request) {
       total_questions: totalQuestions,
       answers: answers,
       detailed_scores: detailedScores,
-      tab_switches: tabSwitches,
-      blur_count: blurCount,
-      time_spent: timeSpent,
+      tab_switches: Math.max(0, Number(tabSwitches) || 0),
+      blur_count: Math.max(0, Number(blurCount) || 0),
+      time_spent: sanitizedTimeSpent,
       is_graded: true,
       submitted_at: new Date().toISOString(),
     }

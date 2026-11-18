@@ -1,8 +1,31 @@
 # CHANGELOG - SenExam Platform
 
 All notable changes to this project will be documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.2194023.10599.01] - 2026-11-18
+## [2.1.0] - 2026-11-18
+
+### 🚀 Tự Động Hóa Phiên Bản (Automated SemVer Engine)
+- **Chuẩn hóa SemVer:** Chuyển đổi chính thức sang chuẩn Semantic Versioning (`MAJOR.MINOR.PATCH`). Bản `2.0.2194023.10599.01` được ghi nhận là mốc lịch sử; bản chuẩn kế tiếp là `2.1.0`.
+- **Nguồn sự thật duy nhất (Single Source of Truth):** Thiết lập `lib/version.ts` xuất bản quyền phiên bản từ `package.json`. Loại bỏ hoàn toàn việc gõ tay phiên bản ở các tệp tin giao diện di động `app/m/*`.
+- **Động cơ phát hành tự động:** Viết `scripts/release.mjs` phân tích Conventional Commits (`feat`, `fix`, `perf`, `security`, `breaking change`) để tự động nâng phiên bản, sinh `RELEASE_NOTES.md` và gắn git tag.
+- **Commitlint & Git Hook:** Bổ sung `scripts/verify-commit-msg.mjs` và hook `.git/hooks/commit-msg` để từ chối commit sai quy ước.
+
+### 🛡️ Nâng Cao Độ Bền Hệ Thống Khảo Thí (Resilience & Edge Cases)
+- **Xử lý mất mạng giữa chừng:** Cơ chế lưu nháp ngoại tuyến (Offline Draft Protection) tự động giữ bài thi trong `localStorage` và đồng bộ qua API ngay khi kết nối mạng phục hồi (`online` event).
+- **Phát hiện đa tab đồng thời:** Cảnh báo và đồng bộ trạng thái khi thí sinh mở cùng một đề thi trên hai tab hoặc cửa sổ khác nhau.
+- **Chống sai lệch đồng hồ máy khách (Clock Drift Guard):** Tính toán thời gian làm bài độc lập với đồng hồ hệ điều hành của thí sinh, ngăn chặn hiện tượng chỉnh lùi giờ để gian lận.
+- **Chuẩn hóa chuỗi Tiếng Việt (Unicode NFC Normalization):** Tự động chuẩn hóa dấu thanh, khoảng trắng thừa và ký tự đặc biệt khi chấm điểm các câu hỏi trả lời ngắn.
+
+### ⚡ Tối Ưu Hiệu Năng & Trải Nghiệm (Performance & Core Web Vitals)
+- **Tối ưu hóa tài nguyên:** Thiết lập preconnect tới Supabase API, font-display `swap`, nén Brotli/Gzip, loại bỏ CSS/JS chặn render.
+- **Tối ưu Accessibility & SEO:** Khai báo chuẩn `lang="vi"`, bổ sung metadata OpenGraph, Twitter Card, robot tags và hỗ trợ điều hướng bàn phím.
+- **Lighthouse CI & Performance Budget:** Cấu hình `.lighthouserc.json` và tài liệu theo dõi `PERF_REPORT.md`.
+
+---
+
+## [2.0.2194023.10599.01] - 2026-11-18 (Mốc Lịch Sử Kiểm Toán Toàn Diện)
 
 ### 🛡️ Bảo Mật & Xác Thực (Security & Auth Hardening)
 - **Vá lỗ hổng Critical [CRITICAL-01]:** Loại bỏ hoàn toàn các chuỗi Base64 nhúng cứng chứa khóa bí mật Service Role (`sb_secret_...`) và Publishable Key (`sb_publishable_...`) trong `lib/supabaseAdmin.ts` và `lib/supabaseClient.ts`.

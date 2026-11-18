@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
-import pkg from '@/package.json'
+import { APP_VERSION } from './version'
 
 export type ReleaseChannel = 'stable' | 'beta'
 
@@ -19,8 +19,8 @@ export type SystemRelease = {
 
 export type ReleaseLogAction = 'set_version' | 'enable_test' | 'disable_test' | 'publish_stable' | 'publish_beta'
 
-export const CURRENT_APP_VERSION = '2.0.2194023.10599.01'
-export const CURRENT_SEMVER_VERSION = (pkg.version as string) || '2.0.2194023'
+export const CURRENT_APP_VERSION = APP_VERSION
+export const CURRENT_SEMVER_VERSION = APP_VERSION
 const ACK_VERSION_KEY = 'senexam_ack_version'
 
 export async function fetchSystemRelease(): Promise<SystemRelease | null> {
