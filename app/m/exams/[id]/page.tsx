@@ -116,6 +116,7 @@ export default function MobileExamPage() {
   const [showPalette, setShowPalette] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [result, setResult] = useState<{ score: number; correct: number; total: number } | null>(null)
 
   // Chế độ Luyện tập vs Khảo thí & Đảo đề
@@ -242,12 +243,19 @@ export default function MobileExamPage() {
 
         setQuestions(flat)
 
-        // Khôi phục bài làm từ localStorage
+        // Khôi phục bài làm và vị trí câu hỏi từ localStorage khi vào lại
         const savedAns = localStorage.getItem(`m_exam_ans_${examId}`)
         if (savedAns) {
           try {
             setAnswers(JSON.parse(savedAns))
           } catch {}
+        }
+        const savedIdx = localStorage.getItem(`m_exam_idx_${examId}`)
+        if (savedIdx && !isNaN(parseInt(savedIdx))) {
+          const parsedIdx = parseInt(savedIdx)
+          if (parsedIdx >= 0 && parsedIdx < flat.length) {
+            setCurrentIndex(parsedIdx)
+          }
         }
       } catch (err) {
         console.error('Lỗi nạp đề thi:', err)
@@ -258,6 +266,28 @@ export default function MobileExamPage() {
 
     fetchExam()
   }, [examId, router])
+
+  // Lắng nghe sự kiện nộp bài tự động khi bấm Back phần cứng từ CapacitorManager
+  useEffect(() => {
+    const handleAutoSubmit = () => {
+      if (hasStarted && !result && !isSubmitting) {
+        handleSubmitExam()
+      }
+    }
+    window.addEventListener('senexam:auto-submit-and-exit', handleAutoSubmit)
+    return () => window.removeEventListener('senexam:auto-submit-and-exit', handleAutoSubmit)
+  }, [hasStarted, result, isSubmitting, questions, answers])
+
+  // Điều hướng chuyển câu hỏi và ghi nhớ vị trí
+  const handleNavigateQuestion = (target: number | ((prev: number) => number)) => {
+    setCurrentIndex((prev) => {
+      const next = typeof target === 'function' ? target(prev) : target
+      try {
+        localStorage.setItem(`m_exam_idx_${examId}`, String(next))
+      } catch {}
+      return next
+    })
+  }
 
   // Timer đếm ngược
   useEffect(() => {
@@ -281,15 +311,18 @@ export default function MobileExamPage() {
     if (isReviewMode) return
     setAnswers((prev) => {
       const next = { ...prev, [qKey]: val }
-      localStorage.setItem(`m_exam_ans_${examId}`, JSON.stringify(next))
+      try {
+        localStorage.setItem(`m_exam_ans_${examId}`, JSON.stringify(next))
+      } catch {}
       return next
     })
   }
 
-  // Nộp bài thi
+  // Nộp bài thi có xử lý ngoại lệ mạng an toàn
   const handleSubmitExam = async () => {
     setShowSubmitConfirm(false)
     setIsSubmitting(true)
+    setSubmitError(null)
 
     let correctCount = 0
     questions.forEach((q) => {
@@ -304,28 +337,34 @@ export default function MobileExamPage() {
     const rawScore = (correctCount / total) * 10
     const finalScore = parseFloat(rawScore.toFixed(2))
 
-    setResult({ score: finalScore, correct: correctCount, total })
-
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('submissions').insert([
-          {
-            exam_id: examId,
-            user_id: user.id,
-            score: finalScore,
-            correct_count: correctCount,
-            total_questions: total,
-            answers: answers,
-            created_at: new Date().toISOString(),
-          },
-        ])
-      }
-    } catch (e) {
+      if (!user) throw new Error('Chưa đăng nhập')
+
+      const { error } = await supabase.from('submissions').insert([
+        {
+          exam_id: examId,
+          user_id: user.id,
+          score: finalScore,
+          correct_count: correctCount,
+          total_questions: total,
+          answers: answers,
+          created_at: new Date().toISOString(),
+        },
+      ])
+
+      if (error) throw error
+
+      setResult({ score: finalScore, correct: correctCount, total })
+      try {
+        localStorage.removeItem(`m_exam_ans_${examId}`)
+        localStorage.removeItem(`m_exam_idx_${examId}`)
+      } catch {}
+    } catch (e: any) {
       console.error('Lỗi lưu submission:', e)
+      setSubmitError('Mất kết nối mạng! Bài làm của bạn đã được bảo vệ an toàn trên thiết bị. Vui lòng kiểm tra lại kết nối và bấm "Thử nộp lại".')
     } finally {
       setIsSubmitting(false)
-      localStorage.removeItem(`m_exam_ans_${examId}`)
     }
   }
 
@@ -663,7 +702,7 @@ export default function MobileExamPage() {
                 <button
                   type="button"
                   disabled={currentIndex === 0}
-                  onClick={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
+                  onClick={() => handleNavigateQuestion((idx) => Math.max(0, idx - 1))}
                   className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5 text-slate-600 disabled:opacity-30 active:scale-95"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -675,7 +714,7 @@ export default function MobileExamPage() {
                 <button
                   type="button"
                   disabled={currentIndex === questions.length - 1}
-                  onClick={() => setCurrentIndex((idx) => Math.min(questions.length - 1, idx + 1))}
+                  onClick={() => handleNavigateQuestion((idx) => Math.min(questions.length - 1, idx + 1))}
                   className="p-1.5 rounded-lg bg-black/5 dark:bg-white/5 text-slate-600 disabled:opacity-30 active:scale-95"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -707,7 +746,7 @@ export default function MobileExamPage() {
                     onClick={() => {
                       handleSelectOption(currentKey, letter)
                       if (!isReviewMode && currentIndex < questions.length - 1) {
-                        setTimeout(() => setCurrentIndex((idx) => idx + 1), 160)
+                        setTimeout(() => handleNavigateQuestion((idx) => idx + 1), 160)
                       }
                     }}
                     className={`h-11 rounded-xl font-black text-sm transition-all duration-150 flex items-center justify-center active:scale-95 cursor-pointer ${
@@ -821,7 +860,7 @@ export default function MobileExamPage() {
             <button
               type="button"
               disabled={currentIndex === 0}
-              onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+              onClick={() => handleNavigateQuestion((i) => Math.max(0, i - 1))}
               className="px-4 py-2 rounded-xl bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 font-bold text-xs disabled:opacity-30 active:scale-95 flex items-center gap-1"
             >
               <ChevronLeft className="h-4 w-4" /> Câu trước
@@ -829,7 +868,7 @@ export default function MobileExamPage() {
             <button
               type="button"
               disabled={currentIndex === questions.length - 1}
-              onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
+              onClick={() => handleNavigateQuestion((i) => Math.min(questions.length - 1, i + 1))}
               className="px-4 py-2 rounded-xl bg-sky-600 text-white font-bold text-xs disabled:opacity-30 active:scale-95 flex items-center gap-1"
             >
               Câu tiếp <ChevronRight className="h-4 w-4" />
@@ -864,7 +903,7 @@ export default function MobileExamPage() {
                     key={q.id}
                     type="button"
                     onClick={() => {
-                      setCurrentIndex(idx)
+                      handleNavigateQuestion(idx)
                       setShowPalette(false)
                     }}
                     className={`h-11 rounded-xl font-bold text-xs flex flex-col items-center justify-center transition active:scale-95 ${
@@ -935,6 +974,42 @@ export default function MobileExamPage() {
                 className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white font-bold text-xs shadow-md"
               >
                 Thoát ra
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÔNG BÁO LỖI NẠP MẠNG & THỬ LẠI */}
+      {submitError && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-xs rounded-3xl bg-white dark:bg-slate-900 p-5 space-y-4 shadow-2xl text-center border border-amber-500/30">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black text-xl">
+              ⚠️
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                Chưa Nộp Được Bài
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {submitError}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSubmitError(null)}
+                className="py-2.5 px-3 rounded-xl border border-black/10 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold text-xs"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleSubmitExam}
+                className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md active:scale-95 transition"
+              >
+                {isSubmitting ? 'Đang nộp...' : 'Thử nộp lại'}
               </button>
             </div>
           </div>

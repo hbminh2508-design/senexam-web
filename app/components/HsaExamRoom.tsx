@@ -194,6 +194,10 @@ export default function HsaExamRoom({
   // Tổ hợp được chọn cho Phần 3
   const [selectedComboId, setSelectedComboId] = useState<string>('combo_1')
 
+  // Quản lý hiển thị tối ưu cho Mobile
+  const [mobileLitTab, setMobileLitTab] = useState<'passage' | 'questions'>('questions')
+  const [showMobilePaletteDrawer, setShowMobilePaletteDrawer] = useState(false)
+
   // Bảng điểm kết quả
   const [hsaResult, setHsaResult] = useState<{
     scoreP1: number
@@ -928,6 +932,14 @@ export default function HsaExamRoom({
       {/* ================= QUESTION BAR: DẢI SỐ CÂU HỎI (Images 2 & 3) ================= */}
       {/* CHỈ HIỆN 50 CÂU CỦA PHẦN THI HIỆN TẠI (1..50 hoặc 51..100 hoặc 101..150) */}
       <div className="w-full bg-[#f0f0f0] border-b border-[#cccccc] px-3 py-1.5 overflow-x-auto flex gap-1 items-center shrink-0">
+        <button
+          type="button"
+          onClick={() => setShowMobilePaletteDrawer(true)}
+          className="md:hidden shrink-0 px-2.5 py-1 bg-[#333333] hover:bg-black text-white text-[10px] font-black rounded-xs flex items-center gap-1 shadow-xs cursor-pointer mr-1"
+          title="Mở bảng chọn câu hỏi dạng lưới"
+        >
+          <span>☰ Bảng câu</span>
+        </button>
         {currentPart.questions.map((q: any) => {
           const qNum = q.number
           const isAnswered = answers[String(qNum)] !== undefined && answers[String(qNum)] !== ''
@@ -959,46 +971,73 @@ export default function HsaExamRoom({
       {/* ================= NỘI DUNG ĐỀ THI HSA ================= */}
       <div className="flex-1 overflow-hidden flex flex-col bg-white">
         {isPart2Literature ? (
-          /* Image 3: BỐ CỤC 2 CỘT CHUẨN HSA CHO PHẦN NGỮ VĂN */
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 divide-x divide-slate-300 h-full overflow-hidden">
-            {/* Cột trái: Cập nhật động theo câu hỏi đang được focus / xem */}
-            <div className="h-full overflow-y-auto p-4 md:p-6 bg-[#edf2fa] text-xs md:text-sm text-slate-800 leading-relaxed font-serif">
-              {currentActiveQuestion.passage ? (
-                <>
-                  <div className="font-sans font-bold text-slate-700 mb-1 italic">
-                    Ngữ liệu đoạn trích liên quan đến Câu {currentActiveQuestion.number}:
-                  </div>
-                  <div className="font-sans font-bold text-slate-900 mb-3 text-xs">
-                    Đọc đoạn trích dưới đây và trả lời các câu hỏi tương ứng:
-                  </div>
-                  <div className="whitespace-pre-wrap italic leading-loose text-slate-900 bg-white/70 p-4 rounded border border-slate-200 shadow-xs">
-                    <SafeMathRenderer content={currentActiveQuestion.passage} />
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 font-sans p-6">
-                  <FileText className="w-10 h-10 text-slate-400 mb-3" />
-                  <p className="font-bold text-slate-800 text-sm mb-1">
-                    Câu hỏi độc lập về Kiến thức Ngôn ngữ & Tiếng Việt
-                  </p>
-                  <p className="text-xs text-slate-600 max-w-sm leading-relaxed mb-4">
-                    Câu số <strong>{currentActiveQuestion.number}</strong> là câu hỏi độc lập về từ vựng, ngữ pháp, ngữ nghĩa hoặc phong cách ngôn ngữ.
-                    Hãy đọc kỹ đề bài ở cột bên phải để chọn phương án chính xác nhất.
-                  </p>
-                  <div className="bg-white p-3 rounded border border-slate-300 text-left text-xs max-w-md w-full">
-                    <span className="font-bold text-emerald-800 block mb-1">💡 Hướng dẫn làm bài phần Định tính:</span>
-                    <ul className="list-disc pl-4 space-y-1 text-slate-700 text-[11px]">
-                      <li>Câu 51 - 70: Kiến thức ngôn ngữ, từ ngữ không cùng nhóm, phát hiện lỗi sai.</li>
-                      <li>Câu 71 - 80: Đọc hiểu văn bản đơn lẻ.</li>
-                      <li>Câu 81 - 100: Chùm bài đọc hiểu 5 câu (khi lướt tới các câu này, bài đọc tương ứng sẽ tự động hiển thị tại cột này).</li>
-                    </ul>
-                  </div>
-                </div>
-              )}
+          <>
+            {/* Thanh chuyển tab trên mobile cho Ngữ văn: Đoạn trích vs Câu hỏi */}
+            <div className="md:hidden flex items-center border-b border-slate-300 bg-slate-100 p-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileLitTab('passage')}
+                className={`flex-1 py-1 text-xs font-bold rounded-xs transition ${
+                  mobileLitTab === 'passage'
+                    ? 'bg-[#5b9bd5] text-white shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                📖 Ngữ liệu đoạn trích
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileLitTab('questions')}
+                className={`flex-1 py-1 text-xs font-bold rounded-xs transition ${
+                  mobileLitTab === 'questions'
+                    ? 'bg-[#2d6a36] text-white shadow-xs'
+                    : 'text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                ✍️ Làm câu hỏi (Câu {currentActiveQuestion.number})
+              </button>
             </div>
 
-            {/* Cột phải: Danh sách các câu hỏi con của Phần 2 */}
-            <div className="h-full overflow-y-auto p-4 md:p-6 space-y-6 bg-white">
+            {/* Image 3: BỐ CỤC 2 CỘT CHUẨN HSA CHO PHẦN NGỮ VĂN */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 divide-x divide-slate-300 h-full overflow-hidden">
+              {/* Cột trái: Cập nhật động theo câu hỏi đang được focus / xem */}
+              <div className={`${mobileLitTab === 'passage' ? 'block' : 'hidden'} md:block h-full overflow-y-auto p-4 md:p-6 bg-[#edf2fa] text-xs md:text-sm text-slate-800 leading-relaxed font-serif`}>
+                {currentActiveQuestion.passage ? (
+                  <>
+                    <div className="font-sans font-bold text-slate-700 mb-1 italic">
+                      Ngữ liệu đoạn trích liên quan đến Câu {currentActiveQuestion.number}:
+                    </div>
+                    <div className="font-sans font-bold text-slate-900 mb-3 text-xs">
+                      Đọc đoạn trích dưới đây và trả lời các câu hỏi tương ứng:
+                    </div>
+                    <div className="whitespace-pre-wrap italic leading-loose text-slate-900 bg-white/70 p-4 rounded border border-slate-200 shadow-xs">
+                      <SafeMathRenderer content={currentActiveQuestion.passage} />
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 font-sans p-6">
+                    <FileText className="w-10 h-10 text-slate-400 mb-3" />
+                    <p className="font-bold text-slate-800 text-sm mb-1">
+                      Câu hỏi độc lập về Kiến thức Ngôn ngữ & Tiếng Việt
+                    </p>
+                    <p className="text-xs text-slate-600 max-w-sm leading-relaxed mb-4">
+                      Câu số <strong>{currentActiveQuestion.number}</strong> là câu hỏi độc lập về từ vựng, ngữ pháp, ngữ nghĩa hoặc phong cách ngôn ngữ.
+                      Hãy đọc kỹ đề bài ở cột bên phải để chọn phương án chính xác nhất.
+                    </p>
+                    <div className="bg-white p-3 rounded border border-slate-300 text-left text-xs max-w-md w-full">
+                      <span className="font-bold text-emerald-800 block mb-1">💡 Hướng dẫn làm bài phần Định tính:</span>
+                      <ul className="list-disc pl-4 space-y-1 text-slate-700 text-[11px]">
+                        <li>Câu 51 - 70: Kiến thức ngôn ngữ, từ ngữ không cùng nhóm, phát hiện lỗi sai.</li>
+                        <li>Câu 71 - 80: Đọc hiểu văn bản đơn lẻ.</li>
+                        <li>Câu 81 - 100: Chùm bài đọc hiểu 5 câu (khi lướt tới các câu này, bài đọc tương ứng sẽ tự động hiển thị tại cột này).</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Cột phải: Danh sách các câu hỏi con của Phần 2 */}
+              <div className={`${mobileLitTab === 'questions' ? 'block' : 'hidden'} md:block h-full overflow-y-auto p-4 md:p-6 space-y-6 bg-white`}>
               {currentPart.questions.map((q: any) => {
                 const isNoted = notedQuestions[q.number]
                 return (
@@ -1045,6 +1084,7 @@ export default function HsaExamRoom({
               })}
             </div>
           </div>
+          </>
         ) : (
           /* Image 2: DANH SÁCH CÂU HỎI CUỘN LIÊN TỤC CHO PHẦN TOÁN & KHOA HỌC */
           <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
@@ -1099,6 +1139,62 @@ export default function HsaExamRoom({
           </div>
         )}
       </div>
+
+      {/* DRAWER BẢNG CHỌN CÂU HỎI NHANH TRÊN MOBILE */}
+      {showMobilePaletteDrawer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end justify-center animate-in fade-in">
+          <div className="w-full max-w-lg bg-white rounded-t-2xl p-4 space-y-3 shadow-2xl border-t border-slate-300 max-h-[75vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <span className="text-xs font-black uppercase text-slate-800">
+                Bảng 50 câu {currentPart.title}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowMobilePaletteDrawer(false)}
+                className="px-2 py-0.5 rounded text-xs font-bold text-slate-500 hover:text-black cursor-pointer"
+              >
+                ✕ Đóng
+              </button>
+            </div>
+            <div className="grid grid-cols-10 gap-1.5 overflow-y-auto p-1">
+              {currentPart.questions.map((q: any) => {
+                const qNum = q.number
+                const isAnswered = answers[String(qNum)] !== undefined && answers[String(qNum)] !== ''
+                const isViewing = currentQuestionNumber === qNum
+                const isNoted = notedQuestions[qNum]
+
+                return (
+                  <button
+                    key={qNum}
+                    type="button"
+                    onClick={() => {
+                      scrollToQuestion(qNum)
+                      setShowMobilePaletteDrawer(false)
+                      if (isPart2Literature) setMobileLitTab('questions')
+                    }}
+                    className={`h-8 rounded text-xs font-bold flex items-center justify-center border cursor-pointer transition ${
+                      isNoted
+                        ? 'bg-[#f59e0b] text-black border-amber-600 font-black'
+                        : isViewing
+                        ? 'ring-2 ring-blue-600 bg-[#555555] text-white'
+                        : isAnswered
+                        ? 'bg-[#555555] text-white border-[#333333]'
+                        : 'bg-white text-slate-800 border-slate-400'
+                    }`}
+                  >
+                    {qNum}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-around pt-2 border-t border-slate-200 text-[10px] text-slate-600">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#555555]"></span> Đã làm</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-white border border-slate-400"></span> Chưa làm</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span> Bôi vàng</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 

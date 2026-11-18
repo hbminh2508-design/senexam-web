@@ -57,11 +57,24 @@
   }
 }
 
-/* Tắt hiệu ứng chuyển động khi người dùng bật "Hiệu ứng chuyển động: Tắt" trong Cài đặt */
-[data-motion="off"] * {
-  transition-duration: 0s !important;
-  animation-duration: 0s !important;
-  scroll-behavior: auto !important;
+/* Tắt hiệu ứng chuyển động khi người dùng bật "Hiệu ứng chuyển động: Tắt" trong Cài đặt hoặc HĐH */
+[data-motion="off"] *,
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Kích thước mục chạm tối thiểu 44px chuẩn công thái học Mobile (WCAG / Apple HIG) */
+.min-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ms-glass {

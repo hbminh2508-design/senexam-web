@@ -42,8 +42,10 @@ import {
   HelpCircle,
   Check,
   Send,
+  Eye,
 } from 'lucide-react'
 import { APP_VERSION as MOBILE_VERSION } from '@/lib/version'
+import { openSafeDownload } from '@/lib/capacitorBridge'
 
 interface ExamItem {
   id: string
@@ -771,15 +773,14 @@ function MobileSenGroundContent() {
                       >
                         <ExternalLink className="h-4 w-4" />
                       </a>
-                      <a
-                        href={`https://drive.google.com/uc?export=download&id=${activePreviewDoc.drive_file_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-black dark:hover:text-white"
-                        title="Tải về"
+                      <button
+                        type="button"
+                        onClick={() => openSafeDownload(`https://drive.google.com/uc?export=download&id=${activePreviewDoc.drive_file_id}`, `${activePreviewDoc.title || 'tai-lieu'}.pdf`)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-black dark:hover:text-white cursor-pointer"
+                        title="Tải về máy an toàn"
                       >
                         <Download className="h-4 w-4" />
-                      </a>
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -999,12 +1000,20 @@ function MobileSenGroundContent() {
                       <span className="text-[10px] text-slate-400">
                         Môn: <strong className="text-slate-600 dark:text-slate-300">{sub.exams?.subject || 'Tổng hợp'}</strong>
                       </span>
-                      <Link
-                        href={`/m/exams/${sub.exam_id}`}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline"
-                      >
-                        <RotateCcw className="h-3 w-3" /> Làm lại đề
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <Link
+                          href={`/m/submissions/${sub.id}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                        >
+                          <Eye className="h-3 w-3" /> Xem lại bài
+                        </Link>
+                        <Link
+                          href={`/m/exams/${sub.exam_id}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline"
+                        >
+                          <RotateCcw className="h-3 w-3" /> Làm lại
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 )
