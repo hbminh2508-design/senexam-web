@@ -68,7 +68,10 @@ export default function GlobalCanvasEngine() {
     }
     window.addEventListener('resize', handleResize, { passive: true })
 
-    // Tách biệt hoàn toàn FEPN & Bầu Cử (không render canvas hạt nền SenExam trên phân hệ FEPN / Bầu cử)
+    // Tạm dừng hoàn toàn Canvas Animation:
+    // 1. Phân hệ FEPN & Bầu Cử
+    // 2. Bên trong TẤT CẢ các phòng thi (HSA, TSA, VNU TEST, University Portal, SEB) để chống giật lag và tập trung 100%
+    // 3. Người dùng bật prefers-reduced-motion
     const isFepn = Boolean(
       pathname.startsWith('/baucu') ||
       pathname.startsWith('/fepn-') ||
@@ -77,7 +80,19 @@ export default function GlobalCanvasEngine() {
         (window.location.hostname.includes('fepn.') || window.location.hostname.includes('tsv.fepn.')))
     )
 
-    if (isFepn) {
+    const isInsideActiveExamRoom = Boolean(
+      pathname.startsWith('/new-exams/') ||
+      pathname.startsWith('/legacy-exams/') ||
+      pathname.startsWith('/seb-exam/') ||
+      pathname.startsWith('/vnu-test') ||
+      pathname.startsWith('/university-exams/') ||
+      pathname.startsWith('/exams/')
+    )
+
+    const prefersReducedMotion = typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (isFepn || isInsideActiveExamRoom || prefersReducedMotion) {
       ctx.clearRect(0, 0, width, height)
       return () => {
         window.removeEventListener('resize', handleResize)
@@ -182,7 +197,6 @@ export default function GlobalCanvasEngine() {
       }
 
       // Kiểm tra tùy chọn giảm chuyển động (prefers-reduced-motion) để tối ưu Accessibility & PIN
-    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (prefersReducedMotion) {
       return () => {
         if (resizeRafId !== null) cancelAnimationFrame(resizeRafId)
@@ -205,7 +219,6 @@ export default function GlobalCanvasEngine() {
     document.addEventListener('visibilitychange', handleVisibility)
 
     // Kiểm tra tùy chọn giảm chuyển động (prefers-reduced-motion) để tối ưu Accessibility & PIN
-    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (prefersReducedMotion) {
       return () => {
         if (resizeRafId !== null) cancelAnimationFrame(resizeRafId)

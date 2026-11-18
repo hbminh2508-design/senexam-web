@@ -31,6 +31,7 @@ import {
   ListOrdered,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { ExamTimerIsolated } from '@/app/components/ExamTimerIsolated'
 
 // Error boundary cho KaTeX
 interface ErrorBoundaryProps {
@@ -78,7 +79,7 @@ export const UetSafeMath = React.memo(
 
     return (
       <MarkdownErrorBoundary resetKey={safeContent} fallback={<span className="text-xs font-mono">{safeContent}</span>}>
-        <div className={`${className || ''} overflow-x-auto max-w-full`}>
+        <div className={`${className || ''} min-h-[1.5em] overflow-x-auto max-w-full`}>
           <ReactMarkdown
             remarkPlugins={[remarkMath, remarkGfm]}
             rehypePlugins={[
@@ -108,6 +109,8 @@ export const UetSafeMath = React.memo(
                   <img
                     {...props}
                     alt={props.alt || 'Hình vẽ minh họa'}
+                    loading="lazy"
+                    decoding="async"
                     className="max-h-[320px] max-w-full border border-slate-300 mx-auto object-contain bg-white cursor-zoom-in rounded-none"
                     onClick={() => {
                       if (props.src) window.open(props.src, '_blank')
@@ -299,23 +302,8 @@ export default function UniversityExamRoom({
     }
   }, [answers, flags, examMode, revealedInPractice, exam?.id, studentInfo?.id, viewState])
 
-  // Đếm ngược thời gian làm bài (CHỈ KHI Ở CHẾ ĐỘ THI THẬT)
-  useEffect(() => {
-    if (viewState !== 'exam' || examMode !== 'exam' || timeLeft <= 0) return
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          handleAutoSubmit()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [viewState, examMode, timeLeft])
+  // Đếm ngược thời gian làm bài đã được cô lập vào <ExamTimerIsolated />
+  // để tránh việc re-render toàn bộ 1800+ dòng giao diện mỗi giây.
 
   // Tự động nộp bài khi hết giờ (Chế độ thi thật)
   const handleAutoSubmit = () => {
@@ -1006,7 +994,11 @@ export default function UniversityExamRoom({
           <div className="flex items-center gap-2">
             {examMode === 'exam' ? (
               <span className="text-xs font-mono bg-[#002244] px-2 py-1 text-amber-300 font-bold border border-slate-600">
-                {formatTime(timeLeft)}
+                <ExamTimerIsolated
+                  initialSeconds={examDurationMinutes * 60}
+                  onTimeUp={handleAutoSubmit}
+                  className="text-amber-300"
+                />
               </span>
             ) : (
               <span className="text-xs bg-amber-500 text-slate-900 font-bold px-2 py-1 border border-amber-600">
@@ -1669,8 +1661,12 @@ export default function UniversityExamRoom({
                 <div className="text-[10px] text-red-700 uppercase font-bold tracking-wider">
                   Thời gian còn lại
                 </div>
-                <div className="text-xl font-mono font-bold text-red-600 mt-0.5">
-                  {formatTime(timeLeft)}
+                <div className="mt-0.5">
+                  <ExamTimerIsolated
+                    initialSeconds={examDurationMinutes * 60}
+                    onTimeUp={handleAutoSubmit}
+                    className="text-xl font-mono font-bold text-red-600"
+                  />
                 </div>
               </div>
             ) : (
@@ -1765,8 +1761,13 @@ export default function UniversityExamRoom({
       <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#003366] text-white px-3 py-2 border-t-2 border-[#002244] shadow-2xl flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {examMode === 'exam' ? (
-            <span className="text-xs font-mono font-bold bg-[#002244] px-2 py-1 text-amber-300 border border-slate-600">
-              ⏱ {formatTime(timeLeft)}
+            <span className="text-xs font-mono font-bold bg-[#002244] px-2 py-1 text-amber-300 border border-slate-600 inline-flex items-center gap-1">
+              <span>⏱</span>
+              <ExamTimerIsolated
+                initialSeconds={examDurationMinutes * 60}
+                onTimeUp={handleAutoSubmit}
+                className="text-amber-300"
+              />
             </span>
           ) : (
             <span className="text-[10px] font-bold bg-amber-500 text-slate-900 px-2 py-1">

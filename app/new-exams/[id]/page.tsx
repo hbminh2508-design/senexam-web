@@ -20,6 +20,7 @@ import VnuTestExamRoom from '@/app/components/VnuTestExamRoom'
 import UniversityExamRoom from '@/app/components/UniversityExamRoom'
 import TikzRenderer from '@/app/components/TikzRenderer'
 import { isUniversityExam } from '@/lib/universityExamHelper'
+import { ExamTimerIsolated } from '@/app/components/ExamTimerIsolated'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -305,22 +306,8 @@ export default function NewExamRoomPage() {
     fetchExam()
   }, [examId, router])
 
-  // Timer đếm ngược
-  useEffect(() => {
-    if (!hasStarted || loading || timeLeft <= 0 || submittedResult || submitting) return
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          handleAutoSubmit()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [hasStarted, loading, timeLeft, submittedResult, submitting])
+  // Timer đếm ngược đã được cô lập vào <ExamTimerIsolated />
+  // để tối ưu 60fps và loại bỏ hoàn toàn re-render 2300+ dòng mã phòng thi mỗi giây.
 
   // Tự động lưu tiến độ vào LocalStorage
   useEffect(() => {
@@ -1366,17 +1353,15 @@ export default function NewExamRoomPage() {
           </div>
         </div>
 
-        {/* Center: Timer Countdown */}
+        {/* Center: Timer Countdown (cô lập trạng thái để không re-render cây câu hỏi) */}
         <div className="flex items-center gap-2">
-          <div
-            className={`flex items-center gap-2 rounded-2xl px-4 py-1.5 border font-mono font-black text-sm sm:text-base shadow-inner ${
-              timeLeft < 300
-                ? 'border-rose-500 bg-rose-500/15 text-rose-600 dark:text-rose-400 animate-pulse'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-            }`}
-          >
+          <div className="flex items-center gap-2 rounded-2xl px-4 py-1.5 border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-black text-sm sm:text-base shadow-inner">
             <Clock className="h-4 w-4" />
-            <span>{formatTimer(timeLeft)}</span>
+            <ExamTimerIsolated
+              initialSeconds={(exam?.duration || 50) * 60}
+              onTimeUp={handleAutoSubmit}
+              className="text-amber-700 dark:text-amber-300 font-mono"
+            />
           </div>
         </div>
 
@@ -2007,16 +1992,14 @@ export default function NewExamRoomPage() {
                 </div>
               </div>
 
-              {/* Countdown Timer Badge */}
-              <div
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border font-mono font-black text-xs sm:text-sm shrink-0 shadow-inner ${
-                  timeLeft < 300
-                    ? 'border-rose-500 bg-rose-500/15 text-rose-600 dark:text-rose-400 animate-pulse'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                }`}
-              >
+              {/* Countdown Timer Badge (cô lập) */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-black text-xs sm:text-sm shrink-0 shadow-inner">
                 <Clock className="h-3.5 w-3.5" />
-                <span>{formatTimer(timeLeft)}</span>
+                <ExamTimerIsolated
+                  initialSeconds={(exam?.duration || 50) * 60}
+                  onTimeUp={handleAutoSubmit}
+                  className="text-amber-700 dark:text-amber-300 font-mono"
+                />
               </div>
             </div>
 

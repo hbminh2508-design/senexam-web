@@ -35,6 +35,7 @@ import {
   Check,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { ExamTimerIsolated } from '@/app/components/ExamTimerIsolated'
 
 // Error boundary cho KaTeX
 interface ErrorBoundaryProps {
@@ -86,7 +87,7 @@ export const SafeMathRenderer = React.memo(
 
     return (
       <MarkdownErrorBoundary resetKey={safeContent} fallback={<span className="text-xs font-mono">{safeContent}</span>}>
-        <div className={className}>
+        <div className={`${className || ''} min-h-[1.5em] overflow-x-auto max-w-full`}>
           <ReactMarkdown
             remarkPlugins={[remarkMath, remarkGfm]}
             rehypePlugins={[
@@ -100,6 +101,7 @@ export const SafeMathRenderer = React.memo(
               ],
             ]}
             components={{
+              // Render hình vẽ TikZ tự động
               code: ({ className: codeClass, children, ...props }: any) => {
                 const isTikz = /language-tikz/i.test(codeClass || '')
                 if (isTikz) {
@@ -116,6 +118,8 @@ export const SafeMathRenderer = React.memo(
                   <img
                     {...props}
                     alt={props.alt || 'Hình minh họa câu hỏi'}
+                    loading="lazy"
+                    decoding="async"
                     className="max-h-[340px] max-w-full border border-slate-300 mx-auto object-contain bg-white cursor-zoom-in"
                     onClick={() => {
                       if (props.src) window.open(props.src, '_blank')
@@ -262,23 +266,8 @@ export default function VnuTestExamRoom({
     )
   }, [questions, answers])
 
-  // Đếm ngược thời gian làm bài
-  useEffect(() => {
-    if (screenStage !== 'exam') return
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          handleAutoSubmit()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [screenStage])
+  // Đếm ngược thời gian làm bài đã được cô lập vào <ExamTimerIsolated />
+  // để tối ưu 60fps và loại bỏ re-render toàn bộ đề thi mỗi giây.
 
   // Toàn màn hình
   const triggerFullscreen = () => {
@@ -569,9 +558,11 @@ export default function VnuTestExamRoom({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-red-600 font-bold font-mono text-sm">
-              {formatSeconds(timeLeft)}
-            </div>
+            <ExamTimerIsolated
+              initialSeconds={examDurationMinutes * 60}
+              onTimeUp={handleAutoSubmit}
+              className="text-red-600 font-bold font-mono text-sm"
+            />
             <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
               <User className="w-5 h-5" />
             </div>
@@ -776,9 +767,11 @@ export default function VnuTestExamRoom({
             <span>Toàn màn hình</span>
           </button>
 
-          <div className="text-red-600 font-bold font-mono text-base md:text-lg">
-            {formatSeconds(timeLeft)}
-          </div>
+          <ExamTimerIsolated
+            initialSeconds={examDurationMinutes * 60}
+            onTimeUp={handleAutoSubmit}
+            className="text-red-600 font-bold font-mono text-base md:text-lg"
+          />
           <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
             <User className="w-5 h-5" />
           </div>

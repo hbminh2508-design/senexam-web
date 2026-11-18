@@ -35,6 +35,7 @@ import {
   BookOpen,
   Sliders,
 } from 'lucide-react'
+import { ExamTimerIsolated } from '@/app/components/ExamTimerIsolated'
 
 const headingFont = Baloo_2({ subsets: ['latin', 'vietnamese'], variable: '--font-sebexam-heading' })
 const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-sebexam-body' })
@@ -347,22 +348,8 @@ export default function SebExamRoomPage() {
     }
   }, [hasStarted, submittedResult, submitting])
 
-  // 3. Bộ đếm ngược thời gian
-  useEffect(() => {
-    if (!hasStarted || loading || timeLeft <= 0 || submittedResult || submitting) return
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          handleAutoSubmit()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [hasStarted, loading, timeLeft, submittedResult, submitting])
+  // 3. Đếm ngược thời gian làm bài đã được cô lập vào <ExamTimerIsolated />
+  // để loại bỏ hoàn toàn việc re-render toàn bộ giao diện SEB Kiosk mỗi giây.
 
   // 🤫 Chế độ giám sát thầm lặng (Silent Mode): Không hiển thị cảnh báo lên màn hình thí sinh
   const handleViolationAlert = (_message: string) => {
@@ -1136,16 +1123,14 @@ export default function SebExamRoomPage() {
             </span>
           )}
 
-          {/* Timer đếm ngược */}
-          <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-mono font-black text-xs ${
-              timeLeft < 300
-                ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
-                : 'bg-sky-50 text-sky-800 border-sky-200'
-            }`}
-          >
+          {/* Timer đếm ngược cô lập */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-mono font-black text-xs bg-sky-50 text-sky-800 border-sky-200">
             <Clock className="h-3.5 w-3.5" />
-            <span>{formatTimer(timeLeft)}</span>
+            <ExamTimerIsolated
+              initialSeconds={(exam?.duration || 50) * 60}
+              onTimeUp={handleAutoSubmit}
+              className="text-sky-800 font-mono"
+            />
           </div>
 
           <button

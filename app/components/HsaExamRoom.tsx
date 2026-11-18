@@ -25,6 +25,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { ExamTimerIsolated } from '@/app/components/ExamTimerIsolated'
 
 interface ErrorBoundaryProps {
   fallback?: React.ReactNode
@@ -71,7 +72,7 @@ export const SafeMathRenderer = React.memo(
 
     return (
       <MarkdownErrorBoundary resetKey={safeContent} fallback={<span className="text-xs font-mono">{safeContent}</span>}>
-        <div className={className}>
+        <div className={`${className || ''} min-h-[1.5em] overflow-x-auto max-w-full`}>
           <ReactMarkdown
             remarkPlugins={[remarkMath, remarkGfm]}
             rehypePlugins={[
@@ -102,6 +103,8 @@ export const SafeMathRenderer = React.memo(
                   <img
                     {...props}
                     alt={props.alt || 'Hình minh họa câu hỏi'}
+                    loading="lazy"
+                    decoding="async"
                     className="max-h-[340px] max-w-full border border-slate-300 mx-auto object-contain bg-white cursor-zoom-in"
                     onClick={() => {
                       if (props.src) window.open(props.src, '_blank')
@@ -369,41 +372,8 @@ export default function HsaExamRoom({
     return currentPart.questions.find((q: any) => q.number === currentQuestionNumber) || currentPart.questions[0]
   }, [currentPart, currentQuestionNumber])
 
-  // Bộ đếm thời gian cho màn hình chờ 120s (Image 1)
-  useEffect(() => {
-    if (screenStage !== 'transition') return
-
-    const timer = setInterval(() => {
-      setTransitionTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          handleStartCurrentPart()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [screenStage, currentPartIdx])
-
-  // Bộ đếm thời gian cho phần thi đang diễn ra (Image 2)
-  useEffect(() => {
-    if (screenStage !== 'exam' || partTimeLeft <= 0) return
-
-    const timer = setInterval(() => {
-      setPartTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          setScreenStage('warning_end')
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [screenStage, partTimeLeft])
+  // Đếm ngược thời gian đã được cô lập hoàn toàn vào <ExamTimerIsolated />,
+  // không chạy interval ở component cha để tránh re-render 150 câu hỏi mỗi giây.
 
   // Tự động kích hoạt Toàn màn hình khi bắt đầu làm bài
   const triggerFullscreen = () => {
@@ -588,9 +558,13 @@ export default function HsaExamRoom({
             Nếu đã sẵn sàng, bạn có thể bấm nút &lt;BẮT ĐẦU&gt; dưới đây để bắt đầu phần thi.
           </p>
 
-          {/* Số đếm ngược to màu đỏ thẫm */}
-          <div className="text-2xl font-bold text-[#d32f2f] mb-4 font-mono">
-            {transitionTimeLeft}
+          {/* Số đếm ngược to màu đỏ thẫm (cô lập trạng thái để không re-render màn hình) */}
+          <div className="mb-4">
+            <ExamTimerIsolated
+              initialSeconds={120}
+              onTimeUp={handleStartCurrentPart}
+              className="text-2xl font-bold text-[#d32f2f] font-mono"
+            />
           </div>
 
           {/* Nút bấm xanh lá cổ điển */}
@@ -714,9 +688,11 @@ export default function HsaExamRoom({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-red-600 font-bold font-mono text-sm">
-              {formatSeconds(partTimeLeft)}
-            </div>
+            <ExamTimerIsolated
+              initialSeconds={currentPart.durationMinutes * 60}
+              onTimeUp={() => setScreenStage('warning_end')}
+              className="text-red-600 font-bold font-mono text-sm"
+            />
             <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
               <User className="w-5 h-5" />
             </div>
@@ -930,9 +906,11 @@ export default function HsaExamRoom({
             <span>Toàn màn hình</span>
           </button>
 
-          <div className="text-red-600 font-bold font-mono text-base md:text-lg">
-            {formatSeconds(partTimeLeft)}
-          </div>
+          <ExamTimerIsolated
+            initialSeconds={currentPart.durationMinutes * 60}
+            onTimeUp={() => setScreenStage('warning_end')}
+            className="text-red-600 font-bold font-mono text-base md:text-lg"
+          />
           <div className="w-7 h-8 border border-slate-300 bg-white flex items-center justify-center text-slate-400">
             <User className="w-5 h-5" />
           </div>
