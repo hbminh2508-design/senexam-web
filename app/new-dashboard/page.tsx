@@ -68,6 +68,7 @@ import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 import { getPlanTierName, getTotalSenaiDailyLimit } from '@/lib/vipMembership'
 import { getEffectiveSenaiTier, SENAI_TIER_LABEL, SENAI_TIER_DAILY_LIMIT, type SenAiTierCode } from '@/lib/senaiTiers'
+import { APP_VERSION } from '@/lib/version'
 
 const DashboardSenAiStudio = dynamic(
   () => import('@/app/components/DashboardSenAiStudio'),
@@ -1476,7 +1477,7 @@ function NewDashboardContent() {
                 title="Bấm để chuyển đổi mã build phiên bản"
                 className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
               >
-                {showFullVersion ? '2.0.2194023.10483.01' : '2.0'}
+                {showFullVersion ? `v${APP_VERSION} (Build ${APP_VERSION})` : `v${APP_VERSION}`}
               </button>
             </div>
 
@@ -2261,7 +2262,7 @@ function NewDashboardContent() {
                   title="Bấm để chuyển đổi mã build phiên bản"
                   className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
                 >
-                  {showFullVersion ? '2.0.2194023.10483.01' : '2.0'}
+                  {showFullVersion ? `v${APP_VERSION} (Build ${APP_VERSION})` : `v${APP_VERSION}`}
                 </button>
               </div>
 

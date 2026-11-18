@@ -91,6 +91,7 @@ import {
 import { isExamInFolder } from '@/lib/sebFolderUtils'
 import SecurePasswordChangeCard from '@/app/components/SecurePasswordChangeCard'
 import ModernLoading from '@/app/components/ModernLoading'
+import { APP_VERSION } from '@/lib/version'
 
 const headingFont = Baloo_2({
   subsets: ['latin', 'vietnamese'],
@@ -2215,7 +2216,7 @@ export default function NewAdminDashboardPage() {
                 title="Bấm để chuyển đổi mã build phiên bản"
                 className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
               >
-                {showFullVersion ? '2.0.2194023.10483.01' : '2.0'}
+                {showFullVersion ? `v${APP_VERSION} (Build ${APP_VERSION})` : `v${APP_VERSION}`}
               </button>
             </div>
 
@@ -2911,7 +2912,7 @@ export default function NewAdminDashboardPage() {
                     title="Bấm để chuyển đổi mã build phiên bản"
                     className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
                   >
-                    {showFullVersion ? '2.0.2194023.10483.01' : '2.0'}
+                    {showFullVersion ? `v${APP_VERSION} (Build ${APP_VERSION})` : `v${APP_VERSION}`}
                   </button>
                 </div>
 

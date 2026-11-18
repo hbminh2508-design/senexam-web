@@ -51,3 +51,20 @@ test('Release Engine: Conventional commits bump calculation', () => {
   ])
   assert.strictEqual(choreRes.bumpType, 'none')
 })
+
+test('Version Integrity: Dashboards bind dynamically to APP_VERSION without hardcoding', () => {
+  const dashContent = fs.readFileSync('app/new-dashboard/page.tsx', 'utf8')
+  const adminDashContent = fs.readFileSync('app/new-admin-dashboard/page.tsx', 'utf8')
+
+  assert.doesNotMatch(dashContent, /2\.0\.2194023\.10483\.01/, 'User dashboard must not contain hardcoded version 10483.01')
+  assert.doesNotMatch(adminDashContent, /2\.0\.2194023\.10483\.01/, 'Admin dashboard must not contain hardcoded version 10483.01')
+
+  assert.match(dashContent, /import \{ APP_VERSION \} from '@\/lib\/version'/, 'User dashboard must import APP_VERSION')
+  assert.match(adminDashContent, /import \{ APP_VERSION \} from '@\/lib\/version'/, 'Admin dashboard must import APP_VERSION')
+})
+
+test('Automated Migrations: scripts/apply-migrations.mjs exists and is configured', () => {
+  assert.strictEqual(fs.existsSync('scripts/apply-migrations.mjs'), true, 'apply-migrations.mjs must exist')
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+  assert.strictEqual(pkg.scripts['db:migrate'], 'node scripts/apply-migrations.mjs')
+})
