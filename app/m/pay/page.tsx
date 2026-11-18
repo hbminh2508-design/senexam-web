@@ -510,9 +510,10 @@ export default function MobilePayPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 dark:hover:text-white"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+            title="Quay lại"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <h1 className="text-base font-black text-slate-900 dark:text-white">
             Cửa Hàng VIP & Ví Sen
@@ -520,14 +521,14 @@ export default function MobilePayPage() {
         </div>
 
         {/* Số dư Cash Mobile */}
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-xs font-black">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-xs font-black">
           <Wallet className="h-3.5 w-3.5" />
           <span>{scmBalance.toLocaleString('vi-VN')} SCm</span>
         </div>
       </div>
 
       {/* 2. 5 TABS ĐIỀU HƯỚNG CỬA HÀNG ĐỒNG BỘ 100% NHƯ PC */}
-      <div className="flex items-center gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/10 overflow-x-auto scrollbar-none">
+      <div className="flex items-center gap-1.5 p-1 bg-black/5 dark:bg-white/5 rounded-2xl border border-black/5 dark:border-white/10 overflow-x-auto scrollbar-none">
         {[
           { key: 'vip', label: 'Gói VIP', icon: Crown },
           { key: 'wallet', label: 'Cash Mobile', icon: Wallet },
@@ -542,10 +543,10 @@ export default function MobilePayPage() {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key as TabKey)}
-              className={`flex-1 min-w-[65px] py-2 rounded-xl text-[11px] font-black transition flex flex-col items-center justify-center gap-1 active:scale-95 ${
+              className={`flex-1 min-w-[65px] min-h-[44px] py-2 px-1 rounded-xl text-[11px] font-black transition flex flex-col items-center justify-center gap-1 active:scale-95 cursor-pointer ${
                 isActive
                   ? 'bg-sky-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
               }`}
             >
               <Icon className="h-3.5 w-3.5" />

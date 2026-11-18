@@ -176,7 +176,7 @@ export default function MobileNav() {
                     <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-sky-600 dark:bg-sky-400 animate-pulse" />
                   )}
                 </div>
-                <span className={`text-[9px] mt-0.5 tracking-tight ${isActive ? 'font-black' : 'font-semibold'}`}>
+                <span className={`text-[10px] mt-0.5 tracking-tight ${isActive ? 'font-black' : 'font-semibold'}`}>
                   {item.label}
                 </span>
               </Link>
@@ -193,7 +193,7 @@ export default function MobileNav() {
               <StarAiIcon className="w-5 h-5" active={showSenAiModal} />
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-pink-500 animate-ping" />
             </div>
-            <span className="text-[9px] mt-0.5 tracking-tight font-black">SenAI</span>
+            <span className="text-[10px] mt-0.5 tracking-tight font-black">SenAI</span>
           </button>
         </div>
       </nav>

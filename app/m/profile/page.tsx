@@ -286,23 +286,23 @@ export default function MobileProfilePage() {
 
         <form onSubmit={handleSaveProfile} className="space-y-3">
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-500">Họ và tên</label>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Họ và tên</label>
             <input
               type="text"
               placeholder="Nguyễn Văn A"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none focus:border-sky-500 font-bold"
+              className="w-full h-11 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none focus:border-sky-500 font-bold"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-500">Khối lớp</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Khối lớp</label>
               <select
                 value={grade}
                 onChange={(e) => setGrade(e.target.value)}
-                className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2 text-xs font-bold outline-none"
+                className="w-full h-11 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2 text-xs font-bold outline-none"
               >
                 <option value="10">Lớp 10</option>
                 <option value="11">Lớp 11</option>
@@ -312,43 +312,43 @@ export default function MobileProfilePage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-500">Điểm mục tiêu</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Điểm mục tiêu</label>
               <input
                 type="text"
                 placeholder="VD: 27 điểm"
                 value={targetScore}
                 onChange={(e) => setTargetScore(e.target.value)}
-                className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none font-bold"
+                className="w-full h-11 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none font-bold"
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-500">Trường THPT / Đại Học</label>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Trường THPT / Đại Học</label>
             <input
               type="text"
               placeholder="VD: THPT Chuyên Hà Nội - Amsterdam"
               value={school}
               onChange={(e) => setSchool(e.target.value)}
-              className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none"
+              className="w-full h-11 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-500">Tỉnh / Thành phố</label>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tỉnh / Thành phố</label>
             <input
               type="text"
               placeholder="VD: Hà Nội, TP. Hồ Chí Minh..."
               value={province}
               onChange={(e) => setProvince(e.target.value)}
-              className="w-full h-10 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none"
+              className="w-full h-11 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 text-xs outline-none"
             />
           </div>
 
           <button
             type="submit"
             disabled={savingProfile || !user}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-md active:scale-98 transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            className="w-full min-h-[44px] py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-xs shadow-md active:scale-98 transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <Save className="h-4 w-4" />
             <span>{savingProfile ? 'Đang lưu hồ sơ...' : 'LƯU CẬP NHẬT HỒ SƠ'}</span>

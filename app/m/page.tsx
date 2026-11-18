@@ -476,22 +476,22 @@ export default function MobileDashboardPage() {
         </div>
       </div>
 
-      {/* 6. THANH CUỘN MÔN HỌC (CHIPS) */}
+      {/* 6. THANH CUỘN MÔN HỌC (CHIPS CÔNG THÁI HỌC) */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs font-bold text-slate-500">
+        <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
           <span>Khối Môn Học</span>
-          <span className="text-[10px] text-slate-400">Cuộn ngang</span>
+          <span className="text-[11px] text-slate-500">Cuộn ngang</span>
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           {subjects.map((sub) => (
             <button
               key={sub.key}
               type="button"
               onClick={() => setSelectedSubject(sub.key)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer active:scale-95 ${
+              className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer active:scale-95 ${
                 selectedSubject === sub.key
                   ? 'bg-sky-600 text-white shadow-xs'
-                  : 'bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10'
+                  : 'bg-black/5 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-black/10'
               }`}
             >
               {sub.label}
@@ -515,8 +515,17 @@ export default function MobileDashboardPage() {
         </div>
 
         {filteredExams.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-black/10 dark:border-white/10 p-6 text-center text-xs text-slate-400">
-            Không có đề thi nào phù hợp với bộ lọc môn học này.
+          <div className="rounded-3xl border border-dashed border-black/10 dark:border-white/10 p-8 text-center text-xs text-slate-500 space-y-2 bg-black/5 dark:bg-white/5">
+            <Search className="h-8 w-8 text-slate-400 mx-auto" />
+            <p className="font-bold text-slate-800 dark:text-slate-200">Không tìm thấy đề thi phù hợp</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Hãy thử đổi môn học hoặc xóa từ khóa tìm kiếm</p>
+            <button
+              type="button"
+              onClick={() => { setSelectedSubject('all'); setSearchQuery(''); }}
+              className="mt-2 min-h-[40px] px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-bold active:scale-95 transition"
+            >
+              Xem tất cả môn
+            </button>
           </div>
         ) : (
           filteredExams.slice(0, 6).map((exam) => (
