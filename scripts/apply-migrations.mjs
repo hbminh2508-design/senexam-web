@@ -106,6 +106,23 @@ async function runWithPostgres(connectionString) {
   }
 }
 
+async function executeManagementQuery(token, projectRef, query) {
+  const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ query }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Lỗi API (${res.status}): ${errText}`)
+  }
+  return res.json()
+}
+
 async function runWithManagementApi(token, supabaseUrl) {
   const match = supabaseUrl.match(/https:\/\/([a-zA-Z0-9_-]+)\.supabase\.co/)
   if (!match) {
@@ -114,28 +131,45 @@ async function runWithManagementApi(token, supabaseUrl) {
   const projectRef = match[1]
   console.log(`📡 Đang áp dụng migration qua Supabase Management API (Project: ${projectRef})...`)
 
+  // 1. Tạo bảng _migrations nếu chưa có
+  await executeManagementQuery(
+    token,
+    projectRef,
+    `CREATE TABLE IF NOT EXISTS _migrations (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL UNIQUE,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  )
+
+  // 2. Lấy danh sách migration đã chạy
+  const appliedRows = await executeManagementQuery(token, projectRef, `SELECT name FROM _migrations;`)
+  const appliedSet = new Set((appliedRows || []).map(r => r.name))
+
   const files = getMigrationFiles()
+  let appliedCount = 0
+
   for (const file of files) {
+    if (appliedSet.has(file)) {
+      console.log(`  ⏭️  Đã chạy trước đó: ${file}`)
+      continue
+    }
+
     console.log(`  ⏳ Đang gửi migration: ${file}...`)
     const filePath = path.join(MIGRATIONS_DIR, file)
     const sqlContent = fs.readFileSync(filePath, 'utf8')
 
-    const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ query: sqlContent }),
-    })
+    await executeManagementQuery(token, projectRef, sqlContent)
+    await executeManagementQuery(
+      token,
+      projectRef,
+      `INSERT INTO _migrations (name) VALUES ('${file}') ON CONFLICT (name) DO NOTHING;`
+    )
 
-    if (!res.ok) {
-      const errText = await res.text()
-      throw new Error(`Lỗi API (${res.status}): ${errText}`)
-    }
     console.log(`  ✅ Hoàn tất thành công: ${file}`)
+    appliedCount++
   }
-  console.log('\n🎉 Đã gửi và thực thi tất cả migration thành công qua Supabase API!')
+  console.log(`\n🎉 Đã gửi và thực thi tất cả migration thành công qua Supabase API! Đã áp dụng mới: ${appliedCount} tệp.`)
 }
 
 async function main() {

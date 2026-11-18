@@ -18,11 +18,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_idempotency_key
 ON public.submissions (idempotency_key) 
 WHERE idempotency_key IS NOT NULL;
 
--- 4. Tạo Unique Index cho các đề thi chỉ cho phép nộp 1 lần duy nhất (exam có max_attempts = 1)
--- Ngăn chặn triệt để 2 tab hoặc 2 thiết bị nộp song song cùng 1 tích tắc
-CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_single_attempt 
-ON public.submissions (exam_id, user_id) 
-WHERE is_completed = true;
+-- 4. Tạo Index cho tra cứu và tối ưu truy vấn bài thi của học sinh
+CREATE INDEX IF NOT EXISTS idx_submissions_exam_user 
+ON public.submissions (exam_id, user_id);
 
 -- 5. Bật Row Level Security cho bảng submissions nếu chưa bật
 ALTER TABLE public.submissions ENABLE ROW LEVEL SECURITY;
