@@ -46,6 +46,26 @@ export async function POST(request: Request) {
   try {
     cleanOldLocks()
 
+    // 0. Xác thực Origin / Chống CSRF cho route nộp bài
+    const origin = request.headers.get('origin')
+    const host = request.headers.get('host')
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host
+        if (
+          originHost !== host &&
+          !originHost.endsWith('senexam.me') &&
+          !originHost.includes('localhost') &&
+          !originHost.includes('127.0.0.1')
+        ) {
+          return NextResponse.json(
+            { error: 'Từ chối yêu cầu từ nguồn không xác thực (CSRF Blocked)' },
+            { status: 403 }
+          )
+        }
+      } catch {}
+    }
+
     const body = await request.json().catch(() => ({}))
     const {
       examId,
@@ -54,6 +74,7 @@ export async function POST(request: Request) {
       tabSwitches = 0,
       blurCount = 0,
       timeSpent = 0,
+      startedAt,
       idempotencyKey,
     } = body
 
@@ -105,19 +126,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Không tìm thấy đề thi trên máy chủ' }, { status: 404 })
     }
 
-    // Kiểm tra số lần nộp bài (max_attempts)
+    // Kiểm tra số lần nộp bài (max_attempts) & Xử lý nộp trùng Idempotent
     if (exam.max_attempts && exam.max_attempts > 0) {
-      const { count: attemptCount } = await supabaseAdmin
+      const { data: existingSub } = await supabaseAdmin
         .from('submissions')
-        .select('id', { count: 'exact', head: true })
+        .select('id, score, correct_count, total_questions, created_at')
         .eq('exam_id', examId)
         .eq('user_id', effectiveUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-      if (attemptCount && attemptCount >= exam.max_attempts) {
-        return NextResponse.json(
-          { error: `Bạn đã đạt số lần làm bài tối đa cho phép (${exam.max_attempts} lần).` },
-          { status: 403 }
-        )
+      if (existingSub) {
+        // Nếu đề thi chỉ cho phép làm 1 lần (max_attempts = 1), trả về kết quả cũ một cách idempotent
+        if (exam.max_attempts === 1) {
+          const idempotentResult = {
+            success: true,
+            submissionId: existingSub.id,
+            score: existingSub.score,
+            correctCount: existingSub.correct_count,
+            totalQuestions: existingSub.total_questions,
+            submittedAt: existingSub.created_at,
+            message: 'Bài thi của bạn đã được ghi nhận thành công trước đó.',
+            isDuplicatePrevented: true,
+          }
+          submissionLocks.set(lockKey, { timestamp: Date.now(), result: idempotentResult })
+          return NextResponse.json(idempotentResult)
+        }
+
+        // Nếu cho phép nhiều lần nhưng đã đạt ngưỡng
+        const { count: attemptCount } = await supabaseAdmin
+          .from('submissions')
+          .select('id', { count: 'exact', head: true })
+          .eq('exam_id', examId)
+          .eq('user_id', effectiveUserId)
+
+        if (attemptCount && attemptCount >= exam.max_attempts) {
+          return NextResponse.json(
+            { error: `Bạn đã đạt số lần làm bài tối đa cho phép (${exam.max_attempts} lần).` },
+            { status: 403 }
+          )
+        }
       }
     }
 
@@ -129,8 +178,13 @@ export async function POST(request: Request) {
     let totalQuestions = 0
     const detailedScores: Record<string, number> = {}
 
+    // Hỗ trợ cả 2 định dạng: mảng sections trực tiếp hoặc object chứa sections
     const examStructure = (exam.exam_structure as any) || {}
-    const sections: any[] = Array.isArray(examStructure.sections) ? examStructure.sections : []
+    const sections: any[] = Array.isArray(exam.exam_structure)
+      ? exam.exam_structure
+      : Array.isArray(examStructure.sections)
+      ? examStructure.sections
+      : []
 
     if (sections.length > 0) {
       sections.forEach((section: any) => {
@@ -219,11 +273,32 @@ export async function POST(request: Request) {
       calculatedScore = Math.round(earnedPoints * 100) / 100
     }
 
-    // Giới hạn thời gian làm bài hợp lý (chống sai lệch đồng hồ client âm hoặc quá lớn)
-    const maxAllowedSeconds = (exam.duration || 180) * 120
-    const sanitizedTimeSpent = Math.max(0, Math.min(Number(timeSpent) || 0, maxAllowedSeconds))
+    // 5. Xác thực thời gian làm bài (Server-authoritative Timing)
+    const examDurationMinutes = Number(exam.duration) || 60
+    const examDurationSeconds = examDurationMinutes * 60
+    const graceSeconds = 300 // 5 phút dung sai mạng và nộp bài
 
-    // 5. Ghi vào bảng submissions qua Supabase Admin
+    let sanitizedTimeSpent = Math.max(0, Number(timeSpent) || 0)
+    let isDisqualified = false
+    let disqualificationReason: string | null = null
+
+    if (startedAt) {
+      const serverElapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
+      if (serverElapsed > 0) {
+        // Lấy thời gian thực tính toán trên máy chủ
+        sanitizedTimeSpent = Math.min(serverElapsed, examDurationSeconds + graceSeconds)
+        // Nếu thí sinh nộp quá thời gian quy định + 5 phút dung sai
+        if (serverElapsed > examDurationSeconds + graceSeconds) {
+          isDisqualified = true
+          disqualificationReason = 'SUBMISSION_OVERDUE'
+        }
+      }
+    } else {
+      // Giới hạn thời gian client gửi lên không vượt quá thời gian đề + dung sai
+      sanitizedTimeSpent = Math.min(sanitizedTimeSpent, examDurationSeconds + graceSeconds)
+    }
+
+    // 6. Ghi vào bảng submissions qua Supabase Admin
     const submissionPayload = {
       exam_id: examId,
       user_id: effectiveUserId,
@@ -238,6 +313,8 @@ export async function POST(request: Request) {
       blur_count: Math.max(0, Number(blurCount) || 0),
       time_spent: sanitizedTimeSpent,
       is_graded: true,
+      is_disqualified: isDisqualified,
+      disqualification_reason: disqualificationReason,
       submitted_at: new Date().toISOString(),
     }
 

@@ -56,32 +56,35 @@ export async function getUserFromRequest(request: Request): Promise<{ id: string
   }
 }
 
-// Xác thực + xác minh caller có role 'admin' hoặc 'collab' hoặc email quản trị viên —
-// trả về null nếu chưa đăng nhập hoặc không phải admin/collab, để route trả 401/403 tương ứng.
+// Xác thực + xác minh caller có role 'admin' hoặc 'collab' từ CSDL hoặc có ADMIN_SECRET hợp lệ
+// Tuyệt đối không hardcode email cá nhân để chống leo thang đặc quyền
 export async function requireAdmin(request: Request): Promise<{ id: string; email?: string } | null> {
+  // 1. Kiểm tra header bí mật ADMIN_SECRET cho các tác vụ server nội bộ
+  const adminSecretHeader = request.headers.get('x-admin-secret')
+  const envAdminSecret = process.env.ADMIN_SECRET
+  if (
+    adminSecretHeader &&
+    envAdminSecret &&
+    envAdminSecret.length >= 16 &&
+    adminSecretHeader === envAdminSecret
+  ) {
+    return { id: 'system_admin', email: 'system@senexam.internal' }
+  }
+
+  // 2. Kiểm tra token Bearer của người dùng đăng nhập
   const user = await getUserFromRequest(request)
   if (!user) return null
 
-  const isSuperEmail =
-    user.email?.toLowerCase() === 'admin@senexam.me' ||
-    user.email?.toLowerCase() === 'hoangbinhminh2508@gmail.com'
-
+  // 3. Tra cứu role thật sự từ CSDL bảng profiles (chỉ tin cậy role 'admin' hoặc 'collab')
   const { data: profile } = await getSupabaseAdmin()
     .from('profiles')
-    .select('role, email')
+    .select('role')
     .eq('id', user.id)
     .maybeSingle()
 
   const role = profile ? (profile as any).role : undefined
-  const profileEmail = profile && (profile as any).email ? (profile as any).email.toLowerCase() : undefined
 
-  if (
-    role === 'admin' ||
-    role === 'collab' ||
-    isSuperEmail ||
-    profileEmail === 'admin@senexam.me' ||
-    profileEmail === 'hoangbinhminh2508@gmail.com'
-  ) {
+  if (role === 'admin' || role === 'collab') {
     return user
   }
 

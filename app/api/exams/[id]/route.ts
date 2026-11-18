@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, requireAdmin } from '@/lib/supabaseAdmin'
+import { stripExamAnswers, verifySebRequest } from '@/lib/examSecurity'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,52 +32,15 @@ export async function GET(
       return NextResponse.json({ success: true, exam })
     }
 
-    // NẾU LÀ HỌC SINH / THÍ SINH LÀM BÀI:
-    // Tuyệt đối loại bỏ toàn bộ đáp án đúng và lời giải khỏi payload gửi về client
-    const safeExam = { ...exam }
-
-    // Xóa link file giải chi tiết
-    delete (safeExam as any).solution_pdf_url
-
-    // Khử đáp án trong cấu trúc phân phần
-    if (safeExam.exam_structure && typeof safeExam.exam_structure === 'object') {
-      const clonedStructure = JSON.parse(JSON.stringify(safeExam.exam_structure))
-
-      if (Array.isArray(clonedStructure.sections)) {
-        clonedStructure.sections.forEach((sec: any) => {
-          delete sec.correctAnswers
-          delete sec.correctMap
-          if (Array.isArray(sec.questions)) {
-            sec.questions.forEach((q: any) => {
-              delete q.correctAnswer
-              delete q.explanation
-              delete q.solution
-              // Với câu hỏi dạng Đúng/Sai (true_false), xóa isCorrect trong từng ý con
-              if (Array.isArray(q.subQuestions)) {
-                q.subQuestions.forEach((sub: any) => {
-                  delete sub.isCorrect
-                })
-              }
-            })
-          }
-        })
-      }
-
-      if (Array.isArray(clonedStructure.questions)) {
-        clonedStructure.questions.forEach((q: any) => {
-          delete q.correctAnswer
-          delete q.explanation
-          delete q.solution
-          if (Array.isArray(q.subQuestions)) {
-            q.subQuestions.forEach((sub: any) => {
-              delete sub.isCorrect
-            })
-          }
-        })
-      }
-
-      safeExam.exam_structure = clonedStructure
+    // NẾU LÀ ĐỀ THI YÊU CẦU SEB: Xác thực headers trình duyệt SEB
+    const sebCheck = verifySebRequest(request.headers, exam.require_seb)
+    if (!sebCheck.allowed) {
+      return NextResponse.json({ error: sebCheck.error }, { status: 403 })
     }
+
+    // NẾU LÀ HỌC SINH / THÍ SINH LÀM BÀI:
+    // Tuyệt đối loại bỏ toàn bộ đáp án đúng, lời giải, seb_config_key, access_code
+    const safeExam = stripExamAnswers(exam)
 
     return NextResponse.json({ success: true, exam: safeExam })
   } catch (err: any) {

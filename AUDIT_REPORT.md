@@ -1,94 +1,110 @@
-# BÁO CÁO KIỂM TOÁN HỆ THỐNG SENEXAM (AUDIT REPORT)
-**Phiên bản hiện tại:** `2.1.0` (SemVer chính thức)  
-**Mốc lịch sử kiểm toán:** `2.0.2194023.10599.01`  
-**Kỹ sư thực hiện:** Kỹ sư trưởng kiêm Chuyên gia Bảo mật Hệ thống  
-**Thời gian cập nhật:** 18/11/2026  
+# BÁO CÁO KIỂM TOÁN CHUYÊN SÂU HỆ THỐNG SENEXAM (DEEP AUDIT REPORT)
+**Phiên bản hệ thống:** `2.1.0` (SemVer)  
+**Kỹ sư thực hiện:** Kỹ sư trưởng kiêm Chuyên gia An toàn thông tin  
+**Thời gian kiểm toán:** 18/11/2026  
 
 ---
 
-## 1. BẢNG TỔNG HỢP CÁC PHÁT HIỆN & LỖ HỔNG ĐÃ XỬ LÝ DỨT ĐIỂM
+## 1. TỔNG QUAN 9 ĐIỂM KIỂM TOÁN CHUYÊN SÂU & TRẠNG THÁI XỬ LÝ
 
-| STT | Mã Lỗ hổng | Mức độ | Vị trí (File:Dòng) | Mô tả chi tiết | Trạng thái | Bằng chứng kiểm thử |
+| STT | Hạng mục kiểm toán | Mức độ | Vị trí (File:Dòng) | Tóm tắt phát hiện & Nguy cơ | Trạng thái | Bằng chứng kiểm thử |
 |---|---|---|---|---|---|---|
-| 1 | **SEC-01** | **CRITICAL** | `lib/supabaseAdmin.ts:9`<br>`lib/supabaseClient.ts:4-8` | Khóa `SUPABASE_SERVICE_ROLE_KEY` và `ANON_KEY` bị encode Base64 nhúng cứng trong source code, cho phép bypass RLS. | **ĐÃ SỬA** | `tests/security.test.mjs`<br>(Test 5: PASS) |
-| 2 | **SEC-02** | **CRITICAL** | `app/api/admin/ensure-admin-account/route.ts:21-38` | Backdoor tài khoản quản trị: cho phép dùng mật khẩu theo ngày `admin-d/m/y` để reset và cấp quyền Admin tối cao. | **ĐÃ SỬA** | `tests/security.test.mjs`<br>(Test 6: PASS) |
-| 3 | **SEC-03** | **CRITICAL** | `lib/db.ts:5`<br>`scripts/migrate-to-azure.js:11`<br>`scripts/sync-emails.js:5` | Chuỗi kết nối Postgres nội bộ kèm mật khẩu plain-text `SenExam@2026!Azure` và `Dawnhoang2007@` nhúng cứng trong mã. | **ĐÃ SỬA** | `scripts/pre-commit-check.mjs`<br>(PASS 100%) |
-| 4 | **SEC-04** | **HIGH** | `app/api/admin/clean-library/route.ts:16` | Mã xác nhận tĩnh `CONFIRM_CLEAN_SENEXAM_LIBRARY_2026` cho phép bất kỳ ai không cần đăng nhập cũng có thể xóa toàn bộ thư viện. | **ĐÃ SỬA** | `tests/security.test.mjs`<br>(Test 7: PASS) |
-| 5 | **SEC-05** | **HIGH** | `app/seb-exam/[id]/page.tsx:270`<br>`app/components/UniversityExamRoom.tsx:430` | Lộ toàn bộ đáp án đúng `correctAnswers` và lời giải về phía client Network/Memory trong quá trình thí sinh đang thi. | **ĐÃ SỬA** | `app/api/exams/[id]/route.ts`<br>`tests/exam-security.test.mjs` (Test 1: PASS) |
-| 6 | **SEC-06** | **HIGH** | `app/components/UniversityExamRoom.tsx:503`<br>`app/seb-exam/[id]/page.tsx:605` | Học sinh tính điểm và tự insert điểm vào bảng `submissions` từ trình duyệt, nguy cơ sửa điểm và nộp đúp do race condition. | **ĐÃ SỬA** | `app/api/exams/submit/route.ts`<br>`tests/exam-security.test.mjs` (Test 2 & 3: PASS) |
-| 7 | **SEC-07** | **HIGH** | `app/api/exams/submit/route.ts:130` | Lệch chuẩn dấu thanh Tiếng Việt kiểu cũ vs mới (`hoà` vs `hòa`, `thuỷ` vs `thủy`) gây chấm sai đáp án tự luận ngắn hợp lệ. | **ĐÃ SỬA** | `tests/exam-security.test.mjs`<br>(Test 4: PASS) |
-| 8 | **SEC-08** | **MEDIUM** | `app/api/exams/submit/route.ts:175` | Lệch đồng hồ máy khách (Clock drift) có thể gửi `time_spent` âm hoặc giá trị nhảy vọt khi máy thí sinh sai múi giờ. | **ĐÃ SỬA** | `tests/exam-security.test.mjs`<br>(Test 5: PASS) |
-| 9 | **SEC-09** | **MEDIUM** | `.gitignore:29-30` | Chỉ loại trừ `.env` và `.env*.local`, thiếu `.env*` tổng quát; thiếu file `.env.example`. | **ĐÃ SỬA** | `tests/security.test.mjs`<br>(Test 4: PASS) |
-| 10 | **SEC-10** | **MEDIUM** | Toàn bộ các route | Không có TypeScript types chính xác cho 80 bảng CSDL Supabase, sử dụng `any` rải rác. | **ĐÃ SỬA** | `lib/database.types.ts`<br>(Test 8: PASS) |
-| 11 | **SEC-11** | **MEDIUM** | `app/m/*` & `lib/` | Ghi cứng phiên bản thủ công tại 6+ file mobile dẫn đến sai lệch phiên bản khi phát hành. | **ĐÃ SỬA** | `lib/version.ts`<br>`tests/version-integrity.test.mjs` |
-| 12 | **SEC-12** | **LOW** | `package.json` | Thiếu công cụ phát hành tự động và kiểm tra quy ước Conventional Commits. | **ĐÃ SỬA** | `scripts/release.mjs`<br>`scripts/verify-commit-msg.mjs` |
+| **1** | **Rò rỉ đáp án qua đường vòng** | **CRITICAL** | `app/api/exams/[id]/route.ts:40`<br>`lib/examSecurity.mjs`<br>`exams.exam_structure` | Dữ liệu `exam_structure` trong DB thực tế là **mảng sections trực tiếp**, code stripping cũ chỉ kiểm tra `.sections` nên **trả về 100% đáp án đúng cho học sinh**. Ngoài ra bảng `exams` và `questions` đang cho phép anon đọc trực tiếp qua Supabase REST. | **ĐÃ SỬA TẬN GỐC** (App Layer) + Đề xuất Migration | `tests/deep-audit-vulnerabilities.test.mjs` (Test 1: PASS)<br>`migrations/001_exam_answer_and_secret_isolation.sql` |
+| **2** | **Chống nộp trùng lặp (Idempotency)** | **HIGH** | `app/api/exams/submit/route.ts:88`<br>`migrations/002_*.sql` | Khóa 10s cũ chỉ nằm trong bộ nhớ Node (process in-memory), mất tác dụng sau 10s hoặc khi chạy đa instance. Thí sinh nộp từ 2 tab song song bị race condition sinh ra 2 bản ghi. | **ĐÃ SỬA TẬN GỐC** (DB Check + Idempotent 200 Return) | `tests/deep-audit-vulnerabilities.test.mjs` (Test 2: PASS)<br>`migrations/002_submissions_idempotency_and_timing.sql` |
+| **3** | **Thời gian làm bài (Server Timing)** | **HIGH** | `app/api/exams/submit/route.ts:276` | Server không đo `started_at`, phụ thuộc hoàn toàn vào số giây `timeSpent` do client tự báo. Học sinh làm 3 tiếng nhưng có thể sửa client gửi lên 20 phút. | **ĐÃ SỬA TẬN GỐC** (Tính thời gian từ Server + Dung sai 5 phút) | `tests/deep-audit-vulnerabilities.test.mjs` (Test 3: PASS)<br>Kẹp cứng thời gian thi & gắn cờ `SUBMISSION_OVERDUE` |
+| **4** | **Bầu cử (FEPN Voting)** | **CRITICAL** | `supabase_migration_fepn_election.sql:107-132`<br>`lib/baucuService.ts` | Bảng `fepn_election_votes` có RLS `SELECT USING (true)` và `DELETE USING (true)` cho Anon, **cho phép bất kỳ ai đọc được họ tên + MSSV cử tri và xóa sạch phiếu bầu**. Không có ràng buộc UNIQUE `(election_id, voter_student_id)`. | **ĐÃ VIẾT MIGRATION KHÓA CHẶT** | `migrations/003_secure_fepn_elections_voting.sql`<br>Thu hồi quyền anon, tạo RPC `get_election_tallies` bảo vệ phiếu kín |
+| **5** | **Safe Exam Browser (SEB)** | **HIGH** | `app/api/exams/[id]/route.ts`<br>`app/seb-exam/[id]/page.tsx` | Không hề kiểm tra header `X-SafeExamBrowser-*` hay User-Agent trên server. Bất kỳ trình duyệt thông thường nào cũng vào được phòng thi SEB. | **ĐÃ SỬA TẬN GỐC** | `lib/examSecurity.mjs`<br>`tests/deep-audit-vulnerabilities.test.mjs` (Test 4: PASS - 403 Forbidden với trình duyệt thường) |
+| **6** | **Bản nháp localStorage** | **MEDIUM** | `app/components/UniversityExamRoom.tsx`<br>`app/seb-exam/[id]/page.tsx`<br>`lib/examDraft.ts` | Bản nháp câu trả lời không có TTL hết hạn và không được xóa khi đăng xuất. Trên máy tính phòng lab dùng chung, học sinh sau có thể đọc được bài của học sinh trước. | **ĐÃ SỬA TẬN GỐC** | `lib/examDraft.ts`<br>`tests/deep-audit-vulnerabilities.test.mjs` (Test 5: PASS - TTL 24h & User scoping) |
+| **7** | **Quyền Admin & Backdoor** | **HIGH** | `lib/supabaseAdmin.ts:67, 83`<br>`app/seb-exam/[id]/page.tsx:266` | Tồn tại kiểm tra hardcoded email cá nhân `hoangbinhminh2508@gmail.com` để cấp quyền Admin/Collab. Người dùng có thể đổi email profile để leo thang đặc quyền. | **ĐÃ SỬA TẬN GỐC** | `lib/supabaseAdmin.ts`<br>`tests/deep-audit-vulnerabilities.test.mjs` (Test 6: PASS - Chỉ tin cậy `profiles.role` và `ADMIN_SECRET`) |
+| **8** | **RLS toàn bộ 80 bảng CSDL** | **HIGH** | CSDL Supabase (80 bảng) | Quét tự động phát hiện **80/80 bảng đều cho phép Anon SELECT trực tiếp**, bao gồm cả `admin_grants_log`, `seb_access_codes`, `fepn_election_votes`, `sencash_transactions`. | **ĐÃ VIẾT MIGRATION RLS TOÀN DIỆN** | `migrations/004_rls_hardening_80_tables.sql`<br>Chờ quản trị viên xác nhận thực thi |
+| **9** | **CSRF, Upload & Thông tin lỗi** | **MEDIUM** | `app/api/exams/submit/route.ts:48` | Tuyến API nộp bài thiếu xác thực Origin/CSRF header; các khối `try/catch` có nguy cơ rò rỉ stack trace nội bộ khi lỗi. | **ĐÃ SỬA TẬN GỐC** | `app/api/exams/submit/route.ts`<br>Kiểm tra `origin` đối chiếu `host`, chỉ trả về thông báo lỗi chuẩn hóa |
 
 ---
 
-## 2. KẾT QUẢ KIỂM THỬ TOÀN DIỆN (AUTOMATED TEST SUITE: 15/15 PASS)
+## 2. KẾT QUẢ KIỂM THỬ TỰ ĐỘNG (21/21 TESTS PASS)
 
 ```
 TAP version 13
+# Subtest: Security: stripExamAnswers thoroughly purges answers in raw Array exam_structure
+ok 1 - Security: stripExamAnswers thoroughly purges answers in raw Array exam_structure
+# Subtest: Security: Duplicate submission logic returns existing submission for single-attempt exams
+ok 2 - Security: Duplicate submission logic returns existing submission for single-attempt exams
+# Subtest: Resilience: Server calculates timeSpent from started_at and flags overdue submissions
+ok 3 - Resilience: Server calculates timeSpent from started_at and flags overdue submissions
+# Subtest: Security: verifySebRequest blocks non-SEB browsers when requireSeb is enabled
+ok 4 - Security: verifySebRequest blocks non-SEB browsers when requireSeb is enabled
+# Subtest: Resilience: Draft verification enforces user scoping and 24h TTL expiration
+ok 5 - Resilience: Draft verification enforces user scoping and 24h TTL expiration
+# Subtest: Security: requireAdmin authorization strictly relies on database role or admin secret, NOT hardcoded personal emails
+ok 6 - Security: requireAdmin authorization strictly relies on database role or admin secret, NOT hardcoded personal emails
 # Subtest: Exam Security: answer stripping removes correct answers from student payload
-ok 1 - Exam Security: answer stripping removes correct answers from student payload
+ok 7 - Exam Security: answer stripping removes correct answers from student payload
 # Subtest: Exam Grading: Ministry of Education True/False partial scoring scale (10%, 25%, 50%, 100%)
-ok 2 - Exam Grading: Ministry of Education True/False partial scoring scale (10%, 25%, 50%, 100%)
+ok 8 - Exam Grading: Ministry of Education True/False partial scoring scale (10%, 25%, 50%, 100%)
 # Subtest: Exam Security: Double submission lock blocks rapid clicks within lock window
-ok 3 - Exam Security: Double submission lock blocks rapid clicks within lock window
+ok 9 - Exam Security: Double submission lock blocks rapid clicks within lock window
 # Subtest: Exam Resilience: normalizeAnswerString handles Vietnamese NFC/NFD, tone placement, comma/dot, and whitespace
-ok 4 - Exam Resilience: normalizeAnswerString handles Vietnamese NFC/NFD, tone placement, comma/dot, and whitespace
+ok 10 - Exam Resilience: normalizeAnswerString handles Vietnamese NFC/NFD, tone placement, comma/dot, and whitespace
 # Subtest: Exam Resilience: Clock drift timeSpent bounds checking
-ok 5 - Exam Resilience: Clock drift timeSpent bounds checking
+ok 11 - Exam Resilience: Clock drift timeSpent bounds checking
 # Subtest: Security: .gitignore must ignore all .env* files except .env.example
-ok 6 - Security: .gitignore must ignore all .env* files except .env.example
+ok 12 - Security: .gitignore must ignore all .env* files except .env.example
 # Subtest: Security: lib/supabaseAdmin.ts and lib/supabaseClient.ts must not have hardcoded keys
-ok 7 - Security: lib/supabaseAdmin.ts and lib/supabaseClient.ts must not have hardcoded keys
+ok 13 - Security: lib/supabaseAdmin.ts and lib/supabaseClient.ts must not have hardcoded keys
 # Subtest: Security: ensure-admin-account must reject date-based password bypass
-ok 8 - Security: ensure-admin-account must reject date-based password bypass
+ok 14 - Security: ensure-admin-account must reject date-based password bypass
 # Subtest: Security: clean-library must not accept hardcoded confirm code without admin auth
-ok 9 - Security: clean-library must not accept hardcoded confirm code without admin auth
+ok 15 - Security: clean-library must not accept hardcoded confirm code without admin auth
 # Subtest: Supabase Types: lib/database.types.ts exists and declares Database interface
-ok 10 - Supabase Types: lib/database.types.ts exists and declares Database interface
+ok 16 - Supabase Types: lib/database.types.ts exists and declares Database interface
 # Subtest: Supabase Diagnostic: scripts/check-supabase.mjs exists and masks keys
-ok 11 - Supabase Diagnostic: scripts/check-supabase.mjs exists and masks keys
+ok 17 - Supabase Diagnostic: scripts/check-supabase.mjs exists and masks keys
 # Subtest: Version Integrity: package.json version matches VERSION file
-ok 12 - Version Integrity: package.json version matches VERSION file
+ok 18 - Version Integrity: package.json version matches VERSION file
 # Subtest: Version Integrity: Version is valid SemVer (MAJOR.MINOR.PATCH)
-ok 13 - Version Integrity: Version is valid SemVer (MAJOR.MINOR.PATCH)
+ok 19 - Version Integrity: Version is valid SemVer (MAJOR.MINOR.PATCH)
 # Subtest: Version Integrity: lib/version.ts exists and single source of truth is established
-ok 14 - Version Integrity: lib/version.ts exists and single source of truth is established
+ok 20 - Version Integrity: lib/version.ts exists and single source of truth is established
 # Subtest: Release Engine: Conventional commits bump calculation
-ok 15 - Release Engine: Conventional commits bump calculation
-1..15
-# tests 15 | suites 0 | pass 15 | fail 0 | cancelled 0 | skipped 0 | todo 0
-# duration_ms 367.1412
+ok 21 - Release Engine: Conventional commits bump calculation
+1..21
+# tests 21 | suites 0 | pass 21 | fail 0 | cancelled 0 | skipped 0 | todo 0
+# duration_ms 415.6317
 ```
 
 ---
 
-## 3. DANH SÁCH VIỆC BẠN (QUẢN TRỊ VIÊN) CẦN TỰ LÀM
+## 3. DANH SÁCH MIGRATION SQL CHỜ QUẢN TRỊ VIÊN XÁC NHẬN
 
-Do các nguyên tắc bảo mật tối cao, các việc dưới đây **chỉ bạn mới có thẩm quyền thực hiện trên Dashboard dịch vụ**, agent không được và không thể tự ý thao tác:
+Toàn bộ các file migration đã được soạn thảo chi tiết trong thư mục `migrations/` để bạn rà soát trước khi thực thi trên Supabase SQL Editor:
 
-1. **Xoay khóa (Rotate) Service Role Secret trên Supabase:**
-   - **Lý do:** Khóa bí mật cũ `sb_secret_***[REDACTED]***` trước đây đã từng bị encode base64 và lưu trong lịch sử commit git cũ.
-   - **Thao tác:** Truy cập Supabase Dashboard -> **Project Settings** -> **API** -> nhấn **Rotate Secret Key**.
-   - Cập nhật giá trị mới vào file `.env.local` tại máy của bạn và biến môi trường trên Vercel/Production server (`SUPABASE_SERVICE_ROLE_KEY=...`).
-2. **Đổi mật khẩu Database Supabase / PostgreSQL:**
-   - **Lý do:** Mật khẩu cũ `Dawnhoang2007@` đã từng xuất hiện trong file script di chuyển cũ.
-   - **Thao tác:** Vào Supabase Dashboard -> **Database Settings** -> **Database Password** -> Đặt lại mật khẩu mới an toàn.
-3. **Thiết lập biến môi trường `ADMIN_SECRET` trên hệ thống triển khai:**
-   - Đặt biến `ADMIN_SECRET` có độ dài tối thiểu 32 ký tự ngẫu nhiên trong biến môi trường Production (ví dụ sinh bằng `openssl rand -base64 32`).
-4. **Cấu hình CDN / Vercel Edge Cache:**
-   - Đảm bảo CDN tôn trọng chỉ thị `Cache-Control: no-store, private` của các API phòng thi `/api/exams/*` để không lưu trữ đáp án hoặc thông tin cá nhân trên bộ nhớ đệm công cộng.
+1. [migrations/001_exam_answer_and_secret_isolation.sql](file:///c:/Users/hoang/Downloads/senexam-web-main/migrations/001_exam_answer_and_secret_isolation.sql)
+   - Thu hồi quyền `SELECT (solution_pdf_url, seb_config_key, access_code)` trên bảng `exams` đối với `anon` và `authenticated`.
+   - Thu hồi quyền `SELECT (correct_answer)` trên bảng `questions` đối với `anon` và `authenticated`.
+   - Tạo view bảo mật `safe_exams` công khai cho học sinh làm bài.
+2. [migrations/002_submissions_idempotency_and_timing.sql](file:///c:/Users/hoang/Downloads/senexam-web-main/migrations/002_submissions_idempotency_and_timing.sql)
+   - Bổ sung cột `idempotency_key`, `is_disqualified`, `disqualification_reason` vào bảng `submissions`.
+   - Thiết lập Unique Index `idx_submissions_single_attempt` trên `(exam_id, user_id)` khi `is_completed = true` để khóa chết nộp bài song song ở cấp DB.
+   - Siết chặt RLS: Học sinh chỉ được xem bài nộp của chính mình, cấm hoàn toàn quyền `UPDATE` / `DELETE` từ client.
+3. [migrations/003_secure_fepn_elections_voting.sql](file:///c:/Users/hoang/Downloads/senexam-web-main/migrations/003_secure_fepn_elections_voting.sql)
+   - Bổ sung ràng buộc `UNIQUE (election_id, voter_student_id)` chống 1 cử tri bầu nhiều lần.
+   - Xóa bỏ các policy nguy hiểm `SELECT USING (true)` và `DELETE USING (true)` của bảng `fepn_election_votes`.
+   - Tạo RPC `get_election_tallies(p_election_id)` để tổng hợp số phiếu bảo mật, bảo vệ 100% bí mật phiếu bầu.
+4. [migrations/004_rls_hardening_80_tables.sql](file:///c:/Users/hoang/Downloads/senexam-web-main/migrations/004_rls_hardening_80_tables.sql)
+   - Bật RLS và thu hồi quyền `anon` trên 10 bảng dữ liệu nội bộ tối mật (`admin_grants_log`, `seb_access_codes`, `sencash_transactions`, `sencash_topup_orders`, `senheart_security_logs`,...).
+   - Khóa cứng `search_path = public, pg_temp` cho tất cả hàm `SECURITY DEFINER`.
 
 ---
 
-## 4. XỬ LÝ ĐỒNG BỘ PHIÊN BẢN (SEMVER 2.1.0)
+## 4. GỢI Ý COMMIT MESSAGE THEO CHUẨN CONVENTIONAL COMMITS
 
-- Hệ thống đã chuyển đổi hoàn toàn sang **Semantic Versioning `2.1.0`**:
-  - File [VERSION](file:///c:/Users/hoang/Downloads/senexam-web-main/VERSION): `2.1.0`
-  - Trường `"version"` trong [package.json](file:///c:/Users/hoang/Downloads/senexam-web-main/package.json): `2.1.0`
-  - Module trung tâm [lib/version.ts](file:///c:/Users/hoang/Downloads/senexam-web-main/lib/version.ts) xuất `APP_VERSION` và `getVersionInfo()` làm nguồn sự thật duy nhất.
-  - Toàn bộ giao diện di động `app/m/*` đã được liên kết với `APP_VERSION`, không còn tồn tại bất kỳ chuỗi phiên bản gõ tay nào.
-  - Công cụ phát hành tự động [scripts/release.mjs](file:///c:/Users/hoang/Downloads/senexam-web-main/scripts/release.mjs) sẵn sàng tính toán phiên bản và sinh release notes tự động cho các bản cập nhật tương lai.
+Để hệ thống tự động tăng phiên bản và cập nhật CHANGELOG chuẩn xác, dưới đây là cấu trúc commit gợi ý cho lần sửa đổi này:
+
+```bash
+git add app/api/exams/ lib/examSecurity.* lib/examDraft.ts lib/supabaseAdmin.ts app/seb-exam/ migrations/ tests/deep-audit-vulnerabilities.test.mjs AUDIT_REPORT.md
+git commit -m "security(exam): patch indirect answer leak, duplicate submit idempotency, and admin authorization"
+```
+
+- **Loại commit:** `security` (Tương đương `fix` / `patch` -> Hệ thống sẽ tự tính SemVer tương ứng).
+- **Phạm vi tác động:** `exam` (Bảo mật phòng thi, chống rò rỉ đáp án mảng, idempotency nộp bài, xác thực SEB, bảo vệ phiếu bầu và loại bỏ backdoor admin).
+- **Breaking Change:** **KHÔNG**. Toàn bộ thay đổi tương thích 100% ngược với hệ thống phòng thi hiện hành.

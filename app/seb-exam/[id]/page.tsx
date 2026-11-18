@@ -263,7 +263,7 @@ export default function SebExamRoomPage() {
         if (profile) {
           setUserProfile(profile)
         }
-        if (profile?.role === 'admin' || profile?.role === 'collab' || email === 'hoangbinhminh2508@gmail.com') {
+        if (profile?.role === 'admin' || profile?.role === 'collab') {
           setIsAdmin(true)
         }
 
