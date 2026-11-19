@@ -695,7 +695,6 @@ export function middleware(request: NextRequest) {
       'auth',
       'sengraph',
       'chat',
-      'zalo-chat',
       'reset-password',
       'fepn-reset-password',
       'seb-dashboard',

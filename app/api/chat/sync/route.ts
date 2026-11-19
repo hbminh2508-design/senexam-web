@@ -88,7 +88,7 @@ export async function POST(request: Request) {
 
       let insertedInDb = false
       try {
-        const { error } = await db.from('zalo_sync_queue').insert(syncItem)
+        const { error } = await db.from('chat_transit_queue').insert(syncItem)
         if (!error) {
           insertedInDb = true
         }
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       // 3.1 Kéo từ Supabase Database Table & Xóa Ngay Lập Tức
       try {
         const { data: rows, error } = await db
-          .from('zalo_sync_queue')
+          .from('chat_transit_queue')
           .select('id, sender_id, sender_name, payload, sync_type, created_at')
           .eq('receiver_id', normReceiver)
           .order('created_at', { ascending: true })
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
           const idsToDelete = rows.map((r: any) => r.id)
 
           // 🚨 BƯỚC QUYẾT ĐỊNH: XÓA NGAY LẬP TỨC TRÊN SERVER ĐỂ KHÔNG BỊ ĐẦY DUNG LƯỢNG
-          await db.from('zalo_sync_queue').delete().in('id', idsToDelete)
+          await db.from('chat_transit_queue').delete().in('id', idsToDelete)
 
           rows.forEach((r: any) => {
             pulledMessages.push({
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
       const syncKey = `backup_${senderId}_${code}`.toLowerCase()
 
       try {
-        await db.from('zalo_sync_queue').insert({
+        await db.from('chat_transit_queue').insert({
           sender_id: String(senderId),
           sender_name: String(senderName || 'Thiết bị nguồn'),
           receiver_id: syncKey,
@@ -232,7 +232,7 @@ export async function POST(request: Request) {
 
       try {
         const { data: rows } = await db
-          .from('zalo_sync_queue')
+          .from('chat_transit_queue')
           .select('id, payload')
           .eq('receiver_id', syncKey)
           .limit(1)
@@ -240,7 +240,7 @@ export async function POST(request: Request) {
         if (rows && rows.length > 0) {
           backupPayload = rows[0].payload
           // 🚨 XÓA NGAY LẬP TỨC GÓI SAO LƯU TRÊN SERVER
-          await db.from('zalo_sync_queue').delete().eq('id', rows[0].id)
+          await db.from('chat_transit_queue').delete().eq('id', rows[0].id)
         }
       } catch (e) {}
 
@@ -265,7 +265,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: 'Hành động không hợp lệ' }, { status: 400 })
   } catch (error: any) {
-    console.error('Lỗi Zalo Sync Queue Route:', error)
+    console.error('Lỗi Sen Chat Sync Queue Route:', error)
     return NextResponse.json({ error: error?.message || 'Lỗi máy chủ' }, { status: 500 })
   }
 }
