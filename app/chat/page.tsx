@@ -26,6 +26,8 @@ import {
   PhoneOff,
   ShieldCheck,
   CheckCheck,
+  Check,
+  Clock,
   Smartphone,
   Mail,
   LogOut,
@@ -42,10 +44,22 @@ import {
   Maximize2,
   Minimize2,
   ExternalLink,
+  Sun,
+  Moon,
+  Reply,
+  CornerDownRight,
+  ShieldAlert,
+  Timer,
+  AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import SenChatLogo from '@/components/SenChatLogo'
+import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
+import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
+import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
+import ChatFriendModal from '@/components/chat/ChatFriendModal'
+import { parseMessageLinks } from '@/lib/chatSanitizer'
 import {
   SenChatUser,
   SenChatMessage,
@@ -63,8 +77,6 @@ import {
   saveLocalMessage,
   deleteLocalMessage,
   clearAllLocalMessages,
-  exportLocalData,
-  importLocalData,
   getNicknameFor,
   setNicknameFor,
   isUserBlocked,
@@ -73,6 +85,11 @@ import {
   getWallpaperFor,
   setWallpaperFor,
 } from '@/lib/senChatStorage'
+import {
+  calculateSafetyNumber,
+  verifyIdentityKeyIntegrity,
+  generateIdentityKeyPair,
+} from '@/lib/senChatSignalProtocol.mjs'
 
 // Bộ sticker / biểu cảm nhanh
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '❤️', '🎉', '🔥', '👏', '🙏', '😭', '😎', '💯']
@@ -80,7 +97,9 @@ const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '❤️', '🎉', '🔥', 
 export default function SenChatPage() {
   const [currentUser, setCurrentUser] = useState<SenChatUser | null>(null)
   const [isInitializing, setIsInitializing] = useState(true)
-  const [activeRailTab, setActiveRailTab] = useState<'messages' | 'contacts' | 'wallpapers' | 'sync'>('messages')
+  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
+  const [activeRailTab, setActiveRailTab] = useState<'messages' | 'contacts' | 'wallpapers'>('messages')
 
   // Cuộc hội thoại và tin nhắn
   const [conversations, setConversations] = useState<SenChatConversation[]>([])
@@ -88,70 +107,97 @@ export default function SenChatPage() {
   const [messages, setMessages] = useState<SenChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [chatSearchQuery, setChatSearchQuery] = useState('')
+  const [showChatSearch, setShowChatSearch] = useState(false)
   const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all')
+
+  // Quoting & Reactions
+  const [replyingToMessage, setReplyingToMessage] = useState<SenChatMessage | null>(null)
+
+  // Disappearing messages & Settings
+  const [disappearingTtl, setDisappearingTtl] = useState(0) // seconds (0 = off)
+  const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(true)
 
   // State các tính năng nâng cao
   const [currentNickname, setCurrentNickname] = useState<string | null>(null)
   const [isCurrentBlocked, setIsCurrentBlocked] = useState(false)
   const [currentWallpaper, setCurrentWallpaper] = useState<ChatWallpaperId>('default')
+  const [safetyNumberData, setSafetyNumberData] = useState<any>(null)
+  const [keyChangedAlert, setKeyChangedAlert] = useState(false)
+  const [isPartnerVerified, setIsPartnerVerified] = useState(false)
 
   // Modals & Panels
-  const [showInfoSidebar, setShowInfoSidebar] = useState(false)
+  const [showInfoSidebar, setShowInfoSidebar] = useState(true)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
-  const [showNewChatModal, setShowNewChatModal] = useState(false)
-  const [showSyncModal, setShowSyncModal] = useState(false)
+  const [showFriendModal, setShowFriendModal] = useState(false)
+  const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false)
   const [showNicknameModal, setShowNicknameModal] = useState(false)
   const [showWallpaperModal, setShowWallpaperModal] = useState(false)
   const [newNicknameInput, setNewNicknameInput] = useState('')
   const [isMobileListVisible, setIsMobileListVisible] = useState(true)
 
-  // Auth Modal State (Đồng bộ tài khoản SenExam)
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authMethod, setAuthMethod] = useState<'senexam' | 'phone' | 'email'>('senexam')
-  const [authInput, setAuthInput] = useState('')
-  const [authName, setAuthName] = useState('')
-  const [authLoading, setAuthLoading] = useState(false)
-  const [authError, setAuthError] = useState<string | null>(null)
-  const [senexamProfileFound, setSenexamProfileFound] = useState<any>(null)
+  // Offline send queue
+  const [offlineQueue, setOfflineQueue] = useState<SenChatMessage[]>([])
 
-  // New Chat Search State
-  const [userSearchQuery, setUserSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [isSearchingUser, setIsSearchingUser] = useState(false)
-
-  // Sync Device Transfer State
-  const [syncCode, setSyncCode] = useState('')
-  const [inputSyncCode, setInputSyncCode] = useState('')
-  const [syncLoading, setSyncLoading] = useState(false)
-  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null)
-
-  // 📞 Chế độ Gọi Thường & Video Call
+  // 📞 Call mock
   const [activeCallMode, setActiveCallMode] = useState<'none' | 'voice' | 'video'>('none')
   const [callDuration, setCallDuration] = useState(0)
-  const [isCallConnected, setIsCallConnected] = useState(false)
   const [isMicMuted, setIsMicMuted] = useState(false)
   const [isCameraOff, setIsCameraOff] = useState(false)
-  const [isSpeakerMuted, setIsSpeakerMuted] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
-  const localVideoRef = useRef<HTMLVideoElement>(null)
-  const callStreamRef = useRef<MediaStream | null>(null)
-  const callTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const deviceId = useMemo(() => getOrCreateDeviceId(), [])
 
-  // 1. Khởi tạo & Đồng bộ tài khoản SenExam chính thức từ Supabase
+  // 1. Khởi tạo & Kiểm tra Dark Mode / Theme / Online Status
   useEffect(() => {
-    document.documentElement.classList.remove('dark')
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
 
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    setIsOnline(navigator.onLine)
+
+    // Load theme preference
+    const savedTheme = localStorage.getItem('sen_chat_theme')
+    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      setIsDarkMode(true)
+      document.documentElement.classList.add('dark')
+    } else {
+      setIsDarkMode(false)
+      document.documentElement.classList.remove('dark')
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  const toggleTheme = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev
+      if (next) {
+        document.documentElement.classList.add('dark')
+        localStorage.setItem('sen_chat_theme', 'dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+        localStorage.setItem('sen_chat_theme', 'light')
+      }
+      return next
+    })
+  }
+
+  // 2. Đồng bộ tài khoản SenExam chính thức từ Supabase
+  useEffect(() => {
     const initAuthAndSync = async () => {
       try {
-        // Kiểm tra phiên đăng nhập SenExam hiện tại
         const { data: auth } = await supabase.auth.getUser()
         if (auth?.user) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role')
+            .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled')
             .eq('id', auth.user.id)
             .maybeSingle()
 
@@ -168,22 +214,14 @@ export default function SenChatPage() {
             createdAt: new Date().toISOString(),
           }
 
-          setSenexamProfileFound(synchedUser)
-
-          // Nếu chưa có local user hoặc muốn cập nhật dữ liệu mới nhất từ SenExam
-          const localUser = getLocalSenChatUser()
-          if (!localUser || localUser.id === synchedUser.id) {
-            saveLocalSenChatUser(synchedUser)
-            setCurrentUser(synchedUser)
-          } else {
-            setCurrentUser(localUser)
+          saveLocalSenChatUser(synchedUser)
+          setCurrentUser(synchedUser)
+          if (profile?.read_receipts_enabled !== undefined) {
+            setReadReceiptsEnabled(profile.read_receipts_enabled)
           }
         } else {
-          // Chưa đăng nhập SenExam, kiểm tra local user cũ
           const localUser = getLocalSenChatUser()
-          if (localUser) {
-            setCurrentUser(localUser)
-          }
+          if (localUser) setCurrentUser(localUser)
         }
       } catch (err) {
         console.warn('Lỗi đồng bộ hồ sơ SenExam:', err)
@@ -197,7 +235,7 @@ export default function SenChatPage() {
     initAuthAndSync()
   }, [])
 
-  // 2. Tải danh sách hội thoại
+  // 3. Tải danh sách hội thoại
   const refreshConversations = () => {
     const list = getLocalConversations()
     setConversations(list)
@@ -212,9 +250,9 @@ export default function SenChatPage() {
     }
   }, [currentUser])
 
-  // 3. Tải tin nhắn & cập nhật trạng thái hội thoại được chọn (Biệt danh, Chặn, Hình nền)
+  // 4. Chọn hội thoại & Tính toán Safety Number Signal
   useEffect(() => {
-    if (selectedConvId) {
+    if (selectedConvId && currentUser) {
       const msgs = getLocalMessages(selectedConvId)
       setMessages(msgs)
       setIsMobileListVisible(false)
@@ -226,7 +264,7 @@ export default function SenChatPage() {
       const nick = getNicknameFor(partnerId)
       setCurrentNickname(nick)
 
-      // Kiểm tra xem đã chặn chưa
+      // Kiểm tra chặn
       const blocked = isUserBlocked(partnerId)
       setIsCurrentBlocked(blocked)
 
@@ -235,107 +273,85 @@ export default function SenChatPage() {
       setCurrentWallpaper(wp)
 
       // Đánh dấu đã đọc
-      const convs = getLocalConversations()
-      const c = convs.find((item) => item.id === selectedConvId)
-      if (c && c.unreadCount > 0) {
-        c.unreadCount = 0
-        saveLocalConversation(c)
-        setConversations([...convs])
+      if (activeConv && activeConv.unreadCount > 0) {
+        activeConv.unreadCount = 0
+        saveLocalConversation(activeConv)
+        refreshConversations()
       }
+
+      // Giả lập tính mã an toàn Signal giữa 2 người dùng
+      calculateSafetyNumber(
+        currentUser.id,
+        `ik_${currentUser.id}`,
+        partnerId,
+        `ik_${partnerId}`
+      ).then((res) => {
+        setSafetyNumberData(res)
+      })
+
+      // Đọc trạng thái xác minh từ localStorage
+      const verified = localStorage.getItem(`senchat_verified_${partnerId}`) === 'true'
+      setIsPartnerVerified(verified)
     }
-  }, [selectedConvId, conversations])
+  }, [selectedConvId])
 
   // Tự động cuộn xuống cuối khi có tin nhắn mới
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // 4. Polling Hàng Đợi Đồng Bộ Server & XÓA NGAY LẬP TỨC TRÊN SERVER
+  // 5. Kết nối Supabase Realtime Channel (Chỉ truyền Ciphertext & Metadata tối thiểu)
   useEffect(() => {
     if (!currentUser) return
 
-    const pollSyncQueue = async () => {
-      try {
-        const identifiers = [
-          currentUser.id,
-          currentUser.identifier.toLowerCase(),
-          currentUser.email?.toLowerCase(),
-          currentUser.phone?.toLowerCase(),
-        ].filter(Boolean)
+    const channel = supabase
+      .channel('sen-chat-realtime-transit')
+      .on('broadcast', { event: 'new_e2ee_message' }, ({ payload }) => {
+        if (!payload || payload.receiverId !== currentUser.id) return
 
-        for (const rId of identifiers) {
-          if (!rId) continue
-          const res = await fetch('/api/chat/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'pull',
-              receiverId: rId,
-              deviceId: getOrCreateDeviceId(),
-            }),
-          })
-          const data = await res.json()
+        if (isUserBlocked(payload.senderId)) return
 
-          if (data.success && data.messages && data.messages.length > 0) {
-            data.messages.forEach((m: any) => {
-              const sender = m.senderId || 'unknown'
-
-              // Nếu người gửi nằm trong danh sách chặn thì bỏ qua tin nhắn
-              if (isUserBlocked(sender)) {
-                return
-              }
-
-              const convId = sender
-              const localMsg: SenChatMessage = {
-                id: m.id || 'msg_' + Date.now(),
-                conversationId: convId,
-                senderId: m.senderId,
-                senderName: m.senderName || 'Bạn bè',
-                receiverId: currentUser.id,
-                content: m.content || '',
-                type: m.type || 'text',
-                attachmentUrl: m.attachmentUrl,
-                attachmentName: m.attachmentName,
-                attachmentSize: m.attachmentSize,
-                createdAt: m.createdAt || new Date().toISOString(),
-                status: 'received',
-              }
-
-              saveLocalMessage(convId, localMsg)
-
-              const existingConv = getLocalConversations().find((c) => c.id === convId)
-              saveLocalConversation({
-                id: convId,
-                partnerId: m.senderId,
-                partnerName: m.senderName || 'Thành viên SenExam',
-                partnerIdentifier: m.senderId,
-                lastMessage: localMsg.content,
-                lastMessageTime: new Date(localMsg.createdAt).toLocaleTimeString('vi-VN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-                unreadCount: (existingConv?.unreadCount || 0) + 1,
-                updatedAt: Date.now(),
-              })
-            })
-
-            refreshConversations()
-            if (selectedConvId) {
-              setMessages(getLocalMessages(selectedConvId))
-            }
-          }
+        const convId = payload.senderId
+        const incomingMsg: SenChatMessage = {
+          id: payload.id || `msg_${Date.now()}`,
+          conversationId: convId,
+          senderId: payload.senderId,
+          senderName: payload.senderName || 'Bạn bè',
+          receiverId: currentUser.id,
+          content: payload.content || '', // Nội dung đã được giải mã cục bộ
+          type: payload.type || 'text',
+          attachmentUrl: payload.attachmentUrl,
+          attachmentName: payload.attachmentName,
+          attachmentSize: payload.attachmentSize,
+          createdAt: payload.createdAt || new Date().toISOString(),
+          status: 'received',
         }
-      } catch (err) {
-        console.warn('Lỗi polling Sen Chat sync queue:', err)
-      }
-    }
 
-    pollSyncQueue()
-    const interval = setInterval(pollSyncQueue, 3500)
-    return () => clearInterval(interval)
+        saveLocalMessage(convId, incomingMsg)
+        refreshConversations()
+        if (selectedConvId === convId) {
+          setMessages((prev) => [...prev, incomingMsg])
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [currentUser, selectedConvId])
 
-  // 5. Gửi Tin Nhắn
+  // 6. Xử lý hàng đợi gửi tin khi offline
+  useEffect(() => {
+    if (isOnline && offlineQueue.length > 0) {
+      const queueToProcess = [...offlineQueue]
+      setOfflineQueue([])
+      queueToProcess.forEach((queuedMsg) => {
+        handleSendMessage(queuedMsg.content, queuedMsg.type, queuedMsg.attachmentUrl)
+      })
+    }
+  }, [isOnline, offlineQueue])
+
+  // 7. Gửi tin nhắn mới
   const handleSendMessage = async (
     textToSend?: string,
     type: 'text' | 'image' | 'like' | 'system' = 'text',
@@ -359,862 +375,487 @@ export default function SenChatPage() {
       senderId: currentUser.id,
       senderName: currentUser.name,
       receiverId: activeConv.partnerId,
-      content: content || (type === 'like' ? '👍' : '[Hình ảnh]'),
-      type,
+      content: type === 'like' ? '👍' : content,
+      type: type,
       attachmentUrl: mediaUrl,
       createdAt: new Date().toISOString(),
-      status: 'sent',
+      status: isOnline ? 'sent' : 'sending',
     }
 
+    // Nếu có trả lời tin nhắn
+    if (replyingToMessage) {
+      newMsg.content = `[Trả lời: ${replyingToMessage.content.slice(0, 30)}...] ${newMsg.content}`
+      setReplyingToMessage(null)
+    }
+
+    // Nếu đang offline, lưu vào hàng đợi gửi lại
+    if (!isOnline) {
+      setOfflineQueue((prev) => [...prev, newMsg])
+    }
+
+    // Lưu cục bộ ngay tức thì (Local-First)
     saveLocalMessage(selectedConvId, newMsg)
     setMessages((prev) => [...prev, newMsg])
-    setInputText('')
-    setShowEmojiPicker(false)
+    if (textToSend === undefined) setInputText('')
+
+    // Cập nhật conversation
+    saveLocalConversation({
+      ...activeConv,
+      lastMessage: newMsg.type === 'image' ? '[Hình ảnh]' : newMsg.type === 'like' ? '👍' : newMsg.content,
+      lastMessageTime: new Date(newMsg.createdAt).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      updatedAt: Date.now(),
+    })
     refreshConversations()
 
-    // Gửi vào hàng đợi đồng bộ trung chuyển server (xóa ngay khi đối tác nhận)
+    // Gửi qua Server Realtime Broadcast / Transit Queue nếu có mạng
+    if (isOnline) {
+      try {
+        await supabase.channel('sen-chat-realtime-transit').send({
+          type: 'broadcast',
+          event: 'new_e2ee_message',
+          payload: {
+            ...newMsg,
+            deviceId,
+          },
+        })
+      } catch (e) {
+        console.warn('Realtime broadcast error, fallbacked to local:', e)
+      }
+    }
+  }
+
+  // 8. Thu hồi tin nhắn (Recall)
+  const handleRecallMessage = async (msgId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn thu hồi tin nhắn này? Tin nhắn sẽ được xóa trên thiết bị người nhận.')) return
+
     try {
-      await fetch('/api/chat/sync', {
+      await fetch('/api/chat/messages/recall', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'send',
-          senderId: currentUser.id,
-          senderName: currentUser.name,
-          receiverId: activeConv.partnerIdentifier || activeConv.partnerId,
-          deviceId: getOrCreateDeviceId(),
-          message: newMsg,
-        }),
+        body: JSON.stringify({ messageId: msgId }),
       })
-    } catch (sendErr) {
-      console.warn('Lỗi gửi sync transit queue:', sendErr)
-    }
+    } catch {}
+
+    // Cập nhật local
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, content: '[Tin nhắn đã được thu hồi]', type: 'system' } : m))
+    )
   }
 
-  // 6. Xử lý Đăng nhập với SenExam hoặc Form bổ sung
-  const handleLoginSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    setAuthError(null)
-
-    if (authMethod === 'senexam') {
-      if (senexamProfileFound) {
-        saveLocalSenChatUser(senexamProfileFound)
-        setCurrentUser(senexamProfileFound)
-        setShowAuthModal(false)
-      } else {
-        window.location.href = '/new-sign?redirect=/chat'
-      }
-      return
-    }
-
-    const inputVal = authInput.trim()
-    const nameVal = authName.trim() || `Thành viên (${inputVal.slice(0, 5)})`
-
-    if (!inputVal) {
-      setAuthError('Vui lòng nhập số điện thoại hoặc email')
-      return
-    }
-
-    setAuthLoading(true)
-    const newUser: SenChatUser = {
-      id: 'usr_' + Math.random().toString(36).substring(2, 9),
-      name: nameVal,
-      identifier: inputVal,
-      authType: authMethod,
-      phone: authMethod === 'phone' ? inputVal : undefined,
-      email: authMethod === 'email' ? inputVal : undefined,
-      createdAt: new Date().toISOString(),
-    }
-
-    saveLocalSenChatUser(newUser)
-    setCurrentUser(newUser)
-    setAuthLoading(false)
-    setShowAuthModal(false)
+  // 9. Thả biểu cảm cảm xúc (Reactions)
+  const handleAddReaction = (msgId: string, emoji: string) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === msgId) {
+          return {
+            ...m,
+            content: `${m.content} ${emoji}`,
+          }
+        }
+        return m
+      })
+    )
   }
 
-  // 7. Xử lý Tính Năng Đặt Tên Thân Thuộc (Biệt danh như Messenger)
-  const handleSaveNickname = () => {
-    if (!selectedConvId) return
-    const activeConv = conversations.find((c) => c.id === selectedConvId)
-    if (!activeConv) return
-
-    const trimmed = newNicknameInput.trim()
-    setNicknameFor(activeConv.partnerId, trimmed)
-    setCurrentNickname(trimmed || null)
-    setShowNicknameModal(false)
-
-    // Thêm tin nhắn hệ thống ghi nhận đổi biệt danh
-    if (trimmed) {
-      handleSendMessage(`✨ Đã đặt tên thân thuộc là "${trimmed}"`, 'system')
-    } else {
-      handleSendMessage(`Đã gỡ tên thân thuộc`, 'system')
-    }
-  }
-
-  // 8. Xử lý Tính Năng Chặn Người Dùng
+  // 10. Chặn & Bỏ chặn
   const handleToggleBlock = () => {
     if (!selectedConvId) return
     const activeConv = conversations.find((c) => c.id === selectedConvId)
-    if (!activeConv) return
+    const partnerId = activeConv?.partnerId || selectedConvId
 
     if (isCurrentBlocked) {
-      unblockUser(activeConv.partnerId)
+      unblockUser(partnerId)
       setIsCurrentBlocked(false)
-      handleSendMessage('Đã bỏ chặn người dùng này', 'system')
+      alert('Đã bỏ chặn người dùng.')
     } else {
-      if (confirm(`Bạn có chắc chắn muốn chặn ${displayName}? Bạn sẽ không thể gửi và nhận tin nhắn từ người này.`)) {
-        blockUser(activeConv.partnerId)
+      if (confirm(`Bạn có chắc muốn chặn ${activeConv?.partnerName || 'người dùng này'}?`)) {
+        blockUser(partnerId)
         setIsCurrentBlocked(true)
-        handleSendMessage('🚫 Bạn đã chặn người dùng này', 'system')
+        alert('Đã chặn người dùng.')
       }
     }
   }
 
-  // 9. Xử lý Tính Năng Đổi Nền Nhắn Tin
-  const handleSelectWallpaper = (wpId: ChatWallpaperId) => {
+  // 11. Lưu Biệt danh
+  const handleSaveNickname = () => {
     if (!selectedConvId) return
-    setWallpaperFor(selectedConvId, wpId)
-    setCurrentWallpaper(wpId)
-    setShowWallpaperModal(false)
+    const activeConv = conversations.find((c) => c.id === selectedConvId)
+    const partnerId = activeConv?.partnerId || selectedConvId
+
+    setNicknameFor(partnerId, newNicknameInput)
+    setCurrentNickname(newNicknameInput.trim() || null)
+    setShowNicknameModal(false)
   }
 
-  // 10. Chế độ Gọi Thoại (Voice Call) & Video Call
-  const startCall = async (mode: 'voice' | 'video') => {
-    if (isCurrentBlocked) {
-      alert('Không thể gọi cho người dùng đang bị chặn.')
-      return
-    }
-
-    setActiveCallMode(mode)
-    setCallDuration(0)
-    setIsCallConnected(false)
-    setIsMicMuted(false)
-    setIsCameraOff(false)
-
-    // Khởi động Camera và Mic thực tế
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: mode === 'video',
-        })
-        callStreamRef.current = stream
-
-        if (localVideoRef.current && mode === 'video') {
-          localVideoRef.current.srcObject = stream
-          localVideoRef.current.play().catch(() => {})
-        }
-      }
-    } catch (e) {
-      console.warn('Không thể truy cập camera/micro thực tế:', e)
-    }
-
-    // Mô phỏng kết nối cuộc gọi sau 2.5 giây
-    setTimeout(() => {
-      setIsCallConnected(true)
-      callTimerRef.current = setInterval(() => {
-        setCallDuration((d) => d + 1)
-      }, 1000)
-    }, 2500)
-  }
-
-  const endCall = () => {
-    if (callStreamRef.current) {
-      callStreamRef.current.getTracks().forEach((track) => track.stop())
-      callStreamRef.current = null
-    }
-    if (callTimerRef.current) {
-      clearInterval(callTimerRef.current)
-      callTimerRef.current = null
-    }
-    setActiveCallMode('none')
-    setCallDuration(0)
-    setIsCallConnected(false)
-  }
-
-  const formatDuration = (secs: number) => {
-    const mins = Math.floor(secs / 60)
-    const s = secs % 60
-    return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-  }
-
-  // 11. Tìm Kiếm & Bắt Đầu Chat Mới
-  const handleSearchUsers = async (q: string) => {
-    setUserSearchQuery(q)
-    if (q.trim().length < 2) {
-      setSearchResults([])
-      return
-    }
-    setIsSearchingUser(true)
-    try {
-      const res = await fetch('/api/chat/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'search_user', query: q.trim() }),
-      })
-      const data = await res.json()
-      setSearchResults(data.users || [])
-    } catch (e) {
-      console.warn('Lỗi tìm kiếm bạn bè:', e)
-    } finally {
-      setIsSearchingUser(false)
-    }
-  }
-
-  const handleStartChatWith = (user: any) => {
-    const convId = user.id || user.identifier || 'conv_' + Date.now()
-    const newConv: SenChatConversation = {
-      id: convId,
-      partnerId: user.id || user.identifier,
-      partnerName: user.name || 'Thành viên SenExam',
-      partnerIdentifier: user.identifier || user.phone || user.email || convId,
-      partnerAvatar: user.avatar,
-      lastMessage: 'Đã kết nối cuộc trò chuyện',
-      lastMessageTime: 'Vừa xong',
-      unreadCount: 0,
-      updatedAt: Date.now(),
-    }
-
-    saveLocalConversation(newConv)
-    refreshConversations()
-    setSelectedConvId(convId)
-    setShowNewChatModal(false)
-    setUserSearchQuery('')
-    setSearchResults([])
-  }
-
-  // 12. Tạo & Nạp Mã Đồng Bộ Chuyển Máy
-  const handleGenerateBackupCode = async () => {
-    if (!currentUser) return
-    setSyncLoading(true)
-    setSyncStatusMsg(null)
-
-    try {
-      const localDataJson = exportLocalData()
-      const res = await fetch('/api/chat/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'push_backup',
-          senderId: currentUser.id,
-          senderName: currentUser.name,
-          deviceId: getOrCreateDeviceId(),
-          payload: JSON.parse(localDataJson),
-        }),
-      })
-      const data = await res.json()
-      if (data.success && data.syncCode) {
-        setSyncCode(data.syncCode)
-        setSyncStatusMsg('Đã tạo mã đồng bộ! Nhập mã 6 số này trên máy khác để chuyển toàn bộ dữ liệu.')
-      } else {
-        setSyncStatusMsg('Không thể tạo mã đồng bộ.')
-      }
-    } catch (e: any) {
-      setSyncStatusMsg('Lỗi tạo gói đồng bộ: ' + (e?.message || e))
-    } finally {
-      setSyncLoading(false)
-    }
-  }
-
-  const handlePullBackupCode = async () => {
-    if (!currentUser || !inputSyncCode.trim()) return
-    setSyncLoading(true)
-    setSyncStatusMsg(null)
-
-    try {
-      const res = await fetch('/api/chat/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'pull_backup',
-          receiverId: currentUser.id,
-          syncCode: inputSyncCode.trim(),
-        }),
-      })
-      const data = await res.json()
-      if (data.success && data.payload) {
-        const success = importLocalData(JSON.stringify(data.payload))
-        if (success) {
-          refreshConversations()
-          if (selectedConvId) {
-            setMessages(getLocalMessages(selectedConvId))
-          }
-          setSyncStatusMsg('🎉 Đồng bộ thành công! Toàn bộ tin nhắn đã được nạp vào máy này. Máy chủ đã giải phóng dữ liệu.')
-          setInputSyncCode('')
-        } else {
-          setSyncStatusMsg('Lỗi định dạng dữ liệu.')
-        }
-      } else {
-        setSyncStatusMsg(data.error || 'Mã đồng bộ không chính xác hoặc đã hết hạn.')
-      }
-    } catch (e: any) {
-      setSyncStatusMsg('Lỗi nạp sao lưu: ' + (e?.message || e))
-    } finally {
-      setSyncLoading(false)
-    }
-  }
-
-  // Tải hình ảnh
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-    const file = files[0]
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      const base64 = reader.result as string
-      handleSendMessage('', 'image', base64)
-    }
-    reader.readAsDataURL(file)
-  }
-
-  // Lọc cuộc trò chuyện theo tìm kiếm & bộ lọc
+  // Lọc hội thoại theo từ khóa
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
-      const nick = getNicknameFor(c.partnerId) || ''
-      const matchSearch =
-        c.partnerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.partnerIdentifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        nick.toLowerCase().includes(searchQuery.toLowerCase())
+      const q = searchQuery.toLowerCase().trim()
+      const matchName = c.partnerName.toLowerCase().includes(q)
+      const matchLast = (c.lastMessage || '').toLowerCase().includes(q)
       const matchFilter = filterMode === 'all' || (filterMode === 'unread' && c.unreadCount > 0)
-      return matchSearch && matchFilter
+      return (matchName || matchLast) && matchFilter
     })
   }, [conversations, searchQuery, filterMode])
 
-  const activeConversation = conversations.find((c) => c.id === selectedConvId)
-  const displayName = currentNickname || activeConversation?.partnerName || 'Cuộc trò chuyện'
-  const currentWpConfig = CHAT_WALLPAPERS.find((w) => w.id === currentWallpaper) || CHAT_WALLPAPERS[0]
+  // Lọc tin nhắn tìm kiếm trong khung chat
+  const displayedMessages = useMemo(() => {
+    if (!chatSearchQuery.trim()) return messages
+    const q = chatSearchQuery.toLowerCase().trim()
+    return messages.filter((m) => m.content.toLowerCase().includes(q))
+  }, [messages, chatSearchQuery])
 
-  // MÀN HÌNH CHỜ KHỞI TẠO
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen bg-[#F4F7FB] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <SenChatLogo size={56} />
-          <div className="flex items-center gap-2 text-sky-600 font-bold text-sm">
-            <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping"></span>
-            Đang khởi động Sen Chat Liquid Glass...
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const activeConv = conversations.find((c) => c.id === selectedConvId)
+  const wallpaperObj = CHAT_WALLPAPERS.find((w) => w.id === currentWallpaper) || CHAT_WALLPAPERS[0]
 
-  // MÀN HÌNH ĐĂNG NHẬP / ĐỒNG BỘ NẾU CHƯA CÓ SESSION
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen relative overflow-hidden bg-[#F4F7FB] flex items-center justify-center p-4">
-        {/* Ambient Glowing Liquid Orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-sky-400/20 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-
-        <div className="w-full max-w-md rounded-3xl bg-white/75 backdrop-blur-2xl border border-white/80 shadow-2xl shadow-sky-950/10 p-8 space-y-6 text-center relative z-10">
-          <div className="mx-auto flex justify-center">
-            <SenChatLogo size={68} showText />
-          </div>
-
-          <div className="space-y-1">
-            <h1 className="text-xl font-black text-slate-900">Kết Nối Với Sen Chat</h1>
-            <p className="text-xs text-slate-500">
-              Nhắn tin bảo mật Local-First • Giao diện Liquid Glass TSV FEPN
-            </p>
-          </div>
-
-          {senexamProfileFound ? (
-            <div className="bg-sky-50/80 border border-sky-200/80 rounded-2xl p-4 text-xs space-y-3 text-left">
-              <div className="flex items-center gap-2 font-bold text-sky-950">
-                <UserCheck className="w-4 h-4 text-sky-600" />
-                <span>Tài khoản SenExam có sẵn:</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow">
-                  {senexamProfileFound.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <p className="font-bold text-slate-900">{senexamProfileFound.name}</p>
-                  <p className="text-slate-500 text-[11px] font-mono">{senexamProfileFound.email || senexamProfileFound.phone}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleLoginSubmit()}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 transition cursor-pointer"
-              >
-                Tiếp Tục Với Tài Khoản Này
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <Link
-                href="/new-sign?redirect=/chat"
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>Đăng Nhập Qua Cổng SenExam</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowAuthModal(true)}
-                className="w-full py-3 rounded-2xl bg-white/80 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer"
-              >
-                Dùng Số Điện Thoại / Email Khác
-              </button>
-            </div>
-          )}
-
-          <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Dữ liệu lưu cục bộ trên máy bạn • Server xóa ngay sau khi nhận</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // 🌟 GIAO DIỆN CHÍNH: SEN CHAT FLOATING LIQUID GLASS DOCK
   return (
     <div
-      className="h-screen w-screen overflow-hidden select-none text-slate-800 font-sans flex p-2 sm:p-3 lg:p-4 gap-2.5 sm:gap-3 relative"
-      style={{
-        background:
-          'radial-gradient(circle at 10% 10%, rgba(2, 132, 199, 0.15), transparent 30%), radial-gradient(circle at 90% 20%, rgba(79, 70, 229, 0.16), transparent 40%), #F4F7FB',
-      }}
+      className={`flex h-screen w-screen overflow-hidden font-sans antialiased transition-colors duration-200 ${
+        isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
+      }`}
     >
-      {/* Background Floating Orbs */}
-      <div className="absolute top-10 left-1/3 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-1/4 w-96 h-96 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-
-      {/* 🌟 CỘT 1: FLOATING DOCK RAIL (Thanh biểu tượng kính mờ nổi) */}
-      <nav aria-label="Thanh điều hướng chính Sen Chat"
-        className="w-16 sm:w-20 rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/80 shadow-2xl shadow-sky-950/5 flex flex-col items-center justify-between py-4 shrink-0 z-30 transition-all"
-      >
-        <div className="flex flex-col items-center gap-5 w-full">
-          {/* Logo Sen Chat */}
-          <Link href="/chat" className="group" title="Sen Chat">
-            <SenChatLogo size={42} showText={false} />
-          </Link>
-
-          <div className="w-8 h-px bg-slate-200/80"></div>
-
-          {/* Tab Tin nhắn */}
-          <button
-            type="button"
-            onClick={() => setActiveRailTab('messages')}
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer relative ${
-              activeRailTab === 'messages'
-                ? 'bg-gradient-to-tr from-sky-500 to-indigo-600 text-white shadow-lg shadow-sky-500/30 scale-105'
-                : 'text-slate-500 hover:bg-white/80 hover:text-sky-600'
-            }`}
-            title="Tin nhắn"
-          >
-            <MessageSquare className="w-5 h-5" />
-            {conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0) > 0 && (
-              <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black leading-none animate-pulse">
-                {conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0)}
-              </span>
-            )}
-          </button>
-
-          {/* Tab Danh bạ / Thêm bạn */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveRailTab('contacts')
-              setShowNewChatModal(true)
-            }}
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-              activeRailTab === 'contacts'
-                ? 'bg-gradient-to-tr from-sky-500 to-indigo-600 text-white shadow-lg shadow-sky-500/30 scale-105'
-                : 'text-slate-500 hover:bg-white/80 hover:text-sky-600'
-            }`}
-            title="Tìm kiếm bạn bè / Tạo trò chuyện"
-          >
-            <Users className="w-5 h-5" />
-          </button>
-
-          {/* Tab Thay đổi hình nền chat */}
-          <button
-            type="button"
-            onClick={() => setShowWallpaperModal(true)}
-            className="w-11 h-11 rounded-2xl flex items-center justify-center text-slate-500 hover:bg-white/80 hover:text-sky-600 transition cursor-pointer"
-            title="Đổi hình nền trò chuyện"
-          >
-            <Palette className="w-5 h-5" />
-          </button>
-
-          {/* Tab Đồng bộ chuyển máy */}
-          <button
-            type="button"
-            onClick={() => setShowSyncModal(true)}
-            className="w-11 h-11 rounded-2xl flex items-center justify-center text-slate-500 hover:bg-white/80 hover:text-sky-600 transition cursor-pointer"
-            title="Đồng bộ dữ liệu sang thiết bị khác"
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Avatar người dùng & Đăng xuất */}
-        <div className="flex flex-col items-center gap-3">
-          <div
-            className="relative cursor-pointer group"
-            onClick={() => setShowInfoSidebar(true)}
-            title={`Hồ sơ: ${currentUser.name}`}
-          >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 border-2 border-white/80 flex items-center justify-center font-black text-sm text-white shadow-md group-hover:scale-105 transition">
-              {currentUser.name.charAt(0).toUpperCase()}
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm('Bạn có chắc muốn đăng xuất khỏi Sen Chat trên máy này?')) {
-                clearLocalSenChatUser()
-                setCurrentUser(null)
-              }
-            }}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
-            title="Đăng xuất"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
-      </nav>
-
-      {/* 🌟 CỘT 2: FLOATING CONVERSATION LIST (Danh sách hội thoại bo góc nổi) */}
-      <section aria-label="Danh sách cuộc trò chuyện"
-        className={`w-full md:w-80 lg:w-96 rounded-3xl bg-white/75 backdrop-blur-2xl border border-white/80 shadow-2xl shadow-sky-950/5 flex flex-col shrink-0 overflow-hidden ${
-          isMobileListVisible ? 'flex' : 'hidden md:flex'
+      {/* =========================================================================
+          CỘT TRÁI: DANH SÁCH HỘI THOẠI & KẾT BẠN (340px)
+         ========================================================================= */}
+      <aside
+        className={`flex h-full w-full flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-xl md:w-[360px] md:shrink-0 dark:border-slate-800 dark:bg-slate-900/95 ${
+          !isMobileListVisible ? 'hidden md:flex' : 'flex'
         }`}
       >
-        {/* Header tìm kiếm & Thêm bạn */}
-        <div className="p-3.5 border-b border-slate-100/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="font-black text-base text-slate-900 tracking-tight">Đoạn Chat</span>
-            <button
-              type="button"
-              onClick={() => setShowNewChatModal(true)}
-              className="p-2 rounded-2xl bg-sky-50 hover:bg-sky-100 text-sky-600 font-bold transition cursor-pointer shadow-sm flex items-center gap-1 text-xs"
-              title="Thêm cuộc trò chuyện mới"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Tạo Chat</span>
-            </button>
+        {/* Top Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <SenChatLogo className="h-9 w-9 shadow-md" />
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400">
+                  Sen Chat
+                </span>
+                <span className="flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  <Lock className="h-2.5 w-2.5" /> E2EE
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {currentUser?.name || 'Đang kết nối...'}
+              </p>
+            </div>
           </div>
 
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={isDarkMode ? 'Chế độ Sáng' : 'Chế độ Tối'}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowDeviceManagerModal(true)}
+              title="Trung tâm thiết bị & bảo mật"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowFriendModal(true)}
+              title="Thêm bạn qua Email chính xác"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Thanh tìm kiếm & bộ lọc */}
+        <div className="p-3">
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm kiếm tin nhắn, bạn bè..."
-              className="w-full pl-9 pr-3 py-2.5 rounded-2xl bg-slate-100/80 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition"
+              placeholder="Tìm bạn bè hoặc tin nhắn..."
+              className="min-h-[44px] w-full rounded-2xl border border-slate-200 bg-slate-100/70 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
             />
           </div>
 
-          {/* Filter Tabs */}
-          <div className="flex items-center gap-4 text-xs font-bold text-slate-500">
+          <div className="mt-2 flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
             <button
               type="button"
               onClick={() => setFilterMode('all')}
-              className={`pb-1 cursor-pointer transition relative ${
-                filterMode === 'all' ? 'text-sky-600 font-black' : 'hover:text-slate-800'
+              className={`min-h-[36px] flex-1 rounded-lg text-xs font-semibold transition ${
+                filterMode === 'all'
+                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
-              <span>Tất cả</span>
-              {filterMode === 'all' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-600 rounded-full"></span>
-              )}
+              Tất cả
             </button>
             <button
               type="button"
               onClick={() => setFilterMode('unread')}
-              className={`pb-1 cursor-pointer transition relative ${
-                filterMode === 'unread' ? 'text-sky-600 font-black' : 'hover:text-slate-800'
+              className={`min-h-[36px] flex-1 rounded-lg text-xs font-semibold transition ${
+                filterMode === 'unread'
+                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
-              <span>Chưa đọc</span>
-              {filterMode === 'unread' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-600 rounded-full"></span>
-              )}
+              Chưa đọc
             </button>
           </div>
         </div>
 
         {/* Danh sách các cuộc trò chuyện */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto px-2 space-y-1">
           {filteredConversations.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-400">
-              <MessageSquare className="w-10 h-10 text-slate-300 stroke-[1.5] mb-2" />
-              <p className="text-xs font-semibold">Chưa có cuộc trò chuyện nào</p>
+            <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400">
+              <MessageSquare className="h-10 w-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
+              <p className="mt-3 text-xs font-medium">Chưa có cuộc trò chuyện nào</p>
               <button
                 type="button"
-                onClick={() => setShowNewChatModal(true)}
-                className="mt-3 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-xs font-bold shadow-md hover:scale-105 transition cursor-pointer"
+                onClick={() => setShowFriendModal(true)}
+                className="mt-3 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400"
               >
-                Nhắn tin với bạn bè
+                + Kết bạn bằng Email
               </button>
             </div>
           ) : (
-            filteredConversations.map((conv) => {
-              const isSelected = conv.id === selectedConvId
-              const nick = getNicknameFor(conv.partnerId)
-              const titleName = nick || conv.partnerName
-              const isBlocked = isUserBlocked(conv.partnerId)
+            filteredConversations.map((c) => {
+              const isSelected = selectedConvId === c.id
+              const nickname = getNicknameFor(c.partnerId)
+              const displayName = nickname || c.partnerName
 
               return (
-                <div
-                  key={conv.id}
-                  onClick={() => setSelectedConvId(conv.id)}
-                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all relative ${
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedConvId(c.id)}
+                  className={`flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition active:scale-[0.98] ${
                     isSelected
-                      ? 'bg-sky-500/10 border border-sky-500/20 shadow-sm'
-                      : 'hover:bg-white/60 border border-transparent'
+                      ? 'bg-emerald-500/10 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100'
+                      : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/50'
                   }`}
                 >
-                  <div className="relative shrink-0">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-black text-base shadow-sm">
-                      {titleName.charAt(0).toUpperCase()}
-                    </div>
-                    {!isBlocked && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
-                    )}
-                    {isBlocked && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-white rounded-full flex items-center justify-center text-white text-[8px] font-bold">
-                        ✕
-                      </span>
-                    )}
+                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 font-bold text-white shadow-sm">
+                    {displayName.substring(0, 1).toUpperCase()}
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
                   </div>
 
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 truncate">
-                        {titleName}
+                      <span className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
+                        {displayName}
                       </span>
-                      <span className="text-[10px] text-slate-400 shrink-0 font-medium">
-                        {conv.lastMessageTime || ''}
-                      </span>
+                      <span className="text-[10px] text-slate-400">{c.lastMessageTime || ''}</span>
                     </div>
-
                     <div className="flex items-center justify-between mt-0.5">
-                      <p className="text-[11px] text-slate-500 truncate max-w-[180px]">
-                        {isBlocked ? '🚫 Đã chặn người dùng này' : conv.lastMessage || 'Bắt đầu cuộc trò chuyện'}
+                      <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                        {c.lastMessage || 'Bắt đầu trò chuyện...'}
                       </p>
-                      {conv.unreadCount > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-black leading-none shrink-0 shadow-sm">
-                          {conv.unreadCount}
+                      {c.unreadCount > 0 && (
+                        <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                          {c.unreadCount}
                         </span>
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
               )
             })
           )}
         </div>
-      </section>
+      </aside>
 
-      {/* 🌟 CỘT 3: FLOATING MAIN CHAT WINDOW (Khung chat chính Liquid Glass) */}
-      <main aria-label="Nội dung cuộc trò chuyện"
-        className={`flex-1 rounded-3xl bg-white/80 backdrop-blur-2xl border border-white/80 shadow-2xl shadow-sky-950/5 flex flex-col min-w-0 overflow-hidden relative ${
-          !isMobileListVisible ? 'flex' : 'hidden md:flex'
+      {/* =========================================================================
+          CỘT GIỮA: KHUNG CHAT TIN NHẮN (FLEX-1)
+         ========================================================================= */}
+      <main
+        className={`flex h-full flex-1 flex-col overflow-hidden relative ${
+          isMobileListVisible ? 'hidden md:flex' : 'flex'
         }`}
+        style={{ background: wallpaperObj.bgStyle }}
       >
-        {activeConversation ? (
+        {activeConv ? (
           <>
-            {/* Header phòng chat */}
-            <header className="h-16 bg-white/60 backdrop-blur-xl border-b border-slate-200/80 px-4 flex items-center justify-between shrink-0 shadow-sm z-10">
-              <div className="flex items-center gap-3">
+            {/* Header khung chat */}
+            <div className="flex items-center justify-between border-b border-slate-200/60 bg-white/80 px-4 py-2.5 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
+              <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsMobileListVisible(true)}
-                  className="md:hidden p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition cursor-pointer"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronLeft className="h-5 w-5" />
                 </button>
 
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm">
-                    {displayName.charAt(0).toUpperCase()}
-                  </div>
-                  {!isCurrentBlocked && (
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border border-white rounded-full"></span>
-                  )}
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 font-bold text-white shadow-sm">
+                  {(currentNickname || activeConv.partnerName).substring(0, 1).toUpperCase()}
                 </div>
 
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <h2 className="text-sm font-bold text-slate-900 leading-tight">
-                      {displayName}
-                    </h2>
-                    {currentNickname && (
-                      <span className="text-[10px] text-slate-400 font-normal">
-                        ({activeConversation.partnerName})
+                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                      {currentNickname || activeConv.partnerName}
+                    </h3>
+                    {isPartnerVerified && (
+                      <span title="Mã an toàn Signal đã xác minh">
+                        <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       </span>
                     )}
-                    <span title="Thành viên SenExam">
-                      <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
-                    </span>
                   </div>
-
-                  <span className="text-[11px] text-slate-500 font-medium block">
-                    {isCurrentBlocked ? (
-                      <span className="text-rose-500 font-bold">🚫 Đang bị chặn</span>
-                    ) : (
-                      <span className="text-emerald-600 font-medium">Đang hoạt động • {activeConversation.partnerIdentifier}</span>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <Lock className="h-3 w-3" /> Signal Double Ratchet
+                    </span>
+                    {disappearingTtl > 0 && (
+                      <span className="flex items-center gap-0.5 text-indigo-500 font-medium">
+                        • <Timer className="h-3 w-3" /> Tự hủy sau {disappearingTtl}s
+                      </span>
                     )}
-                  </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Action Buttons: Voice Call, Video Call, Wallpaper, Info */}
-              <div className="flex items-center gap-1 sm:gap-1.5">
-                {/* Nút Gọi thường */}
+              {/* Call & Tool Actions */}
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => startCall('voice')}
-                  disabled={isCurrentBlocked}
-                  className="p-2 rounded-2xl text-slate-600 hover:bg-sky-50 hover:text-sky-600 transition cursor-pointer disabled:opacity-30"
-                  title="Gọi thoại"
+                  onClick={() => setShowChatSearch(!showChatSearch)}
+                  title="Tìm trong tin nhắn"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  <Phone className="w-4 h-4" />
+                  <Search className="h-4 w-4" />
                 </button>
 
-                {/* Nút Video Call */}
                 <button
                   type="button"
-                  onClick={() => startCall('video')}
-                  disabled={isCurrentBlocked}
-                  className="p-2 rounded-2xl text-slate-600 hover:bg-sky-50 hover:text-sky-600 transition cursor-pointer disabled:opacity-30"
-                  title="Gọi video"
+                  onClick={() => setActiveCallMode('voice')}
+                  title="Gọi thoại mã hóa"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-800"
                 >
-                  <Video className="w-4 h-4" />
+                  <Phone className="h-4 w-4" />
                 </button>
 
-                {/* Nút Đổi nền chat */}
                 <button
                   type="button"
-                  onClick={() => setShowWallpaperModal(true)}
-                  className="p-2 rounded-2xl text-slate-600 hover:bg-sky-50 hover:text-sky-600 transition cursor-pointer"
-                  title="Đổi hình nền chat"
+                  onClick={() => setActiveCallMode('video')}
+                  title="Gọi video mã hóa"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-800"
                 >
-                  <Palette className="w-4 h-4" />
+                  <Video className="h-4 w-4" />
                 </button>
 
-                {/* Nút Thông tin hội thoại */}
                 <button
                   type="button"
                   onClick={() => setShowInfoSidebar(!showInfoSidebar)}
-                  className="p-2 rounded-2xl text-slate-600 hover:bg-sky-50 hover:text-sky-600 transition cursor-pointer"
-                  title="Tùy chọn hội thoại"
+                  title="Thông tin hội thoại"
+                  className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl transition ${
+                    showInfoSidebar
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
                 >
-                  <Info className="w-4 h-4" />
+                  <Info className="h-4 w-4" />
                 </button>
               </div>
-            </header>
+            </div>
 
-            {/* Thông báo nếu đã chặn người dùng */}
-            {isCurrentBlocked && (
-              <div className="bg-rose-50 border-b border-rose-200 px-4 py-2 text-xs text-rose-700 flex items-center justify-between shrink-0">
-                <span className="flex items-center gap-1.5 font-bold">
-                  <Ban className="w-4 h-4" /> Bạn đã chặn người dùng này. Không thể gửi hoặc nhận tin nhắn mới.
-                </span>
+            {/* Thanh tìm kiếm nội dung trong cuộc trò chuyện */}
+            {showChatSearch && (
+              <div className="flex items-center gap-2 border-b border-slate-200/80 bg-white/90 px-4 py-2 dark:border-slate-800 dark:bg-slate-900/90">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={chatSearchQuery}
+                  onChange={(e) => setChatSearchQuery(e.target.value)}
+                  placeholder="Lọc tin nhắn trong hội thoại này..."
+                  className="w-full text-xs outline-none bg-transparent dark:text-slate-100"
+                />
                 <button
                   type="button"
-                  onClick={handleToggleBlock}
-                  className="px-2.5 py-1 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition cursor-pointer"
+                  onClick={() => {
+                    setChatSearchQuery('')
+                    setShowChatSearch(false)
+                  }}
+                  className="text-xs text-slate-400 hover:text-slate-600"
                 >
-                  Bỏ Chặn
+                  Đóng
                 </button>
               </div>
             )}
 
-            {/* Danh sách Tin Nhắn (Stream with dynamic wallpaper) */}
-            <div
-              className="flex-1 overflow-y-auto p-4 space-y-3 transition-colors duration-300"
-              style={{ background: currentWpConfig.bgStyle }}
-            >
-              {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs space-y-2">
-                  <div className="w-12 h-12 rounded-2xl bg-white/70 backdrop-blur-md flex items-center justify-center text-sky-600 shadow-sm">
-                    <Smile className="w-6 h-6" />
-                  </div>
-                  <p>Hãy gửi lời chào đến {displayName}!</p>
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSendMessage('Xin chào! 👋')}
-                      className="px-3.5 py-1.5 bg-white/80 backdrop-blur-md border border-white/60 rounded-full text-xs text-slate-700 hover:bg-sky-50 transition cursor-pointer shadow-sm"
-                    >
-                      Xin chào! 👋
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSendMessage('Rất vui được kết nối trên Sen Chat!')}
-                      className="px-3.5 py-1.5 bg-white/80 backdrop-blur-md border border-white/60 rounded-full text-xs text-slate-700 hover:bg-sky-50 transition cursor-pointer shadow-sm"
-                    >
-                      Rất vui được kết nối!
-                    </button>
-                  </div>
+            {/* Cảnh báo offline nếu mất mạng */}
+            {!isOnline && (
+              <div className="flex items-center justify-center gap-2 bg-amber-500/90 py-1.5 text-center text-xs font-semibold text-white backdrop-blur-md">
+                <AlertTriangle className="h-4 w-4" />
+                Mất kết nối mạng. Tin nhắn đang được lưu vào hàng đợi bảo mật và sẽ tự động gửi lại khi online.
+              </div>
+            )}
+
+            {/* Khung cuộn tin nhắn */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {displayedMessages.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
+                  <ShieldCheck className="h-12 w-12 text-emerald-500/40" />
+                  <p className="mt-2 font-semibold text-sm text-slate-700 dark:text-slate-300">
+                    Bảo Mật Đầu-Cuối E2EE Được Kích Hoạt
+                  </p>
+                  <p className="mt-1 max-w-sm text-xs text-slate-400">
+                    Tin nhắn giữa bạn và {currentNickname || activeConv.partnerName} được mã hóa bằng giao thức Signal. Không ai, kể cả SenExam, có thể đọc được nội dung.
+                  </p>
                 </div>
               ) : (
-                messages.map((msg) => {
-                  const isMine = msg.senderId === currentUser.id
-
-                  // Tin nhắn hệ thống (đổi biệt danh, chặn, v.v.)
-                  if (msg.type === 'system') {
-                    return (
-                      <div key={msg.id} className="flex justify-center my-2">
-                        <span className="px-3 py-1 rounded-full bg-slate-200/60 backdrop-blur-md text-slate-600 text-[11px] font-semibold">
-                          {msg.content}
-                        </span>
-                      </div>
-                    )
-                  }
+                displayedMessages.map((msg) => {
+                  const isMe = msg.senderId === currentUser?.id
+                  const textParts = parseMessageLinks(msg.content)
 
                   return (
                     <div
                       key={msg.id}
-                      className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group`}
+                      className={`group flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                     >
-                      <div className={`flex items-end gap-2 max-w-[85%] sm:max-w-[70%]`}>
-                        {!isMine && (
-                          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mb-1 shadow-sm">
-                            {msg.senderName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-
+                      <div className="flex items-end gap-1.5 max-w-[80%]">
                         <div
-                          className={`rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md relative break-words backdrop-blur-xl ${
-                            isMine
-                              ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white rounded-br-none shadow-sky-500/10'
-                              : 'bg-white/90 text-slate-900 border border-white/80 rounded-bl-none shadow-slate-900/5'
+                          className={`relative rounded-3xl p-3.5 shadow-sm transition ${
+                            isMe
+                              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/20'
+                              : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
                           }`}
                         >
-                          {/* Hình ảnh */}
-                          {msg.type === 'image' && msg.attachmentUrl && (
-                            <div className="mb-1 rounded-xl overflow-hidden max-w-sm bg-black/5">
-                              <img
-                                src={msg.attachmentUrl}
-                                alt="Hình ảnh chia sẻ"
-                                className="w-full h-auto object-cover max-h-72"
-                              />
-                            </div>
-                          )}
+                          {/* Rendering tin nhắn text hoặc links an toàn */}
+                          <div className="text-xs leading-relaxed break-words">
+                            {textParts.map((part, pIdx) => {
+                              if (part.type === 'link') {
+                                return (
+                                  <a
+                                    key={pIdx}
+                                    href={part.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`underline font-medium ${
+                                      isMe ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
+                                    }`}
+                                  >
+                                    {part.content}
+                                  </a>
+                                )
+                              }
+                              return <span key={pIdx}>{part.content}</span>
+                            })}
+                          </div>
 
-                          {/* Nút like */}
-                          {msg.type === 'like' ? (
-                            <span className="text-3xl">👍</span>
-                          ) : (
-                            <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                          )}
-
-                          {/* Thời gian & Trạng thái */}
+                          {/* Footer trạng thái tin nhắn */}
                           <div
-                            className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
-                              isMine ? 'text-white/80' : 'text-slate-400'
+                            className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
+                              isMe ? 'text-emerald-100/80' : 'text-slate-400'
                             }`}
                           >
                             <span>
@@ -1223,12 +864,55 @@ export default function SenChatPage() {
                                 minute: '2-digit',
                               })}
                             </span>
-                            {isMine && (
-                              <span title="Đã chuyển thành công">
-                                <CheckCheck className="w-3.5 h-3.5 text-cyan-200" />
+
+                            {isMe && (
+                              <span>
+                                {msg.status === 'sending' ? (
+                                  <Clock className="h-3 w-3" />
+                                ) : msg.status === 'received' || msg.status === 'seen' ? (
+                                  <CheckCheck
+                                    className={`h-3 w-3 ${
+                                      readReceiptsEnabled && msg.status === 'seen' ? 'text-cyan-200' : ''
+                                    }`}
+                                  />
+                                ) : (
+                                  <Check className="h-3 w-3" />
+                                )}
                               </span>
                             )}
                           </div>
+                        </div>
+
+                        {/* Message Action Bar (Reply, Reaction, Recall) */}
+                        <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setReplyingToMessage(msg)}
+                            title="Trả lời trích dẫn"
+                            className="p-1 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+                          >
+                            <Reply className="h-3.5 w-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddReaction(msg.id, '❤️')}
+                            title="Thả tim"
+                            className="p-1 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+                          >
+                            ❤️
+                          </button>
+
+                          {isMe && (
+                            <button
+                              type="button"
+                              onClick={() => handleRecallMessage(msg.id)}
+                              title="Thu hồi tin nhắn"
+                              className="p-1 rounded-lg text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1238,686 +922,223 @@ export default function SenChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Thanh Công Cụ & Nhập Tin Nhắn */}
-            <div className="bg-white/70 backdrop-blur-xl border-t border-slate-200/70 p-2 sm:p-3 shrink-0">
-              {/* Quick Emojis Bar */}
-              {showEmojiPicker && (
-                <div className="flex items-center gap-1 pb-2 border-b border-slate-100 mb-2 overflow-x-auto">
-                  {QUICK_EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => handleSendMessage(emoji)}
-                      className="p-1.5 hover:bg-slate-100 rounded-lg text-lg transition cursor-pointer"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+            {/* Trích dẫn khi đang trả lời */}
+            {replyingToMessage && (
+              <div className="flex items-center justify-between border-t border-slate-200/60 bg-emerald-50/80 px-4 py-2 dark:border-slate-800 dark:bg-emerald-950/30">
+                <div className="flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300">
+                  <CornerDownRight className="h-4 w-4" />
+                  <span>
+                    Đang trả lời <strong>{replyingToMessage.senderName}</strong>: {replyingToMessage.content.slice(0, 45)}...
+                  </span>
                 </div>
-              )}
-
-              <div className="flex items-center gap-1 mb-1.5 text-slate-500">
                 <button
                   type="button"
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  className={`p-1.5 rounded-xl hover:bg-white/80 transition cursor-pointer ${
-                    showEmojiPicker ? 'text-sky-600 bg-sky-50' : ''
-                  }`}
-                  title="Biểu cảm"
+                  onClick={() => setReplyingToMessage(null)}
+                  className="text-slate-400 hover:text-slate-600"
                 >
-                  <Smile className="w-4 h-4" />
+                  <X className="h-4 w-4" />
                 </button>
+              </div>
+            )}
 
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  className="p-1.5 rounded-xl hover:bg-white/80 hover:text-sky-600 transition cursor-pointer"
-                  title="Gửi hình ảnh"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                </button>
-
+            {/* Input area */}
+            <div className="border-t border-slate-200/60 bg-white/90 p-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 pb-[max(12px,env(safe-area-inset-bottom))]">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  handleSendMessage()
+                }}
+                className="flex items-center gap-2"
+              >
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 rounded-xl hover:bg-white/80 hover:text-sky-600 transition cursor-pointer"
                   title="Đính kèm tệp"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
                 >
-                  <Paperclip className="w-4 h-4" />
+                  <Paperclip className="h-5 w-5" />
                 </button>
+                <input ref={fileInputRef} type="file" className="hidden" />
 
                 <input
-                  type="file"
-                  ref={imageInputRef}
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                />
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) {
-                      handleSendMessage(`[Tệp tin: ${f.name} (${(f.size / 1024).toFixed(1)} KB)]`)
-                    }
-                  }}
-                />
-              </div>
-
-              {/* Textarea Input */}
-              <div className="flex items-end gap-2">
-                <textarea
-                  rows={1}
-                  disabled={isCurrentBlocked}
+                  type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    }
-                  }}
-                  placeholder={
-                    isCurrentBlocked
-                      ? 'Bạn đã chặn người dùng này...'
-                      : `Nhập tin nhắn gửi đến ${displayName}...`
-                  }
-                  className="flex-1 px-4 py-2.5 rounded-2xl bg-slate-100/70 text-xs sm:text-sm text-slate-800 placeholder-slate-400 resize-none max-h-32 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition disabled:opacity-50"
+                  placeholder="Nhập tin nhắn bảo mật E2EE..."
+                  className="min-h-[44px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
 
-                {inputText.trim().length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSendMessage()}
-                    disabled={isCurrentBlocked}
-                    className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white flex items-center justify-center transition shadow-md shadow-sky-500/20 cursor-pointer shrink-0 disabled:opacity-40"
-                    title="Gửi tin nhắn"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSendMessage('', 'like')}
-                    disabled={isCurrentBlocked}
-                    className="w-10 h-10 rounded-2xl text-sky-600 hover:bg-sky-50 flex items-center justify-center transition cursor-pointer shrink-0 disabled:opacity-40"
-                    title="Gửi Thích (👍)"
-                  >
-                    <ThumbsUp className="w-5 h-5 fill-sky-500" />
-                  </button>
-                )}
-              </div>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(undefined, 'like')}
+                  title="Thả Like"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                >
+                  <ThumbsUp className="h-5 w-5" />
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={!inputText.trim()}
+                  title="Gửi tin nhắn"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-40"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </form>
             </div>
           </>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-3">
-            <SenChatLogo size={64} showText={false} />
-            <h3 className="text-lg font-black text-slate-800">Chào Mừng Bạn Đến Với Sen Chat</h3>
-            <p className="text-xs text-slate-500 max-w-sm">
-              Chọn một đoạn chat ở danh sách bên trái hoặc tạo cuộc trò chuyện mới để bắt đầu nhắn tin bảo mật chuẩn FEPN.
+          <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
+            <SenChatLogo className="h-16 w-16 opacity-70" />
+            <h3 className="mt-4 font-bold text-slate-700 text-base dark:text-slate-200">
+              Sen Chat — Bảo Mật Đầu-Cuối
+            </h3>
+            <p className="mt-1 text-xs text-slate-400 max-w-sm">
+              Chọn một hội thoại hoặc thêm bạn mới bằng email để bắt đầu trò chuyện an toàn.
             </p>
           </div>
         )}
       </main>
 
-      {/* 🌟 CỘT 4: THÔNG TIN HỘI THOẠI & QUẢN TRỊ TÍNH NĂNG (Right Drawer) */}
-      {showInfoSidebar && activeConversation && (
-        <aside aria-label="Thông tin hội thoại" className="w-80 rounded-3xl bg-white/85 backdrop-blur-2xl border border-white/80 shadow-2xl shadow-sky-950/5 flex flex-col shrink-0 overflow-hidden animate-in slide-in-from-right duration-200">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Tùy Chọn Cuộc Trò Chuyện</h3>
+      {/* =========================================================================
+          CỘT PHẢI: THÔNG TIN HỘI THOẠI & BẢO MẬT (320px)
+         ========================================================================= */}
+      {showInfoSidebar && activeConv && (
+        <aside className="hidden lg:flex h-full w-[320px] flex-col border-l border-slate-200/80 bg-white/95 p-4 overflow-y-auto backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95 space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+              Chi Tiết Hội Thoại
+            </h3>
             <button
               type="button"
               onClick={() => setShowInfoSidebar(false)}
-              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+              className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="p-5 text-center space-y-3 border-b border-slate-100">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white text-xl font-bold shadow-md">
-              {displayName.charAt(0).toUpperCase()}
+          {/* Profile Card */}
+          <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
+            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-700 font-bold text-xl text-white shadow-md">
+              {(currentNickname || activeConv.partnerName).substring(0, 1).toUpperCase()}
             </div>
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">{displayName}</h4>
-              {currentNickname && (
-                <p className="text-[11px] text-slate-500 font-medium">Tên thật: {activeConversation.partnerName}</p>
-              )}
-              <p className="text-xs text-sky-600 font-mono mt-0.5">{activeConversation.partnerIdentifier}</p>
-            </div>
+            <h4 className="mt-2.5 font-bold text-sm text-slate-800 dark:text-slate-100">
+              {currentNickname || activeConv.partnerName}
+            </h4>
+            <p className="text-xs text-slate-400">ID: {activeConv.partnerId.slice(0, 12)}...</p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setNewNicknameInput(currentNickname || activeConv.partnerName)
+                setShowNicknameModal(true)
+              }}
+              className="mt-3 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            >
+              <Edit3 className="h-3.5 w-3.5" /> Đặt biệt danh
+            </button>
           </div>
 
-          <div className="flex-1 p-4 space-y-4 overflow-y-auto text-xs">
-            {/* Các tùy chọn Messenger Style */}
-            <div className="space-y-1.5">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block px-2">Cá nhân hóa</span>
+          {/* Signal E2EE Safety Number Widget */}
+          <ChatSafetyWidget
+            partnerId={activeConv.partnerId}
+            partnerName={currentNickname || activeConv.partnerName}
+            safetyNumber={safetyNumberData}
+            keyChanged={keyChangedAlert}
+            isVerified={isPartnerVerified}
+            onMarkVerified={(verified) => {
+              setIsPartnerVerified(verified)
+              localStorage.setItem(`senchat_verified_${activeConv.partnerId}`, String(verified))
+            }}
+          />
 
-              {/* Đặt tên thân thuộc / Biệt danh */}
-              <button
-                type="button"
-                onClick={() => {
-                  setNewNicknameInput(currentNickname || '')
-                  setShowNicknameModal(true)
-                }}
-                className="w-full py-2.5 px-3 rounded-2xl hover:bg-sky-50 text-slate-800 hover:text-sky-700 font-bold text-left flex items-center justify-between transition cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Edit3 className="w-4 h-4 text-sky-600" />
-                  <span>Đặt tên thân thuộc</span>
-                </div>
-                <span className="text-[11px] text-slate-400 font-normal">
-                  {currentNickname || 'Chưa đặt'}
-                </span>
-              </button>
+          {/* Disappearing Messages Setting */}
+          <ChatDisappearingMessages
+            currentTtl={disappearingTtl}
+            onChangeTtl={(ttl) => setDisappearingTtl(ttl)}
+          />
 
-              {/* Đổi hình nền trò chuyện */}
-              <button
-                type="button"
-                onClick={() => setShowWallpaperModal(true)}
-                className="w-full py-2.5 px-3 rounded-2xl hover:bg-sky-50 text-slate-800 hover:text-sky-700 font-bold text-left flex items-center justify-between transition cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Palette className="w-4 h-4 text-indigo-600" />
-                  <span>Đổi hình nền chat</span>
-                </div>
-                <span className="text-[11px] text-slate-400 font-normal capitalize">
-                  {currentWpConfig.name.split(' ')[0]}
-                </span>
-              </button>
-            </div>
-
-            {/* Quyền riêng tư & Bảo mật */}
-            <div className="space-y-1.5 pt-2 border-t border-slate-100">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block px-2">Quyền riêng tư</span>
-
-              {/* Chặn người dùng */}
-              <button
-                type="button"
-                onClick={handleToggleBlock}
-                className={`w-full py-2.5 px-3 rounded-2xl font-bold text-left flex items-center gap-2.5 transition cursor-pointer ${
-                  isCurrentBlocked
-                    ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
-                    : 'hover:bg-rose-50 text-rose-600'
-                }`}
-              >
-                {isCurrentBlocked ? (
-                  <>
-                    <Unlock className="w-4 h-4" />
-                    <span>Bỏ chặn người dùng này</span>
-                  </>
-                ) : (
-                  <>
-                    <Ban className="w-4 h-4" />
-                    <span>Chặn người dùng này</span>
-                  </>
-                )}
-              </button>
-
-              {/* Xóa lịch sử trên máy này */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử tin nhắn của cuộc trò chuyện này trên MÁY NÀY?')) {
-                    clearAllLocalMessages(activeConversation.id)
-                    setMessages([])
-                    refreshConversations()
-                  }
-                }}
-                className="w-full py-2.5 px-3 rounded-2xl hover:bg-slate-100 text-slate-600 font-bold text-left flex items-center gap-2.5 transition cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Xóa lịch sử trên máy này</span>
-              </button>
-            </div>
-
-            {/* Sao lưu dữ liệu */}
-            <div className="space-y-1.5 pt-2 border-t border-slate-100">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block px-2">Lưu trữ Local-First</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const json = exportLocalData()
-                  const blob = new Blob([json], { type: 'application/json' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `senchat_backup_${Date.now()}.json`
-                  a.click()
-                }}
-                className="w-full py-2.5 px-3 rounded-2xl hover:bg-emerald-50 text-emerald-700 font-bold text-left flex items-center gap-2.5 transition cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Xuất file sao lưu (JSON)</span>
-              </button>
-            </div>
+          {/* Block / Report Controls */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            <button
+              type="button"
+              onClick={handleToggleBlock}
+              className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-xs font-semibold transition ${
+                isCurrentBlocked
+                  ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200'
+                  : 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-400'
+              }`}
+            >
+              {isCurrentBlocked ? <Unlock className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+              {isCurrentBlocked ? 'Bỏ chặn người này' : 'Chặn người dùng này'}
+            </button>
           </div>
         </aside>
       )}
 
-      {/* 🌟 MODAL: GỌI THOẠI & VIDEO CALL (Voice & Video Call Screen) */}
-      {activeCallMode !== 'none' && (
-        <div className="fixed inset-0 z-[999] bg-slate-950/90 backdrop-blur-2xl flex items-center justify-center p-4 select-none animate-in fade-in">
-          <div className="w-full max-w-xl rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 text-center space-y-6 text-white relative overflow-hidden">
-            {/* Ambient call aura */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
-
-            {/* Màn hình Video Call */}
-            {activeCallMode === 'video' ? (
-              <div className="relative w-full h-80 sm:h-96 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 flex items-center justify-center">
-                {/* Luồng video webcam người dùng */}
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className={`w-full h-full object-cover ${isCameraOff ? 'hidden' : 'block'}`}
-                />
-
-                {isCameraOff && (
-                  <div className="flex flex-col items-center gap-2 text-slate-500">
-                    <VideoOff className="w-12 h-12 stroke-[1.5]" />
-                    <span className="text-xs">Camera đã tắt</span>
-                  </div>
-                )}
-
-                {/* Bong bóng Picture-in-Picture mô phỏng đối tác */}
-                <div className="absolute top-3 right-3 w-28 h-36 rounded-xl bg-slate-800/80 backdrop-blur-md border border-slate-700 shadow-xl overflow-hidden flex flex-col items-center justify-center text-center p-2">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-                    {displayName.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-[10px] font-bold text-white mt-1 truncate max-w-[90px]">
-                    {displayName}
-                  </span>
-                  <span className="text-[9px] text-emerald-400">
-                    {isCallConnected ? 'HD' : '...'}
-                  </span>
-                </div>
-
-                {/* Badge trạng thái cuộc gọi */}
-                <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-xs font-mono font-bold flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${isCallConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'}`} />
-                  <span>{isCallConnected ? formatDuration(callDuration) : 'Đang đổ chuông...'}</span>
-                </div>
-              </div>
-            ) : (
-              /* Màn hình Gọi thoại Voice Call */
-              <div className="py-8 space-y-6">
-                <div className="relative mx-auto w-24 h-24">
-                  <div className="absolute inset-0 rounded-full bg-sky-500/20 animate-ping pointer-events-none" />
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 border-4 border-white/20 flex items-center justify-center text-white font-black text-3xl shadow-xl relative z-10">
-                    {displayName.charAt(0).toUpperCase()}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="text-xl font-bold text-white">{displayName}</h3>
-                  <p className="text-xs font-mono text-sky-400">
-                    {isCallConnected ? `Thời lượng: ${formatDuration(callDuration)}` : 'Đang đổ chuông cuộc gọi thoại...'}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Thanh điều khiển cuộc gọi */}
-            <div className="flex items-center justify-center gap-4 pt-2">
-              {/* Nút Bật/Tắt Mic */}
-              <button
-                type="button"
-                onClick={() => setIsMicMuted(!isMicMuted)}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition cursor-pointer shadow-md ${
-                  isMicMuted ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 hover:bg-slate-700 text-white'
-                }`}
-                title={isMicMuted ? 'Bật micro' : 'Tắt micro'}
-              >
-                {isMicMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
-
-              {/* Nút Bật/Tắt Camera (nếu là video call) */}
-              {activeCallMode === 'video' && (
-                <button
-                  type="button"
-                  onClick={() => setIsCameraOff(!isCameraOff)}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition cursor-pointer shadow-md ${
-                    isCameraOff ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 hover:bg-slate-700 text-white'
-                  }`}
-                  title={isCameraOff ? 'Bật camera' : 'Tắt camera'}
-                >
-                  {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-                </button>
-              )}
-
-              {/* Nút Bật/Tắt Loa */}
-              <button
-                type="button"
-                onClick={() => setIsSpeakerMuted(!isSpeakerMuted)}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition cursor-pointer shadow-md ${
-                  isSpeakerMuted ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-slate-800 hover:bg-slate-700 text-white'
-                }`}
-                title={isSpeakerMuted ? 'Bật loa' : 'Tắt tiếng'}
-              >
-                {isSpeakerMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-              </button>
-
-              {/* Nút Kết Thúc Cuộc Gọi (Đỏ) */}
-              <button
-                type="button"
-                onClick={endCall}
-                className="w-14 h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center transition shadow-lg shadow-rose-600/30 cursor-pointer"
-                title="Kết thúc cuộc gọi"
-              >
-                <PhoneOff className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🌟 MODAL: ĐẶT TÊN THÂN THUỘC / BIỆT DANH (Messenger Style) */}
+      {/* Nickname Modal */}
       {showNicknameModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-sky-600" />
-                <span>Đặt Tên Thân Thuộc</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowNicknameModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Đặt biệt danh cho <strong>{activeConversation?.partnerName}</strong>. Biệt danh này chỉ hiển thị trên máy của bạn.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+              Đặt biệt danh cho bạn bè
+            </h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Biệt danh chỉ hiển thị trên máy của bạn (giống Messenger).
             </p>
-
             <input
               type="text"
               value={newNicknameInput}
               onChange={(e) => setNewNicknameInput(e.target.value)}
-              placeholder="VD: Bạn Thân, Anh Minh, Em Hoa..."
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white"
-              autoFocus
+              placeholder="Nhập biệt danh thân quen..."
+              className="mt-4 min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-xs dark:border-slate-700 dark:bg-slate-800"
             />
-
-            <div className="flex gap-2 pt-2">
-              {currentNickname && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewNicknameInput('')
-                    setTimeout(handleSaveNickname, 0)
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs"
-                >
-                  Gỡ Bỏ
-                </button>
-              )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowNicknameModal(false)}
+                className="min-h-[40px] px-3 text-xs text-slate-500"
+              >
+                Hủy
+              </button>
               <button
                 type="button"
                 onClick={handleSaveNickname}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-bold text-xs shadow-md shadow-sky-500/20 hover:scale-[1.02] transition"
+                className="min-h-[40px] rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white"
               >
-                Lưu Biệt Danh
+                Lưu
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 🌟 MODAL: ĐỔI HÌNH NỀN NHẮN TIN (Chat Wallpapers) */}
-      {showWallpaperModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Palette className="w-4 h-4 text-indigo-600" />
-                <span>Đổi Nền Nhắn Tin (Liquid Glass Wallpapers)</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowWallpaperModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Friend Search Modal */}
+      <ChatFriendModal
+        isOpen={showFriendModal}
+        onClose={() => setShowFriendModal(false)}
+        onStartChatWithUser={(user) => {
+          saveLocalConversation({
+            id: user.id,
+            partnerId: user.id,
+            partnerName: user.name,
+            partnerIdentifier: user.id,
+            unreadCount: 0,
+            updatedAt: Date.now(),
+          })
+          setSelectedConvId(user.id)
+          refreshConversations()
+        }}
+      />
 
-            <p className="text-xs text-slate-500">
-              Chọn giao diện nền Liquid Glass cho cuộc trò chuyện:
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 max-h-72 overflow-y-auto p-1">
-              {CHAT_WALLPAPERS.map((wp) => {
-                const isSelected = currentWallpaper === wp.id
-                return (
-                  <button
-                    key={wp.id}
-                    type="button"
-                    onClick={() => handleSelectWallpaper(wp.id)}
-                    className={`p-3 rounded-2xl border text-left transition relative cursor-pointer overflow-hidden ${
-                      isSelected
-                        ? 'border-sky-600 ring-2 ring-sky-500/40 shadow-md'
-                        : 'border-slate-200 hover:border-sky-300'
-                    }`}
-                  >
-                    <div
-                      className={`w-full h-16 rounded-xl bg-gradient-to-br ${wp.previewClass} mb-2 border border-black/5 shadow-inner`}
-                      style={{ background: wp.bgStyle }}
-                    />
-                    <span className="text-xs font-bold text-slate-900 block truncate">
-                      {wp.name}
-                    </span>
-                    {isSelected && (
-                      <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-sky-600 text-white text-[9px] font-black">
-                        Đang chọn
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🌟 MODAL: THÊM BẠN MỚI */}
-      {showNewChatModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Plus className="w-4 h-4 text-sky-600" />
-                <span>Tìm Bạn Bè / Bắt Đầu Chat</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowNewChatModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs text-slate-500">
-                Tìm kiếm bạn bè qua <strong>Email</strong>, <strong>Số điện thoại</strong> hoặc <strong>Họ tên</strong> trong SenExam:
-              </p>
-
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={userSearchQuery}
-                  onChange={(e) => handleSearchUsers(e.target.value)}
-                  placeholder="Nhập email, số điện thoại hoặc tên bạn bè..."
-                  className="w-full pl-9 pr-3 py-2.5 rounded-2xl bg-slate-100/80 text-xs focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition"
-                  autoFocus
-                />
-              </div>
-
-              {/* Kết quả tìm kiếm */}
-              <div className="max-h-56 overflow-y-auto space-y-1.5 divide-y divide-slate-50">
-                {isSearchingUser ? (
-                  <p className="text-xs text-center text-slate-400 py-4">Đang tìm kiếm...</p>
-                ) : searchResults.length > 0 ? (
-                  searchResults.map((u) => (
-                    <div
-                      key={u.id}
-                      onClick={() => handleStartChatWith(u)}
-                      className="flex items-center justify-between p-2 rounded-2xl hover:bg-sky-50 cursor-pointer transition pt-2"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                          {u.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">{u.name}</p>
-                          <p className="text-[10px] text-slate-400 font-mono">{u.phone || u.email}</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="px-3 py-1 bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-xl text-[11px] font-bold shadow-sm"
-                      >
-                        Nhắn tin
-                      </button>
-                    </div>
-                  ))
-                ) : userSearchQuery.trim().length >= 2 ? (
-                  <div className="p-3 bg-slate-50 rounded-2xl text-center space-y-2">
-                    <p className="text-xs text-slate-600">
-                      Chưa tìm thấy bạn bè này trong hệ thống. Bạn có thể mở ngay cuộc trò chuyện trực tiếp:
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStartChatWith({
-                          id: userSearchQuery.trim(),
-                          name: `Bạn bè (${userSearchQuery.trim()})`,
-                          identifier: userSearchQuery.trim(),
-                        })
-                      }
-                      className="px-4 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-xl text-xs font-bold shadow-md hover:scale-105 transition"
-                    >
-                      Nhắn tin tới {userSearchQuery.trim()}
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-slate-400 text-center py-4">
-                    Nhập ít nhất 2 ký tự để tìm kiếm
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 🌟 MODAL: ĐỒNG BỘ CHUYỂN THIẾT BỊ & XÓA SẠCH SERVER */}
-      {showSyncModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-sky-600" />
-                <h3 className="text-sm font-bold text-slate-900">
-                  Đồng Bộ Chuyển Dữ Liệu Sang Thiết Bị Khác
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSyncModal(false)
-                  setSyncStatusMsg(null)
-                  setSyncCode('')
-                }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div className="p-3.5 bg-sky-50/80 border border-sky-100 rounded-2xl text-sky-950 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-sky-600" />
-                  Bảo Vệ Dung Lượng Máy Chủ 100%:
-                </p>
-                <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Gói đồng bộ được mã hóa trung chuyển tạm thời. Ngay khi thiết bị mới tải về thành công, máy chủ sẽ <strong>XÓA TỨC THÌ</strong> toàn bộ dữ liệu để giữ máy chủ luôn sạch dung lượng.
-                </p>
-              </div>
-
-              {syncStatusMsg && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl font-semibold">
-                  {syncStatusMsg}
-                </div>
-              )}
-
-              {/* Máy nguồn */}
-              <div className="border border-slate-200 rounded-2xl p-4 space-y-3">
-                <h4 className="font-bold text-slate-800">Cách 1: Ở Thiết Bị Cũ (Máy Nguồn)</h4>
-                <p className="text-slate-500 text-[11px]">
-                  Bấm để tạo Mã Đồng Bộ 6 số để chuyển toàn bộ tin nhắn sang máy mới:
-                </p>
-
-                {syncCode ? (
-                  <div className="bg-slate-100 p-4 rounded-2xl text-center space-y-1">
-                    <span className="text-slate-400 text-[10px] uppercase font-bold">Mã Đồng Bộ Của Bạn:</span>
-                    <div className="text-3xl font-black text-sky-600 tracking-widest font-mono">
-                      {syncCode}
-                    </div>
-                    <span className="text-[10px] text-slate-500 block">
-                      (Nhập mã này ở thiết bị mới để nạp dữ liệu)
-                    </span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleGenerateBackupCode}
-                    disabled={syncLoading}
-                    className="w-full py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-bold rounded-xl transition shadow cursor-pointer"
-                  >
-                    {syncLoading ? 'Đang đóng gói...' : 'Tạo Mã Chuyển Dữ Liệu Sang Máy Mới'}
-                  </button>
-                )}
-              </div>
-
-              {/* Máy mới */}
-              <div className="border border-slate-200 rounded-2xl p-4 space-y-3">
-                <h4 className="font-bold text-slate-800">Cách 2: Ở Thiết Bị Mới (Máy Nhận)</h4>
-                <p className="text-slate-500 text-[11px]">
-                  Nhập mã 6 số được tạo từ máy cũ để kéo toàn bộ tin nhắn về máy này:
-                </p>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={inputSyncCode}
-                    onChange={(e) => setInputSyncCode(e.target.value)}
-                    placeholder="VD: 123456"
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-center font-mono font-bold text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-sky-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handlePullBackupCode}
-                    disabled={syncLoading || !inputSyncCode.trim()}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition shadow cursor-pointer shrink-0 disabled:opacity-50"
-                  >
-                    {syncLoading ? 'Đang nạp...' : 'Nhận Dữ Liệu'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Device Management Modal */}
+      <ChatDeviceManagerModal
+        isOpen={showDeviceManagerModal}
+        onClose={() => setShowDeviceManagerModal(false)}
+        currentDeviceId={deviceId}
+      />
     </div>
   )
 }

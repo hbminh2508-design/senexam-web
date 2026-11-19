@@ -75,6 +75,17 @@ function applySecurityHeaders(res: NextResponse): NextResponse {
   return res
 }
 
+// Hàm gán Security Headers siêu bảo mật nghiêm ngặt cho Sen Chat E2EE
+function applyChatSecurityHeaders(res: NextResponse): NextResponse {
+  applySecurityHeaders(res)
+  res.headers.set('X-Frame-Options', 'DENY')
+  res.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.googleapis.com https://oauth2.googleapis.com; media-src 'self' blob: data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+  )
+  return res
+}
+
 export function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const url = request.nextUrl.clone()
@@ -169,6 +180,29 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(errorResponse)
   }
 
+  // Chống rà quét & Email Enumeration cho Sen Chat: Tối đa 5 lượt tìm kiếm/phút
+  if (pathname.startsWith('/api/chat/friend-lookup')) {
+    const isFriendLookupAllowed = checkRateLimit(`email_lookup_${clientIp}`, 5, 60 * 1000)
+    if (!isFriendLookupAllowed) {
+      return applyChatSecurityHeaders(
+        new NextResponse(
+          JSON.stringify({
+            error: 'Too Many Requests',
+            message: 'Bạn đã thực hiện quá nhiều yêu cầu tìm kiếm. Vui lòng chờ 1 phút để tiếp tục.',
+            status: 429,
+          }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': '60',
+            },
+          }
+        )
+      )
+    }
+  }
+
   // Bỏ qua các API route sau khi đã qua lớp kiểm tra rate limit & bot
   if (pathname.startsWith('/api')) {
     return applySecurityHeaders(NextResponse.next())
@@ -204,6 +238,11 @@ export function middleware(request: NextRequest) {
   const isNopQuyLopSubdomain =
     hostname.startsWith('nopquylop.') ||
     hostname.includes('nopquylop.senexam.')
+
+  const isChatSubdomain =
+    hostname.startsWith('chat.senexam.') ||
+    hostname.startsWith('chat.') ||
+    hostname.includes('chat.localhost')
 
   // 4.5.1 DỰ ÁN LỚN: M.SENEXAM.ME - GIAO DIỆN THUẦN MOBILE 100%
   if (isMobileSubdomain) {
@@ -608,7 +647,27 @@ export function middleware(request: NextRequest) {
     return applySecurityHeaders(NextResponse.rewrite(url))
   }
 
-  // (Lưu ý: Sen Chat tạm thời ẩn routing subdomain theo yêu cầu, xem SEN_CHAT_DOCUMENTATION.md)
+  // 4.11 Định tuyến Subdomain Sen Chat: chat.senexam.me
+  if (isChatSubdomain) {
+    const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(userAgent)
+    if (pathname === '/' || pathname === '/dashboard') {
+      url.pathname = isMobileDevice ? '/m/chat' : '/chat'
+      return applyChatSecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/chat') || pathname.startsWith('/m/chat')) {
+      return applyChatSecurityHeaders(NextResponse.next())
+    }
+    if (pathname === '/login' || pathname === '/idp') {
+      url.pathname = '/new-idp'
+      url.searchParams.set('returnUrl', '/chat')
+      return applyChatSecurityHeaders(NextResponse.redirect(url))
+    }
+  }
+
+  // Áp dụng Security Headers siêu bảo mật cho đường dẫn /chat
+  if (pathname.startsWith('/chat') || pathname.startsWith('/m/chat')) {
+    return applyChatSecurityHeaders(NextResponse.next())
+  }
 
   // 5. Kiểm tra nếu truy cập qua subdomain tsv.fepn.senexam.me hoặc fepn.senexam.me
   if (isFepnSubdomain) {
