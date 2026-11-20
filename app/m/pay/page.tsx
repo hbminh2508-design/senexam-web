@@ -58,6 +58,46 @@ import {
 } from 'lucide-react'
 import { APP_VERSION as MOBILE_VERSION } from '@/lib/version'
 
+const MOBILE_VIP_PERKS: Record<string, string[]> = {
+  vip: [
+    'Học tập liền mạch, không quảng cáo trên toàn hệ thống',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 250MB',
+    'Tải tài liệu và đề thi VIP ôn tập: 5 lượt tải miễn phí mỗi ngày',
+    'Tặng thêm +50 lượt hỏi bài giải đề thông minh mỗi ngày',
+  ],
+  premium: [
+    'Đầy đủ mọi quyền lợi cao cấp của hạng VIP',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 500MB',
+    'Huy hiệu và biểu tượng Premium mạ vàng nổi bật',
+    'Tặng gói hỏi bài nâng cao Plus / Ultra (lên đến 250 câu/ngày)',
+  ],
+  premium_plus: [
+    'Bao gồm mọi quyền lợi cao cấp nhất của VIP và Premium',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 1GB',
+    'Trải nghiệm trước tính năng và giao diện học tập mới nhất',
+    'Tải tài liệu ôn tập tốc độ cao: 15 lượt tải mỗi ngày',
+    'Tặng thêm +100 lượt hỏi bài giải đề thông minh mỗi ngày',
+  ],
+  sen_one: [
+    'Đặc quyền toàn diện cao cấp nhất hệ sinh thái SenExam',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 1GB',
+    'Tải tài liệu VIP không giới hạn từ Thứ 6 đến Chủ Nhật',
+    'Tặng thêm +200 lượt hỏi bài giải đề thông minh mỗi ngày',
+  ],
+  sen_one_lite: [
+    'Bao gồm quyền lợi VIP cơ bản + SenAI Plus',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 250MB',
+    '10 lượt tải tài liệu VIP miễn phí mỗi tháng',
+    'Tặng thêm +50 lượt hỏi bài giải đề mỗi ngày',
+  ],
+  lite: [
+    'Mở khoá xem kho tài liệu ôn thi và đề thi tuyển chọn',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 100MB',
+    'Giảm thiểu tối đa quảng cáo xuất hiện khi làm bài',
+    'Mức giá học sinh siêu tiết kiệm',
+  ],
+}
+
 type TabKey = 'vip' | 'wallet' | 'quota' | 'giftcode' | 'exclusive'
 
 export default function MobilePayPage() {
@@ -599,6 +639,21 @@ export default function MobilePayPage() {
                 {g.label}
               </button>
             ))}
+          </div>
+
+          {/* Đặc quyền gói đang chọn */}
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-black text-amber-600 dark:text-amber-400">
+              <CheckCircle2 className="h-4 w-4" /> Đặc quyền gói {selectedVipGroup === 'vip' ? 'Sen VIP' : selectedVipGroup === 'premium' ? 'Sen Premium' : selectedVipGroup === 'premium_plus' ? 'Sen Premium+' : selectedVipGroup === 'sen_one' ? 'Sen One' : selectedVipGroup === 'sen_one_lite' ? 'Sen One Lite' : 'Sen Lite'}:
+            </div>
+            <ul className="space-y-1">
+              {(MOBILE_VIP_PERKS[selectedVipGroup] || MOBILE_VIP_PERKS.vip).map((perk, idx) => (
+                <li key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-700 dark:text-slate-300">
+                  <span className="text-amber-500 font-bold">•</span>
+                  <span>{perk}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Danh sách các kỳ hạn trong nhóm gói đã chọn */}

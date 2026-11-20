@@ -1,0 +1,221 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
+import { getEffectivePlanTier } from '@/lib/vipMembership'
+import { validateChatFileSize, formatBytes } from '@/lib/chatLimits'
+import { uploadEncryptedImageToDrive } from '@/lib/senChatDriveService'
+
+export const dynamic = 'force-dynamic'
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getUserFromRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+    }
+
+    const supabaseAdmin = getSupabaseAdmin()
+
+    // 1. Đọc thông tin gói dịch vụ từ hồ sơ người dùng để xác định hạn mức tệp
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('vip_expires_at, plan_tier')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const effectiveTier = getEffectivePlanTier(profile)
+
+    const contentType = request.headers.get('content-type') || ''
+
+    // 2. XỬ LÝ INTENT PRE-CHECK (Kiểm tra trước khi bắt đầu stream upload)
+    if (contentType.includes('application/json')) {
+      const body = await request.json().catch(() => ({}))
+      const { conversationId, fileSizeBytes, fileName, fileType } = body
+
+      if (!conversationId || typeof fileSizeBytes !== 'number') {
+        return NextResponse.json({ error: 'Thiếu conversationId hoặc fileSizeBytes' }, { status: 400 })
+      }
+
+      // Xác minh người dùng là thành viên hội thoại
+      const { data: member } = await supabaseAdmin
+        .from('chat_members')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!member) {
+        return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
+      }
+
+      // Kiểm tra hạn mức kích thước tệp theo gói
+      const validation = validateChatFileSize(fileSizeBytes, effectiveTier)
+      if (!validation.allowed) {
+        return NextResponse.json(
+          {
+            error: validation.error,
+            allowed: false,
+            limitBytes: validation.limitBytes,
+            fileSizeBytes: validation.fileSizeBytes,
+            currentTier: validation.currentTier,
+            suggestedTier: validation.suggestedTier,
+            upgradeUrl: validation.upgradeUrl,
+          },
+          { status: 413 }
+        )
+      }
+
+      return NextResponse.json({
+        allowed: true,
+        limitBytes: validation.limitBytes,
+        currentTier: validation.currentTier,
+      })
+    }
+
+    // 3. XỬ LÝ TẢI LÊN MULTIPART/FORM-DATA THỰC TẾ
+    const formData = await request.formData()
+    const file = formData.get('file') as File | null
+    const conversationId = formData.get('conversationId') as string | null
+    const fileType = (formData.get('fileType') as string | null) || 'file'
+    const declaredSize = parseInt(formData.get('fileSizeBytes') as string || '0', 10)
+    const encryptedFileName = formData.get('encryptedFileName') as string || ''
+    const encryptedMimeType = formData.get('encryptedMimeType') as string || ''
+    const encryptedThumbnail = formData.get('encryptedThumbnail') as string || ''
+    const encryptedFileHash = formData.get('encryptedFileHash') as string || ''
+    const messageId = formData.get('messageId') as string || null
+
+    if (!file || !conversationId) {
+      return NextResponse.json({ error: 'Thiếu file dữ liệu hoặc conversationId' }, { status: 400 })
+    }
+
+    // Xác minh người dùng là thành viên hội thoại
+    const { data: member } = await supabaseAdmin
+      .from('chat_members')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (!member) {
+      return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
+    }
+
+    // KIỂM TRA HẠN MỨC SERVER-SIDE (TUYỆT ĐỐI KHÔNG TIN CLIENT)
+    // Kiểm tra cả declaredSize và actual file.size từ stream blob nhận được
+    const actualSizeBytes = file.size
+    const validationDeclared = validateChatFileSize(declaredSize || actualSizeBytes, effectiveTier)
+    const validationActual = validateChatFileSize(actualSizeBytes, effectiveTier)
+
+    if (!validationDeclared.allowed || !validationActual.allowed) {
+      const failValidation = !validationActual.allowed ? validationActual : validationDeclared
+      return NextResponse.json(
+        {
+          error: failValidation.error,
+          allowed: false,
+          limitBytes: failValidation.limitBytes,
+          fileSizeBytes: actualSizeBytes,
+          currentTier: failValidation.currentTier,
+          suggestedTier: failValidation.suggestedTier,
+          upgradeUrl: failValidation.upgradeUrl,
+        },
+        { status: 413 }
+      )
+    }
+
+    // Chuyển File sang Buffer nhị phân
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    let driveFileId: string | null = null
+    let storageProvider: 'google_drive' | 'supabase_storage' = 'google_drive'
+    let storagePath: string | null = null
+
+    // 4. ĐIỀU PHỐI NƠI LƯU TRỮ THEO ĐẶC TẢ P4:
+    // - Ảnh: Luôn lưu qua Google Drive API (chỉ chứa blob mã hóa nhị phân).
+    // - Video và các tệp khác: Lưu trữ qua Supabase Storage.
+    if (fileType === 'image') {
+      try {
+        const driveResult = await uploadEncryptedImageToDrive({
+          buffer,
+          fileName: `senchat-img-${Date.now()}-${user.id.substring(0, 8)}.enc`,
+          mimeType: 'application/octet-stream',
+        })
+        driveFileId = driveResult.fileId
+        storageProvider = 'google_drive'
+      } catch (driveErr: any) {
+        console.error('[SEN_CHAT_UPLOAD] Lỗi tải lên Google Drive:', driveErr)
+        return NextResponse.json(
+          { error: `Lỗi kết nối lưu trữ Google Drive: ${driveErr?.message || 'Không thể lưu trữ tệp'}` },
+          { status: 502 }
+        )
+      }
+    } else {
+      // Video và tệp khác: Lưu qua Supabase Storage bucket 'chat_attachments'
+      storageProvider = 'supabase_storage'
+      const filePath = `${conversationId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.enc`
+
+      // Đảm bảo bucket tồn tại
+      try {
+        await supabaseAdmin.storage.createBucket('chat_attachments', { public: false })
+      } catch {}
+
+      const { data: storageUpload, error: storageErr } = await supabaseAdmin.storage
+        .from('chat_attachments')
+        .upload(filePath, buffer, {
+          contentType: 'application/octet-stream',
+          upsert: true,
+        })
+
+      if (storageErr) {
+        console.error('[SEN_CHAT_UPLOAD] Lỗi Supabase Storage:', storageErr)
+        return NextResponse.json(
+          { error: `Lỗi tải lên tệp: ${storageErr.message}` },
+          { status: 500 }
+        )
+      }
+
+      storagePath = filePath
+      driveFileId = `supabase:${filePath}`
+    }
+
+    // 5. GHI RECORD VÀO BẢNG CHAT_ATTACHMENTS
+    const { data: attachmentRecord, error: dbErr } = await supabaseAdmin
+      .from('chat_attachments')
+      .insert({
+        conversation_id: conversationId,
+        message_id: messageId || null,
+        uploader_id: user.id,
+        drive_file_id: driveFileId,
+        storage_provider: storageProvider,
+        storage_path: storagePath,
+        encrypted_file_hash: encryptedFileHash || 'sha256-unverified',
+        file_size_bytes: actualSizeBytes,
+        mime_type: 'application/octet-stream',
+        file_name_encrypted: encryptedFileName || null,
+        mime_type_encrypted: encryptedMimeType || null,
+        thumbnail_encrypted: encryptedThumbnail || null,
+        is_deleted: false,
+      })
+      .select()
+      .single()
+
+    if (dbErr) {
+      console.error('[SEN_CHAT_UPLOAD] Lỗi lưu metadata chat_attachments:', dbErr)
+      return NextResponse.json({ error: 'Lỗi ghi nhận metadata tệp' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      attachment: {
+        id: attachmentRecord.id,
+        driveFileId,
+        storageProvider,
+        storagePath,
+        fileSizeBytes: actualSizeBytes,
+        createdAt: attachmentRecord.created_at,
+      },
+    })
+  } catch (err: any) {
+    console.error('[SEN_CHAT_UPLOAD] Lỗi xử lý ngoại lệ:', err)
+    return NextResponse.json({ error: err?.message || 'Lỗi xử lý tệp tải lên' }, { status: 500 })
+  }
+}

@@ -60,6 +60,9 @@ import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
+import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
+import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
+import { getEffectivePlanTier } from '@/lib/vipMembership'
 import { parseMessageLinks } from '@/lib/chatSanitizer'
 import {
   SenChatUser,
@@ -111,6 +114,10 @@ export default function SenChatPage() {
   const [chatSearchQuery, setChatSearchQuery] = useState('')
   const [showChatSearch, setShowChatSearch] = useState(false)
   const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all')
+
+  // Gói dịch vụ & Đính kèm tệp
+  const [userPlanTier, setUserPlanTier] = useState<string | null>(null)
+  const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null)
 
   // Quoting & Reactions
   const [replyingToMessage, setReplyingToMessage] = useState<SenChatMessage | null>(null)
@@ -200,9 +207,13 @@ export default function SenChatPage() {
         if (auth?.user) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled')
+            .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled, plan_tier, vip_expires_at')
             .eq('id', auth.user.id)
             .maybeSingle()
+
+          if (profile) {
+            setUserPlanTier(getEffectivePlanTier(profile))
+          }
 
           const synchedUser: SenChatUser = {
             id: auth.user.id,
@@ -869,27 +880,45 @@ export default function SenChatPage() {
                               : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
                           }`}
                         >
+                          {/* Đính kèm tệp / ảnh mã hóa E2EE (Google Drive / Supabase) */}
+                          {(msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
+                            <div className="mb-2">
+                              <ChatAttachmentBubble
+                                attachmentId={msg.attachmentId}
+                                driveFileId={msg.driveFileId}
+                                storageProvider={msg.storageProvider}
+                                fileKeyBase64={msg.fileKeyBase64}
+                                fileName={msg.attachmentName || 'Tệp đính kèm'}
+                                fileSize={msg.attachmentSize}
+                                mimeType={msg.mimeType}
+                                fileType={msg.type === 'image' ? 'image' : 'file'}
+                              />
+                            </div>
+                          )}
+
                           {/* Rendering tin nhắn text hoặc links an toàn */}
-                          <div className="text-xs leading-relaxed break-words">
-                            {textParts.map((part, pIdx) => {
-                              if (part.type === 'link') {
-                                return (
-                                  <a
-                                    key={pIdx}
-                                    href={part.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`underline font-medium ${
-                                      isMe ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
-                                    }`}
-                                  >
-                                    {part.content}
-                                  </a>
-                                )
-                              }
-                              return <span key={pIdx}>{part.content}</span>
-                            })}
-                          </div>
+                          {(!msg.attachmentId || (msg.content && !msg.content.startsWith('[Tệp đính kèm:'))) && (
+                            <div className="text-xs leading-relaxed break-words">
+                              {textParts.map((part, pIdx) => {
+                                if (part.type === 'link') {
+                                  return (
+                                    <a
+                                      key={pIdx}
+                                      href={part.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={`underline font-medium ${
+                                        isMe ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
+                                      }`}
+                                    >
+                                      {part.content}
+                                    </a>
+                                  )
+                                }
+                                return <span key={pIdx}>{part.content}</span>
+                              })}
+                            </div>
+                          )}
 
                           {/* Footer trạng thái tin nhắn */}
                           <div
@@ -997,7 +1026,18 @@ export default function SenChatPage() {
                 >
                   <Paperclip className="h-5 w-5" />
                 </button>
-                <input ref={fileInputRef} type="file" className="hidden" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) {
+                      setSelectedAttachmentFile(f)
+                    }
+                    e.target.value = ''
+                  }}
+                  className="hidden"
+                />
 
                 <input
                   type="text"
@@ -1214,6 +1254,62 @@ export default function SenChatPage() {
           isCreatingNew={false}
           onGroupUpdated={() => {
             refreshConversations()
+          }}
+        />
+      )}
+
+      {/* Modal Tải Lên & Mã Hóa Tệp Đính Kèm (P4) */}
+      {selectedAttachmentFile && selectedConvId && (
+        <ChatAttachmentModal
+          file={selectedAttachmentFile}
+          conversationId={selectedConvId}
+          userPlanTier={userPlanTier}
+          onClose={() => setSelectedAttachmentFile(null)}
+          onSuccess={(att) => {
+            setSelectedAttachmentFile(null)
+            const activeConv = conversations.find((c) => c.id === selectedConvId)
+            if (!activeConv || !currentUser) return
+
+            const newMsg: SenChatMessage = {
+              id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+              conversationId: selectedConvId,
+              senderId: currentUser.id,
+              senderName: currentUser.name,
+              receiverId: activeConv.partnerId,
+              content: `[Tệp đính kèm: ${att.fileName}]`,
+              type: att.fileType === 'image' ? 'image' : 'file',
+              attachmentId: att.id,
+              driveFileId: att.driveFileId,
+              storageProvider: att.storageProvider,
+              storagePath: att.storagePath,
+              fileKeyBase64: att.fileKeyBase64,
+              attachmentName: att.fileName,
+              attachmentSize: att.fileSize,
+              mimeType: att.mimeType,
+              createdAt: new Date().toISOString(),
+              status: isOnline ? 'sent' : 'sending',
+            }
+
+            saveLocalMessage(selectedConvId, newMsg)
+            setMessages((prev) => [...prev, newMsg])
+            saveLocalConversation({
+              ...activeConv,
+              lastMessage: att.fileType === 'image' ? '[Hình ảnh]' : `[Tệp: ${att.fileName}]`,
+              lastMessageTime: new Date(newMsg.createdAt).toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              updatedAt: Date.now(),
+            })
+            refreshConversations()
+
+            if (isOnline) {
+              supabase.channel('sen-chat-realtime-transit').send({
+                type: 'broadcast',
+                event: 'new_e2ee_message',
+                payload: { ...newMsg, deviceId },
+              }).catch(() => {})
+            }
           }}
         />
       )}

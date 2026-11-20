@@ -147,6 +147,7 @@ const VIP_GROUP_META: Record<
 const VIP_PERKS: Record<'vip' | 'premium' | 'premium_plus' | 'lite', string[]> = {
   vip: [
     'Học tập liền mạch, không quảng cáo trên toàn hệ thống',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 250MB',
     'Tải tài liệu và đề thi VIP ôn tập: 5 lượt tải miễn phí mỗi ngày',
     'Tặng thêm +50 lượt hỏi bài giải đề thông minh mỗi ngày',
     'Tặng kèm tài khoản SenAI Lite khi mua theo tháng hoặc năm',
@@ -154,6 +155,7 @@ const VIP_PERKS: Record<'vip' | 'premium' | 'premium_plus' | 'lite', string[]> =
   ],
   premium: [
     'Đầy đủ mọi quyền lợi cao cấp của hạng VIP',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 500MB',
     'Huy hiệu và biểu tượng Premium mạ vàng nổi bật trên Dashboard',
     'Tặng gói hỏi bài nâng cao Plus / Ultra (lên đến 250 câu hỏi/ngày)',
     'Giảm giá 15% không giới hạn trong Cửa hàng Sen',
@@ -161,6 +163,7 @@ const VIP_PERKS: Record<'vip' | 'premium' | 'premium_plus' | 'lite', string[]> =
   ],
   premium_plus: [
     'Bao gồm mọi quyền lợi cao cấp nhất của VIP và Premium',
+    'Sen Chat: gửi tệp/ảnh/video tối đa 1GB',
     'Trải nghiệm trước toàn bộ các tính năng và giao diện học tập mới nhất',
     'Mở khóa công nghệ khảo thí và học tập thế hệ mới SenExam 2.0 Core',
     'Tải đề thi & tài liệu ôn tập tốc độ cao: 15 lượt tải mỗi ngày',

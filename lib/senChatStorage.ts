@@ -30,6 +30,11 @@ export interface SenChatMessage {
   attachmentUrl?: string
   attachmentName?: string
   attachmentSize?: number
+  attachmentId?: string
+  driveFileId?: string
+  storageProvider?: string
+  fileKeyBase64?: string
+  mimeType?: string
   createdAt: string
   status: 'sending' | 'sent' | 'received' | 'seen'
   isLocalOnly?: boolean
