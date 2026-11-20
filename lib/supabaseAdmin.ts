@@ -42,25 +42,52 @@ function getAnonClient(): SupabaseClient<Database> {
 // hoặc query param ?token= (dùng cho các thẻ <a>/<iframe> không gắn được header, vd tải tài liệu VIP).
 export async function getUserFromRequest(request: Request): Promise<{ id: string; email?: string } | null> {
   const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  const bearerMatch = authHeader?.match(/^Bearer\s+(.+)$/i)
+  const bearerToken = bearerMatch ? bearerMatch[1].trim() : null
   const queryToken = new URL(request.url).searchParams.get('token')
   let token = bearerToken || queryToken
 
-  // Fallback: Kiểm tra cookie xác thực nếu không có header Authorization (hỗ trợ Safari / cookie session)
+  // Fallback: Kiểm tra cookie xác thực nếu không có header Authorization (hỗ trợ Safari / cookie session / chunked cookies)
   if (!token) {
     const cookieHeader = request.headers.get('cookie') || ''
-    const match = cookieHeader.match(/sb-[a-zA-Z0-9_-]+-auth-token=([^;]+)/) ||
-                  cookieHeader.match(/sb-access-token=([^;]+)/)
-    if (match) {
-      try {
-        const raw = decodeURIComponent(match[match.length - 1])
-        if (raw.startsWith('[') || raw.startsWith('{')) {
-          const parsed = JSON.parse(raw)
-          token = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token || null)
-        } else {
-          token = raw
+    if (cookieHeader) {
+      const cookieMap: Record<string, string> = {}
+      cookieHeader.split(';').forEach((part) => {
+        const [k, ...v] = part.trim().split('=')
+        if (k) cookieMap[k] = v.join('=')
+      })
+
+      // 1. Kiểm tra trực tiếp sb-access-token
+      if (cookieMap['sb-access-token']) {
+        token = decodeURIComponent(cookieMap['sb-access-token'])
+      } else {
+        // 2. Tìm các cookie dạng sb-*-auth-token hoặc sb-*-auth-token.0, .1 (chunked)
+        const authCookieKeys = Object.keys(cookieMap).filter((k) =>
+          /^sb-[a-zA-Z0-9_-]+-auth-token(\.\d+)?$/.test(k)
+        )
+
+        if (authCookieKeys.length > 0) {
+          authCookieKeys.sort((a, b) => {
+            const numA = a.includes('.') ? parseInt(a.split('.').pop() || '0', 10) : 0
+            const numB = b.includes('.') ? parseInt(b.split('.').pop() || '0', 10) : 0
+            return numA - numB
+          })
+
+          const rawJoined = authCookieKeys.map((k) => cookieMap[k]).join('')
+          try {
+            let decoded = decodeURIComponent(rawJoined)
+            if (decoded.startsWith('base64-')) {
+              decoded = Buffer.from(decoded.slice(7), 'base64').toString('utf-8')
+            }
+            if (decoded.startsWith('[') || decoded.startsWith('{')) {
+              const parsed = JSON.parse(decoded)
+              token = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token || null)
+            } else {
+              token = decoded
+            }
+          } catch {}
         }
-      } catch {}
+      }
     }
   }
 

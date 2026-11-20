@@ -34,12 +34,17 @@ test('Sen Chat P10: ChatAttachmentModal và ChatVoiceRecorder gửi đầy đủ
   const uploadRoutePath = path.join(process.cwd(), 'app/api/chat/attachments/upload/route.ts')
   const uploadRouteCode = fs.readFileSync(uploadRoutePath, 'utf8')
   assert.ok(uploadRouteCode.includes('getUserFromRequest(request)'), 'Upload route phải xác thực user từ request')
+
+  // Kiểm tra getUserFromRequest hỗ trợ chunked cookie và base64 cookie
+  const supabaseAdminCode = fs.readFileSync(path.join(process.cwd(), 'lib/supabaseAdmin.ts'), 'utf8')
+  assert.ok(supabaseAdminCode.includes('base64-'), 'getUserFromRequest phải giải mã base64- cookie của Supabase')
+  assert.ok(supabaseAdminCode.includes('authCookieKeys'), 'getUserFromRequest phải hỗ trợ ghép nối chunked cookies .0, .1')
 })
 
 // ==============================================================================
 // 2. KIỂM THỬ TÍNH NĂNG STT CHO TIN NHẮN THOẠI (WEB SPEECH API + SERVER ENDPOINT)
 // ==============================================================================
-test('Sen Chat P10: Hỗ trợ Web Speech API và hiển thị văn bản chuyển đổi tin nhắn thoại', () => {
+test('Sen Chat P10: Hỗ trợ Web Speech API và hiển thị văn bản chuyển đổi tin nhắn thoại trên cả desktop và mobile', () => {
   const voiceRecorderCode = fs.readFileSync(path.join(process.cwd(), 'components/chat/ChatVoiceRecorder.tsx'), 'utf8')
   assert.ok(
     voiceRecorderCode.includes('webkitSpeechRecognition') || voiceRecorderCode.includes('SpeechRecognition'),
@@ -52,6 +57,13 @@ test('Sen Chat P10: Hỗ trợ Web Speech API và hiển thị văn bản chuy�
   assert.ok(voiceBubbleCode.includes('transcribeAudioOnDevice'), 'Voice bubble phải có tính năng chuyển văn bản on-device')
   assert.ok(voiceBubbleCode.includes('transcribeAudioServerSide'), 'Voice bubble phải có tùy chọn server STT')
   assert.ok(voiceBubbleCode.includes('supabase.auth.refreshSession()'), 'Voice bubble phải làm mới session trước khi STT máy chủ')
+
+  // Mobile Chat Parity: Đảm bảo app/m/chat/page.tsx có đầy đủ chức năng ghi âm và STT
+  const mobileChatCode = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
+  assert.ok(mobileChatCode.includes('ChatVoiceRecorder'), 'Mobile chat phải tích hợp ChatVoiceRecorder')
+  assert.ok(mobileChatCode.includes('handleSendVoiceMessage'), 'Mobile chat phải có hàm handleSendVoiceMessage')
+  assert.ok(mobileChatCode.includes('handleUpdateMessageTranscription'), 'Mobile chat phải có hàm handleUpdateMessageTranscription')
+  assert.ok(mobileChatCode.includes('onUpdateTranscription'), 'Mobile chat phải truyền onUpdateTranscription vào ChatVoiceMessageBubble')
 })
 
 // ==============================================================================
@@ -84,6 +96,8 @@ test('Sen Chat P10: ChatInfoDrawer thu gọn mặc định và đầy đủ 5 t�
   assert.ok(drawerCode.includes('groupMembers') || drawerCode.includes('Trưởng nhóm'), 'Phải có quản lý thành viên nhóm MLS với vai trò rõ ràng')
   assert.ok(drawerCode.includes('ChatSafetyWidget'), 'Phải tích hợp Mã an toàn Safety Number')
   assert.ok(drawerCode.includes('ChatDisappearingMessages'), 'Phải tích hợp Tin nhắn tự hủy')
+  assert.ok(drawerCode.includes('fixed inset-0') && drawerCode.includes('onClick={onClose}'), 'Phải có backdrop overlay đóng drawer khi nhấp ra ngoài')
+  assert.ok(drawerCode.includes('effectiveMembers'), 'Phải có logic dự phòng thành viên nhóm effectiveMembers')
 
   // Kiểm tra ban đầu trong desktop chat showInfoSidebar phải mặc định false
   const desktopChatCode = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')

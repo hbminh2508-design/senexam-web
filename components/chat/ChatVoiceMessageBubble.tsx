@@ -112,16 +112,40 @@ export default function ChatVoiceMessageBubble({
       throw new Error('Thiếu khóa mã hóa tệp (File Key)')
     }
 
-    let { data: authData } = await supabase.auth.getSession()
-    if (
-      !authData.session ||
-      (authData.session.expires_at &&
-        authData.session.expires_at * 1000 - Date.now() < 60000)
-    ) {
-      const { data: refData } = await supabase.auth.refreshSession()
-      if (refData.session) authData = refData
+    let token: string | null = null
+    try {
+      let { data: authData } = await supabase.auth.getSession()
+      if (
+        !authData?.session ||
+        (authData.session.expires_at &&
+          authData.session.expires_at * 1000 - Date.now() < 60000)
+      ) {
+        try {
+          const { data: refData } = await supabase.auth.refreshSession()
+          if (refData?.session) authData = refData
+        } catch {}
+      }
+      token = authData?.session?.access_token || null
+    } catch {}
+
+    if (!token && typeof window !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)
+          if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+            const val = localStorage.getItem(k)
+            if (val) {
+              const parsed = JSON.parse(val)
+              const candidate = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token)
+              if (typeof candidate === 'string' && candidate.length > 20) {
+                token = candidate
+                break
+              }
+            }
+          }
+        }
+      } catch {}
     }
-    const token = authData.session?.access_token
 
     const query = new URLSearchParams()
     if (attachmentId) query.set('attachmentId', attachmentId)
@@ -241,16 +265,40 @@ export default function ChatVoiceMessageBubble({
     setIsTranscribing(true)
     setSttProgress('Đang gửi âm thanh tới máy chủ...')
     try {
-      let { data: authData } = await supabase.auth.getSession()
-      if (
-        !authData.session ||
-        (authData.session.expires_at &&
-          authData.session.expires_at * 1000 - Date.now() < 60000)
-      ) {
-        const { data: refData } = await supabase.auth.refreshSession()
-        if (refData.session) authData = refData
+      let token: string | null = null
+      try {
+        let { data: authData } = await supabase.auth.getSession()
+        if (
+          !authData?.session ||
+          (authData.session.expires_at &&
+            authData.session.expires_at * 1000 - Date.now() < 60000)
+        ) {
+          try {
+            const { data: refData } = await supabase.auth.refreshSession()
+            if (refData?.session) authData = refData
+          } catch {}
+        }
+        token = authData?.session?.access_token || null
+      } catch {}
+
+      if (!token && typeof window !== 'undefined') {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i)
+            if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+              const val = localStorage.getItem(k)
+              if (val) {
+                const parsed = JSON.parse(val)
+                const candidate = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token)
+                if (typeof candidate === 'string' && candidate.length > 20) {
+                  token = candidate
+                  break
+                }
+              }
+            }
+          }
+        } catch {}
       }
-      const token = authData.session?.access_token
 
       const blob = await decryptAudio()
       const result = await transcribeAudioServerSide({

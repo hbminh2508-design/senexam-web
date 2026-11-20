@@ -171,12 +171,44 @@ export default function ChatInfoDrawer({
   const isGroup = Boolean(conversation?.isGroup || conversation?.type === 'group')
   const displayName = currentNickname || conversation?.partnerName || conversation?.title || 'Hội thoại'
 
+  // Danh sách thành viên nhóm hiệu dụng
+  const effectiveMembers = useMemo(() => {
+    if (groupMembers && groupMembers.length > 0) return groupMembers
+    if (!isGroup) return []
+    return [
+      {
+        memberId: 'm_' + currentUserId,
+        userId: currentUserId,
+        name: 'Bạn (Tôi)',
+        role: (conversation?.role || 'owner') as 'owner' | 'admin' | 'member',
+      },
+      ...(conversation?.partnerName
+        ? [
+            {
+              memberId: 'm_partner',
+              userId: conversation.partnerId || 'partner',
+              name: conversation.partnerName,
+              email: conversation.partnerIdentifier,
+              role: 'member' as const,
+            },
+          ]
+        : []),
+    ]
+  }, [groupMembers, isGroup, currentUserId, conversation])
+
   if (!isOpen) return null
 
   return (
-    <aside
-      className="fixed inset-y-0 right-0 z-40 w-full sm:w-[360px] md:w-[380px] flex flex-col border-l border-slate-200/80 bg-white/95 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95 shadow-2xl transition-all duration-300 animate-in slide-in-from-right"
-    >
+    <>
+      {/* Backdrop mờ để đóng ngăn kéo khi nhấp ra ngoài */}
+      <div
+        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px] transition-opacity duration-200"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside
+        className="fixed inset-y-0 right-0 z-50 w-full sm:w-[360px] md:w-[380px] flex flex-col border-l border-slate-200/80 bg-white/95 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95 shadow-2xl transition-all duration-300 animate-in slide-in-from-right"
+      >
       {/* 1. HEADER NÚT ĐÓNG */}
       <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
         <h3 className="font-extrabold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -613,12 +645,12 @@ export default function ChatInfoDrawer({
 
             {/* Danh sách thành viên */}
             <div className="space-y-1.5">
-              {groupMembers.length === 0 ? (
+              {effectiveMembers.length === 0 ? (
                 <p className="text-center py-4 text-xs text-slate-400">
                   Nhấn vào nút Quản Lý Nhóm để xem đầy đủ danh sách
                 </p>
               ) : (
-                groupMembers.map((member) => (
+                effectiveMembers.map((member) => (
                   <div
                     key={member.memberId || member.userId}
                     className="flex items-center justify-between p-2 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900"
@@ -684,5 +716,6 @@ export default function ChatInfoDrawer({
         )}
       </div>
     </aside>
+  </>
   )
 }

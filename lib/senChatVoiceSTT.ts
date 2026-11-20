@@ -448,17 +448,38 @@ export async function transcribeAudioServerSide(params: {
       const { supabase } = await import('@/lib/supabaseClient')
       let { data } = await supabase.auth.getSession()
       if (
-        !data.session ||
+        !data?.session ||
         (data.session.expires_at &&
           data.session.expires_at * 1000 - Date.now() < 60000)
       ) {
-        const { data: refData } = await supabase.auth.refreshSession()
-        if (refData.session) data = refData
+        try {
+          const { data: refData } = await supabase.auth.refreshSession()
+          if (refData?.session) data = refData
+        } catch {}
       }
       if (!token) {
-        token = data.session?.access_token
+        token = data?.session?.access_token
       }
     } catch {}
+
+    if (!token) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)
+          if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+            const val = localStorage.getItem(k)
+            if (val) {
+              const parsed = JSON.parse(val)
+              const candidate = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token)
+              if (typeof candidate === 'string' && candidate.length > 20) {
+                token = candidate
+                break
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   }
 
   // 4. Gửi FormData lên endpoint /api/chat/stt kèm Authorization header

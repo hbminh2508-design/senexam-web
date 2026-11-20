@@ -334,16 +334,41 @@ export default function ChatVoiceRecorder({
     setIsTranscribing(true)
     setSttProgress('Đang gửi âm thanh tới máy chủ...')
     try {
-      let { data: authData } = await supabase.auth.getSession()
-      if (
-        !authData.session ||
-        (authData.session.expires_at &&
-          authData.session.expires_at * 1000 - Date.now() < 60000)
-      ) {
-        const { data: refData } = await supabase.auth.refreshSession()
-        if (refData.session) authData = refData
+      let token: string | null = null
+      try {
+        let { data: authData } = await supabase.auth.getSession()
+        if (
+          !authData?.session ||
+          (authData.session.expires_at &&
+            authData.session.expires_at * 1000 - Date.now() < 60000)
+        ) {
+          try {
+            const { data: refData } = await supabase.auth.refreshSession()
+            if (refData?.session) authData = refData
+          } catch {}
+        }
+        token = authData?.session?.access_token || null
+      } catch {}
+
+      if (!token && typeof window !== 'undefined') {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i)
+            if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+              const val = localStorage.getItem(k)
+              if (val) {
+                const parsed = JSON.parse(val)
+                const candidate = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token)
+                if (typeof candidate === 'string' && candidate.length > 20) {
+                  token = candidate
+                  break
+                }
+              }
+            }
+          }
+        } catch {}
       }
-      const token = authData.session?.access_token
+
       if (!token) {
         throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại.')
       }
@@ -384,17 +409,42 @@ export default function ChatVoiceRecorder({
       // 3. Mã hóa toàn bộ dữ liệu audio blob theo từng chunk AES-256-GCM
       const encryptedBlob = await encryptFileToBlob(recordedBlob, fileKey)
 
-      // 4. Lấy phiên đăng nhập và làm mới nếu cần
-      let { data: authData } = await supabase.auth.getSession()
-      if (
-        !authData.session ||
-        (authData.session.expires_at &&
-          authData.session.expires_at * 1000 - Date.now() < 60000)
-      ) {
-        const { data: refData } = await supabase.auth.refreshSession()
-        if (refData.session) authData = refData
+      // 4. Lấy phiên đăng nhập và làm mới nếu cần (kèm fallback Safari localStorage)
+      let token: string | null = null
+      try {
+        let { data: authData } = await supabase.auth.getSession()
+        if (
+          !authData?.session ||
+          (authData.session.expires_at &&
+            authData.session.expires_at * 1000 - Date.now() < 60000)
+        ) {
+          try {
+            const { data: refData } = await supabase.auth.refreshSession()
+            if (refData?.session) authData = refData
+          } catch {}
+        }
+        token = authData?.session?.access_token || null
+      } catch {}
+
+      if (!token && typeof window !== 'undefined') {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i)
+            if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+              const val = localStorage.getItem(k)
+              if (val) {
+                const parsed = JSON.parse(val)
+                const candidate = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token)
+                if (typeof candidate === 'string' && candidate.length > 20) {
+                  token = candidate
+                  break
+                }
+              }
+            }
+          }
+        } catch {}
       }
-      const token = authData.session?.access_token
+
       if (!token) {
         throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại để tiếp tục.')
       }
@@ -405,6 +455,7 @@ export default function ChatVoiceRecorder({
       formData.append('fileType', 'audio')
       formData.append('fileSizeBytes', String(encryptedBlob.size))
       formData.append('encryptedMimeType', 'audio/webm;codecs=opus')
+      formData.append('authToken', token)
 
       const uploadUrl = `/api/chat/attachments/upload?token=${encodeURIComponent(token)}`
       const uploadRes = await fetch(uploadUrl, {

@@ -199,19 +199,48 @@ export default function ChatAttachmentModal({
       formData.append('encryptedFileHash', `sha256-${Date.now()}`)
 
       // 4.1 Lấy phiên đăng nhập Supabase và làm mới nếu sắp hết hạn
-      let { data: authData } = await supabase.auth.getSession()
-      if (
-        !authData.session ||
-        (authData.session.expires_at &&
-          authData.session.expires_at * 1000 - Date.now() < 60000)
-      ) {
-        const { data: refData } = await supabase.auth.refreshSession()
-        if (refData.session) authData = refData
+      let token: string | null = null
+      try {
+        let { data: authData } = await supabase.auth.getSession()
+        if (
+          !authData?.session ||
+          (authData.session.expires_at &&
+            authData.session.expires_at * 1000 - Date.now() < 60000)
+        ) {
+          try {
+            const { data: refData } = await supabase.auth.refreshSession()
+            if (refData?.session) authData = refData
+          } catch {}
+        }
+        token = authData?.session?.access_token || null
+      } catch {}
+
+      // Fallback cho Safari / ITP: Tìm token trong localStorage nếu getSession() trả về rỗng
+      if (!token && typeof window !== 'undefined') {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i)
+            if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+              const val = localStorage.getItem(k)
+              if (val) {
+                const parsed = JSON.parse(val)
+                const candidate = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token)
+                if (typeof candidate === 'string' && candidate.length > 20) {
+                  token = candidate
+                  break
+                }
+              }
+            }
+          }
+        } catch {}
       }
-      const token = authData.session?.access_token
+
       if (!token) {
         throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại để tiếp tục.')
       }
+
+      // Đính kèm token vào FormData phòng trường hợp header bị chặn trên Safari
+      formData.append('authToken', token)
 
       // 5. Gửi lên server với cơ chế thử lại (Retry) và đầy đủ Authorization header + token param
       let response: Response | null = null

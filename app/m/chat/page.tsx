@@ -8,6 +8,7 @@ import {
   Plus,
   Send,
   Paperclip,
+  Mic,
   Smile,
   ThumbsUp,
   MoreVertical,
@@ -174,6 +175,7 @@ export default function MobileChatPage() {
   const [showDisappearingSettings, setShowDisappearingSettings] = useState(false)
   const [showSafetyModal, setShowSafetyModal] = useState(false)
   const [safetyNumber, setSafetyNumber] = useState('')
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
 
   const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -681,6 +683,79 @@ export default function MobileChatPage() {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, 50)
+  }
+
+  // Gửi tin nhắn thoại bảo mật E2EE kèm STT trên mobile
+  const handleSendVoiceMessage = async (voiceData: {
+    audioBlob: Blob
+    fileKeyBase64: string
+    attachmentId?: string
+    driveFileId?: string
+    storageProvider?: string
+    storagePath?: string
+    duration: number
+    waveform: number[]
+    transcription?: string
+    transcriptionLanguage?: string
+    fileSize: number
+    mimeType: string
+  }) => {
+    if (!selectedConvId || !currentUser || !activeConversation) return
+
+    const timestamp = Date.now()
+    const idempotencyKey = generateIdempotencyKey(currentUser.id, selectedConvId, timestamp, 'audio')
+
+    const newMsg: SenChatMessage = {
+      id: idempotencyKey,
+      conversationId: selectedConvId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      receiverId: activeConversation.partnerId || '',
+      content: voiceData.transcription ? `[Tin nhắn thoại]: ${voiceData.transcription}` : '[Tin nhắn thoại]',
+      type: 'audio',
+      attachmentId: voiceData.attachmentId,
+      driveFileId: voiceData.driveFileId,
+      storageProvider: (voiceData.storageProvider as any) || 'supabase_storage',
+      storagePath: voiceData.storagePath,
+      fileKeyBase64: voiceData.fileKeyBase64,
+      attachmentSize: voiceData.fileSize,
+      mimeType: voiceData.mimeType,
+      duration: voiceData.duration,
+      waveform: voiceData.waveform,
+      transcription: voiceData.transcription,
+      transcriptionLanguage: voiceData.transcriptionLanguage,
+      createdAt: new Date(timestamp).toISOString(),
+      status: 'sent',
+    }
+
+    saveLocalMessage(selectedConvId, newMsg)
+    setMessages((prev) => [...prev, newMsg])
+    setConversations(getLocalConversations())
+    setIsRecordingVoice(false)
+
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 50)
+  }
+
+  // Cập nhật phiên âm tin nhắn thoại sau khi chỉnh sửa trên mobile
+  const handleUpdateMessageTranscription = (msgId: string, newText: string, newLang?: string) => {
+    if (!selectedConvId) return
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === msgId) {
+          const updated: SenChatMessage = {
+            ...m,
+            transcription: newText,
+            transcriptionLanguage: newLang || m.transcriptionLanguage || 'vi',
+            content: newText ? `[Tin nhắn thoại]: ${newText}` : m.content,
+          }
+          saveLocalMessage(selectedConvId, updated)
+          return updated
+        }
+        return m
+      })
+    )
   }
 
   // Xác nhận chuyển dữ liệu cho SenAI với cam kết bảo mật E2EE
@@ -1235,11 +1310,16 @@ export default function MobileChatPage() {
                         messageId={msg.id}
                         attachmentId={msg.attachmentId}
                         driveFileId={msg.driveFileId}
+                        storageProvider={msg.storageProvider}
+                        storagePath={msg.storagePath}
                         fileKeyBase64={msg.fileKeyBase64}
                         duration={msg.duration || 0}
                         waveform={msg.waveform || []}
                         transcription={msg.transcription}
+                        transcriptionLanguage={msg.transcriptionLanguage}
                         isOutgoing={isMe}
+                        userPlanTier={userPlanTier}
+                        onUpdateTranscription={handleUpdateMessageTranscription}
                       />
                     ) : msg.type === 'like' ? (
                       /* Nút thích lớn */
@@ -1313,84 +1393,106 @@ export default function MobileChatPage() {
             </div>
           )}
 
-          {/* Khung Nhập Liệu Đáy (Bottom Chat Input Bar) */}
-          <div
-            className="p-2 border-t border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-end gap-1.5 shrink-0"
-            style={{
-              paddingBottom: viewportBottomOffset > 0 ? '0.5rem' : 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))',
-            }}
-          >
-            {/* Input file ẩn cho Mobile */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) setSelectedAttachmentFile(f)
-                e.target.value = ''
-              }}
-            />
-
-            {/* Nút gửi đính kèm */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 transition"
-              aria-label="Đính kèm tệp"
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
-
-            {/* Nút biểu cảm nhanh */}
-            <button
-              type="button"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 transition"
-              aria-label="Biểu cảm"
-            >
-              <Smile className="h-5 w-5" />
-            </button>
-
-            {/* Ô nhập nội dung tin nhắn */}
-            <div className="flex-1 min-h-[44px] rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 flex items-center">
-              <textarea
-                ref={chatInputRef}
-                rows={1}
-                placeholder="Nhắn tin E2EE... (gõ @Sen hỏi bài)"
-                value={inputText}
-                onChange={handleInputChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSendMessage()
-                  }
-                }}
-                className="w-full max-h-24 bg-transparent text-xs outline-none resize-none"
+          {/* Trình Ghi Âm Tin Nhắn Thoại Mobile */}
+          {isRecordingVoice ? (
+            <div className="p-2 border-t border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
+              <ChatVoiceRecorder
+                conversationId={selectedConvId || ''}
+                userPlanTier={userPlanTier || 'free'}
+                onCancel={() => setIsRecordingVoice(false)}
+                onSendVoiceMessage={handleSendVoiceMessage}
               />
             </div>
+          ) : (
+            /* Khung Nhập Liệu Đáy (Bottom Chat Input Bar) */
+            <div
+              className="p-2 border-t border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-end gap-1.5 shrink-0"
+              style={{
+                paddingBottom: viewportBottomOffset > 0 ? '0.5rem' : 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))',
+              }}
+            >
+              {/* Input file ẩn cho Mobile */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) setSelectedAttachmentFile(f)
+                  e.target.value = ''
+                }}
+              />
 
-            {/* Nút gửi hoặc Thích */}
-            {inputText.trim() ? (
+              {/* Nút gửi đính kèm */}
               <button
                 type="button"
-                onClick={() => handleSendMessage()}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs active:scale-95 transition"
-                aria-label="Gửi tin nhắn"
+                onClick={() => fileInputRef.current?.click()}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 transition"
+                aria-label="Đính kèm tệp"
               >
-                <Send className="h-4.5 w-4.5" />
+                <Paperclip className="h-5 w-5" />
               </button>
-            ) : (
+
+              {/* Nút ghi âm tin nhắn thoại */}
               <button
                 type="button"
-                onClick={handleSendLike}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-amber-500 active:scale-95 transition text-lg"
-                aria-label="Gửi thích"
+                onClick={() => setIsRecordingVoice(true)}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 active:scale-95 transition"
+                aria-label="Ghi âm tin nhắn thoại"
               >
-                👍
+                <Mic className="h-5 w-5" />
               </button>
-            )}
-          </div>
+
+              {/* Nút biểu cảm nhanh */}
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 transition"
+                aria-label="Biểu cảm"
+              >
+                <Smile className="h-5 w-5" />
+              </button>
+
+              {/* Ô nhập nội dung tin nhắn */}
+              <div className="flex-1 min-h-[44px] rounded-2xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2 flex items-center">
+                <textarea
+                  ref={chatInputRef}
+                  rows={1}
+                  placeholder="Nhắn tin E2EE... (gõ @Sen hỏi bài)"
+                  value={inputText}
+                  onChange={handleInputChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSendMessage()
+                    }
+                  }}
+                  className="w-full max-h-24 bg-transparent text-xs outline-none resize-none"
+                />
+              </div>
+
+              {/* Nút gửi hoặc Thích */}
+              {inputText.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage()}
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs active:scale-95 transition"
+                  aria-label="Gửi tin nhắn"
+                >
+                  <Send className="h-4.5 w-4.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSendLike}
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-amber-500 active:scale-95 transition text-lg"
+                  aria-label="Gửi thích"
+                >
+                  👍
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
