@@ -121,6 +121,10 @@ export default function SenChatPage() {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   const [activeRailTab, setActiveRailTab] = useState<'messages' | 'contacts' | 'wallpapers'>('messages')
+  const [friendsList, setFriendsList] = useState<any[]>([])
+  const [incomingInvites, setIncomingInvites] = useState<any[]>([])
+  const [loadingFriends, setLoadingFriends] = useState(false)
+  const [friendSubTab, setFriendSubTab] = useState<'all' | 'requests'>('all')
 
   // Cuộc hội thoại và tin nhắn
   const [conversations, setConversations] = useState<SenChatConversation[]>([])
@@ -224,6 +228,55 @@ export default function SenChatPage() {
     })
   }
 
+  const fetchFriendsList = async () => {
+    try {
+      setLoadingFriends(true)
+      let session = (await supabase.auth.getSession()).data.session
+      if (!session?.access_token) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        session = refData?.session
+      }
+      const token = session?.access_token
+      if (!token) return
+
+      const res = await fetch('/api/chat/friend-invitation', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (data?.friends) setFriendsList(data.friends)
+      if (data?.incoming) setIncomingInvites(data.incoming)
+    } catch (err) {
+      console.warn('Lỗi tải danh sách bạn bè:', err)
+    } finally {
+      setLoadingFriends(false)
+    }
+  }
+
+  const handleRespondFriend = async (senderId: string, action: 'accept' | 'reject') => {
+    try {
+      let session = (await supabase.auth.getSession()).data.session
+      if (!session?.access_token) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        session = refData?.session
+      }
+      const token = session?.access_token
+      if (!token) return
+
+      const res = await fetch('/api/chat/friend-invitation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action, targetUserId: senderId }),
+      })
+      const data = await res.json()
+      if (data?.success) {
+        fetchFriendsList()
+        refreshConversations()
+      }
+    } catch (err) {
+      console.warn('Lỗi phản hồi lời mời bạn bè:', err)
+    }
+  }
+
   // 2. Đồng bộ tài khoản SenExam chính thức từ Supabase & Bắt buộc Đăng nhập
   useEffect(() => {
     // Đăng ký bộ dọn dẹp tin nhắn tạm thời cục bộ khi đóng tab / thoát trang
@@ -263,14 +316,21 @@ export default function SenChatPage() {
           }
 
           // Tự động đăng ký thiết bị hiện tại lên chat_devices và ghi nhận nhật ký kiểm toán
-          const { data: sessionData } = await supabase.auth.getSession()
-          const token = sessionData?.session?.access_token
+          let session = (await supabase.auth.getSession()).data.session
+          if (!session?.access_token) {
+            const { data: refData } = await supabase.auth.refreshSession()
+            session = refData?.session
+          }
+          const token = session?.access_token
           if (token) {
             fetch('/api/chat/device-management', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ action: 'register', deviceId }),
             }).catch((devErr) => console.warn('Lỗi tự động đăng ký thiết bị Sen Chat:', devErr))
+
+            // Tải danh sách bạn bè ban đầu
+            fetchFriendsList()
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP với returnUrl=/chat
@@ -944,14 +1004,26 @@ export default function SenChatPage() {
               )}
             </button>
 
-            {/* Thêm bạn bè qua Email */}
+            {/* Bạn bè / Thêm bạn (Friends / Add Friend) */}
             <button
               type="button"
-              onClick={() => setShowFriendModal(true)}
-              title="Tìm & Thêm bạn qua Email chính xác"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+              onClick={() => {
+                setActiveRailTab('contacts')
+                fetchFriendsList()
+              }}
+              title="Bạn bè & Thêm bạn qua Email"
+              className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl transition-all ${
+                activeRailTab === 'contacts'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 scale-105'
+                  : 'text-slate-600 hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400'
+              }`}
             >
               <UserPlus className="h-5 w-5" />
+              {incomingInvites.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+                  {incomingInvites.length}
+                </span>
+              )}
             </button>
 
             {/* Tạo nhóm MLS RFC 9420 */}
@@ -1034,11 +1106,11 @@ export default function SenChatPage() {
           !isMobileListVisible ? 'hidden md:flex' : 'flex'
         }`}
       >
-        {/* Top Header của Danh sách hội thoại */}
+        {/* Top Header của Cột bên cạnh */}
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 dark:border-slate-800">
           <div>
             <h2 className="font-extrabold text-base tracking-tight text-slate-800 dark:text-slate-100">
-              Đoạn chat
+              {activeRailTab === 'contacts' ? 'Bạn bè' : 'Đoạn chat'}
             </h2>
             <p className="text-[11px] text-slate-400 font-medium truncate max-w-[180px]">
               {currentUser?.name || 'Đang kết nối...'}
@@ -1068,7 +1140,7 @@ export default function SenChatPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm bạn bè hoặc tin nhắn..."
+              placeholder={activeRailTab === 'contacts' ? 'Tìm bạn bè...' : 'Tìm bạn bè hoặc tin nhắn...'}
               className="min-h-[42px] w-full rounded-2xl border border-slate-200 bg-slate-100/70 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
             />
           </div>
@@ -1076,9 +1148,12 @@ export default function SenChatPage() {
           <div className="mt-2.5 flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
             <button
               type="button"
-              onClick={() => setFilterMode('all')}
+              onClick={() => {
+                setActiveRailTab('messages')
+                setFilterMode('all')
+              }}
               className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
-                filterMode === 'all'
+                activeRailTab === 'messages' && filterMode === 'all'
                   ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
@@ -1087,77 +1162,208 @@ export default function SenChatPage() {
             </button>
             <button
               type="button"
-              onClick={() => setFilterMode('unread')}
+              onClick={() => {
+                setActiveRailTab('messages')
+                setFilterMode('unread')
+              }}
               className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
-                filterMode === 'unread'
+                activeRailTab === 'messages' && filterMode === 'unread'
                   ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
               Chưa đọc {totalUnreadCount > 0 ? `(${totalUnreadCount})` : ''}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveRailTab('contacts')
+                fetchFriendsList()
+              }}
+              className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
+                activeRailTab === 'contacts'
+                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              }`}
+            >
+              Bạn bè {incomingInvites.length > 0 ? `(${incomingInvites.length})` : ''}
+            </button>
           </div>
         </div>
 
-        {/* Danh sách các cuộc trò chuyện */}
-        <div className="flex-1 overflow-y-auto px-2 space-y-1">
-          {filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400">
-              <MessageSquare className="h-10 w-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
-              <p className="mt-3 text-xs font-medium">Chưa có cuộc trò chuyện nào</p>
+        {/* Nội dung danh sách: Bạn bè hoặc Cuộc trò chuyện */}
+        {activeRailTab === 'contacts' ? (
+          <div className="flex-1 overflow-y-auto px-2 space-y-2">
+            {/* Lời mời kết bạn đang chờ phản hồi */}
+            {incomingInvites.length > 0 && (
+              <div className="p-2.5 rounded-2xl bg-amber-50/80 border border-amber-200/70 dark:bg-amber-950/30 dark:border-amber-900/50">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                    Lời mời kết bạn ({incomingInvites.length})
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {incomingInvites.map((inv) => (
+                    <div key={inv.friendshipId || inv.id} className="flex items-center justify-between rounded-xl bg-white p-2 shadow-xs dark:bg-slate-800">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold text-slate-800 dark:text-slate-100">{inv.name}</p>
+                        <p className="truncate text-[10px] text-slate-400">{inv.school || 'Học viên SenExam'}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleRespondFriend(inv.id, 'accept')}
+                          className="rounded-lg bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                        >
+                          Đồng ý
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRespondFriend(inv.id, 'reject')}
+                          className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300"
+                        >
+                          Từ chối
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Danh bạ bạn bè đã kết nối */}
+            <div className="px-1 pt-1 pb-0.5 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Danh bạ bạn bè ({friendsList.length})
+              </span>
               <button
                 type="button"
                 onClick={() => setShowFriendModal(true)}
-                className="mt-3 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400"
+                className="text-[11px] font-bold text-emerald-600 hover:underline dark:text-emerald-400"
               >
-                + Kết bạn bằng Email
+                + Thêm bạn
               </button>
             </div>
-          ) : (
-            filteredConversations.map((c) => {
-              const isSelected = selectedConvId === c.id
-              const nickname = getNicknameFor(c.partnerId)
-              const displayName = nickname || c.partnerName
 
-              return (
+            {loadingFriends && friendsList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
+                <RefreshCw className="h-5 w-5 animate-spin text-emerald-600" />
+                <p className="text-xs">Đang tải danh bạ...</p>
+              </div>
+            ) : friendsList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-14 text-center text-slate-400">
+                <UserPlus className="h-10 w-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
+                <p className="mt-3 text-xs font-medium">Chưa có bạn bè nào trong danh bạ</p>
                 <button
-                  key={c.id}
                   type="button"
-                  onClick={() => setSelectedConvId(c.id)}
-                  className={`flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition active:scale-[0.98] ${
-                    isSelected
-                      ? 'bg-emerald-500/10 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100'
-                      : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/50'
-                  }`}
+                  onClick={() => setShowFriendModal(true)}
+                  className="mt-3 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400"
                 >
-                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 font-bold text-white shadow-sm">
-                    {displayName.substring(0, 1).toUpperCase()}
-                    <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
-                        {displayName}
-                      </span>
-                      <span className="text-[10px] text-slate-400">{c.lastMessageTime || ''}</span>
-                    </div>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-                        {c.lastMessage || 'Bắt đầu trò chuyện...'}
-                      </p>
-                      {c.unreadCount > 0 && (
-                        <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
-                          {c.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  + Tìm & Thêm bạn bằng Email
                 </button>
-              )
-            })
-          )}
-        </div>
+              </div>
+            ) : (
+              friendsList
+                .filter((f) => !searchQuery.trim() || f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((friend) => (
+                  <button
+                    key={friend.id}
+                    type="button"
+                    onClick={() => {
+                      saveLocalConversation({
+                        id: friend.id,
+                        partnerId: friend.id,
+                        partnerName: friend.name,
+                        partnerIdentifier: friend.id,
+                        unreadCount: 0,
+                        updatedAt: Date.now(),
+                      })
+                      setSelectedConvId(friend.id)
+                      setActiveRailTab('messages')
+                      refreshConversations()
+                    }}
+                    className="flex min-h-[54px] w-full items-center gap-3 rounded-2xl p-2.5 text-left transition hover:bg-slate-100/80 active:scale-[0.98] dark:hover:bg-slate-800/50"
+                  >
+                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 font-bold text-white shadow-sm">
+                      {friend.name.substring(0, 1).toUpperCase()}
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
+                        {friend.name}
+                      </p>
+                      <p className="truncate text-[11px] text-slate-400">
+                        {friend.school || 'Học viên SenExam'} {friend.className ? `• ${friend.className}` : ''}
+                      </p>
+                    </div>
+                    <span className="rounded-xl bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      Nhắn tin
+                    </span>
+                  </button>
+                ))
+            )}
+          </div>
+        ) : (
+          /* Danh sách các cuộc trò chuyện */
+          <div className="flex-1 overflow-y-auto px-2 space-y-1">
+            {filteredConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400">
+                <MessageSquare className="h-10 w-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
+                <p className="mt-3 text-xs font-medium">Chưa có cuộc trò chuyện nào</p>
+                <button
+                  type="button"
+                  onClick={() => setShowFriendModal(true)}
+                  className="mt-3 text-xs font-bold text-emerald-600 hover:underline dark:text-emerald-400"
+                >
+                  + Kết bạn bằng Email
+                </button>
+              </div>
+            ) : (
+              filteredConversations.map((c) => {
+                const isSelected = selectedConvId === c.id
+                const nickname = getNicknameFor(c.partnerId)
+                const displayName = nickname || c.partnerName
+
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedConvId(c.id)}
+                    className={`flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition active:scale-[0.98] ${
+                      isSelected
+                        ? 'bg-emerald-500/10 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100'
+                        : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 font-bold text-white shadow-sm">
+                      {displayName.substring(0, 1).toUpperCase()}
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
+                          {displayName}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{c.lastMessageTime || ''}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                          {c.lastMessage || 'Bắt đầu trò chuyện...'}
+                        </p>
+                        {c.unreadCount > 0 && (
+                          <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                            {c.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        )}
       </aside>
 
       {/* =========================================================================
@@ -1339,6 +1545,17 @@ export default function SenChatPage() {
                         </div>
                       ) : (
                         <div className="flex items-end gap-1.5 max-w-[80%]">
+                          {!isMe && (
+                            <div className="h-7 w-7 shrink-0 rounded-xl overflow-hidden shadow-xs mb-1">
+                              {msg.isSenAi || msg.senderId === 'senai' ? (
+                                <img src="/senai-logo.png" alt="SenAI" className="h-full w-full object-contain bg-slate-900/90 p-0.5" />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-700 text-white font-bold text-[10px]">
+                                  {(msg.senderName || 'B').substring(0, 1).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           {msg.type === 'audio' ? (
                             <div className="flex flex-col">
                               <ChatVoiceMessageBubble
@@ -1869,7 +2086,10 @@ export default function SenChatPage() {
       {/* Friend Search Modal */}
       <ChatFriendModal
         isOpen={showFriendModal}
-        onClose={() => setShowFriendModal(false)}
+        onClose={() => {
+          setShowFriendModal(false)
+          fetchFriendsList()
+        }}
         onStartChatWithUser={(user) => {
           saveLocalConversation({
             id: user.id,
@@ -1880,7 +2100,9 @@ export default function SenChatPage() {
             updatedAt: Date.now(),
           })
           setSelectedConvId(user.id)
+          setActiveRailTab('messages')
           refreshConversations()
+          fetchFriendsList()
         }}
       />
 

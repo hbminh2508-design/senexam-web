@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin()
     const { data, error } = await supabaseAdmin.rpc('recall_chat_message', {
       p_message_id: messageId,
+      p_caller_id: user.id,
     })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

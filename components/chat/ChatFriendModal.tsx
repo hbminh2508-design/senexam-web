@@ -39,8 +39,12 @@ export default function ChatFriendModal({
     setActionSuccessMsg(null)
 
     try {
-      const { data: authData } = await supabase.auth.getSession()
-      const token = authData.session?.access_token
+      let { data: authData } = await supabase.auth.getSession()
+      let token = authData.session?.access_token
+      if (!token) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        token = refData?.session?.access_token
+      }
 
       const resp = await fetch('/api/chat/friend-lookup', {
         method: 'POST',
@@ -79,8 +83,12 @@ export default function ChatFriendModal({
     if (!searchResult?.id) return
     setLoading(true)
     try {
-      const { data: authData } = await supabase.auth.getSession()
-      const token = authData.session?.access_token
+      let { data: authData } = await supabase.auth.getSession()
+      let token = authData.session?.access_token
+      if (!token) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        token = refData?.session?.access_token
+      }
       const resp = await fetch('/api/chat/friend-invitation', {
         method: 'POST',
         headers: {
@@ -109,8 +117,12 @@ export default function ChatFriendModal({
 
     setReportLoading(true)
     try {
-      const { data: authData } = await supabase.auth.getSession()
-      const token = authData.session?.access_token
+      let { data: authData } = await supabase.auth.getSession()
+      let token = authData.session?.access_token
+      if (!token) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        token = refData?.session?.access_token
+      }
       const resp = await fetch('/api/chat/friend-invitation', {
         method: 'POST',
         headers: {

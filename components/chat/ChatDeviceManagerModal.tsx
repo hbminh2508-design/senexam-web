@@ -42,8 +42,12 @@ export default function ChatDeviceManagerModal({
   const loadData = async () => {
     setLoading(true)
     try {
-      const { data: authData } = await supabase.auth.getSession()
-      const token = authData.session?.access_token
+      let { data: authData } = await supabase.auth.getSession()
+      let token = authData.session?.access_token
+      if (!token) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        token = refData?.session?.access_token
+      }
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 
       const [devResp, logResp] = await Promise.all([
@@ -56,20 +60,56 @@ export default function ChatDeviceManagerModal({
       let currentDevices: ChatDevice[] = Array.isArray(devData?.devices) ? devData.devices : []
       const hasCurrent = currentDevices.some((d) => d.device_id === currentDeviceId)
 
-      // Nếu chưa có thiết bị hiện tại trong DB, tự động đăng ký ngay lập tức
-      if (!hasCurrent && token) {
-        try {
-          const regResp = await fetch('/api/chat/device-management', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ action: 'register', deviceId: currentDeviceId }),
-          })
-          const regData = await regResp.json()
-          if (regData?.device) {
-            currentDevices = [regData.device, ...currentDevices.filter((d) => d.device_id !== currentDeviceId)]
+      // Nếu chưa có thiết bị hiện tại trong DB, nhận diện và tự động đăng ký
+      if (!hasCurrent) {
+        const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+        let defaultName = 'Thiết bị Web'
+        let defaultPlatform = 'web'
+        if (/Android/i.test(ua)) {
+          defaultName = 'Android'
+          defaultPlatform = 'android'
+        } else if (/iPhone|iPad/i.test(ua)) {
+          defaultName = 'iOS'
+          defaultPlatform = 'ios'
+        } else if (/Windows/i.test(ua)) {
+          defaultName = 'Windows PC (Trình duyệt)'
+          defaultPlatform = 'desktop'
+        } else if (/Macintosh|Mac OS X/i.test(ua)) {
+          defaultName = 'macOS (Trình duyệt)'
+          defaultPlatform = 'desktop'
+        } else if (/Linux/i.test(ua)) {
+          defaultName = 'Linux (Trình duyệt)'
+          defaultPlatform = 'desktop'
+        }
+
+        const localDevice: ChatDevice = {
+          id: `local_${currentDeviceId}`,
+          device_id: currentDeviceId,
+          device_name: defaultName,
+          platform: defaultPlatform,
+          is_active: true,
+          last_seen_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        }
+
+        if (token) {
+          try {
+            const regResp = await fetch('/api/chat/device-management', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'register', deviceId: currentDeviceId, platform: defaultPlatform, deviceName: defaultName }),
+            })
+            const regData = await regResp.json()
+            if (regData?.device) {
+              currentDevices = [regData.device, ...currentDevices.filter((d) => d.device_id !== currentDeviceId)]
+            } else {
+              currentDevices = [localDevice, ...currentDevices]
+            }
+          } catch {
+            currentDevices = [localDevice, ...currentDevices]
           }
-        } catch (regErr) {
-          console.warn('Lỗi tự động đăng ký thiết bị hiện tại:', regErr)
+        } else {
+          currentDevices = [localDevice, ...currentDevices]
         }
       }
 
@@ -188,7 +228,7 @@ export default function ChatDeviceManagerModal({
               ) : (
                 devices.map((device) => {
                   const isCurrent = device.device_id === currentDeviceId
-                  const isAndroid = device.platform === 'android'
+                  const isMobile = device.platform === 'android' || device.platform === 'ios'
                   const isDesktop = device.platform === 'desktop'
 
                   return (
@@ -202,7 +242,7 @@ export default function ChatDeviceManagerModal({
                     >
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
-                          {isAndroid ? (
+                          {isMobile ? (
                             <Smartphone className="h-5 w-5 text-emerald-600" />
                           ) : isDesktop ? (
                             <Laptop className="h-5 w-5 text-indigo-600" />

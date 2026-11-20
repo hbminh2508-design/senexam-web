@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
     if (action === 'revoke') {
       const { data, error } = await supabaseAdmin.rpc('revoke_chat_device', {
         p_device_id: deviceId,
+        p_caller_id: user.id,
       })
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })

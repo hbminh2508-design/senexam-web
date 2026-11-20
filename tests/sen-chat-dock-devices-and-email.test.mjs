@@ -28,6 +28,10 @@ test('Sen Chat UI: Bố cục thanh dọc tác vụ bên trái tận cùng (Far-
   // 4. Khung chat chính flex-1 h-full và màn hình chào đón E2EE cân đối
   assert.ok(content.includes('flex h-full flex-1 flex-col overflow-hidden'), 'Khung chat chính chiếm trọn không gian còn lại flex-1 h-full')
   assert.ok(content.includes('Sen Chat — Bảo Mật Đầu-Cuối'), 'Màn hình chào đón cân đối khi chưa chọn cuộc trò chuyện')
+
+  // 5. Kiểm tra có tab Bạn bè và chuyển đổi danh bạ
+  assert.ok(content.includes("activeRailTab === 'contacts'"), 'Phải hỗ trợ tab bạn bè contacts')
+  assert.ok(content.includes('Danh bạ bạn bè'), 'Hiển thị danh bạ bạn bè')
 })
 
 test('Sen Chat Bảo Mật: Tự động đăng ký thiết bị hiện tại & nhận diện (Thiết bị này)', async () => {
@@ -43,6 +47,7 @@ test('Sen Chat Bảo Mật: Tự động đăng ký thiết bị hiện tại & 
   assert.ok(routeContent.includes("action === 'register'") || routeContent.includes("action ="), 'Route phải hỗ trợ đăng ký thiết bị')
   assert.ok(routeContent.includes('device_registered'), 'Ghi nhận nhật ký audit khi đăng ký thiết bị')
   assert.ok(routeContent.includes('upsert'), 'Upsert thiết bị vào chat_devices')
+  assert.ok(routeContent.includes('p_caller_id'), 'Revoke phải truyền p_caller_id cho service_role')
 
   // Modal truyền token và hiển thị "(Thiết bị này)"
   assert.ok(modalContent.includes('Authorization'), 'Modal phải gửi Bearer token')
@@ -52,11 +57,14 @@ test('Sen Chat Bảo Mật: Tự động đăng ký thiết bị hiện tại & 
 test('Sen Chat Bạn Bè: Tìm kiếm chuẩn hóa lower(trim) & nhận diện email chính mình', async () => {
   const routePath = path.join(ROOT_DIR, 'app', 'api', 'chat', 'friend-lookup', 'route.ts')
   const modalPath = path.join(ROOT_DIR, 'components', 'chat', 'ChatFriendModal.tsx')
+  const inviteRoutePath = path.join(ROOT_DIR, 'app', 'api', 'chat', 'friend-invitation', 'route.ts')
   assert.ok(fs.existsSync(routePath), 'Route friend-lookup phải tồn tại')
   assert.ok(fs.existsSync(modalPath), 'Modal ChatFriendModal phải tồn tại')
+  assert.ok(fs.existsSync(inviteRoutePath), 'Route friend-invitation phải tồn tại')
 
   const routeContent = fs.readFileSync(routePath, 'utf8')
   const modalContent = fs.readFileSync(modalPath, 'utf8')
+  const inviteContent = fs.readFileSync(inviteRoutePath, 'utf8')
 
   // Hash chuẩn hóa lower(trim(email))
   const rawEmail1 = 'hbminh2508@gmail.com'
@@ -69,6 +77,10 @@ test('Sen Chat Bạn Bè: Tìm kiếm chuẩn hóa lower(trim) & nhận diện e
   assert.ok(routeContent.includes('is_self: true'), 'Route phải đánh dấu is_self khi tìm chính email của mình')
   assert.ok(routeContent.includes('Đây là email tài khoản của chính bạn.'), 'Thông báo thân thiện khi tìm email chính mình')
   assert.ok(modalContent.includes('isSelfEmail'), 'Modal xử lý hiển thị thân thiện khi nhập email chính mình')
+
+  // Kiểm tra route friend-invitation hỗ trợ GET (danh sách bạn bè) và p_caller_id
+  assert.ok(inviteContent.includes('export async function GET'), 'Route friend-invitation phải hỗ trợ GET danh sách bạn bè')
+  assert.ok(inviteContent.includes('p_caller_id: user.id'), 'Route friend-invitation phải truyền p_caller_id')
 })
 
 test('Sen Chat Logo: Logo SenAI chính thức tồn tại và được tham chiếu', async () => {
@@ -82,4 +94,17 @@ test('Sen Chat Logo: Logo SenAI chính thức tồn tại và được tham chi�
 
   assert.ok(chatDesktop.includes('/senai-logo.png'), 'Chat desktop phải sử dụng logo SenAI')
   assert.ok(confirmModal.includes('/senai-logo.png'), 'Modal xác nhận SenAI phải sử dụng logo SenAI')
+})
+
+test('Sen Chat Migrations: Migration 015 đầy đủ RLS, service_role caller auth và đồng bộ profile', async () => {
+  const migPath = path.join(ROOT_DIR, 'migrations', '015_sen_chat_rpc_service_role_auth_and_friends.sql')
+  assert.ok(fs.existsSync(migPath), 'Migration 015 phải tồn tại')
+  const content = fs.readFileSync(migPath, 'utf8')
+
+  assert.ok(content.includes('send_friend_invitation'), 'Cập nhật send_friend_invitation')
+  assert.ok(content.includes('respond_friend_invitation'), 'Cập nhật respond_friend_invitation')
+  assert.ok(content.includes('revoke_chat_device'), 'Cập nhật revoke_chat_device')
+  assert.ok(content.includes('recall_chat_message'), 'Cập nhật recall_chat_message')
+  assert.ok(content.includes('service_role'), 'Kiểm tra role service_role')
+  assert.ok(content.includes('COALESCE(p_caller_id, auth.uid())'), 'Sử dụng caller id từ tham số')
 })
