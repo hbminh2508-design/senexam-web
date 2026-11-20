@@ -1203,12 +1203,13 @@ export default function SenChatPage() {
                   <button
                     type="submit"
                     disabled={!inputText.trim()}
-                  title="Gửi tin nhắn"
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-40"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              </form>
+                    title="Gửi tin nhắn"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-40"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </form>
+              )}
             </div>
           </>
         ) : (
