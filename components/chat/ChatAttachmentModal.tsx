@@ -46,6 +46,7 @@ interface ChatAttachmentModalProps {
     mimeType: string
     fileType: 'image' | 'video' | 'file'
     thumbnail?: string | null
+    expiresAt?: string
   }) => void
 }
 
@@ -255,6 +256,7 @@ export default function ChatAttachmentModal({
         fileSize: file.size,
         mimeType: file.type || 'application/octet-stream',
         fileType,
+        expiresAt: resData.attachment.expiresAt,
       })
 
       onClose()

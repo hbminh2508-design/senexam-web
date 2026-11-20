@@ -127,7 +127,7 @@ function IdpAuthContent() {
         const serviceParam = (params.get('service') || '').toLowerCase()
         const fromParam = (params.get('from') || '').toLowerCase()
         const targetParam = (params.get('target') || '').toLowerCase()
-        const nextParam = params.get('next') || params.get('redirect') || ''
+        const nextParam = params.get('returnUrl') || params.get('return_url') || params.get('next') || params.get('redirect') || ''
         const host = window.location.hostname.toLowerCase()
 
         // Nếu phát hiện yêu cầu rõ ràng từ FEPN qua query hoặc subdomain: Chuyển hướng sang Cổng Đăng Nhập FEPN độc lập

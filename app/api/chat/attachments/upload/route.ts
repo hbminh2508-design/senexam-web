@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getEffectivePlanTier } from '@/lib/vipMembership'
-import { validateChatFileSize, formatBytes } from '@/lib/chatLimits'
+import {
+  validateChatFileSize,
+  validateGroupStorageQuota,
+  GROUP_STORAGE_QUOTA_BYTES,
+  ATTACHMENT_RETENTION_DAYS,
+  formatBytes,
+} from '@/lib/chatLimits'
 import { uploadEncryptedImageToDrive } from '@/lib/senChatDriveService'
 
 export const dynamic = 'force-dynamic'
@@ -70,6 +76,33 @@ export async function POST(request: NextRequest) {
 
       if (!member) {
         return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
+      }
+
+      // Kiểm tra hạn mức dung lượng nhóm 15GB nếu là cuộc trò chuyện nhóm
+      const { data: conv } = await supabaseAdmin
+        .from('chat_conversations')
+        .select('id, type')
+        .eq('id', conversationId)
+        .maybeSingle()
+
+      if (conv?.type === 'group') {
+        const { data: usageData } = await supabaseAdmin.rpc('get_conversation_storage_usage', {
+          p_conversation_id: conversationId,
+        })
+        const usedBytes = Number(usageData?.used_bytes || 0)
+        const groupValidation = validateGroupStorageQuota(usedBytes, fileSizeBytes)
+        if (!groupValidation.allowed) {
+          return NextResponse.json(
+            {
+              error: groupValidation.error,
+              allowed: false,
+              isGroupQuotaExceeded: true,
+              groupUsedBytes: usedBytes,
+              groupQuotaBytes: GROUP_STORAGE_QUOTA_BYTES,
+            },
+            { status: 413 }
+          )
+        }
       }
 
       // Kiểm tra hạn mức kích thước tệp theo gói
@@ -146,6 +179,33 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // KIỂM TRA HẠN MỨC DUNG LƯỢNG NHÓM 15GB NẾU LÀ GROUP CONVERSATION
+    const { data: convData } = await supabaseAdmin
+      .from('chat_conversations')
+      .select('id, type')
+      .eq('id', conversationId)
+      .maybeSingle()
+
+    if (convData?.type === 'group') {
+      const { data: usageData } = await supabaseAdmin.rpc('get_conversation_storage_usage', {
+        p_conversation_id: conversationId,
+      })
+      const usedBytes = Number(usageData?.used_bytes || 0)
+      const groupValidation = validateGroupStorageQuota(usedBytes, actualSizeBytes)
+      if (!groupValidation.allowed) {
+        return NextResponse.json(
+          {
+            error: groupValidation.error,
+            allowed: false,
+            isGroupQuotaExceeded: true,
+            groupUsedBytes: usedBytes,
+            groupQuotaBytes: GROUP_STORAGE_QUOTA_BYTES,
+          },
+          { status: 413 }
+        )
+      }
+    }
+
     // Chuyển File sang Buffer nhị phân
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
@@ -219,6 +279,8 @@ export async function POST(request: NextRequest) {
         mime_type_encrypted: encryptedMimeType || null,
         thumbnail_encrypted: encryptedThumbnail || null,
         is_deleted: false,
+        expires_at: new Date(Date.now() + ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+        is_pinned_permanent: false,
       })
       .select()
       .single()
@@ -237,6 +299,7 @@ export async function POST(request: NextRequest) {
         storagePath,
         fileSizeBytes: actualSizeBytes,
         createdAt: attachmentRecord.created_at,
+        expiresAt: attachmentRecord.expires_at,
       },
     })
   } catch (err: any) {

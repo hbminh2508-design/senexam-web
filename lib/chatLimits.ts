@@ -19,7 +19,52 @@ export const CHAT_FILE_LIMITS = {
   sen_one: 1024 * 1024 * 1024,      // 1 GB (Sen One)
 } as const
 
+/**
+ * Hạn mức dung lượng media (ảnh, video, âm thanh, tệp) tối đa của mỗi nhóm là 15GB
+ * (16,106,127,360 bytes).
+ */
+export const GROUP_STORAGE_QUOTA_BYTES = 15 * 1024 * 1024 * 1024 // 16,106,127,360 bytes (15 GB)
+
+/**
+ * Thời hạn bảo lưu mặc định cho mỗi tệp tin đính kèm là 30 ngày.
+ * Trưởng nhóm / Quản trị viên có thể gia hạn thêm 30 ngày hoặc bảo lưu vĩnh viễn.
+ */
+export const ATTACHMENT_RETENTION_DAYS = 30
+
 export type ChatPlanTier = keyof typeof CHAT_FILE_LIMITS
+
+/**
+ * Kiểm tra hạn mức dung lượng lưu trữ của nhóm (15GB).
+ */
+export function validateGroupStorageQuota(
+  currentGroupUsageBytes: number,
+  newFileSizeBytes: number
+): {
+  allowed: boolean
+  currentUsage: number
+  newTotal: number
+  quota: number
+  error?: string
+} {
+  const newTotal = (currentGroupUsageBytes || 0) + (newFileSizeBytes || 0)
+  if (newTotal <= GROUP_STORAGE_QUOTA_BYTES) {
+    return {
+      allowed: true,
+      currentUsage: currentGroupUsageBytes || 0,
+      newTotal,
+      quota: GROUP_STORAGE_QUOTA_BYTES,
+    }
+  }
+
+  const remaining = Math.max(0, GROUP_STORAGE_QUOTA_BYTES - (currentGroupUsageBytes || 0))
+  return {
+    allowed: false,
+    currentUsage: currentGroupUsageBytes || 0,
+    newTotal,
+    quota: GROUP_STORAGE_QUOTA_BYTES,
+    error: `Dung lượng nhóm đã đạt giới hạn tối đa 15GB (hiện còn ${formatBytes(remaining)} trống, tệp tải lên ${formatBytes(newFileSizeBytes)}). Trưởng nhóm vui lòng dọn dẹp bớt tệp hoặc ảnh video cũ trước khi gửi thêm.`,
+  }
+}
 
 /**
  * Lấy hạn mức kích thước tệp tối đa (bytes) cho hạng gói

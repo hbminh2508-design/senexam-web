@@ -45,6 +45,8 @@ export interface SenChatMessage {
   isLocalOnly?: boolean
   isSenAi?: boolean
   invokedBy?: string
+  expiresAt?: string
+  isPinnedPermanent?: boolean
 }
 
 export interface SenChatConversation {
@@ -120,6 +122,7 @@ const STORAGE_KEYS = {
   NICKNAMES: 'sen_chat_nicknames',
   BLOCKED_USERS: 'sen_chat_blocked_users',
   WALLPAPERS: 'sen_chat_wallpapers',
+  EPHEMERAL_ENABLED: 'sen_chat_ephemeral_enabled',
 }
 
 // 1. Quản lý Thiết Bị (Device ID)
@@ -230,6 +233,133 @@ export function saveLocalMessage(conversationId: string, message: SenChatMessage
 export function clearAllLocalMessages(conversationId: string): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)
+}
+
+/**
+ * Xóa sạch toàn bộ tin nhắn tạm thời trong tất cả các cuộc hội thoại
+ * Bảo vệ quyền riêng tư tuyệt đối khi đóng trang hoặc thoát ứng dụng
+ */
+export function clearAllEphemeralMessages(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const keysToRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith(STORAGE_KEYS.MESSAGES_PREFIX)) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k))
+
+    // Cập nhật các cuộc hội thoại để không còn lưu trích đoạn tin nhắn nhạy cảm
+    const convs = getLocalConversations()
+    if (convs.length > 0) {
+      const sanitizedConvs = convs.map((c) => ({
+        ...c,
+        lastMessage: undefined,
+        unreadCount: 0,
+      }))
+      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(sanitizedConvs))
+    }
+  } catch (e) {
+    console.warn('Lỗi dọn dẹp tin nhắn tạm thời:', e)
+  }
+}
+
+/**
+ * Kiểm tra xem chế độ dọn dẹp bộ nhớ tạm khi thoát web có đang bật hay không
+ * Mặc định: BẬT (true) để bảo đảm an toàn dữ liệu
+ */
+export function isEphemeralStorageEnabled(): boolean {
+  if (typeof window === 'undefined') return true
+  const saved = localStorage.getItem(STORAGE_KEYS.EPHEMERAL_ENABLED)
+  if (saved === null) return true // Mặc định bật
+  return saved === 'true'
+}
+
+export function setEphemeralStorageEnabled(enabled: boolean): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(STORAGE_KEYS.EPHEMERAL_ENABLED, enabled ? 'true' : 'false')
+}
+
+/**
+ * Dọn sạch toàn bộ dữ liệu Sen Chat trên thiết bị khi Đăng xuất
+ */
+export function clearAllLocalChatData(): void {
+  if (typeof window === 'undefined') return
+  try {
+    clearAllEphemeralMessages()
+    clearLocalSenChatUser()
+    localStorage.removeItem(STORAGE_KEYS.CONVERSATIONS)
+    localStorage.removeItem(STORAGE_KEYS.NICKNAMES)
+    localStorage.removeItem(STORAGE_KEYS.WALLPAPERS)
+    localStorage.removeItem(STORAGE_KEYS.BLOCKED_USERS)
+  } catch (e) {
+    console.warn('Lỗi xóa toàn bộ dữ liệu Sen Chat cục bộ:', e)
+  }
+}
+
+/**
+ * Tính toán dung lượng bộ nhớ tạm và số lượng tin nhắn đang lưu trên máy
+ */
+export function getStorageUsageSummary(): {
+  messageCount: number
+  conversationCount: number
+  approxBytes: number
+  ephemeralEnabled: boolean
+} {
+  if (typeof window === 'undefined') {
+    return { messageCount: 0, conversationCount: 0, approxBytes: 0, ephemeralEnabled: true }
+  }
+
+  let totalBytes = 0
+  let messageCount = 0
+  const convs = getLocalConversations()
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && (key.startsWith('sen_chat_') || key.startsWith(STORAGE_KEYS.MESSAGES_PREFIX))) {
+        const val = localStorage.getItem(key) || ''
+        totalBytes += (key.length + val.length) * 2 // UTF-16 byte estimate
+        if (key.startsWith(STORAGE_KEYS.MESSAGES_PREFIX)) {
+          try {
+            const msgs = JSON.parse(val)
+            if (Array.isArray(msgs)) messageCount += msgs.length
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+
+  return {
+    messageCount,
+    conversationCount: convs.length,
+    approxBytes: totalBytes,
+    ephemeralEnabled: isEphemeralStorageEnabled(),
+  }
+}
+
+/**
+ * Đăng ký bộ lắng nghe sự kiện đóng trang (beforeunload, pagehide)
+ * để tự động dọn sạch tin nhắn tạm thời nếu chế độ Ephemeral đang bật
+ */
+export function setupEphemeralCleanupListener(): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  const handleExit = () => {
+    if (isEphemeralStorageEnabled()) {
+      clearAllEphemeralMessages()
+    }
+  }
+
+  window.addEventListener('pagehide', handleExit)
+  window.addEventListener('beforeunload', handleExit)
+
+  return () => {
+    window.removeEventListener('pagehide', handleExit)
+    window.removeEventListener('beforeunload', handleExit)
+  }
 }
 
 // 5. Tính Năng Đặt Tên Thân Thuộc / Biệt Danh (Nicknames kiểu Messenger)

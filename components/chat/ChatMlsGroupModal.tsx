@@ -29,6 +29,7 @@ import {
   findMemberLeafIndex,
   serializeMls,
 } from '@/lib/senChatMlsProtocol'
+import { formatBytes } from '@/lib/chatLimits'
 
 interface MlsMember {
   memberId: string
@@ -74,6 +75,13 @@ export default function ChatMlsGroupModal({
   // Trạng thái quản lý nhóm
   const [members, setMembers] = useState<MlsMember[]>([])
   const [myRole, setMyRole] = useState<'owner' | 'admin' | 'member'>('member')
+  const [groupStorage, setGroupStorage] = useState<{
+    usedBytes: number
+    maxQuotaBytes: number
+    remainingBytes: number
+    usagePercent: number
+    fileCount: number
+  } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -115,6 +123,21 @@ export default function ChatMlsGroupModal({
       } else {
         setErrorMsg(data.error || 'Không thể tải danh sách thành viên')
       }
+
+      // Tải dung lượng bộ nhớ nhóm (hạn mức 15GB)
+      try {
+        const storageRes = await fetch(`/api/chat/group/storage?conversationId=${conversationId}`, { headers })
+        const storageData = await storageRes.json()
+        if (storageData.success) {
+          setGroupStorage({
+            usedBytes: storageData.usedBytes,
+            maxQuotaBytes: storageData.maxQuotaBytes,
+            remainingBytes: storageData.remainingBytes,
+            usagePercent: storageData.usagePercent,
+            fileCount: storageData.fileCount,
+          })
+        }
+      } catch {}
     } catch (e: any) {
       setErrorMsg(e.message || 'Lỗi kết nối')
     } finally {
@@ -473,6 +496,33 @@ export default function ChatMlsGroupModal({
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Cập nhật tên / ảnh</span>
               </button>
+            )}
+
+            {/* Hạn mức dung lượng nhóm 15GB */}
+            {!isCreatingNew && groupStorage && (
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-2 mt-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Dung lượng media nhóm</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {formatBytes(groupStorage.usedBytes)} / 15GB ({groupStorage.usagePercent.toFixed(1)}%)
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      groupStorage.usagePercent >= 90
+                        ? 'bg-rose-500'
+                        : groupStorage.usagePercent >= 70
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(2, groupStorage.usagePercent))}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Giới hạn tối đa 15GB cho hình ảnh, video, âm thanh và tệp của mỗi nhóm. Tệp bảo lưu 30 ngày (Trưởng nhóm có thể gia hạn thêm).
+                </p>
+              </div>
             )}
           </div>
 

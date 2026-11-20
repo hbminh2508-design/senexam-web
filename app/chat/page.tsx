@@ -51,13 +51,16 @@ import {
   ShieldAlert,
   Timer,
   AlertTriangle,
+  Settings,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import SenChatLogo from '@/components/SenChatLogo'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
+import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
@@ -98,6 +101,7 @@ import {
   unblockUser,
   getWallpaperFor,
   setWallpaperFor,
+  setupEphemeralCleanupListener,
 } from '@/lib/senChatStorage'
 import {
   calculateSafetyNumber,
@@ -109,7 +113,9 @@ import {
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '❤️', '🎉', '🔥', '👏', '🙏', '😭', '😎', '💯']
 
 export default function SenChatPage() {
+  const router = useRouter()
   const [currentUser, setCurrentUser] = useState<SenChatUser | null>(null)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
@@ -217,8 +223,11 @@ export default function SenChatPage() {
     })
   }
 
-  // 2. Đồng bộ tài khoản SenExam chính thức từ Supabase
+  // 2. Đồng bộ tài khoản SenExam chính thức từ Supabase & Bắt buộc Đăng nhập
   useEffect(() => {
+    // Đăng ký bộ dọn dẹp tin nhắn tạm thời cục bộ khi đóng tab / thoát trang
+    const cleanupEphemeral = setupEphemeralCleanupListener()
+
     const initAuthAndSync = async () => {
       try {
         const { data: auth } = await supabase.auth.getUser()
@@ -252,20 +261,32 @@ export default function SenChatPage() {
             setReadReceiptsEnabled(profile.read_receipts_enabled)
           }
         } else {
-          const localUser = getLocalSenChatUser()
-          if (localUser) setCurrentUser(localUser)
+          // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP với returnUrl=/chat
+          router.replace('/new-idp?returnUrl=/chat')
+          return
         }
       } catch (err) {
         console.warn('Lỗi đồng bộ hồ sơ SenExam:', err)
-        const localUser = getLocalSenChatUser()
-        if (localUser) setCurrentUser(localUser)
+        router.replace('/new-idp?returnUrl=/chat')
+        return
       } finally {
         setIsInitializing(false)
       }
     }
 
     initAuthAndSync()
-  }, [])
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.replace('/new-idp?returnUrl=/chat')
+      }
+    })
+
+    return () => {
+      cleanupEphemeral()
+      subscription.unsubscribe()
+    }
+  }, [router])
 
   // 3. Tải danh sách hội thoại
   const refreshConversations = () => {
@@ -889,6 +910,15 @@ export default function SenChatPage() {
 
             <button
               type="button"
+              onClick={() => setShowSettingsModal(true)}
+              title="Cài đặt Sen Chat"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+            >
+              <Settings className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowDeviceManagerModal(true)}
               title="Trung tâm thiết bị & bảo mật"
               className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
@@ -1269,6 +1299,19 @@ export default function SenChatPage() {
                                     fileName={msg.attachmentName || 'Tệp đính kèm'}
                                     fileSize={msg.attachmentSize}
                                     mimeType={msg.mimeType}
+                                    expiresAt={msg.expiresAt}
+                                    isPinnedPermanent={msg.isPinnedPermanent}
+                                    isGroup={activeConv?.isGroup}
+                                    canExtendRetention={activeConv?.isGroup ? (activeConv?.role === 'owner' || activeConv?.role === 'admin' || msg.senderId === currentUser?.id) : true}
+                                    onRetentionExtended={(attId, newExp, isPerm) => {
+                                      setMessages((prev) =>
+                                        prev.map((m) =>
+                                          m.attachmentId === attId
+                                            ? { ...m, expiresAt: newExp || undefined, isPinnedPermanent: isPerm }
+                                            : m
+                                        )
+                                      )
+                                    }}
                                     fileType={
                                       msg.type === 'image'
                                         ? 'image'
@@ -1732,6 +1775,8 @@ export default function SenChatPage() {
               attachmentName: att.fileName,
               attachmentSize: att.fileSize,
               mimeType: att.mimeType,
+              expiresAt: att.expiresAt,
+              isPinnedPermanent: false,
               createdAt: new Date().toISOString(),
               status: isOnline ? 'sent' : 'sending',
             }
@@ -1771,6 +1816,23 @@ export default function SenChatPage() {
         initialQuery={pendingSenAiQuery}
         recentMessages={messages}
         isLoading={isSenAiCalling}
+      />
+
+      {/* Modal Cài Đặt Sen Chat */}
+      <ChatSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        currentUser={currentUser}
+        userPlanTier={userPlanTier}
+        deviceId={deviceId}
+        onOpenDeviceManager={() => setShowDeviceManagerModal(true)}
+        onMessagesCleared={() => {
+          setMessages([])
+          refreshConversations()
+        }}
+        onLoggedOut={() => {
+          router.replace('/new-idp?returnUrl=/chat')
+        }}
       />
     </div>
   )

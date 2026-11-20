@@ -40,12 +40,15 @@ import {
   Radio,
   ArrowLeft,
   SlidersHorizontal,
+  Settings,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
+import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
+import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
@@ -85,6 +88,7 @@ import {
   unblockUser,
   getWallpaperFor,
   setWallpaperFor,
+  setupEphemeralCleanupListener,
 } from '@/lib/senChatStorage'
 import {
   calculateSafetyNumber,
@@ -155,6 +159,9 @@ export default function MobileChatPage() {
   const [flagSecureActive, setFlagSecureActive] = useState(true)
 
   // Các Modal hỗ trợ
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false)
+  const [userPlanTier, setUserPlanTier] = useState<string | null>(null)
   const [showSecurityModal, setShowSecurityModal] = useState(false)
   const [showFriendModal, setShowFriendModal] = useState(false)
   const [showMlsGroupModal, setShowMlsGroupModal] = useState(false)
@@ -173,6 +180,8 @@ export default function MobileChatPage() {
     if (typeof window !== 'undefined') {
       ;(window as any).__senChatHasOpenConversation = view !== 'list'
       ;(window as any).__senChatHasOpenModal =
+        showSettingsModal ||
+        showDeviceManagerModal ||
         showSecurityModal ||
         showFriendModal ||
         showMlsGroupModal ||
@@ -184,6 +193,8 @@ export default function MobileChatPage() {
     }
   }, [
     view,
+    showSettingsModal,
+    showDeviceManagerModal,
     showSecurityModal,
     showFriendModal,
     showMlsGroupModal,
@@ -208,6 +219,14 @@ export default function MobileChatPage() {
       }
 
       // 1. Đóng modal nếu có modal đang mở
+      if (showSettingsModal) {
+        setShowSettingsModal(false)
+        return
+      }
+      if (showDeviceManagerModal) {
+        setShowDeviceManagerModal(false)
+        return
+      }
       if (showSetupPinModal) {
         setShowSetupPinModal(false)
         return
@@ -297,6 +316,9 @@ export default function MobileChatPage() {
 
   // Khởi tạo người dùng, khóa FLAG_SECURE, PIN lock & Danh bạ
   useEffect(() => {
+    // Đăng ký bộ dọn dẹp tin nhắn tạm thời cục bộ khi đóng tab / thoát trang
+    const cleanupEphemeral = setupEphemeralCleanupListener()
+
     async function initMobileChat() {
       setIsLoading(true)
 
@@ -314,20 +336,34 @@ export default function MobileChatPage() {
         }
       }
 
-      // 3. Tải phiên người dùng
-      let user = getLocalSenChatUser()
+      // 3. Tải phiên người dùng & Kiểm tra Supabase Auth bắt buộc
       try {
         const { data: { user: authUser } } = await supabase.auth.getUser()
         if (authUser) {
-          user = {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled, plan_tier, vip_expires_at')
+            .eq('id', authUser.id)
+            .maybeSingle()
+
+          if (profile) {
+            setUserPlanTier(getEffectivePlanTier(profile))
+          }
+
+          const synchedUser: SenChatUser = {
             id: authUser.id,
-            name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Sĩ Tử SenChat',
-            identifier: authUser.email || authUser.phone || authUser.id,
+            name: profile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Học viên SenExam',
+            identifier: authUser.email || profile?.phone_number || profile?.phone || authUser.id,
             authType: 'senexam',
-            avatar: authUser.user_metadata?.avatar_url || '',
+            avatar: profile?.avatar_url || authUser.user_metadata?.avatar_url || '',
+            email: authUser.email || '',
+            phone: profile?.phone_number || profile?.phone || '',
+            school: profile?.school || '',
+            className: profile?.class_name || profile?.grade || '',
             createdAt: authUser.created_at || new Date().toISOString(),
           }
-          saveLocalSenChatUser(user)
+          saveLocalSenChatUser(synchedUser)
+          setCurrentUser(synchedUser)
 
           // Đảm bảo cặp khóa E2EE được bảo vệ an toàn trong Keystore
           const existingKey = await retrieveIdentityPrivateKey('identity_e2ee', window)
@@ -335,25 +371,16 @@ export default function MobileChatPage() {
             const pair = generateIdentityKeyPair()
             await storeIdentityPrivateKey('identity_e2ee', pair.privateKey, window)
           }
+        } else {
+          // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP
+          router.replace('/new-idp?returnUrl=/m/chat')
+          return
         }
       } catch (err) {
         console.warn('Lỗi đồng bộ danh tính người dùng:', err)
+        router.replace('/new-idp?returnUrl=/m/chat')
+        return
       }
-
-      if (!user) {
-        // Mock user nếu chạy chế độ ngoại tuyến / demo di động
-        const deviceId = getOrCreateDeviceId()
-        user = {
-          id: deviceId,
-          name: 'Bạn (Thiết bị di động)',
-          identifier: deviceId,
-          authType: 'senexam',
-          createdAt: new Date().toISOString(),
-        }
-        saveLocalSenChatUser(user)
-      }
-
-      setCurrentUser(user)
 
       // 4. Tải danh sách cuộc trò chuyện
       let list = getLocalConversations()
@@ -421,7 +448,18 @@ export default function MobileChatPage() {
     }
 
     initMobileChat()
-  }, [])
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.replace('/new-idp?returnUrl=/m/chat')
+      }
+    })
+
+    return () => {
+      cleanupEphemeral()
+      subscription.unsubscribe()
+    }
+  }, [router])
 
   // Theo dõi trạng thái mạng & Xả hàng đợi ngoại tuyến (Drain Queue) khi có mạng
   useEffect(() => {
@@ -913,6 +951,14 @@ export default function MobileChatPage() {
             <div className="flex items-center gap-1">
               <button
                 type="button"
+                onClick={() => setShowSettingsModal(true)}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 active:scale-95 transition"
+                aria-label="Cài đặt Sen Chat"
+              >
+                <Settings className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowSecurityModal(true)}
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 active:scale-95 transition"
                 aria-label="Cài đặt bảo mật"
@@ -1133,6 +1179,19 @@ export default function MobileChatPage() {
                         fileName={msg.attachmentName || 'dinh_kem'}
                         fileSize={msg.attachmentSize || 0}
                         mimeType={msg.mimeType}
+                        expiresAt={msg.expiresAt}
+                        isPinnedPermanent={msg.isPinnedPermanent}
+                        isGroup={currentConversation?.isGroup}
+                        canExtendRetention={currentConversation?.isGroup ? (currentConversation?.role === 'owner' || currentConversation?.role === 'admin' || msg.senderId === currentUser?.id) : true}
+                        onRetentionExtended={(attId, newExp, isPerm) => {
+                          setMessages((prev) =>
+                            prev.map((m) =>
+                              m.attachmentId === attId
+                                ? { ...m, expiresAt: newExp || undefined, isPinnedPermanent: isPerm }
+                                : m
+                            )
+                          )
+                        }}
                         fileType={msg.type === 'image' ? 'image' : 'file'}
                       />
                     ) : msg.type === 'audio' ? (
@@ -1657,6 +1716,31 @@ export default function MobileChatPage() {
           onDisappearingChange={() => {}}
         />
       )}
+
+      {/* MODAL: CÀI ĐẶT SEN CHAT */}
+      <ChatSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        currentUser={currentUser}
+        userPlanTier={userPlanTier}
+        deviceId={getOrCreateDeviceId()}
+        isMobile={true}
+        onOpenDeviceManager={() => setShowDeviceManagerModal(true)}
+        onMessagesCleared={() => {
+          setMessages([])
+          setConversations(getLocalConversations())
+        }}
+        onLoggedOut={() => {
+          router.replace('/new-idp?returnUrl=/m/chat')
+        }}
+      />
+
+      {/* MODAL: QUẢN LÝ THIẾT BỊ */}
+      <ChatDeviceManagerModal
+        isOpen={showDeviceManagerModal}
+        onClose={() => setShowDeviceManagerModal(false)}
+        currentDeviceId={getOrCreateDeviceId()}
+      />
     </div>
   )
 }
