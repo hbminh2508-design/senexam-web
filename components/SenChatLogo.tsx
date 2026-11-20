@@ -19,15 +19,14 @@ export default function SenChatLogo({
     return (
       <div className={`flex items-center gap-2.5 ${className}`}>
         <div
-          className="relative overflow-hidden rounded-2xl shadow-lg border border-white/60 bg-slate-900 flex items-center justify-center shrink-0 transition-transform duration-300 hover:scale-105"
+          className="relative overflow-hidden rounded-2xl shadow-md border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 transition-transform duration-300 hover:scale-105"
           style={{ width: size, height: size }}
         >
           <img
-            src="/sen-chat-logo.jpg"
+            src="/sen-chat-logo.png"
             alt="Sen Chat Logo"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain p-0.5"
           />
-          <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-white/20 pointer-events-none" />
         </div>
         {showText && (
           <div className="flex flex-col">
@@ -35,7 +34,7 @@ export default function SenChatLogo({
               Sen <span className="bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 bg-clip-text text-transparent">Chat</span>
             </span>
             <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold uppercase tracking-wider">
-              Liquid Glass Edition
+              E2EE Edition
             </span>
           </div>
         )}

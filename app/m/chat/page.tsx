@@ -54,6 +54,7 @@ import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
 import ChatMessageContent from '@/components/chat/ChatMessageContent'
+import SenChatLogo from '@/components/SenChatLogo'
 import {
   hasSenAiMention,
   extractSenAiQuery,
@@ -895,6 +896,7 @@ export default function MobileChatPage() {
               >
                 <ArrowLeft className="h-5 w-5" />
               </Link>
+              <SenChatLogo size={36} className="shrink-0" />
               <div>
                 <h1 className="text-base font-black flex items-center gap-1.5">
                   <span>Sen Chat</span>
