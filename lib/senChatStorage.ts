@@ -44,6 +44,7 @@ export interface SenChatMessage {
   status: 'sending' | 'sent' | 'received' | 'seen'
   isLocalOnly?: boolean
   isSenAi?: boolean
+  invokedBy?: string
 }
 
 export interface SenChatConversation {

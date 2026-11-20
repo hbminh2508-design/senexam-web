@@ -339,29 +339,59 @@ export default function SenChatPage() {
     const channel = supabase
       .channel('sen-chat-realtime-transit')
       .on('broadcast', { event: 'new_e2ee_message' }, ({ payload }) => {
-        if (!payload || payload.receiverId !== currentUser.id) return
+        if (!payload) return
+
+        // Bỏ qua tin nhắn chính mình vừa gửi (nếu echo lại từ kênh transit)
+        if (payload.deviceId === deviceId || payload.senderId === currentUser.id) return
+
+        // Kiểm tra xem tin nhắn có hướng tới tôi hoặc nhóm tôi đang tham gia không
+        const activeOrMatchedConv = conversations.find(
+          (c) => c.id === payload.conversationId || c.id === payload.receiverId || c.partnerId === payload.receiverId
+        )
+        const isTargetedToMe =
+          payload.receiverId === currentUser.id ||
+          Boolean(activeOrMatchedConv)
+        if (!isTargetedToMe) return
 
         if (isUserBlocked(payload.senderId)) return
 
-        const convId = payload.senderId
+        const isGroupTarget = activeOrMatchedConv?.isGroup
+        const targetConvId = isGroupTarget
+          ? (payload.conversationId || activeOrMatchedConv?.id || payload.receiverId)
+          : (payload.isSenAi || payload.senderId === 'senai' || payload.senderId === 'system')
+            ? (payload.invokedBy || payload.senderId)
+            : payload.senderId
+
         const incomingMsg: SenChatMessage = {
           id: payload.id || `msg_${Date.now()}`,
-          conversationId: convId,
+          conversationId: targetConvId,
           senderId: payload.senderId,
-          senderName: payload.senderName || 'Bạn bè',
+          senderName: payload.senderName || (payload.isSenAi ? 'SenAI' : 'Bạn bè'),
           receiverId: currentUser.id,
-          content: payload.content || '', // Nội dung đã được giải mã cục bộ
+          content: payload.content || '',
           type: payload.type || 'text',
+          isSenAi: !!payload.isSenAi,
+          invokedBy: payload.invokedBy,
           attachmentUrl: payload.attachmentUrl,
           attachmentName: payload.attachmentName,
           attachmentSize: payload.attachmentSize,
+          attachmentId: payload.attachmentId,
+          driveFileId: payload.driveFileId,
+          storageProvider: payload.storageProvider,
+          storagePath: payload.storagePath,
+          fileKeyBase64: payload.fileKeyBase64,
+          mimeType: payload.mimeType,
+          duration: payload.duration,
+          waveform: payload.waveform,
+          transcription: payload.transcription,
+          transcriptionLanguage: payload.transcriptionLanguage,
           createdAt: payload.createdAt || new Date().toISOString(),
           status: 'received',
         }
 
-        saveLocalMessage(convId, incomingMsg)
+        saveLocalMessage(targetConvId, incomingMsg)
         refreshConversations()
-        if (selectedConvId === convId) {
+        if (selectedConvId === targetConvId) {
           setMessages((prev) => [...prev, incomingMsg])
         }
       })
@@ -402,7 +432,8 @@ export default function SenChatPage() {
     // P6: Nếu người dùng gửi tin nhắn nhắc @Sen và chưa qua bước xác nhận E2EE
     if (type === 'text' && !skipSenAiCheck && hasSenAiMention(content)) {
       setShowSenAiAutocomplete(false)
-      setPendingSenAiQuery(content)
+      const cleanPrompt = extractSenAiQuery(content) || content
+      setPendingSenAiQuery(cleanPrompt)
       setShowSenAiConfirmModal(true)
       return
     }
@@ -559,9 +590,10 @@ export default function SenChatPage() {
 
     setIsSenAiCalling(true)
     try {
-      // 1. Gửi tin nhắn của người dùng vào hội thoại
-      const userMessageText = query.includes('@Sen') ? query : `@Sen ${query}`
+      // 1. Gửi tin nhắn của người dùng vào hội thoại và xóa ô nhập
+      const userMessageText = hasSenAiMention(query) ? query : `@Sen ${query}`
       await handleSendMessage(userMessageText, 'text', undefined, true)
+      setInputText('')
 
       // 2. Trong nhóm: thông báo cho các thành viên khi có người gọi Sen
       if (activeConv.isGroup) {
@@ -572,6 +604,7 @@ export default function SenChatPage() {
           senderId: 'system',
           senderName: 'Hệ thống',
           receiverId: activeConv.partnerId,
+          invokedBy: currentUser.id,
           content: groupNoticeText,
           type: 'system',
           createdAt: new Date().toISOString(),
@@ -634,6 +667,7 @@ export default function SenChatPage() {
           senderId: 'senai',
           senderName: 'SenAI',
           receiverId: activeConv.partnerId,
+          invokedBy: currentUser.id,
           content: `⚠️ ${errorContent}`,
           type: 'text',
           isSenAi: true,
@@ -653,6 +687,7 @@ export default function SenChatPage() {
         senderId: 'senai',
         senderName: 'SenAI',
         receiverId: activeConv.partnerId,
+        invokedBy: currentUser.id,
         content: replyContent,
         type: 'text',
         isSenAi: true,

@@ -41,6 +41,7 @@ export {
   extractSenAiQuery,
   getSenAiAutocompleteSuggestions,
   validateE2eeDisclosureConsent,
+  selectContextMessages,
   sanitizeChatInputForAi,
   buildSecureSenAiChatPrompt,
   checkSenAiRateLimit,

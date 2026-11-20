@@ -3,6 +3,7 @@
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
+import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import TikzRenderer from '@/app/components/TikzRenderer'
@@ -26,13 +27,13 @@ export default function ChatMessageContent({
   if (isSenAi || hasMathOrTikz(content)) {
     // Chuẩn hóa nếu có \begin{tikzpicture} chưa bọc trong code fence
     let processedContent = content
-    if (
-      processedContent.includes('\\begin{tikzpicture}') &&
-      !processedContent.includes('```tikz')
-    ) {
+    if (processedContent.includes('\\begin{tikzpicture}')) {
       processedContent = processedContent.replace(
-        /(\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\})/g,
-        '\n```tikz\n$1\n```\n'
+        /(```tikz\s*[\s\S]*?```)|(\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\})/gi,
+        (match, p1, p2) => {
+          if (p1) return p1
+          return `\n\`\`\`tikz\n${p2}\n\`\`\`\n`
+        }
       )
     }
 
@@ -41,8 +42,8 @@ export default function ChatMessageContent({
         isMe ? 'text-white' : 'text-slate-800 dark:text-slate-100'
       }`}>
         <ReactMarkdown
-          remarkPlugins={[remarkMath]}
-          rehypePlugins={[rehypeKatex]}
+          remarkPlugins={[remarkMath, remarkGfm]}
+          rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}
           components={{
             code: ({ className: codeClass, children, ...props }: any) => {
               const isTikz = /language-tikz/i.test(codeClass || '')

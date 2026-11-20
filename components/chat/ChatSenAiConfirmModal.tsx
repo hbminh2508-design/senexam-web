@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { SenChatMessage } from '@/lib/senChatStorage'
+import { selectContextMessages } from '@/lib/senChatAi'
 
 interface ChatSenAiConfirmModalProps {
   isOpen: boolean
@@ -44,11 +45,8 @@ export default function ChatSenAiConfirmModal({
 
   if (!isOpen) return null
 
-  // Lấy các tin nhắn ngữ cảnh được chọn
-  const validHistory = recentMessages
-    .filter((m) => m.type === 'text' && m.content)
-    .slice(-5) // Tối đa 5 tin nhắn gần nhất
-  const selectedContext = validHistory.slice(-contextCount)
+  // Lấy các tin nhắn ngữ cảnh được chọn (chắc chắn rỗng khi contextCount === 0 để không rò rỉ dữ liệu)
+  const selectedContext = selectContextMessages(recentMessages, contextCount)
 
   const handleSend = async () => {
     const trimmed = query.trim()
@@ -99,13 +97,15 @@ export default function ChatSenAiConfirmModal({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs">
-          {/* E2EE Warning Box */}
+          {/* E2EE Warning Box & Confirm Question */}
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-amber-800 dark:text-amber-300 flex items-start gap-3 leading-relaxed">
             <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
             <div className="space-y-1">
-              <span className="font-semibold block">Thông báo bảo mật đầu-cuối (E2EE)</span>
+              <span className="font-bold text-sm block text-amber-900 dark:text-amber-200">
+                “Gửi nội dung này (và {contextCount > 0 ? `${contextCount} tin gần nhất bạn chọn` : 'không kèm tin nhắn'}) tới SenAI?”
+              </span>
               <span>
-                Toàn bộ hội thoại này đang được mã hóa đầu-cuối. Khi bạn xác nhận, <strong>chỉ câu hỏi và các tin nhắn bạn chủ động chọn dưới đây</strong> mới được giải mã và gửi đến máy chủ SenAI để xử lý câu trả lời.
+                Toàn bộ hội thoại này đang được mã hóa đầu-cuối. <strong>Chỉ nội dung người dùng đồng ý mới rời khỏi vòng E2EE</strong> để chuyển đến máy chủ SenAI xử lý bài giải và công thức toán.
               </span>
             </div>
           </div>
