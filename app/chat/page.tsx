@@ -62,6 +62,8 @@ import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
 import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
+import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
+import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import { getEffectivePlanTier } from '@/lib/vipMembership'
 import { parseMessageLinks } from '@/lib/chatSanitizer'
 import {
@@ -115,9 +117,10 @@ export default function SenChatPage() {
   const [showChatSearch, setShowChatSearch] = useState(false)
   const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all')
 
-  // Gói dịch vụ & Đính kèm tệp
+  // Gói dịch vụ & Đính kèm tệp / Tin nhắn thoại (P5)
   const [userPlanTier, setUserPlanTier] = useState<string | null>(null)
   const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null)
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
 
   // Quoting & Reactions
   const [replyingToMessage, setReplyingToMessage] = useState<SenChatMessage | null>(null)
@@ -439,6 +442,103 @@ export default function SenChatPage() {
         console.warn('Realtime broadcast error, fallbacked to local:', e)
       }
     }
+  }
+
+  // 7b. Gửi tin nhắn thoại bảo mật E2EE (P5)
+  const handleSendVoiceMessage = async (voiceData: {
+    audioBlob: Blob
+    fileKeyBase64: string
+    attachmentId?: string
+    driveFileId?: string
+    storageProvider?: string
+    storagePath?: string
+    duration: number
+    waveform: number[]
+    transcription?: string
+    transcriptionLanguage?: string
+    fileSize: number
+    mimeType: string
+  }) => {
+    if (isCurrentBlocked) {
+      alert('Bạn đã chặn người dùng này. Hãy bỏ chặn để tiếp tục nhắn tin.')
+      return
+    }
+    if (!selectedConvId || !currentUser) return
+
+    const activeConv = conversations.find((c) => c.id === selectedConvId)
+    if (!activeConv) return
+
+    const newMsg: SenChatMessage = {
+      id: 'msg_voice_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      conversationId: selectedConvId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      receiverId: activeConv.partnerId,
+      content: voiceData.transcription ? `[Tin nhắn thoại]: ${voiceData.transcription}` : '[Tin nhắn thoại]',
+      type: 'audio',
+      attachmentId: voiceData.attachmentId,
+      driveFileId: voiceData.driveFileId,
+      storageProvider: voiceData.storageProvider || 'supabase_storage',
+      storagePath: voiceData.storagePath,
+      fileKeyBase64: voiceData.fileKeyBase64,
+      attachmentSize: voiceData.fileSize,
+      mimeType: voiceData.mimeType,
+      duration: voiceData.duration,
+      waveform: voiceData.waveform,
+      transcription: voiceData.transcription,
+      transcriptionLanguage: voiceData.transcriptionLanguage,
+      createdAt: new Date().toISOString(),
+      status: isOnline ? 'sent' : 'sending',
+    }
+
+    saveLocalMessage(selectedConvId, newMsg)
+    setMessages((prev) => [...prev, newMsg])
+
+    saveLocalConversation({
+      ...activeConv,
+      lastMessage: voiceData.transcription ? `🎤 ${voiceData.transcription}` : '[Tin nhắn thoại]',
+      lastMessageTime: new Date(newMsg.createdAt).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      updatedAt: Date.now(),
+    })
+    refreshConversations()
+
+    if (isOnline) {
+      try {
+        await supabase.channel('sen-chat-realtime-transit').send({
+          type: 'broadcast',
+          event: 'new_e2ee_message',
+          payload: {
+            ...newMsg,
+            deviceId,
+          },
+        })
+      } catch (e) {
+        console.warn('Realtime broadcast error, fallbacked to local:', e)
+      }
+    }
+  }
+
+  // Cập nhật transcript cho tin nhắn thoại (cho phép sửa tay hoặc cập nhật sau STT)
+  const handleUpdateMessageTranscription = (msgId: string, newText: string, newLang?: string) => {
+    if (!selectedConvId) return
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === msgId) {
+          const updated: SenChatMessage = {
+            ...m,
+            transcription: newText,
+            transcriptionLanguage: newLang || m.transcriptionLanguage || 'vi',
+            content: newText ? `[Tin nhắn thoại]: ${newText}` : m.content,
+          }
+          saveLocalMessage(selectedConvId, updated)
+          return updated
+        }
+        return m
+      })
+    )
   }
 
   // 8. Thu hồi tin nhắn (Recall)
@@ -880,30 +980,48 @@ export default function SenChatPage() {
                               : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
                           }`}
                         >
-                          {/* Đính kèm tệp / ảnh mã hóa E2EE (Google Drive / Supabase) */}
-                          {(msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
-                            <div className="mb-2">
-                              <ChatAttachmentBubble
-                                attachmentId={msg.attachmentId}
-                                driveFileId={msg.driveFileId}
-                                storageProvider={msg.storageProvider}
-                                fileKeyBase64={msg.fileKeyBase64}
-                                fileName={msg.attachmentName || 'Tệp đính kèm'}
-                                fileSize={msg.attachmentSize}
-                                mimeType={msg.mimeType}
-                                fileType={
-                                  msg.type === 'image'
-                                    ? 'image'
-                                    : (msg.mimeType?.startsWith('video/') || msg.attachmentName?.match(/\.(mp4|webm|mov|mkv|avi)$/i))
-                                    ? 'video'
-                                    : 'file'
-                                }
-                              />
-                            </div>
+                          {/* Đính kèm tin nhắn thoại hoặc tệp / ảnh mã hóa E2EE */}
+                          {msg.type === 'audio' ? (
+                            <ChatVoiceMessageBubble
+                              messageId={msg.id}
+                              attachmentId={msg.attachmentId}
+                              driveFileId={msg.driveFileId}
+                              storageProvider={msg.storageProvider}
+                              storagePath={msg.storagePath}
+                              fileKeyBase64={msg.fileKeyBase64}
+                              duration={msg.duration}
+                              waveform={msg.waveform}
+                              transcription={msg.transcription}
+                              transcriptionLanguage={msg.transcriptionLanguage}
+                              isOutgoing={isMe}
+                              userPlanTier={userPlanTier}
+                              onUpdateTranscription={handleUpdateMessageTranscription}
+                            />
+                          ) : (
+                            (msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
+                              <div className="mb-2">
+                                <ChatAttachmentBubble
+                                  attachmentId={msg.attachmentId}
+                                  driveFileId={msg.driveFileId}
+                                  storageProvider={msg.storageProvider}
+                                  fileKeyBase64={msg.fileKeyBase64}
+                                  fileName={msg.attachmentName || 'Tệp đính kèm'}
+                                  fileSize={msg.attachmentSize}
+                                  mimeType={msg.mimeType}
+                                  fileType={
+                                    msg.type === 'image'
+                                      ? 'image'
+                                      : (msg.mimeType?.startsWith('video/') || msg.attachmentName?.match(/\.(mp4|webm|mov|mkv|avi)$/i))
+                                      ? 'video'
+                                      : 'file'
+                                  }
+                                />
+                              </div>
+                            )
                           )}
 
-                          {/* Rendering tin nhắn text hoặc links an toàn */}
-                          {(!msg.attachmentId || (msg.content && !msg.content.startsWith('[Tệp đính kèm:'))) && (
+                          {/* Rendering tin nhắn text hoặc links an toàn (nếu không phải tin nhắn thoại) */}
+                          {msg.type !== 'audio' && (!msg.attachmentId || (msg.content && !msg.content.startsWith('[Tệp đính kèm:'))) && (
                             <div className="text-xs leading-relaxed break-words">
                               {textParts.map((part, pIdx) => {
                                 if (part.type === 'link') {
@@ -1017,54 +1135,74 @@ export default function SenChatPage() {
 
             {/* Input area */}
             <div className="border-t border-slate-200/60 bg-white/90 p-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 pb-[max(12px,env(safe-area-inset-bottom))]">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  handleSendMessage()
-                }}
-                className="flex items-center gap-2"
-              >
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  title="Đính kèm tệp"
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) {
-                      setSelectedAttachmentFile(f)
-                    }
-                    e.target.value = ''
+              {isRecordingVoice ? (
+                <ChatVoiceRecorder
+                  conversationId={selectedConvId || ''}
+                  userPlanTier={userPlanTier}
+                  onCancel={() => setIsRecordingVoice(false)}
+                  onSendVoiceMessage={async (voiceData) => {
+                    await handleSendVoiceMessage(voiceData)
+                    setIsRecordingVoice(false)
                   }}
-                  className="hidden"
                 />
-
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Nhập tin nhắn bảo mật E2EE..."
-                  className="min-h-[44px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                />
-
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(undefined, 'like')}
-                  title="Thả Like"
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleSendMessage()
+                  }}
+                  className="flex items-center gap-2"
                 >
-                  <ThumbsUp className="h-5 w-5" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Đính kèm tệp"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) {
+                        setSelectedAttachmentFile(f)
+                      }
+                      e.target.value = ''
+                    }}
+                    className="hidden"
+                  />
 
-                <button
-                  type="submit"
-                  disabled={!inputText.trim()}
+                  <button
+                    type="button"
+                    onClick={() => setIsRecordingVoice(true)}
+                    title="Ghi âm tin nhắn thoại"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+                  >
+                    <Mic className="h-5 w-5" />
+                  </button>
+
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Nhập tin nhắn bảo mật E2EE..."
+                    className="min-h-[44px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => handleSendMessage(undefined, 'like')}
+                    title="Thả Like"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    <ThumbsUp className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={!inputText.trim()}
                   title="Gửi tin nhắn"
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-40"
                 >

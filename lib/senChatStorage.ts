@@ -26,7 +26,7 @@ export interface SenChatMessage {
   senderName: string
   receiverId: string
   content: string
-  type: 'text' | 'image' | 'file' | 'like' | 'system'
+  type: 'text' | 'image' | 'file' | 'audio' | 'like' | 'system'
   attachmentUrl?: string
   attachmentName?: string
   attachmentSize?: number
@@ -35,6 +35,11 @@ export interface SenChatMessage {
   storageProvider?: string
   fileKeyBase64?: string
   mimeType?: string
+  duration?: number
+  waveform?: number[]
+  transcription?: string
+  transcriptionLanguage?: string
+  sttProvider?: 'device' | 'server'
   createdAt: string
   status: 'sending' | 'sent' | 'received' | 'seen'
   isLocalOnly?: boolean
@@ -206,7 +211,14 @@ export function saveLocalMessage(conversationId: string, message: SenChatMessage
   const convs = getLocalConversations()
   const c = convs.find((item) => item.id === conversationId)
   if (c) {
-    c.lastMessage = message.type === 'image' ? '[Hình ảnh]' : message.type === 'like' ? '👍' : message.content
+    c.lastMessage =
+      message.type === 'image'
+        ? '[Hình ảnh]'
+        : message.type === 'audio'
+        ? (message.transcription ? `🎤 ${message.transcription}` : '[Tin nhắn thoại]')
+        : message.type === 'like'
+        ? '👍'
+        : message.content
     c.lastMessageTime = new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     c.updatedAt = Date.now()
     localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
