@@ -23,11 +23,27 @@ export default function CapacitorManager() {
     let cleanupAppListener: (() => void) | null = null
 
     const handleBackTrigger = () => {
+      // 0. Ưu tiên xử lý từ custom handler được đăng ký từ màn hình hiện thời (nếu có)
+      const isCustomHandled = (globalBackButtonDispatcher as any).triggerCustomHandler?.()
+      if (isCustomHandled) return
+
+      const hasChatOpen = Boolean(
+        typeof window !== 'undefined' && (window as any)?.__senChatHasOpenConversation
+      )
+      const hasChatModal = Boolean(
+        typeof window !== 'undefined' && (window as any)?.__senChatHasOpenModal
+      )
+
       const result = globalBackButtonDispatcher.handleBackPress({
         currentPath: pathname || '',
-      })
+        hasOpenChatConversation: hasChatOpen,
+        hasOpenModal: hasChatModal,
+      } as any)
 
-      if (result.action === 'confirm_exam_exit') {
+      if (result.action === 'close_chat_conversation') {
+        // Gửi sự kiện cho màn hình chat mobile để thoát hội thoại / đóng modal về danh sách
+        window.dispatchEvent(new CustomEvent('senchat:back-pressed'))
+      } else if (result.action === 'confirm_exam_exit') {
         setShowExamExitModal(true)
       } else if (result.action === 'prompt_exit_toast') {
         setToastMessage(result.message)

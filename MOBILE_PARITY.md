@@ -34,6 +34,7 @@
 | **Hồ sơ cá nhân & Đổi mật khẩu** (`/m/profile`) | 🟢 Hoạt động | 🟢 Hoạt động | 🟢 Hoạt động | Chỉnh sửa thông tin, trường học, điểm mục tiêu. Đã loại bỏ chuỗi SC của PC. |
 | **Trang Quản trị Hệ thống (Admin Dashboard)** | 🟢 Hoạt động | ⚪ Chỉ PC | ⚪ Chỉ PC | Trang quản trị vận hành với 80 bảng CSDL, duyệt đơn, xuất file Excel dung lượng lớn chỉ thiết kế cho PC. |
 | **Ứng dụng Thở Tĩnh Tâm (Breathe-U)** | 🟢 Hoạt động | 🟢 Hoạt động | 🟢 Hoạt động | Giao diện chuẩn mobile-first, hoạt động hoàn hảo trên cả 3 nền tảng. |
+| **Sen Chat (Mã Hóa E2EE & MLS)** (`/chat` ➔ `/m/chat`) | 🟢 Hoạt động | 🟢 Hoạt động | 🟢 Hoạt động | **Đã hoàn thiện P7:** Giao diện tối ưu một cột trên điện thoại, chuyển đổi 3 màn hình mượt mà (danh sách $\leftrightarrow$ khung chat $\leftrightarrow$ thông tin phòng), safe-area insets, vùng chạm $\ge 44\text{px}$, bàn phím ảo (visualViewport) không che ô nhập. Nút Back phần cứng theo ngữ cảnh (thoát hội thoại/modal về danh sách $\to$ bấm 2 lần trong 2s để thoát). Tải tệp `openSafeDownload`, Android FLAG_SECURE chống chụp màn hình/task switcher, khóa app bằng PIN/sinh trắc học, lưu khóa riêng E2EE bằng Android Keystore, thông báo đẩy không lộ nội dung tin nhắn, hàng đợi ngoại tuyến với idempotency_key. |
 
 ---
 
@@ -52,3 +53,29 @@
 5. **Khôi phục bài thi khi mất mạng:**
    - Đã lưu cả tiến độ đáp án `m_exam_ans_${examId}` lẫn chỉ số câu hỏi đang làm `m_exam_idx_${examId}` vào `localStorage`. Khi mất mạng và vào lại, học sinh quay lại đúng câu đang làm dở.
    - Thêm modal thông báo mất mạng với nút "Thử nộp lại" an toàn không xóa bài làm.
+
+---
+
+## 3. Các điểm kỹ thuật Android Capacitor & Mobile Web hoàn thiện ở P7 (Sen Chat)
+
+1. **Giao diện 1 cột tối ưu cho điện thoại & bàn phím ảo (Visual Viewport):**
+   - Tuyến đường `/m/chat` thuần mobile-first, chuyển đổi 3 màn hình mượt mà: Danh sách hội thoại $\leftrightarrow$ Khung chat chi tiết $\leftrightarrow$ Thông tin phòng & cài đặt.
+   - Vùng chạm tương tác đạt chuẩn tối thiểu $\ge 44\text{px}$ (`min-h-[44px] min-w-[44px]`), tối ưu ngón cái cầm 1 tay.
+   - Lắng nghe `window.visualViewport` để đẩy thanh nhập liệu lên phía trên bàn phím ảo khi mở, không che khuất ô soạn tin và nội dung tin nhắn.
+2. **Nút Back phần cứng Android theo ngữ cảnh (`CapacitorManager.tsx` & `lib/capacitorBridge.ts`):**
+   - *Khi đang mở modal hoặc phòng chat:* Bấm Back đóng modal hoặc thoát khỏi phòng chat để quay về danh sách hội thoại (`close_chat_conversation`).
+   - *Khi đang ở danh sách hội thoại (`/m/chat`):* Tự động áp dụng quy tắc 2 giây của `/m` (bấm 1 lần hiện toast nhắc nhở, bấm lần 2 trong 2 giây mới gọi `App.exitApp()`).
+3. **Tải tệp tin an toàn qua `openSafeDownload`:**
+   - Toàn bộ ảnh, video, tệp đính kèm mã hóa chunk và bản sao lưu dữ liệu Sen Chat đều được tải qua `openSafeDownload`, ủy quyền tự động sang `_system` intent trên Android WebView để hệ điều hành tải bằng DownloadManager.
+4. **Android FLAG_SECURE (Chống chụp màn hình & Preview đa nhiệm):**
+   - Module `lib/senChatMobileSecurity.ts` tích hợp gọi native Capacitor plugin hoặc CSS overlay chống chụp màn hình, chống rò rỉ nội dung tin nhắn ra danh sách ứng dụng gần đây (Recent Apps / Task Switcher), có công tắc bật/tắt trực tiếp trong cài đặt.
+5. **Khóa ứng dụng bằng PIN & Sinh trắc học (Biometric / PIN App Lock):**
+   - Cho phép người dùng đặt mã PIN 4-6 số và kích hoạt vân tay / Face ID. Tự động khóa ứng dụng khi khởi động hoặc quay lại từ nền, giao diện bàn phím số cảm ứng mượt mà.
+6. **Lưu trữ khóa riêng E2EE bằng Android Keystore:**
+   - Cặp khóa nhận dạng Signal Protocol và Prekeys được lưu trữ bằng plugin Android Keystore / Secure Storage cấp phần cứng, không lưu thô trong trình duyệt.
+7. **Thông báo đẩy chuẩn Zero-Knowledge E2EE:**
+   - Tiêu đề và nội dung thông báo đẩy TUYỆT ĐỐI không chứa bất kỳ văn bản tin nhắn, nội dung giải mã hay ciphertext nào. Chỉ thông báo dạng *"Bạn có tin nhắn mới từ..."* hoặc *"Bạn có tin nhắn mới trong nhóm..."*.
+8. **Hàng đợi gửi lại khi mất mạng (Offline Queue) với Idempotency Key:**
+   - Khi mất mạng, tin nhắn được đưa vào hàng đợi `lib/senChatOfflineQueue.ts` kèm `idempotency_key` duy nhất. Khi mạng phục hồi, hàng đợi tự động xả (drain) theo thứ tự thời gian FIFO và máy chủ/người nhận loại bỏ trùng lặp triệt để.
+9. **Tuân thủ quy chuẩn thương hiệu:**
+   - Tuyệt đối không xuất hiện chữ "SC" hay "SenCash" trong toàn bộ mã nguồn và giao diện `app/m/`. Mobile sử dụng độc quyền hệ thống SCm.

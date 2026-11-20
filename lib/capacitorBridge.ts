@@ -5,6 +5,7 @@ import {
   isNativeCapacitor,
   isExamPath,
   isHomePath,
+  isChatPath,
   createBackButtonDispatcher,
   resolveSafeDownload,
 } from './capacitorBridge.mjs'
@@ -14,6 +15,7 @@ export {
   isNativeCapacitor,
   isExamPath,
   isHomePath,
+  isChatPath,
   createBackButtonDispatcher,
   resolveSafeDownload,
 }

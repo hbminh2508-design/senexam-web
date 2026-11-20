@@ -76,9 +76,10 @@ export default function MobileNav() {
     },
   ])
 
-  // Không hiển thị thanh điều hướng đáy khi đang trong phòng thi
+  // Không hiển thị thanh điều hướng đáy khi đang trong phòng thi hoặc phòng chat
   const isInsideExam = Boolean(pathname?.includes('/m/exams/'))
-  if (isInsideExam) return null
+  const isInsideChat = Boolean(pathname?.startsWith('/m/chat'))
+  if (isInsideExam || isInsideChat) return null
 
   const isHome = pathname === '/m' || pathname === '/m/'
   const isSenGround = pathname === '/m/sen-ground'

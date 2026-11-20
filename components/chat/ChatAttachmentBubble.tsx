@@ -23,6 +23,7 @@ import {
   decryptFileToBlob,
   base64ToBytes,
 } from '@/lib/senChatChunkCrypto'
+import { openSafeDownload } from '@/lib/capacitorBridge'
 
 interface ChatAttachmentBubbleProps {
   attachmentId?: string
@@ -144,12 +145,7 @@ export default function ChatAttachmentBubble({
         blobUrl = await fetchAndDecryptBlob()
       }
 
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      openSafeDownload(blobUrl, fileName)
     } catch (err: any) {
       setError(err?.message || 'Lỗi khi tải hoặc giải mã tệp')
     } finally {
