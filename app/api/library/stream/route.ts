@@ -66,11 +66,11 @@ export async function GET(request: NextRequest) {
     // 1. Nếu là file lưu trên Azure (local disk)
     if (doc.drive_file_id?.startsWith('azure:') || metadata?.storage === 'azure') {
       const filename = metadata?.filename || doc.drive_file_id.replace(/^azure:/, '')
-      const filePath = path.join(STORAGE_DIR, filename)
+      const filePath = path.join(/*turbopackIgnore: true*/ STORAGE_DIR, filename)
 
       try {
-        const fileStat = await fs.stat(filePath)
-        const fileBuffer = await fs.readFile(filePath)
+        const fileStat = await fs.stat(/*turbopackIgnore: true*/ filePath)
+        const fileBuffer = await fs.readFile(/*turbopackIgnore: true*/ filePath)
 
         const contentType = metadata?.mimeType || 'application/pdf'
         const safeTitle = encodeURIComponent(doc.title || 'document.pdf')
