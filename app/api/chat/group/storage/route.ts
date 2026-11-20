@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
 
     const { data: usageData, error: usageErr } = await supabaseAdmin.rpc('get_conversation_storage_usage', {
       p_conversation_id: conversationId,
+      p_caller_id: user.id,
     })
 
     if (usageErr) {

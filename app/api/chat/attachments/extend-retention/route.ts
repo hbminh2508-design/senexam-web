@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
       p_attachment_id: attachmentId,
       p_days: parseInt(String(days), 10) || 30,
       p_permanent: Boolean(permanent),
+      p_caller_id: user.id,
     })
 
     if (error) {

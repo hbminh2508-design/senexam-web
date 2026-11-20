@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
       if (conv?.type === 'group') {
         const { data: usageData } = await supabaseAdmin.rpc('get_conversation_storage_usage', {
           p_conversation_id: conversationId,
+          p_caller_id: user.id,
         })
         const usedBytes = Number(usageData?.used_bytes || 0)
         const groupValidation = validateGroupStorageQuota(usedBytes, fileSizeBytes)
@@ -189,6 +190,7 @@ export async function POST(request: NextRequest) {
     if (convData?.type === 'group') {
       const { data: usageData } = await supabaseAdmin.rpc('get_conversation_storage_usage', {
         p_conversation_id: conversationId,
+        p_caller_id: user.id,
       })
       const usedBytes = Number(usageData?.used_bytes || 0)
       const groupValidation = validateGroupStorageQuota(usedBytes, actualSizeBytes)

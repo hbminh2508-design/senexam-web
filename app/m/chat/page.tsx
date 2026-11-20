@@ -172,6 +172,8 @@ export default function MobileChatPage() {
   const [showSafetyModal, setShowSafetyModal] = useState(false)
   const [safetyNumber, setSafetyNumber] = useState('')
 
+  const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -186,6 +188,7 @@ export default function MobileChatPage() {
         showFriendModal ||
         showMlsGroupModal ||
         showAttachmentModal ||
+        Boolean(selectedAttachmentFile) ||
         showSenAiConfirmModal ||
         showDisappearingSettings ||
         showSafetyModal ||
@@ -241,6 +244,10 @@ export default function MobileChatPage() {
       }
       if (showMlsGroupModal) {
         setShowMlsGroupModal(false)
+        return
+      }
+      if (selectedAttachmentFile) {
+        setSelectedAttachmentFile(null)
         return
       }
       if (showAttachmentModal) {
@@ -405,7 +412,7 @@ export default function MobileChatPage() {
           conversationId: 'senai-welcome',
           senderId: 'senai-assistant',
           senderName: 'SenAI',
-          receiverId: user.id,
+          receiverId: authUser.id,
           content: 'Chào mừng bạn đến với **Sen Chat Mobile**! Tất cả tin nhắn đều được mã hóa đầu cuối (E2EE Signal Protocol) và lưu an toàn trên máy.',
           type: 'text',
           createdAt: new Date().toISOString(),
@@ -1181,8 +1188,8 @@ export default function MobileChatPage() {
                         mimeType={msg.mimeType}
                         expiresAt={msg.expiresAt}
                         isPinnedPermanent={msg.isPinnedPermanent}
-                        isGroup={currentConversation?.isGroup}
-                        canExtendRetention={currentConversation?.isGroup ? (currentConversation?.role === 'owner' || currentConversation?.role === 'admin' || msg.senderId === currentUser?.id) : true}
+                        isGroup={activeConversation?.isGroup}
+                        canExtendRetention={activeConversation?.isGroup ? (activeConversation?.role === 'owner' || activeConversation?.role === 'admin' || msg.senderId === currentUser?.id) : true}
                         onRetentionExtended={(attId, newExp, isPerm) => {
                           setMessages((prev) =>
                             prev.map((m) =>
@@ -1192,7 +1199,13 @@ export default function MobileChatPage() {
                             )
                           )
                         }}
-                        fileType={msg.type === 'image' ? 'image' : 'file'}
+                        fileType={
+                          msg.type === 'image'
+                            ? 'image'
+                            : (msg.mimeType?.startsWith('video/') || msg.attachmentName?.match(/\.(mp4|webm|mov|mkv|avi)$/i))
+                            ? 'video'
+                            : 'file'
+                        }
                       />
                     ) : msg.type === 'audio' ? (
                       /* Tin nhắn giọng nói */
@@ -1285,10 +1298,22 @@ export default function MobileChatPage() {
               paddingBottom: viewportBottomOffset > 0 ? '0.5rem' : 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))',
             }}
           >
+            {/* Input file ẩn cho Mobile */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) setSelectedAttachmentFile(f)
+                e.target.value = ''
+              }}
+            />
+
             {/* Nút gửi đính kèm */}
             <button
               type="button"
-              onClick={() => setShowAttachmentModal(true)}
+              onClick={() => fileInputRef.current?.click()}
               className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 active:scale-95 transition"
               aria-label="Đính kèm tệp"
             >
@@ -1642,15 +1667,14 @@ export default function MobileChatPage() {
       )}
 
       {/* MODAL: ĐÍNH KÈM TỆP QUA OPENSFEDOWNLOAD */}
-      {showAttachmentModal && (
+      {selectedAttachmentFile && (
         <ChatAttachmentModal
-          isOpen={showAttachmentModal}
-          onClose={() => setShowAttachmentModal(false)}
+          file={selectedAttachmentFile}
           conversationId={selectedConvId || ''}
-          currentUserId={currentUser?.id || ''}
-          userPlanTier={null}
-          onSendSuccess={(attData) => {
-            setShowAttachmentModal(false)
+          userPlanTier={userPlanTier}
+          onClose={() => setSelectedAttachmentFile(null)}
+          onSuccess={(attData) => {
+            setSelectedAttachmentFile(null)
             if (!selectedConvId || !currentUser) return
 
             const timestamp = Date.now()
@@ -1664,13 +1688,16 @@ export default function MobileChatPage() {
               receiverId: activeConversation?.partnerId || '',
               content: attData.fileName || '[Tệp đính kèm]',
               type: attData.fileType === 'image' ? 'image' : 'file',
-              attachmentId: attData.attachmentId,
+              attachmentId: attData.id,
               driveFileId: attData.driveFileId,
               storageProvider: attData.storageProvider,
+              storagePath: attData.storagePath,
               fileKeyBase64: attData.fileKeyBase64,
               attachmentName: attData.fileName,
               attachmentSize: attData.fileSize,
               mimeType: attData.mimeType,
+              expiresAt: attData.expiresAt,
+              isPinnedPermanent: false,
               createdAt: new Date(timestamp).toISOString(),
               status: 'sent',
             }

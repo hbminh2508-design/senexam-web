@@ -177,3 +177,59 @@ test('Sen Chat P9: Tuyệt đối không có chữ SC/SenCash trong app/m/chat &
     }
   }
 })
+
+// ==============================================================================
+// 8. KIỂM THỬ SỬA LỖI MIGRATION 013 & SERVICE ROLE AUTH CHO RPC GIA HẠN
+// ==============================================================================
+test('Sen Chat P9: Migration 013 và Service Role caller auth trong RPC gia hạn', () => {
+  const mig13Path = path.join(process.cwd(), 'migrations/013_sen_chat_retention_rpc_auth_fix.sql')
+  assert.ok(fs.existsSync(mig13Path), 'Migration 013 phải tồn tại')
+  const mig13Content = fs.readFileSync(mig13Path, 'utf8')
+
+  assert.ok(
+    mig13Content.includes("auth.role() = 'service_role'"),
+    'Migration 013 phải hỗ trợ service_role backend caller'
+  )
+  assert.ok(
+    mig13Content.includes('p_caller_id UUID DEFAULT NULL'),
+    'RPC extend_attachment_retention phải nhận p_caller_id'
+  )
+
+  const extendRouteContent = fs.readFileSync(
+    path.join(process.cwd(), 'app/api/chat/attachments/extend-retention/route.ts'),
+    'utf8'
+  )
+  assert.ok(
+    extendRouteContent.includes('p_caller_id: user.id'),
+    'API extend-retention route phải truyền p_caller_id: user.id vào RPC'
+  )
+})
+
+// ==============================================================================
+// 9. KIỂM THỬ TOÀN VẸN BIẾN SCOPE TRONG APP/M/CHAT & SESSION LIFECYCLE
+// ==============================================================================
+test('Sen Chat P9: Kiểm tra không lỗi biến undefined trong mobile chat và cờ session ephemeral', () => {
+  const mobileChatContent = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
+  assert.ok(
+    !mobileChatContent.includes('receiverId: user.id'),
+    'Không được có biến undefined user.id trong mobile chat'
+  )
+  assert.ok(
+    !mobileChatContent.includes('currentConversation?.isGroup'),
+    'Không được có biến undefined currentConversation trong mobile chat'
+  )
+  assert.ok(
+    mobileChatContent.includes('fileInputRef'),
+    'Mobile Chat phải có fileInputRef để mở file picker'
+  )
+  assert.ok(
+    mobileChatContent.includes('selectedAttachmentFile'),
+    'Mobile Chat phải quản lý selectedAttachmentFile'
+  )
+
+  const storageContent = fs.readFileSync(path.join(process.cwd(), 'lib/senChatStorage.ts'), 'utf8')
+  assert.ok(
+    storageContent.includes('sen_chat_active_session'),
+    'Phải có cơ chế session lifecycle token trong sessionStorage'
+  )
+})

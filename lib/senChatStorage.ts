@@ -294,6 +294,9 @@ export function clearAllLocalChatData(): void {
     localStorage.removeItem(STORAGE_KEYS.NICKNAMES)
     localStorage.removeItem(STORAGE_KEYS.WALLPAPERS)
     localStorage.removeItem(STORAGE_KEYS.BLOCKED_USERS)
+    try {
+      sessionStorage.removeItem('sen_chat_active_session')
+    } catch {}
   } catch (e) {
     console.warn('Lỗi xóa toàn bộ dữ liệu Sen Chat cục bộ:', e)
   }
@@ -342,15 +345,36 @@ export function getStorageUsageSummary(): {
 
 /**
  * Đăng ký bộ lắng nghe sự kiện đóng trang (beforeunload, pagehide)
- * để tự động dọn sạch tin nhắn tạm thời nếu chế độ Ephemeral đang bật
+ * kèm cơ chế kiểm tra cờ phiên làm việc (Session Lifecycle Token qua sessionStorage).
+ * Nếu ứng dụng được mở lại sau khi bị đóng đột ngột (low-memory killer, crash...),
+ * session token cũ sẽ không còn trong sessionStorage, hệ thống sẽ tự động dọn sạch
+ * mọi tin nhắn tạm thời còn sót lại từ phiên trước để bảo vệ sự riêng tư.
  */
 export function setupEphemeralCleanupListener(): () => void {
   if (typeof window === 'undefined') return () => {}
 
+  // 1. Kiểm tra cờ phiên trong sessionStorage
+  try {
+    const SESSION_TOKEN_KEY = 'sen_chat_active_session'
+    const hasActiveSession = sessionStorage.getItem(SESSION_TOKEN_KEY)
+    if (!hasActiveSession) {
+      if (isEphemeralStorageEnabled()) {
+        clearAllEphemeralMessages()
+      }
+      sessionStorage.setItem(SESSION_TOKEN_KEY, String(Date.now()))
+    }
+  } catch (e) {
+    // Không chặn nếu sessionStorage bị vô hiệu hóa
+  }
+
+  // 2. Lắng nghe các sự kiện thoát trang
   const handleExit = () => {
     if (isEphemeralStorageEnabled()) {
       clearAllEphemeralMessages()
     }
+    try {
+      sessionStorage.removeItem('sen_chat_active_session')
+    } catch {}
   }
 
   window.addEventListener('pagehide', handleExit)
