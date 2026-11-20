@@ -349,3 +349,122 @@ export async function* encryptFileInChunks(
     chunkIndex++
   }
 }
+
+export const CHUNKED_MAGIC = new Uint8Array([0x53, 0x45, 0x4e, 0x31]) // 'SEN1'
+
+/**
+ * Mã hóa toàn bộ file theo từng chunk stream và đóng gói thành Blob
+ * Định dạng: [SEN1 (4B)] + [Chunk 1: len(4B) + IV(12B) + ciphertext + tag(16B)] + ...
+ */
+export async function encryptFileToBlob(
+  file: Blob | Uint8Array,
+  fileKey: Uint8Array,
+  options: {
+    chunkSize?: number
+    signal?: AbortSignal
+    onProgress?: (bytesProcessed: number, totalBytes: number, percent: number) => void
+  } = {}
+): Promise<Blob> {
+  const blob = file instanceof Blob ? file : new Blob([file as any])
+  const parts: BlobPart[] = [CHUNKED_MAGIC]
+
+  for await (const { encryptedChunk } of encryptFileInChunks(blob, fileKey, options)) {
+    const lenHeader = new Uint8Array(4)
+    new DataView(lenHeader.buffer).setUint32(0, encryptedChunk.length, false)
+    parts.push(lenHeader)
+    parts.push(encryptedChunk)
+  }
+
+  return new Blob(parts, { type: 'application/octet-stream' })
+}
+
+/**
+ * Iterator giải mã từng chunk từ Blob mã hóa mà không cần nạp toàn bộ vào RAM
+ */
+export async function* decryptFileInChunks(
+  encryptedBlob: Blob | Uint8Array,
+  rawKey: Uint8Array,
+  options: {
+    signal?: AbortSignal
+    onProgress?: (bytesProcessed: number, totalBytes: number, percent: number) => void
+  } = {}
+): AsyncGenerator<Uint8Array> {
+  const { signal, onProgress } = options
+  const blob = encryptedBlob instanceof Blob ? encryptedBlob : new Blob([encryptedBlob as any])
+  const totalBytes = blob.size
+
+  if (totalBytes < 4) {
+    throw new Error('Dữ liệu tệp mã hóa không hợp lệ (kích thước quá nhỏ)')
+  }
+
+  // Đọc 4 bytes đầu để kiểm tra magic SEN1
+  const headerBuf = await blob.slice(0, 4).arrayBuffer()
+  const headerBytes = new Uint8Array(headerBuf)
+  const isChunkedFormat =
+    headerBytes[0] === 0x53 &&
+    headerBytes[1] === 0x45 &&
+    headerBytes[2] === 0x4e &&
+    headerBytes[3] === 0x31
+
+  if (isChunkedFormat) {
+    let offset = 4
+    while (offset < totalBytes) {
+      if (signal?.aborted) {
+        throw new Error('Thao tác giải mã tệp đã bị hủy bỏ bởi người dùng')
+      }
+
+      if (offset + 4 > totalBytes) {
+        throw new Error('Dữ liệu framing chunk bị lỗi (không đủ 4 bytes độ dài)')
+      }
+
+      const lenBuf = await blob.slice(offset, offset + 4).arrayBuffer()
+      const chunkLen = new DataView(lenBuf).getUint32(0, false)
+      offset += 4
+
+      if (offset + chunkLen > totalBytes) {
+        throw new Error('Dữ liệu chunk bị cắt cụt (không đủ dữ liệu so với độ dài khai báo)')
+      }
+
+      const chunkBuf = await blob.slice(offset, offset + chunkLen).arrayBuffer()
+      const decryptedChunk = await decryptChunk(new Uint8Array(chunkBuf), rawKey)
+      offset += chunkLen
+
+      const percent = totalBytes > 0 ? Math.min(100, Math.round((offset / totalBytes) * 100)) : 100
+      if (onProgress) {
+        onProgress(offset, totalBytes, percent)
+      }
+
+      yield decryptedChunk
+    }
+  } else {
+    // Tương thích ngược: Coi toàn bộ blob là 1 chunk đơn lẻ
+    if (signal?.aborted) {
+      throw new Error('Thao tác giải mã tệp đã bị hủy bỏ bởi người dùng')
+    }
+    const fullBuf = await blob.arrayBuffer()
+    const decrypted = await decryptChunk(new Uint8Array(fullBuf), rawKey)
+    if (onProgress) {
+      onProgress(totalBytes, totalBytes, 100)
+    }
+    yield decrypted
+  }
+}
+
+/**
+ * Giải mã Blob mã hóa thành Blob giải mã hoàn chỉnh
+ */
+export async function decryptFileToBlob(
+  encryptedBlob: Blob | Uint8Array,
+  rawKey: Uint8Array,
+  mimeType: string = 'application/octet-stream',
+  options: {
+    signal?: AbortSignal
+    onProgress?: (bytesProcessed: number, totalBytes: number, percent: number) => void
+  } = {}
+): Promise<Blob> {
+  const parts: BlobPart[] = []
+  for await (const chunk of decryptFileInChunks(encryptedBlob, rawKey, options)) {
+    parts.push(chunk)
+  }
+  return new Blob(parts, { type: mimeType })
+}

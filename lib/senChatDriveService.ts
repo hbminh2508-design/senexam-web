@@ -195,39 +195,43 @@ export async function getDriveFileStream(
   contentRange?: string | null
   status: number
 }> {
-  const oauth2Client = getOAuth2Client()
-  const { token } = await oauth2Client.getAccessToken()
-  if (!token) throw new Error('Không thể lấy Access Token từ Google OAuth')
+  return await withDriveRetry(async () => {
+    const oauth2Client = getOAuth2Client()
+    const { token } = await oauth2Client.getAccessToken()
+    if (!token) throw new Error('Không thể lấy Access Token từ Google OAuth')
 
-  const fetchHeaders: HeadersInit = {
-    Authorization: `Bearer ${token}`,
-  }
-  if (rangeHeader) {
-    fetchHeaders['Range'] = rangeHeader
-  }
+    const fetchHeaders: HeadersInit = {
+      Authorization: `Bearer ${token}`,
+    }
+    if (rangeHeader) {
+      fetchHeaders['Range'] = rangeHeader
+    }
 
-  const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
-  const driveResponse = await fetch(driveUrl, { headers: fetchHeaders })
+    const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+    const driveResponse = await fetch(driveUrl, { headers: fetchHeaders })
 
-  if (!driveResponse.ok) {
-    throw new Error(`Google Drive API trả về lỗi: ${driveResponse.status} ${driveResponse.statusText}`)
-  }
+    if (!driveResponse.ok) {
+      const err: any = new Error(`Google Drive API trả về lỗi: ${driveResponse.status} ${driveResponse.statusText}`)
+      err.status = driveResponse.status
+      throw err
+    }
 
-  const bodyStream = driveResponse.body
-  if (!bodyStream) {
-    throw new Error('Google Drive không có nội dung phản hồi stream')
-  }
+    const bodyStream = driveResponse.body
+    if (!bodyStream) {
+      throw new Error('Google Drive không có nội dung phản hồi stream')
+    }
 
-  // Chuyển Web ReadableStream sang Node Readable nếu cần
-  const nodeStream = Readable.fromWeb(bodyStream as any)
+    // Chuyển Web ReadableStream sang Node Readable nếu cần
+    const nodeStream = Readable.fromWeb(bodyStream as any)
 
-  return {
-    stream: nodeStream,
-    contentType: driveResponse.headers.get('content-type') || 'application/octet-stream',
-    contentLength: driveResponse.headers.get('content-length'),
-    contentRange: driveResponse.headers.get('content-range'),
-    status: driveResponse.status,
-  }
+    return {
+      stream: nodeStream,
+      contentType: driveResponse.headers.get('content-type') || 'application/octet-stream',
+      contentLength: driveResponse.headers.get('content-length'),
+      contentRange: driveResponse.headers.get('content-range'),
+      status: driveResponse.status,
+    }
+  })
 }
 
 /**

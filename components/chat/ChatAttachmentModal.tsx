@@ -22,8 +22,9 @@ import {
   isRestrictedInlineFile,
 } from '@/lib/chatLimits'
 import {
+  DEFAULT_CHUNK_SIZE,
   generateFileKey,
-  encryptChunk,
+  encryptFileToBlob,
   encryptFileMetadata,
   stripExifAndProcessImage,
   bytesToBase64,
@@ -148,18 +149,24 @@ export default function ChatAttachmentModal({
       const fileKeyBase64 = bytesToBase64(fileKey)
 
       setProgress(35)
-      setStatusText('Đang mã hóa dữ liệu theo từng chunk...')
+      setStatusText('Đang mã hóa dữ liệu theo từng chunk AES-256-GCM...')
 
-      // 2. Đọc và mã hóa chunk
-      const arrayBuffer = await processedBlob.arrayBuffer()
-      const plaintextBytes = new Uint8Array(arrayBuffer)
-
-      if (abortController.signal.aborted) {
-        throw new Error('Đã hủy bỏ bởi người dùng')
-      }
-
-      // Mã hóa nhị phân bằng AES-256-GCM
-      const encryptedBytes = await encryptChunk(plaintextBytes, fileKey)
+      // 2. Mã hóa stream theo từng chunk bằng AES-256-GCM không nạp toàn bộ file vào RAM
+      const encryptedFileBlob = await encryptFileToBlob(
+        processedBlob,
+        fileKey,
+        {
+          chunkSize: DEFAULT_CHUNK_SIZE,
+          signal: abortController.signal,
+          onProgress: (processed, total, percent) => {
+            const mappedProgress = 35 + Math.round((percent * 20) / 100)
+            setProgress(mappedProgress)
+            setStatusText(
+              `Đang mã hóa chunk AES-256-GCM (${formatBytes(processed)} / ${formatBytes(total)})...`
+            )
+          },
+        }
+      )
 
       // 3. Mã hóa metadata (tên tệp, mime type, kích thước)
       const encryptedMetadata = await encryptFileMetadata(
@@ -181,10 +188,6 @@ export default function ChatAttachmentModal({
 
       // 4. Chuẩn bị FormData gửi lên API
       const formData = new FormData()
-      const encryptedFileBlob = new Blob([encryptedBytes as any], {
-        type: 'application/octet-stream',
-      })
-
       formData.append('file', encryptedFileBlob, 'encrypted_blob.bin')
       formData.append('conversationId', conversationId)
       formData.append('fileType', fileType)

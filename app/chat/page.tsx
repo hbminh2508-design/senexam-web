@@ -891,7 +891,13 @@ export default function SenChatPage() {
                                 fileName={msg.attachmentName || 'Tệp đính kèm'}
                                 fileSize={msg.attachmentSize}
                                 mimeType={msg.mimeType}
-                                fileType={msg.type === 'image' ? 'image' : 'file'}
+                                fileType={
+                                  msg.type === 'image'
+                                    ? 'image'
+                                    : (msg.mimeType?.startsWith('video/') || msg.attachmentName?.match(/\.(mp4|webm|mov|mkv|avi)$/i))
+                                    ? 'video'
+                                    : 'file'
+                                }
                               />
                             </div>
                           )}

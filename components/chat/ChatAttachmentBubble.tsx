@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Check,
+  Play,
 } from 'lucide-react'
 import {
   formatBytes,
@@ -19,7 +20,7 @@ import {
   isRestrictedInlineFile,
 } from '@/lib/chatLimits'
 import {
-  decryptChunk,
+  decryptFileToBlob,
   base64ToBytes,
 } from '@/lib/senChatChunkCrypto'
 
@@ -99,21 +100,35 @@ export default function ChatAttachmentBubble({
       throw new Error(`Lỗi tải tệp: ${res.statusText}`)
     }
 
-    const encryptedArrayBuffer = await res.arrayBuffer()
-    const encryptedBytes = new Uint8Array(encryptedArrayBuffer)
-
+    const encryptedBlob = await res.blob()
     const rawKey = base64ToBytes(fileKeyBase64)
-    // Giải mã AES-256-GCM
-    const decryptedBytes = await decryptChunk(encryptedBytes, rawKey)
-
-    const blob = new Blob([decryptedBytes as any], {
-      type: isRestricted ? 'application/octet-stream' : mimeType,
-    })
+    // Giải mã AES-256-GCM theo stream chunk (tự động hỗ trợ cả chunk framing và single chunk)
+    const blob = await decryptFileToBlob(
+      encryptedBlob,
+      rawKey,
+      isRestricted ? 'application/octet-stream' : mimeType
+    )
     return URL.createObjectURL(blob)
   }
 
+  // Phát video inline sau khi giải mã
+  const handlePlayVideo = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    try {
+      setIsLoading(true)
+      setError(null)
+      const url = await fetchAndDecryptBlob()
+      setDecryptedUrl(url)
+    } catch (err: any) {
+      setError(err?.message || 'Lỗi khi giải mã video')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Tải tệp về máy
-  const handleDownload = async () => {
+  const handleDownload = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
     if (isExe && !showExeConfirm) {
       setShowExeConfirm(true)
       return
@@ -193,13 +208,25 @@ export default function ChatAttachmentBubble({
           </button>
         </div>
       ) : isVideo && decryptedUrl ? (
-        <div className="rounded-2xl overflow-hidden bg-black border border-slate-800">
-          <video src={decryptedUrl} controls className="w-full max-h-72" />
+        <div className="space-y-1.5">
+          <div className="rounded-2xl overflow-hidden bg-black border border-slate-800">
+            <video src={decryptedUrl} controls autoPlay className="w-full max-h-72" />
+          </div>
+          <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
+            <span className="truncate max-w-[200px]">{fileName}</span>
+            <button
+              type="button"
+              onClick={(e) => handleDownload(e)}
+              className="flex items-center gap-1 text-emerald-500 hover:underline font-bold cursor-pointer"
+            >
+              <Download className="h-3 w-3" /> Tải về
+            </button>
+          </div>
         </div>
       ) : (
-        /* Box tệp tin thông thường / SVG / HTML */
+        /* Box tệp tin thông thường / SVG / HTML / Video chưa load */
         <div
-          onClick={handleDownload}
+          onClick={isVideo ? (e) => handlePlayVideo(e) : (e) => handleDownload(e)}
           className="flex items-center gap-3 p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -219,14 +246,41 @@ export default function ChatAttachmentBubble({
             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
               {formatBytes(fileSize)} ·{' '}
               {driveFileId && !driveFileId.startsWith('supabase:') ? 'Google Drive' : 'Supabase'}
+              {isVideo && ' · Nhấn để xem video'}
             </p>
           </div>
 
-          <div className="shrink-0 text-slate-500 hover:text-emerald-500">
+          <div className="flex items-center gap-1.5 shrink-0">
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+            ) : isVideo ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePlayVideo}
+                  title="Phát video"
+                  className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-500/10 cursor-pointer"
+                >
+                  <Play className="h-4 w-4 fill-emerald-600" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleDownload(e)}
+                  title="Tải về"
+                  className="p-1 rounded-lg text-slate-400 hover:text-emerald-600 cursor-pointer"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              </>
             ) : (
-              <Download className="h-4 w-4" />
+              <button
+                type="button"
+                onClick={(e) => handleDownload(e)}
+                title="Tải về"
+                className="p-1 rounded-lg text-slate-500 hover:text-emerald-500 cursor-pointer"
+              >
+                <Download className="h-4 w-4" />
+              </button>
             )}
           </div>
         </div>

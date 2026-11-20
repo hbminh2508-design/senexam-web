@@ -15,6 +15,11 @@ import {
   decryptChunk,
   encryptFileMetadata,
   decryptFileMetadata,
+  encryptFileInChunks,
+  encryptFileToBlob,
+  decryptFileInChunks,
+  decryptFileToBlob,
+  CHUNKED_MAGIC,
   bytesToBase64,
   base64ToBytes,
 } from '../lib/senChatChunkCrypto.mjs'
@@ -152,6 +157,96 @@ test('Sen Chat P4: Mã hóa và giải mã từng Chunk AES-256-GCM & Metadata',
 })
 
 // ==============================================================================
+// 3B. KIỂM THỬ STREAM MÃ HÓA & GIẢI MÃ TỆP NHIỀU CHUNK (MULTI-CHUNK STREAMING)
+// ==============================================================================
+test('Sen Chat P4: Stream mã hóa và giải mã tệp nhiều chunk (Multi-chunk streaming, Abort, Progress)', async () => {
+  const fileKey = generateFileKey()
+  const chunkSize = 512 * 1024 // 512KB
+
+  // 1. Dữ liệu tệp 1.5MB (gồm 3 chunks: 512KB + 512KB + 512KB)
+  const originalBytes = crypto.randomBytes(1536 * 1024)
+  const originalBlob = new Blob([originalBytes])
+
+  // 2. Mã hóa stream theo từng chunk và theo dõi tiến trình
+  const progressTicks = []
+  const encryptedBlob = await encryptFileToBlob(originalBlob, fileKey, {
+    chunkSize,
+    onProgress: (processed, total, percent) => {
+      progressTicks.push({ processed, total, percent })
+    },
+  })
+
+  assert.ok(encryptedBlob.size > originalBlob.size, 'Kích thước mã hóa lớn hơn do chứa header magic, độ dài và GCM tags')
+  assert.ok(progressTicks.length >= 3, 'Progress callback phải được kích hoạt cho từng chunk')
+  assert.equal(progressTicks[progressTicks.length - 1].percent, 100, 'Tiến trình kết thúc ở 100%')
+
+  // 3. Giải mã stream theo từng chunk và so khớp byte-for-byte
+  const decryptProgressTicks = []
+  const decryptedBlob = await decryptFileToBlob(encryptedBlob, fileKey, 'application/octet-stream', {
+    onProgress: (processed, total, percent) => {
+      decryptProgressTicks.push({ processed, total, percent })
+    },
+  })
+
+  const decryptedArrayBuffer = await decryptedBlob.arrayBuffer()
+  const decryptedBytes = Buffer.from(decryptedArrayBuffer)
+  assert.deepEqual(
+    decryptedBytes,
+    originalBytes,
+    'Tệp sau khi stream giải mã qua nhiều chunk phải trùng khớp byte-for-byte với tệp gốc 1.5MB'
+  )
+  assert.ok(decryptProgressTicks.length >= 3, 'Giải mã kích hoạt tiến trình cho từng chunk')
+
+  // 4. Phát hiện thay đổi dữ liệu trong multi-chunk blob (Tamper detection)
+  const encArrayBuffer = await encryptedBlob.arrayBuffer()
+  const tamperedEncBytes = new Uint8Array(encArrayBuffer)
+  // Sửa 1 byte trong ciphertext của chunk 2
+  tamperedEncBytes[chunkSize + 100] ^= 0xaa
+  const tamperedBlob = new Blob([tamperedEncBytes])
+
+  await assert.rejects(
+    async () => {
+      await decryptFileToBlob(tamperedBlob, fileKey)
+    },
+    'GCM Auth Tag phải bắt được hành vi sửa đổi dữ liệu ở bất kỳ chunk nào và từ chối giải mã'
+  )
+
+  // 5. Kiểm tra tính năng Hủy bỏ giữa chừng (AbortController)
+  const abortController = new AbortController()
+  // Abort sau chunk đầu tiên
+  let chunksEncrypted = 0
+  const abortPromise = (async () => {
+    for await (const chunk of encryptFileInChunks(originalBlob, fileKey, {
+      chunkSize,
+      signal: abortController.signal,
+    })) {
+      chunksEncrypted++
+      if (chunksEncrypted === 1) {
+        abortController.abort()
+      }
+    }
+  })()
+
+  await assert.rejects(
+    abortPromise,
+    /hủy bỏ/i,
+    'Thao tác mã hóa stream phải dừng ngay lập tức khi AbortSignal kích hoạt'
+  )
+
+  // 6. Tương thích ngược: Blob mã hóa đơn lẻ (không có header SEN1) vẫn giải mã bình thường
+  const singleChunk = crypto.randomBytes(64 * 1024)
+  const rawEncryptedChunk = await encryptChunk(new Uint8Array(singleChunk), fileKey)
+  const legacyBlob = new Blob([rawEncryptedChunk])
+  const legacyDecrypted = await decryptFileToBlob(legacyBlob, fileKey)
+  const legacyDecryptedBytes = Buffer.from(await legacyDecrypted.arrayBuffer())
+  assert.deepEqual(
+    legacyDecryptedBytes,
+    singleChunk,
+    'decryptFileToBlob phải hỗ trợ tương thích ngược với blob mã hóa đơn lẻ không có magic header'
+  )
+})
+
+// ==============================================================================
 // 4. KIỂM THỬ ẢNH TẢI LÊN GOOGLE DRIVE CHỈ LÀ BLOB MÃ HÓA (UNDECRYPTABLE)
 // ==============================================================================
 test('Sen Chat P4: Ảnh trên Google Drive chỉ là Blob nhị phân mã hóa không thể xem được nếu thiếu khóa', async () => {
@@ -272,6 +367,35 @@ test('Sen Chat P4: Khi thu hồi tin nhắn hoặc hết hạn tự hủy, tệp
 
   // Tệp của tin nhắn khác vẫn tồn tại
   assert.equal(driveFilesStore.has('drive-file-2'), true)
+
+  // 2. Giả lập xóa tài khoản người dùng -> Xóa toàn bộ file Drive do người dùng đó tải lên
+  const mockUserAttachments = [
+    { id: 'att-u1', uploader_id: 'user-to-delete', drive_file_id: 'drive-file-user-1', is_deleted: false },
+    { id: 'att-u2', uploader_id: 'user-to-delete', drive_file_id: 'drive-file-user-2', is_deleted: false },
+    { id: 'att-other', uploader_id: 'user-active', drive_file_id: 'drive-file-2', is_deleted: false },
+  ]
+  driveFilesStore.set('drive-file-user-1', { size: 1000 })
+  driveFilesStore.set('drive-file-user-2', { size: 2000 })
+
+  function simulateDeleteUserAccount(userId) {
+    const userAtts = mockUserAttachments.filter((a) => a.uploader_id === userId)
+    const deletedIds = []
+    for (const a of userAtts) {
+      a.is_deleted = true
+      if (a.drive_file_id) {
+        driveFilesStore.delete(a.drive_file_id)
+        deletedIds.push(a.drive_file_id)
+      }
+    }
+    return { success: true, deletedIds }
+  }
+
+  const delUserRes = simulateDeleteUserAccount('user-to-delete')
+  assert.equal(delUserRes.success, true)
+  assert.deepEqual(delUserRes.deletedIds, ['drive-file-user-1', 'drive-file-user-2'])
+  assert.equal(driveFilesStore.has('drive-file-user-1'), false, 'Tệp 1 của tài khoản bị xóa phải biến mất trên Drive')
+  assert.equal(driveFilesStore.has('drive-file-user-2'), false, 'Tệp 2 của tài khoản bị xóa phải biến mất trên Drive')
+  assert.equal(driveFilesStore.has('drive-file-2'), true, 'Tệp của tài khoản khác vẫn được giữ nguyên')
 })
 
 // ==============================================================================
