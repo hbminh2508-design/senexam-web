@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, requireAdmin } from '@/lib/supabaseAdmin'
 import { extendVipExpiry } from '@/lib/vipMembership'
-import { deleteDriveFilesBatch } from '@/lib/senChatDriveService'
+import { deleteUserFullAccount } from '@/lib/senChatAccountCleanup'
 
 export const dynamic = 'force-dynamic'
 
@@ -159,55 +159,14 @@ export async function POST(request: Request) {
       })
     }
 
-    // 6. Xóa vĩnh viễn tài khoản người dùng
+    // 6. Xóa vĩnh viễn tài khoản người dùng và dọn dẹp sạch toàn bộ dữ liệu Sen Chat liên quan
     if (action === 'delete_user') {
-      // ĐẶC TẢ P4: Dọn dẹp tất cả tệp trên Google Drive và Supabase Storage của người dùng này
-      try {
-        const { data: userAttachments } = await supabaseAdmin
-          .from('chat_attachments')
-          .select('id, drive_file_id, storage_path')
-          .eq('uploader_id', userId)
-
-        if (userAttachments && userAttachments.length > 0) {
-          const driveIds = userAttachments
-            .map((a: any) => a.drive_file_id)
-            .filter((id: string) => id && !id.startsWith('supabase:'))
-
-          if (driveIds.length > 0) {
-            await deleteDriveFilesBatch(driveIds).catch((delErr) => {
-              console.error('[DELETE_USER_DRIVE] Lỗi xóa tệp Drive khi xóa tài khoản:', delErr)
-            })
-          }
-
-          const storagePaths = userAttachments
-            .map((a: any) => a.storage_path)
-            .filter(Boolean)
-
-          if (storagePaths.length > 0) {
-            await supabaseAdmin.storage
-              .from('chat_attachments')
-              .remove(storagePaths)
-              .catch(() => {})
-          }
-
-          await supabaseAdmin
-            .from('chat_attachments')
-            .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-            .eq('uploader_id', userId)
-            .catch(() => {})
-        }
-      } catch (cleanErr) {
-        console.error('[DELETE_USER] Lỗi dọn dẹp chat_attachments của user:', cleanErr)
-      }
-
-      // Xóa trong Auth
-      const { error: delAuthErr } = await supabaseAdmin.auth.admin.deleteUser(userId)
-      if (delAuthErr) throw delAuthErr
-
-      // Xóa trong profiles và bảng liên quan
-      await supabaseAdmin.from('profiles').delete().eq('id', userId).catch(() => {})
-
-      return NextResponse.json({ success: true, message: 'Đã xóa vĩnh viễn tài khoản người dùng và dọn dẹp file đính kèm' })
+      const cleanupResult = await deleteUserFullAccount(userId, supabaseAdmin)
+      return NextResponse.json({
+        success: true,
+        message: 'Đã xóa vĩnh viễn tài khoản người dùng và dọn sạch dữ liệu liên quan (tệp Drive, tin nhắn, thiết bị, khóa E2EE)',
+        cleanup: cleanupResult,
+      })
     }
 
     return NextResponse.json({ error: 'Hành động không hợp lệ' }, { status: 400 })

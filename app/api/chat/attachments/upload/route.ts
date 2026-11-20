@@ -6,11 +6,36 @@ import { uploadEncryptedImageToDrive } from '@/lib/senChatDriveService'
 
 export const dynamic = 'force-dynamic'
 
+const uploadRateLimitStore = new Map<string, number[]>()
+
+function checkUploadRateLimit(userId: string, maxReqs = 20, windowMs = 60000): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now()
+  const list = uploadRateLimitStore.get(userId) || []
+  const windowStart = now - windowMs
+  const recent = list.filter(t => t > windowStart)
+  if (recent.length >= maxReqs) {
+    const retryAfter = Math.ceil((recent[0] + windowMs - now) / 1000)
+    return { allowed: false, retryAfter: Math.max(1, retryAfter) }
+  }
+  recent.push(now)
+  uploadRateLimitStore.set(userId, recent)
+  return { allowed: true }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+    }
+
+    // Rate limit tải tệp chống spam / cạn kiệt tài nguyên
+    const rateCheck = checkUploadRateLimit(user.id, 20, 60000)
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Tần suất tải tệp quá nhanh. Vui lòng chờ ${rateCheck.retryAfter} giây.` },
+        { status: 429, headers: { 'Retry-After': String(rateCheck.retryAfter) } }
+      )
     }
 
     const supabaseAdmin = getSupabaseAdmin()

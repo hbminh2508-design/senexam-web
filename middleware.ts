@@ -83,6 +83,7 @@ function applyChatSecurityHeaders(res: NextResponse): NextResponse {
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.googleapis.com https://oauth2.googleapis.com; media-src 'self' blob: data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
   )
+  res.headers.set('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()')
   return res
 }
 
@@ -154,7 +155,13 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/fepn-auth') ||
     pathname.startsWith('/api/gift-codes') ||
     pathname.startsWith('/api/beta') ||
-    pathname.startsWith('/api/gemini')
+    pathname.startsWith('/api/gemini') ||
+    pathname.startsWith('/api/chat/attachments/upload') ||
+    pathname.startsWith('/api/chat/stt') ||
+    pathname.startsWith('/api/chat/device-management') ||
+    pathname.startsWith('/api/chat/friend-invitation') ||
+    pathname.startsWith('/api/chat/account/purge') ||
+    pathname.startsWith('/api/chat/mls/key-package')
 
   // Đường dẫn nhạy cảm: tối đa 35 req/phút; Đường dẫn thông thường: tối đa 140 req/10s
   const limitKey = isSensitivePath ? `auth_${clientIp}` : `gen_${clientIp}`
@@ -205,6 +212,9 @@ export function middleware(request: NextRequest) {
 
   // Bỏ qua các API route sau khi đã qua lớp kiểm tra rate limit & bot
   if (pathname.startsWith('/api')) {
+    if (pathname.startsWith('/api/chat')) {
+      return applyChatSecurityHeaders(NextResponse.next())
+    }
     return applySecurityHeaders(NextResponse.next())
   }
 

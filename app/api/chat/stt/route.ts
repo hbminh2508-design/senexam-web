@@ -7,6 +7,22 @@ import { getLanguageMeta, detectLanguageFromText } from '@/lib/senChatVoiceSTT'
 
 export const dynamic = 'force-dynamic'
 
+const sttRateLimitStore = new Map<string, number[]>()
+
+function checkSttRateLimit(userId: string, maxReqs = 10, windowMs = 60000): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now()
+  const list = sttRateLimitStore.get(userId) || []
+  const windowStart = now - windowMs
+  const recent = list.filter(t => t > windowStart)
+  if (recent.length >= maxReqs) {
+    const retryAfter = Math.ceil((recent[0] + windowMs - now) / 1000)
+    return { allowed: false, retryAfter: Math.max(1, retryAfter) }
+  }
+  recent.push(now)
+  sttRateLimitStore.set(userId, recent)
+  return { allowed: true }
+}
+
 /**
  * Endpoint Fallback STT Phía Server cho Máy Yếu
  * 
@@ -22,6 +38,15 @@ export async function POST(request: NextRequest) {
     const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+    }
+
+    // 1.1 Rate limit chống spam/DoS tính năng nhận diện giọng nói
+    const rateCheck = checkSttRateLimit(user.id, 10, 60000)
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Tần suất chuyển giọng nói quá nhanh. Vui lòng chờ ${rateCheck.retryAfter} giây.` },
+        { status: 429, headers: { 'Retry-After': String(rateCheck.retryAfter) } }
+      )
     }
 
     // 2. Đọc FormData hoặc JSON
