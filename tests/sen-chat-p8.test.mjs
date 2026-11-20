@@ -63,9 +63,14 @@ test('Sen Chat P8: Khử độc nhật ký kiểm toán - Tuyệt đối không 
     message_content: 'Nội dung tệp đính kèm cực kỳ nhạy cảm',
     nested: {
       auth_token: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      apiKey: 'AIzaSyTestApiKeyShouldBeSanitized',
+      passphrase: 'super_secret_user_passphrase',
+      session_key: 'ephemeral_session_secret_32b',
+      chain_key: 'ratchet_chain_secret_key_123',
       safe_metadata: 'ok_to_log',
     },
     raw_pem: '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASC...\n-----END PRIVATE KEY-----',
+    ec_pem: '-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIP...\n-----END EC PRIVATE KEY-----',
     safe_info: 'Galaxy S24 Ultra',
   }
 
@@ -78,9 +83,14 @@ test('Sen Chat P8: Khử độc nhật ký kiểm toán - Tuyệt đối không 
   assert.equal(cleaned.plaintext_message, '[REDACTED]')
   assert.equal(cleaned.message_content, '[REDACTED]')
   assert.equal(cleaned.nested.auth_token, '[REDACTED]')
+  assert.equal(cleaned.nested.apiKey, '[REDACTED]')
+  assert.equal(cleaned.nested.passphrase, '[REDACTED]')
+  assert.equal(cleaned.nested.session_key, '[REDACTED]')
+  assert.equal(cleaned.nested.chain_key, '[REDACTED]')
 
   // 2. Khóa PEM phải bị phát hiện và thay thế
   assert.equal(cleaned.raw_pem, '[REDACTED_PRIVATE_KEY]')
+  assert.equal(cleaned.ec_pem, '[REDACTED_PRIVATE_KEY]')
 
   // 3. Dữ liệu an toàn được bảo toàn
   assert.equal(cleaned.user_id, 'usr_abc_123')
@@ -189,6 +199,16 @@ test('Sen Chat P8: Security Headers bắt buộc chuẩn OWASP, CSP và frame-an
   assert.ok(
     content.includes("pathname.startsWith('/api/chat')"),
     "Middleware PHẢI áp dụng chat security headers cho đường dẫn /api/chat"
+  )
+
+  // 6. Kiểm tra hỗ trợ Chat trên subdomain m.senexam.me và chat.senexam.me
+  assert.ok(
+    content.includes("pathname === '/chat' || pathname.startsWith('/chat')"),
+    "Middleware PHẢI điều hướng an toàn cho /chat trên subdomain mobile"
+  )
+  assert.ok(
+    content.includes('!isChatSubdomain'),
+    "Middleware KHÔNG được chuyển hướng sai chat.senexam.me sang m.senexam.me"
   )
 })
 

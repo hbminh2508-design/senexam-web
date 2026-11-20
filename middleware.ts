@@ -315,6 +315,14 @@ export function middleware(request: NextRequest) {
       url.pathname = '/m/profile'
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
+    // Hỗ trợ Sen Chat E2EE trên Mobile Subdomain (m.senexam.me)
+    if (pathname === '/chat' || pathname.startsWith('/chat')) {
+      url.pathname = '/m/chat'
+      return applyChatSecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname === '/m/chat' || pathname.startsWith('/m/chat')) {
+      return applyChatSecurityHeaders(NextResponse.next())
+    }
     if (pathname.startsWith('/m')) {
       return applySecurityHeaders(NextResponse.next())
     }
@@ -324,7 +332,7 @@ export function middleware(request: NextRequest) {
   }
 
   // 4.6 Chuyển hướng các đường dẫn cũ sang giao diện Mới (New UI) trên miền chính
-  if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain && !isNopQuyLopSubdomain) {
+  if (!isSebSubdomain && !isFepnSubdomain && !isSenGraphSubdomain && !isBreatheUSubdomain && !isNopQuyLopSubdomain && !isChatSubdomain) {
     // Tự động chuyển qua m.senexam.me khi phát hiện thiết bị di động truy cập miền chính
     const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(userAgent)
     if (isMobileDevice && !url.searchParams.has('desktop') && !pathname.startsWith('/api') && !pathname.startsWith('/auth') && !pathname.startsWith('/_next') && !pathname.startsWith('/baucu')) {
@@ -337,10 +345,11 @@ export function middleware(request: NextRequest) {
         else if (pathname === '/new-history' || pathname === '/history' || pathname === '/new-submissions' || pathname === '/submissions' || pathname === '/new-history-submissions') targetPath = '/history'
         else if (pathname === '/new-pay' || pathname === '/pay' || pathname === '/vip' || pathname === '/new-vip' || pathname === '/exclusive-store' || pathname === '/codes') targetPath = '/pay'
         else if (pathname === '/new-profile' || pathname === '/profile') targetPath = '/profile'
+        else if (pathname === '/chat' || pathname.startsWith('/chat')) targetPath = '/m/chat'
         else if (pathname === '/dashboard' || pathname === '/new-dashboard') targetPath = '/'
 
         const targetUrl = new URL(targetPath + request.nextUrl.search, 'https://m.senexam.me')
-        return applySecurityHeaders(NextResponse.redirect(targetUrl, 307))
+        return applyChatSecurityHeaders(NextResponse.redirect(targetUrl, 307))
       }
 
       if (pathname.startsWith('/new-exams/') || pathname.startsWith('/exams/')) {
