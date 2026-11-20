@@ -59,6 +59,7 @@ import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
+import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import { parseMessageLinks } from '@/lib/chatSanitizer'
 import {
   SenChatUser,
@@ -130,6 +131,8 @@ export default function SenChatPage() {
   const [showInfoSidebar, setShowInfoSidebar] = useState(true)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showFriendModal, setShowFriendModal] = useState(false)
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false)
+  const [showManageGroupModal, setShowManageGroupModal] = useState(false)
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false)
   const [showNicknameModal, setShowNicknameModal] = useState(false)
   const [showWallpaperModal, setShowWallpaperModal] = useState(false)
@@ -565,6 +568,15 @@ export default function SenChatPage() {
 
             <button
               type="button"
+              onClick={() => setShowCreateGroupModal(true)}
+              title="Tạo nhóm chat mới (MLS RFC 9420)"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:text-teal-300 transition-colors"
+            >
+              <Users className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowFriendModal(true)}
               title="Thêm bạn qua Email chính xác"
               className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700"
@@ -712,9 +724,19 @@ export default function SenChatPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                      <Lock className="h-3 w-3" /> Signal Double Ratchet
-                    </span>
+                    {activeConv.isGroup ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowManageGroupModal(true)}
+                        className="flex items-center gap-1 text-teal-600 dark:text-teal-400 hover:underline font-medium"
+                      >
+                        <Users className="h-3 w-3" /> Nhóm MLS RFC 9420 (Quản lý)
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        <Lock className="h-3 w-3" /> Signal Double Ratchet
+                      </span>
+                    )}
                     {disappearingTtl > 0 && (
                       <span className="flex items-center gap-0.5 text-indigo-500 font-medium">
                         • <Timer className="h-3 w-3" /> Tự hủy sau {disappearingTtl}s
@@ -726,6 +748,16 @@ export default function SenChatPage() {
 
               {/* Call & Tool Actions */}
               <div className="flex items-center gap-1">
+                {activeConv.isGroup && (
+                  <button
+                    type="button"
+                    onClick={() => setShowManageGroupModal(true)}
+                    title="Quản lý thành viên nhóm MLS"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-slate-800"
+                  >
+                    <Users className="h-4 w-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowChatSearch(!showChatSearch)}
@@ -1139,6 +1171,45 @@ export default function SenChatPage() {
         onClose={() => setShowDeviceManagerModal(false)}
         currentDeviceId={deviceId}
       />
+
+      {/* Tạo nhóm chat MLS mới */}
+      <ChatMlsGroupModal
+        isOpen={showCreateGroupModal}
+        onClose={() => setShowCreateGroupModal(false)}
+        currentUserId={currentUser?.id || ''}
+        currentUserEmail={currentUser?.email || ''}
+        isCreatingNew={true}
+        onGroupCreated={(convId, title) => {
+          saveLocalConversation({
+            id: convId,
+            partnerId: convId,
+            partnerName: title,
+            partnerIdentifier: 'MLS_GROUP',
+            unreadCount: 0,
+            updatedAt: Date.now(),
+            isGroup: true,
+          })
+          setSelectedConvId(convId)
+          refreshConversations()
+        }}
+      />
+
+      {/* Quản lý thành viên & thông tin nhóm MLS */}
+      {activeConv && activeConv.isGroup && (
+        <ChatMlsGroupModal
+          isOpen={showManageGroupModal}
+          onClose={() => setShowManageGroupModal(false)}
+          conversationId={activeConv.id}
+          groupTitle={activeConv.partnerName}
+          groupAvatar={activeConv.avatarUrl || ''}
+          currentUserId={currentUser?.id || ''}
+          currentUserEmail={currentUser?.email || ''}
+          isCreatingNew={false}
+          onGroupUpdated={() => {
+            refreshConversations()
+          }}
+        />
+      )}
     </div>
   )
 }

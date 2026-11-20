@@ -46,6 +46,10 @@ export interface SenChatConversation {
   unreadCount: number
   isPinned?: boolean
   updatedAt: number
+  isGroup?: boolean
+  epoch?: number
+  role?: 'owner' | 'admin' | 'member'
+  avatarUrl?: string
 }
 
 export type ChatWallpaperId = 'default' | 'aurora' | 'sunset' | 'midnight' | 'emerald' | 'sakura'
