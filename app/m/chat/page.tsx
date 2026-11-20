@@ -46,7 +46,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
-import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
@@ -145,6 +144,7 @@ export default function MobileChatPage() {
 
   // Trạng thái khóa ứng dụng (PIN & Sinh trắc học)
   const [isLocked, setIsLocked] = useState(false)
+  const [appLockConfig, setAppLockConfig] = useState<{ enabled: boolean; pinLength: number } | null>(null)
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState<string | null>(null)
   const [showSetupPinModal, setShowSetupPinModal] = useState(false)
@@ -196,6 +196,16 @@ export default function MobileChatPage() {
   // Lắng nghe sự kiện Back Button từ CapacitorManager
   useEffect(() => {
     const handleBackPressed = () => {
+      // 0. Đóng bảng emoji hoặc gợi ý trợ lý trước nếu đang mở
+      if (showEmojiPicker) {
+        setShowEmojiPicker(false)
+        return
+      }
+      if (showAiSuggestions) {
+        setShowAiSuggestions(false)
+        return
+      }
+
       // 1. Đóng modal nếu có modal đang mở
       if (showSetupPinModal) {
         setShowSetupPinModal(false)
@@ -250,6 +260,8 @@ export default function MobileChatPage() {
     }
   }, [
     view,
+    showEmojiPicker,
+    showAiSuggestions,
     showSecurityModal,
     showFriendModal,
     showMlsGroupModal,
@@ -293,8 +305,12 @@ export default function MobileChatPage() {
       setFlagSecure(isFlagOn, window)
 
       // 2. Kiểm tra App Lock
-      if (isAppLockConfigured() && isSessionLocked()) {
-        setIsLocked(true)
+      if (isAppLockConfigured()) {
+        const conf = getAppLockConfig()
+        setAppLockConfig({ enabled: conf.enabled, pinLength: conf.pinLength || 6 })
+        if (isSessionLocked()) {
+          setIsLocked(true)
+        }
       }
 
       // 3. Tải phiên người dùng
@@ -373,8 +389,33 @@ export default function MobileChatPage() {
 
       setConversations(list)
 
-      // 5. Kiểm tra hàng đợi ngoại tuyến
-      setOfflinePendingCount(globalOfflineChatQueue.getPendingCount())
+      // 5. Kiểm tra hàng đợi ngoại tuyến & tự động xả nếu đang online
+      const pendingCount = globalOfflineChatQueue.getPendingCount()
+      setOfflinePendingCount(pendingCount)
+      if (pendingCount > 0 && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          await globalOfflineChatQueue.drainQueue(async (queued) => {
+            const sentMsg: SenChatMessage = {
+              id: queued.idempotencyKey,
+              conversationId: queued.conversationId,
+              senderId: queued.senderId,
+              senderName: queued.senderName,
+              receiverId: queued.receiverId,
+              content: queued.content,
+              type: queued.type,
+              attachmentUrl: queued.attachmentUrl,
+              attachmentName: queued.attachmentName,
+              attachmentSize: queued.attachmentSize,
+              createdAt: new Date(queued.timestamp).toISOString(),
+              status: 'sent',
+            }
+            saveLocalMessage(queued.conversationId, sentMsg)
+            return { success: true }
+          })
+          setOfflinePendingCount(globalOfflineChatQueue.getPendingCount())
+          setConversations(getLocalConversations())
+        } catch {}
+      }
       setIsLoading(false)
     }
 
@@ -653,19 +694,21 @@ export default function MobileChatPage() {
     }
   }
 
-  // Mở khóa bằng PIN
+  // Mở khóa bằng PIN (kiểm tra chuẩn theo độ dài cấu hình)
   const handleUnlockPin = (digit?: string) => {
+    const targetLength = appLockConfig?.pinLength || 6
     let nextPin = pinInput
     if (digit !== undefined) {
       if (digit === 'del') {
         nextPin = nextPin.slice(0, -1)
-      } else if (nextPin.length < 6) {
+      } else if (nextPin.length < targetLength) {
         nextPin = nextPin + digit
       }
       setPinInput(nextPin)
+      setPinError(null)
     }
 
-    if (nextPin.length >= 4) {
+    if (nextPin.length === targetLength) {
       const res = verifyAppLockPin(nextPin)
       if (res.success) {
         unlockSession()
@@ -674,8 +717,11 @@ export default function MobileChatPage() {
         setPinError(null)
       } else {
         setPinError(res.error || 'Mã PIN không đúng')
-        if (digit !== undefined && nextPin.length >= 6) {
+        setTimeout(() => {
           setPinInput('')
+        }, 400)
+        if (res.lockedOut) {
+          alert('Ứng dụng bị khóa tạm thời do nhập sai nhiều lần.')
         }
       }
     }
@@ -707,6 +753,7 @@ export default function MobileChatPage() {
       return
     }
     setupAppLock({ pin: newPin, useBiometric: true })
+    setAppLockConfig({ enabled: true, pinLength: newPin.length })
     setShowSetupPinModal(false)
     setNewPin('')
     alert('Đã thiết lập mã PIN và sinh trắc học thành công!')
@@ -758,9 +805,9 @@ export default function MobileChatPage() {
             </p>
           </div>
 
-          {/* Dãy chấm PIN */}
+          {/* Dãy chấm PIN linh hoạt theo độ dài cấu hình */}
           <div className="flex items-center gap-3 py-3">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
+            {Array.from({ length: appLockConfig?.pinLength || 6 }).map((_, i) => (
               <div
                 key={i}
                 className={`w-3.5 h-3.5 rounded-full transition-all duration-200 ${
@@ -927,7 +974,7 @@ export default function MobileChatPage() {
           </div>
 
           {/* Danh Sách Hội Thoại */}
-          <div className="flex-1 overflow-y-auto divide-y divide-black/5 dark:divide-white/5 px-2">
+          <div className="flex-1 overflow-y-auto divide-y divide-black/5 dark:divide-white/5 px-2 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]">
             {filteredConversations.length === 0 ? (
               <div className="p-8 text-center space-y-3 my-auto">
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-black/5 dark:bg-white/5 text-slate-400 flex items-center justify-center">
@@ -1171,7 +1218,12 @@ export default function MobileChatPage() {
           )}
 
           {/* Khung Nhập Liệu Đáy (Bottom Chat Input Bar) */}
-          <div className="p-2 border-t border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-end gap-1.5 shrink-0">
+          <div
+            className="p-2 border-t border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-end gap-1.5 shrink-0"
+            style={{
+              paddingBottom: viewportBottomOffset > 0 ? '0.5rem' : 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))',
+            }}
+          >
             {/* Nút gửi đính kèm */}
             <button
               type="button"
@@ -1238,7 +1290,7 @@ export default function MobileChatPage() {
           VIEW 3: THÔNG TIN PHÒNG & BẢO MẬT (ROOM INFO)
           ======================================================================= */}
       {view === 'room-info' && activeConversation && (
-        <div className="flex-1 flex flex-col w-full h-full overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 space-y-4">
+        <div className="flex-1 flex flex-col w-full h-full overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 space-y-4 pb-[max(2rem,env(safe-area-inset-bottom,2rem))]">
           {/* Header Bar */}
           <div className="flex items-center justify-between">
             <button

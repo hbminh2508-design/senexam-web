@@ -22,6 +22,7 @@ import {
 export interface AppLockConfig {
   enabled: boolean
   hasPin: boolean
+  pinLength?: number
   useBiometric: boolean
 }
 

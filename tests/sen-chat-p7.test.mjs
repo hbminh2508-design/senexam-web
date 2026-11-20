@@ -53,6 +53,10 @@ test('Sen Chat P7: Hàng đợi ngoại tuyến với Idempotency Key & Loại b
   assert.ok(key1.startsWith('idem_'))
   assert.notEqual(key1, key2)
 
+  // Khóa Idempotency Key phải an toàn URL, không chứa khoảng trắng ngay cả khi truyền text tiếng Việt có dấu
+  const unicodeKey = generateIdempotencyKey('user_123', 'conv_456', 1700000000002, 'xin chào')
+  assert.equal(/\s/.test(unicodeKey), false, 'Idempotency Key không được chứa khoảng trắng')
+
   // 2. Thêm tin nhắn vào hàng đợi ngoại tuyến theo thứ tự FIFO
   const msgA = {
     idempotencyKey: key1,
@@ -232,15 +236,17 @@ test('Sen Chat P7: Khóa ứng dụng bằng PIN & Sinh trắc học', async () 
   assert.throws(() => setupAppLock({ pin: '12' }), /từ 4 đến 6 chữ số/)
   assert.throws(() => setupAppLock({ pin: 'abcd' }), /từ 4 đến 6 chữ số/)
 
-  // 2. Thiết lập mã PIN hợp lệ
+  // 2. Thiết lập mã PIN 6 số hợp lệ
   const setup = setupAppLock({ pin: '123456', useBiometric: true })
   assert.equal(setup.success, true)
   assert.equal(setup.lockType, 'both')
+  assert.equal(setup.pinLength, 6)
   assert.equal(isAppLockConfigured(), true)
 
   const config = getAppLockConfig()
   assert.equal(config.enabled, true)
   assert.equal(config.hasPin, true)
+  assert.equal(config.pinLength, 6)
   assert.equal(config.useBiometric, true)
 
   // 3. Khóa phiên làm việc
@@ -272,6 +278,15 @@ test('Sen Chat P7: Khóa ứng dụng bằng PIN & Sinh trắc học', async () 
   const goodDisable = disableAppLock('123456')
   assert.equal(goodDisable.success, true)
   assert.equal(isAppLockConfigured(), false)
+
+  // 8. Thiết lập mã PIN 4 số và kiểm tra cấu hình pinLength
+  const setup4 = setupAppLock({ pin: '4321', useBiometric: false })
+  assert.equal(setup4.success, true)
+  assert.equal(setup4.pinLength, 4)
+  assert.equal(getAppLockConfig().pinLength, 4)
+  const verify4 = verifyAppLockPin('4321')
+  assert.equal(verify4.success, true)
+  disableAppLock('4321')
 })
 
 // ==============================================================================
@@ -310,6 +325,16 @@ test('Sen Chat P7: Lưu trữ và bảo vệ khóa riêng E2EE bằng Android Ke
   assert.equal(delRes.success, true)
   const afterDel = await retrieveIdentityPrivateKey(testAlias, mockWin)
   assert.equal(afterDel, null)
+
+  // 4. Kiểm tra lưu trữ bảo vệ E2EE khi không có Capacitor plugin (fallback mobile web)
+  const webAlias = 'senchat_identity_priv_web'
+  const storeWebRes = await storeIdentityPrivateKey(webAlias, testPrivateKey, null)
+  assert.equal(storeWebRes.success, true)
+  assert.equal(storeWebRes.storageType, 'secure_storage')
+  const retrievedWeb = await retrieveIdentityPrivateKey(webAlias, null)
+  assert.equal(retrievedWeb, testPrivateKey)
+  await deleteIdentityPrivateKey(webAlias, null)
+  assert.equal(await retrieveIdentityPrivateKey(webAlias, null), null)
 })
 
 // ==============================================================================
