@@ -60,6 +60,8 @@ import { supabase } from '@/lib/supabaseClient'
 import SenChatLogo from '@/components/SenChatLogo'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
+import ChatInfoDrawer from '@/components/chat/ChatInfoDrawer'
+import ChatDrmProtection from '@/components/chat/ChatDrmProtection'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
@@ -157,7 +159,7 @@ export default function SenChatPage() {
   const [isPartnerVerified, setIsPartnerVerified] = useState(false)
 
   // Modals & Panels
-  const [showInfoSidebar, setShowInfoSidebar] = useState(true)
+  const [showInfoSidebar, setShowInfoSidebar] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showFriendModal, setShowFriendModal] = useState(false)
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false)
@@ -1534,7 +1536,8 @@ export default function SenChatPage() {
                   return (
                     <div
                       key={msg.id}
-                      className={`group flex flex-col ${
+                      id={`msg-${msg.id}`}
+                      className={`group flex flex-col transition-all rounded-2xl ${
                         msg.type === 'system' ? 'items-center my-1' : isMe ? 'items-end' : 'items-start'
                       }`}
                     >
@@ -1970,81 +1973,55 @@ export default function SenChatPage() {
       </main>
 
       {/* =========================================================================
-          CỘT PHẢI: THÔNG TIN HỘI THOẠI & BẢO MẬT (320px)
+          NGĂN KÉO THU GỌN: THÔNG TIN HỘI THOẠI, TỆP, LINK & BẢO MẬT (COLLAPSIBLE DRAWER)
          ========================================================================= */}
-      {showInfoSidebar && activeConv && (
-        <aside className="hidden lg:flex h-full w-[320px] flex-col border-l border-slate-200/80 bg-white/95 p-4 overflow-y-auto backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95 space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">
-              Chi Tiết Hội Thoại
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowInfoSidebar(false)}
-              className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Profile Card */}
-          <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-700 font-bold text-xl text-white shadow-md">
-              {(currentNickname || activeConv.partnerName).substring(0, 1).toUpperCase()}
-            </div>
-            <h4 className="mt-2.5 font-bold text-sm text-slate-800 dark:text-slate-100">
-              {currentNickname || activeConv.partnerName}
-            </h4>
-            <p className="text-xs text-slate-400">ID: {activeConv.partnerId.slice(0, 12)}...</p>
-
-            <button
-              type="button"
-              onClick={() => {
-                setNewNicknameInput(currentNickname || activeConv.partnerName)
-                setShowNicknameModal(true)
-              }}
-              className="mt-3 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              <Edit3 className="h-3.5 w-3.5" /> Đặt biệt danh
-            </button>
-          </div>
-
-          {/* Signal E2EE Safety Number Widget */}
-          <ChatSafetyWidget
-            partnerId={activeConv.partnerId}
-            partnerName={currentNickname || activeConv.partnerName}
-            safetyNumber={safetyNumberData}
-            keyChanged={keyChangedAlert}
-            isVerified={isPartnerVerified}
-            onMarkVerified={(verified) => {
-              setIsPartnerVerified(verified)
+      {activeConv && (
+        <ChatInfoDrawer
+          isOpen={showInfoSidebar}
+          onClose={() => setShowInfoSidebar(false)}
+          conversation={activeConv}
+          messages={messages}
+          currentUserId={currentUser?.id || ''}
+          currentNickname={currentNickname}
+          onOpenNicknameModal={() => {
+            setNewNicknameInput(currentNickname || activeConv.partnerName)
+            setShowNicknameModal(true)
+          }}
+          onSelectMessage={(msgId) => {
+            const el = document.getElementById(`msg-${msgId}`)
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              el.classList.add('ring-2', 'ring-emerald-500')
+              setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 2000)
+            }
+          }}
+          onRecallMessage={(msgId) => {
+            handleRecallMessage(msgId)
+          }}
+          safetyNumberData={safetyNumberData}
+          keyChangedAlert={keyChangedAlert}
+          isPartnerVerified={isPartnerVerified}
+          onMarkVerified={(verified) => {
+            setIsPartnerVerified(verified)
+            if (activeConv?.partnerId) {
               localStorage.setItem(`senchat_verified_${activeConv.partnerId}`, String(verified))
-            }}
-          />
-
-          {/* Disappearing Messages Setting */}
-          <ChatDisappearingMessages
-            currentTtl={disappearingTtl}
-            onChangeTtl={(ttl) => setDisappearingTtl(ttl)}
-          />
-
-          {/* Block / Report Controls */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            <button
-              type="button"
-              onClick={handleToggleBlock}
-              className={`flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-xs font-semibold transition ${
-                isCurrentBlocked
-                  ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200'
-                  : 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-400'
-              }`}
-            >
-              {isCurrentBlocked ? <Unlock className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-              {isCurrentBlocked ? 'Bỏ chặn người này' : 'Chặn người dùng này'}
-            </button>
-          </div>
-        </aside>
+            }
+          }}
+          disappearingTtl={disappearingTtl}
+          onChangeDisappearingTtl={(ttl) => setDisappearingTtl(ttl)}
+          isCurrentBlocked={isCurrentBlocked}
+          onToggleBlock={handleToggleBlock}
+          onOpenManageGroup={() => setShowManageGroupModal(true)}
+          onLeaveGroup={() => {
+            if (confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
+              setSelectedConvId(null)
+            }
+          }}
+        />
       )}
+
+      {/* BẢO VỆ NỘI DUNG DRM KIỂU NETFLIX (ANTI-SCREEN CAPTURE & BLACKOUT CURTAIN) */}
+      <ChatDrmProtection isEnabled={true} showBadge={true} />
 
       {/* Nickname Modal */}
       {showNicknameModal && (

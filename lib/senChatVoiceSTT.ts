@@ -441,13 +441,23 @@ export async function transcribeAudioServerSide(params: {
     )
   }
 
-  // 3. Tự động lấy Bearer Token nếu chưa truyền vào
+  // 3. Tự động lấy Bearer Token nếu chưa truyền vào (làm mới nếu cần)
   let token = params.authToken
-  if (!token && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
     try {
       const { supabase } = await import('@/lib/supabaseClient')
-      const { data } = await supabase.auth.getSession()
-      token = data.session?.access_token
+      let { data } = await supabase.auth.getSession()
+      if (
+        !data.session ||
+        (data.session.expires_at &&
+          data.session.expires_at * 1000 - Date.now() < 60000)
+      ) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        if (refData.session) data = refData
+      }
+      if (!token) {
+        token = data.session?.access_token
+      }
     } catch {}
   }
 

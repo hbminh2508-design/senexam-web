@@ -29,6 +29,7 @@ import {
   stripExifAndProcessImage,
   bytesToBase64,
 } from '@/lib/senChatChunkCrypto'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ChatAttachmentModalProps {
   file: File | null
@@ -197,22 +198,41 @@ export default function ChatAttachmentModal({
       formData.append('encryptedMimeType', encryptedMetadata.iv)
       formData.append('encryptedFileHash', `sha256-${Date.now()}`)
 
-      // 5. Gửi lên server với cơ chế thử lại (Retry)
+      // 4.1 Lấy phiên đăng nhập Supabase và làm mới nếu sắp hết hạn
+      let { data: authData } = await supabase.auth.getSession()
+      if (
+        !authData.session ||
+        (authData.session.expires_at &&
+          authData.session.expires_at * 1000 - Date.now() < 60000)
+      ) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        if (refData.session) authData = refData
+      }
+      const token = authData.session?.access_token
+      if (!token) {
+        throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại để tiếp tục.')
+      }
+
+      // 5. Gửi lên server với cơ chế thử lại (Retry) và đầy đủ Authorization header + token param
       let response: Response | null = null
       let uploadAttempts = 0
       const maxUploadAttempts = 3
+      const uploadUrl = `/api/chat/attachments/upload?token=${encodeURIComponent(token)}`
 
       while (uploadAttempts < maxUploadAttempts) {
         uploadAttempts++
         try {
-          response = await fetch('/api/chat/attachments/upload', {
+          response = await fetch(uploadUrl, {
             method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
             body: formData,
             signal: abortController.signal,
           })
           if (response.ok) break
-          if (response.status === 413 || response.status === 403) {
-            // Không retry nếu vi phạm hạn mức hoặc không có quyền
+          if (response.status === 413 || response.status === 403 || response.status === 401) {
+            // Không retry nếu vi phạm hạn mức, chưa đăng nhập hoặc không có quyền
             break
           }
         } catch (fetchErr: any) {

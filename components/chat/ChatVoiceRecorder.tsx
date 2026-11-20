@@ -99,6 +99,7 @@ export default function ChatVoiceRecorder({
   const startTimeRef = useRef<number>(0)
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
   const recordedSamplesRef = useRef<number[]>([])
+  const speechRecognitionRef = useRef<any>(null)
 
   // Dọn dẹp tài nguyên khi unmount
   useEffect(() => {
@@ -114,6 +115,12 @@ export default function ChatVoiceRecorder({
   }, [previewAudioUrl])
 
   const cleanupAudioStream = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop()
+      } catch {}
+      speechRecognitionRef.current = null
+    }
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current)
       animFrameRef.current = null
@@ -192,6 +199,39 @@ export default function ChatVoiceRecorder({
       setRecorderState('recording')
       setDuration(0)
 
+      // Khởi động nhận diện giọng nói trực tiếp trên thiết bị (Web Speech API)
+      const SpeechRecognitionClass =
+        typeof window !== 'undefined'
+          ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+          : null
+      if (SpeechRecognitionClass) {
+        try {
+          const rec = new SpeechRecognitionClass()
+          rec.continuous = true
+          rec.interimResults = true
+          rec.lang = 'vi-VN'
+          rec.onresult = (event: any) => {
+            let fullText = ''
+            for (let i = 0; i < event.results.length; i++) {
+              fullText += event.results[i][0].transcript + ' '
+            }
+            const trimmed = fullText.trim()
+            if (trimmed) {
+              setTranscribedText(trimmed)
+              const detected = detectLanguageFromText(trimmed)
+              setDetectedLanguage(detected.code)
+            }
+          }
+          rec.onerror = (errEv: any) => {
+            console.warn('[ChatVoiceRecorder] Web Speech event warning:', errEv?.error)
+          }
+          rec.start()
+          speechRecognitionRef.current = rec
+        } catch (sttErr) {
+          console.warn('[ChatVoiceRecorder] Không thể khởi chạy Web Speech:', sttErr)
+        }
+      }
+
       // Bộ đếm thời gian
       timerIntervalRef.current = setInterval(() => {
         setDuration((prev) => prev + 1)
@@ -245,6 +285,12 @@ export default function ChatVoiceRecorder({
 
   // Dừng ghi âm và chuyển sang màn hình nghe lại & chỉnh sửa
   const handleStopRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop()
+      } catch {}
+      speechRecognitionRef.current = null
+    }
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop()
@@ -288,8 +334,19 @@ export default function ChatVoiceRecorder({
     setIsTranscribing(true)
     setSttProgress('Đang gửi âm thanh tới máy chủ...')
     try {
-      const { data: authData } = await supabase.auth.getSession()
+      let { data: authData } = await supabase.auth.getSession()
+      if (
+        !authData.session ||
+        (authData.session.expires_at &&
+          authData.session.expires_at * 1000 - Date.now() < 60000)
+      ) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        if (refData.session) authData = refData
+      }
       const token = authData.session?.access_token
+      if (!token) {
+        throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại.')
+      }
 
       const result = await transcribeAudioServerSide({
         audioBlob: recordedBlob,
@@ -327,9 +384,20 @@ export default function ChatVoiceRecorder({
       // 3. Mã hóa toàn bộ dữ liệu audio blob theo từng chunk AES-256-GCM
       const encryptedBlob = await encryptFileToBlob(recordedBlob, fileKey)
 
-      // 4. Tải tệp mã hóa lên server (lưu qua Supabase Storage hoặc Provider)
-      const { data: authData } = await supabase.auth.getSession()
+      // 4. Lấy phiên đăng nhập và làm mới nếu cần
+      let { data: authData } = await supabase.auth.getSession()
+      if (
+        !authData.session ||
+        (authData.session.expires_at &&
+          authData.session.expires_at * 1000 - Date.now() < 60000)
+      ) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        if (refData.session) authData = refData
+      }
       const token = authData.session?.access_token
+      if (!token) {
+        throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại để tiếp tục.')
+      }
 
       const formData = new FormData()
       formData.append('file', encryptedBlob, 'voice-message.enc')
@@ -338,10 +406,11 @@ export default function ChatVoiceRecorder({
       formData.append('fileSizeBytes', String(encryptedBlob.size))
       formData.append('encryptedMimeType', 'audio/webm;codecs=opus')
 
-      const uploadRes = await fetch('/api/chat/attachments/upload', {
+      const uploadUrl = `/api/chat/attachments/upload?token=${encodeURIComponent(token)}`
+      const uploadRes = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: formData,
       })

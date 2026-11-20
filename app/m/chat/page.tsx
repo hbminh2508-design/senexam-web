@@ -47,6 +47,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
+import ChatInfoDrawer from '@/components/chat/ChatInfoDrawer'
+import ChatDrmProtection from '@/components/chat/ChatDrmProtection'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
@@ -80,6 +82,7 @@ import {
   deleteLocalConversation,
   getLocalMessages,
   saveLocalMessage,
+  deleteLocalMessage,
   clearAllLocalMessages,
   getNicknameFor,
   setNicknameFor,
@@ -1171,7 +1174,8 @@ export default function MobileChatPage() {
               return (
                 <div
                   key={msg.id}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}
+                  id={`msg-${msg.id}`}
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 transition-all rounded-2xl`}
                 >
                   {!isMe && (
                     <span className="text-[10px] text-slate-400 font-bold pl-1">
@@ -1391,114 +1395,51 @@ export default function MobileChatPage() {
       )}
 
       {/* =======================================================================
-          VIEW 3: THÔNG TIN PHÒNG & BẢO MẬT (ROOM INFO)
+          VIEW 3: NGĂN THÔNG TIN PHÒNG, TỆP, LINK & BẢO MẬT (COLLAPSIBLE DRAWER)
           ======================================================================= */}
       {view === 'room-info' && activeConversation && (
-        <div className="flex-1 flex flex-col w-full h-full overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 space-y-4 pb-[max(2rem,env(safe-area-inset-bottom,2rem))]">
-          {/* Header Bar */}
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setView('conversation')}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 text-slate-700 dark:text-slate-300 active:scale-95 transition"
-              aria-label="Quay lại cuộc trò chuyện"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h2 className="text-sm font-black">Thông Tin Cuộc Trò Chuyện</h2>
-            <div className="w-11" />
-          </div>
-
-          {/* Profile Card */}
-          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs flex flex-col items-center text-center space-y-2">
-            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-sky-400 to-indigo-600 text-white font-black text-xl flex items-center justify-center shadow-md">
-              {activeConversation.partnerName.slice(0, 1).toUpperCase()}
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                {activeConversation.partnerName}
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                {activeConversation.partnerIdentifier}
-              </p>
-            </div>
-          </div>
-
-          {/* Thiết Lập Bảo Mật Phòng */}
-          <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
-              Bảo Mật Đầu Cuối
-            </h4>
-
-            {/* Mã an toàn xác minh danh tính */}
-            <button
-              type="button"
-              onClick={() => {
-                const sn = calculateSafetyNumber(
-                  currentUser?.id || 'me',
-                  'base64_my_key',
-                  activeConversation.partnerId,
-                  'base64_their_key'
-                )
-                setSafetyNumber(sn)
-                setShowSafetyModal(true)
-              }}
-              className="w-full min-h-[44px] p-3 rounded-2xl bg-black/5 dark:bg-white/5 flex items-center justify-between active:scale-98 transition text-left"
-            >
-              <div className="flex items-center gap-2.5">
-                <ShieldCheck className="h-5 w-5 text-emerald-500" />
-                <div>
-                  <span className="text-xs font-black block">Mã An Toàn (Safety Number)</span>
-                  <span className="text-[10px] text-slate-400">Xác thực khóa công khai</span>
-                </div>
-              </div>
-              <ChevronLeft className="h-4 w-4 rotate-180 text-slate-400" />
-            </button>
-
-            {/* Tin nhắn tự hủy */}
-            <button
-              type="button"
-              onClick={() => setShowDisappearingSettings(true)}
-              className="w-full min-h-[44px] p-3 rounded-2xl bg-black/5 dark:bg-white/5 flex items-center justify-between active:scale-98 transition text-left"
-            >
-              <div className="flex items-center gap-2.5">
-                <Timer className="h-5 w-5 text-amber-500" />
-                <div>
-                  <span className="text-xs font-black block">Tin Nhắn Tự Hủy</span>
-                  <span className="text-[10px] text-slate-400">Tự động xóa sau khi đọc</span>
-                </div>
-              </div>
-              <ChevronLeft className="h-4 w-4 rotate-180 text-slate-400" />
-            </button>
-          </div>
-
-          {/* Chọn hình nền */}
-          <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
-              Hình Nền Cuộc Trò Chuyện
-            </h4>
-            <div className="grid grid-cols-3 gap-2">
-              {CHAT_WALLPAPERS.map((wp) => (
-                <button
-                  key={wp.id}
-                  type="button"
-                  onClick={() => {
-                    setWallpaperFor(activeConversation.id, wp.id)
-                    setConversations(getLocalConversations())
-                  }}
-                  className={`min-h-[44px] p-2 rounded-2xl border text-center transition active:scale-95 ${
-                    activeWallpaperId === wp.id
-                      ? 'border-sky-500 bg-sky-500/10 font-black text-sky-600'
-                      : 'border-black/10 dark:border-white/10 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  <span className="text-[10px] block truncate">{wp.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <ChatInfoDrawer
+          isOpen={true}
+          onClose={() => setView('conversation')}
+          conversation={activeConversation}
+          messages={messages}
+          currentUserId={currentUser?.id || ''}
+          currentNickname={activeConversation.partnerName}
+          onSelectMessage={(msgId) => {
+            setView('conversation')
+            setTimeout(() => {
+              const el = document.getElementById(`msg-${msgId}`)
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                el.classList.add('ring-2', 'ring-emerald-500')
+                setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 2000)
+              }
+            }, 100)
+          }}
+          onRecallMessage={(msgId) => {
+            deleteLocalMessage(activeConversation.id, msgId)
+            setMessages(getLocalMessages(activeConversation.id))
+          }}
+          safetyNumberData={safetyNumber}
+          onMarkVerified={(verified) => {
+            if (activeConversation?.partnerId) {
+              localStorage.setItem(`senchat_verified_${activeConversation.partnerId}`, String(verified))
+            }
+          }}
+          disappearingTtl={disappearingTtl}
+          onChangeDisappearingTtl={(ttl) => setDisappearingTtl(ttl)}
+          onOpenManageGroup={() => setShowCreateGroupModal(true)}
+          onLeaveGroup={() => {
+            if (confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
+              setView('list')
+              setSelectedConvId(null)
+            }
+          }}
+        />
       )}
+
+      {/* BẢO VỆ CHỐNG CHỤP MÀN HÌNH DRM KIỂU NETFLIX (BLACKOUT CURTAIN) */}
+      <ChatDrmProtection isEnabled={true} showBadge={false} />
 
       {/* =======================================================================
           MODAL: THIẾT LẬP BẢO MẬT ANDROID CAPACITOR & FLAG_SECURE & APP LOCK

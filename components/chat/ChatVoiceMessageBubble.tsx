@@ -112,7 +112,15 @@ export default function ChatVoiceMessageBubble({
       throw new Error('Thiếu khóa mã hóa tệp (File Key)')
     }
 
-    const { data: authData } = await supabase.auth.getSession()
+    let { data: authData } = await supabase.auth.getSession()
+    if (
+      !authData.session ||
+      (authData.session.expires_at &&
+        authData.session.expires_at * 1000 - Date.now() < 60000)
+    ) {
+      const { data: refData } = await supabase.auth.refreshSession()
+      if (refData.session) authData = refData
+    }
     const token = authData.session?.access_token
 
     const query = new URLSearchParams()
@@ -233,7 +241,15 @@ export default function ChatVoiceMessageBubble({
     setIsTranscribing(true)
     setSttProgress('Đang gửi âm thanh tới máy chủ...')
     try {
-      const { data: authData } = await supabase.auth.getSession()
+      let { data: authData } = await supabase.auth.getSession()
+      if (
+        !authData.session ||
+        (authData.session.expires_at &&
+          authData.session.expires_at * 1000 - Date.now() < 60000)
+      ) {
+        const { data: refData } = await supabase.auth.refreshSession()
+        if (refData.session) authData = refData
+      }
       const token = authData.session?.access_token
 
       const blob = await decryptAudio()

@@ -44,7 +44,26 @@ export async function getUserFromRequest(request: Request): Promise<{ id: string
   const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
   const queryToken = new URL(request.url).searchParams.get('token')
-  const token = bearerToken || queryToken
+  let token = bearerToken || queryToken
+
+  // Fallback: Kiểm tra cookie xác thực nếu không có header Authorization (hỗ trợ Safari / cookie session)
+  if (!token) {
+    const cookieHeader = request.headers.get('cookie') || ''
+    const match = cookieHeader.match(/sb-[a-zA-Z0-9_-]+-auth-token=([^;]+)/) ||
+                  cookieHeader.match(/sb-access-token=([^;]+)/)
+    if (match) {
+      try {
+        const raw = decodeURIComponent(match[match.length - 1])
+        if (raw.startsWith('[') || raw.startsWith('{')) {
+          const parsed = JSON.parse(raw)
+          token = Array.isArray(parsed) ? parsed[0] : (parsed?.access_token || parsed?.token || null)
+        } else {
+          token = raw
+        }
+      } catch {}
+    }
+  }
+
   if (!token) return null
 
   try {

@@ -230,6 +230,13 @@ export function saveLocalMessage(conversationId: string, message: SenChatMessage
   }
 }
 
+export function deleteLocalMessage(conversationId: string, messageId: string): void {
+  if (typeof window === 'undefined') return
+  const list = getLocalMessages(conversationId)
+  const filtered = list.filter((m) => m.id !== messageId)
+  localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(filtered))
+}
+
 export function clearAllLocalMessages(conversationId: string): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)

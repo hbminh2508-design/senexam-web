@@ -94,7 +94,9 @@ export default function SenChatFloatingBubble() {
     pathname?.startsWith('/login') ||
     pathname?.startsWith('/seb-login') ||
     pathname?.startsWith('/new-reset-password') ||
-    pathname?.startsWith('/breathe-u')
+    pathname?.startsWith('/breathe-u') ||
+    pathname?.startsWith('/chat') ||
+    pathname?.startsWith('/m/chat')
   )
 
   const [disabledBySetting, setDisabledBySetting] = useState(false)
