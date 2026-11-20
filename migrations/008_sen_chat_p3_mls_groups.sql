@@ -201,7 +201,8 @@ CREATE OR REPLACE FUNCTION public.create_mls_group(
   p_mls_group_id TEXT,
   p_initial_commit TEXT,
   p_ratchet_tree TEXT,
-  p_member_emails TEXT[]
+  p_member_emails TEXT[],
+  p_creator_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -209,13 +210,19 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_creator_id UUID := auth.uid();
+  v_creator_id UUID;
   v_conv_id UUID;
   v_email TEXT;
   v_target_profile RECORD;
   v_added_count INTEGER := 0;
   v_invalid_emails TEXT[] := ARRAY[]::TEXT[];
 BEGIN
+  IF auth.role() = 'service_role' THEN
+    v_creator_id := COALESCE(p_creator_id, auth.uid());
+  ELSE
+    v_creator_id := auth.uid();
+  END IF;
+
   IF v_creator_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Chưa xác thực người dùng');
   END IF;
@@ -330,7 +337,8 @@ CREATE OR REPLACE FUNCTION public.add_mls_group_member(
   p_commit_message TEXT,
   p_welcome_message TEXT,
   p_new_epoch BIGINT,
-  p_ratchet_tree TEXT
+  p_ratchet_tree TEXT,
+  p_caller_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -338,10 +346,16 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_caller_id UUID := auth.uid();
+  v_caller_id UUID;
   v_caller_role TEXT;
   v_target_profile RECORD;
 BEGIN
+  IF auth.role() = 'service_role' THEN
+    v_caller_id := COALESCE(p_caller_id, auth.uid());
+  ELSE
+    v_caller_id := auth.uid();
+  END IF;
+
   IF v_caller_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Chưa xác thực người dùng');
   END IF;
@@ -437,7 +451,8 @@ CREATE OR REPLACE FUNCTION public.remove_mls_group_member(
   p_target_user_id UUID,
   p_commit_message TEXT,
   p_new_epoch BIGINT,
-  p_ratchet_tree TEXT
+  p_ratchet_tree TEXT,
+  p_caller_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -445,10 +460,16 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_caller_id UUID := auth.uid();
+  v_caller_id UUID;
   v_caller_role TEXT;
   v_target_role TEXT;
 BEGIN
+  IF auth.role() = 'service_role' THEN
+    v_caller_id := COALESCE(p_caller_id, auth.uid());
+  ELSE
+    v_caller_id := auth.uid();
+  END IF;
+
   IF v_caller_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Chưa xác thực người dùng');
   END IF;
@@ -534,7 +555,8 @@ $$;
 CREATE OR REPLACE FUNCTION public.update_mls_group_info(
   p_conversation_id UUID,
   p_title TEXT,
-  p_avatar_url TEXT
+  p_avatar_url TEXT,
+  p_caller_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -542,9 +564,15 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_caller_id UUID := auth.uid();
+  v_caller_id UUID;
   v_caller_role TEXT;
 BEGIN
+  IF auth.role() = 'service_role' THEN
+    v_caller_id := COALESCE(p_caller_id, auth.uid());
+  ELSE
+    v_caller_id := auth.uid();
+  END IF;
+
   IF v_caller_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Chưa xác thực người dùng');
   END IF;
@@ -579,7 +607,8 @@ $$;
 CREATE OR REPLACE FUNCTION public.update_mls_member_role(
   p_conversation_id UUID,
   p_target_user_id UUID,
-  p_new_role TEXT
+  p_new_role TEXT,
+  p_caller_id UUID DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -587,9 +616,15 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_caller_id UUID := auth.uid();
+  v_caller_id UUID;
   v_caller_role TEXT;
 BEGIN
+  IF auth.role() = 'service_role' THEN
+    v_caller_id := COALESCE(p_caller_id, auth.uid());
+  ELSE
+    v_caller_id := auth.uid();
+  END IF;
+
   IF v_caller_id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Chưa xác thực người dùng');
   END IF;

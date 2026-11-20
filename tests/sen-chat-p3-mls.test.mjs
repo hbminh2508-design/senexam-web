@@ -135,7 +135,6 @@ test('MLS RFC 9420: Member removal with Commit rotation blocks removed member fr
 // 4. KIỂM THỬ PHÂN QUYỀN VAI TRÒ (OWNER / ADMIN / MEMBER)
 // ==============================================================================
 test('MLS Group Permissions: Role Hierarchy (Owner vs Admin vs Member vs Stranger)', () => {
-  // Giả lập logic kiểm tra quyền của RPC
   function checkRemovePermission(callerRole, targetRole, isSelf) {
     if (isSelf) {
       if (callerRole === 'owner') return { allowed: false, error: 'Chủ nhóm không thể tự rời khi chưa chuyển quyền' }
@@ -205,29 +204,55 @@ test('MLS Group: Only accepted friends can be added to group', () => {
 })
 
 // ==============================================================================
-// 6. KIỂM THỬ RLS ISOLATION CHO BẢNG NHÓM TRONG MIGRATION 008
+// 6. KIỂM THỬ RLS ISOLATION CHO BẢNG NHÓM TRONG MIGRATION 008 & 009
 // ==============================================================================
-test('RLS Hardening: Migration 008 enforces member-only access on commits and groups', () => {
-  const sqlPath = path.resolve('migrations', '008_sen_chat_p3_mls_groups.sql')
-  assert.ok(fs.existsSync(sqlPath), 'File migration 008 phải tồn tại')
-  const sqlContent = fs.readFileSync(sqlPath, 'utf8')
+test('RLS Hardening: Migration 008 & 009 enforce member-only access and secure service_role dispatch', () => {
+  const sqlPath008 = path.resolve('migrations', '008_sen_chat_p3_mls_groups.sql')
+  const sqlPath009 = path.resolve('migrations', '009_sen_chat_p3_mls_rpc_auth_fix.sql')
+
+  assert.ok(fs.existsSync(sqlPath008), 'File migration 008 phải tồn tại')
+  assert.ok(fs.existsSync(sqlPath009), 'File migration 009 phải tồn tại')
+
+  const sqlContent008 = fs.readFileSync(sqlPath008, 'utf8')
+  const sqlContent009 = fs.readFileSync(sqlPath009, 'utf8')
 
   // Kiểm tra RLS bật trên các bảng mới
-  assert.ok(sqlContent.includes('ALTER TABLE public.chat_mls_key_packages ENABLE ROW LEVEL SECURITY;'))
-  assert.ok(sqlContent.includes('ALTER TABLE public.chat_mls_commits ENABLE ROW LEVEL SECURITY;'))
+  assert.ok(sqlContent008.includes('ALTER TABLE public.chat_mls_key_packages ENABLE ROW LEVEL SECURITY;'))
+  assert.ok(sqlContent008.includes('ALTER TABLE public.chat_mls_commits ENABLE ROW LEVEL SECURITY;'))
 
   // Kiểm tra chính sách RLS chỉ thành viên mới được SELECT commit
-  assert.ok(sqlContent.includes('CREATE POLICY "chat_mls_commits_select_member"'))
-  assert.ok(sqlContent.includes('m.conversation_id = chat_mls_commits.conversation_id'))
+  assert.ok(sqlContent008.includes('CREATE POLICY "chat_mls_commits_select_member"'))
+  assert.ok(sqlContent008.includes('m.conversation_id = chat_mls_commits.conversation_id'))
 
   // Kiểm tra chính sách xóa thành viên có phân quyền Owner/Admin
-  assert.ok(sqlContent.includes('CREATE POLICY "chat_members_delete_policy"'))
-  assert.ok(sqlContent.includes("m.role = 'owner'"))
-  assert.ok(sqlContent.includes("m.role = 'admin'"))
+  assert.ok(sqlContent008.includes('CREATE POLICY "chat_members_delete_policy"'))
+  assert.ok(sqlContent008.includes("m.role = 'owner'"))
+  assert.ok(sqlContent008.includes("m.role = 'admin'"))
 
-  // Kiểm tra RPCs được tạo với SECURITY DEFINER và search_path an toàn
-  assert.ok(sqlContent.includes('CREATE OR REPLACE FUNCTION public.create_mls_group'))
-  assert.ok(sqlContent.includes('CREATE OR REPLACE FUNCTION public.add_mls_group_member'))
-  assert.ok(sqlContent.includes('CREATE OR REPLACE FUNCTION public.remove_mls_group_member'))
-  assert.ok(sqlContent.includes('SET search_path = public, pg_temp'))
+  // Kiểm tra Migration 009 khắc phục triệt để context service_role và chống giả mạo p_caller_id
+  assert.ok(sqlContent009.includes("IF auth.role() = 'service_role' THEN"))
+  assert.ok(sqlContent009.includes('v_caller_id := COALESCE(p_caller_id, auth.uid());'))
+  assert.ok(sqlContent009.includes('v_caller_id := auth.uid();'))
+  assert.ok(sqlContent009.includes('SET search_path = public, pg_temp'))
+})
+
+// ==============================================================================
+// 7. KIỂM THỬ API ROUTE HANDLERS CHUYỂN TIẾP ĐÚNG USER_ID
+// ==============================================================================
+test('MLS Route Handlers: group and members routes pass user.id to RPC', () => {
+  const groupRoutePath = path.resolve('app', 'api', 'chat', 'mls', 'group', 'route.ts')
+  const membersRoutePath = path.resolve('app', 'api', 'chat', 'mls', 'members', 'route.ts')
+
+  assert.ok(fs.existsSync(groupRoutePath))
+  assert.ok(fs.existsSync(membersRoutePath))
+
+  const groupRoute = fs.readFileSync(groupRoutePath, 'utf8')
+  const membersRoute = fs.readFileSync(membersRoutePath, 'utf8')
+
+  // Kiểm tra route group POST và PATCH chuyển tiếp user.id
+  assert.ok(groupRoute.includes('p_creator_id: user.id'))
+  assert.ok(groupRoute.includes('p_caller_id: user.id'))
+
+  // Kiểm tra route members POST, DELETE và PATCH chuyển tiếp user.id
+  assert.ok(membersRoute.includes('p_caller_id: user.id'))
 })

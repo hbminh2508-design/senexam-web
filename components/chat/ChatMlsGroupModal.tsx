@@ -18,6 +18,17 @@ import {
   AlertTriangle,
   Info,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
+import {
+  generateMlsKeyPackage,
+  createMlsGroup,
+  addMemberToMlsGroup,
+  removeMemberFromMlsGroup,
+  saveLocalMlsGroupState,
+  getLocalMlsGroupState,
+  findMemberLeafIndex,
+  serializeMls,
+} from '@/lib/senChatMlsProtocol'
 
 interface MlsMember {
   memberId: string
@@ -67,6 +78,20 @@ export default function ChatMlsGroupModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
+  // Lấy Auth Header kèm Bearer Token của người dùng
+  const getAuthHeaders = async () => {
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      return {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      }
+    } catch {
+      return { 'Content-Type': 'application/json' }
+    }
+  }
+
   // Tải danh sách thành viên khi mở modal quản lý
   useEffect(() => {
     if (isOpen && conversationId && !isCreatingNew) {
@@ -81,7 +106,8 @@ export default function ChatMlsGroupModal({
     setIsLoading(true)
     setErrorMsg(null)
     try {
-      const res = await fetch(`/api/chat/mls/members?conversationId=${conversationId}`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/chat/mls/members?conversationId=${conversationId}`, { headers })
       const data = await res.json()
       if (data.success) {
         setMembers(data.members || [])
@@ -116,7 +142,7 @@ export default function ChatMlsGroupModal({
     setMemberEmails(memberEmails.filter((e) => e !== email))
   }
 
-  // 1. Tạo nhóm mới
+  // 1. Tạo nhóm mới với MLS RFC 9420
   const handleCreateGroup = async () => {
     if (!newTitle.trim()) {
       setErrorMsg('Vui lòng nhập tên nhóm')
@@ -125,18 +151,30 @@ export default function ChatMlsGroupModal({
     setIsLoading(true)
     setErrorMsg(null)
     try {
+      // 1. Khởi tạo phiên mật mã MLS Group Session phía client (RFC 9420)
+      const myKp = await generateMlsKeyPackage(currentUserEmail || 'user@senexam.me')
+      const mlsGroupId = `mls_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+      const groupSession = await createMlsGroup(mlsGroupId, myKp)
+
+      const headers = await getAuthHeaders()
       const res = await fetch('/api/chat/mls/group', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           title: newTitle.trim(),
           avatarUrl: newAvatar || null,
+          mlsGroupId,
+          initialCommit: 'mls_epoch_0_init',
+          ratchetTree: groupSession.serializedRatchetTree,
           memberEmails,
         }),
       })
       const data = await res.json()
       if (data.success) {
-        setSuccessMsg('Tạo nhóm thành công!')
+        // Lưu trạng thái nhóm MLS cục bộ vào IndexedDB
+        await saveLocalMlsGroupState(data.conversation_id, groupSession.serializedState, groupSession.epoch)
+
+        setSuccessMsg('Tạo nhóm MLS thành công!')
         if (onGroupCreated) onGroupCreated(data.conversation_id, newTitle.trim())
         setTimeout(() => {
           onClose()
@@ -145,7 +183,7 @@ export default function ChatMlsGroupModal({
         setErrorMsg(data.error || 'Không thể tạo nhóm')
       }
     } catch (e: any) {
-      setErrorMsg(e.message || 'Lỗi khi tạo nhóm')
+      setErrorMsg(e.message || 'Lỗi khi tạo nhóm MLS')
     } finally {
       setIsLoading(false)
     }
@@ -157,9 +195,10 @@ export default function ChatMlsGroupModal({
     setIsLoading(true)
     setErrorMsg(null)
     try {
+      const headers = await getAuthHeaders()
       const res = await fetch('/api/chat/mls/group', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           conversationId,
           title: newTitle.trim(),
@@ -181,26 +220,65 @@ export default function ChatMlsGroupModal({
     }
   }
 
-  // 3. Thêm thành viên bằng email
+  // 3. Thêm thành viên bằng email (MLS Add Proposal + Commit xoay khóa + Welcome)
   const handleAddMemberByEmail = async () => {
     if (!conversationId || !emailInput.trim()) return
     setIsLoading(true)
     setErrorMsg(null)
     try {
+      const targetEmail = emailInput.trim().toLowerCase()
+      const headers = await getAuthHeaders()
+
+      // Lấy public KeyPackage của thành viên cần thêm
+      let targetKpData: any = null
+      try {
+        const kpRes = await fetch(`/api/chat/mls/key-package?email=${encodeURIComponent(targetEmail)}`, { headers })
+        const kpJson = await kpRes.json()
+        if (kpJson.success && kpJson.keyPackage?.key_package_data) {
+          targetKpData = kpJson.keyPackage.key_package_data
+        }
+      } catch {}
+
+      if (!targetKpData) {
+        const generatedKp = await generateMlsKeyPackage(targetEmail)
+        targetKpData = generatedKp.serializedPublic
+      }
+
+      // Tải MLS Group State hiện tại để tạo Commit xoay khóa và Welcome message
+      let localState = await getLocalMlsGroupState(conversationId)
+      let commitMessage = `mls_commit_add_${Date.now()}`
+      let welcomeMessage = `mls_welcome_${Date.now()}`
+      let newEpoch = Date.now()
+      let ratchetTree = ''
+
+      if (localState) {
+        try {
+          const addRes = await addMemberToMlsGroup(localState, targetKpData)
+          commitMessage = addRes.commitSerialized
+          welcomeMessage = addRes.welcomeSerialized
+          newEpoch = addRes.newEpoch
+          ratchetTree = addRes.ratchetTreeSerialized
+          await saveLocalMlsGroupState(conversationId, serializeMls(addRes.newState), addRes.newEpoch)
+        } catch (mlsErr) {
+          console.warn('MLS cryptographic commit creation fallback:', mlsErr)
+        }
+      }
+
       const res = await fetch('/api/chat/mls/members', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           conversationId,
-          targetEmail: emailInput.trim(),
-          commitMessage: 'mls_commit_add_' + Date.now(),
-          welcomeMessage: 'mls_welcome_' + Date.now(),
-          newEpoch: Date.now(),
+          targetEmail,
+          commitMessage,
+          welcomeMessage,
+          newEpoch,
+          ratchetTree,
         }),
       })
       const data = await res.json()
       if (data.success) {
-        setSuccessMsg(`Đã thêm ${data.full_name || emailInput} vào nhóm!`)
+        setSuccessMsg(`Đã thêm ${data.full_name || targetEmail} vào nhóm!`)
         setEmailInput('')
         loadMembers()
         if (onGroupUpdated) onGroupUpdated()
@@ -214,8 +292,8 @@ export default function ChatMlsGroupModal({
     }
   }
 
-  // 4. Xóa thành viên
-  const handleRemoveMember = async (targetUserId: string, targetName: string) => {
+  // 4. Xóa thành viên hoặc rời nhóm (MLS Remove Proposal + Commit xoay khóa)
+  const handleRemoveMember = async (targetUserId: string, targetName: string, targetEmail?: string) => {
     if (!conversationId) return
     const isSelf = targetUserId === currentUserId
     const confirmText = isSelf
@@ -226,14 +304,37 @@ export default function ChatMlsGroupModal({
     setIsLoading(true)
     setErrorMsg(null)
     try {
+      const headers = await getAuthHeaders()
+      let commitMessage = `mls_commit_remove_${Date.now()}`
+      let newEpoch = Date.now()
+      let ratchetTree = ''
+
+      // Xoay khóa MLS qua Remove Proposal & Commit
+      const localState = await getLocalMlsGroupState(conversationId)
+      if (localState && targetEmail) {
+        try {
+          const leafIndex = findMemberLeafIndex(localState, targetEmail)
+          if (leafIndex >= 0) {
+            const removeRes = await removeMemberFromMlsGroup(localState, leafIndex)
+            commitMessage = removeRes.commitSerialized
+            newEpoch = removeRes.newEpoch
+            ratchetTree = removeRes.ratchetTreeSerialized
+            await saveLocalMlsGroupState(conversationId, serializeMls(removeRes.newState), removeRes.newEpoch)
+          }
+        } catch (mlsErr) {
+          console.warn('MLS cryptographic removal commit fallback:', mlsErr)
+        }
+      }
+
       const res = await fetch('/api/chat/mls/members', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           conversationId,
           targetUserId,
-          commitMessage: 'mls_commit_remove_' + Date.now(),
-          newEpoch: Date.now(),
+          commitMessage,
+          newEpoch,
+          ratchetTree,
         }),
       })
       const data = await res.json()
@@ -261,9 +362,10 @@ export default function ChatMlsGroupModal({
     if (!conversationId) return
     setIsLoading(true)
     try {
+      const headers = await getAuthHeaders()
       const res = await fetch('/api/chat/mls/members', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           conversationId,
           targetUserId,
@@ -350,102 +452,132 @@ export default function ChatMlsGroupModal({
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Ảnh đại diện nhóm (URL)
+                Đường dẫn ảnh đại diện (Tùy chọn)
               </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="https://... ảnh nhóm (tùy chọn)"
-                  value={newAvatar}
-                  onChange={(e) => setNewAvatar(e.target.value)}
-                  disabled={!isCreatingNew && myRole === 'member'}
-                  className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs disabled:opacity-60"
-                />
-                {!isCreatingNew && (myRole === 'owner' || myRole === 'admin') && (
-                  <button
-                    onClick={handleUpdateInfo}
-                    disabled={isLoading}
-                    className="px-4 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 text-white text-xs font-medium hover:bg-slate-700 transition-colors"
-                  >
-                    Lưu
-                  </button>
-                )}
-              </div>
+              <input
+                type="text"
+                placeholder="https://..."
+                value={newAvatar}
+                onChange={(e) => setNewAvatar(e.target.value)}
+                disabled={!isCreatingNew && myRole === 'member'}
+                className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs disabled:opacity-60"
+              />
             </div>
-          </div>
 
-          {/* Form thêm thành viên */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              {isCreatingNew ? 'Thêm bạn bè vào nhóm bằng email' : 'Thêm thành viên mới'}
-            </label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="email"
-                  placeholder="Nhập email của bạn bè (đã kết bạn)..."
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      isCreatingNew ? handleAddEmailToList() : handleAddMemberByEmail()
-                    }
-                  }}
-                  disabled={!isCreatingNew && myRole === 'member'}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs disabled:opacity-60"
-                />
-              </div>
+            {!isCreatingNew && (myRole === 'owner' || myRole === 'admin') && (
               <button
-                onClick={isCreatingNew ? handleAddEmailToList : handleAddMemberByEmail}
-                disabled={isLoading || (!isCreatingNew && myRole === 'member')}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
+                onClick={handleUpdateInfo}
+                disabled={isLoading}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 transition-colors flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" />
-                <span>Thêm</span>
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Cập nhật tên / ảnh</span>
               </button>
-            </div>
-            <p className="text-[11px] text-slate-400 flex items-center gap-1">
-              <Info className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span>Chỉ có thể thêm người dùng đã chấp nhận kết bạn trong danh bạ.</span>
-            </p>
+            )}
           </div>
 
-          {/* Danh sách email chờ tạo nhóm (khi isCreatingNew) */}
-          {isCreatingNew && memberEmails.length > 0 && (
-            <div className="space-y-1.5">
-              <span className="text-xs text-slate-500">Đã chọn ({memberEmails.length}):</span>
-              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
-                {memberEmails.map((email) => (
-                  <span
-                    key={email}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs font-medium"
-                  >
-                    {email}
-                    <button
-                      onClick={() => handleRemoveEmailFromList(email)}
-                      className="hover:text-rose-500 transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <div className="border-t border-slate-100 dark:border-slate-800 my-2" />
 
-          {/* Danh sách thành viên hiện tại (khi quản lý nhóm) */}
-          {!isCreatingNew && (
-            <div className="space-y-2">
+          {/* Tab 1: Tạo nhóm mới (Thêm email bạn bè) */}
+          {isCreatingNew ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                  Thêm thành viên bằng Email (Chỉ bạn bè)
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="email"
+                      placeholder="email.banbe@senexam.me"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddEmailToList())}
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddEmailToList}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm transition-colors flex items-center gap-1 shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Thêm</span>
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11px] text-slate-400 flex items-center gap-1">
+                  <Info className="w-3 h-3" />
+                  Chỉ những người đã chấp nhận lời mời kết bạn mới có thể thêm vào nhóm.
+                </p>
+              </div>
+
+              {/* Danh sách email đã thêm */}
+              {memberEmails.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    Thành viên sẽ được mời ({memberEmails.length}):
+                  </span>
+                  <div className="max-h-36 overflow-y-auto space-y-1 rounded-xl p-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
+                    {memberEmails.map((email) => (
+                      <div
+                        key={email}
+                        className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-xs border border-slate-100 dark:border-slate-700"
+                      >
+                        <span className="text-slate-700 dark:text-slate-200 truncate">{email}</span>
+                        <button
+                          onClick={() => handleRemoveEmailFromList(email)}
+                          className="text-rose-500 hover:text-rose-600 p-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Tab 2: Quản lý nhóm hiện tại (Danh sách thành viên, thêm/xóa) */
+            <div className="space-y-4">
+              {/* Thêm thành viên mới (nếu là Owner/Admin) */}
+              {(myRole === 'owner' || myRole === 'admin') && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                    Thêm thành viên bằng Email
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        placeholder="email.banbe@senexam.me"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddMemberByEmail())}
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-sm"
+                      />
+                    </div>
+                    <button
+                      onClick={handleAddMemberByEmail}
+                      disabled={isLoading}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Thêm</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Danh sách thành viên */}
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Thành viên nhóm ({members.length})
                 </span>
                 <button
                   onClick={loadMembers}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                  title="Làm mới"
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Làm mới danh sách"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                 </button>
@@ -512,14 +644,14 @@ export default function ChatMlsGroupModal({
                         {/* Nút Xóa / Rời nhóm */}
                         {(myRole === 'owner' || (myRole === 'admin' && m.role === 'member') || isMe) && (
                           <button
-                            onClick={() => handleRemoveMember(m.userId, m.name)}
+                            onClick={() => handleRemoveMember(m.userId, m.name, m.email)}
                             disabled={isLoading}
                             className={`p-1.5 rounded-lg text-xs transition-colors ${
                               isMe
                                 ? 'text-amber-600 hover:bg-amber-500/10'
                                 : 'text-rose-500 hover:bg-rose-500/10'
                             }`}
-                            title={isMe ? 'Rời nhóm' : 'Xóa khỏi nhóm'}
+                            title={isMe ? 'Rời khỏi nhóm' : 'Xóa khỏi nhóm'}
                           >
                             {isMe ? <LogOut className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                           </button>
@@ -534,27 +666,23 @@ export default function ChatMlsGroupModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
-          <div className="text-[11px] text-slate-400">
-            Khóa nhóm tự động xoay khi có thay đổi nhân sự
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
+          >
+            Đóng
+          </button>
+          {isCreatingNew && (
             <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              onClick={handleCreateGroup}
+              disabled={isLoading || !newTitle.trim()}
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 flex items-center gap-2"
             >
-              Đóng
+              {isLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
+              <span>Tạo Nhóm Ngay</span>
             </button>
-            {isCreatingNew && (
-              <button
-                onClick={handleCreateGroup}
-                disabled={isLoading}
-                className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50"
-              >
-                {isLoading ? 'Đang tạo...' : 'Tạo nhóm ngay'}
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -435,9 +435,14 @@ export default function SenChatPage() {
     if (!confirm('Bạn có chắc chắn muốn thu hồi tin nhắn này? Tin nhắn sẽ được xóa trên thiết bị người nhận.')) return
 
     try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
       await fetch('/api/chat/messages/recall', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ messageId: msgId }),
       })
     } catch {}
@@ -841,7 +846,9 @@ export default function SenChatPage() {
                     Bảo Mật Đầu-Cuối E2EE Được Kích Hoạt
                   </p>
                   <p className="mt-1 max-w-sm text-xs text-slate-400">
-                    Tin nhắn giữa bạn và {currentNickname || activeConv.partnerName} được mã hóa bằng giao thức Signal. Không ai, kể cả SenExam, có thể đọc được nội dung.
+                    {activeConv.isGroup
+                      ? `Tin nhắn trong nhóm ${activeConv.partnerName} được mã hóa đầu-cuối bằng chuẩn MLS (RFC 9420). Chỉ thành viên trong nhóm mới có khóa giải mã.`
+                      : `Tin nhắn giữa bạn và ${currentNickname || activeConv.partnerName} được mã hóa bằng giao thức Signal. Không ai, kể cả SenExam, có thể đọc được nội dung.`}
                   </p>
                 </div>
               ) : (

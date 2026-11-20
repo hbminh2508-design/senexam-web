@@ -98,6 +98,7 @@ export async function POST(req: Request) {
       p_welcome_message: welcomeMessage,
       p_new_epoch: newEpoch,
       p_ratchet_tree: ratchetTree,
+      p_caller_id: user.id,
     })
 
     if (error) {
@@ -142,6 +143,7 @@ export async function DELETE(req: Request) {
       p_commit_message: commitMessage,
       p_new_epoch: newEpoch,
       p_ratchet_tree: ratchetTree,
+      p_caller_id: user.id,
     })
 
     if (error) {
@@ -177,6 +179,7 @@ export async function PATCH(req: Request) {
       p_conversation_id: conversationId,
       p_target_user_id: targetUserId,
       p_new_role: newRole,
+      p_caller_id: user.id,
     })
 
     if (error) {

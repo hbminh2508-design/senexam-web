@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       p_initial_commit: initialCommit,
       p_ratchet_tree: ratchetTree,
       p_member_emails: memberEmails,
+      p_creator_id: user.id,
     })
 
     if (error) {
@@ -74,6 +75,7 @@ export async function PATCH(req: Request) {
       p_conversation_id: conversationId,
       p_title: title || null,
       p_avatar_url: avatarUrl || null,
+      p_caller_id: user.id,
     })
 
     if (error) {
