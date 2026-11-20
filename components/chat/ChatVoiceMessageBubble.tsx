@@ -27,6 +27,7 @@ import {
   transcribeAudioServerSide,
   WhisperModelProgress,
 } from '@/lib/senChatVoiceSTT'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ChatVoiceMessageBubbleProps {
   messageId: string
@@ -111,11 +112,19 @@ export default function ChatVoiceMessageBubble({
       throw new Error('Thiếu khóa mã hóa tệp (File Key)')
     }
 
+    const { data: authData } = await supabase.auth.getSession()
+    const token = authData.session?.access_token
+
     const query = new URLSearchParams()
     if (attachmentId) query.set('attachmentId', attachmentId)
     if (driveFileId) query.set('driveFileId', driveFileId)
+    if (token) query.set('token', token)
 
-    const res = await fetch(`/api/chat/attachments/stream?${query.toString()}`)
+    const res = await fetch(`/api/chat/attachments/stream?${query.toString()}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
     if (!res.ok) {
       throw new Error(`Lỗi tải âm thanh: ${res.statusText}`)
     }
@@ -224,11 +233,15 @@ export default function ChatVoiceMessageBubble({
     setIsTranscribing(true)
     setSttProgress('Đang gửi âm thanh tới máy chủ...')
     try {
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
+
       const blob = await decryptAudio()
       const result = await transcribeAudioServerSide({
         audioBlob: blob,
         consent: true,
         userPlanTier,
+        authToken: token,
       })
       setCurrentText(result.text)
       setEditText(result.text)

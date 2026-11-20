@@ -353,7 +353,9 @@ export async function transcribeAudioOnDevice(
       })
 
       const rawText = (output?.text || '').trim()
-      const detectedLang = detectLanguageFromText(rawText)
+      // Tự động nhận diện ngôn ngữ: ưu tiên thông tin ngôn ngữ từ Whisper nếu có, fallback detectLanguageFromText
+      const whisperLangCode = output?.language || output?.chunks?.[0]?.language
+      const detectedLang = whisperLangCode ? getLanguageMeta(whisperLangCode) : detectLanguageFromText(rawText)
 
       onProgress?.({
         status: 'completed',
@@ -420,6 +422,7 @@ export async function transcribeAudioServerSide(params: {
   consent: boolean
   languageHint?: string
   userPlanTier?: string | null
+  authToken?: string
 }): Promise<STTResult> {
   const { audioBlob, consent, languageHint, userPlanTier } = params
 
@@ -438,16 +441,33 @@ export async function transcribeAudioServerSide(params: {
     )
   }
 
-  // 3. Gửi FormData lên endpoint /api/chat/stt
+  // 3. Tự động lấy Bearer Token nếu chưa truyền vào
+  let token = params.authToken
+  if (!token && typeof window !== 'undefined') {
+    try {
+      const { supabase } = await import('@/lib/supabaseClient')
+      const { data } = await supabase.auth.getSession()
+      token = data.session?.access_token
+    } catch {}
+  }
+
+  // 4. Gửi FormData lên endpoint /api/chat/stt kèm Authorization header
   const formData = new FormData()
   formData.append('audio', audioBlob, 'voice-message.webm')
   formData.append('consent', 'true')
   if (languageHint) {
     formData.append('language', languageHint)
   }
+  if (token) {
+    formData.append('token', token)
+  }
 
-  const response = await fetch('/api/chat/stt', {
+  const endpoint = token ? `/api/chat/stt?token=${encodeURIComponent(token)}` : '/api/chat/stt'
+  const response = await fetch(endpoint, {
     method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: formData,
   })
 

@@ -973,15 +973,8 @@ export default function SenChatPage() {
                       className={`group flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                     >
                       <div className="flex items-end gap-1.5 max-w-[80%]">
-                        <div
-                          className={`relative rounded-3xl p-3.5 shadow-sm transition ${
-                            isMe
-                              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/20'
-                              : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
-                          }`}
-                        >
-                          {/* Đính kèm tin nhắn thoại hoặc tệp / ảnh mã hóa E2EE */}
-                          {msg.type === 'audio' ? (
+                        {msg.type === 'audio' ? (
+                          <div className="flex flex-col">
                             <ChatVoiceMessageBubble
                               messageId={msg.id}
                               attachmentId={msg.attachmentId}
@@ -997,8 +990,44 @@ export default function SenChatPage() {
                               userPlanTier={userPlanTier}
                               onUpdateTranscription={handleUpdateMessageTranscription}
                             />
-                          ) : (
-                            (msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
+                            {/* Footer trạng thái tin nhắn thoại */}
+                            <div
+                              className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-slate-400 px-1"
+                            >
+                              <span>
+                                {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+
+                              {isMe && (
+                                <span>
+                                  {msg.status === 'sending' ? (
+                                    <Clock className="h-3 w-3" />
+                                  ) : msg.status === 'received' || msg.status === 'seen' ? (
+                                    <CheckCheck
+                                      className={`h-3 w-3 ${
+                                        readReceiptsEnabled && msg.status === 'seen' ? 'text-cyan-500' : ''
+                                      }`}
+                                    />
+                                  ) : (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            className={`relative rounded-3xl p-3.5 shadow-sm transition ${
+                              isMe
+                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/20'
+                                : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
+                            }`}
+                          >
+                            {/* Đính kèm tệp / ảnh mã hóa E2EE */}
+                            {(msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
                               <div className="mb-2">
                                 <ChatAttachmentBubble
                                   attachmentId={msg.attachmentId}
@@ -1017,63 +1046,63 @@ export default function SenChatPage() {
                                   }
                                 />
                               </div>
-                            )
-                          )}
-
-                          {/* Rendering tin nhắn text hoặc links an toàn (nếu không phải tin nhắn thoại) */}
-                          {msg.type !== 'audio' && (!msg.attachmentId || (msg.content && !msg.content.startsWith('[Tệp đính kèm:'))) && (
-                            <div className="text-xs leading-relaxed break-words">
-                              {textParts.map((part, pIdx) => {
-                                if (part.type === 'link') {
-                                  return (
-                                    <a
-                                      key={pIdx}
-                                      href={part.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className={`underline font-medium ${
-                                        isMe ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
-                                      }`}
-                                    >
-                                      {part.content}
-                                    </a>
-                                  )
-                                }
-                                return <span key={pIdx}>{part.content}</span>
-                              })}
-                            </div>
-                          )}
-
-                          {/* Footer trạng thái tin nhắn */}
-                          <div
-                            className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
-                              isMe ? 'text-emerald-100/80' : 'text-slate-400'
-                            }`}
-                          >
-                            <span>
-                              {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-
-                            {isMe && (
-                              <span>
-                                {msg.status === 'sending' ? (
-                                  <Clock className="h-3 w-3" />
-                                ) : msg.status === 'received' || msg.status === 'seen' ? (
-                                  <CheckCheck
-                                    className={`h-3 w-3 ${
-                                      readReceiptsEnabled && msg.status === 'seen' ? 'text-cyan-200' : ''
-                                    }`}
-                                  />
-                                ) : (
-                                  <Check className="h-3 w-3" />
-                                )}
-                              </span>
                             )}
+
+                            {/* Rendering tin nhắn text hoặc links an toàn */}
+                            {(!msg.attachmentId || (msg.content && !msg.content.startsWith('[Tệp đính kèm:'))) && (
+                              <div className="text-xs leading-relaxed break-words">
+                                {textParts.map((part, pIdx) => {
+                                  if (part.type === 'link') {
+                                    return (
+                                      <a
+                                        key={pIdx}
+                                        href={part.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`underline font-medium ${
+                                          isMe ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
+                                        }`}
+                                      >
+                                        {part.content}
+                                      </a>
+                                    )
+                                  }
+                                  return <span key={pIdx}>{part.content}</span>
+                                })}
+                              </div>
+                            )}
+
+                            {/* Footer trạng thái tin nhắn */}
+                            <div
+                              className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
+                                isMe ? 'text-emerald-100/80' : 'text-slate-400'
+                              }`}
+                            >
+                              <span>
+                                {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+
+                              {isMe && (
+                                <span>
+                                  {msg.status === 'sending' ? (
+                                    <Clock className="h-3 w-3" />
+                                  ) : msg.status === 'received' || msg.status === 'seen' ? (
+                                    <CheckCheck
+                                      className={`h-3 w-3 ${
+                                        readReceiptsEnabled && msg.status === 'seen' ? 'text-cyan-200' : ''
+                                      }`}
+                                    />
+                                  ) : (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         {/* Message Action Bar (Reply, Reaction, Recall) */}
                         <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1">

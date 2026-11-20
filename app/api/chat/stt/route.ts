@@ -143,8 +143,13 @@ Nhiệm vụ:
       let parsedResult: any = null
 
       try {
-        const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim()
-        parsedResult = JSON.parse(cleaned)
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          parsedResult = JSON.parse(jsonMatch[0])
+        } else {
+          const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim()
+          parsedResult = JSON.parse(cleaned)
+        }
       } catch {
         const detected = detectLanguageFromText(responseText)
         parsedResult = {

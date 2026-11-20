@@ -118,39 +118,68 @@ test('Sen Chat P5: Giới hạn dung lượng theo gói áp dụng cho tin nhắ
 test('Sen Chat P5: Luồng đồng ý khi dùng STT phía server và cam kết không lưu lại sau xử lý', async () => {
   const sampleAudioBytes = new Uint8Array(10 * 1024)
 
-  // 1. Khi người dùng CHƯA ĐỒNG Ý (consent: false hoặc undefined) -> Server từ chối ngay với mã lỗi 403
+  // 1. Khi người dùng CHƯA ĐĂNG NHẬP -> Server từ chối ngay với mã lỗi 401
+  const rejectUnauthenticated = await simulateServerSttExecution({
+    audioBytes: sampleAudioBytes,
+    consent: true,
+    planTier: 'free',
+    authenticated: false,
+  })
+  assert.equal(rejectUnauthenticated.status, 401)
+  assert.equal(rejectUnauthenticated.error, 'Chưa đăng nhập')
+
+  // 2. Khi người dùng CHƯA ĐỒNG Ý (consent: false hoặc undefined) -> Server từ chối ngay với mã lỗi 403
   const rejectWithoutConsent = await simulateServerSttExecution({
     audioBytes: sampleAudioBytes,
     consent: false,
     planTier: 'free',
+    authenticated: true,
   })
   assert.equal(rejectWithoutConsent.status, 403)
   assert.ok(rejectWithoutConsent.error.includes('chưa đồng ý gửi âm thanh tới máy chủ'))
 
-  // 2. Khi người dùng ĐÃ ĐỒNG Ý RÕ RÀNG (consent: true) -> Server chấp nhận xử lý
+  // 3. Khi người dùng ĐÃ ĐỒNG Ý RÕ RÀNG (consent: true) -> Server chấp nhận xử lý
   const acceptWithConsent = await simulateServerSttExecution({
     audioBytes: sampleAudioBytes,
     consent: true,
     planTier: 'free',
     languageHint: 'vi',
+    authenticated: true,
   })
   assert.equal(acceptWithConsent.status, 200)
   assert.equal(acceptWithConsent.success, true)
   assert.equal(acceptWithConsent.language, 'vi')
   assert.ok(acceptWithConsent.text.length > 0)
 
-  // 3. Cam kết bảo mật bắt buộc: Server KHÔNG lưu lại tệp âm thanh (persistedToStorage === false)
+  // 4. Cam kết bảo mật bắt buộc: Server KHÔNG lưu lại tệp âm thanh (persistedToStorage === false)
   assert.equal(acceptWithConsent.persistedToStorage, false, 'Tuyệt đối không lưu lại tệp âm thanh sau khi xử lý')
 
-  // 4. Kiểm tra mã nguồn server route /api/chat/stt đảm bảo có logic kiểm tra consent bắt buộc
+  // 5. Kiểm tra mã nguồn server route /api/chat/stt đảm bảo có logic kiểm tra xác thực và consent bắt buộc
   const routePath = path.resolve(process.cwd(), 'app/api/chat/stt/route.ts')
   assert.ok(fs.existsSync(routePath), 'Route /api/chat/stt/route.ts phải tồn tại')
   const routeContent = fs.readFileSync(routePath, 'utf8')
 
+  assert.ok(routeContent.includes('getUserFromRequest'), 'Route phải xác thực người dùng qua getUserFromRequest')
+  assert.ok(routeContent.includes('status: 401'), 'Route phải trả về HTTP 401 khi chưa đăng nhập')
   assert.ok(routeContent.includes('consentGranted'), 'Route phải kiểm tra cờ consent')
   assert.ok(routeContent.includes('status: 403'), 'Route phải trả về HTTP 403 khi thiếu consent')
   assert.ok(routeContent.includes('validateChatFileSize'), 'Route phải kiểm tra hạn mức gói dịch vụ')
   assert.ok(routeContent.includes('persistedToStorage: false'), 'Route phải khẳng định không lưu trữ file')
+
+  // 6. Kiểm tra các hộp thoại giao diện người dùng phải chứa chính xác cụm từ cam kết
+  const recorderPath = path.resolve(process.cwd(), 'components/chat/ChatVoiceRecorder.tsx')
+  const recorderContent = fs.readFileSync(recorderPath, 'utf8')
+  assert.ok(
+    recorderContent.toLowerCase().includes('âm thanh sẽ được gửi tới máy chủ để chuyển thành văn bản'),
+    'Hộp thoại đồng ý trong ChatVoiceRecorder phải chứa chính xác thông báo quy định'
+  )
+
+  const bubblePath = path.resolve(process.cwd(), 'components/chat/ChatVoiceMessageBubble.tsx')
+  const bubbleContent = fs.readFileSync(bubblePath, 'utf8')
+  assert.ok(
+    bubbleContent.toLowerCase().includes('âm thanh sẽ được gửi tới máy chủ để chuyển thành văn bản'),
+    'Hộp thoại đồng ý trong ChatVoiceMessageBubble phải chứa chính xác thông báo quy định'
+  )
 })
 
 // ==============================================================================

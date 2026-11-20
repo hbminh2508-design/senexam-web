@@ -35,6 +35,7 @@ import {
   WhisperModelProgress,
 } from '@/lib/senChatVoiceSTT'
 import { validateChatFileSize } from '@/lib/chatLimits'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ChatVoiceRecorderProps {
   conversationId: string
@@ -95,6 +96,7 @@ export default function ChatVoiceRecorder({
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animFrameRef = useRef<number | null>(null)
   const timerIntervalRef = useRef<any>(null)
+  const startTimeRef = useRef<number>(0)
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
   const recordedSamplesRef = useRef<number[]>([])
 
@@ -175,12 +177,17 @@ export default function ChatVoiceRecorder({
         const waveform = extractWaveformFromData(recordedSamplesRef.current, 36)
         setRecordedWaveform(waveform)
 
+        // Tính thời lượng thực tế chính xác
+        const elapsedSec = Math.max(1, Math.round((Date.now() - (startTimeRef.current || Date.now())) / 1000))
+        setDuration(elapsedSec)
+
         const previewUrl = URL.createObjectURL(fullBlob)
         setPreviewAudioUrl(previewUrl)
         setRecorderState('reviewing')
         cleanupAudioStream()
       }
 
+      startTimeRef.current = Date.now()
       recorder.start(100) // Lấy chunk mỗi 100ms
       setRecorderState('recording')
       setDuration(0)
@@ -281,10 +288,14 @@ export default function ChatVoiceRecorder({
     setIsTranscribing(true)
     setSttProgress('Đang gửi âm thanh tới máy chủ...')
     try {
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
+
       const result = await transcribeAudioServerSide({
         audioBlob: recordedBlob,
         consent: true,
         userPlanTier,
+        authToken: token,
       })
       setTranscribedText(result.text)
       setDetectedLanguage(result.language)
@@ -317,6 +328,9 @@ export default function ChatVoiceRecorder({
       const encryptedBlob = await encryptFileToBlob(recordedBlob, fileKey)
 
       // 4. Tải tệp mã hóa lên server (lưu qua Supabase Storage hoặc Provider)
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
+
       const formData = new FormData()
       formData.append('file', encryptedBlob, 'voice-message.enc')
       formData.append('conversationId', conversationId)
@@ -326,6 +340,9 @@ export default function ChatVoiceRecorder({
 
       const uploadRes = await fetch('/api/chat/attachments/upload', {
         method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: formData,
       })
 
