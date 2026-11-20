@@ -43,6 +43,7 @@ export interface SenChatMessage {
   createdAt: string
   status: 'sending' | 'sent' | 'received' | 'seen'
   isLocalOnly?: boolean
+  isSenAi?: boolean
 }
 
 export interface SenChatConversation {

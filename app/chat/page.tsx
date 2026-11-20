@@ -64,6 +64,14 @@ import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
 import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
 import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
+import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
+import ChatMessageContent from '@/components/chat/ChatMessageContent'
+import {
+  hasSenAiMention,
+  extractSenAiQuery,
+  getSenAiAutocompleteSuggestions,
+  formatSenAiGroupNotice,
+} from '@/lib/senChatAi'
 import { getEffectivePlanTier } from '@/lib/vipMembership'
 import { parseMessageLinks } from '@/lib/chatSanitizer'
 import {
@@ -148,6 +156,13 @@ export default function SenChatPage() {
   const [showWallpaperModal, setShowWallpaperModal] = useState(false)
   const [newNicknameInput, setNewNicknameInput] = useState('')
   const [isMobileListVisible, setIsMobileListVisible] = useState(true)
+
+  // 🤖 SenAI trong Chat (P6)
+  const [showSenAiConfirmModal, setShowSenAiConfirmModal] = useState(false)
+  const [pendingSenAiQuery, setPendingSenAiQuery] = useState('')
+  const [isSenAiCalling, setIsSenAiCalling] = useState(false)
+  const [senAiSuggestions, setSenAiSuggestions] = useState<any[]>([])
+  const [showSenAiAutocomplete, setShowSenAiAutocomplete] = useState(false)
 
   // Offline send queue
   const [offlineQueue, setOfflineQueue] = useState<SenChatMessage[]>([])
@@ -372,7 +387,8 @@ export default function SenChatPage() {
   const handleSendMessage = async (
     textToSend?: string,
     type: 'text' | 'image' | 'like' | 'system' = 'text',
-    mediaUrl?: string
+    mediaUrl?: string,
+    skipSenAiCheck: boolean = false
   ) => {
     if (isCurrentBlocked) {
       alert('Bạn đã chặn người dùng này. Hãy bỏ chặn để tiếp tục nhắn tin.')
@@ -382,6 +398,14 @@ export default function SenChatPage() {
     const content = (textToSend !== undefined ? textToSend : inputText).trim()
     if (!content && type === 'text') return
     if (!selectedConvId || !currentUser) return
+
+    // P6: Nếu người dùng gửi tin nhắn nhắc @Sen và chưa qua bước xác nhận E2EE
+    if (type === 'text' && !skipSenAiCheck && hasSenAiMention(content)) {
+      setShowSenAiAutocomplete(false)
+      setPendingSenAiQuery(content)
+      setShowSenAiConfirmModal(true)
+      return
+    }
 
     const activeConv = conversations.find((c) => c.id === selectedConvId)
     if (!activeConv) return
@@ -518,6 +542,161 @@ export default function SenChatPage() {
       } catch (e) {
         console.warn('Realtime broadcast error, fallbacked to local:', e)
       }
+    }
+  }
+
+  // 7c. Xác nhận gửi câu hỏi tới SenAI (P6: E2EE Disclosure & Context)
+  const handleConfirmSenAiCall = async ({
+    query,
+    contextMessages,
+  }: {
+    query: string
+    contextMessages: SenChatMessage[]
+  }) => {
+    if (!selectedConvId || !currentUser) return
+    const activeConv = conversations.find((c) => c.id === selectedConvId)
+    if (!activeConv) return
+
+    setIsSenAiCalling(true)
+    try {
+      // 1. Gửi tin nhắn của người dùng vào hội thoại
+      const userMessageText = query.includes('@Sen') ? query : `@Sen ${query}`
+      await handleSendMessage(userMessageText, 'text', undefined, true)
+
+      // 2. Trong nhóm: thông báo cho các thành viên khi có người gọi Sen
+      if (activeConv.isGroup) {
+        const groupNoticeText = formatSenAiGroupNotice(currentUser.name)
+        const sysMsg: SenChatMessage = {
+          id: 'msg_sys_senai_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+          conversationId: selectedConvId,
+          senderId: 'system',
+          senderName: 'Hệ thống',
+          receiverId: activeConv.partnerId,
+          content: groupNoticeText,
+          type: 'system',
+          createdAt: new Date().toISOString(),
+          status: 'sent',
+        }
+        saveLocalMessage(selectedConvId, sysMsg)
+        setMessages((prev) => [...prev, sysMsg])
+
+        if (isOnline) {
+          try {
+            await supabase.channel('sen-chat-realtime-transit').send({
+              type: 'broadcast',
+              event: 'new_e2ee_message',
+              payload: { ...sysMsg, deviceId },
+            })
+          } catch (e) {
+            console.warn('Lỗi broadcast thông báo nhóm:', e)
+          }
+        }
+      }
+
+      // 3. Lấy access token người dùng để kiểm tra quota chính chủ
+      let token: string | null = null
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        token = session?.access_token || null
+      } catch (authErr) {
+        console.warn('Lỗi lấy token:', authErr)
+      }
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      // 4. Gọi API /api/chat/senai (Chỉ gửi dữ liệu người dùng đã đồng ý ra khỏi vòng E2EE)
+      const res = await fetch('/api/chat/senai', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          query: extractSenAiQuery(query) || query,
+          contextMessages: contextMessages.map((m) => ({
+            senderName: m.senderName,
+            content: m.content,
+            isSenAi: m.isSenAi,
+          })),
+          userConfirmed: true,
+          isGroup: !!activeConv.isGroup,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        // Nếu có lỗi quota hoặc rate limit
+        const errorContent = data.error || 'Đã xảy ra lỗi khi trao đổi với SenAI.'
+        const errSysMsg: SenChatMessage = {
+          id: 'msg_senai_err_' + Date.now(),
+          conversationId: selectedConvId,
+          senderId: 'senai',
+          senderName: 'SenAI',
+          receiverId: activeConv.partnerId,
+          content: `⚠️ ${errorContent}`,
+          type: 'text',
+          isSenAi: true,
+          createdAt: new Date().toISOString(),
+          status: 'sent',
+        }
+        saveLocalMessage(selectedConvId, errSysMsg)
+        setMessages((prev) => [...prev, errSysMsg])
+        return
+      }
+
+      // 5. Câu trả lời thành công từ SenAI: Hiển thị với nhãn SenAI và phát E2EE cho các thành viên
+      const replyContent = data.reply || data.text || 'Đã nhận câu hỏi.'
+      const senAiMsg: SenChatMessage = {
+        id: 'msg_senai_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        conversationId: selectedConvId,
+        senderId: 'senai',
+        senderName: 'SenAI',
+        receiverId: activeConv.partnerId,
+        content: replyContent,
+        type: 'text',
+        isSenAi: true,
+        createdAt: new Date().toISOString(),
+        status: 'sent',
+      }
+
+      saveLocalMessage(selectedConvId, senAiMsg)
+      setMessages((prev) => [...prev, senAiMsg])
+
+      // Cập nhật cuộc trò chuyện
+      saveLocalConversation({
+        ...activeConv,
+        lastMessage: `🤖 SenAI: ${replyContent.slice(0, 30)}...`,
+        lastMessageTime: new Date(senAiMsg.createdAt).toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        updatedAt: Date.now(),
+      })
+      refreshConversations()
+
+      // Phát realtime qua Supabase Realtime Transit
+      if (isOnline) {
+        try {
+          await supabase.channel('sen-chat-realtime-transit').send({
+            type: 'broadcast',
+            event: 'new_e2ee_message',
+            payload: { ...senAiMsg, deviceId },
+          })
+        } catch (e) {
+          console.warn('Lỗi broadcast tin nhắn SenAI:', e)
+        }
+      }
+
+      // Cập nhật quota cho toàn hệ thống
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('senai-quota-updated', { detail: data }))
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi gọi SenAI:', err)
+      alert('Có lỗi kết nối tới SenAI: ' + (err?.message || 'Vui lòng thử lại sau.'))
+    } finally {
+      setIsSenAiCalling(false)
     }
   }
 
@@ -970,107 +1149,110 @@ export default function SenChatPage() {
                   return (
                     <div
                       key={msg.id}
-                      className={`group flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                      className={`group flex flex-col ${
+                        msg.type === 'system' ? 'items-center my-1' : isMe ? 'items-end' : 'items-start'
+                      }`}
                     >
-                      <div className="flex items-end gap-1.5 max-w-[80%]">
-                        {msg.type === 'audio' ? (
-                          <div className="flex flex-col">
-                            <ChatVoiceMessageBubble
-                              messageId={msg.id}
-                              attachmentId={msg.attachmentId}
-                              driveFileId={msg.driveFileId}
-                              storageProvider={msg.storageProvider}
-                              storagePath={msg.storagePath}
-                              fileKeyBase64={msg.fileKeyBase64}
-                              duration={msg.duration}
-                              waveform={msg.waveform}
-                              transcription={msg.transcription}
-                              transcriptionLanguage={msg.transcriptionLanguage}
-                              isOutgoing={isMe}
-                              userPlanTier={userPlanTier}
-                              onUpdateTranscription={handleUpdateMessageTranscription}
-                            />
-                            {/* Footer trạng thái tin nhắn thoại */}
-                            <div
-                              className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-slate-400 px-1"
-                            >
-                              <span>
-                                {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-
-                              {isMe && (
+                      {msg.type === 'system' ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100/90 dark:bg-slate-800/90 text-[11px] text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 shadow-xs max-w-[85%] text-center">
+                          <Info className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                          <span>{msg.content}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-end gap-1.5 max-w-[80%]">
+                          {msg.type === 'audio' ? (
+                            <div className="flex flex-col">
+                              <ChatVoiceMessageBubble
+                                messageId={msg.id}
+                                attachmentId={msg.attachmentId}
+                                driveFileId={msg.driveFileId}
+                                storageProvider={msg.storageProvider}
+                                storagePath={msg.storagePath}
+                                fileKeyBase64={msg.fileKeyBase64}
+                                duration={msg.duration}
+                                waveform={msg.waveform}
+                                transcription={msg.transcription}
+                                transcriptionLanguage={msg.transcriptionLanguage}
+                                isOutgoing={isMe}
+                                userPlanTier={userPlanTier}
+                                onUpdateTranscription={handleUpdateMessageTranscription}
+                              />
+                              {/* Footer trạng thái tin nhắn thoại */}
+                              <div
+                                className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-slate-400 px-1"
+                              >
                                 <span>
-                                  {msg.status === 'sending' ? (
-                                    <Clock className="h-3 w-3" />
-                                  ) : msg.status === 'received' || msg.status === 'seen' ? (
-                                    <CheckCheck
-                                      className={`h-3 w-3 ${
-                                        readReceiptsEnabled && msg.status === 'seen' ? 'text-cyan-500' : ''
-                                      }`}
-                                    />
-                                  ) : (
-                                    <Check className="h-3 w-3" />
-                                  )}
+                                  {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
                                 </span>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            className={`relative rounded-3xl p-3.5 shadow-sm transition ${
-                              isMe
-                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/20'
-                                : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
-                            }`}
-                          >
-                            {/* Đính kèm tệp / ảnh mã hóa E2EE */}
-                            {(msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
-                              <div className="mb-2">
-                                <ChatAttachmentBubble
-                                  attachmentId={msg.attachmentId}
-                                  driveFileId={msg.driveFileId}
-                                  storageProvider={msg.storageProvider}
-                                  fileKeyBase64={msg.fileKeyBase64}
-                                  fileName={msg.attachmentName || 'Tệp đính kèm'}
-                                  fileSize={msg.attachmentSize}
-                                  mimeType={msg.mimeType}
-                                  fileType={
-                                    msg.type === 'image'
-                                      ? 'image'
-                                      : (msg.mimeType?.startsWith('video/') || msg.attachmentName?.match(/\.(mp4|webm|mov|mkv|avi)$/i))
-                                      ? 'video'
-                                      : 'file'
-                                  }
-                                />
-                              </div>
-                            )}
 
-                            {/* Rendering tin nhắn text hoặc links an toàn */}
-                            {(!msg.attachmentId || (msg.content && !msg.content.startsWith('[Tệp đính kèm:'))) && (
-                              <div className="text-xs leading-relaxed break-words">
-                                {textParts.map((part, pIdx) => {
-                                  if (part.type === 'link') {
-                                    return (
-                                      <a
-                                        key={pIdx}
-                                        href={part.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={`underline font-medium ${
-                                          isMe ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400'
+                                {isMe && (
+                                  <span>
+                                    {msg.status === 'sending' ? (
+                                      <Clock className="h-3 w-3" />
+                                    ) : msg.status === 'received' || msg.status === 'seen' ? (
+                                      <CheckCheck
+                                        className={`h-3 w-3 ${
+                                          readReceiptsEnabled && msg.status === 'seen' ? 'text-cyan-500' : ''
                                         }`}
-                                      >
-                                        {part.content}
-                                      </a>
-                                    )
-                                  }
-                                  return <span key={pIdx}>{part.content}</span>
-                                })}
+                                      />
+                                    ) : (
+                                      <Check className="h-3 w-3" />
+                                    )}
+                                  </span>
+                                )}
                               </div>
-                            )}
+                            </div>
+                          ) : (
+                            <div
+                              className={`relative rounded-3xl p-3.5 shadow-sm transition ${
+                                msg.isSenAi || msg.senderId === 'senai'
+                                  ? 'border border-purple-200/90 bg-gradient-to-br from-purple-50/90 via-white/95 to-indigo-50/80 text-slate-800 backdrop-blur-md dark:border-purple-800/80 dark:bg-gradient-to-br dark:from-purple-950/40 dark:to-slate-900/90 dark:text-slate-100 shadow-purple-500/10'
+                                  : isMe
+                                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/20'
+                                  : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
+                              }`}
+                            >
+                              {/* Nhãn SenAI đặc trưng */}
+                              {(msg.isSenAi || msg.senderId === 'senai') && (
+                                <div className="mb-2 flex items-center gap-1.5 px-2 py-0.5 w-fit rounded-lg bg-gradient-to-r from-purple-500/15 to-indigo-500/15 border border-purple-500/20 text-purple-700 dark:text-purple-300 font-bold text-[10px]">
+                                  <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                                  <span>SenAI</span>
+                                </div>
+                              )}
+
+                              {/* Đính kèm tệp / ảnh mã hóa E2EE */}
+                              {(msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
+                                <div className="mb-2">
+                                  <ChatAttachmentBubble
+                                    attachmentId={msg.attachmentId}
+                                    driveFileId={msg.driveFileId}
+                                    storageProvider={msg.storageProvider}
+                                    fileKeyBase64={msg.fileKeyBase64}
+                                    fileName={msg.attachmentName || 'Tệp đính kèm'}
+                                    fileSize={msg.attachmentSize}
+                                    mimeType={msg.mimeType}
+                                    fileType={
+                                      msg.type === 'image'
+                                        ? 'image'
+                                        : (msg.mimeType?.startsWith('video/') || msg.attachmentName?.match(/\.(mp4|webm|mov|mkv|avi)$/i))
+                                        ? 'video'
+                                        : 'file'
+                                    }
+                                  />
+                                </div>
+                              )}
+
+                              {/* Rendering tin nhắn text hoặc công thức KaTeX / TikZ an toàn */}
+                              {(!msg.attachmentId || (msg.content && !msg.content.startsWith('[Tệp đính kèm:'))) && (
+                                <ChatMessageContent
+                                  content={msg.content}
+                                  isSenAi={msg.isSenAi || msg.senderId === 'senai'}
+                                  isMe={isMe}
+                                />
+                              )}
 
                             {/* Footer trạng thái tin nhắn */}
                             <div
@@ -1136,7 +1318,8 @@ export default function SenChatPage() {
                           )}
                         </div>
                       </div>
-                    </div>
+                    )}
+                  </div>
                   )
                 })
               )}
@@ -1163,7 +1346,55 @@ export default function SenChatPage() {
             )}
 
             {/* Input area */}
-            <div className="border-t border-slate-200/60 bg-white/90 p-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 pb-[max(12px,env(safe-area-inset-bottom))]">
+            <div className="relative border-t border-slate-200/60 bg-white/90 p-3 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90 pb-[max(12px,env(safe-area-inset-bottom))]">
+              {/* Gợi ý autocomplete @Sen */}
+              {showSenAiAutocomplete && senAiSuggestions.length > 0 && (
+                <div className="absolute bottom-full left-4 right-4 mb-2 rounded-2xl bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 shadow-xl overflow-hidden z-20 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <div className="px-3 py-1.5 bg-purple-500/10 border-b border-purple-100 dark:border-purple-900 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                      Gợi ý gọi trợ lý AI
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSenAiAutocomplete(false)}
+                      className="text-slate-400 hover:text-slate-600 text-xs px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {senAiSuggestions.map((sug) => (
+                    <button
+                      key={sug.id}
+                      type="button"
+                      onClick={() => {
+                        const newText = inputText.replace(/(?:^|\s)@[a-z0-9_]*$/i, (match) => {
+                          const prefix = match.startsWith(' ') ? ' ' : ''
+                          return prefix + '@Sen '
+                        })
+                        setInputText(newText)
+                        setShowSenAiAutocomplete(false)
+                      }}
+                      className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-left transition"
+                    >
+                      <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs text-slate-800 dark:text-slate-100">{sug.trigger}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 font-semibold">
+                            {sug.name}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {sug.description}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {isRecordingVoice ? (
                 <ChatVoiceRecorder
                   conversationId={selectedConvId || ''}
@@ -1215,8 +1446,14 @@ export default function SenChatPage() {
                   <input
                     type="text"
                     value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Nhập tin nhắn bảo mật E2EE..."
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setInputText(val)
+                      const suggestions = getSenAiAutocompleteSuggestions(val)
+                      setSenAiSuggestions(suggestions)
+                      setShowSenAiAutocomplete(suggestions.length > 0)
+                    }}
+                    placeholder="Nhập tin nhắn bảo mật E2EE (gõ @Sen để hỏi AI)..."
                     className="min-h-[44px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
 
@@ -1487,6 +1724,19 @@ export default function SenChatPage() {
           }}
         />
       )}
+
+      {/* Modal Xác nhận E2EE khi gọi @Sen (SenAI) trong chat (P6) */}
+      <ChatSenAiConfirmModal
+        isOpen={showSenAiConfirmModal}
+        onClose={() => {
+          setShowSenAiConfirmModal(false)
+          setPendingSenAiQuery('')
+        }}
+        onConfirm={handleConfirmSenAiCall}
+        initialQuery={pendingSenAiQuery}
+        recentMessages={messages}
+        isLoading={isSenAiCalling}
+      />
     </div>
   )
 }

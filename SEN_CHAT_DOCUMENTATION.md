@@ -62,6 +62,11 @@ Mặc dù giao diện và routing tạm thời được ẩn để nhường ch�
 |---|---|
 | `app/chat/page.tsx` | Trang chính của Sen Chat với đầy đủ giao diện Floating Sidebar, Liquid Glass, hộp chat, danh bạ, cài đặt |
 | `public/sen-chat-logo.jpg` | Asset logo Sen Chat chính thức được tạo mới |
+| `lib/senChatAi.ts` / `.mjs` | Module tích hợp gọi @Sen (SenAI) trong chat E2EE, ranh giới bảo mật, chống prompt injection, rate limit |
+| `components/chat/ChatSenAiConfirmModal.tsx` | Hộp thoại xác nhận E2EE disclosure và chọn N tin nhắn ngữ cảnh trước khi gửi ra ngoài |
+| `components/chat/ChatMessageContent.tsx` | Thành phần render nội dung tin nhắn, công thức toán KaTeX và đồ thị TikZ bằng SVG |
+| `app/api/chat/senai/route.ts` | Endpoint server xử lý câu hỏi @Sen, kiểm tra quota người dùng và ghi log câu hỏi |
+| `tests/sen-chat-p6.test.mjs` | Bộ kiểm thử toàn diện P6 cho tính năng gọi @Sen trong Sen Chat |
 | `middleware.ts` | Khối `isChatSubdomain` (đã được ghi chú tạm đóng, có thể bật lại bất kỳ lúc nào) |
 | `SEN_CHAT_DOCUMENTATION.md` | Tài liệu phục hồi kiến trúc này |
 
