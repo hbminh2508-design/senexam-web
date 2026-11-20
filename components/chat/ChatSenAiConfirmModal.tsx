@@ -73,8 +73,8 @@ export default function ChatSenAiConfirmModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-indigo-500/10 dark:from-purple-950/40 dark:to-indigo-950/40 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white flex items-center justify-center shadow-md shadow-purple-500/20">
-              <Sparkles className="h-5 w-5" />
+            <div className="h-9 w-9 rounded-xl bg-slate-900/90 flex items-center justify-center p-1 shadow-md shadow-purple-500/20 overflow-hidden ring-1 ring-purple-500/30">
+              <img src="/senai-logo.png" alt="SenAI" className="h-full w-full object-contain" />
             </div>
             <div>
               <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">

@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { UserPlus, Search, AlertCircle, CheckCircle2, X, Flag, Shield, Lock } from 'lucide-react'
+import { UserPlus, Search, AlertCircle, CheckCircle2, X, Flag, Shield, Lock, Info } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ChatFriendModalProps {
   isOpen: boolean
@@ -18,6 +19,7 @@ export default function ChatFriendModal({
   const [loading, setLoading] = useState(false)
   const [searchResult, setSearchResult] = useState<any | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isSelfEmail, setIsSelfEmail] = useState(false)
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null)
 
   // Report state
@@ -27,18 +29,26 @@ export default function ChatFriendModal({
 
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!emailInput.trim()) return
+    const cleanEmail = emailInput.trim().toLowerCase()
+    if (!cleanEmail) return
 
     setLoading(true)
     setErrorMessage(null)
+    setIsSelfEmail(false)
     setSearchResult(null)
     setActionSuccessMsg(null)
 
     try {
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
+
       const resp = await fetch('/api/chat/friend-lookup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailInput.trim() }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email: cleanEmail }),
       })
 
       if (resp.status === 429) {
@@ -47,6 +57,12 @@ export default function ChatFriendModal({
       }
 
       const data = await resp.json()
+      if (data?.is_self) {
+        setIsSelfEmail(true)
+        setErrorMessage(data.message || 'Đây là email tài khoản của chính bạn.')
+        return
+      }
+
       if (data?.found && data?.user) {
         setSearchResult(data.user)
       } else {
@@ -63,9 +79,14 @@ export default function ChatFriendModal({
     if (!searchResult?.id) return
     setLoading(true)
     try {
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
       const resp = await fetch('/api/chat/friend-invitation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ action: 'send', targetUserId: searchResult.id }),
       })
       const data = await resp.json()
@@ -88,9 +109,14 @@ export default function ChatFriendModal({
 
     setReportLoading(true)
     try {
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
       const resp = await fetch('/api/chat/friend-invitation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'report',
           targetUserId: searchResult.id,
@@ -116,17 +142,17 @@ export default function ChatFriendModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
               <UserPlus className="h-5 w-5" />
             </div>
             <div>
               <h3 className="font-bold text-slate-800 dark:text-slate-100">
-                Kết Bạn Qua Email Chính Xác
+                Tìm & Kết Bạn
               </h3>
-              <p className="text-[11px] text-slate-400">
-                Bảo vệ quyền riêng tư — Tra cứu băm SHA-256 chống rà quét
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Bảo vệ chống rà quét danh bạ (SHA-256)
               </p>
             </div>
           </div>
@@ -139,17 +165,17 @@ export default function ChatFriendModal({
           </button>
         </div>
 
-        {/* Search input form */}
+        {/* Form tìm kiếm */}
         <form onSubmit={handleLookup} className="mt-4">
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Địa chỉ Email của bạn học / đồng nghiệp:
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
+            Nhập chính xác địa chỉ Email người dùng
           </label>
           <div className="mt-1.5 flex gap-2">
             <input
               type="email"
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="ví dụ: banhoc@senexam.edu.vn"
+              placeholder="ví dụ: hocvien@senexam.edu.vn"
               required
               className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-xs text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
@@ -165,9 +191,17 @@ export default function ChatFriendModal({
         </form>
 
         {errorMessage && (
-          <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-            <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
-            <span>{errorMessage}</span>
+          <div className={`mt-3 flex items-center gap-2 rounded-xl p-3 text-xs ${
+            isSelfEmail
+              ? 'border border-amber-300/60 bg-amber-50 text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300'
+              : 'border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300'
+          }`}>
+            {isSelfEmail ? (
+              <Info className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            ) : (
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+            )}
+            <span className="font-medium">{errorMessage}</span>
           </div>
         )}
 
@@ -201,23 +235,27 @@ export default function ChatFriendModal({
                 <button
                   type="button"
                   onClick={() => {
-                    onStartChatWithUser?.(searchResult)
                     onClose()
+                    onStartChatWithUser?.(searchResult)
                   }}
-                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-emerald-700"
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700"
                 >
                   Nhắn tin ngay
                 </button>
               ) : searchResult.friendshipStatus === 'pending' ? (
-                <span className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-slate-100 py-2.5 text-xs font-medium text-slate-500 dark:bg-slate-800">
-                  Đã gửi lời mời kết bạn
-                </span>
+                <button
+                  type="button"
+                  disabled
+                  className="min-h-[44px] flex-1 rounded-xl bg-slate-200 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                >
+                  Đã gửi lời mời
+                </button>
               ) : (
                 <button
                   type="button"
                   onClick={handleSendInvite}
                   disabled={loading}
-                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50"
                 >
                   <UserPlus className="h-4 w-4" /> Gửi lời mời kết bạn
                 </button>
@@ -227,7 +265,7 @@ export default function ChatFriendModal({
                 type="button"
                 onClick={() => setShowReportModal(true)}
                 title="Báo cáo người dùng"
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:hover:bg-rose-950/30"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"
               >
                 <Flag className="h-4 w-4" />
               </button>
@@ -235,36 +273,43 @@ export default function ChatFriendModal({
           </div>
         )}
 
-        {/* Report Dialog */}
+        {/* Modal Báo cáo người dùng */}
         {showReportModal && (
-          <form onSubmit={handleReportUser} className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
-            <h4 className="text-xs font-bold text-rose-600">Báo cáo tài khoản:</h4>
+          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50/70 p-4 dark:border-rose-900/50 dark:bg-rose-950/30">
+            <h5 className="font-bold text-xs text-rose-800 dark:text-rose-200">
+              Lý do báo cáo vi phạm
+            </h5>
             <textarea
               value={reportReason}
               onChange={(e) => setReportReason(e.target.value)}
-              placeholder="Nêu lý do vi phạm (Spam, giả mạo, nội dung không phù hợp...)"
-              required
-              rows={3}
-              className="mt-1.5 w-full rounded-xl border border-slate-200 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
+              placeholder="Spam, quấy rối, ngôn từ thù địch..."
+              rows={2}
+              className="mt-2 w-full rounded-xl border border-rose-200 bg-white p-2 text-xs outline-none focus:border-rose-500 dark:border-rose-900 dark:bg-slate-900 dark:text-slate-100"
             />
             <div className="mt-2 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowReportModal(false)}
-                className="rounded-lg px-3 py-1.5 text-xs text-slate-500"
+                className="rounded-lg px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200/50 dark:text-slate-300"
               >
                 Hủy
               </button>
               <button
-                type="submit"
-                disabled={reportLoading}
-                className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white"
+                type="button"
+                onClick={handleReportUser}
+                disabled={reportLoading || !reportReason.trim()}
+                className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
               >
                 {reportLoading ? 'Đang gửi...' : 'Gửi báo cáo'}
               </button>
             </div>
-          </form>
+          </div>
         )}
+
+        <div className="mt-5 flex items-center gap-1.5 text-[11px] text-slate-400">
+          <Shield className="h-3.5 w-3.5 text-emerald-600" />
+          <span>Email được băm SHA-256 một chiều, không thể truy ngược.</span>
+        </div>
       </div>
     </div>
   )

@@ -52,6 +52,7 @@ import {
   Timer,
   AlertTriangle,
   Settings,
+  UserPlus,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -259,6 +260,17 @@ export default function SenChatPage() {
           setCurrentUser(synchedUser)
           if (profile?.read_receipts_enabled !== undefined) {
             setReadReceiptsEnabled(profile.read_receipts_enabled)
+          }
+
+          // Tự động đăng ký thiết bị hiện tại lên chat_devices và ghi nhận nhật ký kiểm toán
+          const { data: sessionData } = await supabase.auth.getSession()
+          const token = sessionData?.session?.access_token
+          if (token) {
+            fetch('/api/chat/device-management', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'register', deviceId }),
+            }).catch((devErr) => console.warn('Lỗi tự động đăng ký thiết bị Sen Chat:', devErr))
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP với returnUrl=/chat
@@ -862,6 +874,11 @@ export default function SenChatPage() {
     return messages.filter((m) => m.content.toLowerCase().includes(q))
   }, [messages, chatSearchQuery])
 
+  // Tổng số tin nhắn chưa đọc
+  const totalUnreadCount = useMemo(() => {
+    return conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0)
+  }, [conversations])
+
   const activeConv = conversations.find((c) => c.id === selectedConvId)
   const wallpaperObj = CHAT_WALLPAPERS.find((w) => w.id === currentWallpaper) || CHAT_WALLPAPERS[0]
 
@@ -872,76 +889,173 @@ export default function SenChatPage() {
       }`}
     >
       {/* =========================================================================
-          CỘT TRÁI: DANH SÁCH HỘI THOẠI & KẾT BẠN (340px)
+          CỘT TẬN CÙNG BÊN TRÁI: THANH DỌC TÁC VỤ (FAR-LEFT VERTICAL DOCK)
          ========================================================================= */}
-      <aside
-        className={`flex h-full w-full flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-xl md:w-[360px] md:shrink-0 dark:border-slate-800 dark:bg-slate-900/95 ${
-          !isMobileListVisible ? 'hidden md:flex' : 'flex'
+      <nav
+        aria-label="Thanh tác vụ chính Sen Chat"
+        className={`h-full w-16 md:w-[68px] shrink-0 flex-col items-center justify-between border-r border-slate-200/80 bg-slate-100/90 py-3.5 dark:border-slate-800 dark:bg-slate-900/90 z-20 ${
+          isMobileListVisible ? 'flex' : 'hidden md:flex'
         }`}
       >
-        {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <SenChatLogo className="h-9 w-9 shadow-md" />
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400">
-                  Sen Chat
+        {/* Top: Logo Sen Chat */}
+        <div className="flex flex-col items-center gap-4">
+          <Link
+            href="/chat"
+            title="Sen Chat — Bảo mật đầu-cuối E2EE"
+            className="group relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-md shadow-emerald-500/10 transition-transform hover:scale-105 active:scale-95 dark:bg-slate-800"
+          >
+            <img
+              src="/sen-chat-logo.png"
+              alt="Sen Chat"
+              className="h-9 w-9 rounded-xl object-cover"
+            />
+            <span
+              className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"
+              title="Mã hóa đầu-cuối Signal & MLS"
+            >
+              <Lock className="h-2 w-2 text-white" />
+            </span>
+          </Link>
+
+          {/* Đường kẻ phân cách */}
+          <div className="h-px w-8 bg-slate-200 dark:bg-slate-800" />
+
+          {/* Nhóm các nút tác vụ dọc (Icon Dock) */}
+          <div className="flex flex-col items-center gap-2">
+            {/* Tin nhắn */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveRailTab('messages')
+                setFilterMode('all')
+              }}
+              title="Tin nhắn hội thoại"
+              className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl transition-all ${
+                activeRailTab === 'messages'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 scale-105'
+                  : 'text-slate-600 hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400'
+              }`}
+            >
+              <MessageSquare className="h-5 w-5" />
+              {totalUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
                 </span>
-                <span className="flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  <Lock className="h-2.5 w-2.5" /> E2EE
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                {currentUser?.name || 'Đang kết nối...'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={toggleTheme}
-              title={isDarkMode ? 'Chế độ Sáng' : 'Chế độ Tối'}
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-            >
-              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              )}
             </button>
 
+            {/* Thêm bạn bè qua Email */}
             <button
               type="button"
-              onClick={() => setShowSettingsModal(true)}
-              title="Cài đặt Sen Chat"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+              onClick={() => setShowFriendModal(true)}
+              title="Tìm & Thêm bạn qua Email chính xác"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
             >
-              <Settings className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+              <UserPlus className="h-5 w-5" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowDeviceManagerModal(true)}
-              title="Trung tâm thiết bị & bảo mật"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-            >
-              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            </button>
-
+            {/* Tạo nhóm MLS RFC 9420 */}
             <button
               type="button"
               onClick={() => setShowCreateGroupModal(true)}
               title="Tạo nhóm chat mới (MLS RFC 9420)"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:text-teal-300 transition-colors"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-teal-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-teal-400"
             >
-              <Users className="h-4 w-4" />
+              <Users className="h-5 w-5" />
             </button>
 
+            {/* Trung tâm bảo mật & Thiết bị */}
+            <button
+              type="button"
+              onClick={() => setShowDeviceManagerModal(true)}
+              title="Trung tâm thiết bị & Bảo mật"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+            >
+              <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            </button>
+
+            {/* Cài đặt */}
+            <button
+              type="button"
+              onClick={() => setShowSettingsModal(true)}
+              title="Cài đặt Sen Chat"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            >
+              <Settings className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Actions: Theme Toggle & User Avatar */}
+        <div className="flex flex-col items-center gap-3">
+          {/* Theme Toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title={isDarkMode ? 'Chuyển sang Chế độ Sáng' : 'Chuyển sang Chế độ Tối'}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 transition hover:bg-white hover:text-amber-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-amber-400"
+          >
+            {isDarkMode ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
+          </button>
+
+          {/* User Avatar */}
+          <button
+            type="button"
+            onClick={() => setShowSettingsModal(true)}
+            title={`${currentUser?.name || 'Người dùng'} — Bấm để mở Cài đặt / Đăng xuất`}
+            className="group relative flex h-11 w-11 items-center justify-center rounded-2xl transition-transform hover:scale-105 active:scale-95"
+          >
+            {currentUser?.avatar ? (
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="h-10 w-10 rounded-2xl object-cover ring-2 ring-emerald-500/40"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 font-bold text-white shadow-sm ring-2 ring-emerald-500/30">
+                {(currentUser?.name || 'S').substring(0, 1).toUpperCase()}
+              </div>
+            )}
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 ${
+                isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+              }`}
+              title={isOnline ? 'Đang trực tuyến' : 'Ngoại tuyến'}
+            />
+          </button>
+        </div>
+      </nav>
+
+      {/* =========================================================================
+          CỘT BÊN CẠNH: DANH SÁCH HỘI THOẠI & KẾT BẠN (320px - 360px)
+         ========================================================================= */}
+      <aside
+        className={`h-full w-full flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-xl md:w-[340px] lg:w-[360px] md:shrink-0 dark:border-slate-800 dark:bg-slate-900/95 ${
+          !isMobileListVisible ? 'hidden md:flex' : 'flex'
+        }`}
+      >
+        {/* Top Header của Danh sách hội thoại */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 dark:border-slate-800">
+          <div>
+            <h2 className="font-extrabold text-base tracking-tight text-slate-800 dark:text-slate-100">
+              Đoạn chat
+            </h2>
+            <p className="text-[11px] text-slate-400 font-medium truncate max-w-[180px]">
+              {currentUser?.name || 'Đang kết nối...'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+              <Lock className="h-2.5 w-2.5" /> E2EE
+            </span>
             <button
               type="button"
               onClick={() => setShowFriendModal(true)}
               title="Thêm bạn qua Email chính xác"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700"
+              className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 transition-colors"
             >
-              <Plus className="h-4 w-4" />
+              <UserPlus className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -955,15 +1069,15 @@ export default function SenChatPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm bạn bè hoặc tin nhắn..."
-              className="min-h-[44px] w-full rounded-2xl border border-slate-200 bg-slate-100/70 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
+              className="min-h-[42px] w-full rounded-2xl border border-slate-200 bg-slate-100/70 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
             />
           </div>
 
-          <div className="mt-2 flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+          <div className="mt-2.5 flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
             <button
               type="button"
               onClick={() => setFilterMode('all')}
-              className={`min-h-[36px] flex-1 rounded-lg text-xs font-semibold transition ${
+              className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
                 filterMode === 'all'
                   ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
@@ -974,13 +1088,13 @@ export default function SenChatPage() {
             <button
               type="button"
               onClick={() => setFilterMode('unread')}
-              className={`min-h-[36px] flex-1 rounded-lg text-xs font-semibold transition ${
+              className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
                 filterMode === 'unread'
                   ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
-              Chưa đọc
+              Chưa đọc {totalUnreadCount > 0 ? `(${totalUnreadCount})` : ''}
             </button>
           </div>
         </div>
@@ -1283,7 +1397,7 @@ export default function SenChatPage() {
                               {/* Nhãn SenAI đặc trưng */}
                               {(msg.isSenAi || msg.senderId === 'senai') && (
                                 <div className="mb-2 flex items-center gap-1.5 px-2 py-0.5 w-fit rounded-lg bg-gradient-to-r from-purple-500/15 to-indigo-500/15 border border-purple-500/20 text-purple-700 dark:text-purple-300 font-bold text-[10px]">
-                                  <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                                  <img src="/senai-logo.png" alt="SenAI" className="h-3.5 w-3.5 object-contain" />
                                   <span>SenAI</span>
                                 </div>
                               )}
@@ -1454,8 +1568,8 @@ export default function SenChatPage() {
                       }}
                       className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-left transition"
                     >
-                      <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                        <Sparkles className="h-4 w-4" />
+                      <div className="h-8 w-8 rounded-xl bg-slate-900/90 p-0.5 flex items-center justify-center shrink-0 shadow-sm ring-1 ring-purple-500/30 overflow-hidden">
+                        <img src="/senai-logo.png" alt="SenAI" className="h-full w-full object-contain" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -1557,14 +1671,83 @@ export default function SenChatPage() {
             </div>
           </>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
-            <SenChatLogo className="h-16 w-16 opacity-70" />
-            <h3 className="mt-4 font-bold text-slate-700 text-base dark:text-slate-200">
-              Sen Chat — Bảo Mật Đầu-Cuối
-            </h3>
-            <p className="mt-1 text-xs text-slate-400 max-w-sm">
-              Chọn một hội thoại hoặc thêm bạn mới bằng email để bắt đầu trò chuyện an toàn.
-            </p>
+          <div className="flex h-full flex-1 flex-col items-center justify-center p-6 text-center select-none overflow-y-auto">
+            <div className="max-w-lg w-full flex flex-col items-center space-y-6">
+              <div className="relative">
+                <img
+                  src="/sen-chat-logo.png"
+                  alt="Sen Chat"
+                  className="h-20 w-20 rounded-3xl shadow-xl shadow-emerald-500/15 object-cover"
+                />
+                <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md ring-2 ring-white dark:ring-slate-900">
+                  <Lock className="h-3.5 w-3.5" />
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-extrabold text-xl text-slate-800 dark:text-slate-100 tracking-tight">
+                  Sen Chat — Bảo Mật Đầu-Cuối
+                </h3>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-md">
+                  Nhắn tin và gọi điện riêng tư theo tiêu chuẩn Signal Protocol & IETF MLS RFC 9420. Dữ liệu của bạn được mã hóa hoàn toàn trên thiết bị này.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
+                <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs mb-1">
+                    <Lock className="h-3.5 w-3.5" /> Signal Double Ratchet
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Khóa xoay liên tục sau mỗi tin nhắn. Khóa cũ tự hủy, chống đọc lén lịch sử.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400 font-bold text-xs mb-1">
+                    <Users className="h-3.5 w-3.5" /> Nhóm MLS RFC 9420
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Bảo mật nhóm phân cấp cây Ratchet Tree mới nhất của hiệp hội Internet IETF.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs mb-1">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Mã Safety Number
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Xác minh dấu vân tay số người nhận để phát hiện giả mạo danh tính.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 backdrop-blur-sm">
+                  <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-xs mb-1">
+                    <img src="/senai-logo.png" alt="SenAI" className="h-3.5 w-3.5 object-contain" /> Trợ Lý SenAI
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Hỗ trợ giải bài, KaTeX và TikZ với xác nhận rời vùng E2EE minh bạch.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFriendModal(true)}
+                  className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 active:scale-95"
+                >
+                  <UserPlus className="h-4 w-4" /> Thêm bạn qua Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateGroupModal(true)}
+                  className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  <Users className="h-4 w-4" /> Tạo nhóm MLS
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>

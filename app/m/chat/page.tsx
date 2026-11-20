@@ -378,6 +378,18 @@ export default function MobileChatPage() {
             const pair = generateIdentityKeyPair()
             await storeIdentityPrivateKey('identity_e2ee', pair.privateKey, window)
           }
+
+          // Tự động đăng ký thiết bị hiện tại lên chat_devices
+          const { data: sessionData } = await supabase.auth.getSession()
+          const token = sessionData?.session?.access_token
+          if (token) {
+            const mDeviceId = getOrCreateDeviceId()
+            fetch('/api/chat/device-management', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'register', deviceId: mDeviceId, platform: 'android' }),
+            }).catch(() => {})
+          }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP
           router.replace('/new-idp?returnUrl=/m/chat')
@@ -1176,6 +1188,12 @@ export default function MobileChatPage() {
                         : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-black/5 dark:border-white/5 rounded-bl-xs'
                     }`}
                   >
+                    {msg.isSenAi && (
+                      <div className="mb-1.5 flex items-center gap-1.5 px-2 py-0.5 w-fit rounded-lg bg-gradient-to-r from-purple-500/15 to-indigo-500/15 border border-purple-500/20 text-purple-700 dark:text-purple-300 font-bold text-[10px]">
+                        <img src="/senai-logo.png" alt="SenAI" className="h-3 w-3 object-contain" />
+                        <span>SenAI</span>
+                      </div>
+                    )}
                     {/* Thẻ đính kèm tệp / ảnh */}
                     {msg.type === 'file' || msg.type === 'image' ? (
                       <ChatAttachmentBubble

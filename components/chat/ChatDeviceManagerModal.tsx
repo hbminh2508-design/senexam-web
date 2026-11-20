@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { Laptop, Smartphone, Globe, ShieldAlert, LogOut, RefreshCw, X, ShieldCheck } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ChatDevice {
   id: string
@@ -41,14 +42,38 @@ export default function ChatDeviceManagerModal({
   const loadData = async () => {
     setLoading(true)
     try {
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+
       const [devResp, logResp] = await Promise.all([
-        fetch('/api/chat/device-management'),
-        fetch('/api/chat/audit-log'),
+        fetch(`/api/chat/device-management?currentDeviceId=${encodeURIComponent(currentDeviceId)}`, { headers }),
+        fetch('/api/chat/audit-log', { headers }),
       ])
       const devData = await devResp.json()
       const logData = await logResp.json()
 
-      if (devData?.devices) setDevices(devData.devices)
+      let currentDevices: ChatDevice[] = Array.isArray(devData?.devices) ? devData.devices : []
+      const hasCurrent = currentDevices.some((d) => d.device_id === currentDeviceId)
+
+      // Nếu chưa có thiết bị hiện tại trong DB, tự động đăng ký ngay lập tức
+      if (!hasCurrent && token) {
+        try {
+          const regResp = await fetch('/api/chat/device-management', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ action: 'register', deviceId: currentDeviceId }),
+          })
+          const regData = await regResp.json()
+          if (regData?.device) {
+            currentDevices = [regData.device, ...currentDevices.filter((d) => d.device_id !== currentDeviceId)]
+          }
+        } catch (regErr) {
+          console.warn('Lỗi tự động đăng ký thiết bị hiện tại:', regErr)
+        }
+      }
+
+      setDevices(currentDevices)
       if (logData?.logs) setAuditLogs(logData.logs)
     } catch (e) {
       console.warn('Lỗi tải dữ liệu thiết bị/audit:', e)
@@ -67,10 +92,15 @@ export default function ChatDeviceManagerModal({
     if (!confirm('Bạn có chắc chắn muốn đăng xuất và thu hồi khóa của thiết bị này từ xa?')) return
 
     try {
+      const { data: authData } = await supabase.auth.getSession()
+      const token = authData.session?.access_token
       const resp = await fetch('/api/chat/device-management', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action: 'revoke', deviceId }),
       })
       const result = await resp.json()
       if (result?.success) {
@@ -148,7 +178,12 @@ export default function ChatDeviceManagerModal({
         <div className="mt-4 flex-1 overflow-y-auto pr-1">
           {activeTab === 'devices' && (
             <div className="space-y-3">
-              {devices.length === 0 ? (
+              {loading && devices.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-2">
+                  <RefreshCw className="h-5 w-5 animate-spin text-emerald-600" />
+                  <p className="text-xs">Đang tải danh sách thiết bị...</p>
+                </div>
+              ) : devices.length === 0 ? (
                 <p className="py-8 text-center text-xs text-slate-400">Chưa có thiết bị nào</p>
               ) : (
                 devices.map((device) => {
@@ -158,10 +193,10 @@ export default function ChatDeviceManagerModal({
 
                   return (
                     <div
-                      key={device.id}
+                      key={device.id || device.device_id}
                       className={`flex items-center justify-between rounded-2xl border p-3.5 transition ${
                         isCurrent
-                          ? 'border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/20'
+                          ? 'border-emerald-500/40 bg-emerald-50/40 dark:border-emerald-500/40 dark:bg-emerald-950/30'
                           : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40'
                       }`}
                     >
@@ -181,13 +216,13 @@ export default function ChatDeviceManagerModal({
                               {device.device_name || 'Sen Chat Device'}
                             </span>
                             {isCurrent && (
-                              <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                Thiết bị này
+                              <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+                                (Thiết bị này)
                               </span>
                             )}
                           </div>
                           <p className="text-[11px] text-slate-400">
-                            Hoạt động: {new Date(device.last_seen_at).toLocaleString('vi-VN')}
+                            Hoạt động: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString('vi-VN') : 'Vừa xong'}
                           </p>
                         </div>
                       </div>
@@ -227,7 +262,7 @@ export default function ChatDeviceManagerModal({
                         {!['device_registered', 'identity_key_changed', 'device_revoked', 'replay_blocked'].includes(log.event_type) && log.event_type}
                       </div>
                       <p className="text-[11px] text-slate-400">
-                        {log.details ? JSON.stringify(log.details) : ''}
+                        {log.details ? (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)) : ''}
                       </p>
                     </div>
                     <span className="text-[10px] text-slate-400 shrink-0">
