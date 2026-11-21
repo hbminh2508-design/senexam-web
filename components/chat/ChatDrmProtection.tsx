@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { ShieldAlert, ShieldCheck, AlertTriangle, EyeOff, Lock, X } from 'lucide-react'
+import { ShieldAlert, ShieldCheck, AlertTriangle, X } from 'lucide-react'
 import { checkDeviceCompliance, isScreenCaptureKey, DeviceComplianceStatus } from '@/lib/senChatDeviceCompliance'
 
 interface ChatDrmProtectionProps {
@@ -18,6 +18,22 @@ export default function ChatDrmProtection({
   const [compliance, setCompliance] = useState<DeviceComplianceStatus | null>(null)
   const [showComplianceModal, setShowComplianceModal] = useState(false)
   const blackoutTimeoutRef = useRef<any>(null)
+
+  // Quản lý class DRM trên document element
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (isBlackedOut) {
+      document.documentElement.classList.add('senchat-hardware-drm-active')
+      document.body.classList.add('senchat-hardware-drm-active')
+    } else {
+      document.documentElement.classList.remove('senchat-hardware-drm-active')
+      document.body.classList.remove('senchat-hardware-drm-active')
+    }
+    return () => {
+      document.documentElement.classList.remove('senchat-hardware-drm-active')
+      document.body.classList.remove('senchat-hardware-drm-active')
+    }
+  }, [isBlackedOut])
 
   // 1. Kiểm tra tiêu chuẩn thiết bị khi mount
   useEffect(() => {
@@ -41,7 +57,7 @@ export default function ChatDrmProtection({
   useEffect(() => {
     if (!isEnabled || typeof window === 'undefined') return
 
-    const triggerBlackout = (reason: 'screenshot' | 'blur', durationMs = 3000) => {
+    const triggerBlackout = (reason: 'screenshot' | 'blur', durationMs = 2000) => {
       setBlackoutReason(reason)
       setIsBlackedOut(true)
 
@@ -67,27 +83,27 @@ export default function ChatDrmProtection({
       if (isScreenCaptureKey(e)) {
         e.preventDefault?.()
         e.stopPropagation?.()
-        triggerBlackout('screenshot', 4000)
+        triggerBlackout('screenshot', 2500)
       }
     }
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'PrintScreen' || e.key === 'Snapshot') {
-        triggerBlackout('screenshot', 4000)
+        triggerBlackout('screenshot', 2500)
       }
     }
 
     const handleBlur = () => {
-      // Khi cửa sổ mất tiêu điểm (ví dụ phần mềm chụp màn hình ngoài hoặc OBS đang hoạt động)
-      triggerBlackout('blur', 0) // Giữ đen cho tới khi người dùng quay lại
+      // Khi cửa sổ mất tiêu điểm do công cụ capture / screen recording
+      triggerBlackout('blur', 0) // Giữ che mờ cho tới khi người dùng quay lại cửa sổ
     }
 
     const handleFocus = () => {
-      // Khi người dùng quay trở lại cửa sổ
+      // Khi người dùng quay trở lại cửa sổ, hiệu ứng mờ tan biến êm dịu tức thì
       if (blackoutTimeoutRef.current) clearTimeout(blackoutTimeoutRef.current)
       blackoutTimeoutRef.current = setTimeout(() => {
         setIsBlackedOut(false)
-      }, 500)
+      }, 150)
     }
 
     const handleVisibilityChange = () => {
@@ -97,7 +113,7 @@ export default function ChatDrmProtection({
         if (blackoutTimeoutRef.current) clearTimeout(blackoutTimeoutRef.current)
         blackoutTimeoutRef.current = setTimeout(() => {
           setIsBlackedOut(false)
-        }, 500)
+        }, 150)
       }
     }
 
@@ -119,7 +135,7 @@ export default function ChatDrmProtection({
 
   return (
     <>
-      {/* 1. CSS CHỐNG IN ẤN VÀ SAO CHÉP KHI Ở CHẾ ĐỘ BẢO MẬT (DRM PRINT DEFENSE) */}
+      {/* 1. CSS CHỐNG IN ẤN, SAO CHÉP VÀ LỚP BẢO VỆ DRM PHẦN CỨNG KIỂU NETFLIX */}
       <style dangerouslySetInnerHTML={{
         __html: `
           @media print {
@@ -135,54 +151,32 @@ export default function ChatDrmProtection({
             user-select: none !important;
             -webkit-touch-callout: none !important;
           }
+          /* Cơ chế DRM phần cứng kiểu Netflix: che mờ sâu và tối đen toàn bộ khi capture */
+          html.senchat-hardware-drm-active body,
+          body.senchat-hardware-drm-active {
+            filter: blur(50px) brightness(0.02) contrast(150%) !important;
+            -webkit-filter: blur(50px) brightness(0.02) contrast(150%) !important;
+            transform: translateZ(0) !important;
+            -webkit-transform: translateZ(0) !important;
+            pointer-events: none !important;
+            transition: filter 0.15s ease-out !important;
+          }
         `,
       }} />
 
-      {/* 2. MÀN CHE ĐEN TOÀN MÀN HÌNH KIỂU NETFLIX (BLACKOUT CURTAIN) */}
+      {/* 2. LỚP CHE MỜ SÂU VÀ CHỐNG PHẢN CHIẾU (HARDWARE DRM OBFUSCATION FILTER - KHÔNG DÙNG POPUP) */}
       {isBlackedOut && (
         <div
-          role="alert"
-          aria-live="assertive"
-          onClick={() => setIsBlackedOut(false)}
-          className="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-black p-6 text-white select-none cursor-pointer transition-opacity duration-150 animate-in fade-in"
-        >
-          <div className="flex max-w-md flex-col items-center space-y-4 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-900 border border-emerald-500/30 text-emerald-400 shadow-2xl ring-4 ring-rose-500/20">
-              <EyeOff className="h-8 w-8 text-rose-500 animate-pulse" />
-            </div>
-
-            <div>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 font-bold text-[11px] uppercase tracking-wider mb-2 border border-rose-500/30">
-                <Lock className="h-3 w-3 inline" /> Blackout Curtain Active
-              </span>
-              <h3 className="text-lg font-extrabold text-white tracking-tight">
-                Bảo Vệ Bản Quyền & Nội Dung Riêng Tư E2EE
-              </h3>
-            </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed">
-              {blackoutReason === 'screenshot' &&
-                'Màn hình đã được tạm thời che đen do phát hiện thao tác chụp ảnh hoặc ghi hình màn hình.'}
-              {blackoutReason === 'blur' &&
-                'Màn hình được che đen tự động khi cửa sổ chat mất tiêu điểm nhằm chống phần mềm quay lén chạy ngầm.'}
-              {blackoutReason === 'devtools' &&
-                'Phát hiện Developer Tools đang mở. Nội dung E2EE được che đen để bảo vệ khóa mật mã.'}
-            </p>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setIsBlackedOut(false)
-                }}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-5 py-2.5 text-xs font-bold text-white backdrop-blur-md transition hover:bg-white/20 active:scale-95 border border-white/20 shadow-lg"
-              >
-                Nhấp chuột hoặc quay lại cửa sổ để tiếp tục
-              </button>
-            </div>
-          </div>
-        </div>
+          aria-hidden="true"
+          className="fixed inset-0 z-[999999] bg-black/95 pointer-events-none transition-opacity duration-150 animate-in fade-in"
+          style={{
+            filter: 'blur(50px) brightness(0.02) contrast(150%)',
+            WebkitFilter: 'blur(50px) brightness(0.02) contrast(150%)',
+            backdropFilter: 'blur(50px) brightness(0.02) contrast(150%)',
+            WebkitBackdropFilter: 'blur(50px) brightness(0.02) contrast(150%)',
+            transform: 'translateZ(0)',
+          }}
+        />
       )}
 
       {/* 3. HUY HIỆU ĐỘ CHUẨN THIẾT BỊ (DEVICE COMPLIANCE BADGE - TÙY CHỌN) */}

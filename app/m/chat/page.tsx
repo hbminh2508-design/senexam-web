@@ -56,6 +56,7 @@ import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
 import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
+import ChatCallModal, { ChatIncomingCallDialog, CallSignalPayload } from '@/components/chat/ChatCallModal'
 import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
@@ -162,6 +163,39 @@ export default function MobileChatPage() {
   // Trạng thái FLAG_SECURE
   const [flagSecureActive, setFlagSecureActive] = useState(true)
 
+  // 📞 Cuộc gọi WebRTC E2EE Mobile
+  const [activeCallMode, setActiveCallMode] = useState<'none' | 'voice' | 'video'>('none')
+  const [incomingCall, setIncomingCall] = useState<CallSignalPayload | null>(null)
+  const [activeCallIsIncoming, setActiveCallIsIncoming] = useState(false)
+  const [activeCallId, setActiveCallId] = useState<string | null>(null)
+
+  // Xử lý chấp nhận / từ chối cuộc gọi đến WebRTC
+  const handleAcceptIncomingCall = useCallback((call: CallSignalPayload) => {
+    setIncomingCall(null)
+    setActiveCallId(call.callId)
+    setActiveCallIsIncoming(true)
+    setActiveCallMode(call.callMode)
+    if (call.conversationId) {
+      setSelectedConvId(call.conversationId)
+      setView('conversation')
+    }
+  }, [])
+
+  const handleDeclineIncomingCall = useCallback((call: CallSignalPayload) => {
+    supabase.channel('sen-chat-realtime-transit').send({
+      type: 'broadcast',
+      event: 'call_response',
+      payload: {
+        callId: call.callId,
+        conversationId: call.conversationId,
+        callerId: call.callerId,
+        receiverId: currentUser?.id,
+        accepted: false,
+      },
+    }).catch(() => {})
+    setIncomingCall(null)
+  }, [currentUser])
+
   // Các Modal hỗ trợ
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false)
@@ -212,6 +246,28 @@ export default function MobileChatPage() {
     showSafetyModal,
     showSetupPinModal,
   ])
+
+  // Lắng nghe tín hiệu cuộc gọi đến WebRTC E2EE qua Realtime Channel
+  useEffect(() => {
+    if (!currentUser) return
+    const channel = supabase
+      .channel('sen-chat-realtime-transit')
+      .on('broadcast', { event: 'call_request' }, ({ payload }) => {
+        if (!payload || !currentUser) return
+        if (payload.receiverId === currentUser.id) {
+          setIncomingCall(payload)
+        }
+      })
+      .on('broadcast', { event: 'call_end' }, ({ payload }) => {
+        if (!payload) return
+        setIncomingCall((prev) => (prev?.callId === payload.callId ? null : prev))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUser])
 
   // Lắng nghe sự kiện Back Button từ CapacitorManager
   useEffect(() => {
@@ -1224,6 +1280,30 @@ export default function MobileChatPage() {
             <div className="flex items-center gap-0.5 shrink-0">
               <button
                 type="button"
+                onClick={() => {
+                  setActiveCallId(null)
+                  setActiveCallIsIncoming(false)
+                  setActiveCallMode('voice')
+                }}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 hover:text-emerald-600 active:scale-95 transition"
+                aria-label="Gọi thoại mã hóa"
+              >
+                <Phone className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCallId(null)
+                  setActiveCallIsIncoming(false)
+                  setActiveCallMode('video')
+                }}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 hover:text-emerald-600 active:scale-95 transition"
+                aria-label="Gọi video mã hóa"
+              >
+                <Video className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setView('room-info')}
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 active:scale-95 transition"
                 aria-label="Thông tin phòng"
@@ -1822,6 +1902,36 @@ export default function MobileChatPage() {
           router.replace('/new-idp?returnUrl=/m/chat')
         }}
       />
+
+      {/* HỘP THOẠI CHUÔNG CUỘC GỌI ĐẾN WEBRTC E2EE */}
+      {incomingCall && (
+        <ChatIncomingCallDialog
+          payload={incomingCall}
+          onAccept={() => handleAcceptIncomingCall(incomingCall)}
+          onDecline={() => handleDeclineIncomingCall(incomingCall)}
+        />
+      )}
+
+      {/* GIAO DIỆN CUỘC GỌI THOẠI & VIDEO WEBRTC E2EE */}
+      {activeCallMode !== 'none' && currentUser && (activeConversation || incomingCall) && (
+        <ChatCallModal
+          callMode={activeCallMode}
+          isIncoming={activeCallIsIncoming}
+          initialCallId={activeCallId || undefined}
+          conversationId={activeConversation?.id || incomingCall?.conversationId || selectedConvId || ''}
+          partnerId={activeConversation?.partnerId || incomingCall?.callerId || selectedConvId || ''}
+          partnerName={activeConversation?.partnerName || incomingCall?.callerName || 'Bạn bè'}
+          partnerAvatar={activeConversation?.partnerAvatar || incomingCall?.callerAvatar}
+          currentUserId={currentUser.id}
+          currentUserName={currentUser.name}
+          currentUserAvatar={currentUser.avatar}
+          onClose={() => {
+            setActiveCallMode('none')
+            setActiveCallIsIncoming(false)
+            setActiveCallId(null)
+          }}
+        />
+      )}
 
       {/* MODAL: QUẢN LÝ THIẾT BỊ */}
       <ChatDeviceManagerModal

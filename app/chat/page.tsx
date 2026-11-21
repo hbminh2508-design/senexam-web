@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useMemo } from 'react'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import {
   MessageSquare,
   Users,
@@ -68,6 +68,7 @@ import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
 import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
+import ChatCallModal, { ChatIncomingCallDialog, CallSignalPayload } from '@/components/chat/ChatCallModal'
 import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
@@ -180,16 +181,42 @@ export default function SenChatPage() {
   // Offline send queue
   const [offlineQueue, setOfflineQueue] = useState<SenChatMessage[]>([])
 
-  // 📞 Call mock
+  // 📞 WebRTC E2EE Calls
   const [activeCallMode, setActiveCallMode] = useState<'none' | 'voice' | 'video'>('none')
-  const [callDuration, setCallDuration] = useState(0)
-  const [isMicMuted, setIsMicMuted] = useState(false)
-  const [isCameraOff, setIsCameraOff] = useState(false)
+  const [incomingCall, setIncomingCall] = useState<CallSignalPayload | null>(null)
+  const [activeCallIsIncoming, setActiveCallIsIncoming] = useState(false)
+  const [activeCallId, setActiveCallId] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const deviceId = useMemo(() => getOrCreateDeviceId(), [])
+
+  // Xử lý cuộc gọi đến WebRTC
+  const handleAcceptIncomingCall = useCallback((call: CallSignalPayload) => {
+    setIncomingCall(null)
+    setActiveCallId(call.callId)
+    setActiveCallIsIncoming(true)
+    setActiveCallMode(call.callMode)
+    if (call.conversationId) {
+      setSelectedConvId(call.conversationId)
+    }
+  }, [])
+
+  const handleDeclineIncomingCall = useCallback((call: CallSignalPayload) => {
+    supabase.channel('sen-chat-realtime-transit').send({
+      type: 'broadcast',
+      event: 'call_response',
+      payload: {
+        callId: call.callId,
+        conversationId: call.conversationId,
+        callerId: call.callerId,
+        receiverId: currentUser?.id,
+        accepted: false,
+      },
+    }).catch(() => {})
+    setIncomingCall(null)
+  }, [currentUser])
 
   // 1. Khởi tạo & Kiểm tra Dark Mode / Theme / Online Status
   useEffect(() => {
@@ -489,6 +516,16 @@ export default function SenChatPage() {
         if (selectedConvId === targetConvId) {
           setMessages((prev) => [...prev, incomingMsg])
         }
+      })
+      .on('broadcast', { event: 'call_request' }, ({ payload }) => {
+        if (!payload || !currentUser) return
+        if (payload.receiverId === currentUser.id) {
+          setIncomingCall(payload)
+        }
+      })
+      .on('broadcast', { event: 'call_end' }, ({ payload }) => {
+        if (!payload) return
+        setIncomingCall((prev) => (prev?.callId === payload.callId ? null : prev))
       })
       .subscribe()
 
@@ -1451,7 +1488,11 @@ export default function SenChatPage() {
 
                 <button
                   type="button"
-                  onClick={() => setActiveCallMode('voice')}
+                  onClick={() => {
+                    setActiveCallId(null)
+                    setActiveCallIsIncoming(false)
+                    setActiveCallMode('voice')
+                  }}
                   title="Gọi thoại mã hóa"
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-800"
                 >
@@ -1460,7 +1501,11 @@ export default function SenChatPage() {
 
                 <button
                   type="button"
-                  onClick={() => setActiveCallMode('video')}
+                  onClick={() => {
+                    setActiveCallId(null)
+                    setActiveCallIsIncoming(false)
+                    setActiveCallMode('video')
+                  }}
                   title="Gọi video mã hóa"
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-800"
                 >
@@ -2199,6 +2244,36 @@ export default function SenChatPage() {
         recentMessages={messages}
         isLoading={isSenAiCalling}
       />
+
+      {/* Hộp thoại chuông cuộc gọi đến WebRTC E2EE */}
+      {incomingCall && (
+        <ChatIncomingCallDialog
+          payload={incomingCall}
+          onAccept={() => handleAcceptIncomingCall(incomingCall)}
+          onDecline={() => handleDeclineIncomingCall(incomingCall)}
+        />
+      )}
+
+      {/* Giao diện cuộc gọi thoại & video WebRTC E2EE */}
+      {activeCallMode !== 'none' && currentUser && (activeConv || incomingCall) && (
+        <ChatCallModal
+          callMode={activeCallMode}
+          isIncoming={activeCallIsIncoming}
+          initialCallId={activeCallId || undefined}
+          conversationId={activeConv?.id || incomingCall?.conversationId || selectedConvId || ''}
+          partnerId={activeConv?.partnerId || incomingCall?.callerId || selectedConvId || ''}
+          partnerName={activeConv?.partnerName || incomingCall?.callerName || 'Bạn bè'}
+          partnerAvatar={activeConv?.partnerAvatar || incomingCall?.callerAvatar}
+          currentUserId={currentUser.id}
+          currentUserName={currentUser.name}
+          currentUserAvatar={currentUser.avatar}
+          onClose={() => {
+            setActiveCallMode('none')
+            setActiveCallIsIncoming(false)
+            setActiveCallId(null)
+          }}
+        />
+      )}
 
       {/* Modal Cài Đặt Sen Chat */}
       <ChatSettingsModal

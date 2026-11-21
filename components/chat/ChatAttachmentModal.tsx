@@ -88,11 +88,13 @@ export default function ChatAttachmentModal({
     const validation = validateChatFileSize(file.size, userPlanTier)
     if (!validation.allowed) {
       setLimitError({
-        message: validation.error || 'Tệp vượt quá hạn mức cho phép của gói hiện tại',
+        message: validation.error || `Tệp của bạn (${formatBytes(file.size)}) vượt quá hạn mức ${formatBytes(validation.limitBytes)} của gói ${validation.currentTier === 'free' ? 'Miễn phí' : validation.currentTier}. Hãy nâng cấp lên Sen VIP để gửi tệp này.`,
         suggestedTier: validation.suggestedTier,
         upgradeUrl: validation.upgradeUrl,
       })
       return
+    } else {
+      setLimitError(null)
     }
 
     // 2. Kiểm tra tệp thực thi
@@ -125,6 +127,17 @@ export default function ChatAttachmentModal({
   // Thực hiện mã hóa chunk E2EE và tải lên
   const handleStartUpload = async () => {
     try {
+      // Pre-check trước khi bắt đầu stream mã hóa
+      const preValidation = validateChatFileSize(file.size, userPlanTier)
+      if (!preValidation.allowed) {
+        setLimitError({
+          message: preValidation.error || `Tệp của bạn (${formatBytes(file.size)}) vượt quá hạn mức ${formatBytes(preValidation.limitBytes)} của gói ${preValidation.currentTier === 'free' ? 'Miễn phí' : preValidation.currentTier}. Hãy nâng cấp lên Sen VIP để gửi tệp này.`,
+          suggestedTier: preValidation.suggestedTier,
+          upgradeUrl: preValidation.upgradeUrl,
+        })
+        return
+      }
+
       setIsUploading(true)
       setErrorMsg(null)
       setProgress(5)
@@ -188,16 +201,6 @@ export default function ChatAttachmentModal({
           : 'Đang gửi blob mã hóa lên Supabase Storage...'
       )
 
-      // 4. Chuẩn bị FormData gửi lên API
-      const formData = new FormData()
-      formData.append('file', encryptedFileBlob, 'encrypted_blob.bin')
-      formData.append('conversationId', conversationId)
-      formData.append('fileType', fileType)
-      formData.append('fileSizeBytes', String(file.size))
-      formData.append('encryptedFileName', encryptedMetadata.ciphertext)
-      formData.append('encryptedMimeType', encryptedMetadata.iv)
-      formData.append('encryptedFileHash', `sha256-${Date.now()}`)
-
       // 4.1 Lấy phiên đăng nhập Supabase và làm mới nếu sắp hết hạn
       let token: string | null = null
       try {
@@ -239,56 +242,223 @@ export default function ChatAttachmentModal({
         throw new Error('Chưa đăng nhập. Vui lòng đăng nhập lại để tiếp tục.')
       }
 
-      // Đính kèm token vào FormData phòng trường hợp header bị chặn trên Safari
-      formData.append('authToken', token)
+      let finalAttachment: any = null
 
-      // 5. Gửi lên server với cơ chế thử lại (Retry) và đầy đủ Authorization header + token param
-      let response: Response | null = null
-      let uploadAttempts = 0
-      const maxUploadAttempts = 3
-      const uploadUrl = `/api/chat/attachments/upload?token=${encodeURIComponent(token)}`
+      // Phân luồng:
+      // - Nếu là tệp lớn (> 4MB) hoặc không phải ảnh (video, ipa, zip, binary): Upload trực tiếp lên Supabase Storage
+      // - Nếu là ảnh <= 4MB: Tiếp tục gửi qua FormData để xử lý lưu trữ Google Drive API bảo mật
+      const isDirectStorageUpload = !isImage || file.size > 4 * 1024 * 1024
 
-      while (uploadAttempts < maxUploadAttempts) {
-        uploadAttempts++
+      if (isDirectStorageUpload) {
+        setProgress(60)
+        setStatusText('Đang khởi tạo tải lên trực tiếp kho lưu trữ...')
+
+        // B1. Gọi API prepare_upload để xác thực hạn mức & lấy storagePath / signed URL
+        const prepRes = await fetch(`/api/chat/attachments/upload?token=${encodeURIComponent(token)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            action: 'prepare_upload',
+            conversationId,
+            fileSizeBytes: file.size,
+            fileName: file.name,
+            fileType,
+          }),
+          signal: abortController.signal,
+        })
+
+        const prepRawText = await prepRes.text()
+        let prepData: any = null
         try {
-          response = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            body: formData,
-            signal: abortController.signal,
-          })
-          if (response.ok) break
-          if (response.status === 413 || response.status === 403 || response.status === 401) {
-            // Không retry nếu vi phạm hạn mức, chưa đăng nhập hoặc không có quyền
-            break
+          prepData = JSON.parse(prepRawText)
+        } catch {
+          if (prepRes.status === 413) {
+            throw new Error('Dung lượng tệp vượt quá hạn mức tải lên của máy chủ hoặc gói cước hiện tại.')
           }
-        } catch (fetchErr: any) {
-          if (abortController.signal.aborted) throw fetchErr
-          if (uploadAttempts >= maxUploadAttempts) throw fetchErr
-          setStatusText(`Kết nối gián đoạn, đang thử lại lần ${uploadAttempts + 1}/${maxUploadAttempts}...`)
-          await new Promise((r) => setTimeout(r, 1500))
+          throw new Error(`Lỗi khởi tạo tải lên (${prepRes.status})`)
         }
-      }
 
-      if (!response) {
-        throw new Error('Không thể kết nối đến máy chủ sau 3 lần thử')
-      }
-
-      const resData = await response.json()
-
-      if (!response.ok) {
-        if (response.status === 413 && resData.suggestedTier) {
-          setLimitError({
-            message: resData.error || 'Dung lượng tệp vượt quá hạn mức gói của bạn',
-            suggestedTier: resData.suggestedTier,
-            upgradeUrl: resData.upgradeUrl,
-          })
-          setIsUploading(false)
-          return
+        if (!prepRes.ok) {
+          if (prepRes.status === 413 && prepData?.suggestedTier) {
+            setLimitError({
+              message: prepData.error || 'Dung lượng tệp vượt quá hạn mức gói của bạn',
+              suggestedTier: prepData.suggestedTier,
+              upgradeUrl: prepData.upgradeUrl,
+            })
+            setIsUploading(false)
+            return
+          }
+          throw new Error(prepData?.error || `Lỗi chuẩn bị tải lên (${prepRes.status})`)
         }
-        throw new Error(resData.error || `Lỗi tải lên (${response.status})`)
+
+        const storagePath = prepData.storagePath
+        const signedUploadUrl = prepData.signedUploadUrl
+        const signedToken = prepData.token
+
+        // B2. Tải blob mã hóa trực tiếp lên Supabase Storage bucket chat_attachments
+        setProgress(72)
+        setStatusText(`Đang truyền blob mã hóa lên Supabase Storage (${formatBytes(file.size)})...`)
+
+        let directUploadSuccess = false
+        if (signedUploadUrl) {
+          try {
+            const putRes = await fetch(signedUploadUrl, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/octet-stream',
+              },
+              body: encryptedFileBlob,
+              signal: abortController.signal,
+            })
+            if (putRes.ok) {
+              directUploadSuccess = true
+            }
+          } catch (putErr: any) {
+            console.warn('[SEN_CHAT_UPLOAD] Lỗi tải qua signed upload URL, thử fallback:', putErr)
+          }
+        }
+
+        if (!directUploadSuccess && signedToken) {
+          try {
+            const { error: signedErr } = await supabase.storage
+              .from('chat_attachments')
+              .uploadToSignedUrl(storagePath, signedToken, encryptedFileBlob)
+            if (!signedErr) {
+              directUploadSuccess = true
+            }
+          } catch {}
+        }
+
+        if (!directUploadSuccess) {
+          const { error: uploadErr } = await supabase.storage
+            .from('chat_attachments')
+            .upload(storagePath, encryptedFileBlob, {
+              contentType: 'application/octet-stream',
+              upsert: true,
+            })
+          if (uploadErr) {
+            throw new Error(`Lỗi tải trực tiếp lên kho lưu trữ: ${uploadErr.message}`)
+          }
+          directUploadSuccess = true
+        }
+
+        // B3. Xác nhận hoàn tất và lưu siêu dữ liệu vào bảng chat_attachments
+        setProgress(90)
+        setStatusText('Đang xác nhận siêu dữ liệu tệp đính kèm...')
+
+        const compRes = await fetch(`/api/chat/attachments/upload?token=${encodeURIComponent(token)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            action: 'complete_direct_upload',
+            conversationId,
+            storagePath,
+            fileSizeBytes: file.size,
+            fileType,
+            encryptedFileName: encryptedMetadata.ciphertext,
+            encryptedMimeType: encryptedMetadata.iv,
+            encryptedThumbnail: null,
+            encryptedFileHash: `sha256-${Date.now()}`,
+            messageId: null,
+          }),
+          signal: abortController.signal,
+        })
+
+        const compRawText = await compRes.text()
+        let compData: any = null
+        try {
+          compData = JSON.parse(compRawText)
+        } catch {
+          if (compRes.status === 413) {
+            throw new Error('Dung lượng tệp vượt quá hạn mức tải lên của máy chủ hoặc gói cước hiện tại.')
+          }
+          throw new Error(`Lỗi xác nhận tệp (${compRes.status})`)
+        }
+
+        if (!compRes.ok) {
+          throw new Error(compData?.error || 'Lỗi lưu thông tin tệp đính kèm')
+        }
+
+        finalAttachment = compData.attachment
+      } else {
+        // 4. Chuẩn bị FormData gửi lên API (ảnh <= 4MB qua Google Drive)
+        const formData = new FormData()
+        formData.append('file', encryptedFileBlob, 'encrypted_blob.bin')
+        formData.append('conversationId', conversationId)
+        formData.append('fileType', fileType)
+        formData.append('fileSizeBytes', String(file.size))
+        formData.append('encryptedFileName', encryptedMetadata.ciphertext)
+        formData.append('encryptedMimeType', encryptedMetadata.iv)
+        formData.append('encryptedFileHash', `sha256-${Date.now()}`)
+        formData.append('authToken', token)
+
+        // 5. Gửi lên server với cơ chế thử lại (Retry) và đầy đủ Authorization header + token param
+        let response: Response | null = null
+        let uploadAttempts = 0
+        const maxUploadAttempts = 3
+        const uploadUrl = `/api/chat/attachments/upload?token=${encodeURIComponent(token)}`
+
+        while (uploadAttempts < maxUploadAttempts) {
+          uploadAttempts++
+          try {
+            response = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              body: formData,
+              signal: abortController.signal,
+            })
+            if (response.ok) break
+            if (response.status === 413 || response.status === 403 || response.status === 401) {
+              break
+            }
+          } catch (fetchErr: any) {
+            if (abortController.signal.aborted) throw fetchErr
+            if (uploadAttempts >= maxUploadAttempts) throw fetchErr
+            setStatusText(`Kết nối gián đoạn, đang thử lại lần ${uploadAttempts + 1}/${maxUploadAttempts}...`)
+            await new Promise((r) => setTimeout(r, 1500))
+          }
+        }
+
+        if (!response) {
+          throw new Error('Không thể kết nối đến máy chủ sau 3 lần thử')
+        }
+
+        const rawResText = await response.text()
+        let resData: any = null
+        try {
+          resData = JSON.parse(rawResText)
+        } catch {
+          if (response.status === 413) {
+            throw new Error('Dung lượng tệp vượt quá hạn mức tải lên của máy chủ hoặc gói cước hiện tại.')
+          }
+          if (response.status === 502 || response.status === 504) {
+            throw new Error('Máy chủ lưu trữ phản hồi chậm hoặc tạm thời gián đoạn. Vui lòng thử lại.')
+          }
+          throw new Error(`Máy chủ phản hồi mã ${response.status}. Vui lòng thử lại.`)
+        }
+
+        if (!response.ok) {
+          if (response.status === 413 && resData?.suggestedTier) {
+            setLimitError({
+              message: resData.error || 'Dung lượng tệp vượt quá hạn mức gói của bạn',
+              suggestedTier: resData.suggestedTier,
+              upgradeUrl: resData.upgradeUrl,
+            })
+            setIsUploading(false)
+            return
+          }
+          throw new Error(resData?.error || `Lỗi tải lên (${response.status})`)
+        }
+
+        finalAttachment = resData.attachment
       }
 
       setProgress(100)
@@ -296,16 +466,16 @@ export default function ChatAttachmentModal({
 
       // Báo thành công ra ngoài để chèn vào tin nhắn E2EE
       onSuccess({
-        id: resData.attachment.id,
+        id: finalAttachment.id,
         fileKeyBase64,
-        driveFileId: resData.attachment.driveFileId,
-        storageProvider: resData.attachment.storageProvider,
-        storagePath: resData.attachment.storagePath,
+        driveFileId: finalAttachment.driveFileId,
+        storageProvider: finalAttachment.storageProvider,
+        storagePath: finalAttachment.storagePath,
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type || 'application/octet-stream',
         fileType,
-        expiresAt: resData.attachment.expiresAt,
+        expiresAt: finalAttachment.expiresAt,
       })
 
       onClose()
@@ -365,7 +535,15 @@ export default function ChatAttachmentModal({
                 className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs shadow-md"
               >
                 <Sparkles className="h-4 w-4" />
-                <span>Nâng Cấp Gói Để Tăng Dung Lượng</span>
+                <span>
+                  {limitError.suggestedTier === 'vip'
+                    ? 'Nâng Cấp Lên Sen VIP (250MB)'
+                    : limitError.suggestedTier === 'premium'
+                    ? 'Nâng Cấp Lên Sen Premium (500MB)'
+                    : limitError.suggestedTier === 'premium_plus'
+                    ? 'Nâng Cấp Lên Sen Premium+ (1GB)'
+                    : 'Nâng Cấp Gói Để Tăng Dung Lượng'}
+                </span>
                 <ArrowUpRight className="h-4 w-4" />
               </a>
             </div>

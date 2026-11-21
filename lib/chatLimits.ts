@@ -131,6 +131,17 @@ export function validateChatFileSize(
     premium_plus: 'Sen Premium+ (1GB)',
   }
 
+  const tierDisplayNames: Record<string, string> = {
+    free: 'Miễn phí',
+    lite: 'Miễn phí',
+    vip: 'Sen VIP',
+    sen_one_lite: 'Sen One Lite',
+    premium: 'Sen Premium',
+    premium_plus: 'Sen Premium+',
+    sen_one: 'Sen One',
+  }
+  const currentTierDisplay = tierDisplayNames[currentTier] || currentTier
+
   return {
     allowed: false,
     limitBytes,
@@ -138,9 +149,9 @@ export function validateChatFileSize(
     currentTier,
     suggestedTier,
     upgradeUrl: '/new-pay?tab=vip',
-    error: `Tệp dung lượng ${formatBytes(fileSizeBytes)} vượt quá hạn mức ${formatBytes(
+    error: `Tệp của bạn (${formatBytes(fileSizeBytes)}) vượt quá hạn mức ${formatBytes(
       limitBytes
-    )} của gói hiện tại. Vui lòng nâng cấp lên ${tierNames[suggestedTier]} để gửi tệp này.`,
+    )} của gói ${currentTierDisplay}. Hãy nâng cấp lên ${tierNames[suggestedTier]} để gửi tệp này.`,
   }
 }
 

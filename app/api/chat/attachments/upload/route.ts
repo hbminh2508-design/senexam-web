@@ -57,10 +57,22 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get('content-type') || ''
 
-    // 2. XỬ LÝ INTENT PRE-CHECK (Kiểm tra trước khi bắt đầu stream upload)
+    // 2. XỬ LÝ INTENT PRE-CHECK, PREPARE_UPLOAD HOẶC COMPLETE_DIRECT_UPLOAD
     if (contentType.includes('application/json')) {
       const body = await request.json().catch(() => ({}))
-      const { conversationId, fileSizeBytes, fileName, fileType } = body
+      const {
+        action,
+        conversationId,
+        fileSizeBytes,
+        fileName,
+        fileType = 'file',
+        storagePath,
+        encryptedFileName,
+        encryptedMimeType,
+        encryptedThumbnail,
+        encryptedFileHash,
+        messageId,
+      } = body
 
       if (!conversationId || typeof fileSizeBytes !== 'number') {
         return NextResponse.json({ error: 'Thiếu conversationId hoặc fileSizeBytes' }, { status: 400 })
@@ -121,6 +133,88 @@ export async function POST(request: NextRequest) {
           },
           { status: 413 }
         )
+      }
+
+      // NẾU LÀ ACTION PREPARE_UPLOAD (Chuẩn bị upload trực tiếp lên Storage cho file lớn)
+      if (action === 'prepare_upload') {
+        const generatedPath = `${conversationId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.enc`
+        try {
+          await supabaseAdmin.storage.createBucket('chat_attachments', { public: false })
+        } catch {}
+
+        let signedUploadUrl: string | null = null
+        let signedToken: string | null = null
+        try {
+          const { data: signedData } = await supabaseAdmin.storage
+            .from('chat_attachments')
+            .createSignedUploadUrl(generatedPath)
+          if (signedData) {
+            signedUploadUrl = signedData.signedUrl
+            signedToken = signedData.token
+          }
+        } catch (sErr) {
+          console.warn('[SEN_CHAT_UPLOAD] createSignedUploadUrl warning:', sErr)
+        }
+
+        return NextResponse.json({
+          allowed: true,
+          limitBytes: validation.limitBytes,
+          currentTier: validation.currentTier,
+          storageProvider: 'supabase_storage',
+          storageBucket: 'chat_attachments',
+          storagePath: generatedPath,
+          signedUploadUrl,
+          token: signedToken,
+        })
+      }
+
+      // NẾU LÀ ACTION COMPLETE_DIRECT_UPLOAD (Sau khi client đã upload blob lên Supabase Storage)
+      if (action === 'complete_direct_upload') {
+        if (!storagePath) {
+          return NextResponse.json({ error: 'Thiếu storagePath của tệp đã tải lên' }, { status: 400 })
+        }
+
+        const driveFileId = `supabase:${storagePath}`
+
+        const { data: attachmentRecord, error: dbErr } = await supabaseAdmin
+          .from('chat_attachments')
+          .insert({
+            conversation_id: conversationId,
+            message_id: messageId || null,
+            uploader_id: user.id,
+            drive_file_id: driveFileId,
+            storage_provider: 'supabase_storage',
+            storage_path: storagePath,
+            encrypted_file_hash: encryptedFileHash || 'sha256-unverified',
+            file_size_bytes: fileSizeBytes,
+            mime_type: 'application/octet-stream',
+            file_name_encrypted: encryptedFileName || null,
+            mime_type_encrypted: encryptedMimeType || null,
+            thumbnail_encrypted: encryptedThumbnail || null,
+            is_deleted: false,
+            expires_at: new Date(Date.now() + ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+            is_pinned_permanent: false,
+          })
+          .select()
+          .single()
+
+        if (dbErr) {
+          console.error('[SEN_CHAT_UPLOAD] Lỗi lưu metadata chat_attachments:', dbErr)
+          return NextResponse.json({ error: 'Lỗi ghi nhận metadata tệp' }, { status: 500 })
+        }
+
+        return NextResponse.json({
+          success: true,
+          attachment: {
+            id: attachmentRecord.id,
+            driveFileId,
+            storageProvider: 'supabase_storage',
+            storagePath,
+            fileSizeBytes,
+            createdAt: attachmentRecord.created_at,
+            expiresAt: attachmentRecord.expires_at,
+          },
+        })
       }
 
       return NextResponse.json({
