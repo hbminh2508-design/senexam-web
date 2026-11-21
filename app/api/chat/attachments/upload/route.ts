@@ -138,6 +138,10 @@ export async function POST(request: NextRequest) {
       // NẾU LÀ ACTION PREPARE_UPLOAD (Chuẩn bị upload trực tiếp lên Storage cho file lớn)
       if (action === 'prepare_upload') {
         const generatedPath = `${conversationId}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.enc`
+        const storageBucket = 'sen-chat-attachments'
+        try {
+          await supabaseAdmin.storage.createBucket(storageBucket, { public: false })
+        } catch {}
         try {
           await supabaseAdmin.storage.createBucket('chat_attachments', { public: false })
         } catch {}
@@ -146,11 +150,20 @@ export async function POST(request: NextRequest) {
         let signedToken: string | null = null
         try {
           const { data: signedData } = await supabaseAdmin.storage
-            .from('chat_attachments')
+            .from(storageBucket)
             .createSignedUploadUrl(generatedPath)
           if (signedData) {
             signedUploadUrl = signedData.signedUrl
             signedToken = signedData.token
+          } else {
+            // Fallback sang bucket chat_attachments
+            const { data: fallbackSigned } = await supabaseAdmin.storage
+              .from('chat_attachments')
+              .createSignedUploadUrl(generatedPath)
+            if (fallbackSigned) {
+              signedUploadUrl = fallbackSigned.signedUrl
+              signedToken = fallbackSigned.token
+            }
           }
         } catch (sErr) {
           console.warn('[SEN_CHAT_UPLOAD] createSignedUploadUrl warning:', sErr)
@@ -161,7 +174,7 @@ export async function POST(request: NextRequest) {
           limitBytes: validation.limitBytes,
           currentTier: validation.currentTier,
           storageProvider: 'supabase_storage',
-          storageBucket: 'chat_attachments',
+          storageBucket,
           storagePath: generatedPath,
           signedUploadUrl,
           token: signedToken,

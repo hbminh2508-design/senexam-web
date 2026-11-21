@@ -86,9 +86,19 @@ export async function GET(request: NextRequest) {
     } else {
       // Stream từ Supabase Storage
       const storagePath = attachment.storage_path || attachment.drive_file_id.replace(/^supabase:/, '')
-      const { data: fileData, error: downloadErr } = await supabaseAdmin.storage
-        .from('chat_attachments')
+      let { data: fileData, error: downloadErr } = await supabaseAdmin.storage
+        .from('sen-chat-attachments')
         .download(storagePath)
+
+      if (downloadErr || !fileData) {
+        const fallback = await supabaseAdmin.storage
+          .from('chat_attachments')
+          .download(storagePath)
+        if (fallback.data) {
+          fileData = fallback.data
+          downloadErr = null
+        }
+      }
 
       if (downloadErr || !fileData) {
         console.error('[SEN_CHAT_STREAM] Lỗi download từ Supabase Storage:', downloadErr)

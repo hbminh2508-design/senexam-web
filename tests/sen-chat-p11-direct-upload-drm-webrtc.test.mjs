@@ -50,7 +50,8 @@ test('Sen Chat P11: Upload endpoint hỗ trợ prepare_upload & complete_direct_
   assert.ok(uploadRouteCode.includes("action === 'prepare_upload'"), 'Route phải hỗ trợ action prepare_upload')
   assert.ok(uploadRouteCode.includes("action === 'complete_direct_upload'"), 'Route phải hỗ trợ action complete_direct_upload')
   assert.ok(uploadRouteCode.includes('createSignedUploadUrl'), 'Route phải tạo signed upload URL cho client upload trực tiếp')
-  assert.ok(uploadRouteCode.includes('chat_attachments'), 'Route phải thao tác với bucket chat_attachments')
+  assert.ok(uploadRouteCode.includes('sen-chat-attachments'), 'Route phải chỉ định bucket sen-chat-attachments chuẩn')
+  assert.ok(uploadRouteCode.includes('chat_attachments'), 'Route phải thao tác với bảng/bucket chat_attachments')
 
   // Kiểm tra ChatAttachmentModal
   const modalPath = path.join(process.cwd(), 'components/chat/ChatAttachmentModal.tsx')
@@ -61,6 +62,7 @@ test('Sen Chat P11: Upload endpoint hỗ trợ prepare_upload & complete_direct_
   assert.ok(modalCode.includes('isDirectStorageUpload'), 'Modal phải có cờ phân luồng direct upload')
   assert.ok(modalCode.includes('prepare_upload'), 'Modal phải gọi prepare_upload')
   assert.ok(modalCode.includes('complete_direct_upload'), 'Modal phải gọi complete_direct_upload')
+  assert.ok(modalCode.includes('sen-chat-attachments'), 'Modal phải hỗ trợ bucket sen-chat-attachments')
 
   // Safe response parsing: đọc text() và bọc try/catch, tuyệt đối không gọi response.json() trần
   assert.ok(modalCode.includes('.text()'), 'Modal phải đọc response.text() trước khi parse')
@@ -131,6 +133,11 @@ test('Sen Chat P11: Component ChatCallModal đầy đủ WebRTC MediaStream, Sig
   // Badge bảo mật E2EE & Timer
   assert.ok(callModalCode.includes('Mã hóa WebRTC E2EE P2P'), 'Phải có badge bảo mật WebRTC E2EE P2P')
   assert.ok(callModalCode.includes('formatDuration'), 'Phải có bộ đếm thời gian cuộc gọi')
+
+  // Signaling Realtime subscription & clean cleanup
+  assert.ok(callModalCode.includes('.subscribe()'), 'Phải gọi channel.subscribe() để kích hoạt nhận broadcast signaling')
+  assert.ok(callModalCode.includes('supabase.removeChannel(channel)'), 'Phải dọn dẹp channel qua removeChannel')
+  assert.ok(callModalCode.includes('iceCandidateQueueRef'), 'Phải có hàng đợi candidate để tránh race condition trước khi có remoteDescription')
 
   // Hộp thoại chuông cuộc gọi đến
   assert.ok(callModalCode.includes('ChatIncomingCallDialog'), 'Phải xuất khẩu component ChatIncomingCallDialog')

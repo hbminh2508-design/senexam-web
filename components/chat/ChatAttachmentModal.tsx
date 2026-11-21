@@ -298,9 +298,11 @@ export default function ChatAttachmentModal({
         const signedUploadUrl = prepData.signedUploadUrl
         const signedToken = prepData.token
 
-        // B2. Tải blob mã hóa trực tiếp lên Supabase Storage bucket chat_attachments
+        // B2. Tải blob mã hóa trực tiếp lên Supabase Storage bucket sen-chat-attachments
         setProgress(72)
         setStatusText(`Đang truyền blob mã hóa lên Supabase Storage (${formatBytes(file.size)})...`)
+
+        const targetBucket = prepData.storageBucket || 'sen-chat-attachments'
 
         let directUploadSuccess = false
         if (signedUploadUrl) {
@@ -324,7 +326,7 @@ export default function ChatAttachmentModal({
         if (!directUploadSuccess && signedToken) {
           try {
             const { error: signedErr } = await supabase.storage
-              .from('chat_attachments')
+              .from(targetBucket)
               .uploadToSignedUrl(storagePath, signedToken, encryptedFileBlob)
             if (!signedErr) {
               directUploadSuccess = true
@@ -333,16 +335,34 @@ export default function ChatAttachmentModal({
         }
 
         if (!directUploadSuccess) {
-          const { error: uploadErr } = await supabase.storage
-            .from('chat_attachments')
+          // Upload trực tiếp lên Supabase Storage bucket sen-chat-attachments
+          let uploadErr: any = null
+          const res = await supabase.storage
+            .from('sen-chat-attachments')
             .upload(storagePath, encryptedFileBlob, {
               contentType: 'application/octet-stream',
               upsert: true,
             })
+          if (res.error) {
+            uploadErr = res.error
+            // Fallback sang bucket chat_attachments nếu cần
+            const fallbackRes = await supabase.storage
+              .from('chat_attachments')
+              .upload(storagePath, encryptedFileBlob, {
+                contentType: 'application/octet-stream',
+                upsert: true,
+              })
+            if (!fallbackRes.error) {
+              uploadErr = null
+              directUploadSuccess = true
+            }
+          } else {
+            directUploadSuccess = true
+          }
+
           if (uploadErr) {
             throw new Error(`Lỗi tải trực tiếp lên kho lưu trữ: ${uploadErr.message}`)
           }
-          directUploadSuccess = true
         }
 
         // B3. Xác nhận hoàn tất và lưu siêu dữ liệu vào bảng chat_attachments

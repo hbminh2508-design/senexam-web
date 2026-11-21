@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
         .filter((id: string) => id && id.startsWith('supabase:'))
         .map((id: string) => id.replace(/^supabase:/, ''))
       if (supabasePaths.length > 0) {
+        supabaseAdmin.storage.from('sen-chat-attachments').remove(supabasePaths).catch(() => {})
         supabaseAdmin.storage.from('chat_attachments').remove(supabasePaths).catch(() => {})
       }
     }

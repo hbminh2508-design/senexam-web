@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
       .map((item: any) => item.storage_path)
 
     if (supabasePaths.length > 0) {
+      await supabaseAdmin.storage.from('sen-chat-attachments').remove(supabasePaths).catch(() => {})
       await supabaseAdmin.storage.from('chat_attachments').remove(supabasePaths).catch(() => {})
     }
 

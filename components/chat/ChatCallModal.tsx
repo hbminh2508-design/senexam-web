@@ -77,6 +77,7 @@ export default function ChatCallModal({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([])
 
   // Định dạng thời gian cuộc gọi mm:ss
   const formatDuration = (secs: number) => {
@@ -270,17 +271,24 @@ export default function ChatCallModal({
         }
 
         pc.ontrack = (event) => {
-          if (event.streams && event.streams[0]) {
-            remoteStreamRef.current = event.streams[0]
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = event.streams[0]
+          let stream = event.streams && event.streams[0]
+          if (!stream) {
+            if (!remoteStreamRef.current) {
+              remoteStreamRef.current = new MediaStream()
             }
-            if (event.track.kind === 'video') {
-              setHasRemoteVideo(true)
-            }
-            setCallStatus('connected')
-            setStatusMessage('Đã kết nối mã hóa E2EE P2P')
+            remoteStreamRef.current.addTrack(event.track)
+            stream = remoteStreamRef.current
+          } else {
+            remoteStreamRef.current = stream
           }
+          if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
+            remoteVideoRef.current.srcObject = stream
+          }
+          if (event.track.kind === 'video') {
+            setHasRemoteVideo(true)
+          }
+          setCallStatus('connected')
+          setStatusMessage('Đã kết nối mã hóa E2EE P2P')
         }
 
         pc.onconnectionstatechange = () => {
@@ -296,6 +304,9 @@ export default function ChatCallModal({
       console.warn('[WEBRTC_CALL] Lỗi tạo RTCPeerConnection:', pcErr)
     }
 
+    // Lắng nghe tín hiệu Signaling từ Realtime channel
+    const channel = supabase.channel('sen-chat-realtime-transit')
+
     // Khởi tạo stream và thêm track vào RTCPeerConnection
     setupLocalMedia().then((stream) => {
       if (isCancelled || !stream || !pc) return
@@ -307,7 +318,7 @@ export default function ChatCallModal({
 
       // Nếu là người gọi, gửi call_request tới đối phương
       if (!isIncoming) {
-        supabase.channel('sen-chat-realtime-transit').send({
+        channel.send({
           type: 'broadcast',
           event: 'call_request',
           payload: {
@@ -322,15 +333,16 @@ export default function ChatCallModal({
         }).catch(() => {})
         setStatusMessage('Đang đổ chuông đối phương...')
       } else {
-        // Nếu là người nhận, gửi call_response accepted và tạo WebRTC Offer
-        supabase.channel('sen-chat-realtime-transit').send({
+        // Nếu là người nhận, gửi call_response accepted tới đối phương (caller)
+        channel.send({
           type: 'broadcast',
           event: 'call_response',
           payload: {
             callId: callIdRef.current,
             conversationId,
+            senderId: currentUserId,
             callerId: partnerId,
-            receiverId: currentUserId,
+            receiverId: partnerId,
             accepted: true,
           },
         }).catch(() => {})
@@ -339,21 +351,63 @@ export default function ChatCallModal({
       }
     })
 
-    // Lắng nghe tín hiệu Signaling từ Realtime channel
-    const channel = supabase.channel('sen-chat-realtime-transit')
+    channel
+      .on('broadcast', { event: 'call_response' }, async ({ payload }) => {
+        if (!payload || payload.callId !== callIdRef.current) return
+        if (payload.senderId && payload.senderId === currentUserId) return
+        if (payload.receiverId && payload.receiverId !== currentUserId) return
 
-    const responseSub = channel.on('broadcast', { event: 'call_response' }, async ({ payload }) => {
-      if (!payload || payload.callId !== callIdRef.current) return
-      if (payload.receiverId !== currentUserId) return
+        if (payload.accepted) {
+          setCallStatus('connected')
+          setStatusMessage('Đã nhận cuộc gọi. Đang đồng bộ WebRTC...')
+          // Caller tạo offer
+          if (pc && pc.signalingState !== 'closed') {
+            try {
+              const offer = await pc.createOffer()
+              await pc.setLocalDescription(offer)
+              channel.send({
+                type: 'broadcast',
+                event: 'call_signal',
+                payload: {
+                  callId: callIdRef.current,
+                  conversationId,
+                  senderId: currentUserId,
+                  receiverId: partnerId,
+                  signal: {
+                    type: 'offer',
+                    sdp: offer,
+                  },
+                },
+              }).catch(() => {})
+            } catch (offerErr) {
+              console.error('[WEBRTC_CALL] Lỗi tạo offer:', offerErr)
+            }
+          }
+        } else {
+          setStatusMessage('Đối phương đã từ chối cuộc gọi')
+          setCallStatus('ended')
+          setTimeout(() => onClose(), 1500)
+        }
+      })
+      .on('broadcast', { event: 'call_signal' }, async ({ payload }) => {
+        if (!payload || payload.callId !== callIdRef.current) return
+        if (payload.senderId && payload.senderId === currentUserId) return
+        if (payload.receiverId && payload.receiverId !== currentUserId) return
 
-      if (payload.accepted) {
-        setCallStatus('connected')
-        setStatusMessage('Đã nhận cuộc gọi. Đang đồng bộ WebRTC...')
-        // Caller tạo offer
-        if (pc && pc.signalingState !== 'closed') {
-          try {
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
+        const signal = payload.signal
+        if (!pc || pc.signalingState === 'closed') return
+
+        try {
+          if (signal.type === 'offer' && signal.sdp) {
+            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
+            if (iceCandidateQueueRef.current.length > 0) {
+              for (const queuedCandidate of iceCandidateQueueRef.current) {
+                await pc.addIceCandidate(new RTCIceCandidate(queuedCandidate)).catch(() => {})
+              }
+              iceCandidateQueueRef.current = []
+            }
+            const answer = await pc.createAnswer()
+            await pc.setLocalDescription(answer)
             channel.send({
               type: 'broadcast',
               event: 'call_signal',
@@ -363,67 +417,42 @@ export default function ChatCallModal({
                 senderId: currentUserId,
                 receiverId: partnerId,
                 signal: {
-                  type: 'offer',
-                  sdp: offer,
+                  type: 'answer',
+                  sdp: answer,
                 },
               },
             }).catch(() => {})
-          } catch (offerErr) {
-            console.error('[WEBRTC_CALL] Lỗi tạo offer:', offerErr)
+            setCallStatus('connected')
+          } else if (signal.type === 'answer' && signal.sdp) {
+            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
+            if (iceCandidateQueueRef.current.length > 0) {
+              for (const queuedCandidate of iceCandidateQueueRef.current) {
+                await pc.addIceCandidate(new RTCIceCandidate(queuedCandidate)).catch(() => {})
+              }
+              iceCandidateQueueRef.current = []
+            }
+            setCallStatus('connected')
+          } else if (signal.type === 'candidate' && signal.candidate) {
+            if (pc.remoteDescription && pc.remoteDescription.type) {
+              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {})
+            } else {
+              iceCandidateQueueRef.current.push(signal.candidate)
+            }
           }
+        } catch (sigErr) {
+          console.warn('[WEBRTC_CALL] Lỗi xử lý signal WebRTC:', sigErr)
         }
-      } else {
-        setStatusMessage('Đối phương đã từ chối cuộc gọi')
+      })
+      .on('broadcast', { event: 'call_end' }, ({ payload }) => {
+        if (!payload || payload.callId !== callIdRef.current) return
+        if (payload.senderId && payload.senderId === currentUserId) return
+        if (payload.receiverId && payload.receiverId !== currentUserId) return
+        setStatusMessage('Đối phương đã kết thúc cuộc gọi')
         setCallStatus('ended')
-        setTimeout(() => onClose(), 1500)
-      }
-    })
-
-    const signalSub = channel.on('broadcast', { event: 'call_signal' }, async ({ payload }) => {
-      if (!payload || payload.callId !== callIdRef.current) return
-      if (payload.receiverId !== currentUserId) return
-
-      const signal = payload.signal
-      if (!pc || pc.signalingState === 'closed') return
-
-      try {
-        if (signal.type === 'offer' && signal.sdp) {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
-          const answer = await pc.createAnswer()
-          await pc.setLocalDescription(answer)
-          channel.send({
-            type: 'broadcast',
-            event: 'call_signal',
-            payload: {
-              callId: callIdRef.current,
-              conversationId,
-              senderId: currentUserId,
-              receiverId: partnerId,
-              signal: {
-                type: 'answer',
-                sdp: answer,
-              },
-            },
-          }).catch(() => {})
-          setCallStatus('connected')
-        } else if (signal.type === 'answer' && signal.sdp) {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
-          setCallStatus('connected')
-        } else if (signal.type === 'candidate' && signal.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate))
-        }
-      } catch (sigErr) {
-        console.warn('[WEBRTC_CALL] Lỗi xử lý signal WebRTC:', sigErr)
-      }
-    })
-
-    const endSub = channel.on('broadcast', { event: 'call_end' }, ({ payload }) => {
-      if (!payload || payload.callId !== callIdRef.current) return
-      setStatusMessage('Đối phương đã kết thúc cuộc gọi')
-      setCallStatus('ended')
-      cleanupCall()
-      setTimeout(() => onClose(), 1200)
-    })
+        cleanupCall()
+        setTimeout(() => onClose(), 1200)
+      })
+      .subscribe()
 
     // Timeout nếu đối phương không nghe máy sau 45s
     const callTimeout = setTimeout(() => {
@@ -438,6 +467,7 @@ export default function ChatCallModal({
       isCancelled = true
       clearTimeout(callTimeout)
       cleanupCall()
+      supabase.removeChannel(channel)
     }
   }, [
     callMode,

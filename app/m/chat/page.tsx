@@ -188,8 +188,9 @@ export default function MobileChatPage() {
       payload: {
         callId: call.callId,
         conversationId: call.conversationId,
+        senderId: currentUser?.id,
         callerId: call.callerId,
-        receiverId: currentUser?.id,
+        receiverId: call.callerId,
         accepted: false,
       },
     }).catch(() => {})
