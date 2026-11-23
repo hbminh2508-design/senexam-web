@@ -244,7 +244,8 @@ export function clearAllLocalMessages(conversationId: string): void {
 
 /**
  * Xóa sạch toàn bộ tin nhắn tạm thời trong tất cả các cuộc hội thoại
- * Bảo vệ quyền riêng tư tuyệt đối khi đóng trang hoặc thoát ứng dụng
+ * Bảo toàn danh sách cuộc trò chuyện và thứ tự thời gian chính xác của người dùng.
+ * Các tệp đính kèm đã gửi trên máy chủ/lưu trữ được giữ nguyên vẹn.
  */
 export function clearAllEphemeralMessages(): void {
   if (typeof window === 'undefined') return
@@ -258,12 +259,14 @@ export function clearAllEphemeralMessages(): void {
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k))
 
-    // Cập nhật các cuộc hội thoại để không còn lưu trích đoạn tin nhắn nhạy cảm
+    // Cập nhật các cuộc hội thoại: Giữ lại toàn bộ người nhắn tin (partnerId, partnerName, avatarUrl, isGroup...)
+    // và bảo toàn đúng thứ tự sắp xếp thời gian (updatedAt không bị đảo lộn).
     const convs = getLocalConversations()
     if (convs.length > 0) {
       const sanitizedConvs = convs.map((c) => ({
         ...c,
         lastMessage: undefined,
+        lastMessageTime: undefined,
         unreadCount: 0,
       }))
       localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(sanitizedConvs))
@@ -275,12 +278,12 @@ export function clearAllEphemeralMessages(): void {
 
 /**
  * Kiểm tra xem chế độ dọn dẹp bộ nhớ tạm khi thoát web có đang bật hay không
- * Mặc định: BẬT (true) để bảo đảm an toàn dữ liệu
+ * Mặc định: TẮT (false) để lưu trữ chat bền vững trong Local Storage theo yêu cầu người dùng
  */
 export function isEphemeralStorageEnabled(): boolean {
-  if (typeof window === 'undefined') return true
+  if (typeof window === 'undefined') return false
   const saved = localStorage.getItem(STORAGE_KEYS.EPHEMERAL_ENABLED)
-  if (saved === null) return true // Mặc định bật
+  if (saved === null) return false // Mặc định tắt: Lưu trữ bền vững
   return saved === 'true'
 }
 
@@ -290,14 +293,18 @@ export function setEphemeralStorageEnabled(enabled: boolean): void {
 }
 
 /**
- * Dọn sạch toàn bộ dữ liệu Sen Chat trên thiết bị khi Đăng xuất
+ * Dọn sạch dữ liệu phiên Sen Chat trên thiết bị khi Đăng xuất:
+ * - Xóa sạch mảng tin nhắn qua clearAllEphemeralMessages()
+ * - Giữ lại danh sách người nhắn tin (CONVERSATIONS) theo đúng thứ tự
+ * - Giữ nguyên các tệp đã gửi
+ * - Xóa thông tin phiên người dùng hiện tại
  */
 export function clearAllLocalChatData(): void {
   if (typeof window === 'undefined') return
   try {
     clearAllEphemeralMessages()
     clearLocalSenChatUser()
-    localStorage.removeItem(STORAGE_KEYS.CONVERSATIONS)
+    // Lưu ý: Danh sách hội thoại CONVERSATIONS vẫn được giữ lại theo đúng thứ tự
     localStorage.removeItem(STORAGE_KEYS.NICKNAMES)
     localStorage.removeItem(STORAGE_KEYS.WALLPAPERS)
     localStorage.removeItem(STORAGE_KEYS.BLOCKED_USERS)
@@ -352,29 +359,29 @@ export function getStorageUsageSummary(): {
 
 /**
  * Đăng ký bộ lắng nghe sự kiện đóng trang (beforeunload, pagehide)
- * kèm cơ chế kiểm tra cờ phiên làm việc (Session Lifecycle Token qua sessionStorage).
- * Nếu ứng dụng được mở lại sau khi bị đóng đột ngột (low-memory killer, crash...),
- * session token cũ sẽ không còn trong sessionStorage, hệ thống sẽ tự động dọn sạch
- * mọi tin nhắn tạm thời còn sót lại từ phiên trước để bảo vệ sự riêng tư.
+ * Đổi chế độ mặc định: Chat được lưu trữ bền vững trong localStorage, KHÔNG tự động xóa
+ * tin nhắn khi thoát trang, đóng tab hay reload web (setupEphemeralCleanupListener trở thành no-op).
+ * Chỉ khi nào người dùng chủ động cấu hình bật xóa tạm thời (isEphemeralStorageEnabled() === true)
+ * thì mới gắn listener.
  */
 export function setupEphemeralCleanupListener(): () => void {
   if (typeof window === 'undefined') return () => {}
 
-  // 1. Kiểm tra cờ phiên trong sessionStorage
+  // Mặc định bền vững: Không xóa tin nhắn khi thoát/reload web
+  if (!isEphemeralStorageEnabled()) {
+    return () => {}
+  }
+
+  // Nếu người dùng chủ động bật tùy chọn dọn dẹp tạm thời:
   try {
     const SESSION_TOKEN_KEY = 'sen_chat_active_session'
     const hasActiveSession = sessionStorage.getItem(SESSION_TOKEN_KEY)
     if (!hasActiveSession) {
-      if (isEphemeralStorageEnabled()) {
-        clearAllEphemeralMessages()
-      }
+      clearAllEphemeralMessages()
       sessionStorage.setItem(SESSION_TOKEN_KEY, String(Date.now()))
     }
-  } catch (e) {
-    // Không chặn nếu sessionStorage bị vô hiệu hóa
-  }
+  } catch (e) {}
 
-  // 2. Lắng nghe các sự kiện thoát trang
   const handleExit = () => {
     if (isEphemeralStorageEnabled()) {
       clearAllEphemeralMessages()

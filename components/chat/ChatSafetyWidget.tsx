@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { ShieldCheck, AlertTriangle, QrCode, CheckCircle2, X, Lock } from 'lucide-react'
+import { ChatDeviceComplianceBadge } from '@/components/chat/ChatDrmProtection'
 
 interface ChatSafetyWidgetProps {
   partnerId: string
@@ -101,6 +102,12 @@ export default function ChatSafetyWidget({
           </div>
         </div>
       )}
+
+      {/* Độ Chuẩn Thiết Bị E2EE */}
+      <div className="mt-3 pt-3 border-t border-emerald-500/10 flex items-center justify-between">
+        <span className="text-[11px] text-slate-500 dark:text-slate-400">Độ chuẩn thiết bị:</span>
+        <ChatDeviceComplianceBadge />
+      </div>
 
       {/* Modal QR Code */}
       {showQrModal && (

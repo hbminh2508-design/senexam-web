@@ -49,7 +49,8 @@ import { supabase } from '@/lib/supabaseClient'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
 import ChatInfoDrawer from '@/components/chat/ChatInfoDrawer'
-import ChatDrmProtection from '@/components/chat/ChatDrmProtection'
+import ChatDrmProtection, { ChatDeviceComplianceBadge } from '@/components/chat/ChatDrmProtection'
+import ChatVersionModal from '@/components/chat/ChatVersionModal'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
@@ -145,6 +146,8 @@ export default function MobileChatPage() {
 
   // Ô nhập tin nhắn
   const [inputText, setInputText] = useState('')
+  // Modals
+  const [showVersionModal, setShowVersionModal] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showAiSuggestions, setShowAiSuggestions] = useState(false)
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([])
@@ -1088,18 +1091,26 @@ export default function MobileChatPage() {
               >
                 <ArrowLeft className="h-5 w-5" />
               </Link>
-              <SenChatLogo size={36} className="shrink-0" />
-              <div>
-                <h1 className="text-base font-black flex items-center gap-1.5">
-                  <span>Sen Chat</span>
-                  <span className="px-1.5 py-0.2 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[9px] font-black tracking-wider uppercase">
-                    E2EE
+              <button
+                type="button"
+                onClick={() => setShowVersionModal(true)}
+                title="Sen Chat v1.0.1 — Bấm để xem thông tin phiên bản & nhật ký cập nhật"
+                className="flex items-center gap-2 text-left active:scale-95 transition"
+              >
+                <SenChatLogo size={36} className="shrink-0" />
+                <div>
+                  <h1 className="text-base font-black flex items-center gap-1.5">
+                    <span>Sen Chat</span>
+                    <span className="px-1.5 py-0.2 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[9px] font-black tracking-wider uppercase">
+                      E2EE
+                    </span>
+                    <ChatDeviceComplianceBadge />
+                  </h1>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {flagSecureActive ? '🛡️ FLAG_SECURE Đang bật' : 'Mã hóa đầu cuối'}
                   </span>
-                </h1>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  {flagSecureActive ? '🛡️ FLAG_SECURE Đang bật' : 'Mã hóa đầu cuối'}
-                </span>
-              </div>
+                </div>
+              </button>
             </div>
 
             <div className="flex items-center gap-1">
@@ -1621,8 +1632,11 @@ export default function MobileChatPage() {
         />
       )}
 
-      {/* BẢO VỆ CHỐNG CHỤP MÀN HÌNH DRM KIỂU NETFLIX (BLACKOUT CURTAIN) */}
+      {/* BẢO VỆ CHỐNG CHỤP MÀN HÌNH DRM (CHỐNG IN ẤN) */}
       <ChatDrmProtection isEnabled={true} showBadge={false} />
+
+      {/* Hộp thoại Phiên bản & Nhật ký cập nhật Sen Chat v1.0.1 */}
+      <ChatVersionModal isOpen={showVersionModal} onClose={() => setShowVersionModal(false)} />
 
       {/* =======================================================================
           MODAL: THIẾT LẬP BẢO MẬT ANDROID CAPACITOR & FLAG_SECURE & APP LOCK

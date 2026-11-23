@@ -74,14 +74,14 @@ test('Sen Chat P11: Upload endpoint hỗ trợ prepare_upload & complete_direct_
 })
 
 // ==============================================================================
-// 3. KIỂM THỬ CHẶN CHỤP MÀN HÌNH CHUẨN DRM HARDWARE KIỂU NETFLIX (KHÔNG DÙNG POPUP)
+// 3. KIỂM THỬ BẢO VỆ CHỐNG IN ẤN VÀ TẮT CHE MỜ MÀN HÌNH THEO YÊU CẦU NGƯỜI DÙNG
 // ==============================================================================
-test('Sen Chat P11: DRM Hardware filter che mờ sâu kiểu Netflix, xóa hoàn toàn popup thô sơ', () => {
+test('Sen Chat P11: Tắt che mờ màn hình theo yêu cầu, gỡ bỏ fixed bottom-3 đè avatar, giữ @media print', () => {
   const drmPath = path.join(process.cwd(), 'components/chat/ChatDrmProtection.tsx')
   assert.ok(fs.existsSync(drmPath), 'ChatDrmProtection.tsx phải tồn tại')
   const drmCode = fs.readFileSync(drmPath, 'utf8')
 
-  // Gỡ bỏ hoàn toàn popup cũ
+  // Gỡ bỏ hoàn toàn popup và che mờ màn hình
   assert.ok(
     !drmCode.includes('Blackout Curtain Active'),
     'Phải gỡ bỏ hoàn toàn banner Blackout Curtain Active'
@@ -90,19 +90,19 @@ test('Sen Chat P11: DRM Hardware filter che mờ sâu kiểu Netflix, xóa hoàn
     !drmCode.includes('Nhấp chuột hoặc quay lại cửa sổ để tiếp tục'),
     'Phải gỡ bỏ hoàn toàn nút bấm popup thủ công'
   )
+  assert.ok(
+    !drmCode.includes('isBlackedOut'),
+    'Phải tắt hoàn toàn tính năng che mờ màn hình isBlackedOut theo yêu cầu người dùng'
+  )
 
-  // Áp dụng lớp che mờ sâu và chống phản chiếu (Hardware DRM obfuscation filter)
+  // Gỡ bỏ thuộc tính fixed bottom-3 left-3 đè lên avatar người dùng
   assert.ok(
-    drmCode.includes('filter: blur(50px) brightness(0.02) contrast(150%)'),
-    'Phải áp dụng bộ lọc CSS GPU acceleration blur(50px) brightness(0.02) contrast(150%)'
+    !drmCode.includes('fixed bottom-3 left-3'),
+    'Huy hiệu E2EE tuyệt đối không được dùng fixed bottom-3 left-3 đè avatar'
   )
   assert.ok(
-    drmCode.includes('transform: translateZ(0)'),
-    'Phải kích hoạt phần cứng GPU acceleration qua transform: translateZ(0)'
-  )
-  assert.ok(
-    drmCode.includes('pointer-events: none'),
-    'Lớp bảo vệ phải có pointer-events: none để không gây cản trở trải nghiệm khi quay lại'
+    drmCode.includes('ChatDeviceComplianceBadge'),
+    'Phải cung cấp component ChatDeviceComplianceBadge tinh tế đặt trong header'
   )
 
   // Giữ nguyên bảo vệ in ấn

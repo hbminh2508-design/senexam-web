@@ -61,7 +61,8 @@ import SenChatLogo from '@/components/SenChatLogo'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
 import ChatInfoDrawer from '@/components/chat/ChatInfoDrawer'
-import ChatDrmProtection from '@/components/chat/ChatDrmProtection'
+import ChatDrmProtection, { ChatDeviceComplianceBadge } from '@/components/chat/ChatDrmProtection'
+import ChatVersionModal from '@/components/chat/ChatVersionModal'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
@@ -160,6 +161,7 @@ export default function SenChatPage() {
   const [isPartnerVerified, setIsPartnerVerified] = useState(false)
 
   // Modals & Panels
+  const [showVersionModal, setShowVersionModal] = useState(false)
   const [showInfoSidebar, setShowInfoSidebar] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showFriendModal, setShowFriendModal] = useState(false)
@@ -997,11 +999,12 @@ export default function SenChatPage() {
           isMobileListVisible ? 'flex' : 'hidden md:flex'
         }`}
       >
-        {/* Top: Logo Sen Chat */}
+        {/* Top: Logo Sen Chat -> Nhấn để mở Modal Phiên bản & Changelog */}
         <div className="flex flex-col items-center gap-4">
-          <Link
-            href="/chat"
-            title="Sen Chat — Bảo mật đầu-cuối E2EE"
+          <button
+            type="button"
+            onClick={() => setShowVersionModal(true)}
+            title="Sen Chat v1.0.1 — Bấm để xem thông tin phiên bản & nhật ký cập nhật"
             className="group relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-md shadow-emerald-500/10 transition-transform hover:scale-105 active:scale-95 dark:bg-slate-800"
           >
             <img
@@ -1015,7 +1018,7 @@ export default function SenChatPage() {
             >
               <Lock className="h-2 w-2 text-white" />
             </span>
-          </Link>
+          </button>
 
           {/* Đường kẻ phân cách */}
           <div className="h-px w-8 bg-slate-200 dark:bg-slate-800" />
@@ -1457,6 +1460,8 @@ export default function SenChatPage() {
                         <Lock className="h-3 w-3" /> Signal Double Ratchet
                       </span>
                     )}
+                    <span className="text-slate-300 dark:text-slate-600">•</span>
+                    <ChatDeviceComplianceBadge />
                     {disappearingTtl > 0 && (
                       <span className="flex items-center gap-0.5 text-indigo-500 font-medium">
                         • <Timer className="h-3 w-3" /> Tự hủy sau {disappearingTtl}s
@@ -2066,8 +2071,11 @@ export default function SenChatPage() {
         />
       )}
 
-      {/* BẢO VỆ NỘI DUNG DRM KIỂU NETFLIX (ANTI-SCREEN CAPTURE & BLACKOUT CURTAIN) */}
-      <ChatDrmProtection isEnabled={true} showBadge={true} />
+      {/* BẢO VỆ NỘI DUNG DRM (CHỐNG IN ẤN & USER SELECT) */}
+      <ChatDrmProtection isEnabled={true} showBadge={false} />
+
+      {/* Hộp thoại Phiên bản & Nhật ký cập nhật Sen Chat v1.0.1 */}
+      <ChatVersionModal isOpen={showVersionModal} onClose={() => setShowVersionModal(false)} />
 
       {/* Nickname Modal */}
       {showNicknameModal && (
