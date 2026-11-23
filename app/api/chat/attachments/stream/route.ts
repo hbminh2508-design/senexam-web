@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request)
     if (!user) {
-      return new NextResponse('Chưa đăng nhập', { status: 401 })
+      return new NextResponse('Chưa đăng nhập. Vui lòng làm mới trang.', { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -107,7 +107,29 @@ export async function GET(request: NextRequest) {
           headers: responseHeaders,
         })
       } catch (err: any) {
-        console.error('[SEN_CHAT_STREAM] Lỗi stream từ Google Drive:', err)
+        console.error('[SEN_CHAT_STREAM] Lỗi stream từ Google Drive, thử fallback Supabase Storage:', err)
+        // Cơ chế fallback: Nếu Google Drive lỗi tạm thời hoặc bị chặn, tự động thử fallback sang Supabase Storage tương ứng
+        const fallbackPath = attachment.storage_path || `attachments/${attachment.id}`
+        let { data: fileData } = await supabaseAdmin.storage
+          .from('sen-chat-attachments')
+          .download(fallbackPath)
+
+        if (!fileData) {
+          const fb = await supabaseAdmin.storage
+            .from('chat_attachments')
+            .download(fallbackPath)
+          if (fb.data) fileData = fb.data
+        }
+
+        if (fileData) {
+          const arrayBuffer = await fileData.arrayBuffer()
+          responseHeaders.set('Content-Length', String(arrayBuffer.byteLength))
+          return new NextResponse(Buffer.from(arrayBuffer), {
+            status: 200,
+            headers: responseHeaders,
+          })
+        }
+
         return new NextResponse(`Lỗi tải tệp từ Google Drive: ${err?.message || 'Không thể đọc tệp'}`, { status: 502 })
       }
     } else {

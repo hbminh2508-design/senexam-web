@@ -8,35 +8,38 @@ import {
 } from '../lib/senChatVersion.mjs'
 
 // ==============================================================================
-// 1. KIỂM THỬ PHIÊN BẢN SEN CHAT V1.0.1 VÀ CHANGELOG
+// 1. KIỂM THỬ PHIÊN BẢN SEN CHAT VÀ CHANGELOG
 // ==============================================================================
-test('Sen Chat v1.0.1: Phiên bản hiện tại là 1.0.1 và ghi log chính xác', () => {
-  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.0.1', 'Phiên bản Sen Chat phải là 1.0.1')
+test('Sen Chat: Phiên bản hiện tại là 1.0.2 và ghi log chính xác', () => {
+  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.0.2', 'Phiên bản Sen Chat phải là 1.0.2')
   assert.ok(Array.isArray(SEN_CHAT_CHANGELOG), 'SEN_CHAT_CHANGELOG phải là mảng')
   assert.ok(SEN_CHAT_CHANGELOG.length >= 2, 'Phải có ít nhất 2 phiên bản trong changelog')
 
   const latest = SEN_CHAT_CHANGELOG[0]
-  assert.equal(latest.version, '1.0.1')
+  assert.equal(latest.version, '1.0.2')
   assert.equal(latest.isLatest, true)
   assert.equal(latest.title, 'Bắt lại những con bò đang bay trên các vì sao')
   assert.ok(
     latest.changes.includes('Bắt lại những con bò đang bay trên các vì sao'),
-    'Changelog 1.0.1 phải chứa mục "Bắt lại những con bò đang bay trên các vì sao"'
+    'Changelog 1.0.2 phải chứa mục "Bắt lại những con bò đang bay trên các vì sao"'
   )
+
+  const v101 = SEN_CHAT_CHANGELOG.find((l) => l.version === '1.0.1')
+  assert.ok(v101, 'Phải có phiên bản 1.0.1 trong lịch sử')
   assert.ok(
-    latest.changes.some((c) => c.includes('Lưu trữ tin nhắn bền vững trong Local Storage')),
+    v101.changes.some((c) => c.includes('Lưu trữ tin nhắn bền vững trong Local Storage')),
     'Changelog phải có mục lưu trữ bền vững'
   )
   assert.ok(
-    latest.changes.some((c) => c.includes('Giữ nguyên danh sách người trò chuyện')),
+    v101.changes.some((c) => c.includes('Giữ nguyên danh sách người trò chuyện')),
     'Changelog phải có mục giữ nguyên danh sách người trò chuyện'
   )
   assert.ok(
-    latest.changes.some((c) => c.includes('Tắt tính năng che mờ màn hình')),
+    v101.changes.some((c) => c.includes('Tắt tính năng che mờ màn hình')),
     'Changelog phải có mục tắt che mờ màn hình'
   )
   assert.ok(
-    latest.changes.some((c) => c.includes('Di chuyển thanh E2EE Chuẩn Thiết Bị')),
+    v101.changes.some((c) => c.includes('Di chuyển thanh E2EE Chuẩn Thiết Bị')),
     'Changelog phải có mục di chuyển thanh E2EE'
   )
 

@@ -120,6 +120,10 @@ import {
   verifyIdentityKeyIntegrity,
   generateIdentityKeyPair,
 } from '@/lib/senChatSignalProtocol.mjs'
+import {
+  initDeviceRelay,
+  broadcastRequestMessageSync,
+} from '@/lib/senChatDeviceRelay'
 
 // Bộ sticker / biểu cảm nhanh
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '❤️', '🎉', '🔥', '👏', '🙏', '😭', '😎', '💯']
@@ -414,6 +418,24 @@ export default function SenChatPage() {
       refreshConversations()
     }
   }, [currentUser])
+
+  // Khởi động Realtime Relay Node đồng bộ đa thiết bị (v1.0.2)
+  useEffect(() => {
+    if (!currentUser?.id) return
+    const relay = initDeviceRelay({
+      userId: currentUser.id,
+      supabaseClient: supabase,
+      onMessagesReconciled: (convId, reconciledMsgs) => {
+        if (selectedConvId === convId) {
+          setMessages(reconciledMsgs)
+        }
+      },
+    })
+
+    return () => {
+      relay?.cleanup()
+    }
+  }, [currentUser?.id, selectedConvId])
 
   // 4. Chọn hội thoại & Tính toán Safety Number Signal
   useEffect(() => {
@@ -1633,7 +1655,7 @@ export default function SenChatPage() {
             )}
 
             {/* Thông báo chính sách bảo mật lưu trữ 30 ngày */}
-            <div className="flex items-center justify-between px-4 py-1.5 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] shrink-0">
+            <div className="relative z-10 flex items-center justify-between px-4 py-1.5 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] shrink-0">
               <div className="flex items-center gap-1.5 truncate">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                 <span className="truncate">{CHAT_RETENTION_POLICY_NOTICE}</span>
@@ -1752,6 +1774,7 @@ export default function SenChatPage() {
                               {(msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
                                 <div className="mb-2">
                                   <ChatAttachmentBubble
+                                    isMe={isMe}
                                     attachmentId={msg.attachmentId}
                                     driveFileId={msg.driveFileId}
                                     storageProvider={msg.storageProvider}

@@ -286,6 +286,30 @@ export function saveLocalMessage(conversationId: string, message: SenChatMessage
   }
 }
 
+export function saveLocalMessages(conversationId: string, messages: SenChatMessage[]): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(messages))
+
+  if (messages.length > 0) {
+    const last = messages[messages.length - 1]
+    const convs = getLocalConversations()
+    const c = convs.find((item) => item.id === conversationId)
+    if (c && last) {
+      c.lastMessage =
+        last.type === 'image'
+          ? '[Hình ảnh]'
+          : last.type === 'audio'
+          ? (last.transcription ? `🎤 ${last.transcription}` : '[Tin nhắn thoại]')
+          : last.type === 'like'
+          ? '👍'
+          : last.content
+      c.lastMessageTime = new Date(last.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      c.updatedAt = Date.now()
+      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
+    }
+  }
+}
+
 export function deleteLocalMessage(conversationId: string, messageId: string): void {
   if (typeof window === 'undefined') return
   const list = getLocalMessages(conversationId)

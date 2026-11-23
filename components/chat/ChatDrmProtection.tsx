@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ShieldAlert, ShieldCheck, AlertTriangle, X } from 'lucide-react'
 import { checkDeviceCompliance, DeviceComplianceStatus } from '@/lib/senChatDeviceCompliance'
 
@@ -10,7 +11,10 @@ export interface DeviceComplianceDetailModalProps {
 }
 
 export function DeviceComplianceDetailModal({ compliance, onClose }: DeviceComplianceDetailModalProps) {
+  const [mounted, setMounted] = useState(false)
+
   useEffect(() => {
+    setMounted(true)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -18,14 +22,16 @@ export function DeviceComplianceDetailModal({ compliance, onClose }: DeviceCompl
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
-  return (
+  if (!mounted || typeof document === 'undefined') return null
+
+  const modalContent = (
     <div
       role="dialog"
       aria-modal="true"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm animate-in fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm animate-in fade-in"
     >
       <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 animate-in zoom-in-95">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
@@ -92,6 +98,11 @@ export function DeviceComplianceDetailModal({ compliance, onClose }: DeviceCompl
       </div>
     </div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body)
+  }
+  return null
 }
 
 /**

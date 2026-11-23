@@ -184,12 +184,14 @@ export async function uploadEncryptedImageToDrive(params: {
 
 /**
  * Lấy luồng tải tệp từ Google Drive phục vụ người dùng hợp lệ
+ * Trả về Web ReadableStream chuẩn tương thích trực tiếp với NextResponse trong Next.js App Router,
+ * hoặc fallback đọc buffer an toàn.
  */
 export async function getDriveFileStream(
   fileId: string,
   rangeHeader?: string | null
 ): Promise<{
-  stream: NodeJS.ReadableStream
+  stream: ReadableStream<Uint8Array> | NodeJS.ReadableStream | Buffer
   contentType: string
   contentLength?: string | null
   contentRange?: string | null
@@ -218,14 +220,19 @@ export async function getDriveFileStream(
 
     const bodyStream = driveResponse.body
     if (!bodyStream) {
-      throw new Error('Google Drive không có nội dung phản hồi stream')
+      // Fallback đọc buffer an toàn, không để stream bị hỏng hay treo
+      const arrayBuffer = await driveResponse.arrayBuffer()
+      return {
+        stream: Buffer.from(arrayBuffer),
+        contentType: driveResponse.headers.get('content-type') || 'application/octet-stream',
+        contentLength: String(arrayBuffer.byteLength),
+        contentRange: driveResponse.headers.get('content-range'),
+        status: driveResponse.status,
+      }
     }
 
-    // Chuyển Web ReadableStream sang Node Readable nếu cần
-    const nodeStream = Readable.fromWeb(bodyStream as any)
-
     return {
-      stream: nodeStream,
+      stream: bodyStream as ReadableStream<Uint8Array>,
       contentType: driveResponse.headers.get('content-type') || 'application/octet-stream',
       contentLength: driveResponse.headers.get('content-length'),
       contentRange: driveResponse.headers.get('content-range'),

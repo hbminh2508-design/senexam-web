@@ -104,6 +104,10 @@ import {
 import ChatSenAiStudioView from '@/components/chat/ChatSenAiStudioView'
 import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
 import {
+  initDeviceRelay,
+  broadcastRequestMessageSync,
+} from '@/lib/senChatDeviceRelay'
+import {
   calculateSafetyNumber,
   generateIdentityKeyPair,
 } from '@/lib/senChatSignalProtocol.mjs'
@@ -630,6 +634,24 @@ export default function MobileChatPage() {
       subscription.unsubscribe()
     }
   }, [router])
+
+  // Khởi động Realtime Relay Node đồng bộ đa thiết bị (v1.0.2)
+  useEffect(() => {
+    if (!currentUser?.id) return
+    const relay = initDeviceRelay({
+      userId: currentUser.id,
+      supabaseClient: supabase,
+      onMessagesReconciled: (convId, reconciledMsgs) => {
+        if (activeConversation?.id === convId) {
+          setMessages(reconciledMsgs)
+        }
+      },
+    })
+
+    return () => {
+      relay?.cleanup()
+    }
+  }, [currentUser?.id, activeConversation?.id])
 
   // Theo dõi trạng thái mạng & Xả hàng đợi ngoại tuyến (Drain Queue) khi có mạng
   useEffect(() => {
@@ -1488,7 +1510,7 @@ export default function MobileChatPage() {
           </header>
 
           {/* Thông báo chính sách bảo mật lưu trữ 30 ngày */}
-          <div className="flex items-center justify-between px-3 py-1 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[10px] shrink-0">
+          <div className="relative z-10 flex items-center justify-between px-3 py-1 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[10px] shrink-0">
             <div className="flex items-center gap-1.5 truncate">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
               <span className="truncate">{CHAT_RETENTION_POLICY_NOTICE}</span>
@@ -1538,6 +1560,7 @@ export default function MobileChatPage() {
                     {/* Thẻ đính kèm tệp / ảnh */}
                     {msg.type === 'file' || msg.type === 'image' ? (
                       <ChatAttachmentBubble
+                        isMe={isMe}
                         attachmentId={msg.attachmentId}
                         driveFileId={msg.driveFileId}
                         storageProvider={msg.storageProvider}

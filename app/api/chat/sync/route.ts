@@ -263,6 +263,77 @@ export async function POST(request: Request) {
       })
     }
 
+    // 5. TRUNG CHUYỂN TỆP (File Transit Relay) & PHÂN CHIA LUỒNG (Stream Dispatching)
+    if (action === 'relay_stream') {
+      const { streamTicket, fileMetadata, relayNodeId, targetDeviceId } = body
+      const ticket = streamTicket || `stream_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+      const relayItem = {
+        sender_id: String(senderId || relayNodeId || 'dev_node'),
+        sender_name: String(senderName || 'Thiết bị trung gian'),
+        receiver_id: String(targetDeviceId || receiverId || 'all_devices').toLowerCase(),
+        device_id: String(deviceId || relayNodeId || 'dev_relay'),
+        payload: { streamTicket: ticket, fileMetadata, relayNodeId, targetDeviceId, timestamp: Date.now() },
+        sync_type: 'relay_stream',
+        created_at: new Date().toISOString(),
+      }
+
+      let storedInDb = false
+      try {
+        const { error } = await db.from('chat_transit_queue').insert(relayItem)
+        if (!error) storedInDb = true
+      } catch (e) {}
+
+      if (!storedInDb) {
+        memorySyncQueue.push({
+          id: ticket,
+          ...relayItem,
+          created_at: Date.now(),
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        streamTicket: ticket,
+        dispatched: true,
+        storedIn: storedInDb ? 'database_queue' : 'memory_queue',
+        message: 'Đã thiết lập kênh phân chia luồng trung chuyển tệp thành công',
+      })
+    }
+
+    // 6. ĐỒNG BỘ TIN NHẮN CHUẨN XÁC (Message Reconciliation Sync via Server)
+    if (action === 'sync_messages') {
+      const { conversationId, messages: newMessages, lastSyncTime } = body
+      const syncedCount = Array.isArray(newMessages) ? newMessages.length : 0
+
+      if (syncedCount > 0) {
+        const syncItem = {
+          sender_id: String(senderId || 'anon'),
+          sender_name: String(senderName || 'Device Node'),
+          receiver_id: String(receiverId || senderId || 'all_devices').toLowerCase(),
+          device_id: String(deviceId || 'dev_node'),
+          payload: { conversationId, messages: newMessages, lastSyncTime },
+          sync_type: 'message_sync',
+          created_at: new Date().toISOString(),
+        }
+        try {
+          await db.from('chat_transit_queue').insert(syncItem)
+        } catch (e) {
+          memorySyncQueue.push({
+            id: 'sync_' + Date.now(),
+            ...syncItem,
+            created_at: Date.now(),
+          })
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        syncedCount,
+        serverTimestamp: new Date().toISOString(),
+        message: 'Đã đồng bộ phân chia luồng tin nhắn chuẩn xác về máy chủ trung gian',
+      })
+    }
+
     return NextResponse.json({ error: 'Hành động không hợp lệ' }, { status: 400 })
   } catch (error: any) {
     console.error('Lỗi Sen Chat Sync Queue Route:', error)

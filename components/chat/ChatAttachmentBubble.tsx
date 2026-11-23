@@ -28,6 +28,7 @@ import {
 } from '@/lib/senChatChunkCrypto'
 import { openSafeDownload } from '@/lib/capacitorBridge'
 import ChatFilePreviewModal from '@/components/chat/ChatFilePreviewModal'
+import { supabase } from '@/lib/supabaseClient'
 
 interface ChatAttachmentBubbleProps {
   attachmentId?: string
@@ -44,6 +45,7 @@ interface ChatAttachmentBubbleProps {
   isGroup?: boolean
   canExtendRetention?: boolean
   onRetentionExtended?: (attachmentId: string, newExpiresAt: string | null, isPermanent: boolean) => void
+  isMe?: boolean
 }
 
 export default function ChatAttachmentBubble({
@@ -61,6 +63,7 @@ export default function ChatAttachmentBubble({
   isGroup = false,
   canExtendRetention = false,
   onRetentionExtended,
+  isMe = false,
 }: ChatAttachmentBubbleProps) {
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -156,8 +159,8 @@ export default function ChatAttachmentBubble({
             setDecryptedUrl(url)
           }
         })
-        .catch((err) => {
-          if (active) setError('Không thể giải mã ảnh')
+        .catch((err: any) => {
+          if (active) setError(err?.message || 'Không thể giải mã ảnh')
         })
         .finally(() => {
           if (active) setIsLoading(false)
@@ -178,16 +181,56 @@ export default function ChatAttachmentBubble({
       throw new Error('Thiếu khóa giải mã tệp (File Key)')
     }
 
+    let token = ''
+    try {
+      const sessionData = (await supabase.auth.getSession()).data.session
+      token = sessionData?.access_token || ''
+    } catch {}
+
     const query = new URLSearchParams()
     if (attachmentId) query.set('attachmentId', attachmentId)
     if (driveFileId) query.set('driveFileId', driveFileId)
+    if (token) query.set('token', token)
 
-    const res = await fetch(`/api/chat/attachments/stream?${query.toString()}`)
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const res = await fetch(`/api/chat/attachments/stream?${query.toString()}`, {
+      headers,
+    })
+
     if (!res.ok) {
-      throw new Error(`Lỗi tải tệp: ${res.statusText}`)
+      const errorText = await res.text().catch(() => '')
+      throw new Error(errorText || `Lỗi tải tệp: HTTP ${res.status}`)
     }
 
     const encryptedBlob = await res.blob()
+
+    // Kiểm tra blob nhận được: nếu là text/json thông báo lỗi thì hiển thị lỗi từ server thay vì cố giải mã AES
+    if (
+      encryptedBlob.type.includes('application/json') ||
+      encryptedBlob.type.includes('text/') ||
+      encryptedBlob.type === 'text/plain'
+    ) {
+      const text = await encryptedBlob.text()
+      let serverErrorMsg = text
+      try {
+        const json = JSON.parse(text)
+        serverErrorMsg = json.error || json.message || text
+      } catch {}
+      if (
+        serverErrorMsg &&
+        (serverErrorMsg.includes('Lỗi') ||
+          serverErrorMsg.includes('error') ||
+          serverErrorMsg.includes('Chưa đăng nhập') ||
+          serverErrorMsg.includes('không tồn tại'))
+      ) {
+        throw new Error(serverErrorMsg)
+      }
+    }
+
     const rawKey = base64ToBytes(fileKeyBase64)
     // Giải mã AES-256-GCM theo stream chunk (tự động hỗ trợ cả chunk framing và single chunk)
     const blob = await decryptFileToBlob(
@@ -318,9 +361,19 @@ export default function ChatAttachmentBubble({
         /* Box tệp tin thông thường / SVG / HTML / Video chưa load */
         <div
           onClick={handleOpenPreview}
-          className="flex items-center gap-3 p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
+          className={`flex items-center gap-3 p-3 rounded-2xl transition cursor-pointer ${
+            isMe
+              ? 'bg-white/15 hover:bg-white/20 border border-white/20 text-white'
+              : 'bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10'
+          }`}
         >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+          <div
+            className={`flex h-11 w-11 items-center justify-center rounded-xl shrink-0 ${
+              isMe
+                ? 'bg-white/20 text-white shadow-xs'
+                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            }`}
+          >
             {isImage ? (
               <ImageIcon className="h-5 w-5" />
             ) : isVideo ? (
@@ -331,10 +384,18 @@ export default function ChatAttachmentBubble({
           </div>
 
           <div className="flex-1 min-w-0 pr-2">
-            <p className="text-xs font-bold truncate text-slate-800 dark:text-slate-100">
+            <p
+              className={`text-xs truncate ${
+                isMe ? 'text-white font-bold' : 'text-slate-800 dark:text-slate-100 font-bold'
+              }`}
+            >
               {fileName}
             </p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+            <p
+              className={`text-[10px] mt-0.5 ${
+                isMe ? 'text-emerald-100/90' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
               {formatBytes(fileSize)} ·{' '}
               {driveFileId && !driveFileId.startsWith('supabase:') ? 'Google Drive' : 'Supabase'}
               {' · Nhấn để xem trước'}
@@ -343,22 +404,30 @@ export default function ChatAttachmentBubble({
 
           <div className="flex items-center gap-1.5 shrink-0">
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+              <Loader2 className={`h-4 w-4 animate-spin ${isMe ? 'text-white' : 'text-emerald-500'}`} />
             ) : isVideo ? (
               <>
                 <button
                   type="button"
                   onClick={handlePlayVideo}
                   title="Phát video"
-                  className="p-1 rounded-lg text-emerald-600 hover:bg-emerald-500/10 cursor-pointer"
+                  className={`p-1 rounded-lg cursor-pointer ${
+                    isMe
+                      ? 'text-white hover:bg-white/20'
+                      : 'text-emerald-600 hover:bg-emerald-500/10'
+                  }`}
                 >
-                  <Play className="h-4 w-4 fill-emerald-600" />
+                  <Play className={`h-4 w-4 ${isMe ? 'fill-white' : 'fill-emerald-600'}`} />
                 </button>
                 <button
                   type="button"
                   onClick={(e) => handleDownload(e)}
                   title="Tải về"
-                  className="p-1 rounded-lg text-slate-400 hover:text-emerald-600 cursor-pointer"
+                  className={`p-1 rounded-lg cursor-pointer ${
+                    isMe
+                      ? 'text-white/80 hover:text-white hover:bg-white/20'
+                      : 'text-slate-400 hover:text-emerald-600'
+                  }`}
                 >
                   <Download className="h-4 w-4" />
                 </button>
@@ -368,7 +437,11 @@ export default function ChatAttachmentBubble({
                 type="button"
                 onClick={(e) => handleDownload(e)}
                 title="Tải về"
-                className="p-1 rounded-lg text-slate-500 hover:text-emerald-500 cursor-pointer"
+                className={`p-1 rounded-lg cursor-pointer ${
+                  isMe
+                    ? 'text-white/80 hover:text-white hover:bg-white/20'
+                    : 'text-slate-500 hover:text-emerald-500'
+                }`}
               >
                 <Download className="h-4 w-4" />
               </button>
@@ -391,14 +464,41 @@ export default function ChatAttachmentBubble({
       />
 
       {error && (
-        <p className="text-[10px] text-rose-500 font-semibold px-1">{error}</p>
+        <div className="px-1">
+          {isMe ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-black/25 text-rose-200 border border-rose-300/30 text-[10px] font-medium backdrop-blur-xs">
+              <AlertTriangle className="h-3 w-3 text-rose-300 shrink-0" />
+              <span>{error}</span>
+            </span>
+          ) : (
+            <p className="text-[10px] text-rose-500 font-semibold">{error}</p>
+          )}
+        </div>
       )}
 
       {/* Thông tin bảo lưu tệp 30 ngày & Nút gia hạn bởi Trưởng nhóm / Admin */}
-      <div className="flex items-center justify-between gap-2 px-1 text-[10px] text-slate-400 mt-1">
+      <div
+        className={`flex items-center justify-between gap-2 px-1 text-[10px] mt-1 ${
+          isMe ? 'text-emerald-100/90' : 'text-slate-400'
+        }`}
+      >
         <div className="flex items-center gap-1">
-          <Clock className="h-3 w-3 text-slate-400 shrink-0" />
-          <span className={retention.isPermanent ? 'text-emerald-500 font-semibold' : retention.isExpired ? 'text-rose-500 font-semibold' : 'text-slate-400'}>
+          <Clock className={`h-3 w-3 shrink-0 ${isMe ? 'text-emerald-200/80' : 'text-slate-400'}`} />
+          <span
+            className={
+              retention.isPermanent
+                ? isMe
+                  ? 'text-white font-bold'
+                  : 'text-emerald-500 font-semibold'
+                : retention.isExpired
+                ? isMe
+                  ? 'text-rose-200 font-semibold'
+                  : 'text-rose-500 font-semibold'
+                : isMe
+                ? 'text-emerald-100/90'
+                : 'text-slate-400'
+            }
+          >
             {retention.text}
           </span>
         </div>
@@ -409,7 +509,11 @@ export default function ChatAttachmentBubble({
               e.stopPropagation()
               setShowExtendModal(true)
             }}
-            className="flex items-center gap-0.5 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-semibold hover:underline cursor-pointer"
+            className={`flex items-center gap-0.5 font-semibold hover:underline cursor-pointer ${
+              isMe
+                ? 'text-white hover:text-emerald-100'
+                : 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
+            }`}
           >
             <CalendarPlus className="h-3 w-3" />
             Gia hạn

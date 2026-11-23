@@ -51,6 +51,7 @@ import {
   exportAllChatDataJson,
   CHAT_RETENTION_POLICY_NOTICE,
 } from '@/lib/senChatStorage'
+import { broadcastDeviceSettings } from '@/lib/senChatDeviceRelay'
 import { formatBytes } from '@/lib/chatLimits'
 
 interface ChatSettingsModalProps {
@@ -147,6 +148,7 @@ export default function ChatSettingsModal({
     setEphemeralEnabled(val)
     setEphemeralStorageEnabled(val)
     setStorageStats(getStorageUsageSummary())
+    broadcastDeviceSettings({ ephemeralEnabled: val })
   }
 
   // Cập nhật cấu hình riêng tư lên Supabase
@@ -188,17 +190,20 @@ export default function ChatSettingsModal({
   const handleChangeFontSize = (size: ChatFontSize) => {
     setFontSizeState(size)
     setChatFontSize(size)
+    broadcastDeviceSettings({ fontSize: size })
   }
 
   const handleChangeSendKey = (key: ChatSendKey) => {
     setSendKeyState(key)
     setChatSendKey(key)
+    broadcastDeviceSettings({ sendKey: key })
   }
 
   const handleToggleNotification = (key: keyof ChatNotificationSettings, val: boolean) => {
     const updated = { ...notifications, [key]: val }
     setNotificationsState(updated)
     setChatNotificationSettings(updated)
+    broadcastDeviceSettings({ notifications: updated })
   }
 
   const handleExportJson = () => {

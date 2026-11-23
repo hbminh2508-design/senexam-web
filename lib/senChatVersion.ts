@@ -4,7 +4,7 @@
  * Quy ước: Phiên bản chỉ sửa lỗi ghi tiêu đề "Bắt lại những con bò đang bay trên các vì sao".
  */
 
-export const SEN_CHAT_CURRENT_VERSION = '1.0.1'
+export const SEN_CHAT_CURRENT_VERSION = '1.0.2'
 
 export interface SenChatChangelogEntry {
   version: string
@@ -17,10 +17,25 @@ export interface SenChatChangelogEntry {
 
 export const SEN_CHAT_CHANGELOG: SenChatChangelogEntry[] = [
   {
+    version: '1.0.2',
+    releaseDate: '24/11/2026',
+    title: 'Bắt lại những con bò đang bay trên các vì sao',
+    isLatest: true,
+    isBugFixOnly: true,
+    changes: [
+      'Bắt lại những con bò đang bay trên các vì sao',
+      'Khắc phục lỗi lệch khung hiển thị của bảng kiểm tra chuẩn an toàn thiết bị và thanh banner',
+      'Sửa triệt để lỗi tải tệp Supabase và lỗi giải mã ảnh từ Google Drive',
+      'Bổ sung tính năng đồng bộ đa thiết bị, biến các thiết bị thành máy chủ trung gian chuyển tệp về server chính và phân chia luồng tin nhắn chuẩn nhất',
+      'Tự động đồng bộ cài đặt tính năng cá nhân hóa giữa các thiết bị cùng tài khoản theo thời gian thực',
+      'Tối ưu độ tương phản và giao diện thẻ tệp đính kèm trong bong bóng tin nhắn',
+    ],
+  },
+  {
     version: '1.0.1',
     releaseDate: '23/11/2026',
     title: 'Bắt lại những con bò đang bay trên các vì sao',
-    isLatest: true,
+    isLatest: false,
     isBugFixOnly: true,
     changes: [
       'Bắt lại những con bò đang bay trên các vì sao',
