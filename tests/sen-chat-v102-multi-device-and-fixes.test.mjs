@@ -185,13 +185,14 @@ test('Sen Chat v1.0.2: Quản lý thiết bị Node và định danh duy nhất'
 
 test('Sen Chat v1.0.2: Hàm đối soát tin nhắn reconcileMessages khử trùng lặp và sắp xếp theo thời gian', () => {
   const existing = [
-    { id: 'msg_1', content: 'Chào bạn', createdAt: '2026-11-24T00:00:00.000Z', isLocalOnly: true },
-    { id: 'msg_3', content: 'Bạn khỏe không?', createdAt: '2026-11-24T00:02:00.000Z' },
+    { id: 'msg_1', content: 'Chào bạn', createdAt: '2026-11-24T00:00:00.000Z', isLocalOnly: true, status: 'sending' },
+    { id: 'msg_3', content: 'Bạn khỏe không?', createdAt: '2026-11-24T00:02:00.000Z', status: 'seen' },
   ]
 
   const incoming = [
-    { id: 'msg_1', content: 'Chào bạn (server)', createdAt: '2026-11-24T00:00:00.000Z', decryptedUrl: 'blob:safe-url' },
-    { id: 'msg_2', content: 'Tin nhắn chen giữa từ thiết bị khác', createdAt: '2026-11-24T00:01:00.000Z' },
+    { id: 'msg_1', content: 'Chào bạn (server)', createdAt: '2026-11-24T00:00:00.000Z', decryptedUrl: 'blob:safe-url', status: 'sent' },
+    { id: 'msg_2', content: 'Tin nhắn chen giữa từ thiết bị khác', createdAt: '2026-11-24T00:01:00.000Z', status: 'sent' },
+    { id: 'msg_3', content: 'Bạn khỏe không?', createdAt: '2026-11-24T00:02:00.000Z', status: 'delivered' },
     { id: 'msg_4', content: 'Tin mới nhất', createdAt: '2026-11-24T00:03:00.000Z' },
   ]
 
@@ -206,6 +207,8 @@ test('Sen Chat v1.0.2: Hàm đối soát tin nhắn reconcileMessages khử trù
   // Kiểm tra việc bảo tồn các trường cục bộ
   assert.equal(merged[0].isLocalOnly, true, 'Trường isLocalOnly phải được bảo tồn')
   assert.equal(merged[0].decryptedUrl, 'blob:safe-url', 'Trường decryptedUrl từ incoming phải được kết hợp')
+  assert.equal(merged[0].status, 'sent', 'Trạng thái sending phải được nâng lên sent')
+  assert.equal(merged[2].status, 'seen', 'Trạng thái seen cao hơn phải được bảo toàn')
 })
 
 test('Sen Chat v1.0.2: Route /api/chat/sync xử lý relay_stream và sync_messages', () => {
@@ -225,7 +228,7 @@ test('Sen Chat v1.0.2: Route /api/chat/sync xử lý relay_stream và sync_messa
   )
 })
 
-test('Sen Chat v1.0.2: initDeviceRelay được tích hợp vào cả Desktop và Mobile', () => {
+test('Sen Chat v1.0.2: initDeviceRelay, broadcastRequestMessageSync và broadcastFileTransitReady được tích hợp vào cả Desktop và Mobile', () => {
   const deskChatCode = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')
   const mobChatCode = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
 
@@ -236,6 +239,40 @@ test('Sen Chat v1.0.2: initDeviceRelay được tích hợp vào cả Desktop v�
   assert.ok(
     mobChatCode.includes('initDeviceRelay'),
     'Mobile chat phải gọi initDeviceRelay'
+  )
+
+  // Kiểm tra broadcastRequestMessageSync được gọi thực tế
+  assert.ok(
+    deskChatCode.includes('broadcastRequestMessageSync('),
+    'Desktop chat phải gọi broadcastRequestMessageSync khi chuyển phòng/kết nối'
+  )
+  assert.ok(
+    mobChatCode.includes('broadcastRequestMessageSync('),
+    'Mobile chat phải gọi broadcastRequestMessageSync khi chuyển phòng/kết nối'
+  )
+
+  // Kiểm tra broadcastFileTransitReady được gọi khi tải tệp
+  assert.ok(
+    deskChatCode.includes('broadcastFileTransitReady('),
+    'Desktop chat phải gọi broadcastFileTransitReady khi gửi tệp'
+  )
+  assert.ok(
+    mobChatCode.includes('broadcastFileTransitReady('),
+    'Mobile chat phải gọi broadcastFileTransitReady khi gửi tệp'
+  )
+})
+
+test('Sen Chat v1.0.2: ChatFilePreviewModal và ChatAttachmentBubble (showExtendModal) dùng createPortal tránh bị kẹp trong message backdrop-filter', () => {
+  const previewModalCode = fs.readFileSync(path.join(process.cwd(), 'components/chat/ChatFilePreviewModal.tsx'), 'utf8')
+  const bubbleCode = fs.readFileSync(path.join(process.cwd(), 'components/chat/ChatAttachmentBubble.tsx'), 'utf8')
+
+  assert.ok(
+    previewModalCode.includes('createPortal(modalContent, document.body)'),
+    'ChatFilePreviewModal phải sử dụng createPortal vào document.body'
+  )
+  assert.ok(
+    bubbleCode.includes('createPortal(') && bubbleCode.includes('document.body'),
+    'ChatAttachmentBubble phải sử dụng createPortal cho modal gia hạn lưu trữ'
   )
 })
 

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Download,
   FileText,
@@ -522,10 +523,10 @@ export default function ChatAttachmentBubble({
       </div>
 
       {/* Modal gia hạn lưu trữ cho tệp tin */}
-      {showExtendModal && (
+      {showExtendModal && typeof document !== 'undefined' && createPortal(
         <div
           onClick={(e) => e.stopPropagation()}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
         >
           <div className="w-full max-w-xs rounded-2xl bg-white p-4 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
@@ -573,7 +574,8 @@ export default function ChatAttachmentBubble({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -9,6 +9,7 @@
 
 import { supabase as defaultSupabase } from '@/lib/supabaseClient'
 import {
+  getLocalConversations,
   getLocalMessages,
   saveLocalMessages,
   getChatFontSize,
@@ -118,7 +119,7 @@ export function setDeviceNodeName(name: string): void {
  * - Hợp nhất trường trạng thái (vd: decryptedUrl, reactions)
  * - Sắp xếp theo thứ tự thời gian tăng dần
  */
-export function reconcileMessages<T extends { id: string; createdAt?: string }>(
+export function reconcileMessages<T extends { id: string; createdAt?: string; status?: string }>(
   existing: T[],
   incoming: T[]
 ): T[] {
@@ -137,8 +138,28 @@ export function reconcileMessages<T extends { id: string; createdAt?: string }>(
           map.set(msg.id, msg)
         } else {
           // Bảo lưu dữ liệu cục bộ đã giải mã nếu tin nhắn hiện tại có
-          const curr = map.get(msg.id)!
-          map.set(msg.id, { ...msg, ...curr })
+          const curr: any = map.get(msg.id)!
+          const inc: any = msg
+
+          // Trạng thái ưu tiên trạng thái cao hơn (seen > received > sent > sending)
+          const statusOrder: Record<string, number> = {
+            sending: 1,
+            sent: 2,
+            received: 3,
+            seen: 4,
+          }
+          const currScore = statusOrder[curr.status || ''] || 0
+          const incScore = statusOrder[inc.status || ''] || 0
+          const resolvedStatus = incScore >= currScore ? (inc.status || curr.status) : curr.status
+
+          map.set(msg.id, {
+            ...inc,
+            ...curr,
+            status: resolvedStatus,
+            decryptedUrl: curr.decryptedUrl || inc.decryptedUrl,
+            waveform: curr.waveform || inc.waveform,
+            transcription: curr.transcription || inc.transcription,
+          })
         }
       }
     }
@@ -286,21 +307,25 @@ export function initDeviceRelay({
     if (!payload || payload.requestingDeviceId === deviceId) return
 
     const { conversationId, requestingDeviceId } = payload
-    if (!conversationId) return
+    const convIds: string[] = conversationId
+      ? [conversationId]
+      : getLocalConversations().map((c: any) => c.id).filter(Boolean)
 
-    const localMsgs = getLocalMessages(conversationId)
-    if (localMsgs && localMsgs.length > 0) {
-      // Phản hồi lại tin nhắn đã lưu để thiết bị kia hợp nhất
-      channel.send({
-        type: 'broadcast',
-        event: 'response_message_sync',
-        payload: {
-          targetDeviceId: requestingDeviceId,
-          senderDeviceId: deviceId,
-          conversationId,
-          messages: localMsgs,
-        },
-      })
+    for (const cid of convIds) {
+      const localMsgs = getLocalMessages(cid)
+      if (localMsgs && localMsgs.length > 0) {
+        // Phản hồi lại tin nhắn đã lưu để thiết bị kia hợp nhất
+        channel.send({
+          type: 'broadcast',
+          event: 'response_message_sync',
+          payload: {
+            targetDeviceId: requestingDeviceId,
+            senderDeviceId: deviceId,
+            conversationId: cid,
+            messages: localMsgs,
+          },
+        })
+      }
     }
   })
 

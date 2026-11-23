@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X,
   Download,
@@ -175,8 +176,8 @@ export default function ChatFilePreviewModal({
     return `Bảo lưu còn ${days} ngày`
   }
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-md">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-md">
       <div className="relative flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 text-white shadow-2xl">
         {/* Header Modal */}
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3 sm:px-6">
@@ -474,4 +475,9 @@ export default function ChatFilePreviewModal({
       </div>
     </div>
   )
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body)
+  }
+  return null
 }

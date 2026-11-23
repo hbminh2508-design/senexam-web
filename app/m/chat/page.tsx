@@ -106,6 +106,7 @@ import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompres
 import {
   initDeviceRelay,
   broadcastRequestMessageSync,
+  broadcastFileTransitReady,
 } from '@/lib/senChatDeviceRelay'
 import {
   calculateSafetyNumber,
@@ -145,6 +146,10 @@ export default function MobileChatPage() {
   const [view, setView] = useState<'list' | 'conversation' | 'room-info'>('list')
   const [conversations, setConversations] = useState<SenChatConversation[]>([])
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
+  const selectedConvIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    selectedConvIdRef.current = selectedConvId
+  }, [selectedConvId])
   const [messages, setMessages] = useState<SenChatMessage[]>([])
   const [currentUser, setCurrentUser] = useState<SenChatUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -642,16 +647,19 @@ export default function MobileChatPage() {
       userId: currentUser.id,
       supabaseClient: supabase,
       onMessagesReconciled: (convId, reconciledMsgs) => {
-        if (activeConversation?.id === convId) {
+        if (selectedConvIdRef.current === convId) {
           setMessages(reconciledMsgs)
         }
       },
     })
 
+    // Đồng bộ ban đầu khi kết nối relay
+    broadcastRequestMessageSync(selectedConvIdRef.current || undefined)
+
     return () => {
       relay?.cleanup()
     }
-  }, [currentUser?.id, activeConversation?.id])
+  }, [currentUser?.id])
 
   // Theo dõi trạng thái mạng & Xả hàng đợi ngoại tuyến (Drain Queue) khi có mạng
   useEffect(() => {
@@ -703,6 +711,7 @@ export default function MobileChatPage() {
   // Chọn cuộc hội thoại
   const handleSelectConversation = useCallback((convId: string) => {
     setSelectedConvId(convId)
+    broadcastRequestMessageSync(convId)
     const msgs = getLocalMessages(convId)
     setMessages(msgs)
     setView('conversation')
@@ -2061,6 +2070,15 @@ export default function MobileChatPage() {
             saveLocalMessage(selectedConvId, msg)
             setMessages((prev) => [...prev, msg])
             setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+
+            broadcastFileTransitReady({
+              attachmentId: attData.id,
+              fileId: attData.driveFileId,
+              fileName: attData.fileName,
+              fileSize: attData.fileSize,
+              mimeType: attData.mimeType,
+              fileMetadata: { conversationId: selectedConvId, fileKeyBase64: attData.fileKeyBase64 },
+            })
             setTimeout(() => {
               messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
             }, 50)

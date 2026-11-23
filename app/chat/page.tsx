@@ -123,6 +123,7 @@ import {
 import {
   initDeviceRelay,
   broadcastRequestMessageSync,
+  broadcastFileTransitReady,
 } from '@/lib/senChatDeviceRelay'
 
 // Bộ sticker / biểu cảm nhanh
@@ -144,6 +145,10 @@ export default function SenChatPage() {
   // Cuộc hội thoại và tin nhắn
   const [conversations, setConversations] = useState<SenChatConversation[]>([])
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null)
+  const selectedConvIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    selectedConvIdRef.current = selectedConvId
+  }, [selectedConvId])
   const [messages, setMessages] = useState<SenChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -426,20 +431,25 @@ export default function SenChatPage() {
       userId: currentUser.id,
       supabaseClient: supabase,
       onMessagesReconciled: (convId, reconciledMsgs) => {
-        if (selectedConvId === convId) {
+        if (selectedConvIdRef.current === convId) {
           setMessages(reconciledMsgs)
         }
       },
     })
 
+    // Đồng bộ ban đầu khi kết nối relay
+    broadcastRequestMessageSync(selectedConvIdRef.current || undefined)
+
     return () => {
       relay?.cleanup()
     }
-  }, [currentUser?.id, selectedConvId])
+  }, [currentUser?.id])
 
   // 4. Chọn hội thoại & Tính toán Safety Number Signal
   useEffect(() => {
     if (selectedConvId && currentUser) {
+      selectedConvIdRef.current = selectedConvId
+      broadcastRequestMessageSync(selectedConvId)
       const msgs = getLocalMessages(selectedConvId)
       setMessages(msgs)
       setIsMobileListVisible(false)
@@ -2352,6 +2362,15 @@ export default function SenChatPage() {
                 event: 'new_e2ee_message',
                 payload: { ...newMsg, deviceId },
               }).catch(() => {})
+
+              broadcastFileTransitReady({
+                attachmentId: att.id,
+                fileId: att.driveFileId,
+                fileName: att.fileName,
+                fileSize: att.fileSize,
+                mimeType: att.mimeType,
+                fileMetadata: { conversationId: selectedConvId, fileKeyBase64: att.fileKeyBase64 },
+              })
             }
           }}
         />
