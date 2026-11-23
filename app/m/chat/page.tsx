@@ -98,6 +98,8 @@ import {
   ensureSenAiStudioInConversations,
   SENAI_STUDIO_CONVERSATION_ID,
   CHAT_RETENTION_POLICY_NOTICE,
+  getChatSendKey,
+  getChatNotificationSettings,
 } from '@/lib/senChatStorage'
 import ChatSenAiStudioView from '@/components/chat/ChatSenAiStudioView'
 import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
@@ -224,6 +226,7 @@ export default function MobileChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
+  const deviceId = useMemo(() => getOrCreateDeviceId(), [])
 
   // Đồng bộ trạng thái mở hội thoại cho CapacitorManager (để nút Back phần cứng biết)
   useEffect(() => {
@@ -261,6 +264,84 @@ export default function MobileChatPage() {
     if (!currentUser) return
     const channel = supabase
       .channel('sen-chat-realtime-transit')
+      .on('broadcast', { event: 'new_e2ee_message' }, async ({ payload }) => {
+        if (!payload || !currentUser) return
+        if (payload.deviceId === deviceId || payload.senderId === currentUser.id) return
+
+        const listConvs = getLocalConversations()
+        const activeOrMatchedConv = listConvs.find(
+          (c) => c.id === payload.conversationId || c.id === payload.receiverId || c.partnerId === payload.receiverId
+        )
+        const isTargetedToMe =
+          payload.receiverId === currentUser.id ||
+          Boolean(activeOrMatchedConv)
+        if (!isTargetedToMe) return
+
+        if (isUserBlocked(payload.senderId)) return
+
+        const isGroupTarget = activeOrMatchedConv?.isGroup
+        const targetConvId = isGroupTarget
+          ? (payload.conversationId || activeOrMatchedConv?.id || payload.receiverId)
+          : (payload.isSenAi || payload.senderId === 'senai' || payload.senderId === 'system')
+            ? (payload.invokedBy || payload.senderId)
+            : payload.senderId
+
+        const decompressedContent = await decompressChatMessage(payload.content || '')
+
+        const incomingMsg: SenChatMessage = {
+          id: payload.id || `msg_${Date.now()}`,
+          conversationId: targetConvId,
+          senderId: payload.senderId,
+          senderName: payload.senderName || (payload.isSenAi ? 'SenAI' : 'Bạn bè'),
+          receiverId: currentUser.id,
+          content: decompressedContent,
+          type: payload.type || 'text',
+          isSenAi: !!payload.isSenAi,
+          invokedBy: payload.invokedBy,
+          attachmentUrl: payload.attachmentUrl,
+          attachmentName: payload.attachmentName,
+          attachmentSize: payload.attachmentSize,
+          attachmentId: payload.attachmentId,
+          driveFileId: payload.driveFileId,
+          storageProvider: payload.storageProvider,
+          storagePath: payload.storagePath,
+          fileKeyBase64: payload.fileKeyBase64,
+          mimeType: payload.mimeType,
+          duration: payload.duration,
+          waveform: payload.waveform,
+          transcription: payload.transcription,
+          transcriptionLanguage: payload.transcriptionLanguage,
+          createdAt: payload.createdAt || new Date().toISOString(),
+          status: 'received',
+        }
+
+        saveLocalMessage(targetConvId, incomingMsg)
+        setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+        setMessages((prev) => {
+          if (selectedConvId === targetConvId) {
+            return [...prev, incomingMsg]
+          }
+          return prev
+        })
+
+        try {
+          const notifs = getChatNotificationSettings()
+          if (notifs.messageSound && typeof window !== 'undefined') {
+            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+            const osc = audioCtx.createOscillator()
+            const gain = audioCtx.createGain()
+            osc.type = 'sine'
+            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime)
+            osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12)
+            gain.gain.setValueAtTime(0.08, audioCtx.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25)
+            osc.connect(gain)
+            gain.connect(audioCtx.destination)
+            osc.start()
+            osc.stop(audioCtx.currentTime + 0.25)
+          }
+        } catch {}
+      })
       .on('broadcast', { event: 'call_request' }, ({ payload }) => {
         if (!payload || !currentUser) return
         if (payload.receiverId === currentUser.id) {
@@ -672,8 +753,32 @@ export default function MobileChatPage() {
       // Cập nhật danh sách hội thoại
       setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
 
-      // 2. Nếu mất mạng: Đẩy vào Hàng Đợi Ngoại Tuyến với Idempotency Key
-      if (!isOnline) {
+      // 2. Gửi qua Realtime transit với nén văn bản nếu có mạng
+      if (isOnline) {
+        compressChatMessage(text)
+          .then((compressedText) => {
+            supabase.channel('sen-chat-realtime-transit').send({
+              type: 'broadcast',
+              event: 'new_e2ee_message',
+              payload: {
+                ...newMessage,
+                content: compressedText,
+                deviceId,
+              },
+            }).catch(() => {})
+          })
+          .catch(() => {
+            supabase.channel('sen-chat-realtime-transit').send({
+              type: 'broadcast',
+              event: 'new_e2ee_message',
+              payload: {
+                ...newMessage,
+                deviceId,
+              },
+            }).catch(() => {})
+          })
+      } else {
+        // Nếu mất mạng: Đẩy vào Hàng Đợi Ngoại Tuyến với Idempotency Key
         globalOfflineChatQueue.enqueue({
           idempotencyKey,
           conversationId: selectedConvId,
@@ -694,7 +799,7 @@ export default function MobileChatPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       }, 50)
     },
-    [inputText, selectedConvId, currentUser, activeConversation, isOnline]
+    [inputText, selectedConvId, currentUser, activeConversation, isOnline, deviceId]
   )
 
   // Nhập tin nhắn & bắt trigger @Sen
@@ -1619,9 +1724,15 @@ export default function MobileChatPage() {
                   value={inputText}
                   onChange={handleInputChange}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
+                    if (e.key === 'Enter') {
+                      const sendKey = getChatSendKey()
+                      if (sendKey === 'enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      } else if (sendKey === 'shift_enter' && e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      }
                     }
                   }}
                   className="w-full max-h-24 bg-transparent text-xs outline-none resize-none"

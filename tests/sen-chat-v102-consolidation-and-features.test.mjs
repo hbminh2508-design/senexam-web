@@ -207,6 +207,16 @@ test('Sen Chat & Dashboard: Thẻ Sen Chat và cơ chế dừng hoạt động S
   assert.ok(studioPageContent.includes('THỬ NGAY'), 'Thanh thông báo có nút THỬ NGAY')
   assert.ok(studioPageContent.includes('1797267600000'), 'Trang Sen AI Studio sử dụng mốc 1797267600000 ms')
   assert.ok(studioPageContent.includes('Sen AI Studio đã dừng hoạt động'), 'Có modal thông báo khi đến hoặc sau ngày 15/12/2026')
+
+  // Kiểm tra navigation di động và m/page.tsx tự động chuyển tiếp/thay thế sau 15/12/2026
+  const bottomNavPath = path.join(process.cwd(), 'app/components/MobileBottomNav.tsx')
+  const bottomNavContent = fs.readFileSync(bottomNavPath, 'utf8')
+  assert.ok(bottomNavContent.includes("key: 'sen_chat'"), 'MobileBottomNav phải có thẻ Sen Chat')
+  assert.ok(bottomNavContent.includes('1797267600000'), 'MobileBottomNav kiểm tra mốc dừng hoạt động 1797267600000')
+
+  const mHomePath = path.join(process.cwd(), 'app/m/page.tsx')
+  const mHomeContent = fs.readFileSync(mHomePath, 'utf8')
+  assert.ok(mHomeContent.includes('1797267600000'), 'm/page.tsx tự động chuyển đổi sang Sen Chat khi qua mốc 1797267600000')
 })
 
 // ==============================================================================
@@ -218,4 +228,10 @@ test('Sen Chat: app/m/chat/page.tsx không chứa chuỗi cấm "SC" hoặc "Sen
   const hasForbiddenSenCash = /SenCash/i.test(mobileChatContent)
   assert.equal(hasForbiddenSC, false, 'app/m/chat/page.tsx tuyệt đối không được chứa từ "SC"')
   assert.equal(hasForbiddenSenCash, false, 'app/m/chat/page.tsx tuyệt đối không được chứa từ "SenCash"')
+
+  // Kiểm tra mobile chat hỗ trợ nén tin nhắn gửi và giải nén realtime
+  assert.ok(mobileChatContent.includes('compressChatMessage'), 'Mobile chat tích hợp compressChatMessage')
+  assert.ok(mobileChatContent.includes('decompressChatMessage'), 'Mobile chat tích hợp decompressChatMessage')
+  assert.ok(mobileChatContent.includes('new_e2ee_message'), 'Mobile chat lắng nghe sự kiện new_e2ee_message realtime')
+  assert.ok(mobileChatContent.includes('getChatSendKey'), 'Mobile chat tôn trọng tùy chọn phím gửi Enter / Shift+Enter')
 })

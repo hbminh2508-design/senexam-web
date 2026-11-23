@@ -112,6 +112,8 @@ import {
   ensureSenAiStudioInConversations,
   SENAI_STUDIO_CONVERSATION_ID,
   CHAT_RETENTION_POLICY_NOTICE,
+  getChatSendKey,
+  getChatNotificationSettings,
 } from '@/lib/senChatStorage'
 import {
   calculateSafetyNumber,
@@ -528,6 +530,25 @@ export default function SenChatPage() {
         if (selectedConvId === targetConvId) {
           setMessages((prev) => [...prev, incomingMsg])
         }
+
+        // Thông báo âm thanh tin nhắn mới
+        try {
+          const notifs = getChatNotificationSettings()
+          if (notifs.messageSound && typeof window !== 'undefined') {
+            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+            const osc = audioCtx.createOscillator()
+            const gain = audioCtx.createGain()
+            osc.type = 'sine'
+            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime)
+            osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12)
+            gain.gain.setValueAtTime(0.08, audioCtx.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25)
+            osc.connect(gain)
+            gain.connect(audioCtx.destination)
+            osc.start()
+            osc.stop(audioCtx.currentTime + 0.25)
+          }
+        } catch {}
       })
       .on('broadcast', { event: 'call_request' }, ({ payload }) => {
         if (!payload || !currentUser) return
@@ -1969,6 +1990,23 @@ export default function SenChatPage() {
                       const suggestions = getSenAiAutocompleteSuggestions(val)
                       setSenAiSuggestions(suggestions)
                       setShowSenAiAutocomplete(suggestions.length > 0)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const sendKey = getChatSendKey()
+                        if (sendKey === 'shift_enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          return
+                        }
+                        if (sendKey === 'enter' && e.shiftKey) {
+                          e.preventDefault()
+                          return
+                        }
+                        e.preventDefault()
+                        if (inputText.trim()) {
+                          handleSendMessage()
+                        }
+                      }
                     }}
                     placeholder="Nhập tin nhắn bảo mật E2EE (gõ @Sen để hỏi AI)..."
                     className="min-h-[44px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"

@@ -65,7 +65,7 @@ export async function compressChatMessage(text: string): Promise<string> {
 
     // 1. TrÃ¬nh duyá»‡t há»— trá»£ CompressionStream chuáº©n Web API
     if (typeof CompressionStream !== 'undefined') {
-      const stream = new Response(rawBytes).body?.pipeThrough(new CompressionStream('gzip'))
+      const stream = new Response(new Blob([rawBytes])).body?.pipeThrough(new CompressionStream('gzip'))
       if (stream) {
         const compressedBuffer = await new Response(stream).arrayBuffer()
         const base64 = uint8ArrayToBase64(new Uint8Array(compressedBuffer))
@@ -108,7 +108,7 @@ export async function decompressChatMessage(compressedOrPlain: string): Promise<
 
     // 1. TrÃ¬nh duyá»‡t há»— trá»£ DecompressionStream chuáº©n Web API
     if (typeof DecompressionStream !== 'undefined') {
-      const stream = new Response(compressedBytes as any).body?.pipeThrough(
+      const stream = new Response(new Blob([compressedBytes])).body?.pipeThrough(
         new DecompressionStream('gzip')
       )
       if (stream) {

@@ -136,6 +136,16 @@ const ALL_FEATURES: FeatureItem[] = [
 
   // 3. SenAI & Quota
   {
+    key: 'sen_chat',
+    title: 'Sen Chat & SenAI',
+    desc: 'Trò chuyện bảo mật E2EE, gửi tệp 1GB và tích hợp xưởng SenAI Studio trực tiếp.',
+    href: '/chat',
+    tone: 'from-cyan-400 via-sky-500 to-indigo-600',
+    badge: 'Mới & E2EE',
+    icon: MessageSquare,
+    category: 'senai',
+  },
+  {
     key: 'senai_studio',
     title: 'SenAI Studio',
     desc: 'Xưởng AI cá nhân hoá tạo đề, chấm bài và giải thích chi tiết.',
@@ -279,9 +289,14 @@ export default function MobileBottomNav() {
     (pathname?.startsWith('/new-sen-ground') && !isLibraryActive) || pathname?.startsWith('/new-exams')
 
   const filteredFeatures = useMemo(() => {
+    const isStudioSunset = Date.now() >= 1797267600000 // 2026-12-15T00:00:00+07:00
+    const list = ALL_FEATURES.filter((f) => {
+      if (f.key === 'senai_studio' && isStudioSunset) return false
+      return true
+    })
     const q = searchQuery.trim().toLowerCase()
-    if (!q) return ALL_FEATURES
-    return ALL_FEATURES.filter(
+    if (!q) return list
+    return list.filter(
       (f) => f.title.toLowerCase().includes(q) || f.desc.toLowerCase().includes(q)
     )
   }, [searchQuery])

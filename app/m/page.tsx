@@ -374,15 +374,17 @@ export default function MobileDashboardPage() {
             <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">Cash Mobile</span>
           </Link>
 
-          {/* SenAI Studio */}
+          {/* SenAI Studio (Tự động chuyển tiếp sang Sen Chat sau ngày dừng hoạt động 15/12/2026) */}
           <Link
-            href="/new-senai-studio"
+            href={Date.now() >= 1797267600000 ? '/m/chat' : '/new-senai-studio'}
             className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/5 dark:border-white/10 shadow-xs active:scale-95 transition space-y-1 text-center"
           >
             <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <Sparkles className="h-4 w-4" />
             </div>
-            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">SenAI Studio</span>
+            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200">
+              {Date.now() >= 1797267600000 ? 'Sen Chat' : 'SenAI Studio'}
+            </span>
           </Link>
 
           {/* SenGraph 2D & 3D */}
