@@ -45,9 +45,9 @@ test('Sen Chat v1.0.1: Phiên bản hiện tại là 1.0.1 và ghi log chính x�
 })
 
 // ==============================================================================
-// 2. KIỂM THỬ LƯU TRỮ BỀN VỮNG & BẢO TOÀN DANH SÁCH CUỘC TRÒ CHUYỆN
+// 2. KIỂM THỬ LƯU TRỮ BỀN VỮNG & BẢO TOÀN DANH SÁCH CUỘC TRÒ CHUYỆN (SOURCE & RUNTIME)
 // ==============================================================================
-test('Sen Chat v1.0.1: Lưu trữ chat bền vững trong Local Storage và bảo toàn người nhắn tin', () => {
+test('Sen Chat v1.0.1: Lưu trữ chat bền vững trong Local Storage và bảo toàn người nhắn tin', async () => {
   const storageFilePath = path.join(process.cwd(), 'lib/senChatStorage.ts')
   const code = fs.readFileSync(storageFilePath, 'utf8')
 
@@ -72,6 +72,149 @@ test('Sen Chat v1.0.1: Lưu trữ chat bền vững trong Local Storage và bả
     !code.includes('localStorage.removeItem(STORAGE_KEYS.CONVERSATIONS)'),
     'clearAllLocalChatData tuyệt đối KHÔNG được xóa key CONVERSATIONS khi đăng xuất'
   )
+
+  // RUNTIME TEST với mock Storage
+  const {
+    getLocalConversations,
+    saveLocalConversation,
+    getLocalMessages,
+    saveLocalMessage,
+    clearAllEphemeralMessages,
+    clearAllLocalMessages,
+    clearAllLocalChatData,
+    isEphemeralStorageEnabled,
+    getStorageUsageSummary,
+  } = await import('../lib/senChatStorage.mjs')
+
+  const store = new Map()
+  const mockLocalStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+    get length() {
+      return store.size
+    },
+    key: (i) => Array.from(store.keys())[i] || null,
+  }
+
+  // Gắn mock vào global window
+  const originalWindow = globalThis.window
+  const originalLocalStorage = globalThis.localStorage
+  globalThis.window = {}
+  globalThis.localStorage = mockLocalStorage
+
+  try {
+    // 1. Mặc định lưu trữ bền vững
+    assert.equal(isEphemeralStorageEnabled(), false, 'isEphemeralStorageEnabled phải trả về false mặc định')
+    const initialStats = getStorageUsageSummary()
+    assert.equal(initialStats.ephemeralEnabled, false, 'getStorageUsageSummary phải trả về ephemeralEnabled: false')
+
+    // 2. Thêm 3 cuộc hội thoại với mốc thời gian khác nhau
+    const conv1 = {
+      id: 'user_1',
+      partnerId: 'user_1',
+      partnerName: 'Nguyễn Văn A',
+      partnerIdentifier: '0901234567',
+      avatarUrl: 'https://avatar.com/1.png',
+      updatedAt: 1000,
+      unreadCount: 2,
+    }
+    const conv2 = {
+      id: 'user_2',
+      partnerId: 'user_2',
+      partnerName: 'Trần Thị B',
+      partnerIdentifier: 'b@senexam.me',
+      avatarUrl: 'https://avatar.com/2.png',
+      updatedAt: 3000,
+      unreadCount: 1,
+    }
+    const conv3 = {
+      id: 'group_mls_1',
+      partnerId: 'group_mls_1',
+      partnerName: 'Nhóm Học Tập MLS',
+      partnerIdentifier: 'Nhóm MLS',
+      isGroup: true,
+      avatarUrl: 'https://avatar.com/group.png',
+      updatedAt: 2000,
+      unreadCount: 5,
+    }
+
+    saveLocalConversation(conv1)
+    saveLocalConversation(conv2)
+    saveLocalConversation(conv3)
+
+    // Thêm tin nhắn vào các cuộc hội thoại
+    saveLocalMessage('user_1', {
+      id: 'm1',
+      conversationId: 'user_1',
+      senderId: 'user_1',
+      senderName: 'Nguyễn Văn A',
+      receiverId: 'me',
+      content: 'Chào bạn',
+      type: 'text',
+      createdAt: new Date().toISOString(),
+      status: 'received',
+    })
+    saveLocalMessage('group_mls_1', {
+      id: 'm2',
+      conversationId: 'group_mls_1',
+      senderId: 'user_2',
+      senderName: 'Trần Thị B',
+      receiverId: 'group_mls_1',
+      content: 'Bài tập 3 đã xong',
+      type: 'text',
+      createdAt: new Date().toISOString(),
+      status: 'received',
+    })
+
+    // Thứ tự trước khi xóa: Do group_mls_1 và user_1 vừa nhận tin nhắn, chúng có updatedAt mới nhất
+    const convListBefore = getLocalConversations()
+    assert.equal(convListBefore.length, 3)
+    const expectedOrderBefore = convListBefore.map((c) => c.id)
+    assert.equal(getLocalMessages('user_1').length, 1)
+    assert.equal(getLocalMessages('group_mls_1').length, 1)
+
+    // 3. Thực hiện Xóa tin nhắn tạm thời (clearAllEphemeralMessages)
+    clearAllEphemeralMessages()
+
+    // Kiểm tra: Mọi tin nhắn đã bị xóa
+    assert.equal(getLocalMessages('user_1').length, 0, 'Tin nhắn của user_1 phải bị xóa')
+    assert.equal(getLocalMessages('group_mls_1').length, 0, 'Tin nhắn của group_mls_1 phải bị xóa')
+
+    // Kiểm tra: Danh sách hội thoại VẪN GIỮ NGUYÊN và ĐÚNG THỨ TỰ THỜI GIAN SO VỚI TRƯỚC KHI XÓA
+    const convListAfter = getLocalConversations()
+    assert.equal(convListAfter.length, 3, 'Danh sách cuộc hội thoại phải được bảo toàn đầy đủ 3 cuộc trò chuyện')
+    assert.deepEqual(
+      convListAfter.map((c) => c.id),
+      expectedOrderBefore,
+      'Thứ tự các cuộc hội thoại sau khi xóa tin nhắn phải được bảo toàn tuyệt đối theo đúng thứ tự từ trước'
+    )
+
+    // Kiểm tra chi tiết từng người nhắn tin
+    const c1 = convListAfter.find((c) => c.id === 'user_1')
+    assert.equal(c1.partnerName, 'Nguyễn Văn A')
+    assert.equal(c1.partnerIdentifier, '0901234567')
+    assert.equal(c1.avatarUrl, 'https://avatar.com/1.png')
+    assert.equal(c1.unreadCount, 0, 'unreadCount phải được reset về 0')
+    assert.equal(c1.lastMessage, undefined, 'lastMessage phải được dọn sạch')
+
+    const cGroup = convListAfter.find((c) => c.id === 'group_mls_1')
+    assert.equal(cGroup.partnerName, 'Nhóm Học Tập MLS')
+    assert.equal(cGroup.isGroup, true, 'isGroup phải được giữ nguyên')
+
+    // 4. Kiểm tra clearAllLocalChatData (khi Đăng xuất): CONVERSATIONS vẫn được giữ lại theo đúng thứ tự
+    clearAllLocalChatData()
+    const convListAfterLogout = getLocalConversations()
+    assert.equal(convListAfterLogout.length, 3, 'Khi đăng xuất, danh sách người nhắn tin vẫn được bảo toàn')
+    assert.deepEqual(
+      convListAfterLogout.map((c) => c.id),
+      expectedOrderBefore,
+      'Khi đăng xuất, thứ tự cuộc trò chuyện vẫn được giữ nguyên'
+    )
+  } finally {
+    globalThis.window = originalWindow
+    globalThis.localStorage = originalLocalStorage
+  }
 })
 
 // ==============================================================================

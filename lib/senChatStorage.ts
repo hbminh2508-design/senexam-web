@@ -240,6 +240,18 @@ export function deleteLocalMessage(conversationId: string, messageId: string): v
 export function clearAllLocalMessages(conversationId: string): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)
+  try {
+    const convs = getLocalConversations()
+    const c = convs.find((item) => item.id === conversationId)
+    if (c) {
+      c.lastMessage = undefined
+      c.lastMessageTime = undefined
+      c.unreadCount = 0
+      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
+    }
+  } catch (e) {
+    console.warn('Lỗi cập nhật hội thoại khi xóa tin nhắn:', e)
+  }
 }
 
 /**
@@ -326,7 +338,7 @@ export function getStorageUsageSummary(): {
   ephemeralEnabled: boolean
 } {
   if (typeof window === 'undefined') {
-    return { messageCount: 0, conversationCount: 0, approxBytes: 0, ephemeralEnabled: true }
+    return { messageCount: 0, conversationCount: 0, approxBytes: 0, ephemeralEnabled: false }
   }
 
   let totalBytes = 0

@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import { X, Sparkles, CheckCircle2, Calendar, ShieldCheck, History } from 'lucide-react'
 import { SEN_CHAT_CURRENT_VERSION, SEN_CHAT_CHANGELOG } from '@/lib/senChatVersion'
 
@@ -10,6 +10,15 @@ interface ChatVersionModalProps {
 }
 
 export default function ChatVersionModal({ isOpen, onClose }: ChatVersionModalProps) {
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
@@ -17,6 +26,9 @@ export default function ChatVersionModal({ isOpen, onClose }: ChatVersionModalPr
       role="dialog"
       aria-modal="true"
       aria-labelledby="chat-version-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-200/80 dark:border-slate-800 dark:bg-slate-900 text-slate-800 dark:text-slate-100 animate-in zoom-in-95 duration-200">
