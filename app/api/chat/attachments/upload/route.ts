@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Xác minh người dùng là thành viên hội thoại
-      const { data: member } = await supabaseAdmin
+      let { data: member } = await supabaseAdmin
         .from('chat_members')
         .select('id')
         .eq('conversation_id', conversationId)
@@ -87,7 +87,40 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       if (!member) {
-        return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
+        // Kiểm tra cuộc hội thoại
+        const { data: convCheck } = await supabaseAdmin
+          .from('chat_conversations')
+          .select('id, type')
+          .eq('id', conversationId)
+          .maybeSingle()
+
+        if (!convCheck) {
+          // Hội thoại 1-1 chưa lưu CSDL -> Tự động khởi tạo và kết nạp thành viên
+          try {
+            await supabaseAdmin.from('chat_conversations').insert({
+              id: conversationId,
+              type: 'direct',
+              created_by: user.id,
+            })
+            await supabaseAdmin.from('chat_members').insert({
+              conversation_id: conversationId,
+              user_id: user.id,
+              role: 'member',
+            })
+            member = { id: 'auto_direct_member' }
+          } catch {}
+        } else if (convCheck.type !== 'group') {
+          try {
+            await supabaseAdmin.from('chat_members').insert({
+              conversation_id: conversationId,
+              user_id: user.id,
+              role: 'member',
+            })
+            member = { id: 'auto_direct_member' }
+          } catch {}
+        } else {
+          return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
+        }
       }
 
       // Kiểm tra hạn mức dung lượng nhóm 15GB nếu là cuộc trò chuyện nhóm
@@ -254,7 +287,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Xác minh người dùng là thành viên hội thoại
-    const { data: member } = await supabaseAdmin
+    let { data: member } = await supabaseAdmin
       .from('chat_members')
       .select('id')
       .eq('conversation_id', conversationId)
@@ -262,7 +295,38 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (!member) {
-      return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
+      const { data: convCheck } = await supabaseAdmin
+        .from('chat_conversations')
+        .select('id, type')
+        .eq('id', conversationId)
+        .maybeSingle()
+
+      if (!convCheck) {
+        try {
+          await supabaseAdmin.from('chat_conversations').insert({
+            id: conversationId,
+            type: 'direct',
+            created_by: user.id,
+          })
+          await supabaseAdmin.from('chat_members').insert({
+            conversation_id: conversationId,
+            user_id: user.id,
+            role: 'member',
+          })
+          member = { id: 'auto_direct_member' }
+        } catch {}
+      } else if (convCheck.type !== 'group') {
+        try {
+          await supabaseAdmin.from('chat_members').insert({
+            conversation_id: conversationId,
+            user_id: user.id,
+            role: 'member',
+          })
+          member = { id: 'auto_direct_member' }
+        } catch {}
+      } else {
+        return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
+      }
     }
 
     // KIỂM TRA HẠN MỨC SERVER-SIDE (TUYỆT ĐỐI KHÔNG TIN CLIENT)

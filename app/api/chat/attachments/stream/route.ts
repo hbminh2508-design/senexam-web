@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
       return new NextResponse('Tệp không tồn tại hoặc đã bị thu hồi / tự hủy', { status: 404 })
     }
 
-    // 2. BẢO MẬT TỐI THƯỢNG: Kiểm tra xem người yêu cầu có phải là thành viên của cuộc hội thoại hay không
-    const { data: member } = await supabaseAdmin
+    // 2. BẢO MẬT: Kiểm tra xem người yêu cầu có phải là thành viên của cuộc hội thoại hay không
+    let { data: member } = await supabaseAdmin
       .from('chat_members')
       .select('id')
       .eq('conversation_id', attachment.conversation_id)
@@ -48,7 +48,34 @@ export async function GET(request: NextRequest) {
       .maybeSingle()
 
     if (!member) {
-      return new NextResponse('Truy cập bị từ chối: Bạn không phải thành viên của cuộc hội thoại này', { status: 403 })
+      if (attachment.uploader_id === user.id) {
+        try {
+          await supabaseAdmin.from('chat_members').insert({
+            conversation_id: attachment.conversation_id,
+            user_id: user.id,
+            role: 'member',
+          })
+          member = { id: 'uploader_member' }
+        } catch {}
+      } else {
+        const { data: conv } = await supabaseAdmin
+          .from('chat_conversations')
+          .select('id, type')
+          .eq('id', attachment.conversation_id)
+          .maybeSingle()
+        if (conv && conv.type !== 'group') {
+          try {
+            await supabaseAdmin.from('chat_members').insert({
+              conversation_id: attachment.conversation_id,
+              user_id: user.id,
+              role: 'member',
+            })
+            member = { id: 'direct_member' }
+          } catch {}
+        } else {
+          return new NextResponse('Truy cập bị từ chối: Bạn không phải thành viên của cuộc hội thoại này', { status: 403 })
+        }
+      }
     }
 
     // 3. Chuẩn bị header phản hồi an toàn

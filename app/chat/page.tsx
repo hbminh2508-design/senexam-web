@@ -74,6 +74,8 @@ import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
 import ChatMessageContent from '@/components/chat/ChatMessageContent'
+import ChatSenAiStudioView from '@/components/chat/ChatSenAiStudioView'
+import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
 import {
   hasSenAiMention,
   extractSenAiQuery,
@@ -107,6 +109,9 @@ import {
   getWallpaperFor,
   setWallpaperFor,
   setupEphemeralCleanupListener,
+  ensureSenAiStudioInConversations,
+  SENAI_STUDIO_CONVERSATION_ID,
+  CHAT_RETENTION_POLICY_NOTICE,
 } from '@/lib/senChatStorage'
 import {
   calculateSafetyNumber,
@@ -392,9 +397,10 @@ export default function SenChatPage() {
     }
   }, [router])
 
-  // 3. Tải danh sách hội thoại
+  // 3. Tải danh sách hội thoại (Luôn ghim SenAI Studio ở vị trí đầu tiên)
   const refreshConversations = () => {
-    const list = getLocalConversations()
+    const rawList = getLocalConversations()
+    const list = ensureSenAiStudioInConversations(rawList)
     setConversations(list)
     if (!selectedConvId && list.length > 0) {
       setSelectedConvId(list[0].id)
@@ -463,7 +469,7 @@ export default function SenChatPage() {
 
     const channel = supabase
       .channel('sen-chat-realtime-transit')
-      .on('broadcast', { event: 'new_e2ee_message' }, ({ payload }) => {
+      .on('broadcast', { event: 'new_e2ee_message' }, async ({ payload }) => {
         if (!payload) return
 
         // Bỏ qua tin nhắn chính mình vừa gửi (nếu echo lại từ kênh transit)
@@ -487,13 +493,16 @@ export default function SenChatPage() {
             ? (payload.invokedBy || payload.senderId)
             : payload.senderId
 
+        // Giải nén tự động và minh bạch nếu tin nhắn gửi dạng nén
+        const decompressedContent = await decompressChatMessage(payload.content || '')
+
         const incomingMsg: SenChatMessage = {
           id: payload.id || `msg_${Date.now()}`,
           conversationId: targetConvId,
           senderId: payload.senderId,
           senderName: payload.senderName || (payload.isSenAi ? 'SenAI' : 'Bạn bè'),
           receiverId: currentUser.id,
-          content: payload.content || '',
+          content: decompressedContent,
           type: payload.type || 'text',
           isSenAi: !!payload.isSenAi,
           invokedBy: payload.invokedBy,
@@ -617,14 +626,18 @@ export default function SenChatPage() {
     })
     refreshConversations()
 
-    // Gửi qua Server Realtime Broadcast / Transit Queue nếu có mạng
+    // Gửi qua Server Realtime Broadcast / Transit Queue nếu có mạng (Nén tin nhắn văn bản)
     if (isOnline) {
       try {
+        const compressedContent =
+          newMsg.type === 'text' && newMsg.content ? await compressChatMessage(newMsg.content) : newMsg.content
+
         await supabase.channel('sen-chat-realtime-transit').send({
           type: 'broadcast',
           event: 'new_e2ee_message',
           payload: {
             ...newMsg,
+            content: compressedContent,
             deviceId,
           },
         })
@@ -958,13 +971,14 @@ export default function SenChatPage() {
     setShowNicknameModal(false)
   }
 
-  // Lọc hội thoại theo từ khóa
+  // Lọc hội thoại theo từ khóa (SenAI Studio luôn luôn hiển thị ở vị trí ghim)
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
       const q = searchQuery.toLowerCase().trim()
+      if (c.id === SENAI_STUDIO_CONVERSATION_ID && !q) return true
       const matchName = c.partnerName.toLowerCase().includes(q)
       const matchLast = (c.lastMessage || '').toLowerCase().includes(q)
-      const matchFilter = filterMode === 'all' || (filterMode === 'unread' && c.unreadCount > 0)
+      const matchFilter = filterMode === 'all' || (filterMode === 'unread' && c.unreadCount > 0) || c.id === SENAI_STUDIO_CONVERSATION_ID
       return (matchName || matchLast) && matchFilter
     })
   }, [conversations, searchQuery, filterMode])
@@ -1364,8 +1378,9 @@ export default function SenChatPage() {
             ) : (
               filteredConversations.map((c) => {
                 const isSelected = selectedConvId === c.id
-                const nickname = getNicknameFor(c.partnerId)
-                const displayName = nickname || c.partnerName
+                const isSenAiStudio = c.id === SENAI_STUDIO_CONVERSATION_ID
+                const nickname = isSenAiStudio ? 'SenAI Studio' : getNicknameFor(c.partnerId)
+                const displayName = isSenAiStudio ? 'SenAI Studio' : (nickname || c.partnerName)
 
                 return (
                   <button
@@ -1375,24 +1390,41 @@ export default function SenChatPage() {
                     className={`flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition active:scale-[0.98] ${
                       isSelected
                         ? 'bg-emerald-500/10 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100'
+                        : isSenAiStudio
+                        ? 'bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 border border-emerald-500/20'
                         : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/50'
                     }`}
                   >
-                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 font-bold text-white shadow-sm">
-                      {displayName.substring(0, 1).toUpperCase()}
+                    <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-sm ${
+                      isSenAiStudio
+                        ? 'bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 shadow-emerald-500/30'
+                        : 'bg-gradient-to-br from-emerald-400 to-teal-600'
+                    }`}>
+                      {isSenAiStudio ? (
+                        <Sparkles className="h-5 w-5 animate-pulse text-white" />
+                      ) : (
+                        displayName.substring(0, 1).toUpperCase()
+                      )}
                       <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
-                        <span className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
-                          {displayName}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
+                            {displayName}
+                          </span>
+                          {isSenAiStudio && (
+                            <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-[9px] font-black uppercase tracking-wider text-white">
+                              Studio
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-slate-400">{c.lastMessageTime || ''}</span>
                       </div>
                       <div className="flex items-center justify-between mt-0.5">
                         <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-                          {c.lastMessage || 'Bắt đầu trò chuyện...'}
+                          {c.lastMessage || (isSenAiStudio ? 'Trợ lý học tập & nghiên cứu' : 'Bắt đầu trò chuyện...')}
                         </p>
                         {c.unreadCount > 0 && (
                           <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
@@ -1419,6 +1451,20 @@ export default function SenChatPage() {
         style={{ background: wallpaperObj.bgStyle }}
       >
         {activeConv ? (
+          activeConv.id === SENAI_STUDIO_CONVERSATION_ID ? (
+            <div className="flex h-full w-full flex-col">
+              <div className="md:hidden flex items-center px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileListVisible(true)}
+                  className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Quay lại danh sách
+                </button>
+              </div>
+              <ChatSenAiStudioView userId={currentUser?.id} />
+            </div>
+          ) : (
           <>
             {/* Header khung chat */}
             <div className="flex items-center justify-between border-b border-slate-200/60 bg-white/80 px-4 py-2.5 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
@@ -1564,6 +1610,14 @@ export default function SenChatPage() {
                 Mất kết nối mạng. Tin nhắn đang được lưu vào hàng đợi bảo mật và sẽ tự động gửi lại khi online.
               </div>
             )}
+
+            {/* Thông báo chính sách bảo mật lưu trữ 30 ngày */}
+            <div className="flex items-center justify-between px-4 py-1.5 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] shrink-0">
+              <div className="flex items-center gap-1.5 truncate">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">{CHAT_RETENTION_POLICY_NOTICE}</span>
+              </div>
+            </div>
 
             {/* Khung cuộn tin nhắn */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -1941,6 +1995,7 @@ export default function SenChatPage() {
               )}
             </div>
           </>
+          )
         ) : (
           <div className="flex h-full flex-1 flex-col items-center justify-center p-6 text-center select-none overflow-y-auto">
             <div className="max-w-lg w-full flex flex-col items-center space-y-6">

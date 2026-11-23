@@ -19,6 +19,15 @@ import {
   Database,
   Moon,
   Sun,
+  SlidersHorizontal,
+  Type,
+  Bell,
+  Volume2,
+  Download,
+  Film,
+  Image as ImageIcon,
+  FileText,
+  Music,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import {
@@ -28,6 +37,19 @@ import {
   clearAllEphemeralMessages,
   clearAllLocalChatData,
   getStorageUsageSummary,
+  getDetailedStorageBreakdown,
+  DetailedStorageBreakdown,
+  getChatFontSize,
+  setChatFontSize,
+  ChatFontSize,
+  getChatSendKey,
+  setChatSendKey,
+  ChatSendKey,
+  getChatNotificationSettings,
+  setChatNotificationSettings,
+  ChatNotificationSettings,
+  exportAllChatDataJson,
+  CHAT_RETENTION_POLICY_NOTICE,
 } from '@/lib/senChatStorage'
 import { formatBytes } from '@/lib/chatLimits'
 
@@ -43,7 +65,7 @@ interface ChatSettingsModalProps {
   isMobile?: boolean
 }
 
-type SettingsTab = 'profile' | 'privacy' | 'devices' | 'storage'
+type SettingsTab = 'profile' | 'preferences' | 'privacy' | 'devices' | 'storage'
 
 export default function ChatSettingsModal({
   isOpen,
@@ -68,14 +90,35 @@ export default function ChatSettingsModal({
     approxBytes: 0,
     ephemeralEnabled: true,
   })
+  const [detailedStorage, setDetailedStorage] = useState<DetailedStorageBreakdown>({
+    compressedMessages: { count: 0, bytes: 0 },
+    images: { count: 0, bytes: 0 },
+    videos: { count: 0, bytes: 0 },
+    files: { count: 0, bytes: 0 },
+    audio: { count: 0, bytes: 0 },
+    totalBytes: 0,
+    totalItems: 0,
+  })
+  const [fontSize, setFontSizeState] = useState<ChatFontSize>('normal')
+  const [sendKey, setSendKeyState] = useState<ChatSendKey>('enter')
+  const [notifications, setNotificationsState] = useState<ChatNotificationSettings>({
+    messageSound: true,
+    callSound: true,
+    mentionSen: true,
+  })
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [clearSuccessMsg, setClearSuccessMsg] = useState<string | null>(null)
+  const [exportSuccessMsg, setExportSuccessMsg] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
     setEphemeralEnabled(isEphemeralStorageEnabled())
     setStorageStats(getStorageUsageSummary())
+    setDetailedStorage(getDetailedStorageBreakdown())
+    setFontSizeState(getChatFontSize())
+    setSendKeyState(getChatSendKey())
+    setNotificationsState(getChatNotificationSettings())
 
     // Tải cấu hình quyền riêng tư từ hồ sơ profiles của Supabase
     if (currentUser?.id) {
@@ -135,10 +178,46 @@ export default function ChatSettingsModal({
   const handleClearEphemeralNow = () => {
     clearAllEphemeralMessages()
     setStorageStats(getStorageUsageSummary())
+    setDetailedStorage(getDetailedStorageBreakdown())
     setShowClearConfirm(false)
     setClearSuccessMsg('Đã dọn sạch toàn bộ tin nhắn tạm thời trên thiết bị này!')
     if (onMessagesCleared) onMessagesCleared()
     setTimeout(() => setClearSuccessMsg(null), 3000)
+  }
+
+  const handleChangeFontSize = (size: ChatFontSize) => {
+    setFontSizeState(size)
+    setChatFontSize(size)
+  }
+
+  const handleChangeSendKey = (key: ChatSendKey) => {
+    setSendKeyState(key)
+    setChatSendKey(key)
+  }
+
+  const handleToggleNotification = (key: keyof ChatNotificationSettings, val: boolean) => {
+    const updated = { ...notifications, [key]: val }
+    setNotificationsState(updated)
+    setChatNotificationSettings(updated)
+  }
+
+  const handleExportJson = () => {
+    try {
+      const dataStr = exportAllChatDataJson()
+      const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `senchat-backup-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setExportSuccessMsg('Đã xuất bản sao lưu dữ liệu JSON thành công!')
+      setTimeout(() => setExportSuccessMsg(null), 3500)
+    } catch (err: any) {
+      alert('Lỗi xuất dữ liệu: ' + err?.message)
+    }
   }
 
   // Đăng xuất an toàn: Xóa sạch bộ nhớ tạm và chuyển hướng
@@ -208,6 +287,18 @@ export default function ChatSettingsModal({
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('preferences')}
+            className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
+              activeTab === 'preferences'
+                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Tùy chọn & Thông báo
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('privacy')}
             className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'privacy'
@@ -240,7 +331,7 @@ export default function ChatSettingsModal({
             }`}
           >
             <HardDrive className="h-4 w-4" />
-            Bộ nhớ tạm
+            Bộ nhớ & Lưu trữ
           </button>
         </div>
 
@@ -310,7 +401,130 @@ export default function ChatSettingsModal({
             </div>
           )}
 
-          {/* TAB 2: PRIVACY */}
+          {/* TAB 2: PREFERENCES & NOTIFICATIONS */}
+          {activeTab === 'preferences' && (
+            <div className="space-y-6">
+              {/* Cỡ chữ hiển thị tin nhắn */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Type className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold">Cỡ chữ hiển thị tin nhắn</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Điều chỉnh kích thước phông chữ tin nhắn văn bản phù hợp với thị giác của bạn.
+                </p>
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  {[
+                    { key: 'small', label: 'Nhỏ', desc: '13px' },
+                    { key: 'normal', label: 'Vừa (Chuẩn)', desc: '14px' },
+                    { key: 'large', label: 'Lớn', desc: '16px' },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => handleChangeFontSize(item.key as ChatFontSize)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
+                        fontSize === item.key
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold shadow-xs'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <span className="text-xs">{item.label}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">{item.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Cài đặt gửi tin nhắn */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
+                <span className="text-xs font-bold">Cài đặt phím gửi tin nhắn</span>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Lựa chọn thao tác phím thuận tiện nhất khi trò chuyện trên máy tính.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {[
+                    { key: 'enter', label: 'Enter để gửi', desc: 'Shift + Enter xuống dòng (Mặc định)' },
+                    { key: 'shift_enter', label: 'Shift + Enter để gửi', desc: 'Enter để xuống dòng' },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => handleChangeSendKey(item.key as ChatSendKey)}
+                      className={`flex flex-col p-3 rounded-xl border text-left transition ${
+                        sendKey === item.key
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold shadow-xs'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <span className="text-xs">{item.label}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">{item.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tùy chọn âm thanh & Thông báo */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold">Tùy chọn thông báo & Âm thanh</span>
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Âm báo tin nhắn mới</p>
+                      <p className="text-[11px] text-slate-400">Phát âm thanh nhẹ khi nhận được tin nhắn</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={notifications.messageSound}
+                        onChange={(e) => handleToggleNotification('messageSound', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-200/60 dark:border-slate-700/60 pt-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Âm cuộc gọi đến E2EE</p>
+                      <p className="text-[11px] text-slate-400">Đổ chuông khi có bạn bè yêu cầu gọi thoại hoặc video</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={notifications.callSound}
+                        onChange={(e) => handleToggleNotification('callSound', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-200/60 dark:border-slate-700/60 pt-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Nhắc tên @Sen trong nhóm</p>
+                      <p className="text-[11px] text-slate-400">Hiển thị thông báo khi có thành viên gọi trợ lý SenAI</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={notifications.mentionSen}
+                        onChange={(e) => handleToggleNotification('mentionSen', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: PRIVACY */}
           {activeTab === 'privacy' && (
             <div className="space-y-6">
               {privacySuccessMsg && (
@@ -432,7 +646,7 @@ export default function ChatSettingsModal({
             </div>
           )}
 
-          {/* TAB 4: EPHEMERAL STORAGE & RETENTION */}
+          {/* TAB 5: STORAGE & BACKUP */}
           {activeTab === 'storage' && (
             <div className="space-y-6">
               {clearSuccessMsg && (
@@ -441,6 +655,126 @@ export default function ChatSettingsModal({
                   <span>{clearSuccessMsg}</span>
                 </div>
               )}
+
+              {exportSuccessMsg && (
+                <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span>{exportSuccessMsg}</span>
+                </div>
+              )}
+
+              {/* Quản lý dung lượng chi tiết theo danh mục */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold">Phân loại dung lượng chi tiết</span>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200">
+                    Tổng: {formatBytes(detailedStorage.totalBytes || storageStats.approxBytes)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-bold">
+                      <FileText className="h-3.5 w-3.5 text-emerald-500" />
+                      <span>Tin nhắn nén</span>
+                    </div>
+                    <p className="text-xs font-black text-slate-800 dark:text-white">
+                      {detailedStorage.compressedMessages.count} tin
+                    </p>
+                    <p className="text-[10px] text-slate-400">{formatBytes(detailedStorage.compressedMessages.bytes)}</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-bold">
+                      <ImageIcon className="h-3.5 w-3.5 text-sky-500" />
+                      <span>Hình ảnh</span>
+                    </div>
+                    <p className="text-xs font-black text-slate-800 dark:text-white">
+                      {detailedStorage.images.count} ảnh
+                    </p>
+                    <p className="text-[10px] text-slate-400">{formatBytes(detailedStorage.images.bytes)}</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-bold">
+                      <Film className="h-3.5 w-3.5 text-purple-500" />
+                      <span>Video</span>
+                    </div>
+                    <p className="text-xs font-black text-slate-800 dark:text-white">
+                      {detailedStorage.videos.count} video
+                    </p>
+                    <p className="text-[10px] text-slate-400">{formatBytes(detailedStorage.videos.bytes)}</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-bold">
+                      <HardDrive className="h-3.5 w-3.5 text-amber-500" />
+                      <span>Tệp tin</span>
+                    </div>
+                    <p className="text-xs font-black text-slate-800 dark:text-white">
+                      {detailedStorage.files.count} tệp
+                    </p>
+                    <p className="text-[10px] text-slate-400">{formatBytes(detailedStorage.files.bytes)}</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] font-bold">
+                      <Music className="h-3.5 w-3.5 text-rose-500" />
+                      <span>Âm thanh</span>
+                    </div>
+                    <p className="text-xs font-black text-slate-800 dark:text-white">
+                      {detailedStorage.audio.count} ghi âm
+                    </p>
+                    <p className="text-[10px] text-slate-400">{formatBytes(detailedStorage.audio.bytes)}</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
+                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      <span>Hội thoại</span>
+                    </div>
+                    <p className="text-xs font-black text-emerald-800 dark:text-emerald-200">
+                      {storageStats.conversationCount} cuộc trò chuyện
+                    </p>
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400">Bảo lưu danh bạ</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chính sách vòng đời 30 ngày & Nhóm MLS vĩnh viễn */}
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-500/30 text-slate-800 dark:text-slate-100 space-y-2.5">
+                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>Vòng đời tin nhắn 30 ngày & Bảo toàn Nhóm vĩnh viễn</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Nhóm trò chuyện MLS & Danh bạ liên lạc</strong> được bảo toàn <strong>vĩnh viễn</strong>, không bao giờ bị mất dữ liệu.</li>
+                  <li><strong>Tin nhắn văn bản</strong> có thời hạn bảo mật tối đa <strong>30 ngày</strong> để tối ưu không gian và đảm bảo quyền riêng tư.</li>
+                  <li><strong>Tệp đính kèm</strong> (ảnh, video, tài liệu) tuân theo chính sách 30 ngày độc lập và có thể gia hạn thêm hoặc lưu vĩnh viễn bởi trưởng nhóm.</li>
+                  <li>Mỗi nhóm được phân bổ hạn mức dung lượng tối đa <strong>15GB</strong> dữ liệu media.</li>
+                </ul>
+              </div>
+
+              {/* Xuất sao lưu JSON */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-3">
+                <div>
+                  <h5 className="text-xs font-bold text-slate-800 dark:text-slate-100">Sao lưu & Xuất toàn bộ lịch sử</h5>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Tải về toàn bộ tin nhắn, danh sách hội thoại và cấu hình dưới định dạng JSON an toàn.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/20 transition shrink-0"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Export JSON</span>
+                </button>
+              </div>
 
               {/* Ephemeral mode toggle */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
@@ -461,38 +795,10 @@ export default function ChatSettingsModal({
                     <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
                   </label>
                 </div>
-
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] text-slate-400">Tin nhắn tạm</p>
-                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{storageStats.messageCount}</p>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] text-slate-400">Cuộc hội thoại</p>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{storageStats.conversationCount}</p>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] text-slate-400">Bộ nhớ tạm</p>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{formatBytes(storageStats.approxBytes)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* File retention policy explanation */}
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-slate-800 dark:text-slate-100 space-y-2">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>Chính sách lưu trữ tệp & Dung lượng nhóm</span>
-                </div>
-                <ul className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 list-disc pl-4">
-                  <li>Các tệp tin đính kèm (ảnh, video, tài liệu) được bảo lưu mặc định <strong>30 ngày</strong>.</li>
-                  <li>Trưởng nhóm (Group Owner) / Quản trị viên có quyền gia hạn thêm thời hạn lưu hoặc bảo lưu vĩnh viễn cho tệp.</li>
-                  <li>Mỗi nhóm được lưu trữ tối đa <strong>15GB</strong> dữ liệu media (ảnh, âm thanh, video, tệp tin).</li>
-                </ul>
               </div>
 
               {/* Action buttons */}
-              <div className="space-y-3 pt-2">
+              <div className="space-y-3 pt-1">
                 {showClearConfirm ? (
                   <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-900 space-y-2">
                     <p className="text-xs font-bold text-rose-700 dark:text-rose-300">

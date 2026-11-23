@@ -9,6 +9,7 @@ import 'katex/dist/katex.min.css'
 import TikzRenderer from '@/app/components/TikzRenderer'
 import { parseMessageLinks } from '@/lib/chatSanitizer'
 import { hasMathOrTikz } from '@/lib/senChatAi'
+import { isCompressedChatMessage, decompressChatMessageSync } from '@/lib/senChatCompression'
 
 interface ChatMessageContentProps {
   content: string
@@ -23,10 +24,14 @@ export default function ChatMessageContent({
 }: ChatMessageContentProps) {
   if (!content) return null
 
+  // Tự động giải nén minh bạch nếu tin nhắn đang ở định dạng nén SEN_Z:...
+  const rawContent = isCompressedChatMessage(content) ? decompressChatMessageSync(content) : content
+  if (!rawContent) return null
+
   // Nếu là tin nhắn từ SenAI hoặc có chứa ký hiệu KaTeX ($...$ / $$...$$) / TikZ
-  if (isSenAi || hasMathOrTikz(content)) {
+  if (isSenAi || hasMathOrTikz(rawContent)) {
     // Chuẩn hóa nếu có \begin{tikzpicture} chưa bọc trong code fence
-    let processedContent = content
+    let processedContent = rawContent
     if (processedContent.includes('\\begin{tikzpicture}')) {
       processedContent = processedContent.replace(
         /(```tikz\s*[\s\S]*?```)|(\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\})/gi,
@@ -90,7 +95,7 @@ export default function ChatMessageContent({
   }
 
   // Tin nhắn văn bản thông thường: Phân tích liên kết an toàn
-  const textParts = parseMessageLinks(content)
+  const textParts = parseMessageLinks(rawContent)
 
   return (
     <div className="text-xs leading-relaxed break-words">

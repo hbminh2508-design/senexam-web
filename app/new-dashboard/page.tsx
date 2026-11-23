@@ -150,6 +150,16 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'study',
   },
   {
+    key: 'sen-chat',
+    title: 'Sen Chat & SenAI',
+    description: 'Nền tảng trò chuyện bảo mật E2EE, gửi tệp 1GB và tích hợp xưởng trợ lý SenAI Studio trực tiếp.',
+    href: '/chat',
+    tone: 'from-[#06B6D4] via-[#3B82F6] to-[#8B5CF6]',
+    badge: 'Mới & E2EE',
+    icon: MessageCircle,
+    category: 'senai',
+  },
+  {
     key: 'senai',
     title: 'SenAI Studio',
     description: 'Xưởng AI cá nhân hoá để tạo đề, chấm bài và giải thích chi tiết.',
@@ -620,7 +630,12 @@ function NewDashboardContent() {
   const filteredActions = useMemo(() => {
     // Ẩn nút Admin & Teacher & Legacy Dashboard nếu user không có quyền
     const isAdmin = userRole === 'admin' || userRole === 'collab' || userEmail === 'hoangbinhminh2508@gmail.com'
+    const isStudioSunset = Date.now() >= 1797267600000 // 2026-12-15T00:00:00+07:00
     const allowedActions = QUICK_ACTIONS.filter((item) => {
+      // Sau ngày 15/12/2026, nút SenAI Studio tự động biến mất và chuyển hoàn toàn sang Sen Chat
+      if (item.key === 'senai' && isStudioSunset) {
+        return false
+      }
       if (item.key === 'admin' || item.key === 'legacy-dashboard') {
         return isAdmin
       }

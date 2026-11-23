@@ -95,7 +95,12 @@ import {
   getWallpaperFor,
   setWallpaperFor,
   setupEphemeralCleanupListener,
+  ensureSenAiStudioInConversations,
+  SENAI_STUDIO_CONVERSATION_ID,
+  CHAT_RETENTION_POLICY_NOTICE,
 } from '@/lib/senChatStorage'
+import ChatSenAiStudioView from '@/components/chat/ChatSenAiStudioView'
+import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
 import {
   calculateSafetyNumber,
   generateIdentityKeyPair,
@@ -467,7 +472,7 @@ export default function MobileChatPage() {
       }
 
       // 4. Tải danh sách cuộc trò chuyện
-      let list = getLocalConversations()
+      let list = ensureSenAiStudioInConversations(getLocalConversations())
       if (list.length === 0) {
         // Khởi tạo cuộc trò chuyện chào mừng chuẩn E2EE
         const welcomeConv: SenChatConversation = {
@@ -525,7 +530,7 @@ export default function MobileChatPage() {
             return { success: true }
           })
           setOfflinePendingCount(globalOfflineChatQueue.getPendingCount())
-          setConversations(getLocalConversations())
+          setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
         } catch {}
       }
       setIsLoading(false)
@@ -574,7 +579,7 @@ export default function MobileChatPage() {
         if (selectedConvId) {
           setMessages(getLocalMessages(selectedConvId))
         }
-        setConversations(getLocalConversations())
+        setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
       }
     }
 
@@ -665,7 +670,7 @@ export default function MobileChatPage() {
       setShowAiSuggestions(false)
 
       // Cập nhật danh sách hội thoại
-      setConversations(getLocalConversations())
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
 
       // 2. Nếu mất mạng: Đẩy vào Hàng Đợi Ngoại Tuyến với Idempotency Key
       if (!isOnline) {
@@ -739,7 +744,7 @@ export default function MobileChatPage() {
 
     saveLocalMessage(selectedConvId, likeMsg)
     setMessages((prev) => [...prev, likeMsg])
-    setConversations(getLocalConversations())
+    setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, 50)
@@ -790,7 +795,7 @@ export default function MobileChatPage() {
 
     saveLocalMessage(selectedConvId, newMsg)
     setMessages((prev) => [...prev, newMsg])
-    setConversations(getLocalConversations())
+    setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
     setIsRecordingVoice(false)
 
     setTimeout(() => {
@@ -871,7 +876,7 @@ export default function MobileChatPage() {
 
       saveLocalMessage(selectedConvId, finalAiMsg)
       setMessages((prev) => prev.map((m) => (m.id === aiPendingId ? finalAiMsg : m)))
-      setConversations(getLocalConversations())
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
     } catch {
       const errorMsg: SenChatMessage = {
         id: aiPendingId,
@@ -955,15 +960,18 @@ export default function MobileChatPage() {
     alert('Đã thiết lập mã PIN và sinh trắc học thành công!')
   }
 
-  // Lọc cuộc trò chuyện theo tab
+  // Lọc cuộc trò chuyện theo tab (SenAI Studio luôn luôn hiển thị ở đầu)
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
+      if (c.id === SENAI_STUDIO_CONVERSATION_ID && !searchQuery.trim()) return true
       const matchQuery =
         !searchQuery.trim() ||
         c.partnerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
       const matchTab =
         activeFilterTab === 'all'
+          ? true
+          : c.id === SENAI_STUDIO_CONVERSATION_ID
           ? true
           : activeFilterTab === 'group'
           ? Boolean(c.isGroup)
@@ -1203,42 +1211,64 @@ export default function MobileChatPage() {
                 </div>
               </div>
             ) : (
-              filteredConversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => handleSelectConversation(conv.id)}
-                  className="min-h-[64px] p-2.5 rounded-2xl flex items-center gap-3 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10 transition"
-                >
-                  <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-400 to-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
-                    {conv.partnerName.slice(0, 1).toUpperCase()}
-                    {conv.isGroup && (
-                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-indigo-600 text-[9px] text-white flex items-center justify-center">
-                        👥
+              filteredConversations.map((conv) => {
+                const isSenAiStudio = conv.id === SENAI_STUDIO_CONVERSATION_ID
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => handleSelectConversation(conv.id)}
+                    className={`min-h-[64px] p-2.5 rounded-2xl flex items-center gap-3 cursor-pointer transition ${
+                      isSenAiStudio
+                        ? 'bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/15'
+                        : 'hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10'
+                    }`}
+                  >
+                    <div className={`relative w-11 h-11 rounded-2xl font-black text-sm flex items-center justify-center shrink-0 shadow-xs ${
+                      isSenAiStudio
+                        ? 'bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 text-white shadow-emerald-500/30'
+                        : 'bg-gradient-to-tr from-sky-400 to-indigo-600 text-white'
+                    }`}>
+                      {isSenAiStudio ? (
+                        <Sparkles className="h-5 w-5 animate-pulse text-white" />
+                      ) : (
+                        conv.partnerName.slice(0, 1).toUpperCase()
+                      )}
+                      {conv.isGroup && (
+                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-indigo-600 text-[9px] text-white flex items-center justify-center">
+                          👥
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
+                            {isSenAiStudio ? 'SenAI Studio' : conv.partnerName}
+                          </h4>
+                          {isSenAiStudio && (
+                            <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-[9px] font-black uppercase tracking-wider text-white">
+                              Studio
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {conv.lastMessageTime || ''}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        {conv.lastMessage || (isSenAiStudio ? 'Trợ lý học tập & nghiên cứu' : 'Chưa có tin nhắn')}
+                      </p>
+                    </div>
+
+                    {conv.unreadCount > 0 && (
+                      <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                        {conv.unreadCount}
                       </span>
                     )}
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
-                        {conv.partnerName}
-                      </h4>
-                      <span className="text-[10px] text-slate-400 shrink-0">
-                        {conv.lastMessageTime || ''}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                      {conv.lastMessage || 'Chưa có tin nhắn'}
-                    </p>
-                  </div>
-
-                  {conv.unreadCount > 0 && (
-                    <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">
-                      {conv.unreadCount}
-                    </span>
-                  )}
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>
@@ -1248,6 +1278,33 @@ export default function MobileChatPage() {
           VIEW 2: KHUNG CHAT CHI TIẾT (CONVERSATION DETAIL)
           ======================================================================= */}
       {view === 'conversation' && activeConversation && (
+        activeConversation.id === SENAI_STUDIO_CONVERSATION_ID ? (
+          <div className="flex-1 flex flex-col w-full h-full overflow-hidden bg-white dark:bg-slate-950">
+            <div className="p-2.5 border-b border-black/10 dark:border-white/10 flex items-center gap-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedConvId(null)
+                  setView('list')
+                }}
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 active:scale-95 transition"
+                aria-label="Quay lại danh sách hội thoại"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-xs truncate">SenAI Studio</h3>
+                  <p className="text-[10px] text-slate-400">Trợ lý học tập & nghiên cứu</p>
+                </div>
+              </div>
+            </div>
+            <ChatSenAiStudioView userId={currentUser?.id} isMobile={true} />
+          </div>
+        ) : (
         <div
           className="flex-1 flex flex-col w-full h-full overflow-hidden transition-all duration-150"
           style={{
@@ -1324,6 +1381,14 @@ export default function MobileChatPage() {
               </button>
             </div>
           </header>
+
+          {/* Thông báo chính sách bảo mật lưu trữ 30 ngày */}
+          <div className="flex items-center justify-between px-3 py-1 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[10px] shrink-0">
+            <div className="flex items-center gap-1.5 truncate">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+              <span className="truncate">{CHAT_RETENTION_POLICY_NOTICE}</span>
+            </div>
+          </div>
 
           {/* Danh Sách Tin Nhắn */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -1586,6 +1651,7 @@ export default function MobileChatPage() {
             </div>
           )}
         </div>
+        )
       )}
 
       {/* =======================================================================
@@ -1787,7 +1853,7 @@ export default function MobileChatPage() {
                 isGroup: false,
               }
               saveLocalConversation(newConv)
-              setConversations(getLocalConversations())
+              setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
               handleSelectConversation(convId)
             }
           }}
@@ -1816,7 +1882,7 @@ export default function MobileChatPage() {
               isGroup: true,
             }
             saveLocalConversation(newConv)
-            setConversations(getLocalConversations())
+            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
             handleSelectConversation(group.id)
           }}
         />
@@ -1860,7 +1926,7 @@ export default function MobileChatPage() {
 
             saveLocalMessage(selectedConvId, msg)
             setMessages((prev) => [...prev, msg])
-            setConversations(getLocalConversations())
+            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
             setTimeout(() => {
               messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
             }, 50)
@@ -1911,7 +1977,7 @@ export default function MobileChatPage() {
         onOpenDeviceManager={() => setShowDeviceManagerModal(true)}
         onMessagesCleared={() => {
           setMessages([])
-          setConversations(getLocalConversations())
+          setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
         }}
         onLoggedOut={() => {
           router.replace('/new-idp?returnUrl=/m/chat')

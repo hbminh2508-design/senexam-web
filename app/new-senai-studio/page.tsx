@@ -14,6 +14,7 @@ import 'katex/dist/katex.min.css'
 import ModernLoading from '@/app/components/ModernLoading'
 import {
   ArrowLeft,
+  ArrowRight,
   Sparkles,
   Send,
   Loader2,
@@ -65,6 +66,24 @@ export default function NewSenAiStudioPage() {
   const [sending, setSending] = useState(false)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Đếm ngược thời gian dừng hoạt động SenAI Studio: 00:00 15/12/2026 GMT+7 (1797267600000)
+  const SENAI_SUNSET_TS = 1797267600000
+  const [currentTime, setCurrentTime] = useState<number>(() => Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const isSunset = currentTime >= SENAI_SUNSET_TS
+  const timeLeftMs = Math.max(0, SENAI_SUNSET_TS - currentTime)
+  const countdownDays = Math.floor(timeLeftMs / (1000 * 60 * 60 * 24))
+  const countdownHours = Math.floor((timeLeftMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+  const countdownMinutes = Math.floor((timeLeftMs % (1000 * 60 * 60)) / (1000 * 60))
+  const countdownSeconds = Math.floor((timeLeftMs % (1000 * 60)) / 1000)
 
   useEffect(() => {
     const dark = document.documentElement.classList.contains('dark') || localStorage.getItem('theme') === 'dark'
@@ -318,6 +337,27 @@ export default function NewSenAiStudioPage() {
         </div>
       </header>
 
+      {/* SUNSET ANNOUNCEMENT BANNER */}
+      <div className="shrink-0 bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 px-4 py-2 text-white shadow-md flex flex-wrap items-center justify-between gap-2 z-10">
+        <div className="flex items-center gap-2 flex-wrap text-xs font-bold">
+          <span className="flex h-2.5 w-2.5 rounded-full bg-yellow-300 animate-ping shrink-0" />
+          <span>
+            Sen AI Studio nay sẽ được chuyển thành Sen Chat. Sau ngày 15/12/2026, Sen AI Studio chính thức sẽ dừng hoạt động.
+          </span>
+          {!isSunset && (
+            <span className="bg-black/30 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[11px] font-mono tracking-wider text-yellow-200">
+              ⏳ Còn {countdownDays} ngày {countdownHours}h {countdownMinutes}m {countdownSeconds}s
+            </span>
+          )}
+        </div>
+        <Link
+          href="/chat"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-white text-slate-900 px-3.5 py-1 text-xs font-black hover:bg-white/90 transition shadow active:scale-95 shrink-0"
+        >
+          THỬ NGAY <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
       {/* BODY: SIDEBAR + CHAT AREA */}
       <div className="flex-1 flex overflow-hidden">
         {/* SIDEBAR: SESSIONS */}
@@ -518,6 +558,35 @@ export default function NewSenAiStudioPage() {
           </div>
         </div>
       </div>
+
+      {/* FULL-PAGE SUNSET OVERLAY (KHI ĐẾN HOẶC QUA 00:00 15/12/2026 GMT+7) */}
+      {isSunset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-xl p-4 animate-in fade-in duration-300">
+          <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 text-center shadow-2xl border border-black/10 dark:border-white/10">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+              <Sparkles className="w-8 h-8 text-indigo-500 animate-pulse" />
+            </div>
+            <h3
+              className="text-2xl font-black text-slate-900 dark:text-white mb-2"
+              style={{ fontFamily: 'var(--font-newsenai-heading)' }}
+            >
+              Sen AI Studio đã dừng hoạt động
+            </h3>
+            <p className="text-xs text-[#6B7280] dark:text-slate-300 leading-relaxed mb-6">
+              Kể từ <strong>00:00 ngày 15/12/2026</strong> (Giờ Việt Nam GMT+7), Sen AI Studio đã chính thức hoàn thành sứ mệnh và sáp nhập vĩnh viễn vào nền tảng <strong>Sen Chat</strong>.
+              <br /><br />
+              Mời bạn tiếp tục sử dụng toàn bộ tính năng xưởng AI, DeepThink, KaTeX và lịch sử phiên được lưu trữ an toàn trong Sen Chat!
+            </p>
+            <Link
+              href="/chat"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-black py-3.5 px-6 shadow-lg hover:opacity-95 transition active:scale-95"
+            >
+              <span>Chuyển sang Sen Chat Ngay</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

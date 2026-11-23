@@ -27,6 +27,7 @@ import {
   base64ToBytes,
 } from '@/lib/senChatChunkCrypto'
 import { openSafeDownload } from '@/lib/capacitorBridge'
+import ChatFilePreviewModal from '@/components/chat/ChatFilePreviewModal'
 
 interface ChatAttachmentBubbleProps {
   attachmentId?: string
@@ -70,6 +71,23 @@ export default function ChatAttachmentBubble({
   const [currentExpiresAt, setCurrentExpiresAt] = useState<string | undefined>(expiresAt)
   const [currentIsPermanent, setCurrentIsPermanent] = useState<boolean>(isPinnedPermanent)
   const [extendFeedback, setExtendFeedback] = useState<string | null>(null)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+
+  const handleOpenPreview = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    try {
+      if (!decryptedUrl) {
+        setIsLoading(true)
+        const url = await fetchAndDecryptBlob()
+        setDecryptedUrl(url)
+      }
+      setShowPreviewModal(true)
+    } catch (err: any) {
+      setError(err?.message || 'Lỗi khi chuẩn bị xem trước tệp')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const isExe = isExecutableFile(fileName, mimeType)
   const isRestricted = isRestrictedInlineFile(fileName, mimeType)
@@ -260,7 +278,7 @@ export default function ChatAttachmentBubble({
             src={decryptedUrl}
             alt={fileName}
             className="w-full max-h-72 object-cover cursor-pointer hover:scale-[1.01] transition"
-            onClick={handleDownload}
+            onClick={handleOpenPreview}
           />
           <button
             type="button"
@@ -278,19 +296,28 @@ export default function ChatAttachmentBubble({
           </div>
           <div className="flex items-center justify-between px-1 text-[10px] text-slate-400">
             <span className="truncate max-w-[200px]">{fileName}</span>
-            <button
-              type="button"
-              onClick={(e) => handleDownload(e)}
-              className="flex items-center gap-1 text-emerald-500 hover:underline font-bold cursor-pointer"
-            >
-              <Download className="h-3 w-3" /> Tải về
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleOpenPreview}
+                className="flex items-center gap-1 text-emerald-500 hover:underline font-bold cursor-pointer"
+              >
+                Xem toàn màn hình
+              </button>
+              <button
+                type="button"
+                onClick={(e) => handleDownload(e)}
+                className="flex items-center gap-1 text-slate-400 hover:text-emerald-500 font-bold cursor-pointer"
+              >
+                <Download className="h-3 w-3" /> Tải về
+              </button>
+            </div>
           </div>
         </div>
       ) : (
         /* Box tệp tin thông thường / SVG / HTML / Video chưa load */
         <div
-          onClick={isVideo ? (e) => handlePlayVideo(e) : (e) => handleDownload(e)}
+          onClick={handleOpenPreview}
           className="flex items-center gap-3 p-3 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 transition cursor-pointer"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -310,7 +337,7 @@ export default function ChatAttachmentBubble({
             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
               {formatBytes(fileSize)} ·{' '}
               {driveFileId && !driveFileId.startsWith('supabase:') ? 'Google Drive' : 'Supabase'}
-              {isVideo && ' · Nhấn để xem video'}
+              {' · Nhấn để xem trước'}
             </p>
           </div>
 
@@ -349,6 +376,19 @@ export default function ChatAttachmentBubble({
           </div>
         </div>
       )}
+
+      {/* Modal xem trước đa định dạng */}
+      <ChatFilePreviewModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        fileUrl={decryptedUrl}
+        fileName={fileName}
+        fileSize={fileSize}
+        mimeType={mimeType}
+        expiresAt={currentExpiresAt}
+        isPinnedPermanent={currentIsPermanent}
+        onDownload={() => handleDownload()}
+      />
 
       {error && (
         <p className="text-[10px] text-rose-500 font-semibold px-1">{error}</p>
