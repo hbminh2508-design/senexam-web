@@ -51,7 +51,12 @@ import {
   exportAllChatDataJson,
   CHAT_RETENTION_POLICY_NOTICE,
 } from '@/lib/senChatStorage'
-import { broadcastDeviceSettings } from '@/lib/senChatDeviceRelay'
+import {
+  broadcastDeviceSettings,
+  checkDeviceSyncStatus,
+  triggerFullDeviceSync,
+  DeviceSyncStatusResult,
+} from '@/lib/senChatDeviceRelay'
 import { formatBytes } from '@/lib/chatLimits'
 
 interface ChatSettingsModalProps {
@@ -111,6 +116,9 @@ export default function ChatSettingsModal({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [clearSuccessMsg, setClearSuccessMsg] = useState<string | null>(null)
   const [exportSuccessMsg, setExportSuccessMsg] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<DeviceSyncStatusResult | null>(null)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -120,6 +128,13 @@ export default function ChatSettingsModal({
     setFontSizeState(getChatFontSize())
     setSendKeyState(getChatSendKey())
     setNotificationsState(getChatNotificationSettings())
+
+    // Kiểm tra trạng thái đồng bộ đa thiết bị
+    if (currentUser?.id) {
+      checkDeviceSyncStatus(currentUser.id, deviceId)
+        .then(setSyncStatus)
+        .catch(() => {})
+    }
 
     // Tải cấu hình quyền riêng tư từ hồ sơ profiles của Supabase
     if (currentUser?.id) {
@@ -204,6 +219,23 @@ export default function ChatSettingsModal({
     setNotificationsState(updated)
     setChatNotificationSettings(updated)
     broadcastDeviceSettings({ notifications: updated })
+  }
+
+  const handleTriggerSync = async () => {
+    if (!currentUser?.id || isSyncing) return
+    setIsSyncing(true)
+    setSyncSuccessMsg(null)
+    try {
+      const res = await triggerFullDeviceSync(currentUser.id, deviceId)
+      const updated = await checkDeviceSyncStatus(currentUser.id, deviceId)
+      setSyncStatus(updated)
+      setSyncSuccessMsg(res.message || 'Đồng bộ dữ liệu thành công!')
+      setTimeout(() => setSyncSuccessMsg(null), 4000)
+    } catch (err: any) {
+      alert('Lỗi đồng bộ dữ liệu: ' + (err?.message || 'Vui lòng thử lại sau.'))
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   const handleExportJson = () => {
@@ -626,6 +658,59 @@ export default function ChatSettingsModal({
                 <p className="text-[11px] text-slate-400">
                   Khóa Identity Key và One-Time Prekey được lưu trữ cục bộ trên thiết bị này theo tiêu chuẩn Signal Protocol & MLS.
                 </p>
+              </div>
+
+              {/* CARD ĐỒNG BỘ DỮ LIỆU ĐA THIẾT BỊ */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin text-emerald-600' : 'text-slate-600 dark:text-slate-300'}`} />
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Đồng bộ dữ liệu đa thiết bị</span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      syncStatus?.needsSync
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                    }`}
+                  >
+                    {syncStatus?.needsSync ? 'Cần đồng bộ dữ liệu' : 'Đã đồng bộ'}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Số thiết bị đăng nhập:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {syncStatus?.deviceCount ?? 1} thiết bị
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Đồng bộ lần cuối:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {syncStatus?.lastSyncAt
+                        ? new Date(syncStatus.lastSyncAt).toLocaleString('vi-VN')
+                        : 'Chưa từng đồng bộ'}
+                    </span>
+                  </div>
+                </div>
+
+                {syncSuccessMsg && (
+                  <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-2.5 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>{syncSuccessMsg}</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleTriggerSync}
+                  disabled={isSyncing}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-60 shadow-sm"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Đang đồng bộ dữ liệu...' : 'Đồng bộ dữ liệu ngay'}</span>
+                </button>
               </div>
 
               {onOpenDeviceManager && (

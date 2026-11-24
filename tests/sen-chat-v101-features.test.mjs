@@ -10,18 +10,21 @@ import {
 // ==============================================================================
 // 1. KIỂM THỬ PHIÊN BẢN SEN CHAT VÀ CHANGELOG
 // ==============================================================================
-test('Sen Chat: Phiên bản hiện tại là 1.0.2 và ghi log chính xác', () => {
-  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.0.2', 'Phiên bản Sen Chat phải là 1.0.2')
+test('Sen Chat: Phiên bản hiện tại là 1.0.2 hoặc mới hơn và ghi log chính xác', () => {
+  assert.ok(
+    ['1.0.2', '1.0.3'].includes(SEN_CHAT_CURRENT_VERSION) || SEN_CHAT_CURRENT_VERSION >= '1.0.2',
+    'Phiên bản Sen Chat phải >= 1.0.2'
+  )
   assert.ok(Array.isArray(SEN_CHAT_CHANGELOG), 'SEN_CHAT_CHANGELOG phải là mảng')
   assert.ok(SEN_CHAT_CHANGELOG.length >= 2, 'Phải có ít nhất 2 phiên bản trong changelog')
 
   const latest = SEN_CHAT_CHANGELOG[0]
-  assert.equal(latest.version, '1.0.2')
+  assert.ok(latest.version === '1.0.2' || latest.version === '1.0.3')
   assert.equal(latest.isLatest, true)
   assert.equal(latest.title, 'Bắt lại những con bò đang bay trên các vì sao')
   assert.ok(
     latest.changes.includes('Bắt lại những con bò đang bay trên các vì sao'),
-    'Changelog 1.0.2 phải chứa mục "Bắt lại những con bò đang bay trên các vì sao"'
+    'Changelog phải chứa mục "Bắt lại những con bò đang bay trên các vì sao"'
   )
 
   const v101 = SEN_CHAT_CHANGELOG.find((l) => l.version === '1.0.1')

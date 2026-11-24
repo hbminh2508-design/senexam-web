@@ -107,6 +107,9 @@ import {
   initDeviceRelay,
   broadcastRequestMessageSync,
   broadcastFileTransitReady,
+  checkDeviceSyncStatus,
+  triggerFullDeviceSync,
+  DeviceSyncStatusResult,
 } from '@/lib/senChatDeviceRelay'
 import {
   calculateSafetyNumber,
@@ -236,6 +239,55 @@ export default function MobileChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const deviceId = useMemo(() => getOrCreateDeviceId(), [])
+
+  // 🔄 Đồng bộ đa thiết bị (v1.0.3)
+  const [deviceSyncStatus, setDeviceSyncStatus] = useState<DeviceSyncStatusResult | null>(null)
+  const [isSyncingData, setIsSyncingData] = useState(false)
+  const [syncCompletedNotice, setSyncCompletedNotice] = useState<string | null>(null)
+
+  const refreshSyncStatus = useCallback(async () => {
+    if (!currentUser?.id) return
+    try {
+      const res = await checkDeviceSyncStatus(currentUser.id, deviceId)
+      setDeviceSyncStatus(res)
+    } catch {}
+  }, [currentUser?.id, deviceId])
+
+  const handleTriggerSyncNow = async () => {
+    if (!currentUser?.id || isSyncingData) return
+    setIsSyncingData(true)
+    try {
+      const res = await triggerFullDeviceSync(currentUser.id, deviceId)
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      setSyncCompletedNotice('Đã đồng bộ ✓')
+      const updated = await checkDeviceSyncStatus(currentUser.id, deviceId)
+      setDeviceSyncStatus(updated)
+      setTimeout(() => setSyncCompletedNotice(null), 3500)
+    } catch (err: any) {
+      alert('Lỗi đồng bộ: ' + (err?.message || 'Vui lòng thử lại.'))
+    } finally {
+      setIsSyncingData(false)
+    }
+  }
+
+  useEffect(() => {
+    refreshSyncStatus()
+    const interval = setInterval(refreshSyncStatus, 60000)
+    const onSyncCompleted = () => {
+      refreshSyncStatus()
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+    }
+    const onReconciled = () => {
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+    }
+    window.addEventListener('senchat-sync-completed', onSyncCompleted)
+    window.addEventListener('senchat-messages-reconciled', onReconciled)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('senchat-sync-completed', onSyncCompleted)
+      window.removeEventListener('senchat-messages-reconciled', onReconciled)
+    }
+  }, [refreshSyncStatus])
 
   // Đồng bộ trạng thái mở hội thoại cho CapacitorManager (để nút Back phần cứng biết)
   useEffect(() => {
@@ -1332,6 +1384,40 @@ export default function MobileChatPage() {
 
           {/* Danh Sách Hội Thoại */}
           <div className="flex-1 overflow-y-auto divide-y divide-black/5 dark:divide-white/5 px-2 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]">
+            {/* Banner/Nút Đồng bộ dữ liệu ngay - Nằm ngay phía trên mục SenAI Studio */}
+            {(deviceSyncStatus?.needsSync || isSyncingData || syncCompletedNotice) && (
+              <div className="mb-2 p-2.5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-amber-950/30 backdrop-blur-sm transition-all shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                      <RefreshCw className={`h-3.5 w-3.5 ${isSyncingData ? 'animate-spin' : ''}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-bold text-amber-900 dark:text-amber-200">
+                        {syncCompletedNotice
+                          ? 'Đã đồng bộ dữ liệu ✓'
+                          : deviceSyncStatus?.otherDevices && deviceSyncStatus.otherDevices.length > 0
+                          ? `Phát hiện ${deviceSyncStatus.otherDevices.length} thiết bị khác · Chưa đồng bộ`
+                          : 'Dữ liệu chưa đồng bộ đầy đủ'}
+                      </p>
+                      <p className="truncate text-[9.5px] text-amber-700/80 dark:text-amber-400/80">
+                        {syncCompletedNotice ? 'Tin nhắn và dữ liệu đã cập nhật' : 'Đối soát tin nhắn & tệp với các thiết bị khác'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleTriggerSyncNow}
+                    disabled={isSyncingData}
+                    className="shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-600 hover:bg-amber-700 active:scale-95 text-white transition shadow-sm disabled:opacity-60 flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${isSyncingData ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingData ? 'Đang đồng bộ...' : (syncCompletedNotice || 'Đồng bộ dữ liệu ngay')}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {filteredConversations.length === 0 ? (
               <div className="p-8 text-center space-y-3 my-auto">
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-black/5 dark:bg-white/5 text-slate-400 flex items-center justify-center">

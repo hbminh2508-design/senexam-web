@@ -446,3 +446,235 @@ export function broadcastRequestMessageSync(conversationId?: string) {
     activeRelayInstance.requestMessageSync(conversationId)
   }
 }
+
+export interface DeviceSyncStatusResult {
+  needsSync: boolean
+  deviceCount: number
+  otherDevices: any[]
+  reason: 'only_one_device' | 'no_prior_sync' | 'sync_expired' | 'relay_signal_pending' | 'up_to_date' | string
+  lastSyncAt: number | null
+}
+
+export interface TriggerDeviceSyncResult {
+  success: boolean
+  syncedMessagesCount: number
+  deviceCount: number
+  message: string
+}
+
+/**
+ * KIỂM TRA TRẠNG THÁI ĐỒNG BỘ ĐA THIẾT BỊ (v1.0.3)
+ * - Quét các thiết bị qua API /api/chat/device-management hoặc trực tiếp supabase client
+ * - Lọc thiết bị đang hoạt động (is_active: true hoặc last_seen_at gần đây)
+ * - Đối chiếu senchat_last_sync_timestamp xem có thiết bị khác và cần đồng bộ không
+ */
+export async function checkDeviceSyncStatus(
+  userId: string,
+  currentDeviceId?: string,
+  options?: {
+    supabaseClient?: any
+    devices?: any[]
+    hasRelayPendingFlag?: boolean
+  }
+): Promise<DeviceSyncStatusResult> {
+  const currDevId = currentDeviceId || getDeviceId()
+  let lastSyncAt: number | null = null
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('senchat_last_sync_timestamp')
+      if (raw) lastSyncAt = parseInt(raw, 10) || null
+    }
+  } catch {}
+
+  let devices: any[] = options?.devices || []
+  if (!options?.devices) {
+    let fetchOk = false
+    try {
+      if (typeof fetch !== 'undefined') {
+        const res = await fetch(`/api/chat/device-management?currentDeviceId=${encodeURIComponent(currDevId)}`, {
+          method: 'GET',
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data.devices)) {
+            devices = data.devices
+            fetchOk = true
+          }
+        }
+      }
+    } catch {}
+
+    if (!fetchOk) {
+      const client = options?.supabaseClient || defaultSupabase
+      if (client && typeof client.from === 'function') {
+        try {
+          const { data, error } = await client
+            .from('chat_devices')
+            .select('id, device_id, device_name, platform, is_active, last_seen_at, created_at')
+            .eq('user_id', userId)
+          if (!error && Array.isArray(data)) {
+            devices = data
+          }
+        } catch {}
+      }
+    }
+  }
+
+  const now = Date.now()
+  const activeThresholdMs = 30 * 24 * 60 * 60 * 1000 // 30 ngày
+  const activeDevices = devices.filter((d: any) => {
+    if (!d) return false
+    if (d.is_active === true) return true
+    if (d.last_seen_at) {
+      const seen = new Date(d.last_seen_at).getTime()
+      return !isNaN(seen) && (now - seen < activeThresholdMs)
+    }
+    return false
+  })
+
+  const otherDevices = activeDevices.filter((d: any) => d.device_id && d.device_id !== currDevId)
+  const deviceCount = Math.max(activeDevices.length, otherDevices.length + (currDevId ? 1 : 0))
+
+  if (otherDevices.length === 0) {
+    return {
+      needsSync: false,
+      deviceCount: Math.max(1, deviceCount),
+      otherDevices: [],
+      reason: 'only_one_device',
+      lastSyncAt,
+    }
+  }
+
+  const syncIntervalMs = 3 * 60 * 1000 // 3 phút
+  const isExpired = !lastSyncAt || (now - lastSyncAt > syncIntervalMs)
+  const hasFlag = !!options?.hasRelayPendingFlag || (typeof window !== 'undefined' && !!(window as any).__senchat_needs_sync)
+  const needsSync = isExpired || hasFlag
+
+  let reason = 'up_to_date'
+  if (hasFlag) {
+    reason = 'relay_signal_pending'
+  } else if (!lastSyncAt) {
+    reason = 'no_prior_sync'
+  } else if (isExpired) {
+    reason = 'sync_expired'
+  }
+
+  return {
+    needsSync,
+    deviceCount,
+    otherDevices,
+    reason,
+    lastSyncAt,
+  }
+}
+
+/**
+ * KÍCH HOẠT ĐỒNG BỘ DỮ LIỆU ĐA THIẾT BỊ NGAY LẬP TỨC (v1.0.3)
+ * - Broadcast yêu cầu đối soát tới các thiết bị relay node khác
+ * - Kéo tin nhắn tồn đọng trên server transit queue và đối soát (reconcileMessages)
+ * - Cập nhật senchat_last_sync_timestamp
+ * - Phát custom event 'senchat-sync-completed'
+ */
+export async function triggerFullDeviceSync(
+  userId: string,
+  currentDeviceId?: string,
+  options?: {
+    supabaseClient?: any
+    devices?: any[]
+  }
+): Promise<TriggerDeviceSyncResult> {
+  const currDevId = currentDeviceId || getDeviceId()
+
+  // 1. Phát yêu cầu broadcast để các thiết bị online gửi tin nhắn đối soát
+  broadcastRequestMessageSync()
+
+  // 2. Kéo tin nhắn tồn đọng trên Server transit queue (/api/chat/sync pull)
+  let syncedMessagesCount = 0
+  if (userId) {
+    try {
+      if (typeof fetch !== 'undefined') {
+        const res = await fetch('/api/chat/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'pull',
+            receiverId: userId,
+            deviceId: currDevId,
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const pulledMessages: any[] = Array.isArray(data.messages) ? data.messages : []
+          syncedMessagesCount = pulledMessages.length
+
+          if (pulledMessages.length > 0) {
+            const convMap = new Map<string, any[]>()
+            for (const msg of pulledMessages) {
+              const cid = msg.conversationId || msg.conversation_id || msg.senderId
+              if (cid) {
+                if (!convMap.has(cid)) convMap.set(cid, [])
+                convMap.get(cid)!.push(msg)
+              }
+            }
+
+            for (const [cid, msgs] of convMap.entries()) {
+              const currentLocal = getLocalMessages(cid)
+              const reconciled = reconcileMessages(currentLocal, msgs)
+              saveLocalMessages(cid, reconciled)
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('senchat-messages-reconciled', {
+                    detail: { conversationId: cid, messages: reconciled },
+                  })
+                )
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi kéo tin nhắn khi kích hoạt đồng bộ đầy đủ:', e)
+    }
+  }
+
+  // 3. Cập nhật timestamp đồng bộ thành công
+  const now = Date.now()
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('senchat_last_sync_timestamp', now.toString())
+    }
+    if (typeof window !== 'undefined') {
+      ;(window as any).__senchat_needs_sync = false
+    }
+  } catch {}
+
+  // 4. Lấy số lượng thiết bị
+  let deviceCount = 1
+  try {
+    const status = await checkDeviceSyncStatus(userId, currDevId, options)
+    deviceCount = status.deviceCount
+  } catch {}
+
+  // 5. Phát window custom event
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('senchat-sync-completed', {
+          detail: {
+            timestamp: now,
+            syncedMessagesCount,
+            deviceCount,
+            deviceId: currDevId,
+          },
+        })
+      )
+    } catch {}
+  }
+
+  return {
+    success: true,
+    syncedMessagesCount,
+    deviceCount,
+    message: `Đồng bộ thành công (${deviceCount} thiết bị, ${syncedMessagesCount} tin nhắn đối soát)`,
+  }
+}

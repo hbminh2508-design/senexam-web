@@ -4,7 +4,7 @@
  * Quy ước: Phiên bản chỉ sửa lỗi ghi tiêu đề "Bắt lại những con bò đang bay trên các vì sao".
  */
 
-export const SEN_CHAT_CURRENT_VERSION = '1.0.2'
+export const SEN_CHAT_CURRENT_VERSION = '1.0.3'
 
 export interface SenChatChangelogEntry {
   version: string
@@ -17,10 +17,24 @@ export interface SenChatChangelogEntry {
 
 export const SEN_CHAT_CHANGELOG: SenChatChangelogEntry[] = [
   {
-    version: '1.0.2',
+    version: '1.0.3',
     releaseDate: '24/11/2026',
     title: 'Bắt lại những con bò đang bay trên các vì sao',
     isLatest: true,
+    isBugFixOnly: true,
+    changes: [
+      'Bắt lại những con bò đang bay trên các vì sao',
+      'Bổ sung nút \'Đồng bộ dữ liệu ngay\' tự động phát hiện thiết bị chưa đồng bộ, đặt ngay phía trên mục SenAI Studio',
+      'Tích hợp tính năng kích hoạt đồng bộ dữ liệu tức thì trong Cài đặt Sen Chat',
+      'Tự động quét và đối soát dữ liệu tin nhắn, trạng thái và tệp giữa toàn bộ thiết bị đang đăng nhập',
+      'Cải thiện độ ổn định và hiệu năng kết nối đa thiết bị thời gian thực',
+    ],
+  },
+  {
+    version: '1.0.2',
+    releaseDate: '24/11/2026',
+    title: 'Bắt lại những con bò đang bay trên các vì sao',
+    isLatest: false,
     isBugFixOnly: true,
     changes: [
       'Bắt lại những con bò đang bay trên các vì sao',
