@@ -156,6 +156,14 @@ export default function ChatSettingsModal({
     }
   }, [isOpen, currentUser?.id])
 
+  useEffect(() => {
+    if (isOpen && activeTab === 'devices' && currentUser?.id) {
+      checkDeviceSyncStatus(currentUser.id, deviceId)
+        .then(setSyncStatus)
+        .catch(() => {})
+    }
+  }, [isOpen, activeTab, currentUser?.id, deviceId])
+
   if (!isOpen) return null
 
   // Cập nhật cài đặt dọn dẹp bộ nhớ tạm
@@ -229,6 +237,8 @@ export default function ChatSettingsModal({
       const res = await triggerFullDeviceSync(currentUser.id, deviceId)
       const updated = await checkDeviceSyncStatus(currentUser.id, deviceId)
       setSyncStatus(updated)
+      setStorageStats(getStorageUsageSummary())
+      setDetailedStorage(getDetailedStorageBreakdown())
       setSyncSuccessMsg(res.message || 'Đồng bộ dữ liệu thành công!')
       setTimeout(() => setSyncSuccessMsg(null), 4000)
     } catch (err: any) {

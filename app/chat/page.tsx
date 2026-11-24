@@ -128,6 +128,7 @@ import {
   triggerFullDeviceSync,
   DeviceSyncStatusResult,
 } from '@/lib/senChatDeviceRelay'
+import { SEN_CHAT_CURRENT_VERSION } from '@/lib/senChatVersion'
 
 // Bộ sticker / biểu cảm nhanh
 const QUICK_EMOJIS = ['😀', '😂', '😍', '👍', '❤️', '🎉', '🔥', '👏', '🙏', '😭', '😎', '💯']
@@ -232,6 +233,9 @@ export default function SenChatPage() {
     try {
       const res = await triggerFullDeviceSync(currentUser.id, deviceId)
       setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (selectedConvId) {
+        setMessages(getLocalMessages(selectedConvId))
+      }
       setSyncCompletedNotice('Đã đồng bộ ✓')
       const updated = await checkDeviceSyncStatus(currentUser.id, deviceId)
       setDeviceSyncStatus(updated)
@@ -249,9 +253,16 @@ export default function SenChatPage() {
     const onSyncCompleted = () => {
       refreshSyncStatus()
       setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (selectedConvIdRef.current) {
+        setMessages(getLocalMessages(selectedConvIdRef.current))
+      }
     }
-    const onReconciled = () => {
+    const onReconciled = (e: any) => {
       setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      const activeId = selectedConvIdRef.current
+      if (activeId && (!e?.detail?.conversationId || e?.detail?.conversationId === activeId)) {
+        setMessages(getLocalMessages(activeId))
+      }
     }
     window.addEventListener('senchat-sync-completed', onSyncCompleted)
     window.addEventListener('senchat-messages-reconciled', onReconciled)
@@ -1123,7 +1134,7 @@ export default function SenChatPage() {
           <button
             type="button"
             onClick={() => setShowVersionModal(true)}
-            title="Sen Chat v1.0.1 — Bấm để xem thông tin phiên bản & nhật ký cập nhật"
+            title={`Sen Chat v${SEN_CHAT_CURRENT_VERSION} — Bấm để xem thông tin phiên bản & nhật ký cập nhật`}
             className="group relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-md shadow-emerald-500/10 transition-transform hover:scale-105 active:scale-95 dark:bg-slate-800"
           >
             <img
@@ -2286,7 +2297,7 @@ export default function SenChatPage() {
       {/* BẢO VỆ NỘI DUNG DRM (CHỐNG IN ẤN & USER SELECT) */}
       <ChatDrmProtection isEnabled={true} showBadge={false} />
 
-      {/* Hộp thoại Phiên bản & Nhật ký cập nhật Sen Chat v1.0.1 */}
+      {/* Hộp thoại Phiên bản & Nhật ký cập nhật Sen Chat */}
       <ChatVersionModal isOpen={showVersionModal} onClose={() => setShowVersionModal(false)} />
 
       {/* Nickname Modal */}

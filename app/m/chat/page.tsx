@@ -111,6 +111,7 @@ import {
   triggerFullDeviceSync,
   DeviceSyncStatusResult,
 } from '@/lib/senChatDeviceRelay'
+import { SEN_CHAT_CURRENT_VERSION } from '@/lib/senChatVersion'
 import {
   calculateSafetyNumber,
   generateIdentityKeyPair,
@@ -259,6 +260,9 @@ export default function MobileChatPage() {
     try {
       const res = await triggerFullDeviceSync(currentUser.id, deviceId)
       setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (selectedConvId) {
+        setMessages(getLocalMessages(selectedConvId))
+      }
       setSyncCompletedNotice('Đã đồng bộ ✓')
       const updated = await checkDeviceSyncStatus(currentUser.id, deviceId)
       setDeviceSyncStatus(updated)
@@ -276,9 +280,16 @@ export default function MobileChatPage() {
     const onSyncCompleted = () => {
       refreshSyncStatus()
       setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (selectedConvIdRef.current) {
+        setMessages(getLocalMessages(selectedConvIdRef.current))
+      }
     }
-    const onReconciled = () => {
+    const onReconciled = (e: any) => {
       setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      const activeId = selectedConvIdRef.current
+      if (activeId && (!e?.detail?.conversationId || e?.detail?.conversationId === activeId)) {
+        setMessages(getLocalMessages(activeId))
+      }
     }
     window.addEventListener('senchat-sync-completed', onSyncCompleted)
     window.addEventListener('senchat-messages-reconciled', onReconciled)
@@ -1290,7 +1301,7 @@ export default function MobileChatPage() {
               <button
                 type="button"
                 onClick={() => setShowVersionModal(true)}
-                title="Sen Chat v1.0.1 — Bấm để xem thông tin phiên bản & nhật ký cập nhật"
+                title={`Sen Chat v${SEN_CHAT_CURRENT_VERSION} — Bấm để xem thông tin phiên bản & nhật ký cập nhật`}
                 className="flex items-center gap-2 text-left active:scale-95 transition"
               >
                 <SenChatLogo size={36} className="shrink-0" />
@@ -1930,7 +1941,7 @@ export default function MobileChatPage() {
       {/* BẢO VỆ CHỐNG CHỤP MÀN HÌNH DRM (CHỐNG IN ẤN) */}
       <ChatDrmProtection isEnabled={true} showBadge={false} />
 
-      {/* Hộp thoại Phiên bản & Nhật ký cập nhật Sen Chat v1.0.1 */}
+      {/* Hộp thoại Phiên bản & Nhật ký cập nhật Sen Chat */}
       <ChatVersionModal isOpen={showVersionModal} onClose={() => setShowVersionModal(false)} />
 
       {/* =======================================================================

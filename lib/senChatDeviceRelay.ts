@@ -524,6 +524,7 @@ export async function checkDeviceSyncStatus(
   const activeThresholdMs = 30 * 24 * 60 * 60 * 1000 // 30 ngày
   const activeDevices = devices.filter((d: any) => {
     if (!d) return false
+    if (d.is_active === false) return false
     if (d.is_active === true) return true
     if (d.last_seen_at) {
       const seen = new Date(d.last_seen_at).getTime()
@@ -532,7 +533,10 @@ export async function checkDeviceSyncStatus(
     return false
   })
 
-  const otherDevices = activeDevices.filter((d: any) => d.device_id && d.device_id !== currDevId)
+  const otherDevices = activeDevices.filter((d: any) => {
+    const did = d.device_id || d.deviceId
+    return did && did !== currDevId
+  })
   const deviceCount = Math.max(activeDevices.length, otherDevices.length + (currDevId ? 1 : 0))
 
   if (otherDevices.length === 0) {
@@ -610,17 +614,38 @@ export async function triggerFullDeviceSync(
           if (pulledMessages.length > 0) {
             const convMap = new Map<string, any[]>()
             for (const msg of pulledMessages) {
-              const cid = msg.conversationId || msg.conversation_id || msg.senderId
+              const cid = msg.conversationId || msg.conversation_id || (msg.senderId === userId ? msg.receiverId : msg.senderId)
               if (cid) {
                 if (!convMap.has(cid)) convMap.set(cid, [])
                 convMap.get(cid)!.push(msg)
               }
             }
 
+            let convs = getLocalConversations()
+            let convsModified = false
+
             for (const [cid, msgs] of convMap.entries()) {
               const currentLocal = getLocalMessages(cid)
               const reconciled = reconcileMessages(currentLocal, msgs)
               saveLocalMessages(cid, reconciled)
+
+              const exists = convs.some((c: any) => c.id === cid)
+              if (!exists && reconciled.length > 0) {
+                const last = reconciled[reconciled.length - 1]
+                const partnerId = last.senderId === userId ? (last.receiverId || cid) : last.senderId
+                const partnerName = (last.senderId === userId ? last.receiverName : last.senderName) || 'Người trò chuyện'
+                convs.unshift({
+                  id: cid,
+                  partnerId: partnerId || cid,
+                  partnerName: partnerName || 'Người trò chuyện',
+                  lastMessage: last.type === 'image' ? '[Hình ảnh]' : last.type === 'like' ? '👍' : (last.content || ''),
+                  lastMessageTime: new Date(last.createdAt || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                  unreadCount: 0,
+                  updatedAt: Date.now(),
+                })
+                convsModified = true
+              }
+
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(
                   new CustomEvent('senchat-messages-reconciled', {
@@ -628,6 +653,12 @@ export async function triggerFullDeviceSync(
                   })
                 )
               }
+            }
+
+            if (convsModified && typeof localStorage !== 'undefined') {
+              try {
+                localStorage.setItem('sen_chat_conversations', JSON.stringify(convs))
+              } catch {}
             }
           }
         }

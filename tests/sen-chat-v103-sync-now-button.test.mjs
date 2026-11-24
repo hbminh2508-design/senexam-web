@@ -118,6 +118,17 @@ test('Sen Chat v1.0.3: Hàm checkDeviceSyncStatus kiểm tra chính xác nhu c�
   })
   assert.equal(flagPendingResult.needsSync, true, 'Cờ tín hiệu relay pending kích hoạt đồng bộ ngay')
   assert.equal(flagPendingResult.reason, 'relay_signal_pending')
+
+  // Trường hợp 6: Có thiết bị khác nhưng đã bị thu hồi / đăng xuất (is_active: false) dù last_seen_at gần đây
+  const revokedDevicesList = [
+    { device_id: myDeviceId, is_active: true, last_seen_at: new Date().toISOString() },
+    { device_id: 'dev_revoked_phone', is_active: false, last_seen_at: new Date().toISOString() },
+  ]
+  const revokedResult = await checkDeviceSyncStatus('user_123', myDeviceId, {
+    devices: revokedDevicesList,
+  })
+  assert.equal(revokedResult.needsSync, false, 'Thiết bị đã thu hồi (is_active: false) không được tính là active hay kích hoạt sync')
+  assert.equal(revokedResult.reason, 'only_one_device')
 })
 
 test('Sen Chat v1.0.3: Hàm triggerFullDeviceSync thực hiện pull, lưu timestamp và phát event', async () => {
@@ -178,6 +189,41 @@ test('Sen Chat v1.0.3: Hàm triggerFullDeviceSync thực hiện pull, lưu times
     assert.ok(eventDispatched, 'Phải phát event trên window')
     assert.equal(eventDispatched.type, 'senchat-sync-completed')
     assert.equal(eventDispatched.detail.syncedMessagesCount, 2)
+    // Thử nghiệm thêm: Tin nhắn do chính user gửi từ thiết bị khác (senderId === userId, không có conversationId)
+    // Phải được nhóm theo receiverId thay vì tự gom vào ID của chính mình
+    global.fetch = async (url, opts) => {
+      if (url.includes('/api/chat/sync')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            count: 1,
+            messages: [
+              { id: 'msg_cross', senderId: 'user_123', receiverId: 'user_partner_999', content: 'Tin nhắn gửi từ máy phụ', createdAt: new Date().toISOString() },
+            ],
+          }),
+        }
+      }
+      return { ok: true, json: async () => ({ devices: [] }) }
+    }
+
+    const crossRes = await triggerFullDeviceSync('user_123', 'dev_test_node', {
+      devices: [
+        { device_id: 'dev_test_node', is_active: true },
+        { device_id: 'dev_remote_node', is_active: true },
+      ],
+    })
+    assert.equal(crossRes.success, true)
+    assert.equal(crossRes.syncedMessagesCount, 1)
+
+    // Xác nhận conversation đã được thêm vào LocalStorage dưới key receiverId (user_partner_999)
+    const rawSavedConvs = mockStorage.get('sen_chat_conversations')
+    assert.ok(rawSavedConvs, 'sen_chat_conversations phải được cập nhật vào LocalStorage')
+    const savedConvs = JSON.parse(rawSavedConvs)
+    assert.ok(
+      savedConvs.some((c) => c.id === 'user_partner_999'),
+      'Hội thoại mới phải được nhóm chuẩn xác theo đối tác (user_partner_999)'
+    )
   } finally {
     global.fetch = originalFetch
   }
@@ -190,10 +236,14 @@ test('Sen Chat v1.0.3: Desktop (app/chat/page.tsx) có nút Đồng bộ dữ li
   const desktopFilePath = path.join(process.cwd(), 'app/chat/page.tsx')
   const desktopCode = fs.readFileSync(desktopFilePath, 'utf8')
 
-  // Kiểm tra import checkDeviceSyncStatus và triggerFullDeviceSync
+  // Kiểm tra import checkDeviceSyncStatus, triggerFullDeviceSync và SEN_CHAT_CURRENT_VERSION
   assert.ok(
     desktopCode.includes('checkDeviceSyncStatus') && desktopCode.includes('triggerFullDeviceSync'),
     'app/chat/page.tsx phải import checkDeviceSyncStatus và triggerFullDeviceSync'
+  )
+  assert.ok(
+    desktopCode.includes('SEN_CHAT_CURRENT_VERSION'),
+    'app/chat/page.tsx phải import SEN_CHAT_CURRENT_VERSION'
   )
 
   // Kiểm tra icon RefreshCw
@@ -212,11 +262,19 @@ test('Sen Chat v1.0.3: Desktop (app/chat/page.tsx) có nút Đồng bộ dữ li
     'app/chat/page.tsx phải có hàm handleTriggerSyncNow để kích hoạt đồng bộ'
   )
 
-  // Vị trí: banner nằm trước filteredConversations.map (mục đầu tiên luôn là SENAI_STUDIO_CONVERSATION_ID)
-  const bannerIndex = desktopCode.indexOf('handleTriggerSyncNow')
-  const senAiStudioIndex = desktopCode.indexOf('SENAI_STUDIO_CONVERSATION_ID')
-  assert.ok(bannerIndex > 0, 'Phải có banner đồng bộ')
-  assert.ok(senAiStudioIndex > 0, 'Phải có mục SenAI Studio')
+  // Vị trí trong JSX: Banner đồng bộ phải nằm trong container danh sách cuộc trò chuyện và TRƯỚC filteredConversations.map
+  const convListMarker = 'Danh sách các cuộc trò chuyện'
+  const convListIndex = desktopCode.indexOf(convListMarker)
+  assert.ok(convListIndex > 0, 'Phải có container Danh sách các cuộc trò chuyện')
+
+  const bannerInJsxIndex = desktopCode.indexOf('handleTriggerSyncNow', convListIndex)
+  const mapInJsxIndex = desktopCode.indexOf('filteredConversations.map', convListIndex)
+  assert.ok(bannerInJsxIndex > 0, 'Banner đồng bộ phải nằm trong khối danh sách cuộc trò chuyện')
+  assert.ok(mapInJsxIndex > 0, 'filteredConversations.map phải nằm trong khối danh sách cuộc trò chuyện')
+  assert.ok(
+    bannerInJsxIndex < mapInJsxIndex,
+    'Banner đồng bộ phải nằm NGAY PHÍA TRÊN mục SenAI Studio (được render ở đầu filteredConversations.map)'
+  )
 })
 
 // ==============================================================================
@@ -226,10 +284,14 @@ test('Sen Chat v1.0.3: Mobile (app/m/chat/page.tsx) có nút Đồng bộ dữ l
   const mobileFilePath = path.join(process.cwd(), 'app/m/chat/page.tsx')
   const mobileCode = fs.readFileSync(mobileFilePath, 'utf8')
 
-  // Kiểm tra import checkDeviceSyncStatus và triggerFullDeviceSync
+  // Kiểm tra import checkDeviceSyncStatus, triggerFullDeviceSync và SEN_CHAT_CURRENT_VERSION
   assert.ok(
     mobileCode.includes('checkDeviceSyncStatus') && mobileCode.includes('triggerFullDeviceSync'),
     'app/m/chat/page.tsx phải import checkDeviceSyncStatus và triggerFullDeviceSync'
+  )
+  assert.ok(
+    mobileCode.includes('SEN_CHAT_CURRENT_VERSION'),
+    'app/m/chat/page.tsx phải import SEN_CHAT_CURRENT_VERSION'
   )
 
   // Kiểm tra icon RefreshCw
@@ -246,6 +308,20 @@ test('Sen Chat v1.0.3: Mobile (app/m/chat/page.tsx) có nút Đồng bộ dữ l
   assert.ok(
     mobileCode.includes('handleTriggerSyncNow'),
     'app/m/chat/page.tsx phải có hàm handleTriggerSyncNow'
+  )
+
+  // Vị trí trong JSX Mobile: Banner đồng bộ phải nằm trong container Danh Sách Hội Thoại và TRƯỚC filteredConversations.map
+  const mobileConvListMarker = 'Danh Sách Hội Thoại'
+  const mobileConvListIndex = mobileCode.indexOf(mobileConvListMarker)
+  assert.ok(mobileConvListIndex > 0, 'Phải có container Danh Sách Hội Thoại mobile')
+
+  const mobileBannerInJsxIndex = mobileCode.indexOf('handleTriggerSyncNow', mobileConvListIndex)
+  const mobileMapInJsxIndex = mobileCode.indexOf('filteredConversations.map', mobileConvListIndex)
+  assert.ok(mobileBannerInJsxIndex > 0, 'Banner đồng bộ phải nằm trong khối danh sách cuộc trò chuyện mobile')
+  assert.ok(mobileMapInJsxIndex > 0, 'filteredConversations.map phải nằm trong khối danh sách cuộc trò chuyện mobile')
+  assert.ok(
+    mobileBannerInJsxIndex < mobileMapInJsxIndex,
+    'Banner đồng bộ phải nằm NGAY PHÍA TRÊN mục SenAI Studio trên mobile'
   )
 })
 
