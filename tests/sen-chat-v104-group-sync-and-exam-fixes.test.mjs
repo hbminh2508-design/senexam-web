@@ -371,3 +371,78 @@ test('Sen Chat v1.0.4 & SenExam: Kiểm tra API sync nhóm, UI Desktop/Mobile, q
   const mobileExam = fs.readFileSync(path.join(process.cwd(), 'app/m/exams/[id]/page.tsx'), 'utf8')
   assert.ok(mobileExam.includes('handleSubmitExamRef'), 'mobile exam phải dùng handleSubmitExamRef tránh stale closure')
 })
+
+test('Sen Chat v1.0.4: checkDeviceSyncStatus tự resolve token từ supabaseClient và triggerFullDeviceSync giữ SenAI Studio ở đầu khi có tin nhắn mới', async () => {
+  const { store, dispatchedEvents } = setupMockBrowser()
+  const origFetch = globalThis.fetch
+
+  try {
+    let fetchedGroupWithAuth = false
+    globalThis.fetch = async (url, init) => {
+      if (String(url).includes('/api/chat/device-management')) {
+        return { ok: true, json: async () => ({ devices: [{ device_id: 'dev_a', is_active: true }] }) }
+      }
+      if (String(url).includes('/api/chat/mls/group')) {
+        if (init?.headers?.Authorization === 'Bearer session_tok_123') {
+          fetchedGroupWithAuth = true
+          return {
+            ok: true,
+            json: async () => ({
+              conversations: [{ id: 'grp_session_1', type: 'group', isGroup: true, partnerName: 'Nhóm Session', updatedAt: Date.now() }],
+            }),
+          }
+        }
+        return { ok: false, status: 401, json: async () => ({}) }
+      }
+      if (String(url).includes('/api/chat/sync')) {
+        return {
+          ok: true,
+          json: async () => ({
+            messages: [
+              {
+                id: 'msg_transit_1',
+                conversationId: 'conv_new_peer',
+                senderId: 'peer_1',
+                senderName: 'Bạn B',
+                receiverId: 'u_test',
+                content: 'Chào bạn',
+                type: 'text',
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          }),
+        }
+      }
+      return { ok: true, json: async () => ({}) }
+    }
+
+    const mockSupabase = {
+      auth: {
+        getSession: async () => ({ data: { session: { access_token: 'session_tok_123' } } }),
+      },
+    }
+
+    const status = await checkDeviceSyncStatus('u_test', 'dev_a', {
+      supabaseClient: mockSupabase,
+    })
+    assert.equal(fetchedGroupWithAuth, true, 'checkDeviceSyncStatus phải tự resolve access_token từ supabaseClient.auth.getSession()')
+    assert.equal(status.needsSync, true)
+    assert.equal(status.reason, 'missing_server_conversations')
+
+    await triggerFullDeviceSync('u_test', 'dev_a', {
+      supabaseClient: mockSupabase,
+      devices: [{ device_id: 'dev_a', is_active: true }],
+    })
+
+    const saved = JSON.parse(store.get('sen_chat_conversations') || '[]')
+    assert.equal(saved[0].id, SENAI_STUDIO_CONVERSATION_ID, 'SENAI_STUDIO_CONVERSATION phải luôn ở index 0')
+    assert.ok(saved.some((c) => c.id === 'grp_session_1'), 'Phải có nhóm từ server')
+    assert.ok(saved.some((c) => c.id === 'conv_new_peer'), 'Phải có hội thoại mới từ transit pull')
+    assert.ok(
+      dispatchedEvents.some((e) => e.type === 'senchat-conversations-reconciled'),
+      'Phải phát senchat-conversations-reconciled khi có hội thoại mới'
+    )
+  } finally {
+    globalThis.fetch = origFetch
+  }
+})

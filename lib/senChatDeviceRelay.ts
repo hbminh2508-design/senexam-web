@@ -655,19 +655,22 @@ export async function checkDeviceSyncStatus(
 
   // Kiểm tra danh sách nhóm/hội thoại trên server so với local
   let serverConvs: any[] | null = Array.isArray(options?.serverConversations) ? options!.serverConversations! : null
-  if (!serverConvs && options?.accessToken && typeof fetch !== 'undefined') {
-    try {
-      const convRes = await fetch('/api/chat/mls/group', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${options.accessToken}` },
-      })
-      if (convRes.ok) {
-        const convData = await convRes.json()
-        if (Array.isArray(convData.conversations)) {
-          serverConvs = convData.conversations
+  if (!serverConvs && typeof fetch !== 'undefined') {
+    const token = await resolveAccessToken(options)
+    if (token) {
+      try {
+        const convRes = await fetch('/api/chat/mls/group', {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (convRes.ok) {
+          const convData = await convRes.json()
+          if (Array.isArray(convData.conversations)) {
+            serverConvs = convData.conversations
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   let missingConversationsCount = 0
@@ -766,6 +769,7 @@ export async function triggerFullDeviceSync(
   // 2. Kéo đồng thời danh sách nhóm/hội thoại từ Server và tin nhắn tồn đọng trên Transit Queue
   let syncedMessagesCount = 0
   let syncedConversationsCount = 0
+  let remoteConvsForStatus: any[] | undefined = undefined
 
   if (userId && typeof fetch !== 'undefined') {
     const token = await resolveAccessToken(options)
@@ -794,6 +798,7 @@ export async function triggerFullDeviceSync(
         const groupData = await groupSettled.value.json().catch(() => null)
         if (Array.isArray(groupData?.conversations)) {
           remoteConvs = groupData.conversations
+          remoteConvsForStatus = remoteConvs
         }
       }
 
@@ -839,7 +844,7 @@ export async function triggerFullDeviceSync(
           }
 
           let convs = getLocalConversations()
-          let convsModified = false
+          const discoveredConvs: any[] = []
 
           for (const [cid, msgs] of convMap.entries()) {
             const currentLocal = getLocalMessages(cid)
@@ -851,7 +856,7 @@ export async function triggerFullDeviceSync(
               const last = reconciled[reconciled.length - 1]
               const partnerId = last.senderId === userId ? (last.receiverId || cid) : last.senderId
               const partnerName = (last.senderId === userId ? last.receiverName : last.senderName) || 'Người trò chuyện'
-              convs.unshift({
+              discoveredConvs.push({
                 id: cid,
                 partnerId: partnerId || cid,
                 partnerName: partnerName || 'Người trò chuyện',
@@ -860,7 +865,6 @@ export async function triggerFullDeviceSync(
                 unreadCount: 0,
                 updatedAt: Date.now(),
               })
-              convsModified = true
             }
 
             if (typeof window !== 'undefined') {
@@ -872,10 +876,22 @@ export async function triggerFullDeviceSync(
             }
           }
 
-          if (convsModified && typeof localStorage !== 'undefined') {
-            try {
-              localStorage.setItem('sen_chat_conversations', JSON.stringify(convs))
-            } catch {}
+          if (discoveredConvs.length > 0) {
+            const reconciledAll = reconcileConversations(convs, discoveredConvs)
+            if (typeof localStorage !== 'undefined') {
+              try {
+                localStorage.setItem('sen_chat_conversations', JSON.stringify(reconciledAll))
+              } catch {}
+            }
+            if (typeof window !== 'undefined') {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent('senchat-conversations-reconciled', {
+                    detail: { conversations: reconciledAll },
+                  })
+                )
+              } catch {}
+            }
           }
         }
       }
@@ -898,7 +914,10 @@ export async function triggerFullDeviceSync(
   // 4. Lấy số lượng thiết bị
   let deviceCount = 1
   try {
-    const status = await checkDeviceSyncStatus(userId, currDevId, options)
+    const status = await checkDeviceSyncStatus(userId, currDevId, {
+      ...options,
+      serverConversations: remoteConvsForStatus,
+    })
     deviceCount = status.deviceCount
   } catch {}
 

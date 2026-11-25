@@ -85,19 +85,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, conversations })
     }
 
-    // 6.5 ĐỒNG BỘ DANH SÁCH NHÓM & HỘI THOẠI TỪ SUPABASE (sync_conversations)
-    if (action === 'sync_conversations') {
-      const user = await getUserFromRequest(request)
-      if (!user) {
-        return NextResponse.json({ error: 'Chưa xác thực người dùng' }, { status: 401 })
-      }
-      const conversations = await fetchUserConversationsFromDb(db, user.id)
-      return NextResponse.json({
-        success: true,
-        conversations,
-      })
-    }
-
     return NextResponse.json({ error: 'Hành động không hợp lệ' }, { status: 400 })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Lỗi máy chủ' }, { status: 500 })
