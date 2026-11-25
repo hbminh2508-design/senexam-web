@@ -42,6 +42,10 @@ import {
   ArrowLeft,
   SlidersHorizontal,
   Settings,
+  Reply,
+  Pin,
+  PinOff,
+  CircleDot,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -100,6 +104,12 @@ import {
   CHAT_RETENTION_POLICY_NOTICE,
   getChatSendKey,
   getChatNotificationSettings,
+  togglePinConversation,
+  markConversationUnread,
+  toggleMessageReaction,
+  getConversationDraft,
+  saveConversationDraft,
+  clearConversationDraft,
 } from '@/lib/senChatStorage'
 import ChatSenAiStudioView from '@/components/chat/ChatSenAiStudioView'
 import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
@@ -164,8 +174,9 @@ export default function MobileChatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'direct' | 'group'>('all')
 
-  // Ô nhập tin nhắn
+  // Ô nhập tin nhắn & Trả lời / Biểu cảm
   const [inputText, setInputText] = useState('')
+  const [replyingToMessage, setReplyingToMessage] = useState<SenChatMessage | null>(null)
   // Modals
   const [showVersionModal, setShowVersionModal] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -291,12 +302,17 @@ export default function MobileChatPage() {
         setMessages(getLocalMessages(activeId))
       }
     }
+    const onConversationsReconciled = () => {
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+    }
     window.addEventListener('senchat-sync-completed', onSyncCompleted)
     window.addEventListener('senchat-messages-reconciled', onReconciled)
+    window.addEventListener('senchat-conversations-reconciled', onConversationsReconciled)
     return () => {
       clearInterval(interval)
       window.removeEventListener('senchat-sync-completed', onSyncCompleted)
       window.removeEventListener('senchat-messages-reconciled', onReconciled)
+      window.removeEventListener('senchat-conversations-reconciled', onConversationsReconciled)
     }
   }, [refreshSyncStatus])
 
@@ -612,6 +628,16 @@ export default function MobileChatPage() {
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({ action: 'register', deviceId: mDeviceId, platform: 'android' }),
             }).catch(() => {})
+
+            // Tự động đồng bộ nhóm & tin nhắn đa thiết bị ngay khi mở app
+            triggerFullDeviceSync(authUser.id, mDeviceId, {
+              supabaseClient: supabase,
+              accessToken: token,
+            })
+              .then(() => {
+                setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+              })
+              .catch(() => {})
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP
@@ -714,6 +740,9 @@ export default function MobileChatPage() {
           setMessages(reconciledMsgs)
         }
       },
+      onConversationsReconciled: () => {
+        setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      },
     })
 
     // Đồng bộ ban đầu khi kết nối relay
@@ -777,6 +806,8 @@ export default function MobileChatPage() {
     broadcastRequestMessageSync(convId)
     const msgs = getLocalMessages(convId)
     setMessages(msgs)
+    setInputText(getConversationDraft(convId))
+    setReplyingToMessage(null)
     setView('conversation')
 
     // Reset unread count
@@ -785,7 +816,7 @@ export default function MobileChatPage() {
     if (conv && conv.unreadCount > 0) {
       conv.unreadCount = 0
       saveLocalConversation(conv)
-      setConversations(list)
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
     }
 
     // Cuộn xuống tin nhắn mới nhất
@@ -835,12 +866,25 @@ export default function MobileChatPage() {
         type: 'text',
         createdAt: new Date(timestamp).toISOString(),
         status: isOnline ? 'sent' : 'sending',
+        ...(replyingToMessage
+          ? {
+              replyTo: {
+                id: replyingToMessage.id,
+                senderName: replyingToMessage.senderName || 'Người dùng',
+                content:
+                  replyingToMessage.content ||
+                  (replyingToMessage.attachmentName ? `[Tệp: ${replyingToMessage.attachmentName}]` : '[Tin nhắn]'),
+              },
+            }
+          : {}),
       }
 
       // 1. Lưu cục bộ ngay tức thì
       saveLocalMessage(selectedConvId, newMessage)
       setMessages((prev) => [...prev, newMessage])
       setInputText('')
+      clearConversationDraft(selectedConvId)
+      setReplyingToMessage(null)
       setShowEmojiPicker(false)
       setShowAiSuggestions(false)
 
@@ -896,10 +940,13 @@ export default function MobileChatPage() {
     [inputText, selectedConvId, currentUser, activeConversation, isOnline, deviceId]
   )
 
-  // Nhập tin nhắn & bắt trigger @Sen
+  // Nhập tin nhắn & bắt trigger @Sen + lưu nháp tự động
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value
     setInputText(val)
+    if (selectedConvId) {
+      saveConversationDraft(selectedConvId, val)
+    }
 
     if (val.includes('@')) {
       const suggestions = getSenAiAutocompleteSuggestions(val)
@@ -908,6 +955,13 @@ export default function MobileChatPage() {
     } else {
       setShowAiSuggestions(false)
     }
+  }
+
+  // Thả biểu cảm nhanh trên tin nhắn Mobile
+  const handleAddReaction = (msgId: string, emoji: string) => {
+    if (!selectedConvId || !currentUser?.id) return
+    const updated = toggleMessageReaction(selectedConvId, msgId, emoji, currentUser.id)
+    setMessages(updated)
   }
 
   // Chọn gợi ý @Sen
@@ -1476,6 +1530,9 @@ export default function MobileChatPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
                         <div className="flex items-center gap-1.5 min-w-0">
+                          {conv.isPinned && !isSenAiStudio && (
+                            <Pin className="h-3 w-3 shrink-0 text-amber-500" />
+                          )}
                           <h4 className="text-xs font-black text-slate-900 dark:text-white truncate">
                             {isSenAiStudio ? 'SenAI Studio' : conv.partnerName}
                           </h4>
@@ -1493,6 +1550,33 @@ export default function MobileChatPage() {
                         {conv.lastMessage || (isSenAiStudio ? 'Trợ lý học tập & nghiên cứu' : 'Chưa có tin nhắn')}
                       </p>
                     </div>
+
+                    {!isSenAiStudio && (
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConversations(togglePinConversation(conv.id))
+                          }}
+                          title={conv.isPinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"
+                        >
+                          {conv.isPinned ? <PinOff className="h-3.5 w-3.5 text-amber-500" /> : <Pin className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConversations(markConversationUnread(conv.id, 1))
+                          }}
+                          title="Đánh dấu chưa đọc"
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"
+                        >
+                          <CircleDot className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
 
                     {conv.unreadCount > 0 && (
                       <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-black flex items-center justify-center shrink-0">
@@ -1657,6 +1741,18 @@ export default function MobileChatPage() {
                         : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-black/5 dark:border-white/5 rounded-bl-xs'
                     }`}
                   >
+                    {msg.replyTo && (
+                      <div
+                        className={`mb-1.5 rounded-xl border-l-2 px-2 py-1 text-[10px] ${
+                          isMe
+                            ? 'border-white/70 bg-white/15 text-white/95'
+                            : 'border-sky-500 bg-slate-100 text-slate-700 dark:bg-slate-700/70 dark:text-slate-200'
+                        }`}
+                      >
+                        <div className="font-bold">{msg.replyTo.senderName}</div>
+                        <div className="truncate opacity-80">{msg.replyTo.content}</div>
+                      </div>
+                    )}
                     {msg.isSenAi && (
                       <div className="mb-1.5 flex items-center gap-1.5 px-2 py-0.5 w-fit rounded-lg bg-gradient-to-r from-purple-500/15 to-indigo-500/15 border border-purple-500/20 text-purple-700 dark:text-purple-300 font-bold text-[10px]">
                         <img src="/senai-logo.png" alt="SenAI" className="h-3 w-3 object-contain" />
@@ -1723,6 +1819,52 @@ export default function MobileChatPage() {
                         isMe={isMe}
                       />
                     )}
+                    {/* Hiển thị huy hiệu biểu cảm nhanh */}
+                    {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {Object.entries(msg.reactions).map(([emoji, users]) => {
+                          if (!Array.isArray(users) || users.length === 0) return null
+                          const reactedByMe = currentUser?.id ? users.includes(currentUser.id) : false
+                          return (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => handleAddReaction(msg.id, emoji)}
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                reactedByMe
+                                  ? 'bg-sky-500/20 border border-sky-400 text-sky-900 dark:text-sky-200'
+                                  : 'bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-200'
+                              }`}
+                            >
+                              <span>{emoji}</span>
+                              <span>{users.length}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Thanh thao tác nhanh: Trả lời & Biểu cảm */}
+                  <div className="flex items-center gap-1 px-1">
+                    <button
+                      type="button"
+                      onClick={() => setReplyingToMessage(msg)}
+                      title="Trả lời"
+                      className="p-1 rounded-lg text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <Reply className="h-3 w-3" />
+                    </button>
+                    {(['👍', '❤️', '😂', '😮', '😢'] as const).map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => handleAddReaction(msg.id, emoji)}
+                        className="p-0.5 text-[11px] hover:scale-110 transition"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Thời gian & Trạng thái gửi */}
@@ -1781,6 +1923,27 @@ export default function MobileChatPage() {
                   {emoji}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Khung hiển thị tin nhắn đang trả lời */}
+          {replyingToMessage && (
+            <div className="px-3 py-1.5 bg-slate-100/90 dark:bg-slate-800/90 border-t border-black/5 dark:border-white/5 flex items-center justify-between gap-2 text-[11px]">
+              <div className="min-w-0 flex-1">
+                <span className="font-bold text-sky-600 dark:text-sky-400">
+                  Đang trả lời {replyingToMessage.senderName}:{' '}
+                </span>
+                <span className="text-slate-600 dark:text-slate-300 truncate">
+                  {replyingToMessage.content || '[Đính kèm]'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyingToMessage(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
 

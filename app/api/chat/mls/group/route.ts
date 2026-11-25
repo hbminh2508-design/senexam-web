@@ -5,9 +5,69 @@ export const dynamic = 'force-dynamic'
 
 /**
  * Quản lý Nhóm Chat MLS (RFC 9420)
+ * GET: Lấy danh sách nhóm & cuộc trò chuyện của người dùng hiện tại từ Supabase
  * POST: Tạo nhóm chat mới với danh sách email bạn bè
  * PATCH: Đổi tên / ảnh đại diện của nhóm chat
  */
+export async function GET(req: Request) {
+  try {
+    const user = await getUserFromRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: 'Chưa xác thực người dùng' }, { status: 401 })
+    }
+
+    const db = getSupabaseAdmin()
+    const { data: memberships, error } = await db
+      .from('chat_members')
+      .select(
+        'role, joined_at, chat_conversations:conversation_id(id, type, title, avatar_url, mls_group_id, mls_epoch, updated_at, created_at)'
+      )
+      .eq('user_id', user.id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    const conversations = (memberships || [])
+      .map((m: any) => {
+        const rawConv = m.chat_conversations || m.conversation
+        const conv = Array.isArray(rawConv) ? rawConv[0] : rawConv
+        if (!conv || !conv.id) return null
+        const isGroup = conv.type === 'group'
+        const updatedAtMs = conv.updated_at
+          ? new Date(conv.updated_at).getTime()
+          : conv.created_at
+          ? new Date(conv.created_at).getTime()
+          : Date.now()
+        return {
+          id: conv.id,
+          type: conv.type || 'group',
+          isGroup,
+          partnerId: conv.mls_group_id || conv.id,
+          partnerName: conv.title || (isGroup ? 'Nhóm chat' : 'Cuộc trò chuyện'),
+          partnerIdentifier: isGroup ? 'Nhóm MLS' : '',
+          mlsGroupId: conv.mls_group_id || null,
+          mlsEpoch: conv.mls_epoch ?? 0,
+          epoch: conv.mls_epoch ?? 0,
+          role: m.role || 'member',
+          avatarUrl: conv.avatar_url || '',
+          partnerAvatar: conv.avatar_url || '',
+          unreadCount: 0,
+          updatedAt: isNaN(updatedAtMs) ? Date.now() : updatedAtMs,
+          createdAt: conv.created_at || null,
+        }
+      })
+      .filter(Boolean)
+
+    return NextResponse.json({
+      success: true,
+      conversations,
+    })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Lỗi server' }, { status: 500 })
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req)

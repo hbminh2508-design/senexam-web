@@ -47,6 +47,12 @@ export interface SenChatMessage {
   invokedBy?: string
   expiresAt?: string
   isPinnedPermanent?: boolean
+  replyTo?: {
+    id: string
+    senderName: string
+    content: string
+  }
+  reactions?: Record<string, string[]>
 }
 
 export interface SenChatConversation {
@@ -126,6 +132,7 @@ const STORAGE_KEYS = {
   FONT_SIZE: 'sen_chat_font_size',
   SEND_KEY: 'sen_chat_send_key',
   NOTIFICATIONS: 'sen_chat_notifications_config',
+  DRAFTS: 'sen_chat_drafts',
 }
 
 export const TEXT_MESSAGE_RETENTION_DAYS = 30
@@ -148,10 +155,16 @@ export const SENAI_STUDIO_CONVERSATION: SenChatConversation = {
 
 /**
  * Đảm bảo mục SenAI Studio luôn luôn được ghim ở đầu tiên (index 0, isPinned: true)
+ * và các cuộc hội thoại được ghim nằm ngay bên dưới SenAI Studio.
  */
 export function ensureSenAiStudioInConversations(list: SenChatConversation[]): SenChatConversation[] {
   const filtered = (list || []).filter((c) => c.id !== SENAI_STUDIO_CONVERSATION_ID)
-  return [{ ...SENAI_STUDIO_CONVERSATION, isPinned: true }, ...filtered]
+  const sorted = [...filtered].sort((a, b) => {
+    const pinDiff = (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0)
+    if (pinDiff !== 0) return pinDiff
+    return (b.updatedAt || 0) - (a.updatedAt || 0)
+  })
+  return [{ ...SENAI_STUDIO_CONVERSATION, isPinned: true }, ...sorted]
 }
 
 // 1. Quản lý Thiết Bị (Device ID)
@@ -192,7 +205,11 @@ export function getLocalConversations(): SenChatConversation[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CONVERSATIONS)
     const list: SenChatConversation[] = raw ? JSON.parse(raw) : []
-    return list.sort((a, b) => b.updatedAt - a.updatedAt)
+    return list.sort((a, b) => {
+      const pinDiff = (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0)
+      if (pinDiff !== 0) return pinDiff
+      return (b.updatedAt || 0) - (a.updatedAt || 0)
+    })
   } catch (e) {
     return []
   }
@@ -216,6 +233,97 @@ export function deleteLocalConversation(convId: string): void {
   const list = getLocalConversations().filter((c) => c.id !== convId)
   localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
   localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${convId}`)
+}
+
+export function togglePinConversation(convId: string): SenChatConversation[] {
+  if (typeof window === 'undefined') return []
+  if (convId === SENAI_STUDIO_CONVERSATION_ID) {
+    return ensureSenAiStudioInConversations(getLocalConversations())
+  }
+  const list = getLocalConversations().map((c) =>
+    c.id === convId ? { ...c, isPinned: !c.isPinned } : c
+  )
+  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
+  return ensureSenAiStudioInConversations(list)
+}
+
+export function markConversationUnread(convId: string, count = 1): SenChatConversation[] {
+  if (typeof window === 'undefined') return []
+  if (convId === SENAI_STUDIO_CONVERSATION_ID) {
+    return ensureSenAiStudioInConversations(getLocalConversations())
+  }
+  const list = getLocalConversations().map((c) =>
+    c.id === convId ? { ...c, unreadCount: Math.max(1, count) } : c
+  )
+  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
+  return ensureSenAiStudioInConversations(list)
+}
+
+export function toggleMessageReaction(
+  conversationId: string,
+  messageId: string,
+  emoji: string,
+  userId: string
+): SenChatMessage[] {
+  if (typeof window === 'undefined' || !conversationId || !messageId || !emoji || !userId) {
+    return []
+  }
+  const list = getLocalMessages(conversationId)
+  const updated = list.map((m) => {
+    if (m.id !== messageId) return m
+    const reactions: Record<string, string[]> = { ...(m.reactions || {}) }
+    const users = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : []
+    const idx = users.indexOf(userId)
+    if (idx >= 0) {
+      users.splice(idx, 1)
+    } else {
+      users.push(userId)
+    }
+    if (users.length === 0) {
+      delete reactions[emoji]
+    } else {
+      reactions[emoji] = users
+    }
+    return { ...m, reactions }
+  })
+  localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(updated))
+  return updated
+}
+
+export function getConversationDraft(conversationId: string): string {
+  if (typeof window === 'undefined' || !conversationId) return ''
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DRAFTS)
+    const drafts = raw ? JSON.parse(raw) : {}
+    return typeof drafts[conversationId] === 'string' ? drafts[conversationId] : ''
+  } catch {
+    return ''
+  }
+}
+
+export function saveConversationDraft(conversationId: string, text: string): void {
+  if (typeof window === 'undefined' || !conversationId) return
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DRAFTS)
+    const drafts = raw ? JSON.parse(raw) : {}
+    if (!text || !text.trim()) {
+      delete drafts[conversationId]
+    } else {
+      drafts[conversationId] = text
+    }
+    localStorage.setItem(STORAGE_KEYS.DRAFTS, JSON.stringify(drafts))
+  } catch {}
+}
+
+export function clearConversationDraft(conversationId: string): void {
+  if (typeof window === 'undefined' || !conversationId) return
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DRAFTS)
+    if (!raw) return
+    const drafts = JSON.parse(raw)
+    delete drafts[conversationId]
+    localStorage.setItem(STORAGE_KEYS.DRAFTS, JSON.stringify(drafts))
+  } catch {}
 }
 
 // 4. Quản lý Lịch Sử Tin Nhắn (Messages)

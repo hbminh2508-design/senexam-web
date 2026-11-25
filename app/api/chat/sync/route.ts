@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { supabase as publicSupabase } from '@/lib/supabaseClient'
 
 export const dynamic = 'force-dynamic'
@@ -25,6 +25,84 @@ interface MemoryQueueItem {
 }
 
 const memorySyncQueue: MemoryQueueItem[] = []
+
+async function fetchUserConversationsFromDb(db: any, userId: string) {
+  const { data: memberships, error } = await db
+    .from('chat_members')
+    .select(
+      'role, joined_at, chat_conversations:conversation_id(id, type, title, avatar_url, mls_group_id, mls_epoch, updated_at, created_at)'
+    )
+    .eq('user_id', userId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (memberships || [])
+    .map((m: any) => {
+      const rawConv = m.chat_conversations || m.conversation
+      const conv = Array.isArray(rawConv) ? rawConv[0] : rawConv
+      if (!conv || !conv.id) return null
+      const isGroup = conv.type === 'group'
+      const updatedAtMs = conv.updated_at
+        ? new Date(conv.updated_at).getTime()
+        : conv.created_at
+        ? new Date(conv.created_at).getTime()
+        : Date.now()
+      return {
+        id: conv.id,
+        type: conv.type || 'group',
+        isGroup,
+        partnerId: conv.mls_group_id || conv.id,
+        partnerName: conv.title || (isGroup ? 'Nhóm chat' : 'Cuộc trò chuyện'),
+        partnerIdentifier: isGroup ? 'Nhóm MLS' : '',
+        mlsGroupId: conv.mls_group_id || null,
+        mlsEpoch: conv.mls_epoch ?? 0,
+        epoch: conv.mls_epoch ?? 0,
+        role: m.role || 'member',
+        avatarUrl: conv.avatar_url || '',
+        partnerAvatar: conv.avatar_url || '',
+        unreadCount: 0,
+        updatedAt: isNaN(updatedAtMs) ? Date.now() : updatedAtMs,
+        createdAt: conv.created_at || null,
+      }
+    })
+    .filter(Boolean)
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const action = searchParams.get('action') || 'sync_conversations'
+
+    if (action === 'sync_conversations') {
+      const user = await getUserFromRequest(request)
+      if (!user) {
+        return NextResponse.json({ error: 'Chưa xác thực người dùng' }, { status: 401 })
+      }
+      const db = getDb()
+      const conversations = await fetchUserConversationsFromDb(db, user.id)
+      return NextResponse.json({ success: true, conversations })
+    }
+
+    // 6.5 ĐỒNG BỘ DANH SÁCH NHÓM & HỘI THOẠI TỪ SUPABASE (sync_conversations)
+    if (action === 'sync_conversations') {
+      const user = await getUserFromRequest(request)
+      if (!user) {
+        return NextResponse.json({ error: 'Chưa xác thực người dùng' }, { status: 401 })
+      }
+      const conversations = await fetchUserConversationsFromDb(db, user.id)
+      return NextResponse.json({
+        success: true,
+        conversations,
+      })
+    }
+
+    return NextResponse.json({ error: 'Hành động không hợp lệ' }, { status: 400 })
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Lỗi máy chủ' }, { status: 500 })
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -331,6 +409,19 @@ export async function POST(request: Request) {
         syncedCount,
         serverTimestamp: new Date().toISOString(),
         message: 'Đã đồng bộ phân chia luồng tin nhắn chuẩn xác về máy chủ trung gian',
+      })
+    }
+
+    // 6.5 ĐỒNG BỘ DANH SÁCH NHÓM & HỘI THOẠI TỪ SUPABASE (sync_conversations)
+    if (action === 'sync_conversations') {
+      const user = await getUserFromRequest(request)
+      if (!user) {
+        return NextResponse.json({ error: 'Chưa xác thực người dùng' }, { status: 401 })
+      }
+      const conversations = await fetchUserConversationsFromDb(db, user.id)
+      return NextResponse.json({
+        success: true,
+        conversations,
       })
     }
 

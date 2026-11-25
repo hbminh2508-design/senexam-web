@@ -283,8 +283,9 @@ export async function POST(request: Request) {
     let disqualificationReason: string | null = null
 
     if (startedAt) {
-      const serverElapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000)
-      if (serverElapsed > 0) {
+      const startedMs = new Date(startedAt).getTime()
+      const serverElapsed = !isNaN(startedMs) ? Math.floor((Date.now() - startedMs) / 1000) : NaN
+      if (!isNaN(serverElapsed) && serverElapsed > 0) {
         // Lấy thời gian thực tính toán trên máy chủ
         sanitizedTimeSpent = Math.min(serverElapsed, examDurationSeconds + graceSeconds)
         // Nếu thí sinh nộp quá thời gian quy định + 5 phút dung sai
@@ -292,6 +293,8 @@ export async function POST(request: Request) {
           isDisqualified = true
           disqualificationReason = 'SUBMISSION_OVERDUE'
         }
+      } else {
+        sanitizedTimeSpent = Math.min(sanitizedTimeSpent, examDurationSeconds + graceSeconds)
       }
     } else {
       // Giới hạn thời gian client gửi lên không vượt quá thời gian đề + dung sai

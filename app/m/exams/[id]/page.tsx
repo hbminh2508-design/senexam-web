@@ -289,14 +289,16 @@ export default function MobileExamPage() {
     })
   }
 
-  // Timer đếm ngược
+  const handleSubmitExamRef = useRef<() => void>(() => {})
+
+  // Timer đếm ngược (dùng ref tránh stale closure và tránh gọi side-effect trong setState)
   useEffect(() => {
     if (!hasStarted || result || isReviewMode) return
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer)
-          handleSubmitExam()
+          setTimeout(() => handleSubmitExamRef.current(), 0)
           return 0
         }
         return prev - 1
@@ -367,6 +369,7 @@ export default function MobileExamPage() {
       setIsSubmitting(false)
     }
   }
+  handleSubmitExamRef.current = handleSubmitExam
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60)

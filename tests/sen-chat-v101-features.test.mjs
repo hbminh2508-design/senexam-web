@@ -19,12 +19,15 @@ test('Sen Chat: Phiên bản hiện tại là 1.0.2 hoặc mới hơn và ghi lo
   assert.ok(SEN_CHAT_CHANGELOG.length >= 2, 'Phải có ít nhất 2 phiên bản trong changelog')
 
   const latest = SEN_CHAT_CHANGELOG[0]
-  assert.ok(latest.version === '1.0.2' || latest.version === '1.0.3')
+  assert.ok(latest.version >= '1.0.2')
   assert.equal(latest.isLatest, true)
-  assert.equal(latest.title, 'Bắt lại những con bò đang bay trên các vì sao')
+
+  const v103 = SEN_CHAT_CHANGELOG.find((l) => l.version === '1.0.3')
+  assert.ok(v103, 'Phải có phiên bản 1.0.3 trong lịch sử')
+  assert.equal(v103.title, 'Bắt lại những con bò đang bay trên các vì sao')
   assert.ok(
-    latest.changes.includes('Bắt lại những con bò đang bay trên các vì sao'),
-    'Changelog phải chứa mục "Bắt lại những con bò đang bay trên các vì sao"'
+    v103.changes.includes('Bắt lại những con bò đang bay trên các vì sao'),
+    'Changelog 1.0.3 phải chứa mục "Bắt lại những con bò đang bay trên các vì sao"'
   )
 
   const v101 = SEN_CHAT_CHANGELOG.find((l) => l.version === '1.0.1')

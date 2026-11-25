@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { saveExamDraft, loadExamDraft, removeExamDraft } from './examDraft'
+import { supabase } from './supabaseClient'
 
 export interface ExamEngineConfig {
   examId: string
@@ -61,6 +62,12 @@ export function useExamEngine(config: ExamEngineConfig) {
   answersRef.current = answers
   const bookmarkedRef = useRef<Record<string, boolean>>(bookmarked)
   bookmarkedRef.current = bookmarked
+  const tabSwitchesRef = useRef<number>(tabSwitches)
+  tabSwitchesRef.current = tabSwitches
+  const blurCountRef = useRef<number>(blurCount)
+  blurCountRef.current = blurCount
+  const debounceSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isSubmittingRef = useRef<boolean>(false)
 
   // 1. Khôi phục bản nháp khi khởi tạo
   useEffect(() => {
@@ -118,30 +125,70 @@ export function useExamEngine(config: ExamEngineConfig) {
     }
   }, [])
 
-  // 4. Lưu nháp định kỳ an toàn vào localStorage
+  // 4. Lưu nháp định kỳ an toàn vào localStorage + lưu ngay khi beforeunload
   useEffect(() => {
     if (!examId || !userId) return
     const interval = setInterval(() => {
       saveExamDraft(examId, userId, answersRef.current, {
         bookmarked: bookmarkedRef.current,
-        tabSwitches,
+        tabSwitches: tabSwitchesRef.current,
       })
       setIsDraftSaved(true)
       setLastSavedAt(Date.now())
     }, autoSaveIntervalMs)
 
-    return () => clearInterval(interval)
-  }, [examId, userId, autoSaveIntervalMs, tabSwitches])
+    const handleBeforeUnload = () => {
+      if (debounceSaveTimerRef.current) {
+        clearTimeout(debounceSaveTimerRef.current)
+        debounceSaveTimerRef.current = null
+      }
+      saveExamDraft(examId, userId, answersRef.current, {
+        bookmarked: bookmarkedRef.current,
+        tabSwitches: tabSwitchesRef.current,
+      })
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pagehide', handleBeforeUnload)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pagehide', handleBeforeUnload)
+      if (debounceSaveTimerRef.current) {
+        clearTimeout(debounceSaveTimerRef.current)
+        debounceSaveTimerRef.current = null
+      }
+    }
+  }, [examId, userId, autoSaveIntervalMs])
 
   // Callbacks điều hướng và thao tác đáp án
-  const selectAnswer = useCallback((questionKey: string, value: any) => {
-    setAnswers((prev) => {
-      const next = { ...prev, [questionKey]: value }
-      answersRef.current = next
-      return next
-    })
-    setIsDraftSaved(false)
-  }, [])
+  const selectAnswer = useCallback(
+    (questionKey: string, value: any) => {
+      setAnswers((prev) => {
+        const next = { ...prev, [questionKey]: value }
+        answersRef.current = next
+        return next
+      })
+      setIsDraftSaved(false)
+
+      // Debounce auto-save 300ms để không mất đáp án mới chọn trước khi interval chạy
+      if (examId && userId) {
+        if (debounceSaveTimerRef.current) {
+          clearTimeout(debounceSaveTimerRef.current)
+        }
+        debounceSaveTimerRef.current = setTimeout(() => {
+          saveExamDraft(examId, userId, answersRef.current, {
+            bookmarked: bookmarkedRef.current,
+            tabSwitches: tabSwitchesRef.current,
+          })
+          setIsDraftSaved(true)
+          setLastSavedAt(Date.now())
+        }, 300)
+      }
+    },
+    [examId, userId]
+  )
 
   const toggleBookmark = useCallback((questionKey: string) => {
     setBookmarked((prev) => {
@@ -168,31 +215,52 @@ export function useExamEngine(config: ExamEngineConfig) {
 
   const submit = useCallback(
     async (timeSpentSeconds?: number) => {
-      if (isSubmitting) return
+      if (isSubmittingRef.current || isSubmitting) return
+      isSubmittingRef.current = true
       setIsSubmitting(true)
       try {
+        const idempotencyKey = `exam_${userId}_${examId}_${Date.now()}`
         const payload = {
           answers: answersRef.current,
-          tabSwitches,
-          blurCount,
+          tabSwitches: tabSwitchesRef.current,
+          blurCount: blurCountRef.current,
           timeSpent: timeSpentSeconds || 0,
           startedAt: startedAtRef.current,
+          idempotencyKey,
         }
 
         let res: any = null
         if (onSubmitExam) {
           res = await onSubmitExam(payload)
         } else {
+          let accessToken: string | null = null
+          try {
+            const { data } = await supabase.auth.getSession()
+            accessToken = data?.session?.access_token || null
+          } catch {}
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          }
+          if (accessToken) {
+            headers.Authorization = `Bearer ${accessToken}`
+          }
+
           const apiRes = await fetch('/api/exams/submit', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               examId,
               userId,
               ...payload,
             }),
           })
-          res = await apiRes.json()
+
+          if (!apiRes.ok) {
+            const errBody = await apiRes.json().catch(() => null)
+            throw new Error(errBody?.error || `Lỗi nộp bài (HTTP ${apiRes.status})`)
+          }
+          res = await apiRes.json().catch(() => ({ success: false, error: 'Phản hồi máy chủ không hợp lệ' }))
         }
 
         // Dọn dẹp nháp khi nộp bài thành công
@@ -201,10 +269,11 @@ export function useExamEngine(config: ExamEngineConfig) {
         }
         return res
       } finally {
+        isSubmittingRef.current = false
         setIsSubmitting(false)
       }
     },
-    [isSubmitting, examId, userId, tabSwitches, blurCount, onSubmitExam]
+    [isSubmitting, examId, userId, onSubmitExam]
   )
 
   return {

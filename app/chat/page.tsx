@@ -53,6 +53,9 @@ import {
   AlertTriangle,
   Settings,
   UserPlus,
+  Pin,
+  PinOff,
+  CircleDot,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -114,6 +117,12 @@ import {
   CHAT_RETENTION_POLICY_NOTICE,
   getChatSendKey,
   getChatNotificationSettings,
+  togglePinConversation,
+  markConversationUnread,
+  toggleMessageReaction,
+  getConversationDraft,
+  saveConversationDraft,
+  clearConversationDraft,
 } from '@/lib/senChatStorage'
 import {
   calculateSafetyNumber,
@@ -126,6 +135,7 @@ import {
   broadcastFileTransitReady,
   checkDeviceSyncStatus,
   triggerFullDeviceSync,
+  reconcileConversations,
   DeviceSyncStatusResult,
 } from '@/lib/senChatDeviceRelay'
 import { SEN_CHAT_CURRENT_VERSION } from '@/lib/senChatVersion'
@@ -264,12 +274,17 @@ export default function SenChatPage() {
         setMessages(getLocalMessages(activeId))
       }
     }
+    const onConversationsReconciled = () => {
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+    }
     window.addEventListener('senchat-sync-completed', onSyncCompleted)
     window.addEventListener('senchat-messages-reconciled', onReconciled)
+    window.addEventListener('senchat-conversations-reconciled', onConversationsReconciled)
     return () => {
       clearInterval(interval)
       window.removeEventListener('senchat-sync-completed', onSyncCompleted)
       window.removeEventListener('senchat-messages-reconciled', onReconciled)
+      window.removeEventListener('senchat-conversations-reconciled', onConversationsReconciled)
     }
   }, [refreshSyncStatus])
 
@@ -442,6 +457,16 @@ export default function SenChatPage() {
 
             // Tải danh sách bạn bè ban đầu
             fetchFriendsList()
+
+            // Tự động đồng bộ nhóm & tin nhắn đa thiết bị ngay khi mở app
+            triggerFullDeviceSync(auth.user.id, deviceId, {
+              supabaseClient: supabase,
+              accessToken: token,
+            })
+              .then(() => {
+                setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+              })
+              .catch(() => {})
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP với returnUrl=/chat
@@ -498,6 +523,9 @@ export default function SenChatPage() {
           setMessages(reconciledMsgs)
         }
       },
+      onConversationsReconciled: () => {
+        setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      },
     })
 
     // Đồng bộ ban đầu khi kết nối relay
@@ -515,6 +543,8 @@ export default function SenChatPage() {
       broadcastRequestMessageSync(selectedConvId)
       const msgs = getLocalMessages(selectedConvId)
       setMessages(msgs)
+      setInputText(getConversationDraft(selectedConvId))
+      setReplyingToMessage(null)
       setIsMobileListVisible(false)
 
       const activeConv = conversations.find((c) => c.id === selectedConvId)
@@ -714,9 +744,13 @@ export default function SenChatPage() {
       status: isOnline ? 'sent' : 'sending',
     }
 
-    // Nếu có trả lời tin nhắn
+    // Nếu có trả lời tin nhắn (Trích dẫn chuẩn)
     if (replyingToMessage) {
-      newMsg.content = `[Trả lời: ${replyingToMessage.content.slice(0, 30)}...] ${newMsg.content}`
+      newMsg.replyTo = {
+        id: replyingToMessage.id,
+        senderName: replyingToMessage.senderName || 'Người dùng',
+        content: replyingToMessage.content || (replyingToMessage.attachmentName ? `[Tệp: ${replyingToMessage.attachmentName}]` : '[Tin nhắn]'),
+      }
       setReplyingToMessage(null)
     }
 
@@ -728,7 +762,10 @@ export default function SenChatPage() {
     // Lưu cục bộ ngay tức thì (Local-First)
     saveLocalMessage(selectedConvId, newMsg)
     setMessages((prev) => [...prev, newMsg])
-    if (textToSend === undefined) setInputText('')
+    if (textToSend === undefined) {
+      setInputText('')
+      clearConversationDraft(selectedConvId)
+    }
 
     // Cập nhật conversation
     saveLocalConversation({
@@ -1044,17 +1081,9 @@ export default function SenChatPage() {
 
   // 9. Thả biểu cảm cảm xúc (Reactions)
   const handleAddReaction = (msgId: string, emoji: string) => {
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id === msgId) {
-          return {
-            ...m,
-            content: `${m.content} ${emoji}`,
-          }
-        }
-        return m
-      })
-    )
+    if (!selectedConvId || !currentUser?.id) return
+    const updated = toggleMessageReaction(selectedConvId, msgId, emoji, currentUser.id)
+    setMessages(updated)
   }
 
   // 10. Chặn & Bỏ chặn
@@ -1533,11 +1562,9 @@ export default function SenChatPage() {
                 const displayName = isSenAiStudio ? 'SenAI Studio' : (nickname || c.partnerName)
 
                 return (
-                  <button
+                  <div
                     key={c.id}
-                    type="button"
-                    onClick={() => setSelectedConvId(c.id)}
-                    className={`flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition active:scale-[0.98] ${
+                    className={`group/conv relative flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition ${
                       isSelected
                         ? 'bg-emerald-500/10 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100'
                         : isSenAiStudio
@@ -1545,45 +1572,81 @@ export default function SenChatPage() {
                         : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/50'
                     }`}
                   >
-                    <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-sm ${
-                      isSenAiStudio
-                        ? 'bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 shadow-emerald-500/30'
-                        : 'bg-gradient-to-br from-emerald-400 to-teal-600'
-                    }`}>
-                      {isSenAiStudio ? (
-                        <Sparkles className="h-5 w-5 animate-pulse text-white" />
-                      ) : (
-                        displayName.substring(0, 1).toUpperCase()
-                      )}
-                      <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConvId(c.id)}
+                      className="flex flex-1 min-w-0 items-center gap-3 text-left active:scale-[0.98]"
+                    >
+                      <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-sm ${
+                        isSenAiStudio
+                          ? 'bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 shadow-emerald-500/30'
+                          : 'bg-gradient-to-br from-emerald-400 to-teal-600'
+                      }`}>
+                        {isSenAiStudio ? (
+                          <Sparkles className="h-5 w-5 animate-pulse text-white" />
+                        ) : (
+                          displayName.substring(0, 1).toUpperCase()
+                        )}
+                        <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
-                            {displayName}
-                          </span>
-                          {isSenAiStudio && (
-                            <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-[9px] font-black uppercase tracking-wider text-white">
-                              Studio
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {c.isPinned && !isSenAiStudio && (
+                              <Pin className="h-3 w-3 shrink-0 text-amber-500" />
+                            )}
+                            <span className="truncate font-semibold text-xs text-slate-800 dark:text-slate-100">
+                              {displayName}
+                            </span>
+                            {isSenAiStudio && (
+                              <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-[9px] font-black uppercase tracking-wider text-white">
+                                Studio
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400">{c.lastMessageTime || ''}</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                            {c.lastMessage || (isSenAiStudio ? 'Trợ lý học tập & nghiên cứu' : 'Bắt đầu trò chuyện...')}
+                          </p>
+                          {c.unreadCount > 0 && (
+                            <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                              {c.unreadCount}
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-slate-400">{c.lastMessageTime || ''}</span>
                       </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-                          {c.lastMessage || (isSenAiStudio ? 'Trợ lý học tập & nghiên cứu' : 'Bắt đầu trò chuyện...')}
-                        </p>
-                        {c.unreadCount > 0 && (
-                          <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
-                            {c.unreadCount}
-                          </span>
-                        )}
+                    </button>
+
+                    {!isSenAiStudio && (
+                      <div className="hidden group-hover/conv:flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConversations(togglePinConversation(c.id))
+                          }}
+                          title={c.isPinned ? 'Bỏ ghim hội thoại' : 'Ghim hội thoại'}
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200/80 hover:text-amber-600 dark:hover:bg-slate-700"
+                        >
+                          {c.isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConversations(markConversationUnread(c.id, 1))
+                          }}
+                          title="Đánh dấu chưa đọc"
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200/80 hover:text-emerald-600 dark:hover:bg-slate-700"
+                        >
+                          <CircleDot className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                    </div>
-                  </button>
+                    )}
+                  </div>
                 )
               })
             )}
@@ -1877,6 +1940,20 @@ export default function SenChatPage() {
                                 </div>
                               )}
 
+                              {/* Khung trích dẫn tin nhắn trả lời (Reply Quote) */}
+                              {msg.replyTo && (
+                                <div
+                                  className={`mb-2 rounded-xl border-l-2 px-2.5 py-1.5 text-[11px] ${
+                                    isMe
+                                      ? 'border-white/70 bg-white/15 text-white/95'
+                                      : 'border-emerald-500 bg-slate-100/90 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300'
+                                  }`}
+                                >
+                                  <div className="font-bold text-[10px] opacity-90">{msg.replyTo.senderName}</div>
+                                  <div className="truncate opacity-80">{msg.replyTo.content}</div>
+                                </div>
+                              )}
+
                               {/* Đính kèm tệp / ảnh mã hóa E2EE */}
                               {(msg.attachmentId || msg.driveFileId || msg.fileKeyBase64) && (
                                 <div className="mb-2">
@@ -1951,11 +2028,36 @@ export default function SenChatPage() {
                                 </span>
                               )}
                             </div>
+
+                            {/* Hiển thị huy hiệu biểu cảm cảm xúc (Emoji Reactions) */}
+                            {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {Object.entries(msg.reactions).map(([emoji, users]) => {
+                                  if (!Array.isArray(users) || users.length === 0) return null
+                                  const reactedByMe = currentUser?.id ? users.includes(currentUser.id) : false
+                                  return (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => handleAddReaction(msg.id, emoji)}
+                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition ${
+                                        reactedByMe
+                                          ? 'bg-emerald-500/20 border border-emerald-400/60 text-emerald-900 dark:text-emerald-200'
+                                          : 'bg-white/80 border border-slate-200/80 text-slate-700 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-200'
+                                      }`}
+                                    >
+                                      <span>{emoji}</span>
+                                      <span className="text-[10px]">{users.length}</span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
 
                         {/* Message Action Bar (Reply, Reaction, Recall) */}
-                        <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-1">
+                        <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-0.5">
                           <button
                             type="button"
                             onClick={() => setReplyingToMessage(msg)}
@@ -1965,14 +2067,17 @@ export default function SenChatPage() {
                             <Reply className="h-3.5 w-3.5" />
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleAddReaction(msg.id, '❤️')}
-                            title="Thả tim"
-                            className="p-1 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
-                          >
-                            ❤️
-                          </button>
+                          {(['👍', '❤️', '😂', '😮', '😢'] as const).map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => handleAddReaction(msg.id, emoji)}
+                              title={`Thả cảm xúc ${emoji}`}
+                              className="p-1 rounded-lg text-xs hover:bg-slate-200 dark:hover:bg-slate-800 transition hover:scale-110"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
 
                           {isMe && (
                             <button
@@ -2117,6 +2222,9 @@ export default function SenChatPage() {
                     onChange={(e) => {
                       const val = e.target.value
                       setInputText(val)
+                      if (selectedConvId) {
+                        saveConversationDraft(selectedConvId, val)
+                      }
                       const suggestions = getSenAiAutocompleteSuggestions(val)
                       setSenAiSuggestions(suggestions)
                       setShowSenAiAutocomplete(suggestions.length > 0)

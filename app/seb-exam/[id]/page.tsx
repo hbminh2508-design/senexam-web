@@ -213,8 +213,8 @@ export default function SebExamRoomPage() {
                   code: autoCode.trim(),
                 }),
               })
-              const data = await res.json()
-              if (data.success) {
+              const data = res.ok ? await res.json().catch(() => null) : null
+              if (data?.success) {
                 if (data.tokenHash) {
                   await supabase.auth.verifyOtp({
                     token_hash: data.tokenHash,
@@ -658,7 +658,7 @@ export default function SebExamRoomPage() {
           examId: examId,
         }),
       })
-        .then((res) => res.json())
+        .then((res) => (res.ok ? res.json().catch(() => null) : null))
         .then((data) => {
           if (data?.code) setSebAccessCode(data.code)
         })

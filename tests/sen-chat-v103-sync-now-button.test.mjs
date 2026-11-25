@@ -18,14 +18,14 @@ import {
 // ==============================================================================
 // 1. KIỂM THỬ PHIÊN BẢN V1.0.3 VÀ CHANGELOG
 // ==============================================================================
-test('Sen Chat v1.0.3: Phiên bản hiện tại là 1.0.3 và changelog chứa câu thần chú và các tính năng mới', () => {
-  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.0.3', 'Phiên bản Sen Chat phải là 1.0.3')
+test('Sen Chat v1.0.3: Phiên bản hiện tại >= 1.0.3 và changelog 1.0.3 chứa câu thần chú và các tính năng mới', () => {
+  assert.ok(SEN_CHAT_CURRENT_VERSION >= '1.0.3', 'Phiên bản Sen Chat phải >= 1.0.3')
   assert.ok(Array.isArray(SEN_CHAT_CHANGELOG), 'SEN_CHAT_CHANGELOG phải là mảng')
   assert.ok(SEN_CHAT_CHANGELOG.length >= 4, 'Phải có ít nhất 4 phiên bản (1.0.3, 1.0.2, 1.0.1, 1.0.0)')
 
-  const v103 = SEN_CHAT_CHANGELOG[0]
+  const v103 = SEN_CHAT_CHANGELOG.find((c) => c.version === '1.0.3')
+  assert.ok(v103, 'Phải có mục changelog cho phiên bản 1.0.3')
   assert.equal(v103.version, '1.0.3')
-  assert.equal(v103.isLatest, true)
   assert.equal(v103.isBugFixOnly, true)
   assert.equal(v103.releaseDate, '24/11/2026')
   assert.equal(v103.title, 'Bắt lại những con bò đang bay trên các vì sao')
