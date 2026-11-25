@@ -11,6 +11,7 @@ import {
 import {
   initDeviceRelay,
   broadcastConversationRemoved,
+  triggerFullDeviceSync,
 } from '../lib/senChatDeviceRelay.mjs'
 
 import {
@@ -220,4 +221,73 @@ test('Sen Chat v1.0.4 UX: app/m/chat/page.tsx TUYỆT ĐỐI KHÔNG chứa chu�
   const forbiddenScRegex = /\bSC\b|SC(?=[^m]|$)/g
   const scMatches = mobileContent.match(forbiddenScRegex)
   assert.equal(scMatches, null, `app/m/chat/page.tsx không được chứa "SC" lẻ loi: ${JSON.stringify(scMatches)}`)
+})
+
+// ==============================================================================
+// 7. KIỂM THỬ PRUNE NHÓM ĐÃ RỜI KHI OFFLINE SYNC & CHỐNG GHOST CLICK SAU LONG-PRESS
+// ==============================================================================
+test('Sen Chat v1.0.4 UX: triggerFullDeviceSync tự gỡ nhóm đã rời khi thiết bị offline đồng bộ lại & chống ghost click', async () => {
+  setupMockBrowser()
+  saveLocalConversation({
+    id: 'group_already_left_on_other_device',
+    partnerId: 'group_already_left_on_other_device',
+    partnerName: 'Nhóm đã rời ở máy khác',
+    partnerIdentifier: 'MLS_GROUP',
+    unreadCount: 0,
+    updatedAt: Date.now(),
+    isGroup: true,
+  })
+  saveLocalMessage('group_already_left_on_other_device', {
+    id: 'm_stale',
+    conversationId: 'group_already_left_on_other_device',
+    senderId: 'u2',
+    senderName: 'Bạn',
+    receiverId: 'group_already_left_on_other_device',
+    content: 'Tin cũ',
+    type: 'text',
+    createdAt: new Date().toISOString(),
+    status: 'received',
+  })
+
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/api/chat/mls/group')) {
+      return {
+        ok: true,
+        json: async () => ({ success: true, conversations: [] }),
+      }
+    }
+    if (String(url).includes('/api/chat/sync')) {
+      return {
+        ok: true,
+        json: async () => ({ success: true, messages: [] }),
+      }
+    }
+    return { ok: true, json: async () => ({ devices: [] }) }
+  }
+
+  try {
+    await triggerFullDeviceSync('user_1', 'dev_offline', {
+      devices: [{ device_id: 'dev_offline', is_active: true }],
+      accessToken: 'tok_valid',
+    })
+    assert.equal(
+      getLocalConversations().some((c) => c.id === 'group_already_left_on_other_device'),
+      false,
+      'Thiết bị từng offline phải tự động gỡ nhóm không còn trên server khi đồng bộ lại'
+    )
+    assert.equal(
+      getLocalMessages('group_already_left_on_other_device').length,
+      0,
+      'Tin nhắn của nhóm đã rời phải được dọn sạch'
+    )
+  } finally {
+    globalThis.fetch = origFetch
+  }
+
+  for (const relPath of ['app/chat/page.tsx', 'app/m/chat/page.tsx']) {
+    const code = fs.readFileSync(path.join(process.cwd(), relPath), 'utf8')
+    assert.ok(code.includes('longPressTriggeredRef'), `${relPath} phải chặn ghost click sau long-press`)
+    assert.ok(code.includes('onTouchCancel'), `${relPath} phải xử lý onTouchCancel`)
+  }
 })

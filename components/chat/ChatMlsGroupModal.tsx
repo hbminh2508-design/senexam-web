@@ -333,7 +333,7 @@ export default function ChatMlsGroupModal({
     try {
       const headers = await getAuthHeaders()
       let commitMessage = `mls_commit_remove_${Date.now()}`
-      let newEpoch = Date.now()
+      let newEpoch = Math.floor(Date.now() / 1000)
       let ratchetTree = ''
 
       // Xoay khóa MLS qua Remove Proposal & Commit

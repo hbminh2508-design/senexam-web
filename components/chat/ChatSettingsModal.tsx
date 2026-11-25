@@ -393,14 +393,14 @@ export default function ChatSettingsModal({
                     <img
                       src={currentUser.avatar}
                       alt={currentUser.name}
-                      className="h-16 w-16 rounded-2xl object-cover ring-2 ring-emerald-500/30"
+                      className="h-16 w-16 rounded-2xl object-cover ring-2 ring-blue-500/30"
                     />
                   ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 text-2xl font-bold text-white shadow-md">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500 text-2xl font-bold text-white shadow-md">
                       {(currentUser?.name || 'S').substring(0, 1).toUpperCase()}
                     </div>
                   )}
-                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 rounded-full bg-blue-500 ring-2 ring-white dark:ring-slate-900" />
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -423,14 +423,14 @@ export default function ChatSettingsModal({
 
               <div className="space-y-3">
                 <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400">Liên kết tài khoản SenExam</h5>
-                <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/20 flex items-center justify-between gap-3">
+                <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800 bg-blue-50/40 dark:bg-blue-950/20 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-sky-400 shrink-0">
                       <Check className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">Đã đồng bộ từ Supabase Auth</p>
-                      <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
+                      <p className="text-xs font-bold text-blue-900 dark:text-sky-200">Đã đồng bộ từ Supabase Auth</p>
+                      <p className="text-[11px] text-blue-700/80 dark:text-sky-300/80">
                         Cookie SSO miền .senexam.me — Hồ sơ tự động cập nhật
                       </p>
                     </div>
@@ -454,7 +454,7 @@ export default function ChatSettingsModal({
               {/* Cỡ chữ hiển thị tin nhắn */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
                 <div className="flex items-center gap-2">
-                  <Type className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <Type className="h-4 w-4 text-blue-600 dark:text-sky-400" />
                   <span className="text-xs font-bold">Cỡ chữ hiển thị tin nhắn</span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -472,7 +472,7 @@ export default function ChatSettingsModal({
                       onClick={() => handleChangeFontSize(item.key as ChatFontSize)}
                       className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition ${
                         fontSize === item.key
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold shadow-xs'
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-sky-300 font-bold shadow-xs'
                           : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
                     >
@@ -500,7 +500,7 @@ export default function ChatSettingsModal({
                       onClick={() => handleChangeSendKey(item.key as ChatSendKey)}
                       className={`flex flex-col p-3 rounded-xl border text-left transition ${
                         sendKey === item.key
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold shadow-xs'
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-sky-300 font-bold shadow-xs'
                           : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
                     >
@@ -514,7 +514,7 @@ export default function ChatSettingsModal({
               {/* Tùy chọn âm thanh & Thông báo */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-4">
                 <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <Bell className="h-4 w-4 text-blue-600 dark:text-sky-400" />
                   <span className="text-xs font-bold">Tùy chọn thông báo & Âm thanh</span>
                 </div>
 
@@ -836,22 +836,22 @@ export default function ChatSettingsModal({
                     <p className="text-[10px] text-slate-400">{formatBytes(detailedStorage.audio.bytes)}</p>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
-                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
+                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 space-y-1">
+                    <div className="flex items-center gap-1.5 text-blue-600 dark:text-sky-400 text-[11px] font-bold">
                       <ShieldCheck className="h-3.5 w-3.5" />
                       <span>Hội thoại</span>
                     </div>
-                    <p className="text-xs font-black text-emerald-800 dark:text-emerald-200">
+                    <p className="text-xs font-black text-blue-800 dark:text-sky-200">
                       {storageStats.conversationCount} cuộc trò chuyện
                     </p>
-                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400">Bảo lưu danh bạ</p>
+                    <p className="text-[10px] text-blue-600 dark:text-sky-400">Bảo lưu danh bạ</p>
                   </div>
                 </div>
               </div>
 
               {/* Chính sách vòng đời 30 ngày & Nhóm MLS vĩnh viễn */}
-              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-500/30 text-slate-800 dark:text-slate-100 space-y-2.5">
-                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+              <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-500/30 text-slate-800 dark:text-slate-100 space-y-2.5">
+                <div className="flex items-center gap-2 text-blue-700 dark:text-sky-300 font-bold text-xs">
                   <ShieldCheck className="h-4 w-4" />
                   <span>Vòng đời tin nhắn 30 ngày & Bảo toàn Nhóm vĩnh viễn</span>
                 </div>
@@ -874,7 +874,7 @@ export default function ChatSettingsModal({
                 <button
                   type="button"
                   onClick={handleExportJson}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-emerald-600/20 transition shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-600/20 transition shrink-0"
                 >
                   <Download className="h-4 w-4" />
                   <span>Export JSON</span>

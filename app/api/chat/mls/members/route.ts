@@ -198,9 +198,14 @@ export async function DELETE(req: Request) {
           return NextResponse.json({ error: deleteErr.message }, { status: 500 })
         }
 
+        const safeEpoch =
+          Number.isFinite(Number(newEpoch)) && Number(newEpoch) > 0 && Number(newEpoch) <= 2147483647
+            ? Math.floor(Number(newEpoch))
+            : Math.floor(Date.now() / 1000)
+
         await db
           .from('chat_conversations')
-          .update({ mls_epoch: Number(newEpoch) || Math.floor(Date.now() / 1000) })
+          .update({ mls_epoch: safeEpoch })
           .eq('id', conversationId)
 
         return NextResponse.json({ success: true, left: true, fallback: true })

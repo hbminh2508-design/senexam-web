@@ -847,16 +847,29 @@ export async function triggerFullDeviceSync(
     // 2a. Hợp nhất danh sách nhóm & hội thoại từ Server
     try {
       let remoteConvs: any[] = []
+      let hasAuthoritativeServerGroups = false
       if (groupSettled.status === 'fulfilled' && groupSettled.value?.ok) {
         const groupData = await groupSettled.value.json().catch(() => null)
         if (Array.isArray(groupData?.conversations)) {
           remoteConvs = groupData.conversations
           remoteConvsForStatus = remoteConvs
+          hasAuthoritativeServerGroups = Boolean(token)
         }
       }
 
-      if (remoteConvs.length > 0) {
-        const localConvs = getLocalConversations()
+      if (remoteConvs.length > 0 || hasAuthoritativeServerGroups) {
+        const rawLocalConvs = getLocalConversations()
+        const remoteIds = new Set(remoteConvs.map((rc: any) => rc?.id).filter(Boolean))
+        const localConvs = hasAuthoritativeServerGroups
+          ? rawLocalConvs.filter((c: any) => {
+              const isGrp = Boolean(c?.isGroup || c?.type === 'group')
+              if (isGrp && c?.id && !remoteIds.has(c.id)) {
+                clearAllLocalMessages(c.id)
+                return false
+              }
+              return true
+            })
+          : rawLocalConvs
         const localIds = new Set(localConvs.map((c: any) => c?.id).filter(Boolean))
         syncedConversationsCount = remoteConvs.filter((rc: any) => rc?.id && !localIds.has(rc.id)).length
         const reconciledConvs = reconcileConversations(localConvs, remoteConvs)

@@ -372,7 +372,7 @@ export default function ChatAttachmentBubble({
             className={`flex h-11 w-11 items-center justify-center rounded-xl shrink-0 ${
               isMe
                 ? 'bg-white/20 text-white shadow-xs'
-                : 'bg-emerald-500/10 text-blue-600 dark:text-sky-400'
+                : 'bg-blue-500/10 text-blue-600 dark:text-sky-400'
             }`}
           >
             {isImage ? (
@@ -415,10 +415,10 @@ export default function ChatAttachmentBubble({
                   className={`p-1 rounded-lg cursor-pointer ${
                     isMe
                       ? 'text-white hover:bg-white/20'
-                      : 'text-blue-600 hover:bg-emerald-500/10'
+                      : 'text-blue-600 hover:bg-blue-500/10'
                   }`}
                 >
-                  <Play className={`h-4 w-4 ${isMe ? 'fill-white' : 'fill-emerald-600'}`} />
+                  <Play className={`h-4 w-4 ${isMe ? 'fill-white' : 'fill-blue-600'}`} />
                 </button>
                 <button
                   type="button"
@@ -484,7 +484,7 @@ export default function ChatAttachmentBubble({
         }`}
       >
         <div className="flex items-center gap-1">
-          <Clock className={`h-3 w-3 shrink-0 ${isMe ? 'text-emerald-200/80' : 'text-slate-400'}`} />
+          <Clock className={`h-3 w-3 shrink-0 ${isMe ? 'text-sky-200/80' : 'text-slate-400'}`} />
           <span
             className={
               retention.isPermanent
@@ -512,8 +512,8 @@ export default function ChatAttachmentBubble({
             }}
             className={`flex items-center gap-0.5 font-semibold hover:underline cursor-pointer ${
               isMe
-                ? 'text-white hover:text-emerald-100'
-                : 'text-blue-600 hover:text-emerald-700 dark:text-emerald-400'
+                ? 'text-white hover:text-sky-100'
+                : 'text-blue-600 hover:text-blue-700 dark:text-sky-400'
             }`}
           >
             <CalendarPlus className="h-3 w-3" />
@@ -567,7 +567,7 @@ export default function ChatAttachmentBubble({
                 type="button"
                 disabled={isExtending}
                 onClick={() => handleExtendRetention(0, true)}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-emerald-500/40 text-blue-600 dark:text-sky-400 text-xs font-bold hover:bg-emerald-50 dark:hover:bg-emerald-950/20 disabled:opacity-50 transition"
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-blue-500/40 text-blue-600 dark:text-sky-400 text-xs font-bold hover:bg-blue-50 dark:hover:bg-blue-950/20 disabled:opacity-50 transition"
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 Bảo lưu vĩnh viễn

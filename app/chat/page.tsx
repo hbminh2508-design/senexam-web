@@ -333,6 +333,7 @@ export default function SenChatPage() {
   const [activeTouchMessageId, setActiveTouchMessageId] = useState<string | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const longPressTriggeredRef = useRef(false)
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -345,6 +346,7 @@ export default function SenChatPage() {
   const startLongPress = useCallback(
     (e: React.TouchEvent, onTrigger: (tx: number, ty: number) => void) => {
       cancelLongPress()
+      longPressTriggeredRef.current = false
       const touch = e.touches?.[0]
       if (!touch) return
       const tx = touch.clientX
@@ -352,6 +354,7 @@ export default function SenChatPage() {
       touchStartPosRef.current = { x: tx, y: ty }
       longPressTimerRef.current = setTimeout(() => {
         longPressTimerRef.current = null
+        longPressTriggeredRef.current = true
         onTrigger(tx, ty)
       }, 380)
     },
@@ -1459,7 +1462,7 @@ export default function SenChatPage() {
               type="button"
               onClick={() => setShowFriendModal(true)}
               title="Thêm bạn qua Email chính xác"
-              className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 transition-colors"
+              className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-sky-300 transition-colors"
             >
               <UserPlus className="h-4 w-4" />
             </button>
@@ -1475,7 +1478,7 @@ export default function SenChatPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={activeRailTab === 'contacts' ? 'Tìm bạn bè...' : 'Tìm bạn bè hoặc tin nhắn...'}
-              className="min-h-[42px] w-full rounded-2xl border border-slate-200 bg-slate-100/70 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
+              className="min-h-[42px] w-full rounded-2xl border border-slate-200 bg-slate-100/70 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200"
             />
           </div>
 
@@ -1547,7 +1550,7 @@ export default function SenChatPage() {
                         <button
                           type="button"
                           onClick={() => handleRespondFriend(inv.id, 'accept')}
-                          className="rounded-lg bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-700"
+                          className="rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-blue-700"
                         >
                           Đồng ý
                         </button>
@@ -1688,6 +1691,7 @@ export default function SenChatPage() {
                     }
                     onTouchMove={moveLongPress}
                     onTouchEnd={cancelLongPress}
+                    onTouchCancel={cancelLongPress}
                     style={{ WebkitTouchCallout: 'none' }}
                     className={`group/conv relative flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition select-none ${
                       isSelected
@@ -1699,7 +1703,13 @@ export default function SenChatPage() {
                   >
                     <button
                       type="button"
-                      onClick={() => setSelectedConvId(c.id)}
+                      onClick={() => {
+                        if (longPressTriggeredRef.current) {
+                          longPressTriggeredRef.current = false
+                          return
+                        }
+                        setSelectedConvId(c.id)
+                      }}
                       className="flex flex-1 min-w-0 items-center gap-3 text-left active:scale-[0.98]"
                     >
                       <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-sm ${
@@ -1952,7 +1962,7 @@ export default function SenChatPage() {
             {/* Thông báo chính sách bảo mật lưu trữ 30 ngày */}
             <div className="relative z-10 flex items-center justify-between px-4 py-1.5 bg-blue-500/10 border-b border-blue-500/20 text-blue-800 dark:text-sky-300 text-[11px] shrink-0">
               <div className="flex items-center gap-1.5 truncate">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <ShieldCheck className="h-3.5 w-3.5 text-blue-600 dark:text-sky-400 shrink-0" />
                 <span className="truncate">{CHAT_RETENTION_POLICY_NOTICE}</span>
               </div>
             </div>
@@ -2008,7 +2018,12 @@ export default function SenChatPage() {
                       }}
                       onTouchMove={moveLongPress}
                       onTouchEnd={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
                       onClick={() => {
+                        if (longPressTriggeredRef.current) {
+                          longPressTriggeredRef.current = false
+                          return
+                        }
                         if (msg.type !== 'system') {
                           setActiveTouchMessageId((prev) => (prev === msg.id ? null : msg.id))
                         }
@@ -2406,7 +2421,7 @@ export default function SenChatPage() {
                       }
                     }}
                     placeholder="Nhập tin nhắn bảo mật E2EE (gõ @Sen để hỏi AI)..."
-                    className="min-h-[44px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="min-h-[44px] flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
 
                   <button
@@ -2532,8 +2547,8 @@ export default function SenChatPage() {
             const el = document.getElementById(`msg-${msgId}`)
             if (el) {
               el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              el.classList.add('ring-2', 'ring-emerald-500')
-              setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 2000)
+              el.classList.add('ring-2', 'ring-blue-500')
+              setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500'), 2000)
             }
           }}
           onRecallMessage={(msgId) => {
@@ -2595,7 +2610,7 @@ export default function SenChatPage() {
               <button
                 type="button"
                 onClick={handleSaveNickname}
-                className="min-h-[40px] rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white"
+                className="min-h-[40px] rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white hover:bg-blue-700"
               >
                 Lưu
               </button>

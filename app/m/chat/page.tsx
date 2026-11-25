@@ -363,6 +363,7 @@ export default function MobileChatPage() {
   const [activeTouchMessageId, setActiveTouchMessageId] = useState<string | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const longPressTriggeredRef = useRef(false)
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -375,6 +376,7 @@ export default function MobileChatPage() {
   const startLongPress = useCallback(
     (e: React.TouchEvent, onTrigger: (tx: number, ty: number) => void) => {
       cancelLongPress()
+      longPressTriggeredRef.current = false
       const touch = e.touches?.[0]
       if (!touch) return
       const tx = touch.clientX
@@ -382,6 +384,7 @@ export default function MobileChatPage() {
       touchStartPosRef.current = { x: tx, y: ty }
       longPressTimerRef.current = setTimeout(() => {
         longPressTimerRef.current = null
+        longPressTriggeredRef.current = true
         onTrigger(tx, ty)
       }, 380)
     },
@@ -1632,7 +1635,13 @@ export default function MobileChatPage() {
                 return (
                   <div
                     key={conv.id}
-                    onClick={() => handleSelectConversation(conv.id)}
+                    onClick={() => {
+                      if (longPressTriggeredRef.current) {
+                        longPressTriggeredRef.current = false
+                        return
+                      }
+                      handleSelectConversation(conv.id)
+                    }}
                     onContextMenu={(e) => {
                       e.preventDefault()
                       setContextMenu({
@@ -1656,6 +1665,7 @@ export default function MobileChatPage() {
                     }
                     onTouchMove={moveLongPress}
                     onTouchEnd={cancelLongPress}
+                    onTouchCancel={cancelLongPress}
                     style={{ WebkitTouchCallout: 'none' }}
                     className={`min-h-[64px] p-2.5 rounded-2xl flex items-center gap-3 cursor-pointer transition select-none ${
                       isSenAiStudio
@@ -1824,7 +1834,7 @@ export default function MobileChatPage() {
                   setActiveCallIsIncoming(false)
                   setActiveCallMode('voice')
                 }}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 hover:text-emerald-600 active:scale-95 transition"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 hover:text-blue-600 active:scale-95 transition"
                 aria-label="Gọi thoại mã hóa"
               >
                 <Phone className="h-5 w-5" />
@@ -1836,7 +1846,7 @@ export default function MobileChatPage() {
                   setActiveCallIsIncoming(false)
                   setActiveCallMode('video')
                 }}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 hover:text-emerald-600 active:scale-95 transition"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-600 dark:text-slate-300 hover:text-blue-600 active:scale-95 transition"
                 aria-label="Gọi video mã hóa"
               >
                 <Video className="h-5 w-5" />
@@ -1905,7 +1915,12 @@ export default function MobileChatPage() {
                   }}
                   onTouchMove={moveLongPress}
                   onTouchEnd={cancelLongPress}
+                  onTouchCancel={cancelLongPress}
                   onClick={() => {
+                    if (longPressTriggeredRef.current) {
+                      longPressTriggeredRef.current = false
+                      return
+                    }
                     if (msg.type !== 'system') {
                       setActiveTouchMessageId((prev) => (prev === msg.id ? null : msg.id))
                     }
@@ -2016,7 +2031,10 @@ export default function MobileChatPage() {
                             <button
                               key={emoji}
                               type="button"
-                              onClick={() => handleAddReaction(msg.id, emoji)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleAddReaction(msg.id, emoji)
+                              }}
                               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                 reactedByMe
                                   ? 'bg-sky-500/20 border border-sky-400 text-sky-900 dark:text-sky-200'
@@ -2032,13 +2050,24 @@ export default function MobileChatPage() {
                     )}
                   </div>
 
-                  {/* Thanh thao tác nhanh: Trả lời & Biểu cảm */}
-                  <div className="flex items-center gap-1 px-1">
+                  {/* Thanh thao tác nhanh: Trả lời, Biểu cảm & Thu hồi/Xóa (chạm vào tin nhắn trên iPhone/iPad để bật) */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className={`flex items-center gap-1 px-1 transition-all duration-150 ${
+                      activeTouchMessageId === msg.id
+                        ? 'opacity-100 scale-100 rounded-full bg-white/95 dark:bg-slate-800/95 border border-blue-500/20 shadow-md py-0.5 px-2'
+                        : 'opacity-75'
+                    }`}
+                  >
                     <button
                       type="button"
-                      onClick={() => setReplyingToMessage(msg)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setReplyingToMessage(msg)
+                        setActiveTouchMessageId(null)
+                      }}
                       title="Trả lời"
-                      className="p-1 rounded-lg text-slate-400 hover:bg-black/5 dark:hover:bg-white/10"
+                      className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-500/10"
                     >
                       <Reply className="h-3 w-3" />
                     </button>
@@ -2046,12 +2075,30 @@ export default function MobileChatPage() {
                       <button
                         key={emoji}
                         type="button"
-                        onClick={() => handleAddReaction(msg.id, emoji)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleAddReaction(msg.id, emoji)
+                          setActiveTouchMessageId(null)
+                        }}
                         className="p-0.5 text-[11px] hover:scale-110 transition"
                       >
                         {emoji}
                       </button>
                     ))}
+                    {isMe && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRecallMessage(msg.id)
+                          setActiveTouchMessageId(null)
+                        }}
+                        title="Thu hồi tin nhắn"
+                        className="p-1 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-500/10"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Thời gian & Trạng thái gửi */}
@@ -2178,7 +2225,7 @@ export default function MobileChatPage() {
               <button
                 type="button"
                 onClick={() => setIsRecordingVoice(true)}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 active:scale-95 transition"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-sky-400 active:scale-95 transition"
                 aria-label="Ghi âm tin nhắn thoại"
               >
                 <Mic className="h-5 w-5" />
@@ -2261,8 +2308,8 @@ export default function MobileChatPage() {
               const el = document.getElementById(`msg-${msgId}`)
               if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                el.classList.add('ring-2', 'ring-emerald-500')
-                setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 2000)
+                el.classList.add('ring-2', 'ring-blue-500')
+                setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500'), 2000)
               }
             }, 100)
           }}
