@@ -78,6 +78,7 @@ import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
 import ChatMessageContent from '@/components/chat/ChatMessageContent'
 import ChatSenAiStudioView from '@/components/chat/ChatSenAiStudioView'
+import ChatContextMenu from '@/components/chat/ChatContextMenu'
 import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
 import {
   hasSenAiMention,
@@ -102,6 +103,7 @@ import {
   deleteLocalConversation,
   getLocalMessages,
   saveLocalMessage,
+  saveLocalMessages,
   deleteLocalMessage,
   clearAllLocalMessages,
   getNicknameFor,
@@ -133,10 +135,9 @@ import {
   initDeviceRelay,
   broadcastRequestMessageSync,
   broadcastFileTransitReady,
-  checkDeviceSyncStatus,
+  broadcastConversationRemoved,
   triggerFullDeviceSync,
   reconcileConversations,
-  DeviceSyncStatusResult,
 } from '@/lib/senChatDeviceRelay'
 import { SEN_CHAT_CURRENT_VERSION } from '@/lib/senChatVersion'
 
@@ -224,69 +225,184 @@ export default function SenChatPage() {
   const imageInputRef = useRef<HTMLInputElement>(null)
   const deviceId = useMemo(() => getOrCreateDeviceId(), [])
 
-  // 🔄 Đồng bộ đa thiết bị (v1.0.3)
-  const [deviceSyncStatus, setDeviceSyncStatus] = useState<DeviceSyncStatusResult | null>(null)
-  const [isSyncingData, setIsSyncingData] = useState(false)
-  const [syncCompletedNotice, setSyncCompletedNotice] = useState<string | null>(null)
+  // 🔄 Đồng bộ ngầm liên tục giữa các thiết bị (Silent Continuous Background Sync - không hiện thông báo)
+  const isSilentSyncingRef = useRef(false)
+  const lastConvHashRef = useRef<string>('')
+  const lastMsgHashRef = useRef<string>('')
 
-  const refreshSyncStatus = useCallback(async () => {
-    if (!currentUser?.id) return
-    try {
-      const res = await checkDeviceSyncStatus(currentUser.id, deviceId)
-      setDeviceSyncStatus(res)
-    } catch {}
-  }, [currentUser?.id, deviceId])
-
-  const handleTriggerSyncNow = async () => {
-    if (!currentUser?.id || isSyncingData) return
-    setIsSyncingData(true)
-    try {
-      const res = await triggerFullDeviceSync(currentUser.id, deviceId)
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-      if (selectedConvId) {
-        setMessages(getLocalMessages(selectedConvId))
-      }
-      setSyncCompletedNotice('Đã đồng bộ ✓')
-      const updated = await checkDeviceSyncStatus(currentUser.id, deviceId)
-      setDeviceSyncStatus(updated)
-      setTimeout(() => setSyncCompletedNotice(null), 3500)
-    } catch (err: any) {
-      alert('Lỗi đồng bộ: ' + (err?.message || 'Vui lòng thử lại.'))
-    } finally {
-      setIsSyncingData(false)
+  const syncConversationsStateIfChanged = useCallback((nextList: SenChatConversation[]) => {
+    const hash = nextList.map((c) => `${c.id}:${c.updatedAt}:${c.unreadCount}:${c.isPinned ? 1 : 0}:${c.lastMessage || ''}`).join('|')
+    if (hash !== lastConvHashRef.current) {
+      lastConvHashRef.current = hash
+      setConversations(nextList)
     }
-  }
+  }, [])
+
+  const syncMessagesStateIfChanged = useCallback((convId: string, nextMsgs: SenChatMessage[]) => {
+    const hash = `${convId}:${nextMsgs.length}:${nextMsgs.map((m) => `${m.id}:${m.status}:${m.content?.length || 0}:${JSON.stringify(m.reactions || {})}`).join(',')}`
+    if (hash !== lastMsgHashRef.current) {
+      lastMsgHashRef.current = hash
+      setMessages(nextMsgs)
+    }
+  }, [])
+
+  const runSilentBackgroundSync = useCallback(async () => {
+    if (!currentUser?.id || isSilentSyncingRef.current) return
+    isSilentSyncingRef.current = true
+    try {
+      await triggerFullDeviceSync(currentUser.id, deviceId)
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
+      const activeId = selectedConvIdRef.current
+      if (activeId) {
+        syncMessagesStateIfChanged(activeId, getLocalMessages(activeId))
+      }
+    } catch {
+      // Âm thầm bỏ qua khi mạng chập chờn
+    } finally {
+      isSilentSyncingRef.current = false
+    }
+  }, [currentUser?.id, deviceId, syncConversationsStateIfChanged, syncMessagesStateIfChanged])
 
   useEffect(() => {
-    refreshSyncStatus()
-    const interval = setInterval(refreshSyncStatus, 60000)
+    if (!currentUser?.id) return
+    runSilentBackgroundSync()
+    const interval = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        runSilentBackgroundSync()
+      }
+    }, 10000)
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        runSilentBackgroundSync()
+      }
+    }
+    const onOnlineSync = () => {
+      runSilentBackgroundSync()
+    }
     const onSyncCompleted = () => {
-      refreshSyncStatus()
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
       if (selectedConvIdRef.current) {
-        setMessages(getLocalMessages(selectedConvIdRef.current))
+        syncMessagesStateIfChanged(selectedConvIdRef.current, getLocalMessages(selectedConvIdRef.current))
       }
     }
     const onReconciled = (e: any) => {
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
       const activeId = selectedConvIdRef.current
       if (activeId && (!e?.detail?.conversationId || e?.detail?.conversationId === activeId)) {
-        setMessages(getLocalMessages(activeId))
+        syncMessagesStateIfChanged(activeId, getLocalMessages(activeId))
       }
     }
     const onConversationsReconciled = () => {
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
     }
+    const onConversationRemoved = (e: any) => {
+      const removedId = e?.detail?.conversationId
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (removedId && selectedConvIdRef.current === removedId) {
+        setSelectedConvId(SENAI_STUDIO_CONVERSATION_ID)
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('online', onOnlineSync)
     window.addEventListener('senchat-sync-completed', onSyncCompleted)
     window.addEventListener('senchat-messages-reconciled', onReconciled)
     window.addEventListener('senchat-conversations-reconciled', onConversationsReconciled)
+    window.addEventListener('senchat-conversation-removed', onConversationRemoved)
     return () => {
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('online', onOnlineSync)
       window.removeEventListener('senchat-sync-completed', onSyncCompleted)
       window.removeEventListener('senchat-messages-reconciled', onReconciled)
       window.removeEventListener('senchat-conversations-reconciled', onConversationsReconciled)
+      window.removeEventListener('senchat-conversation-removed', onConversationRemoved)
     }
-  }, [refreshSyncStatus])
+  }, [currentUser?.id, runSilentBackgroundSync, syncConversationsStateIfChanged, syncMessagesStateIfChanged])
+
+  // 📋 Custom Context Menu & Touch Long-Press (iPhone/iPad + Desktop)
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean
+    mode: 'message' | 'conversation'
+    x: number
+    y: number
+    message?: SenChatMessage | null
+    conversation?: SenChatConversation | null
+  }>({ isOpen: false, mode: 'message', x: 0, y: 0, message: null, conversation: null })
+  const [activeTouchMessageId, setActiveTouchMessageId] = useState<string | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    touchStartPosRef.current = null
+  }, [])
+
+  const startLongPress = useCallback(
+    (e: React.TouchEvent, onTrigger: (tx: number, ty: number) => void) => {
+      cancelLongPress()
+      const touch = e.touches?.[0]
+      if (!touch) return
+      const tx = touch.clientX
+      const ty = touch.clientY
+      touchStartPosRef.current = { x: tx, y: ty }
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = null
+        onTrigger(tx, ty)
+      }, 380)
+    },
+    [cancelLongPress]
+  )
+
+  const moveLongPress = useCallback(
+    (e: React.TouchEvent) => {
+      if (!touchStartPosRef.current || !longPressTimerRef.current) return
+      const touch = e.touches?.[0]
+      if (!touch) return
+      const dx = Math.abs(touch.clientX - touchStartPosRef.current.x)
+      const dy = Math.abs(touch.clientY - touchStartPosRef.current.y)
+      if (dx > 10 || dy > 10) {
+        cancelLongPress()
+      }
+    },
+    [cancelLongPress]
+  )
+
+  // 🚪 Rời khỏi nhóm MLS chuẩn xác (Desktop)
+  const handleLeaveGroup = useCallback(
+    async (convId: string) => {
+      if (!convId || !currentUser?.id) return
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        await fetch('/api/chat/mls/members', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            conversationId: convId,
+            targetUserId: currentUser.id,
+            commitMessage: `mls_commit_leave_${Date.now()}`,
+          }),
+        })
+      } catch {}
+
+      deleteLocalConversation(convId)
+      clearAllLocalMessages(convId)
+      broadcastConversationRemoved(convId)
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (selectedConvIdRef.current === convId) {
+        setSelectedConvId(SENAI_STUDIO_CONVERSATION_ID)
+      }
+    },
+    [currentUser?.id]
+  )
 
   // Xử lý cuộc gọi đến WebRTC
   const handleAcceptIncomingCall = useCallback((call: CallSignalPayload) => {
@@ -1056,27 +1172,43 @@ export default function SenChatPage() {
     )
   }
 
-  // 8. Thu hồi tin nhắn (Recall)
-  const handleRecallMessage = async (msgId: string) => {
-    if (!confirm('Bạn có chắc chắn muốn thu hồi tin nhắn này? Tin nhắn sẽ được xóa trên thiết bị người nhận.')) return
+  // 8. Thu hồi / Xóa tin nhắn (Recall & Local Delete)
+  const handleRecallMessage = async (msgId: string, skipConfirm = false) => {
+    const targetMsg = messages.find((m) => m.id === msgId)
+    const isMine = targetMsg ? targetMsg.senderId === currentUser?.id : true
 
-    try {
-      const { data } = await supabase.auth.getSession()
-      const token = data.session?.access_token
-      await fetch('/api/chat/messages/recall', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ messageId: msgId }),
+    if (!skipConfirm) {
+      const promptMsg = isMine
+        ? 'Bạn có chắc chắn muốn thu hồi tin nhắn này? Tin nhắn sẽ được xóa trên thiết bị người nhận.'
+        : 'Bạn có chắc chắn muốn xóa tin nhắn này khỏi thiết bị của bạn?'
+      if (!confirm(promptMsg)) return
+    }
+
+    if (isMine) {
+      try {
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        await fetch('/api/chat/messages/recall', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ messageId: msgId }),
+        })
+      } catch {}
+
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === msgId ? { ...m, content: '[Tin nhắn đã được thu hồi]', type: 'system' as const } : m))
+        if (selectedConvId) saveLocalMessages(selectedConvId, next)
+        return next
       })
-    } catch {}
-
-    // Cập nhật local
-    setMessages((prev) =>
-      prev.map((m) => (m.id === msgId ? { ...m, content: '[Tin nhắn đã được thu hồi]', type: 'system' } : m))
-    )
+    } else {
+      if (selectedConvId) {
+        deleteLocalMessage(selectedConvId, msgId)
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== msgId))
+    }
   }
 
   // 9. Thả biểu cảm cảm xúc (Reactions)
@@ -1194,8 +1326,8 @@ export default function SenChatPage() {
               title="Tin nhắn hội thoại"
               className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl transition-all ${
                 activeRailTab === 'messages'
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 scale-105'
-                  : 'text-slate-600 hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 scale-105'
+                  : 'text-slate-600 hover:bg-white hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400'
               }`}
             >
               <MessageSquare className="h-5 w-5" />
@@ -1216,8 +1348,8 @@ export default function SenChatPage() {
               title="Bạn bè & Thêm bạn qua Email"
               className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl transition-all ${
                 activeRailTab === 'contacts'
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 scale-105'
-                  : 'text-slate-600 hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 scale-105'
+                  : 'text-slate-600 hover:bg-white hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400'
               }`}
             >
               <UserPlus className="h-5 w-5" />
@@ -1243,9 +1375,9 @@ export default function SenChatPage() {
               type="button"
               onClick={() => setShowDeviceManagerModal(true)}
               title="Trung tâm thiết bị & Bảo mật"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
             >
-              <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-sky-400" />
             </button>
 
             {/* Cài đặt */}
@@ -1286,7 +1418,7 @@ export default function SenChatPage() {
                 className="h-10 w-10 rounded-2xl object-cover ring-2 ring-emerald-500/40"
               />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 font-bold text-white shadow-sm ring-2 ring-emerald-500/30">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500 font-bold text-white shadow-sm ring-2 ring-emerald-500/30">
                 {(currentUser?.name || 'S').substring(0, 1).toUpperCase()}
               </div>
             )}
@@ -1356,7 +1488,7 @@ export default function SenChatPage() {
               }}
               className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
                 activeRailTab === 'messages' && filterMode === 'all'
-                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
+                  ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-700 dark:text-sky-300'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
@@ -1370,7 +1502,7 @@ export default function SenChatPage() {
               }}
               className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
                 activeRailTab === 'messages' && filterMode === 'unread'
-                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
+                  ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-700 dark:text-sky-300'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
@@ -1384,7 +1516,7 @@ export default function SenChatPage() {
               }}
               className={`min-h-[34px] flex-1 rounded-lg text-xs font-semibold transition ${
                 activeRailTab === 'contacts'
-                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-300'
+                  ? 'bg-white text-blue-700 shadow-sm dark:bg-slate-700 dark:text-sky-300'
                   : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
               }`}
             >
@@ -1486,7 +1618,7 @@ export default function SenChatPage() {
                     }}
                     className="flex min-h-[54px] w-full items-center gap-3 rounded-2xl p-2.5 text-left transition hover:bg-slate-100/80 active:scale-[0.98] dark:hover:bg-slate-800/50"
                   >
-                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 font-bold text-white shadow-sm">
+                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-sky-500 font-bold text-white shadow-sm">
                       {friend.name.substring(0, 1).toUpperCase()}
                       <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
                     </div>
@@ -1507,41 +1639,10 @@ export default function SenChatPage() {
           </div>
         ) : (
           /* Danh sách các cuộc trò chuyện */
-          <div className="flex-1 overflow-y-auto px-2 space-y-1">
-            {/* Banner/Nút Đồng bộ dữ liệu ngay - Nằm ngay phía trên mục SenAI Studio */}
-            {(deviceSyncStatus?.needsSync || isSyncingData || syncCompletedNotice) && (
-              <div className="mb-2 p-2.5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-amber-950/30 backdrop-blur-sm transition-all shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
-                      <RefreshCw className={`h-3.5 w-3.5 ${isSyncingData ? 'animate-spin' : ''}`} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-[11px] font-bold text-amber-900 dark:text-amber-200">
-                        {syncCompletedNotice
-                          ? 'Đã đồng bộ dữ liệu ✓'
-                          : deviceSyncStatus?.otherDevices && deviceSyncStatus.otherDevices.length > 0
-                          ? `Phát hiện ${deviceSyncStatus.otherDevices.length} thiết bị khác · Chưa đồng bộ`
-                          : 'Dữ liệu chưa đồng bộ đầy đủ'}
-                      </p>
-                      <p className="truncate text-[9.5px] text-amber-700/80 dark:text-amber-400/80">
-                        {syncCompletedNotice ? 'Tin nhắn và dữ liệu đã cập nhật' : 'Đối soát tin nhắn & tệp với các thiết bị khác'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleTriggerSyncNow}
-                    disabled={isSyncingData}
-                    className="shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-600 hover:bg-amber-700 active:scale-95 text-white transition shadow-sm disabled:opacity-60 flex items-center gap-1.5"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${isSyncingData ? 'animate-spin' : ''}`} />
-                    <span>{isSyncingData ? 'Đang đồng bộ...' : (syncCompletedNotice || 'Đồng bộ dữ liệu ngay')}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
+          <div
+            className="flex-1 overflow-y-auto overscroll-contain transform-gpu px-2 space-y-1"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {filteredConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400">
                 <MessageSquare className="h-10 w-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
@@ -1564,11 +1665,35 @@ export default function SenChatPage() {
                 return (
                   <div
                     key={c.id}
-                    className={`group/conv relative flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition ${
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setContextMenu({
+                        isOpen: true,
+                        mode: 'conversation',
+                        x: e.clientX,
+                        y: e.clientY,
+                        conversation: c,
+                      })
+                    }}
+                    onTouchStart={(e) =>
+                      startLongPress(e, (tx, ty) =>
+                        setContextMenu({
+                          isOpen: true,
+                          mode: 'conversation',
+                          x: tx,
+                          y: ty,
+                          conversation: c,
+                        })
+                      )
+                    }
+                    onTouchMove={moveLongPress}
+                    onTouchEnd={cancelLongPress}
+                    style={{ WebkitTouchCallout: 'none' }}
+                    className={`group/conv relative flex min-h-[58px] w-full items-center gap-3 rounded-2xl p-3 text-left transition select-none ${
                       isSelected
-                        ? 'bg-emerald-500/10 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100'
+                        ? 'bg-blue-500/12 text-blue-900 dark:bg-blue-500/20 dark:text-sky-100'
                         : isSenAiStudio
-                        ? 'bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 border border-emerald-500/20'
+                        ? 'bg-sky-50/70 hover:bg-sky-100/70 dark:bg-blue-950/25 dark:hover:bg-blue-950/40 border border-blue-500/20'
                         : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/50'
                     }`}
                   >
@@ -1579,8 +1704,8 @@ export default function SenChatPage() {
                     >
                       <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold text-white shadow-sm ${
                         isSenAiStudio
-                          ? 'bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 shadow-emerald-500/30'
-                          : 'bg-gradient-to-br from-emerald-400 to-teal-600'
+                          ? 'bg-gradient-to-tr from-blue-600 via-sky-500 to-cyan-500 shadow-blue-500/30'
+                          : 'bg-gradient-to-br from-blue-500 to-sky-500'
                       }`}>
                         {isSenAiStudio ? (
                           <Sparkles className="h-5 w-5 animate-pulse text-white" />
@@ -1600,7 +1725,7 @@ export default function SenChatPage() {
                               {displayName}
                             </span>
                             {isSenAiStudio && (
-                              <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-[9px] font-black uppercase tracking-wider text-white">
+                              <span className="px-1.5 py-0.2 rounded-md bg-blue-600 text-[9px] font-black uppercase tracking-wider text-white">
                                 Studio
                               </span>
                             )}
@@ -1612,7 +1737,7 @@ export default function SenChatPage() {
                             {c.lastMessage || (isSenAiStudio ? 'Trợ lý học tập & nghiên cứu' : 'Bắt đầu trò chuyện...')}
                           </p>
                           {c.unreadCount > 0 && (
-                            <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                            <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
                               {c.unreadCount}
                             </span>
                           )}
@@ -1640,7 +1765,7 @@ export default function SenChatPage() {
                             setConversations(markConversationUnread(c.id, 1))
                           }}
                           title="Đánh dấu chưa đọc"
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200/80 hover:text-emerald-600 dark:hover:bg-slate-700"
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200/80 hover:text-blue-600 dark:hover:bg-slate-700"
                         >
                           <CircleDot className="h-3.5 w-3.5" />
                         </button>
@@ -1690,7 +1815,7 @@ export default function SenChatPage() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
 
-                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 font-bold text-white shadow-sm">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500 font-bold text-white shadow-sm">
                   {(currentNickname || activeConv.partnerName).substring(0, 1).toUpperCase()}
                 </div>
 
@@ -1701,7 +1826,7 @@ export default function SenChatPage() {
                     </h3>
                     {isPartnerVerified && (
                       <span title="Mã an toàn Signal đã xác minh">
-                        <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                        <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-sky-400" />
                       </span>
                     )}
                   </div>
@@ -1710,12 +1835,12 @@ export default function SenChatPage() {
                       <button
                         type="button"
                         onClick={() => setShowManageGroupModal(true)}
-                        className="flex items-center gap-1 text-teal-600 dark:text-teal-400 hover:underline font-medium"
+                        className="flex items-center gap-1 text-blue-600 dark:text-sky-400 hover:underline font-medium"
                       >
                         <Users className="h-3 w-3" /> Nhóm MLS RFC 9420 (Quản lý)
                       </button>
                     ) : (
-                      <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <span className="flex items-center gap-1 text-blue-600 dark:text-sky-400">
                         <Lock className="h-3 w-3" /> Signal Double Ratchet
                       </span>
                     )}
@@ -1759,7 +1884,7 @@ export default function SenChatPage() {
                     setActiveCallMode('voice')
                   }}
                   title="Gọi thoại mã hóa"
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-800"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-blue-600 dark:hover:bg-slate-800"
                 >
                   <Phone className="h-4 w-4" />
                 </button>
@@ -1772,7 +1897,7 @@ export default function SenChatPage() {
                     setActiveCallMode('video')
                   }}
                   title="Gọi video mã hóa"
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-800"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-blue-600 dark:hover:bg-slate-800"
                 >
                   <Video className="h-4 w-4" />
                 </button>
@@ -1825,7 +1950,7 @@ export default function SenChatPage() {
             )}
 
             {/* Thông báo chính sách bảo mật lưu trữ 30 ngày */}
-            <div className="relative z-10 flex items-center justify-between px-4 py-1.5 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] shrink-0">
+            <div className="relative z-10 flex items-center justify-between px-4 py-1.5 bg-blue-500/10 border-b border-blue-500/20 text-blue-800 dark:text-sky-300 text-[11px] shrink-0">
               <div className="flex items-center gap-1.5 truncate">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                 <span className="truncate">{CHAT_RETENTION_POLICY_NOTICE}</span>
@@ -1833,7 +1958,10 @@ export default function SenChatPage() {
             </div>
 
             {/* Khung cuộn tin nhắn */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain transform-gpu p-4 space-y-3"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {displayedMessages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
                   <ShieldCheck className="h-12 w-12 text-emerald-500/40" />
@@ -1855,6 +1983,37 @@ export default function SenChatPage() {
                     <div
                       key={msg.id}
                       id={`msg-${msg.id}`}
+                      onContextMenu={(e) => {
+                        if (msg.type === 'system') return
+                        e.preventDefault()
+                        setContextMenu({
+                          isOpen: true,
+                          mode: 'message',
+                          x: e.clientX,
+                          y: e.clientY,
+                          message: msg,
+                        })
+                      }}
+                      onTouchStart={(e) => {
+                        if (msg.type === 'system') return
+                        startLongPress(e, (tx, ty) =>
+                          setContextMenu({
+                            isOpen: true,
+                            mode: 'message',
+                            x: tx,
+                            y: ty,
+                            message: msg,
+                          })
+                        )
+                      }}
+                      onTouchMove={moveLongPress}
+                      onTouchEnd={cancelLongPress}
+                      onClick={() => {
+                        if (msg.type !== 'system') {
+                          setActiveTouchMessageId((prev) => (prev === msg.id ? null : msg.id))
+                        }
+                      }}
+                      style={{ WebkitTouchCallout: 'none' }}
                       className={`group flex flex-col transition-all rounded-2xl ${
                         msg.type === 'system' ? 'items-center my-1' : isMe ? 'items-end' : 'items-start'
                       }`}
@@ -1871,7 +2030,7 @@ export default function SenChatPage() {
                               {msg.isSenAi || msg.senderId === 'senai' ? (
                                 <img src="/senai-logo.png" alt="SenAI" className="h-full w-full object-contain bg-slate-900/90 p-0.5" />
                               ) : (
-                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-emerald-500 to-teal-700 text-white font-bold text-[10px]">
+                                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-sky-500 text-white font-bold text-[10px]">
                                   {(msg.senderName || 'B').substring(0, 1).toUpperCase()}
                                 </div>
                               )}
@@ -1928,7 +2087,7 @@ export default function SenChatPage() {
                                 msg.isSenAi || msg.senderId === 'senai'
                                   ? 'border border-purple-200/90 bg-gradient-to-br from-purple-50/90 via-white/95 to-indigo-50/80 text-slate-800 backdrop-blur-md dark:border-purple-800/80 dark:bg-gradient-to-br dark:from-purple-950/40 dark:to-slate-900/90 dark:text-slate-100 shadow-purple-500/10'
                                   : isMe
-                                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/20'
+                                  ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-blue-600/25'
                                   : 'border border-slate-200/80 bg-white/95 text-slate-800 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 dark:text-slate-100'
                               }`}
                             >
@@ -1946,7 +2105,7 @@ export default function SenChatPage() {
                                   className={`mb-2 rounded-xl border-l-2 px-2.5 py-1.5 text-[11px] ${
                                     isMe
                                       ? 'border-white/70 bg-white/15 text-white/95'
-                                      : 'border-emerald-500 bg-slate-100/90 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300'
+                                      : 'border-blue-500 bg-slate-100/90 text-slate-700 dark:bg-slate-800/80 dark:text-slate-300'
                                   }`}
                                 >
                                   <div className="font-bold text-[10px] opacity-90">{msg.replyTo.senderName}</div>
@@ -2002,7 +2161,7 @@ export default function SenChatPage() {
                             {/* Footer trạng thái tin nhắn */}
                             <div
                               className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
-                                isMe ? 'text-emerald-100/80' : 'text-slate-400'
+                                isMe ? 'text-sky-100/80' : 'text-slate-400'
                               }`}
                             >
                               <span>
@@ -2042,7 +2201,7 @@ export default function SenChatPage() {
                                       onClick={() => handleAddReaction(msg.id, emoji)}
                                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition ${
                                         reactedByMe
-                                          ? 'bg-emerald-500/20 border border-emerald-400/60 text-emerald-900 dark:text-emerald-200'
+                                          ? 'bg-blue-500/20 border border-blue-400/60 text-blue-900 dark:text-sky-200'
                                           : 'bg-white/80 border border-slate-200/80 text-slate-700 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-200'
                                       }`}
                                     >
@@ -2057,7 +2216,7 @@ export default function SenChatPage() {
                         )}
 
                         {/* Message Action Bar (Reply, Reaction, Recall) */}
-                        <div className="opacity-0 group-hover:opacity-100 transition flex items-center gap-0.5">
+                        <div className={`${activeTouchMessageId === msg.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition flex items-center gap-0.5`}>
                           <button
                             type="button"
                             onClick={() => setReplyingToMessage(msg)}
@@ -2101,8 +2260,8 @@ export default function SenChatPage() {
 
             {/* Trích dẫn khi đang trả lời */}
             {replyingToMessage && (
-              <div className="flex items-center justify-between border-t border-slate-200/60 bg-emerald-50/80 px-4 py-2 dark:border-slate-800 dark:bg-emerald-950/30">
-                <div className="flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300">
+              <div className="flex items-center justify-between border-t border-slate-200/60 bg-blue-50/80 px-4 py-2 dark:border-slate-800 dark:bg-blue-950/30">
+                <div className="flex items-center gap-2 text-xs text-blue-800 dark:text-sky-300">
                   <CornerDownRight className="h-4 w-4" />
                   <span>
                     Đang trả lời <strong>{replyingToMessage.senderName}</strong>: {replyingToMessage.content.slice(0, 45)}...
@@ -2211,7 +2370,7 @@ export default function SenChatPage() {
                     type="button"
                     onClick={() => setIsRecordingVoice(true)}
                     title="Ghi âm tin nhắn thoại"
-                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 hover:text-emerald-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 hover:bg-slate-100 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400"
                   >
                     <Mic className="h-5 w-5" />
                   </button>
@@ -2263,7 +2422,7 @@ export default function SenChatPage() {
                     type="submit"
                     disabled={!inputText.trim()}
                     title="Gửi tin nhắn"
-                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-40"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl bg-blue-600 text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-40"
                   >
                     <Send className="h-4 w-4" />
                   </button>
@@ -2281,7 +2440,7 @@ export default function SenChatPage() {
                   alt="Sen Chat"
                   className="h-20 w-20 rounded-3xl shadow-xl shadow-emerald-500/15 object-cover"
                 />
-                <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md ring-2 ring-white dark:ring-slate-900">
+                <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-md ring-2 ring-white dark:ring-slate-900">
                   <Lock className="h-3.5 w-3.5" />
                 </span>
               </div>
@@ -2297,7 +2456,7 @@ export default function SenChatPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                 <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 backdrop-blur-sm">
-                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs mb-1">
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-sky-400 font-bold text-xs mb-1">
                     <Lock className="h-3.5 w-3.5" /> Signal Double Ratchet
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -2337,7 +2496,7 @@ export default function SenChatPage() {
                 <button
                   type="button"
                   onClick={() => setShowFriendModal(true)}
-                  className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 active:scale-95"
+                  className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 active:scale-95"
                 >
                   <UserPlus className="h-4 w-4" /> Thêm bạn qua Email
                 </button>
@@ -2395,8 +2554,8 @@ export default function SenChatPage() {
           onToggleBlock={handleToggleBlock}
           onOpenManageGroup={() => setShowManageGroupModal(true)}
           onLeaveGroup={() => {
-            if (confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
-              setSelectedConvId(null)
+            if (activeConv?.id && confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
+              handleLeaveGroup(activeConv.id)
             }
           }}
         />
@@ -2510,6 +2669,13 @@ export default function SenChatPage() {
           isCreatingNew={false}
           onGroupUpdated={() => {
             refreshConversations()
+          }}
+          onGroupLeft={(leftConvId) => {
+            setShowManageGroupModal(false)
+            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+            if (selectedConvIdRef.current === leftConvId) {
+              setSelectedConvId(SENAI_STUDIO_CONVERSATION_ID)
+            }
           }}
         />
       )}
@@ -2638,6 +2804,81 @@ export default function SenChatPage() {
         }}
         onLoggedOut={() => {
           router.replace('/new-idp?returnUrl=/chat')
+        }}
+      />
+
+      {/* Custom Context Menu (Chuột phải Desktop & Nhấn giữ iPhone/iPad) */}
+      <ChatContextMenu
+        isOpen={contextMenu.isOpen}
+        mode={contextMenu.mode}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
+        message={
+          contextMenu.message
+            ? {
+                id: contextMenu.message.id,
+                content: contextMenu.message.content,
+                isMe: contextMenu.message.senderId === currentUser?.id,
+                isSystem: contextMenu.message.type === 'system',
+              }
+            : null
+        }
+        onReply={() => {
+          if (contextMenu.message) setReplyingToMessage(contextMenu.message)
+        }}
+        onCopy={() => {
+          if (contextMenu.message?.content && typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(contextMenu.message.content).catch(() => {})
+          }
+        }}
+        onReact={(emoji) => {
+          if (contextMenu.message) handleAddReaction(contextMenu.message.id, emoji)
+        }}
+        onRecall={() => {
+          if (contextMenu.message) handleRecallMessage(contextMenu.message.id)
+        }}
+        conversation={
+          contextMenu.conversation
+            ? {
+                id: contextMenu.conversation.id,
+                partnerName: contextMenu.conversation.partnerName,
+                isGroup: contextMenu.conversation.isGroup,
+                isPinned: contextMenu.conversation.isPinned,
+                unreadCount: contextMenu.conversation.unreadCount,
+                isSenAiStudio: contextMenu.conversation.id === SENAI_STUDIO_CONVERSATION_ID,
+              }
+            : null
+        }
+        onTogglePin={() => {
+          if (contextMenu.conversation) {
+            setConversations(togglePinConversation(contextMenu.conversation.id))
+          }
+        }}
+        onToggleUnread={() => {
+          if (contextMenu.conversation) {
+            const c = contextMenu.conversation
+            if ((c.unreadCount || 0) > 0) {
+              saveLocalConversation({ ...c, unreadCount: 0 })
+              setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+            } else {
+              setConversations(markConversationUnread(c.id, 1))
+            }
+          }
+        }}
+        onClearHistory={() => {
+          if (contextMenu.conversation && confirm('Xóa toàn bộ lịch sử tin nhắn trên thiết bị này?')) {
+            clearAllLocalMessages(contextMenu.conversation.id)
+            if (selectedConvId === contextMenu.conversation.id) {
+              setMessages([])
+            }
+            refreshConversations()
+          }
+        }}
+        onLeaveGroup={() => {
+          if (contextMenu.conversation?.id && confirm('Bạn có chắc chắn muốn rời khỏi nhóm này?')) {
+            handleLeaveGroup(contextMenu.conversation.id)
+          }
         }}
       />
     </div>

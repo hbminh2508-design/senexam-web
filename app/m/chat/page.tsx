@@ -66,6 +66,7 @@ import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
 import ChatMessageContent from '@/components/chat/ChatMessageContent'
+import ChatContextMenu from '@/components/chat/ChatContextMenu'
 import SenChatLogo from '@/components/SenChatLogo'
 import {
   hasSenAiMention,
@@ -89,6 +90,7 @@ import {
   deleteLocalConversation,
   getLocalMessages,
   saveLocalMessage,
+  saveLocalMessages,
   deleteLocalMessage,
   clearAllLocalMessages,
   getNicknameFor,
@@ -117,9 +119,8 @@ import {
   initDeviceRelay,
   broadcastRequestMessageSync,
   broadcastFileTransitReady,
-  checkDeviceSyncStatus,
+  broadcastConversationRemoved,
   triggerFullDeviceSync,
-  DeviceSyncStatusResult,
 } from '@/lib/senChatDeviceRelay'
 import { SEN_CHAT_CURRENT_VERSION } from '@/lib/senChatVersion'
 import {
@@ -238,6 +239,7 @@ export default function MobileChatPage() {
   const [showSecurityModal, setShowSecurityModal] = useState(false)
   const [showFriendModal, setShowFriendModal] = useState(false)
   const [showMlsGroupModal, setShowMlsGroupModal] = useState(false)
+  const [isManagingGroup, setIsManagingGroup] = useState(false)
   const [showAttachmentModal, setShowAttachmentModal] = useState(false)
   const [showSenAiConfirmModal, setShowSenAiConfirmModal] = useState(false)
   const [pendingSenAiQuery, setPendingSenAiQuery] = useState<string>('')
@@ -252,69 +254,186 @@ export default function MobileChatPage() {
   const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const deviceId = useMemo(() => getOrCreateDeviceId(), [])
 
-  // 🔄 Đồng bộ đa thiết bị (v1.0.3)
-  const [deviceSyncStatus, setDeviceSyncStatus] = useState<DeviceSyncStatusResult | null>(null)
-  const [isSyncingData, setIsSyncingData] = useState(false)
-  const [syncCompletedNotice, setSyncCompletedNotice] = useState<string | null>(null)
+  // 🔄 Đồng bộ ngầm liên tục giữa các thiết bị (Silent Continuous Background Sync - không hiện thông báo)
+  const isSilentSyncingRef = useRef(false)
+  const lastConvHashRef = useRef<string>('')
+  const lastMsgHashRef = useRef<string>('')
 
-  const refreshSyncStatus = useCallback(async () => {
-    if (!currentUser?.id) return
-    try {
-      const res = await checkDeviceSyncStatus(currentUser.id, deviceId)
-      setDeviceSyncStatus(res)
-    } catch {}
-  }, [currentUser?.id, deviceId])
-
-  const handleTriggerSyncNow = async () => {
-    if (!currentUser?.id || isSyncingData) return
-    setIsSyncingData(true)
-    try {
-      const res = await triggerFullDeviceSync(currentUser.id, deviceId)
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-      if (selectedConvId) {
-        setMessages(getLocalMessages(selectedConvId))
-      }
-      setSyncCompletedNotice('Đã đồng bộ ✓')
-      const updated = await checkDeviceSyncStatus(currentUser.id, deviceId)
-      setDeviceSyncStatus(updated)
-      setTimeout(() => setSyncCompletedNotice(null), 3500)
-    } catch (err: any) {
-      alert('Lỗi đồng bộ: ' + (err?.message || 'Vui lòng thử lại.'))
-    } finally {
-      setIsSyncingData(false)
+  const syncConversationsStateIfChanged = useCallback((nextList: SenChatConversation[]) => {
+    const hash = nextList.map((c) => `${c.id}:${c.updatedAt}:${c.unreadCount}:${c.isPinned ? 1 : 0}:${c.lastMessage || ''}`).join('|')
+    if (hash !== lastConvHashRef.current) {
+      lastConvHashRef.current = hash
+      setConversations(nextList)
     }
-  }
+  }, [])
+
+  const syncMessagesStateIfChanged = useCallback((convId: string, nextMsgs: SenChatMessage[]) => {
+    const hash = `${convId}:${nextMsgs.length}:${nextMsgs.map((m) => `${m.id}:${m.status}:${m.content?.length || 0}:${JSON.stringify(m.reactions || {})}`).join(',')}`
+    if (hash !== lastMsgHashRef.current) {
+      lastMsgHashRef.current = hash
+      setMessages(nextMsgs)
+    }
+  }, [])
+
+  const runSilentBackgroundSync = useCallback(async () => {
+    if (!currentUser?.id || isSilentSyncingRef.current) return
+    isSilentSyncingRef.current = true
+    try {
+      await triggerFullDeviceSync(currentUser.id, deviceId)
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
+      const activeId = selectedConvIdRef.current
+      if (activeId) {
+        syncMessagesStateIfChanged(activeId, getLocalMessages(activeId))
+      }
+    } catch {
+      // Âm thầm bỏ qua khi mạng chập chờn
+    } finally {
+      isSilentSyncingRef.current = false
+    }
+  }, [currentUser?.id, deviceId, syncConversationsStateIfChanged, syncMessagesStateIfChanged])
 
   useEffect(() => {
-    refreshSyncStatus()
-    const interval = setInterval(refreshSyncStatus, 60000)
+    if (!currentUser?.id) return
+    runSilentBackgroundSync()
+    const interval = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        runSilentBackgroundSync()
+      }
+    }, 10000)
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        runSilentBackgroundSync()
+      }
+    }
+    const onOnlineSync = () => {
+      runSilentBackgroundSync()
+    }
     const onSyncCompleted = () => {
-      refreshSyncStatus()
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
       if (selectedConvIdRef.current) {
-        setMessages(getLocalMessages(selectedConvIdRef.current))
+        syncMessagesStateIfChanged(selectedConvIdRef.current, getLocalMessages(selectedConvIdRef.current))
       }
     }
     const onReconciled = (e: any) => {
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
       const activeId = selectedConvIdRef.current
       if (activeId && (!e?.detail?.conversationId || e?.detail?.conversationId === activeId)) {
-        setMessages(getLocalMessages(activeId))
+        syncMessagesStateIfChanged(activeId, getLocalMessages(activeId))
       }
     }
     const onConversationsReconciled = () => {
-      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
     }
+    const onConversationRemoved = (e: any) => {
+      const removedId = e?.detail?.conversationId
+      syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (removedId && selectedConvIdRef.current === removedId) {
+        setView('list')
+        setSelectedConvId(null)
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('online', onOnlineSync)
     window.addEventListener('senchat-sync-completed', onSyncCompleted)
     window.addEventListener('senchat-messages-reconciled', onReconciled)
     window.addEventListener('senchat-conversations-reconciled', onConversationsReconciled)
+    window.addEventListener('senchat-conversation-removed', onConversationRemoved)
     return () => {
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('online', onOnlineSync)
       window.removeEventListener('senchat-sync-completed', onSyncCompleted)
       window.removeEventListener('senchat-messages-reconciled', onReconciled)
       window.removeEventListener('senchat-conversations-reconciled', onConversationsReconciled)
+      window.removeEventListener('senchat-conversation-removed', onConversationRemoved)
     }
-  }, [refreshSyncStatus])
+  }, [currentUser?.id, runSilentBackgroundSync, syncConversationsStateIfChanged, syncMessagesStateIfChanged])
+
+  // 📋 Custom Context Menu & Touch Long-Press (iPhone/iPad + Desktop)
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean
+    mode: 'message' | 'conversation'
+    x: number
+    y: number
+    message?: SenChatMessage | null
+    conversation?: SenChatConversation | null
+  }>({ isOpen: false, mode: 'message', x: 0, y: 0, message: null, conversation: null })
+  const [activeTouchMessageId, setActiveTouchMessageId] = useState<string | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    touchStartPosRef.current = null
+  }, [])
+
+  const startLongPress = useCallback(
+    (e: React.TouchEvent, onTrigger: (tx: number, ty: number) => void) => {
+      cancelLongPress()
+      const touch = e.touches?.[0]
+      if (!touch) return
+      const tx = touch.clientX
+      const ty = touch.clientY
+      touchStartPosRef.current = { x: tx, y: ty }
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = null
+        onTrigger(tx, ty)
+      }, 380)
+    },
+    [cancelLongPress]
+  )
+
+  const moveLongPress = useCallback(
+    (e: React.TouchEvent) => {
+      if (!touchStartPosRef.current || !longPressTimerRef.current) return
+      const touch = e.touches?.[0]
+      if (!touch) return
+      const dx = Math.abs(touch.clientX - touchStartPosRef.current.x)
+      const dy = Math.abs(touch.clientY - touchStartPosRef.current.y)
+      if (dx > 10 || dy > 10) {
+        cancelLongPress()
+      }
+    },
+    [cancelLongPress]
+  )
+
+  // 🚪 Rời khỏi nhóm MLS chuẩn xác (Mobile)
+  const handleLeaveGroup = useCallback(
+    async (convId: string) => {
+      if (!convId || !currentUser?.id) return
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        await fetch('/api/chat/mls/members', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            conversationId: convId,
+            targetUserId: currentUser.id,
+            commitMessage: `mls_commit_leave_${Date.now()}`,
+          }),
+        })
+      } catch {}
+
+      deleteLocalConversation(convId)
+      clearAllLocalMessages(convId)
+      broadcastConversationRemoved(convId)
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      if (selectedConvIdRef.current === convId) {
+        setView('list')
+        setSelectedConvId(null)
+      }
+    },
+    [currentUser?.id]
+  )
 
   // Đồng bộ trạng thái mở hội thoại cho CapacitorManager (để nút Back phần cứng biết)
   useEffect(() => {
@@ -964,6 +1083,44 @@ export default function MobileChatPage() {
     setMessages(updated)
   }
 
+  // Thu hồi / Xóa tin nhắn trên Mobile
+  const handleRecallMessage = async (msgId: string) => {
+    const targetMsg = messages.find((m) => m.id === msgId)
+    const isMine = targetMsg ? targetMsg.senderId === currentUser?.id : true
+    const promptMsg = isMine
+      ? 'Bạn có chắc chắn muốn thu hồi tin nhắn này?'
+      : 'Bạn có chắc chắn muốn xóa tin nhắn này khỏi thiết bị?'
+    if (!confirm(promptMsg)) return
+
+    if (isMine) {
+      try {
+        const { data } = await supabase.auth.getSession()
+        const token = data.session?.access_token
+        await fetch('/api/chat/messages/recall', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ messageId: msgId }),
+        })
+      } catch {}
+
+      setMessages((prev) => {
+        const next = prev.map((m) =>
+          m.id === msgId ? { ...m, content: '[Tin nhắn đã được thu hồi]', type: 'system' as const } : m
+        )
+        if (selectedConvId) saveLocalMessages(selectedConvId, next)
+        return next
+      })
+    } else {
+      if (selectedConvId) {
+        deleteLocalMessage(selectedConvId, msgId)
+      }
+      setMessages((prev) => prev.filter((m) => m.id !== msgId))
+    }
+  }
+
   // Chọn gợi ý @Sen
   const handleSelectAiSuggestion = () => {
     setInputText((prev) => {
@@ -1439,7 +1596,10 @@ export default function MobileChatPage() {
 
             <button
               type="button"
-              onClick={() => setShowMlsGroupModal(true)}
+              onClick={() => {
+                setIsManagingGroup(false)
+                setShowMlsGroupModal(true)
+              }}
               className="ml-auto min-h-[44px] px-3 rounded-xl border border-sky-500/30 text-sky-600 dark:text-sky-400 text-xs font-bold flex items-center gap-1 active:scale-95 transition"
             >
               <Users className="h-3.5 w-3.5" />
@@ -1448,41 +1608,10 @@ export default function MobileChatPage() {
           </div>
 
           {/* Danh Sách Hội Thoại */}
-          <div className="flex-1 overflow-y-auto divide-y divide-black/5 dark:divide-white/5 px-2 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]">
-            {/* Banner/Nút Đồng bộ dữ liệu ngay - Nằm ngay phía trên mục SenAI Studio */}
-            {(deviceSyncStatus?.needsSync || isSyncingData || syncCompletedNotice) && (
-              <div className="mb-2 p-2.5 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-amber-950/30 backdrop-blur-sm transition-all shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
-                      <RefreshCw className={`h-3.5 w-3.5 ${isSyncingData ? 'animate-spin' : ''}`} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-[11px] font-bold text-amber-900 dark:text-amber-200">
-                        {syncCompletedNotice
-                          ? 'Đã đồng bộ dữ liệu ✓'
-                          : deviceSyncStatus?.otherDevices && deviceSyncStatus.otherDevices.length > 0
-                          ? `Phát hiện ${deviceSyncStatus.otherDevices.length} thiết bị khác · Chưa đồng bộ`
-                          : 'Dữ liệu chưa đồng bộ đầy đủ'}
-                      </p>
-                      <p className="truncate text-[9.5px] text-amber-700/80 dark:text-amber-400/80">
-                        {syncCompletedNotice ? 'Tin nhắn và dữ liệu đã cập nhật' : 'Đối soát tin nhắn & tệp với các thiết bị khác'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleTriggerSyncNow}
-                    disabled={isSyncingData}
-                    className="shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-600 hover:bg-amber-700 active:scale-95 text-white transition shadow-sm disabled:opacity-60 flex items-center gap-1.5"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${isSyncingData ? 'animate-spin' : ''}`} />
-                    <span>{isSyncingData ? 'Đang đồng bộ...' : (syncCompletedNotice || 'Đồng bộ dữ liệu ngay')}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
+          <div
+            className="flex-1 overflow-y-auto overscroll-contain transform-gpu divide-y divide-black/5 dark:divide-white/5 px-2 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {filteredConversations.length === 0 ? (
               <div className="p-8 text-center space-y-3 my-auto">
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-black/5 dark:bg-white/5 text-slate-400 flex items-center justify-center">
@@ -1504,15 +1633,39 @@ export default function MobileChatPage() {
                   <div
                     key={conv.id}
                     onClick={() => handleSelectConversation(conv.id)}
-                    className={`min-h-[64px] p-2.5 rounded-2xl flex items-center gap-3 cursor-pointer transition ${
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setContextMenu({
+                        isOpen: true,
+                        mode: 'conversation',
+                        x: e.clientX,
+                        y: e.clientY,
+                        conversation: conv,
+                      })
+                    }}
+                    onTouchStart={(e) =>
+                      startLongPress(e, (tx, ty) =>
+                        setContextMenu({
+                          isOpen: true,
+                          mode: 'conversation',
+                          x: tx,
+                          y: ty,
+                          conversation: conv,
+                        })
+                      )
+                    }
+                    onTouchMove={moveLongPress}
+                    onTouchEnd={cancelLongPress}
+                    style={{ WebkitTouchCallout: 'none' }}
+                    className={`min-h-[64px] p-2.5 rounded-2xl flex items-center gap-3 cursor-pointer transition select-none ${
                       isSenAiStudio
-                        ? 'bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/15'
+                        ? 'bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15'
                         : 'hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10'
                     }`}
                   >
                     <div className={`relative w-11 h-11 rounded-2xl font-black text-sm flex items-center justify-center shrink-0 shadow-xs ${
                       isSenAiStudio
-                        ? 'bg-gradient-to-tr from-emerald-500 via-teal-500 to-indigo-600 text-white shadow-emerald-500/30'
+                        ? 'bg-gradient-to-tr from-blue-600 via-sky-500 to-cyan-500 text-white shadow-blue-500/30'
                         : 'bg-gradient-to-tr from-sky-400 to-indigo-600 text-white'
                     }`}>
                       {isSenAiStudio ? (
@@ -1537,7 +1690,7 @@ export default function MobileChatPage() {
                             {isSenAiStudio ? 'SenAI Studio' : conv.partnerName}
                           </h4>
                           {isSenAiStudio && (
-                            <span className="px-1.5 py-0.2 rounded-md bg-emerald-600 text-[9px] font-black uppercase tracking-wider text-white">
+                            <span className="px-1.5 py-0.2 rounded-md bg-blue-600 text-[9px] font-black uppercase tracking-wider text-white">
                               Studio
                             </span>
                           )}
@@ -1610,7 +1763,7 @@ export default function MobileChatPage() {
                 <ChevronLeft className="h-6 w-6" />
               </button>
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-sky-500 text-white flex items-center justify-center shrink-0 shadow-xs">
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
@@ -1655,8 +1808,8 @@ export default function MobileChatPage() {
                   <h3 className="text-xs font-black truncate max-w-[160px]">
                     {activeConversation.partnerName}
                   </h3>
-                  <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <div className="flex items-center gap-1 text-[10px] text-blue-600 dark:text-sky-400 font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                     <span>{activeConversation.isGroup ? 'Nhóm MLS E2EE' : 'Signal E2EE'}</span>
                   </div>
                 </div>
@@ -1700,15 +1853,18 @@ export default function MobileChatPage() {
           </header>
 
           {/* Thông báo chính sách bảo mật lưu trữ 30 ngày */}
-          <div className="relative z-10 flex items-center justify-between px-3 py-1 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[10px] shrink-0">
+          <div className="relative z-10 flex items-center justify-between px-3 py-1 bg-blue-500/10 border-b border-blue-500/20 text-blue-800 dark:text-sky-300 text-[10px] shrink-0">
             <div className="flex items-center gap-1.5 truncate">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+              <ShieldCheck className="h-3.5 w-3.5 text-blue-600 shrink-0" />
               <span className="truncate">{CHAT_RETENTION_POLICY_NOTICE}</span>
             </div>
           </div>
 
           {/* Danh Sách Tin Nhắn */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          <div
+            className="flex-1 overflow-y-auto overscroll-contain transform-gpu p-3 space-y-3"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {/* Huy hiệu bảo mật mã hóa */}
             <div className="flex justify-center my-2">
               <div className="px-3 py-1 rounded-full bg-black/5 dark:bg-white/10 text-slate-500 dark:text-slate-400 text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-xs">
@@ -1724,7 +1880,38 @@ export default function MobileChatPage() {
                 <div
                   key={msg.id}
                   id={`msg-${msg.id}`}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 transition-all rounded-2xl`}
+                  onContextMenu={(e) => {
+                    if (msg.type === 'system') return
+                    e.preventDefault()
+                    setContextMenu({
+                      isOpen: true,
+                      mode: 'message',
+                      x: e.clientX,
+                      y: e.clientY,
+                      message: msg,
+                    })
+                  }}
+                  onTouchStart={(e) => {
+                    if (msg.type === 'system') return
+                    startLongPress(e, (tx, ty) =>
+                      setContextMenu({
+                        isOpen: true,
+                        mode: 'message',
+                        x: tx,
+                        y: ty,
+                        message: msg,
+                      })
+                    )
+                  }}
+                  onTouchMove={moveLongPress}
+                  onTouchEnd={cancelLongPress}
+                  onClick={() => {
+                    if (msg.type !== 'system') {
+                      setActiveTouchMessageId((prev) => (prev === msg.id ? null : msg.id))
+                    }
+                  }}
+                  style={{ WebkitTouchCallout: 'none' }}
+                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1 transition-all rounded-2xl select-none`}
                 >
                   {!isMe && (
                     <span className="text-[10px] text-slate-400 font-bold pl-1">
@@ -1735,7 +1922,7 @@ export default function MobileChatPage() {
                   <div
                     className={`max-w-[85%] rounded-3xl p-3 text-xs shadow-xs leading-relaxed ${
                       isMe
-                        ? 'bg-sky-600 text-white rounded-br-xs'
+                        ? 'bg-gradient-to-r from-blue-600 to-sky-500 text-white rounded-br-xs shadow-blue-600/20'
                         : msg.isSenAi
                         ? 'bg-gradient-to-tr from-pink-500/10 via-purple-500/10 to-indigo-500/10 text-slate-900 dark:text-white border border-pink-500/20 rounded-bl-xs'
                         : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-black/5 dark:border-white/5 rounded-bl-xs'
@@ -2091,11 +2278,13 @@ export default function MobileChatPage() {
           }}
           disappearingTtl={disappearingTtl}
           onChangeDisappearingTtl={(ttl) => setDisappearingTtl(ttl)}
-          onOpenManageGroup={() => setShowCreateGroupModal(true)}
+          onOpenManageGroup={() => {
+            setIsManagingGroup(true)
+            setShowMlsGroupModal(true)
+          }}
           onLeaveGroup={() => {
-            if (confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
-              setView('list')
-              setSelectedConvId(null)
+            if (activeConversation?.id && confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
+              handleLeaveGroup(activeConversation.id)
             }
           }}
         />
@@ -2140,7 +2329,7 @@ export default function MobileChatPage() {
                 onClick={handleToggleFlagSecure}
                 className={`min-h-[44px] min-w-[56px] px-3 rounded-xl text-xs font-black transition active:scale-95 ${
                   flagSecureActive
-                    ? 'bg-emerald-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-black/10 dark:bg-white/10 text-slate-400'
                 }`}
               >
@@ -2263,21 +2452,28 @@ export default function MobileChatPage() {
         />
       )}
 
-      {/* MODAL: TẠO NHÓM MLS */}
+      {/* MODAL: TẠO / QUẢN LÝ NHÓM MLS */}
       {showMlsGroupModal && (
         <ChatMlsGroupModal
           isOpen={showMlsGroupModal}
-          onClose={() => setShowMlsGroupModal(false)}
-          currentUserId={currentUser?.id || ''}
-          currentUserName={currentUser?.name || ''}
-          userPlanTier={null}
-          onCreateGroup={(group) => {
+          onClose={() => {
             setShowMlsGroupModal(false)
+            setIsManagingGroup(false)
+          }}
+          conversationId={isManagingGroup ? activeConversation?.id : undefined}
+          groupTitle={isManagingGroup ? activeConversation?.partnerName : ''}
+          groupAvatar={isManagingGroup ? activeConversation?.avatarUrl || '' : ''}
+          currentUserId={currentUser?.id || ''}
+          currentUserEmail={currentUser?.email || ''}
+          isCreatingNew={!isManagingGroup}
+          onGroupCreated={(convId, title) => {
+            setShowMlsGroupModal(false)
+            setIsManagingGroup(false)
             const newConv: SenChatConversation = {
-              id: group.id,
-              partnerId: group.id,
-              partnerName: group.name,
-              partnerIdentifier: `Nhóm MLS (${group.members?.length || 1} thành viên)`,
+              id: convId,
+              partnerId: convId,
+              partnerName: title,
+              partnerIdentifier: 'MLS_GROUP',
               lastMessage: 'Đã tạo nhóm trò chuyện MLS E2EE',
               lastMessageTime: 'Vừa xong',
               unreadCount: 0,
@@ -2286,7 +2482,19 @@ export default function MobileChatPage() {
             }
             saveLocalConversation(newConv)
             setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-            handleSelectConversation(group.id)
+            handleSelectConversation(convId)
+          }}
+          onGroupUpdated={() => {
+            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+          }}
+          onGroupLeft={(leftConvId) => {
+            setShowMlsGroupModal(false)
+            setIsManagingGroup(false)
+            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+            if (selectedConvIdRef.current === leftConvId) {
+              setView('list')
+              setSelectedConvId(null)
+            }
           }}
         />
       )}
@@ -2431,6 +2639,81 @@ export default function MobileChatPage() {
         isOpen={showDeviceManagerModal}
         onClose={() => setShowDeviceManagerModal(false)}
         currentDeviceId={getOrCreateDeviceId()}
+      />
+
+      {/* Custom Context Menu (Nhấn giữ iPhone/iPad & Chuột phải) */}
+      <ChatContextMenu
+        isOpen={contextMenu.isOpen}
+        mode={contextMenu.mode}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
+        message={
+          contextMenu.message
+            ? {
+                id: contextMenu.message.id,
+                content: contextMenu.message.content,
+                isMe: contextMenu.message.senderId === currentUser?.id,
+                isSystem: contextMenu.message.type === 'system',
+              }
+            : null
+        }
+        onReply={() => {
+          if (contextMenu.message) setReplyingToMessage(contextMenu.message)
+        }}
+        onCopy={() => {
+          if (contextMenu.message?.content && typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(contextMenu.message.content).catch(() => {})
+          }
+        }}
+        onReact={(emoji) => {
+          if (contextMenu.message) handleAddReaction(contextMenu.message.id, emoji)
+        }}
+        onRecall={() => {
+          if (contextMenu.message) handleRecallMessage(contextMenu.message.id)
+        }}
+        conversation={
+          contextMenu.conversation
+            ? {
+                id: contextMenu.conversation.id,
+                partnerName: contextMenu.conversation.partnerName,
+                isGroup: contextMenu.conversation.isGroup,
+                isPinned: contextMenu.conversation.isPinned,
+                unreadCount: contextMenu.conversation.unreadCount,
+                isSenAiStudio: contextMenu.conversation.id === SENAI_STUDIO_CONVERSATION_ID,
+              }
+            : null
+        }
+        onTogglePin={() => {
+          if (contextMenu.conversation) {
+            setConversations(togglePinConversation(contextMenu.conversation.id))
+          }
+        }}
+        onToggleUnread={() => {
+          if (contextMenu.conversation) {
+            const c = contextMenu.conversation
+            if ((c.unreadCount || 0) > 0) {
+              saveLocalConversation({ ...c, unreadCount: 0 })
+              setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+            } else {
+              setConversations(markConversationUnread(c.id, 1))
+            }
+          }
+        }}
+        onClearHistory={() => {
+          if (contextMenu.conversation && confirm('Xóa toàn bộ lịch sử tin nhắn trên thiết bị này?')) {
+            clearAllLocalMessages(contextMenu.conversation.id)
+            if (selectedConvId === contextMenu.conversation.id) {
+              setMessages([])
+            }
+            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+          }
+        }}
+        onLeaveGroup={() => {
+          if (contextMenu.conversation?.id && confirm('Bạn có chắc chắn muốn rời khỏi nhóm này?')) {
+            handleLeaveGroup(contextMenu.conversation.id)
+          }
+        }}
       />
     </div>
   )

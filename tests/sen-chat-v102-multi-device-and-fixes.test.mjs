@@ -126,7 +126,7 @@ test('Sen Chat v1.0.2: Độ tương phản và thẩm mỹ của thẻ tệp đ
 
   assert.ok(bubbleCode.includes('isMe?: boolean'), 'ChatAttachmentBubbleProps phải khai báo isMe?: boolean')
   assert.ok(bubbleCode.includes('text-white font-bold'), 'Tên tệp phải màu trắng nổi bật khi isMe là true')
-  assert.ok(bubbleCode.includes('text-emerald-100/90'), 'Kích thước / nguồn tệp phải có màu chữ sáng khi isMe là true')
+  assert.ok(bubbleCode.includes('text-sky-100/90') || bubbleCode.includes('text-emerald-100/90'), 'Kích thước / nguồn tệp phải có màu chữ sáng khi isMe là true')
   assert.ok(bubbleCode.includes('bg-white/15 hover:bg-white/20 border border-white/20'), 'Hộp tệp đính kèm phải có nền bg-white/15')
 
   // Kiểm tra app/chat/page.tsx và app/m/chat/page.tsx có truyền isMe={isMe}
@@ -157,11 +157,13 @@ test('Sen Chat v1.0.2: Thanh thông báo 30 ngày có z-index và relative khôn
   const mobChatCode = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
 
   assert.ok(
-    deskChatCode.includes('relative z-10 flex items-center justify-between px-4 py-1.5 bg-emerald-500/10'),
+    deskChatCode.includes('relative z-10 flex items-center justify-between px-4 py-1.5 bg-blue-500/10') ||
+      deskChatCode.includes('relative z-10 flex items-center justify-between px-4 py-1.5 bg-emerald-500/10'),
     'Desktop chat banner 30 ngày phải có relative z-10'
   )
   assert.ok(
-    mobChatCode.includes('relative z-10 flex items-center justify-between px-3 py-1 bg-emerald-500/10'),
+    mobChatCode.includes('relative z-10 flex items-center justify-between px-3 py-1 bg-blue-500/10') ||
+      mobChatCode.includes('relative z-10 flex items-center justify-between px-3 py-1 bg-emerald-500/10'),
     'Mobile chat banner 30 ngày phải có relative z-10'
   )
 })

@@ -344,14 +344,14 @@ export default function ChatAttachmentBubble({
               <button
                 type="button"
                 onClick={handleOpenPreview}
-                className="flex items-center gap-1 text-emerald-500 hover:underline font-bold cursor-pointer"
+                className="flex items-center gap-1 text-sky-500 hover:underline font-bold cursor-pointer"
               >
                 Xem toàn màn hình
               </button>
               <button
                 type="button"
                 onClick={(e) => handleDownload(e)}
-                className="flex items-center gap-1 text-slate-400 hover:text-emerald-500 font-bold cursor-pointer"
+                className="flex items-center gap-1 text-slate-400 hover:text-sky-500 font-bold cursor-pointer"
               >
                 <Download className="h-3 w-3" /> Tải về
               </button>
@@ -372,7 +372,7 @@ export default function ChatAttachmentBubble({
             className={`flex h-11 w-11 items-center justify-center rounded-xl shrink-0 ${
               isMe
                 ? 'bg-white/20 text-white shadow-xs'
-                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                : 'bg-emerald-500/10 text-blue-600 dark:text-sky-400'
             }`}
           >
             {isImage ? (
@@ -394,7 +394,7 @@ export default function ChatAttachmentBubble({
             </p>
             <p
               className={`text-[10px] mt-0.5 ${
-                isMe ? 'text-emerald-100/90' : 'text-slate-500 dark:text-slate-400'
+                isMe ? 'text-sky-100/90' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               {formatBytes(fileSize)} ·{' '}
@@ -405,7 +405,7 @@ export default function ChatAttachmentBubble({
 
           <div className="flex items-center gap-1.5 shrink-0">
             {isLoading ? (
-              <Loader2 className={`h-4 w-4 animate-spin ${isMe ? 'text-white' : 'text-emerald-500'}`} />
+              <Loader2 className={`h-4 w-4 animate-spin ${isMe ? 'text-white' : 'text-sky-500'}`} />
             ) : isVideo ? (
               <>
                 <button
@@ -415,7 +415,7 @@ export default function ChatAttachmentBubble({
                   className={`p-1 rounded-lg cursor-pointer ${
                     isMe
                       ? 'text-white hover:bg-white/20'
-                      : 'text-emerald-600 hover:bg-emerald-500/10'
+                      : 'text-blue-600 hover:bg-emerald-500/10'
                   }`}
                 >
                   <Play className={`h-4 w-4 ${isMe ? 'fill-white' : 'fill-emerald-600'}`} />
@@ -427,7 +427,7 @@ export default function ChatAttachmentBubble({
                   className={`p-1 rounded-lg cursor-pointer ${
                     isMe
                       ? 'text-white/80 hover:text-white hover:bg-white/20'
-                      : 'text-slate-400 hover:text-emerald-600'
+                      : 'text-slate-400 hover:text-blue-600'
                   }`}
                 >
                   <Download className="h-4 w-4" />
@@ -441,7 +441,7 @@ export default function ChatAttachmentBubble({
                 className={`p-1 rounded-lg cursor-pointer ${
                   isMe
                     ? 'text-white/80 hover:text-white hover:bg-white/20'
-                    : 'text-slate-500 hover:text-emerald-500'
+                    : 'text-slate-500 hover:text-sky-500'
                 }`}
               >
                 <Download className="h-4 w-4" />
@@ -480,7 +480,7 @@ export default function ChatAttachmentBubble({
       {/* Thông tin bảo lưu tệp 30 ngày & Nút gia hạn bởi Trưởng nhóm / Admin */}
       <div
         className={`flex items-center justify-between gap-2 px-1 text-[10px] mt-1 ${
-          isMe ? 'text-emerald-100/90' : 'text-slate-400'
+          isMe ? 'text-sky-100/90' : 'text-slate-400'
         }`}
       >
         <div className="flex items-center gap-1">
@@ -490,13 +490,13 @@ export default function ChatAttachmentBubble({
               retention.isPermanent
                 ? isMe
                   ? 'text-white font-bold'
-                  : 'text-emerald-500 font-semibold'
+                  : 'text-sky-500 font-semibold'
                 : retention.isExpired
                 ? isMe
                   ? 'text-rose-200 font-semibold'
                   : 'text-rose-500 font-semibold'
                 : isMe
-                ? 'text-emerald-100/90'
+                ? 'text-sky-100/90'
                 : 'text-slate-400'
             }
           >
@@ -513,7 +513,7 @@ export default function ChatAttachmentBubble({
             className={`flex items-center gap-0.5 font-semibold hover:underline cursor-pointer ${
               isMe
                 ? 'text-white hover:text-emerald-100'
-                : 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
+                : 'text-blue-600 hover:text-emerald-700 dark:text-emerald-400'
             }`}
           >
             <CalendarPlus className="h-3 w-3" />
@@ -531,7 +531,7 @@ export default function ChatAttachmentBubble({
           <div className="w-full max-w-xs rounded-2xl bg-white p-4 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
               <div className="flex items-center gap-1.5 font-bold text-xs">
-                <CalendarPlus className="h-4 w-4 text-emerald-600" />
+                <CalendarPlus className="h-4 w-4 text-blue-600" />
                 <span>Gia hạn lưu trữ tệp</span>
               </div>
               <button
@@ -548,7 +548,7 @@ export default function ChatAttachmentBubble({
             </p>
 
             {extendFeedback && (
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <p className="text-xs font-semibold text-blue-600 dark:text-sky-400">
                 {extendFeedback}
               </p>
             )}
@@ -558,7 +558,7 @@ export default function ChatAttachmentBubble({
                 type="button"
                 disabled={isExtending}
                 onClick={() => handleExtendRetention(30, false)}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition"
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition"
               >
                 <Clock className="h-3.5 w-3.5" />
                 Thêm 30 ngày bảo lưu
@@ -567,7 +567,7 @@ export default function ChatAttachmentBubble({
                 type="button"
                 disabled={isExtending}
                 onClick={() => handleExtendRetention(0, true)}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-50 dark:hover:bg-emerald-950/20 disabled:opacity-50 transition"
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-emerald-500/40 text-blue-600 dark:text-sky-400 text-xs font-bold hover:bg-emerald-50 dark:hover:bg-emerald-950/20 disabled:opacity-50 transition"
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 Bảo lưu vĩnh viễn

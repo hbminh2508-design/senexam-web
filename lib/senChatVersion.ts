@@ -24,6 +24,10 @@ export const SEN_CHAT_CHANGELOG: SenChatChangelogEntry[] = [
     isBugFixOnly: false,
     changes: [
       'Sửa triệt để lỗi đồng bộ nhóm & hội thoại giữa các thiết bị (tự động đồng bộ từ Supabase và peer-to-peer relay)',
+      'Sửa triệt để lỗi chưa rời được khỏi nhóm chat (hỗ trợ tự động chuyển quyền chủ nhóm nếu cần & đồng bộ xóa nhóm đa thiết bị)',
+      'Bổ sung giao diện menu chuột phải riêng (Custom Context Menu) tối ưu cho Sen Chat và hỗ trợ chạm/nhấn giữ thả biểu cảm, xóa tin nhắn trên iPhone, iPad',
+      'Nâng cấp đồng bộ ngầm liên tục giữa các thiết bị trong im lặng, không hiện bảng thông báo gây gián đoạn',
+      'Làm mới UI/UX với tông màu xanh nước biển đồng bộ logo Sen Chat và tối ưu độ mượt toàn diện',
       'Thêm tính năng Trả lời trích dẫn tin nhắn (Reply / Quote) và Biểu cảm nhanh (Emoji Reactions)',
       'Hỗ trợ Ghim cuộc trò chuyện (Pin/Unpin), Đánh dấu chưa đọc và Lưu nháp tin nhắn đang soạn theo từng hội thoại',
       'Tối ưu và sửa lỗi SenExam: lưu nháp tức thì (debounce 300ms + beforeunload), ổn định bộ đếm tab/thời gian và bảo mật token nộp bài',

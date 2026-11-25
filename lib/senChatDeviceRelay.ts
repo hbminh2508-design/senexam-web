@@ -12,6 +12,8 @@ import {
   getLocalConversations,
   getLocalMessages,
   saveLocalMessages,
+  deleteLocalConversation,
+  clearAllLocalMessages,
   SENAI_STUDIO_CONVERSATION,
   SENAI_STUDIO_CONVERSATION_ID,
   getChatFontSize,
@@ -473,6 +475,34 @@ export function initDeviceRelay({
     }
   })
 
+  // 5. Nhận thông báo rời / xóa nhóm từ thiết bị khác để âm thầm gỡ bỏ ngay lập tức
+  channel.on('broadcast', { event: 'conversation_removed' }, ({ payload }: any) => {
+    if (!payload || payload.senderDeviceId === deviceId || !payload.conversationId) return
+
+    const { conversationId } = payload
+    deleteLocalConversation(conversationId)
+    clearAllLocalMessages(conversationId)
+
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('senchat-conversation-removed', {
+            detail: { conversationId },
+          })
+        )
+        window.dispatchEvent(
+          new CustomEvent('senchat-conversations-reconciled', {
+            detail: { conversations: getLocalConversations() },
+          })
+        )
+      }
+    } catch {}
+
+    if (onConversationsReconciled) {
+      onConversationsReconciled(getLocalConversations())
+    }
+  })
+
   channel.subscribe()
 
   // Hàm phát broadcast đồng bộ cài đặt
@@ -516,6 +546,19 @@ export function initDeviceRelay({
     })
   }
 
+  // Hàm phát thông báo đã rời / xóa nhóm
+  const notifyConversationRemoved = (conversationId: string) => {
+    channel.send({
+      type: 'broadcast',
+      event: 'conversation_removed',
+      payload: {
+        senderDeviceId: deviceId,
+        conversationId,
+        timestamp: Date.now(),
+      },
+    })
+  }
+
   const instance = {
     channel,
     deviceId,
@@ -523,6 +566,7 @@ export function initDeviceRelay({
     broadcastSettings,
     notifyFileTransitReady,
     requestMessageSync,
+    notifyConversationRemoved,
     cleanup: () => {
       try {
         supabaseClient.removeChannel(channel)
@@ -561,6 +605,15 @@ export function broadcastFileTransitReady(info: FileTransitPayload) {
 export function broadcastRequestMessageSync(conversationId?: string) {
   if (activeRelayInstance) {
     activeRelayInstance.requestMessageSync(conversationId)
+  }
+}
+
+/**
+ * Phát broadcast rời/xóa nhóm để các thiết bị khác âm thầm gỡ nhóm ngay lập tức
+ */
+export function broadcastConversationRemoved(conversationId: string) {
+  if (activeRelayInstance && conversationId) {
+    activeRelayInstance.notifyConversationRemoved(conversationId)
   }
 }
 

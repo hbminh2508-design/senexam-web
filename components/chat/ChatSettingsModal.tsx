@@ -242,7 +242,7 @@ export default function ChatSettingsModal({
       setSyncSuccessMsg(res.message || 'Đồng bộ dữ liệu thành công!')
       setTimeout(() => setSyncSuccessMsg(null), 4000)
     } catch (err: any) {
-      alert('Lỗi đồng bộ dữ liệu: ' + (err?.message || 'Vui lòng thử lại sau.'))
+      console.warn('Đồng bộ ngầm tạm gián đoạn:', err?.message)
     } finally {
       setIsSyncing(false)
     }
@@ -289,7 +289,7 @@ export default function ChatSettingsModal({
     const tier = (userPlanTier || 'free').toLowerCase()
     if (tier.includes('one')) return { label: 'Sen One', color: 'from-amber-500 to-yellow-600' }
     if (tier.includes('premium')) return { label: 'Sen Premium', color: 'from-purple-500 to-indigo-600' }
-    if (tier.includes('vip')) return { label: 'Sen VIP', color: 'from-emerald-500 to-teal-600' }
+    if (tier.includes('vip')) return { label: 'Sen VIP', color: 'from-blue-600 to-sky-500' }
     return { label: 'Học viên Miễn phí', color: 'from-slate-500 to-slate-700' }
   }
 
@@ -301,7 +301,7 @@ export default function ChatSettingsModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-sky-400">
               <Shield className="h-5 w-5" />
             </div>
             <div>
@@ -325,7 +325,7 @@ export default function ChatSettingsModal({
             onClick={() => setActiveTab('profile')}
             className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'profile'
-                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                ? 'border-blue-500 text-blue-600 dark:text-sky-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -337,7 +337,7 @@ export default function ChatSettingsModal({
             onClick={() => setActiveTab('preferences')}
             className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'preferences'
-                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                ? 'border-blue-500 text-blue-600 dark:text-sky-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -349,7 +349,7 @@ export default function ChatSettingsModal({
             onClick={() => setActiveTab('privacy')}
             className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'privacy'
-                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                ? 'border-blue-500 text-blue-600 dark:text-sky-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -361,7 +361,7 @@ export default function ChatSettingsModal({
             onClick={() => setActiveTab('devices')}
             className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'devices'
-                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                ? 'border-blue-500 text-blue-600 dark:text-sky-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -373,7 +373,7 @@ export default function ChatSettingsModal({
             onClick={() => setActiveTab('storage')}
             className={`flex items-center gap-2 py-3 px-3 text-xs font-semibold border-b-2 transition whitespace-nowrap ${
               activeTab === 'storage'
-                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                ? 'border-blue-500 text-blue-600 dark:text-sky-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -425,7 +425,7 @@ export default function ChatSettingsModal({
                 <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400">Liên kết tài khoản SenExam</h5>
                 <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-800 bg-emerald-50/30 dark:bg-emerald-950/20 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-sky-400 shrink-0">
                       <Check className="h-5 w-5" />
                     </div>
                     <div>
@@ -439,7 +439,7 @@ export default function ChatSettingsModal({
                     href="/new-profile"
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition shrink-0"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition shrink-0"
                   >
                     Xem hồ sơ <ExternalLink className="h-3 w-3" />
                   </a>
@@ -531,7 +531,7 @@ export default function ChatSettingsModal({
                         onChange={(e) => handleToggleNotification('messageSound', e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600" />
                     </label>
                   </div>
 
@@ -547,7 +547,7 @@ export default function ChatSettingsModal({
                         onChange={(e) => handleToggleNotification('callSound', e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600" />
                     </label>
                   </div>
 
@@ -563,7 +563,7 @@ export default function ChatSettingsModal({
                         onChange={(e) => handleToggleNotification('mentionSen', e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                      <div className="w-10 h-5 bg-slate-300 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600" />
                     </label>
                   </div>
                 </div>
@@ -601,7 +601,7 @@ export default function ChatSettingsModal({
                       disabled={isSavingPrivacy}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600" />
                   </label>
                 </div>
 
@@ -624,7 +624,7 @@ export default function ChatSettingsModal({
                       disabled={isSavingPrivacy}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600" />
                   </label>
                 </div>
               </div>
@@ -658,7 +658,7 @@ export default function ChatSettingsModal({
                     <Smartphone className="h-4 w-4 text-emerald-600" />
                     <span className="text-xs font-bold">Thiết bị hiện tại</span>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-sky-400">
                     Đang hoạt động
                   </span>
                 </div>
@@ -674,14 +674,19 @@ export default function ChatSettingsModal({
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin text-emerald-600' : 'text-slate-600 dark:text-slate-300'}`} />
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Đồng bộ dữ liệu đa thiết bị</span>
+                    <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin text-blue-600' : 'text-blue-600 dark:text-sky-400'}`} />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Đồng bộ dữ liệu đa thiết bị</span>
+                      <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                        Tự động đồng bộ ngầm liên tục giữa các thiết bị
+                      </span>
+                    </div>
                   </div>
                   <span
                     className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                       syncStatus?.needsSync
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                        ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30'
+                        : 'bg-blue-500/10 text-blue-600 dark:text-sky-400 border-blue-500/30'
                     }`}
                   >
                     {syncStatus?.needsSync ? 'Cần đồng bộ dữ liệu' : 'Đã đồng bộ'}
@@ -706,8 +711,8 @@ export default function ChatSettingsModal({
                 </div>
 
                 {syncSuccessMsg && (
-                  <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-2.5 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                    <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <div className="flex items-center gap-2 rounded-xl bg-blue-50 p-2.5 text-xs text-blue-700 dark:bg-blue-950/40 dark:text-sky-300">
+                    <Check className="h-4 w-4 shrink-0 text-blue-600" />
                     <span>{syncSuccessMsg}</span>
                   </div>
                 )}
@@ -716,7 +721,7 @@ export default function ChatSettingsModal({
                   type="button"
                   onClick={handleTriggerSync}
                   disabled={isSyncing}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-60 shadow-sm"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-sky-500 text-white hover:from-blue-700 hover:to-sky-600 transition disabled:opacity-60 shadow-sm"
                 >
                   <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
                   <span>{isSyncing ? 'Đang đồng bộ dữ liệu...' : 'Đồng bộ dữ liệu ngay'}</span>
@@ -737,7 +742,7 @@ export default function ChatSettingsModal({
                       onClose()
                       onOpenDeviceManager()
                     }}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition shrink-0"
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition shrink-0"
                   >
                     Xem thiết bị
                   </button>
@@ -869,7 +874,7 @@ export default function ChatSettingsModal({
                 <button
                   type="button"
                   onClick={handleExportJson}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/20 transition shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-emerald-600/20 transition shrink-0"
                 >
                   <Download className="h-4 w-4" />
                   <span>Export JSON</span>
@@ -892,7 +897,7 @@ export default function ChatSettingsModal({
                       onChange={(e) => handleToggleEphemeral(e.target.checked)}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600" />
+                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600" />
                   </label>
                 </div>
               </div>

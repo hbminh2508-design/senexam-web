@@ -156,7 +156,7 @@ export default function ChatFriendModal({
       <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-slate-800">
           <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-sky-400">
               <UserPlus className="h-5 w-5" />
             </div>
             <div>
@@ -189,12 +189,12 @@ export default function ChatFriendModal({
               onChange={(e) => setEmailInput(e.target.value)}
               placeholder="ví dụ: hocvien@senexam.edu.vn"
               required
-              className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-xs text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="min-h-[44px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-xs text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
             <button
               type="submit"
               disabled={loading}
-              className="flex min-h-[44px] items-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:opacity-50"
+              className="flex min-h-[44px] items-center gap-1.5 rounded-xl bg-blue-600 px-4 text-xs font-semibold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50"
             >
               <Search className="h-4 w-4" />
               {loading ? 'Đang tra...' : 'Tìm'}
@@ -219,16 +219,16 @@ export default function ChatFriendModal({
 
         {actionSuccessMsg && (
           <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-600" />
             <span>{actionSuccessMsg}</span>
           </div>
         )}
 
         {/* Result Card */}
         {searchResult && (
-          <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-50/40 p-4 dark:border-emerald-500/40 dark:bg-emerald-950/20">
+          <div className="mt-4 rounded-2xl border border-blue-500/30 bg-blue-50/40 p-4 dark:border-blue-500/40 dark:bg-blue-950/20">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 font-bold text-white shadow-md">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-sky-500 font-bold text-white shadow-md">
                 {searchResult.name.substring(0, 1).toUpperCase()}
               </div>
               <div>
@@ -250,7 +250,7 @@ export default function ChatFriendModal({
                     onClose()
                     onStartChatWithUser?.(searchResult)
                   }}
-                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700"
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-xs font-semibold text-white shadow-md shadow-blue-600/20 hover:bg-blue-700"
                 >
                   Nhắn tin ngay
                 </button>
@@ -267,7 +267,7 @@ export default function ChatFriendModal({
                   type="button"
                   onClick={handleSendInvite}
                   disabled={loading}
-                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-xs font-semibold text-white shadow-md shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-50"
                 >
                   <UserPlus className="h-4 w-4" /> Gửi lời mời kết bạn
                 </button>
@@ -319,7 +319,7 @@ export default function ChatFriendModal({
         )}
 
         <div className="mt-5 flex items-center gap-1.5 text-[11px] text-slate-400">
-          <Shield className="h-3.5 w-3.5 text-emerald-600" />
+          <Shield className="h-3.5 w-3.5 text-blue-600" />
           <span>Email được băm SHA-256 một chiều, không thể truy ngược.</span>
         </div>
       </div>

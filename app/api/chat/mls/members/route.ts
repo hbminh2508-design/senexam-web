@@ -123,19 +123,58 @@ export async function DELETE(req: Request) {
     }
 
     const body = await req.json().catch(() => null)
-    if (!body || !body.conversationId || !body.targetUserId || !body.commitMessage) {
-      return NextResponse.json({ error: 'Thiếu thông số bắt buộc (conversationId, targetUserId, commitMessage)' }, { status: 400 })
+    if (!body || !body.conversationId || !body.targetUserId) {
+      return NextResponse.json({ error: 'Thiếu thông số bắt buộc (conversationId, targetUserId)' }, { status: 400 })
     }
 
     const {
       conversationId,
       targetUserId,
-      commitMessage,
+      commitMessage = `mls_commit_remove_${Date.now()}`,
       newEpoch = 1,
       ratchetTree = '',
     } = body
 
+    const isSelfLeave = targetUserId === user.id
+    if (!isSelfLeave && !body.commitMessage) {
+      return NextResponse.json({ error: 'Thiếu thông số bắt buộc (commitMessage)' }, { status: 400 })
+    }
+
     const db = getSupabaseAdmin()
+
+    // Nếu người dùng tự rời nhóm (isSelfLeave): tự động chuyển quyền owner nếu caller là owner và còn thành viên khác
+    if (isSelfLeave) {
+      const { data: callerMember } = await db
+        .from('chat_members')
+        .select('id, role')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (callerMember?.role === 'owner') {
+        const { data: otherMembers } = await db
+          .from('chat_members')
+          .select('id, user_id, role, joined_at')
+          .eq('conversation_id', conversationId)
+          .neq('user_id', user.id)
+          .order('joined_at', { ascending: true })
+
+        if (otherMembers && otherMembers.length > 0) {
+          const adminCandidate = otherMembers.find((m: any) => m.role === 'admin')
+          const successor = adminCandidate || otherMembers[0]
+          if (successor) {
+            await db
+              .from('chat_members')
+              .update({ role: 'owner' })
+              .eq('id', successor.id)
+            await db
+              .from('chat_members')
+              .update({ role: 'member' })
+              .eq('id', callerMember.id)
+          }
+        }
+      }
+    }
 
     const { data, error } = await db.rpc('remove_mls_group_member', {
       p_conversation_id: conversationId,
@@ -146,12 +185,45 @@ export async function DELETE(req: Request) {
       p_caller_id: user.id,
     })
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error || !data?.success) {
+      if (isSelfLeave) {
+        // Fallback xóa trực tiếp dòng chat_members và cập nhật mls_epoch để đảm bảo rời nhóm luôn thành công 100%
+        const { error: deleteErr } = await db
+          .from('chat_members')
+          .delete()
+          .eq('conversation_id', conversationId)
+          .eq('user_id', user.id)
+
+        if (deleteErr) {
+          return NextResponse.json({ error: deleteErr.message }, { status: 500 })
+        }
+
+        await db
+          .from('chat_conversations')
+          .update({ mls_epoch: Number(newEpoch) || Math.floor(Date.now() / 1000) })
+          .eq('id', conversationId)
+
+        return NextResponse.json({ success: true, left: true, fallback: true })
+      }
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ error: data?.error || 'Không thể xóa thành viên' }, { status: 400 })
     }
 
-    if (!data?.success) {
-      return NextResponse.json({ error: data?.error || 'Không thể xóa thành viên' }, { status: 400 })
+    if (isSelfLeave) {
+      // Đảm bảo tuyệt đối bản ghi chat_members của người rời nhóm đã được xóa
+      const { data: leftover } = await db
+        .from('chat_members')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (leftover?.id) {
+        await db.from('chat_members').delete().eq('id', leftover.id)
+      }
     }
 
     return NextResponse.json(data)

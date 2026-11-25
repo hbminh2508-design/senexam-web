@@ -230,98 +230,54 @@ test('Sen Chat v1.0.3: Hàm triggerFullDeviceSync thực hiện pull, lưu times
 })
 
 // ==============================================================================
-// 3. KIỂM THỬ GIAO DIỆN DESKTOP (app/chat/page.tsx)
+// 3. KIỂM THỬ GIAO DIỆN DESKTOP (app/chat/page.tsx) - ĐỒNG BỘ NGẦM KHÔNG HIỆN BANNER
 // ==============================================================================
-test('Sen Chat v1.0.3: Desktop (app/chat/page.tsx) có nút Đồng bộ dữ liệu ngay đặt ngay phía trên SenAI Studio', () => {
+test('Sen Chat v1.0.3 -> v1.0.4: Desktop (app/chat/page.tsx) chạy đồng bộ ngầm liên tục, không hiện banner thông báo', () => {
   const desktopFilePath = path.join(process.cwd(), 'app/chat/page.tsx')
   const desktopCode = fs.readFileSync(desktopFilePath, 'utf8')
 
-  // Kiểm tra import checkDeviceSyncStatus, triggerFullDeviceSync và SEN_CHAT_CURRENT_VERSION
   assert.ok(
-    desktopCode.includes('checkDeviceSyncStatus') && desktopCode.includes('triggerFullDeviceSync'),
-    'app/chat/page.tsx phải import checkDeviceSyncStatus và triggerFullDeviceSync'
+    desktopCode.includes('triggerFullDeviceSync'),
+    'app/chat/page.tsx phải import triggerFullDeviceSync để đồng bộ ngầm'
   )
   assert.ok(
     desktopCode.includes('SEN_CHAT_CURRENT_VERSION'),
     'app/chat/page.tsx phải import SEN_CHAT_CURRENT_VERSION'
   )
-
-  // Kiểm tra icon RefreshCw
   assert.ok(
-    desktopCode.includes('RefreshCw'),
-    'app/chat/page.tsx phải sử dụng icon RefreshCw cho nút đồng bộ'
+    desktopCode.includes('runSilentBackgroundSync'),
+    'app/chat/page.tsx phải có runSilentBackgroundSync chạy ngầm liên tục'
   )
-
-  // Kiểm tra nút/banner xuất hiện ngay phía trên SenAI Studio trong danh sách hội thoại
-  assert.ok(
-    desktopCode.includes('Đồng bộ dữ liệu ngay') || desktopCode.includes('Đồng bộ ngay'),
-    'app/chat/page.tsx phải có nút "Đồng bộ dữ liệu ngay" hoặc "Đồng bộ ngay"'
-  )
-  assert.ok(
-    desktopCode.includes('handleTriggerSyncNow'),
-    'app/chat/page.tsx phải có hàm handleTriggerSyncNow để kích hoạt đồng bộ'
-  )
-
-  // Vị trí trong JSX: Banner đồng bộ phải nằm trong container danh sách cuộc trò chuyện và TRƯỚC filteredConversations.map
-  const convListMarker = 'Danh sách các cuộc trò chuyện'
-  const convListIndex = desktopCode.indexOf(convListMarker)
-  assert.ok(convListIndex > 0, 'Phải có container Danh sách các cuộc trò chuyện')
-
-  const bannerInJsxIndex = desktopCode.indexOf('handleTriggerSyncNow', convListIndex)
-  const mapInJsxIndex = desktopCode.indexOf('filteredConversations.map', convListIndex)
-  assert.ok(bannerInJsxIndex > 0, 'Banner đồng bộ phải nằm trong khối danh sách cuộc trò chuyện')
-  assert.ok(mapInJsxIndex > 0, 'filteredConversations.map phải nằm trong khối danh sách cuộc trò chuyện')
-  assert.ok(
-    bannerInJsxIndex < mapInJsxIndex,
-    'Banner đồng bộ phải nằm NGAY PHÍA TRÊN mục SenAI Studio (được render ở đầu filteredConversations.map)'
+  assert.equal(
+    desktopCode.includes('Phát hiện dữ liệu chưa đồng bộ') || desktopCode.includes('Đồng bộ dữ liệu ngay'),
+    false,
+    'app/chat/page.tsx không được hiển thị banner thông báo đồng bộ gây phiền'
   )
 })
 
 // ==============================================================================
-// 4. KIỂM THỬ GIAO DIỆN MOBILE (app/m/chat/page.tsx)
+// 4. KIỂM THỬ GIAO DIỆN MOBILE (app/m/chat/page.tsx) - ĐỒNG BỘ NGẦM KHÔNG HIỆN BANNER
 // ==============================================================================
-test('Sen Chat v1.0.3: Mobile (app/m/chat/page.tsx) có nút Đồng bộ dữ liệu ngay đặt ngay phía trên SenAI Studio', () => {
+test('Sen Chat v1.0.3 -> v1.0.4: Mobile (app/m/chat/page.tsx) chạy đồng bộ ngầm liên tục, không hiện banner thông báo', () => {
   const mobileFilePath = path.join(process.cwd(), 'app/m/chat/page.tsx')
   const mobileCode = fs.readFileSync(mobileFilePath, 'utf8')
 
-  // Kiểm tra import checkDeviceSyncStatus, triggerFullDeviceSync và SEN_CHAT_CURRENT_VERSION
   assert.ok(
-    mobileCode.includes('checkDeviceSyncStatus') && mobileCode.includes('triggerFullDeviceSync'),
-    'app/m/chat/page.tsx phải import checkDeviceSyncStatus và triggerFullDeviceSync'
+    mobileCode.includes('triggerFullDeviceSync'),
+    'app/m/chat/page.tsx phải import triggerFullDeviceSync để đồng bộ ngầm'
   )
   assert.ok(
     mobileCode.includes('SEN_CHAT_CURRENT_VERSION'),
     'app/m/chat/page.tsx phải import SEN_CHAT_CURRENT_VERSION'
   )
-
-  // Kiểm tra icon RefreshCw
   assert.ok(
-    mobileCode.includes('RefreshCw'),
-    'app/m/chat/page.tsx phải sử dụng icon RefreshCw cho nút đồng bộ'
+    mobileCode.includes('runSilentBackgroundSync'),
+    'app/m/chat/page.tsx phải có runSilentBackgroundSync chạy ngầm liên tục'
   )
-
-  // Kiểm tra nút/banner xuất hiện
-  assert.ok(
-    mobileCode.includes('Đồng bộ dữ liệu ngay') || mobileCode.includes('Đồng bộ ngay'),
-    'app/m/chat/page.tsx phải có nút "Đồng bộ dữ liệu ngay" hoặc "Đồng bộ ngay"'
-  )
-  assert.ok(
-    mobileCode.includes('handleTriggerSyncNow'),
-    'app/m/chat/page.tsx phải có hàm handleTriggerSyncNow'
-  )
-
-  // Vị trí trong JSX Mobile: Banner đồng bộ phải nằm trong container Danh Sách Hội Thoại và TRƯỚC filteredConversations.map
-  const mobileConvListMarker = 'Danh Sách Hội Thoại'
-  const mobileConvListIndex = mobileCode.indexOf(mobileConvListMarker)
-  assert.ok(mobileConvListIndex > 0, 'Phải có container Danh Sách Hội Thoại mobile')
-
-  const mobileBannerInJsxIndex = mobileCode.indexOf('handleTriggerSyncNow', mobileConvListIndex)
-  const mobileMapInJsxIndex = mobileCode.indexOf('filteredConversations.map', mobileConvListIndex)
-  assert.ok(mobileBannerInJsxIndex > 0, 'Banner đồng bộ phải nằm trong khối danh sách cuộc trò chuyện mobile')
-  assert.ok(mobileMapInJsxIndex > 0, 'filteredConversations.map phải nằm trong khối danh sách cuộc trò chuyện mobile')
-  assert.ok(
-    mobileBannerInJsxIndex < mobileMapInJsxIndex,
-    'Banner đồng bộ phải nằm NGAY PHÍA TRÊN mục SenAI Studio trên mobile'
+  assert.equal(
+    mobileCode.includes('Phát hiện dữ liệu chưa đồng bộ') || mobileCode.includes('Đồng bộ dữ liệu ngay'),
+    false,
+    'app/m/chat/page.tsx không được hiển thị banner thông báo đồng bộ gây phiền'
   )
 })
 
