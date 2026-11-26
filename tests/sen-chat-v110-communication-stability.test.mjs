@@ -298,3 +298,18 @@ test('v1.1.0: Phiên bản chính thức là 1.1.0 — Communication & Stability
   assert.equal(SEN_CHAT_CHANGELOG[0].version, '1.1.0')
   assert.equal(SEN_CHAT_CHANGELOG[0].title, 'Communication & Stability Update')
 })
+
+// 26. Mobile routing m.senexam.me/chat, passthrough cho các ứng dụng & chống crash app/m/chat/page.tsx
+test('v1.1.0 [26]: Điều hướng điện thoại về m.senexam.me/chat, mở được toàn bộ ứng dụng trên m.senexam.me và app/m/chat có ErrorBoundary + Suspense', () => {
+  const mw = fs.readFileSync(path.join(process.cwd(), 'middleware.ts'), 'utf8')
+  assert.ok(mw.includes('MOBILE_PASSTHROUGH_PREFIXES'), 'middleware phải cho phép các ứng dụng con trên m.senexam.me mở đúng trang')
+  assert.ok(mw.includes("'/new-video'") && mw.includes("'/new-focus'") && mw.includes("'/new-labs'"), 'Phải cho phép /new-video, /new-focus, /new-labs trên m.senexam.me')
+  assert.ok(mw.includes("url.pathname = '/m/chat'"), 'm.senexam.me/chat phải rewrite về /m/chat')
+  assert.ok(mw.includes("new URL('/chat' + request.nextUrl.search, 'https://m.senexam.me')"), 'chat.senexam.me trên điện thoại phải chuyển về m.senexam.me/chat')
+
+  const mobileChatSrc = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
+  assert.ok(mobileChatSrc.includes('MobileChatErrorBoundary'), 'MobileChatPage phải có ErrorBoundary chống crash')
+  assert.ok(mobileChatSrc.includes('<Suspense'), 'MobileChatPage phải bọc useSearchParams trong Suspense')
+  assert.ok(mobileChatSrc.includes('resolvedAuthUserId'), 'Phải dùng biến resolvedAuthUserId an toàn ngoài khối try')
+  assert.ok(!/\bSC\b|SenCash/i.test(mobileChatSrc), 'app/m/chat/page.tsx tuyệt đối không chứa SC hoặc SenCash')
+})

@@ -299,7 +299,7 @@ export default function MobileDashboardPage() {
         <div className="grid grid-cols-4 gap-2">
           {/* Sen Chat E2EE */}
           <Link
-            href="/m/chat"
+            href="/chat"
             className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-gradient-to-tr from-sky-500/10 to-indigo-500/10 dark:bg-slate-900 border border-sky-500/20 shadow-xs active:scale-95 transition space-y-1 text-center"
           >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-xs">

@@ -307,23 +307,54 @@ export function middleware(request: NextRequest) {
     if (pathname === '/new-idp') {
       return applySecurityHeaders(NextResponse.next())
     }
-    if (pathname === '/pay' || pathname === '/new-pay' || pathname === '/vip' || pathname === '/new-vip') {
+    if (pathname === '/pay' || pathname === '/new-pay' || pathname === '/vip' || pathname === '/new-vip' || pathname === '/new-exclusive-store' || pathname === '/exclusive-store' || pathname === '/new-codes' || pathname === '/codes') {
       url.pathname = '/m/pay'
+      return applySecurityHeaders(NextResponse.rewrite(url))
+    }
+    if (pathname.startsWith('/new-submissions/') || pathname.startsWith('/submissions/')) {
+      const subId = pathname.replace(/^\/(?:new-)?submissions\//, '')
+      url.pathname = `/m/submissions/${subId}`
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
     if (pathname === '/profile' || pathname === '/new-profile') {
       url.pathname = '/m/profile'
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
-    // Hỗ trợ Sen Chat E2EE trên Mobile Subdomain (m.senexam.me)
+    // Hỗ trợ Sen Chat E2EE trên Mobile Subdomain (m.senexam.me/chat)
     if (pathname === '/chat' || pathname.startsWith('/chat')) {
       url.pathname = '/m/chat'
       return applyChatSecurityHeaders(NextResponse.rewrite(url))
     }
-    if (pathname === '/m/chat' || pathname.startsWith('/m/chat')) {
+    if (pathname === '/m/chat' || pathname.startsWith('/m/chat/')) {
       return applyChatSecurityHeaders(NextResponse.next())
     }
     if (pathname.startsWith('/m')) {
+      return applySecurityHeaders(NextResponse.next())
+    }
+    // Cho phép tất cả các ứng dụng học tập/tiện ích trên m.senexam.me mở đúng trang, không bị đẩy ngược về /m
+    const MOBILE_PASSTHROUGH_PREFIXES = [
+      '/new-video',
+      '/new-focus',
+      '/new-labs',
+      '/new-mark-calculate',
+      '/new-senai-studio',
+      '/new-senai',
+      '/read',
+      '/new-schedule',
+      '/new-student',
+      '/new-media',
+      '/new-beta',
+      '/new-teacher',
+      '/new-admin-dashboard',
+      '/new-announcement',
+      '/new-change-password',
+      '/new-reset-password',
+      '/sengraph',
+      '/nopquylop',
+      '/privacy',
+      '/terms',
+    ]
+    if (MOBILE_PASSTHROUGH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       return applySecurityHeaders(NextResponse.next())
     }
     // Mặc định fallback về trang chủ mobile /m
@@ -345,7 +376,7 @@ export function middleware(request: NextRequest) {
         else if (pathname === '/new-history' || pathname === '/history' || pathname === '/new-submissions' || pathname === '/submissions' || pathname === '/new-history-submissions') targetPath = '/history'
         else if (pathname === '/new-pay' || pathname === '/pay' || pathname === '/vip' || pathname === '/new-vip' || pathname === '/exclusive-store' || pathname === '/codes') targetPath = '/pay'
         else if (pathname === '/new-profile' || pathname === '/profile') targetPath = '/profile'
-        else if (pathname === '/chat' || pathname.startsWith('/chat')) targetPath = '/m/chat'
+        else if (pathname === '/chat' || pathname.startsWith('/chat/') || pathname === '/m/chat' || pathname.startsWith('/m/chat/')) targetPath = '/chat'
         else if (pathname === '/dashboard' || pathname === '/new-dashboard') targetPath = '/'
 
         const targetUrl = new URL(targetPath + request.nextUrl.search, 'https://m.senexam.me')
@@ -669,6 +700,15 @@ export function middleware(request: NextRequest) {
   // 4.11 Định tuyến Subdomain Sen Chat: chat.senexam.me
   if (isChatSubdomain) {
     const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(userAgent)
+    if (
+      isMobileDevice &&
+      !url.searchParams.has('desktop') &&
+      !hostname.includes('localhost') &&
+      !hostname.includes('127.0.0.1')
+    ) {
+      const mobileChatUrl = new URL('/chat' + request.nextUrl.search, 'https://m.senexam.me')
+      return applyChatSecurityHeaders(NextResponse.redirect(mobileChatUrl, 307))
+    }
     if (pathname === '/' || pathname === '/dashboard') {
       url.pathname = isMobileDevice ? '/m/chat' : '/chat'
       return applyChatSecurityHeaders(NextResponse.rewrite(url))

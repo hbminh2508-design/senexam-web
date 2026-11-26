@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import React, { Suspense, useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import {
   MessageSquare,
   Users,
@@ -153,7 +153,41 @@ import {
 // Bảng biểu cảm nhanh tối ưu chạm ngón cái trên điện thoại
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🔥', '👏', '🎉', '🙏', '💯']
 
-export default function MobileChatPage() {
+class MobileChatErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMsg: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false, errorMsg: '' }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMsg: error?.message || 'Lỗi hiển thị Sen Chat Mobile' }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100">
+          <div className="h-14 w-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center mb-4 shadow-lg">
+            <MessageSquare className="h-7 w-7" />
+          </div>
+          <h2 className="text-base font-bold mb-1">Sen Chat đang khôi phục kết nối</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 max-w-xs">{this.state.errorMsg}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 text-white text-xs font-bold shadow-sm"
+          >
+            Tải lại Sen Chat
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function MobileChatPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -705,14 +739,27 @@ export default function MobileChatPage() {
       }
 
       // 3. Tải phiên người dùng & Kiểm tra Supabase Auth bắt buộc
+      let resolvedAuthUserId: string | null = null
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser()
+        let authUser: any = null
+        const { data: userData } = await supabase.auth.getUser()
+        authUser = userData?.user || null
+        if (!authUser) {
+          const { data: sessData } = await supabase.auth.getSession()
+          authUser = sessData?.session?.user || null
+        }
+
         if (authUser) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled, plan_tier, vip_expires_at')
-            .eq('id', authUser.id)
-            .maybeSingle()
+          resolvedAuthUserId = authUser.id
+          let profile: any = null
+          try {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled, plan_tier, vip_expires_at')
+              .eq('id', authUser.id)
+              .maybeSingle()
+            profile = profileData
+          } catch {}
 
           if (profile) {
             setUserPlanTier(getEffectivePlanTier(profile))
@@ -733,11 +780,15 @@ export default function MobileChatPage() {
           saveLocalSenChatUser(synchedUser)
           setCurrentUser(synchedUser)
 
-          // Đảm bảo cặp khóa E2EE được bảo vệ an toàn trong Keystore
-          const existingKey = await retrieveIdentityPrivateKey('identity_e2ee', window)
-          if (!existingKey) {
-            const pair = generateIdentityKeyPair()
-            await storeIdentityPrivateKey('identity_e2ee', pair.privateKey, window)
+          // Đảm bảo cặp khóa E2EE được bảo vệ an toàn trong Keystore (không crash trên iOS Private Mode)
+          try {
+            const existingKey = await retrieveIdentityPrivateKey('identity_e2ee', window)
+            if (!existingKey) {
+              const pair = generateIdentityKeyPair()
+              await storeIdentityPrivateKey('identity_e2ee', pair.privateKey, window)
+            }
+          } catch (ksErr) {
+            console.warn('Cảnh báo Keystore trên trình duyệt di động:', ksErr)
           }
 
           // Tự động đăng ký thiết bị hiện tại lên chat_devices
@@ -763,13 +814,19 @@ export default function MobileChatPage() {
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP
-          router.replace('/new-idp?returnUrl=/m/chat')
+          router.replace('/new-idp?returnUrl=/chat')
           return
         }
       } catch (err) {
         console.warn('Lỗi đồng bộ danh tính người dùng:', err)
-        router.replace('/new-idp?returnUrl=/m/chat')
-        return
+        const cachedUser = getLocalSenChatUser()
+        if (cachedUser) {
+          resolvedAuthUserId = cachedUser.id
+          setCurrentUser(cachedUser)
+        } else {
+          router.replace('/new-idp?returnUrl=/chat')
+          return
+        }
       }
 
       // 4. Tải danh sách cuộc trò chuyện
@@ -795,7 +852,7 @@ export default function MobileChatPage() {
           conversationId: 'senai-welcome',
           senderId: 'senai-assistant',
           senderName: 'SenAI',
-          receiverId: authUser.id,
+          receiverId: resolvedAuthUserId || 'local_user',
           content: 'Chào mừng bạn đến với **Sen Chat Mobile**! Tất cả tin nhắn đều được mã hóa đầu cuối (E2EE Signal Protocol) và lưu an toàn trên máy.',
           type: 'text',
           createdAt: new Date().toISOString(),
@@ -2766,5 +2823,21 @@ export default function MobileChatPage() {
         }}
       />
     </div>
+  )
+}
+
+export default function MobileChatPage() {
+  return (
+    <MobileChatErrorBoundary>
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-blue-600 dark:text-sky-400 text-xs font-semibold">
+            Đang tải Sen Chat Mobile...
+          </div>
+        }
+      >
+        <MobileChatPageInner />
+      </Suspense>
+    </MobileChatErrorBoundary>
   )
 }
