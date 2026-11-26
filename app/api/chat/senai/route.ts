@@ -8,6 +8,10 @@ import {
   buildSecureSenAiChatPrompt,
   checkSenAiRateLimit,
   sanitizeAiResponse,
+  SENAI_GEMINI_MODEL,
+  callGeminiWithResilience,
+  classifyGeminiError,
+  trimConversationHistoryToBudget,
 } from '@/lib/senChatAi'
 
 export const dynamic = 'force-dynamic'
@@ -93,31 +97,40 @@ export async function POST(req: Request) {
       console.warn('Cảnh báo kiểm tra quota cơ sở dữ liệu:', dbErr?.message)
     }
 
-    // 4. Đóng gói Prompt an toàn: Chống Prompt Injection & Phân tách dữ liệu
+    // 4. Đóng gói Prompt an toàn: Chống Prompt Injection & Token Budget
+    const trimmedContext = trimConversationHistoryToBudget(
+      Array.isArray(contextMessages) ? contextMessages : [],
+      8000
+    )
     const securePrompt = buildSecureSenAiChatPrompt({
       query: consentValidation.cleanQuery,
-      contextMessages: Array.isArray(contextMessages) ? contextMessages : [],
+      contextMessages: trimmedContext,
     })
 
     const apiKey = process.env.GEMINI_API_KEY
     let rawReply = ''
+    const startedAtMs = Date.now()
 
     if (apiKey) {
       try {
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' })
-        const res = await model.generateContent(securePrompt.prompt)
-        rawReply = res.response.text()
-      } catch (err: any) {
-        console.warn('Lỗi gọi gemini-3.8-flash, thử gemini-3.5-flash-lite fallback:', err?.message)
-        try {
+        rawReply = await callGeminiWithResilience(async (_signal, modelId) => {
           const genAI = new GoogleGenerativeAI(apiKey)
-          const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
-          const res = await fallbackModel.generateContent(securePrompt.prompt)
-          rawReply = res.response.text()
-        } catch (fbErr: any) {
-          throw new Error(`Lỗi kết nối dịch vụ AI: ${fbErr?.message || err?.message}`)
-        }
+          const model = genAI.getGenerativeModel({ model: modelId })
+          const res = await model.generateContent(securePrompt.prompt)
+          return res.response.text()
+        })
+      } catch (err: any) {
+        const classified = classifyGeminiError(err)
+        console.warn('[SENAI_CHAT_TELEMETRY]', {
+          model: SENAI_GEMINI_MODEL,
+          status: classified.code,
+          label: classified.label,
+          latencyMs: Date.now() - startedAtMs,
+        })
+        return NextResponse.json(
+          { error: classified.userMessage, code: classified.label, model: SENAI_GEMINI_MODEL },
+          { status: classified.code >= 400 && classified.code < 600 ? classified.code : 502 }
+        )
       }
     } else {
       // Mock phản hồi trong môi trường dev hoặc khi chưa cấu hình API key

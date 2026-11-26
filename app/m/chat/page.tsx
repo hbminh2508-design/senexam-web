@@ -2512,6 +2512,7 @@ export default function MobileChatPage() {
           groupAvatar={isManagingGroup ? activeConversation?.avatarUrl || '' : ''}
           currentUserId={currentUser?.id || ''}
           currentUserEmail={currentUser?.email || ''}
+          userPlanTier={userPlanTier}
           isCreatingNew={!isManagingGroup}
           onGroupCreated={(convId, title) => {
             setShowMlsGroupModal(false)
@@ -2668,11 +2669,13 @@ export default function MobileChatPage() {
           initialCallId={activeCallId || undefined}
           conversationId={activeConversation?.id || incomingCall?.conversationId || selectedConvId || ''}
           partnerId={activeConversation?.partnerId || incomingCall?.callerId || selectedConvId || ''}
-          partnerName={activeConversation?.partnerName || incomingCall?.callerName || 'Bạn bè'}
+          partnerName={activeConversation?.partnerName || incomingCall?.groupName || incomingCall?.callerName || 'Bạn bè'}
           partnerAvatar={activeConversation?.partnerAvatar || incomingCall?.callerAvatar}
           currentUserId={currentUser.id}
           currentUserName={currentUser.name}
           currentUserAvatar={currentUser.avatar}
+          isGroup={Boolean(activeConversation?.isGroup || incomingCall?.isGroup)}
+          userRole={(activeConversation?.role as 'owner' | 'admin' | 'member') || 'member'}
           onClose={() => {
             setActiveCallMode('none')
             setActiveCallIsIncoming(false)

@@ -128,15 +128,15 @@ test('Sen Chat P11: Component ChatCallModal đầy đủ WebRTC MediaStream, Sig
   assert.ok(callModalCode.includes('toggleMic'), 'Phải có chức năng bật/tắt micro')
   assert.ok(callModalCode.includes('toggleCamera'), 'Phải có chức năng bật/tắt camera')
   assert.ok(callModalCode.includes('switchCameraFacing'), 'Phải có chức năng đổi camera trước/sau')
-  assert.ok(callModalCode.includes('handleEndCall'), 'Phải có chức năng kết thúc cuộc gọi')
+  assert.ok(callModalCode.includes('handleEndCall') || callModalCode.includes('handleLeaveOrEndCall'), 'Phải có chức năng kết thúc cuộc gọi')
 
   // Badge bảo mật E2EE & Timer
-  assert.ok(callModalCode.includes('Mã hóa WebRTC E2EE P2P'), 'Phải có badge bảo mật WebRTC E2EE P2P')
+  assert.ok(callModalCode.includes('Mã hóa WebRTC E2EE P2P') || callModalCode.includes('transportInfo.badgeText'), 'Phải có badge bảo mật WebRTC E2EE P2P')
   assert.ok(callModalCode.includes('formatDuration'), 'Phải có bộ đếm thời gian cuộc gọi')
 
   // Signaling Realtime subscription & clean cleanup
   assert.ok(callModalCode.includes('.subscribe()'), 'Phải gọi channel.subscribe() để kích hoạt nhận broadcast signaling')
-  assert.ok(callModalCode.includes('supabase.removeChannel(channel)'), 'Phải dọn dẹp channel qua removeChannel')
+  assert.ok(callModalCode.includes('supabase.removeChannel('), 'Phải dọn dẹp channel qua removeChannel')
   assert.ok(callModalCode.includes('iceCandidateQueueRef'), 'Phải có hàng đợi candidate để tránh race condition trước khi có remoteDescription')
 
   // Hộp thoại chuông cuộc gọi đến

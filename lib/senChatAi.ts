@@ -52,4 +52,10 @@ export {
   hasMathOrTikz,
   extractTikzBlocks,
   formatSenAiGroupNotice,
+  SENAI_GEMINI_MODEL,
+  resetSenAiCircuitBreakerForTesting,
+  getSenAiCircuitStatus,
+  classifyGeminiError,
+  callGeminiWithResilience,
+  trimConversationHistoryToBudget,
 } from './senChatAi.mjs'

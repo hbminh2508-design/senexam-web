@@ -29,7 +29,7 @@ import {
   findMemberLeafIndex,
   serializeMls,
 } from '@/lib/senChatMlsProtocol'
-import { formatBytes } from '@/lib/chatLimits'
+import { formatBytes, canUserCreateGroup, validateGroupMemberLimit } from '@/lib/chatLimits'
 import { deleteLocalConversation, clearAllLocalMessages } from '@/lib/senChatStorage'
 import { broadcastConversationRemoved } from '@/lib/senChatDeviceRelay'
 
@@ -51,6 +51,7 @@ interface ChatMlsGroupModalProps {
   groupAvatar?: string
   currentUserId: string
   currentUserEmail: string
+  userPlanTier?: string | null
   isCreatingNew?: boolean
   onGroupCreated?: (convId: string, title: string) => void
   onGroupUpdated?: () => void
@@ -65,6 +66,7 @@ export default function ChatMlsGroupModal({
   groupAvatar = '',
   currentUserId,
   currentUserEmail,
+  userPlanTier,
   isCreatingNew = false,
   onGroupCreated,
   onGroupUpdated,
@@ -171,6 +173,18 @@ export default function ChatMlsGroupModal({
 
   // 1. Tạo nhóm mới với MLS RFC 9420
   const handleCreateGroup = async () => {
+    if (userPlanTier !== undefined) {
+      const createCheck = canUserCreateGroup(userPlanTier)
+      if (!createCheck.allowed) {
+        setErrorMsg(createCheck.error || 'Tài khoản Miễn phí không thể tạo nhóm mới.')
+        return
+      }
+      const limitCheck = validateGroupMemberLimit(userPlanTier, 1, memberEmails.length)
+      if (!limitCheck.allowed) {
+        setErrorMsg(limitCheck.error || 'Số lượng thành viên vượt quá giới hạn gói của bạn.')
+        return
+      }
+    }
     if (!newTitle.trim()) {
       setErrorMsg('Vui lòng nhập tên nhóm')
       return

@@ -59,12 +59,12 @@ function setupMockBrowser() {
 // ==============================================================================
 // 1. KIỂM THỬ PHIÊN BẢN 1.0.4 VÀ CHANGELOG
 // ==============================================================================
-test('Sen Chat v1.0.4: Phiên bản hiện tại là 1.0.4 và changelog ghi log đầy đủ', () => {
-  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.0.4')
-  const v104 = SEN_CHAT_CHANGELOG[0]
+test('Sen Chat v1.0.4: Phiên bản hiện tại >= 1.0.4 và changelog ghi log đầy đủ', () => {
+  assert.ok(SEN_CHAT_CURRENT_VERSION >= '1.0.4')
+  const v104 = SEN_CHAT_CHANGELOG.find((c) => c.version === '1.0.4')
+  assert.ok(v104)
   assert.equal(v104.version, '1.0.4')
   assert.equal(v104.releaseDate, '25/11/2026')
-  assert.equal(v104.isLatest, true)
   assert.ok(v104.changes.some((c) => c.includes('đồng bộ nhóm')))
   assert.ok(v104.changes.some((c) => c.includes('Reply') || c.includes('Trả lời')))
   assert.ok(v104.changes.some((c) => c.includes('SenExam')))

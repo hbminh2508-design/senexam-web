@@ -123,6 +123,91 @@ export function setDeviceNodeName(name: string): void {
  * - Hợp nhất trường trạng thái (vd: decryptedUrl, reactions)
  * - Sắp xếp theo thứ tự thời gian tăng dần
  */
+export interface ReactionEventEntry {
+  emoji: string
+  userId: string
+  action: 'add' | 'remove'
+  updatedAt: number
+}
+
+/**
+ * Hợp nhất Reaction đa thiết bị hỗ trợ cả THÊM và XÓA theo timestamp (versioned LWW per user+emoji).
+ * Không bao giờ làm xuất hiện lại reaction đã xóa trên thiết bị khác.
+ */
+export function mergeMessageReactions(curr: any, inc: any): {
+  reactions: Record<string, string[]>
+  reactionEvents: ReactionEventEntry[]
+} {
+  const eventMap = new Map<string, ReactionEventEntry>()
+
+  const ingestEvents = (events: any[]) => {
+    if (!Array.isArray(events)) return
+    for (const ev of events) {
+      if (!ev || !ev.emoji || !ev.userId) continue
+      const key = `${ev.emoji}::${ev.userId}`
+      const prev = eventMap.get(key)
+      const ts = Number(ev.updatedAt) || 0
+      if (!prev || ts >= prev.updatedAt) {
+        eventMap.set(key, {
+          emoji: ev.emoji,
+          userId: ev.userId,
+          action: ev.action === 'remove' ? 'remove' : 'add',
+          updatedAt: ts,
+        })
+      }
+    }
+  }
+
+  // Fallback chuyển đổi reactions cũ chưa có reactionEvents sang sự kiện 'add'
+  const ingestLegacyReactions = (reactionsObj: Record<string, string[]> | undefined, fallbackTs: number) => {
+    if (!reactionsObj || typeof reactionsObj !== 'object') return
+    for (const [emoji, users] of Object.entries(reactionsObj)) {
+      if (!Array.isArray(users)) continue
+      for (const uid of users) {
+        const key = `${emoji}::${uid}`
+        if (!eventMap.has(key)) {
+          eventMap.set(key, { emoji, userId: uid, action: 'add', updatedAt: fallbackTs })
+        }
+      }
+    }
+  }
+
+  const currTs = Number(curr?.reactionsUpdatedAt || new Date(curr?.createdAt || 0).getTime()) || 0
+  const incTs = Number(inc?.reactionsUpdatedAt || new Date(inc?.createdAt || 0).getTime()) || 0
+
+  ingestEvents(curr?.reactionEvents)
+  ingestEvents(inc?.reactionEvents)
+  ingestLegacyReactions(curr?.reactions, currTs)
+  ingestLegacyReactions(inc?.reactions, incTs)
+
+  const reactions: Record<string, string[]> = {}
+  const reactionEvents: ReactionEventEntry[] = []
+  for (const ev of eventMap.values()) {
+    reactionEvents.push(ev)
+    if (ev.action === 'add') {
+      if (!reactions[ev.emoji]) reactions[ev.emoji] = []
+      if (!reactions[ev.emoji].includes(ev.userId)) {
+        reactions[ev.emoji].push(ev.userId)
+      }
+    }
+  }
+
+  return { reactions, reactionEvents }
+}
+
+export function getDeltaSyncCursor(userId: string): number {
+  if (typeof localStorage === 'undefined' || !userId) return 0
+  return Number(localStorage.getItem(`senchat_delta_cursor_${userId}`) || 0)
+}
+
+export function setDeltaSyncCursor(userId: string, cursorMs: number): void {
+  if (typeof localStorage === 'undefined' || !userId) return
+  const prev = getDeltaSyncCursor(userId)
+  if (cursorMs > prev) {
+    localStorage.setItem(`senchat_delta_cursor_${userId}`, String(cursorMs))
+  }
+}
+
 export function reconcileMessages<T extends { id: string; createdAt?: string; status?: string }>(
   existing: T[],
   incoming: T[]
@@ -155,11 +240,15 @@ export function reconcileMessages<T extends { id: string; createdAt?: string; st
           const currScore = statusOrder[curr.status || ''] || 0
           const incScore = statusOrder[inc.status || ''] || 0
           const resolvedStatus = incScore >= currScore ? (inc.status || curr.status) : curr.status
+          const mergedReactions = mergeMessageReactions(curr, inc)
 
           map.set(msg.id, {
             ...inc,
             ...curr,
             status: resolvedStatus,
+            reactions: mergedReactions.reactions,
+            reactionEvents: mergedReactions.reactionEvents,
+            reactionsUpdatedAt: Math.max(Number(curr.reactionsUpdatedAt || 0), Number(inc.reactionsUpdatedAt || 0)) || undefined,
             decryptedUrl: curr.decryptedUrl || inc.decryptedUrl,
             waveform: curr.waveform || inc.waveform,
             transcription: curr.transcription || inc.transcription,

@@ -81,9 +81,9 @@ function applyChatSecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set('X-Frame-Options', 'DENY')
   res.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.googleapis.com https://oauth2.googleapis.com; media-src 'self' blob: data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.googleusercontent.com https://drive.google.com https://*.supabase.co https://*.senexam.me; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.senexam.me wss://*.senexam.me https://*.livekit.cloud wss://*.livekit.cloud https://www.googleapis.com https://oauth2.googleapis.com; media-src 'self' blob: data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
   )
-  res.headers.set('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()')
+  res.headers.set('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=()')
   return res
 }
 

@@ -2655,6 +2655,7 @@ export default function SenChatPage() {
         onClose={() => setShowCreateGroupModal(false)}
         currentUserId={currentUser?.id || ''}
         currentUserEmail={currentUser?.email || ''}
+        userPlanTier={userPlanTier}
         isCreatingNew={true}
         onGroupCreated={(convId, title) => {
           saveLocalConversation({
@@ -2792,11 +2793,13 @@ export default function SenChatPage() {
           initialCallId={activeCallId || undefined}
           conversationId={activeConv?.id || incomingCall?.conversationId || selectedConvId || ''}
           partnerId={activeConv?.partnerId || incomingCall?.callerId || selectedConvId || ''}
-          partnerName={activeConv?.partnerName || incomingCall?.callerName || 'Bạn bè'}
+          partnerName={activeConv?.partnerName || incomingCall?.groupName || incomingCall?.callerName || 'Bạn bè'}
           partnerAvatar={activeConv?.partnerAvatar || incomingCall?.callerAvatar}
           currentUserId={currentUser.id}
           currentUserName={currentUser.name}
           currentUserAvatar={currentUser.avatar}
+          isGroup={Boolean(activeConv?.isGroup || incomingCall?.isGroup)}
+          userRole={(activeConv?.role as 'owner' | 'admin' | 'member') || 'member'}
           onClose={() => {
             setActiveCallMode('none')
             setActiveCallIsIncoming(false)

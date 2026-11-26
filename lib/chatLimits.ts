@@ -219,3 +219,246 @@ export function isRestrictedInlineFile(fileName: string, mimeType?: string): boo
 
   return false
 }
+
+// ==============================================================================
+// SINGLE SOURCE OF TRUTH: QUYỀN LỢI NHÓM & CUỘC GỌI NHÓM SEN CHAT (v1.1.0)
+// ==============================================================================
+
+export interface ChatPlanEntitlement {
+  tier: ChatPlanTier
+  displayName: string
+  canCreateGroup: boolean
+  maxGroupMembers: number
+  maxCallParticipants: number | null
+  maxCallDurationSeconds: number | null
+  maxFileSizeBytes: number
+}
+
+export const CHAT_PLAN_ENTITLEMENTS: Record<ChatPlanTier, ChatPlanEntitlement> = {
+  free: {
+    tier: 'free',
+    displayName: 'Miễn phí',
+    canCreateGroup: false,
+    maxGroupMembers: 0,
+    maxCallParticipants: null, // Theo gói chủ nhóm
+    maxCallDurationSeconds: null, // Theo gói chủ nhóm
+    maxFileSizeBytes: CHAT_FILE_LIMITS.free,
+  },
+  lite: {
+    tier: 'lite',
+    displayName: 'Lite',
+    canCreateGroup: true,
+    maxGroupMembers: 5,
+    maxCallParticipants: 5,
+    maxCallDurationSeconds: 60 * 60, // 1 giờ
+    maxFileSizeBytes: CHAT_FILE_LIMITS.lite,
+  },
+  vip: {
+    tier: 'vip',
+    displayName: 'VIP',
+    canCreateGroup: true,
+    maxGroupMembers: 20,
+    maxCallParticipants: 20,
+    maxCallDurationSeconds: 5 * 60 * 60, // 5 giờ
+    maxFileSizeBytes: CHAT_FILE_LIMITS.vip,
+  },
+  premium: {
+    tier: 'premium',
+    displayName: 'Premium',
+    canCreateGroup: true,
+    maxGroupMembers: 50,
+    maxCallParticipants: 50,
+    maxCallDurationSeconds: null, // Không giới hạn
+    maxFileSizeBytes: CHAT_FILE_LIMITS.premium,
+  },
+  premium_plus: {
+    tier: 'premium_plus',
+    displayName: 'Premium+',
+    canCreateGroup: true,
+    maxGroupMembers: 100,
+    maxCallParticipants: 100,
+    maxCallDurationSeconds: null, // Không giới hạn
+    maxFileSizeBytes: CHAT_FILE_LIMITS.premium_plus,
+  },
+  sen_one_lite: {
+    tier: 'sen_one_lite',
+    displayName: 'One Lite',
+    canCreateGroup: true,
+    maxGroupMembers: 30,
+    maxCallParticipants: 30,
+    maxCallDurationSeconds: null, // Không giới hạn
+    maxFileSizeBytes: CHAT_FILE_LIMITS.sen_one_lite,
+  },
+  sen_one: {
+    tier: 'sen_one',
+    displayName: 'One',
+    canCreateGroup: true,
+    maxGroupMembers: 200,
+    maxCallParticipants: 200,
+    maxCallDurationSeconds: null, // Không giới hạn
+    maxFileSizeBytes: CHAT_FILE_LIMITS.sen_one,
+  },
+}
+
+export function normalizeChatPlanTier(tier: string | null | undefined): ChatPlanTier {
+  if (!tier) return 'free'
+  const raw = String(tier).trim().toLowerCase()
+  if (raw === 'premium+' || raw === 'premium_plus') return 'premium_plus'
+  if (raw === 'one_lite' || raw === 'sen_one_lite') return 'sen_one_lite'
+  if (raw === 'one' || raw === 'sen_one') return 'sen_one'
+  if (raw === 'lite' || raw === 'vip' || raw === 'premium' || raw === 'free') {
+    return raw as ChatPlanTier
+  }
+  return 'free'
+}
+
+export function getPlanEntitlements(tier: string | null | undefined): ChatPlanEntitlement {
+  const normalized = normalizeChatPlanTier(tier)
+  return CHAT_PLAN_ENTITLEMENTS[normalized]
+}
+
+export function canUserCreateGroup(tier: string | null | undefined): {
+  allowed: boolean
+  entitlement: ChatPlanEntitlement
+  error?: string
+} {
+  const entitlement = getPlanEntitlements(tier)
+  if (entitlement.canCreateGroup) {
+    return { allowed: true, entitlement }
+  }
+  return {
+    allowed: false,
+    entitlement,
+    error:
+      'Tài khoản Miễn phí không thể tạo nhóm chat mới. Bạn vẫn có thể tham gia và gọi nhóm của bạn bè trả phí, hoặc nâng cấp từ gói Lite (tối đa 5 thành viên) trở lên để tạo nhóm.',
+  }
+}
+
+export function validateGroupMemberLimit(
+  ownerTier: string | null | undefined,
+  currentMemberCount: number,
+  addingCount: number = 1
+): {
+  allowed: boolean
+  maxMembers: number
+  currentCount: number
+  projectedCount: number
+  ownerTier: ChatPlanTier
+  error?: string
+} {
+  const ent = getPlanEntitlements(ownerTier)
+  const projectedCount = Math.max(0, currentMemberCount) + Math.max(0, addingCount)
+
+  if (!ent.canCreateGroup || ent.maxGroupMembers <= 0) {
+    return {
+      allowed: false,
+      maxMembers: ent.maxGroupMembers,
+      currentCount: currentMemberCount,
+      projectedCount,
+      ownerTier: ent.tier,
+      error:
+        'Chủ sở hữu nhóm hiện đang ở gói Miễn phí nên không thể thêm thành viên mới. Nhóm và tin nhắn cũ vẫn được giữ nguyên; vui lòng nâng cấp gói hoặc chuyển quyền sở hữu hợp lệ.',
+    }
+  }
+
+  if (projectedCount > ent.maxGroupMembers) {
+    return {
+      allowed: false,
+      maxMembers: ent.maxGroupMembers,
+      currentCount: currentMemberCount,
+      projectedCount,
+      ownerTier: ent.tier,
+      error: `Nhóm của gói ${ent.displayName} chỉ hỗ trợ tối đa ${ent.maxGroupMembers} thành viên (bao gồm cả chủ nhóm). Hiện tại có ${currentMemberCount} thành viên.`,
+    }
+  }
+
+  return {
+    allowed: true,
+    maxMembers: ent.maxGroupMembers,
+    currentCount: currentMemberCount,
+    projectedCount,
+    ownerTier: ent.tier,
+  }
+}
+
+export function validateGroupCallStartOrJoin(
+  ownerTier: string | null | undefined,
+  currentActiveParticipants: number,
+  options: { isJoiningExisting?: boolean; startedAtMs?: number | null; nowMs?: number } = {}
+): {
+  allowed: boolean
+  maxParticipants: number
+  maxDurationSeconds: number | null
+  remainingSeconds: number | null
+  ownerTier: ChatPlanTier
+  error?: string
+} {
+  const ent = getPlanEntitlements(ownerTier)
+  const nowMs = options.nowMs ?? Date.now()
+
+  if (!ent.canCreateGroup || !ent.maxCallParticipants) {
+    return {
+      allowed: false,
+      maxParticipants: 0,
+      maxDurationSeconds: null,
+      remainingSeconds: 0,
+      ownerTier: ent.tier,
+      error:
+        'Chủ nhóm hiện đang sử dụng gói Miễn phí nên bị hạn chế khởi tạo phiên gọi nhóm mới. Vui lòng nâng cấp gói hoặc chuyển quyền chủ nhóm.',
+    }
+  }
+
+  if (ent.maxCallDurationSeconds !== null && options.startedAtMs) {
+    const elapsedSec = Math.max(0, Math.floor((nowMs - options.startedAtMs) / 1000))
+    const remainingSec = ent.maxCallDurationSeconds - elapsedSec
+    if (remainingSec <= 0) {
+      return {
+        allowed: false,
+        maxParticipants: ent.maxCallParticipants,
+        maxDurationSeconds: ent.maxCallDurationSeconds,
+        remainingSeconds: 0,
+        ownerTier: ent.tier,
+        error: `Phiên gọi nhóm của gói ${ent.displayName} đã hết thời lượng tối đa (${Math.round(
+          ent.maxCallDurationSeconds / 3600
+        )} giờ).`,
+      }
+    }
+  }
+
+  if (currentActiveParticipants >= ent.maxCallParticipants) {
+    return {
+      allowed: false,
+      maxParticipants: ent.maxCallParticipants,
+      maxDurationSeconds: ent.maxCallDurationSeconds,
+      remainingSeconds:
+        ent.maxCallDurationSeconds !== null && options.startedAtMs
+          ? Math.max(0, ent.maxCallDurationSeconds - Math.floor((nowMs - options.startedAtMs) / 1000))
+          : ent.maxCallDurationSeconds,
+      ownerTier: ent.tier,
+      error: `Cuộc gọi nhóm đã đạt giới hạn tối đa ${ent.maxCallParticipants} người tham gia đồng thời của gói ${ent.displayName}.`,
+    }
+  }
+
+  const remainingSeconds =
+    ent.maxCallDurationSeconds !== null
+      ? options.startedAtMs
+        ? Math.max(0, ent.maxCallDurationSeconds - Math.floor((nowMs - options.startedAtMs) / 1000))
+        : ent.maxCallDurationSeconds
+      : null
+
+  return {
+    allowed: true,
+    maxParticipants: ent.maxCallParticipants,
+    maxDurationSeconds: ent.maxCallDurationSeconds,
+    remainingSeconds,
+    ownerTier: ent.tier,
+  }
+}
+
+export function getCallDurationWarningLevel(remainingSeconds: number | null): 15 | 5 | 1 | null {
+  if (remainingSeconds === null || remainingSeconds <= 0) return null
+  if (remainingSeconds <= 60) return 1
+  if (remainingSeconds <= 300) return 5
+  if (remainingSeconds <= 900) return 15
+  return null
+}

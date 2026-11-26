@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getUserFromRequest, getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getEffectivePlanTier } from '@/lib/vipMembership'
+import { validateGroupMemberLimit } from '@/lib/chatLimits'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +92,37 @@ export async function POST(req: Request) {
     } = body
 
     const db = getSupabaseAdmin()
+
+    // Kiểm tra hạn mức thành viên tối đa theo gói của CHỦ SỞ HỮU nhóm (bao gồm cả chủ nhóm)
+    const { data: currentMembers } = await db
+      .from('chat_members')
+      .select('user_id, role')
+      .eq('conversation_id', conversationId)
+
+    const memberList = currentMembers || []
+    const ownerRecord = memberList.find((m: any) => m.role === 'owner')
+    const ownerUserId = ownerRecord?.user_id || user.id
+
+    const { data: ownerProfile } = await db
+      .from('profiles')
+      .select('vip_expires_at, plan_tier')
+      .eq('id', ownerUserId)
+      .maybeSingle()
+
+    const ownerTier = getEffectivePlanTier(ownerProfile) || 'free'
+    const limitCheck = validateGroupMemberLimit(ownerTier, memberList.length, 1)
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: limitCheck.error,
+          code: 'GROUP_MEMBER_LIMIT_EXCEEDED',
+          maxMembers: limitCheck.maxMembers,
+          currentCount: limitCheck.currentCount,
+          ownerTier: limitCheck.ownerTier,
+        },
+        { status: 403 }
+      )
+    }
 
     const { data, error } = await db.rpc('add_mls_group_member', {
       p_conversation_id: conversationId,

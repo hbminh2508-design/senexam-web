@@ -203,7 +203,7 @@ test('Sen Chat v1.0.4 UX: Bong bóng chat isMe & giao diện chính dùng tông 
     )
   }
 
-  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.0.4')
+  assert.ok(SEN_CHAT_CURRENT_VERSION >= '1.0.4')
   const v104 = SEN_CHAT_CHANGELOG.find((c) => c.version === '1.0.4')
   assert.ok(v104)
   assert.ok(v104.changes.some((c) => c.includes('rời được khỏi nhóm')))

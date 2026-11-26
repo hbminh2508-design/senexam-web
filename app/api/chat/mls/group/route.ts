@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getUserFromRequest, getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { getEffectivePlanTier } from '@/lib/vipMembership'
+import { canUserCreateGroup, validateGroupMemberLimit } from '@/lib/chatLimits'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,6 +93,39 @@ export async function POST(req: Request) {
 
     const db = getSupabaseAdmin()
 
+    // Kiểm tra quyền tạo nhóm và giới hạn thành viên theo gói dịch vụ (Server-side enforcement)
+    const { data: callerProfile } = await db
+      .from('profiles')
+      .select('vip_expires_at, plan_tier')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const effectiveTier = getEffectivePlanTier(callerProfile) || 'free'
+    const createCheck = canUserCreateGroup(effectiveTier)
+    if (!createCheck.allowed) {
+      return NextResponse.json(
+        { error: createCheck.error, code: 'PLAN_UPGRADE_REQUIRED', currentTier: effectiveTier },
+        { status: 403 }
+      )
+    }
+
+    const uniqueEmails = Array.isArray(memberEmails)
+      ? Array.from(new Set(memberEmails.map((e: string) => String(e).trim().toLowerCase()).filter(Boolean)))
+      : []
+
+    // Tổng số thành viên bao gồm cả chủ sở hữu nhóm (+1)
+    const memberLimitCheck = validateGroupMemberLimit(effectiveTier, 1, uniqueEmails.length)
+    if (!memberLimitCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: memberLimitCheck.error,
+          code: 'GROUP_MEMBER_LIMIT_EXCEEDED',
+          maxMembers: memberLimitCheck.maxMembers,
+        },
+        { status: 403 }
+      )
+    }
+
     // Gọi RPC nguyên tử create_mls_group
     const { data, error } = await db.rpc('create_mls_group', {
       p_title: title.trim(),
@@ -98,7 +133,7 @@ export async function POST(req: Request) {
       p_mls_group_id: mlsGroupId,
       p_initial_commit: initialCommit,
       p_ratchet_tree: ratchetTree,
-      p_member_emails: memberEmails,
+      p_member_emails: uniqueEmails,
       p_creator_id: user.id,
     })
 
