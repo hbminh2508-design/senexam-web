@@ -20,6 +20,8 @@ type Delivery = {
 }
 const devices = new Map<string, Promise<RegisteredDevice>>()
 const outbox = new Map<string, Promise<void>>()
+const draining = new Set<string>()
+class RecipientDevicePending extends Error {}
 export function registerInboxDevice(userId: string) {
   const current = devices.get(userId)
   if (current) return current
@@ -50,7 +52,7 @@ function messageContext(sender: string, message: string, group: string | null | 
 export async function sendInboxMessage(message: SenChatMessage, conversation: SenChatConversation) {
   const address = conversation.isGroup ? { group: conversation.id } : { recipient: conversation.partnerId }
   const { devices: targets } = await chatRequest<{ devices: PublicDevice[] }>('inbox', { action: 'keys', ...address })
-  if (!targets.length) throw new Error('Người nhận cần mở Sen Chat một lần để kích hoạt thiết bị nhận tin.')
+  if (!targets.length) throw new RecipientDevicePending()
   const context = messageContext(message.senderId, message.id, address.group)
   const payload = { ...message, content: await compressChatMessage(message.content) }
   const envelope = await sealInboxPayload(JSON.stringify(payload), context, targets)
@@ -65,23 +67,39 @@ export function deliverLocalMessage(message: SenChatMessage, conversation: SenCh
     saveLocalMessage(conversation.id, { ...message, status })
     window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: conversation.id }))
   }
-  save('sending')
+  if (message.status !== 'waiting_for_device') save('sending')
   const delivery = sendInboxMessage(message, conversation).then(
     () => save('sent'),
-    (error) => { save(navigator.onLine ? 'failed' : 'sending'); throw error },
+    (error) => {
+      if (error instanceof RecipientDevicePending) {
+        if (message.status !== 'waiting_for_device') save('waiting_for_device')
+        return
+      }
+      save(navigator.onLine ? 'failed' : 'sending')
+      throw error
+    },
   ).finally(() => outbox.delete(id))
   outbox.set(id, delivery)
   return delivery
 }
 
 export async function resumeChatOutbox(userId: string) {
-  if (!navigator.onLine) return
-  for (const conversation of getLocalConversations()) {
-    if (!conversation.isGroup && isUserBlocked(conversation.partnerId)) continue
-    const messages = getLocalMessages(conversation.id).filter((message) =>
-      message.senderId === userId && message.status === 'sending' && !message.isLocalOnly,
-    )
-    for (const message of messages) await deliverLocalMessage(message, conversation).catch(() => {})
+  if (!navigator.onLine || draining.has(userId)) return
+  draining.add(userId)
+  try {
+    for (const conversation of getLocalConversations()) {
+      if (!conversation.isGroup && isUserBlocked(conversation.partnerId)) continue
+      const messages = getLocalMessages(conversation.id).filter((message) =>
+        message.senderId === userId && ['sending', 'waiting_for_device'].includes(message.status) && !message.isLocalOnly,
+      )
+      for (const message of messages) {
+        if ((await supabase.auth.getSession()).data.session?.user.id !== userId) return
+        await deliverLocalMessage(message, conversation).catch(() => {})
+        if (getLocalMessages(conversation.id).find((item) => item.id === message.id)?.status === 'waiting_for_device') break
+      }
+    }
+  } finally {
+    draining.delete(userId)
   }
 }
 

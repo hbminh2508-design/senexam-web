@@ -42,7 +42,7 @@ export interface SenChatMessage {
   transcriptionLanguage?: string
   sttProvider?: 'device' | 'server'
   createdAt: string
-  status: 'sending' | 'sent' | 'received' | 'seen' | 'failed'
+  status: 'sending' | 'waiting_for_device' | 'sent' | 'received' | 'seen' | 'failed'
   missedCall?: 'voice' | 'video'
   isLocalOnly?: boolean
   isSenAi?: boolean

@@ -673,7 +673,8 @@ export default function SenChatPage() {
 
   // Tự động cuộn xuống cuối khi có tin nhắn mới
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const list = messagesEndRef.current?.parentElement
+    if (list) list.scrollTop = list.scrollHeight
   }, [messages])
 
   useEffect(() => {
@@ -1131,7 +1132,7 @@ export default function SenChatPage() {
 
   return (
     <div
-      className={`flex h-screen w-screen overflow-hidden font-sans antialiased transition-colors duration-200 ${
+      className={`flex h-dvh w-full min-w-0 shrink-0 overflow-hidden pb-[env(safe-area-inset-bottom)] pr-[env(safe-area-inset-right)] font-sans antialiased transition-colors duration-200 ${
         isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
       }`}
     >
@@ -1926,7 +1927,9 @@ export default function SenChatPage() {
 
                                 {isMe && (
                                   <span>
-                                    {msg.status === 'failed' ? (
+                                    {msg.status === 'waiting_for_device' ? (
+                                      <span>Chờ người nhận mở Sen Chat</span>
+                                    ) : msg.status === 'failed' ? (
                                       <button type="button" className="font-semibold underline" title="Gửi thất bại" onClick={() => { if (activeConv) void deliverLocalMessage(msg, activeConv).catch(() => {}) }}>Thử lại</button>
                                     ) : msg.status === 'sending' ? (
                                       <Clock className="h-3 w-3" />
@@ -2035,7 +2038,9 @@ export default function SenChatPage() {
 
                               {isMe && (
                                 <span>
-                                  {msg.status === 'failed' ? (
+                                  {msg.status === 'waiting_for_device' ? (
+                                      <span>Chờ người nhận mở Sen Chat</span>
+                                    ) : msg.status === 'failed' ? (
                                       <button type="button" className="font-semibold underline" title="Gửi thất bại" onClick={() => { if (activeConv) void deliverLocalMessage(msg, activeConv).catch(() => {}) }}>Thử lại</button>
                                     ) : msg.status === 'sending' ? (
                                     <Clock className="h-3 w-3" />

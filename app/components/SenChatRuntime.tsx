@@ -144,9 +144,9 @@ export default function SenChatRuntime() {
       })
     const sync = () => { syncCalls(); syncInbox() }
     const fallback = setInterval(() => { if (!realtimeReady) sync() }, 4500)
-    const reconcile = setInterval(sync, 30000)
-    window.addEventListener('focus', sync)
     const online = () => { sync(); void resumeChatOutbox(userId) }
+    const reconcile = setInterval(online, 30000)
+    window.addEventListener('focus', online)
     window.addEventListener('online', online)
     window.addEventListener('sen-chat-refresh-calls', syncCalls)
     online()
@@ -155,7 +155,7 @@ export default function SenChatRuntime() {
       clearInterval(fallback)
       clearInterval(reconcile)
       tabs?.close()
-      window.removeEventListener('focus', sync)
+      window.removeEventListener('focus', online)
       window.removeEventListener('online', online)
       window.removeEventListener('sen-chat-refresh-calls', syncCalls)
       void supabase.removeChannel(channel)

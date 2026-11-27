@@ -2035,7 +2035,9 @@ function MobileChatPageInner() {
                     </span>
                     {isMe && (
                       <span>
-                        {msg.status === 'failed' ? (
+                        {msg.status === 'waiting_for_device' ? (
+                                      <span>Chờ người nhận mở Sen Chat</span>
+                                    ) : msg.status === 'failed' ? (
                                       <button type="button" className="font-semibold underline" title="Gửi thất bại" onClick={() => { if (activeConversation) void deliverLocalMessage(msg, activeConversation).catch(() => {}) }}>Thử lại</button>
                                     ) : msg.status === 'sending' ? (
                           <Clock className="h-2.5 w-2.5 animate-spin text-amber-500" />

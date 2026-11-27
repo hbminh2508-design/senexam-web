@@ -58,6 +58,7 @@ export default function SenChatQuickMessages({ userId }: { userId: string | null
           className={`my-1 max-w-[85%] break-words rounded-2xl px-3 py-2 ${message.senderId === userId ? 'self-end bg-sky-700 text-white' : 'self-start bg-slate-100 dark:bg-slate-800'}`}>
           {message.type === 'text' || message.type === 'system' ? message.content : 'Tệp đính kèm'}
           {message.senderId === userId && message.status === 'sending' && <span className="block text-xs opacity-80">Đang gửi</span>}
+          {message.senderId === userId && message.status === 'waiting_for_device' && <span className="block text-xs opacity-90">Chờ người nhận mở Sen Chat</span>}
           {message.senderId === userId && message.status === 'failed' &&
             <button type="button" className="block text-xs font-semibold underline" title="Gửi thất bại" onClick={() => {
               void deliverLocalMessage(message, selected).catch((reason) => setError(reason.message))
