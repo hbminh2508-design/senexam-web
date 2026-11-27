@@ -135,24 +135,27 @@ test('Sen Chat P11: Component ChatCallModal đầy đủ WebRTC MediaStream, Sig
   assert.ok(callModalCode.includes('formatDuration'), 'Phải có bộ đếm thời gian cuộc gọi')
 
   // Signaling Realtime subscription & clean cleanup
-  assert.ok(callModalCode.includes('.subscribe()'), 'Phải gọi channel.subscribe() để kích hoạt nhận broadcast signaling')
+  assert.ok(callModalCode.includes("status === 'SUBSCRIBED'"), 'Chờ kênh signaling sẵn sàng trước khi trả lời')
+  assert.ok(callModalCode.includes("signalChannel.current?.send(") && callModalCode.includes(".channel('sen-call:' + id"),
+    'Cả hai chiều SDP/ICE dùng cùng kênh riêng của phiên gọi')
   assert.ok(callModalCode.includes('supabase.removeChannel('), 'Phải dọn dẹp channel qua removeChannel')
   assert.ok(callModalCode.includes('iceCandidateQueueRef'), 'Phải có hàng đợi candidate để tránh race condition trước khi có remoteDescription')
 
   // Hộp thoại chuông cuộc gọi đến
   assert.ok(callModalCode.includes('ChatIncomingCallDialog'), 'Phải xuất khẩu component ChatIncomingCallDialog')
 
-  // Tích hợp vào app/chat/page.tsx
-  const desktopChatCode = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')
-  assert.ok(desktopChatCode.includes('ChatCallModal'), 'Desktop chat phải tích hợp ChatCallModal')
-  assert.ok(desktopChatCode.includes('ChatIncomingCallDialog'), 'Desktop chat phải tích hợp ChatIncomingCallDialog')
-  assert.ok(desktopChatCode.includes('call_request'), 'Desktop chat phải lắng nghe sự kiện call_request')
+  const runtime = fs.readFileSync(path.join(process.cwd(), 'app/components/SenChatRuntime.tsx'), 'utf8')
+  const layout = fs.readFileSync(path.join(process.cwd(), 'app/layout.tsx'), 'utf8')
+  assert.ok(layout.includes('<SenChatRuntime />'), 'Lời mời gọi phải hoạt động ngoài trang Chat')
+  assert.ok(runtime.includes('ChatIncomingCallDialog') && runtime.includes("event: 'call-change'"))
+  assert.ok(callModalCode.includes('await room.connect(') && callModalCode.includes('room.localParticipant.publishTrack('))
+  assert.ok(callModalCode.includes('<ChatWhiteboard callId={groupCallId.current}'))
 
-  // Tích hợp vào app/m/chat/page.tsx
+  const desktopChatCode = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')
+  assert.ok(desktopChatCode.includes("startChatCall(activeConv, 'voice')"))
+  assert.ok(desktopChatCode.includes("startChatCall(activeConv, 'video')"))
+
   const mobileChatCode = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
-  assert.ok(mobileChatCode.includes('ChatCallModal'), 'Mobile chat phải tích hợp ChatCallModal')
-  assert.ok(mobileChatCode.includes('ChatIncomingCallDialog'), 'Mobile chat phải tích hợp ChatIncomingCallDialog')
-  assert.ok(mobileChatCode.includes('call_request'), 'Mobile chat phải lắng nghe sự kiện call_request')
-  assert.ok(mobileChatCode.includes("setActiveCallMode('voice')"), 'Mobile chat phải có nút kích hoạt gọi thoại')
-  assert.ok(mobileChatCode.includes("setActiveCallMode('video')"), 'Mobile chat phải có nút kích hoạt gọi video')
+  assert.ok(mobileChatCode.includes("startChatCall(activeConversation, 'voice')"))
+  assert.ok(mobileChatCode.includes("startChatCall(activeConversation, 'video')"))
 })

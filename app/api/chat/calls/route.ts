@@ -1,8 +1,7 @@
 import crypto from 'crypto'
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
-import { getEffectivePlanTier } from '@/lib/vipMembership'
-import { validateGroupCallStartOrJoin, getPlanEntitlements } from '@/lib/chatLimits'
+import { getUserFromRequest } from '@/lib/supabaseAdmin'
+import { chatDb } from '@/lib/senChatAlertsServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,7 +82,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Thiếu conversationId' }, { status: 400 })
     }
 
-    const db = getSupabaseAdmin()
+    const db = chatDb()
 
     // Kiểm tra quyền thành viên
     const { data: member } = await db
@@ -97,7 +96,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Bạn không phải thành viên của cuộc hội thoại này' }, { status: 403 })
     }
 
-    const { data: session } = await db
+    const { data: session, error: sessionError } = await db
       .from('chat_call_sessions')
       .select('*')
       .eq('conversation_id', conversationId)
@@ -106,6 +105,7 @@ export async function GET(request: Request) {
       .limit(1)
       .maybeSingle()
 
+    if (sessionError) return NextResponse.json({ error: 'Máy chủ gọi nhóm chưa sẵn sàng' }, { status: 503 })
     if (!session) {
       return NextResponse.json({ success: true, activeCall: null })
     }
@@ -194,7 +194,7 @@ export async function POST(request: Request) {
       userName = 'Thành viên Sen Chat',
     } = body
 
-    const db = getSupabaseAdmin()
+    const db = chatDb()
 
     if (action === 'start_or_join') {
       if (!conversationId) {
@@ -226,6 +226,23 @@ export async function POST(request: Request) {
         )
       }
 
+      if (conv.type === 'group' && !createSfuAccessToken({
+        roomName: 'configuration-check', userId: user.id, userName, canPublish: false,
+      }).sfuConfigured) {
+        return NextResponse.json({
+          error: 'Máy chủ âm thanh và video nhóm chưa được cấu hình.', code: 'GROUP_MEDIA_UNAVAILABLE',
+        }, { status: 503 })
+      }
+
+      if (callId) {
+        const { data: expected } = await db.from('chat_call_sessions').select('id, expires_at')
+          .eq('id', callId).eq('conversation_id', conversationId)
+          .in('status', ['ringing', 'active', 'reconnecting']).maybeSingle()
+        if (!expected || (expected.expires_at && Date.parse(expected.expires_at) <= Date.now())) {
+          return NextResponse.json({ error: 'Cuộc gọi này đã kết thúc.' }, { status: 409 })
+        }
+      }
+
       // Gọi RPC nguyên tử create_or_join_group_call (nếu DB đã chạy migration 016)
       const { data: rpcData, error: rpcErr } = await db.rpc('create_or_join_group_call', {
         p_conversation_id: conversationId,
@@ -245,7 +262,7 @@ export async function POST(request: Request) {
         const sfu =
           conv.type === 'group'
             ? createSfuAccessToken({
-                roomName: rpcData.sfuRoomName,
+                roomName: `senchat-${rpcData.callId}`,
                 userId: user.id,
                 userName,
                 canPublish: true,
@@ -253,6 +270,12 @@ export async function POST(request: Request) {
               })
             : { token: null, sfuUrl: null, sfuConfigured: false }
 
+        if (callId && rpcData.callId !== callId) {
+          await db.rpc('leave_or_end_group_call', {
+            p_call_id: rpcData.callId, p_caller_id: user.id, p_end_for_all: false, p_reason: 'USER_LEFT',
+          })
+          return NextResponse.json({ error: 'Cuộc gọi ban đầu đã kết thúc.' }, { status: 409 })
+        }
         return NextResponse.json({
           success: true,
           ...rpcData,
@@ -263,69 +286,28 @@ export async function POST(request: Request) {
         })
       }
 
-      // Fallback logic khi migration chưa chạy trên môi trường dev: vẫn kiểm tra gói chủ nhóm nghiêm ngặt
-      const { data: members } = await db
-        .from('chat_members')
-        .select('user_id, role')
-        .eq('conversation_id', conversationId)
-
-      const owner = (members || []).find((m: any) => m.role === 'owner')
-      const ownerId = owner?.user_id || conv.created_by || user.id
-      const { data: ownerProfile } = await db
-        .from('profiles')
-        .select('vip_expires_at, plan_tier')
-        .eq('id', ownerId)
-        .maybeSingle()
-
-      const ownerTier = conv.type === 'group' ? getEffectivePlanTier(ownerProfile) || 'free' : 'vip'
-      const ent = getPlanEntitlements(ownerTier)
-
-      if (conv.type === 'group') {
-        const check = validateGroupCallStartOrJoin(ownerTier, 0)
-        if (!check.allowed) {
-          return NextResponse.json({ error: check.error, code: 'GROUP_OWNER_FREE_TIER' }, { status: 403 })
-        }
-      }
-
-      const roomName = `senchat-${conversationId.replace(/-/g, '')}`
-      const sfu =
-        conv.type === 'group'
-          ? createSfuAccessToken({
-              roomName,
-              userId: user.id,
-              userName,
-              canPublish: true,
-              ttlSeconds: ent.maxCallDurationSeconds || 3600 * 6,
-            })
-          : { token: null, sfuUrl: null, sfuConfigured: false }
-
-      return NextResponse.json({
-        success: true,
-        callId: callId || `call_${Date.now()}`,
-        sfuRoomName: roomName,
-        transportMode: conv.type === 'group' ? 'sfu' : 'p2p',
-        maxParticipants: conv.type === 'group' ? ent.maxCallParticipants : 2,
-        maxDurationSeconds: conv.type === 'group' ? ent.maxCallDurationSeconds : null,
-        ownerPlanTier: ownerTier,
-        sfuToken: sfu.token,
-        sfuUrl: sfu.sfuUrl,
-        sfuConfigured: sfu.sfuConfigured,
-      })
+      return NextResponse.json({ error: 'Máy chủ gọi nhóm chưa sẵn sàng.', code: 'GROUP_CALL_UNAVAILABLE' }, { status: 503 })
     }
 
     if (action === 'heartbeat') {
       if (!callId) return NextResponse.json({ error: 'Thiếu callId' }, { status: 400 })
+      const { data: participant } = await db.from('chat_call_participants').select('user_id')
+        .eq('call_id', callId).eq('user_id', user.id).eq('status', 'joined').maybeSingle()
+      if (!participant) return NextResponse.json({ ended: true }, { status: 403 })
       const nowIso = new Date().toISOString()
 
       const { data: session } = await db
         .from('chat_call_sessions')
-        .select('id, status, expires_at')
+        .select('id, status, expires_at, conversation_id')
         .eq('id', callId)
         .maybeSingle()
 
       if (!session || session.status === 'ended') {
         return NextResponse.json({ success: false, ended: true, endReason: 'CALL_ENDED' })
       }
+      const { data: membership } = await db.from('chat_members').select('user_id')
+        .eq('conversation_id', session.conversation_id).eq('user_id', user.id).maybeSingle()
+      if (!membership) return NextResponse.json({ success: false, ended: true, endReason: 'NOT_A_MEMBER' })
 
       if (session.expires_at && new Date(session.expires_at).getTime() <= Date.now()) {
         await db

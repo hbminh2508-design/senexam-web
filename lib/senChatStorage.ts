@@ -26,13 +26,14 @@ export interface SenChatMessage {
   senderName: string
   receiverId: string
   content: string
-  type: 'text' | 'image' | 'file' | 'audio' | 'like' | 'system'
+  type: 'text' | 'image' | 'file' | 'audio' | 'video' | 'like' | 'system'
   attachmentUrl?: string
   attachmentName?: string
   attachmentSize?: number
   attachmentId?: string
   driveFileId?: string
   storageProvider?: string
+  storagePath?: string
   fileKeyBase64?: string
   mimeType?: string
   duration?: number
@@ -41,7 +42,8 @@ export interface SenChatMessage {
   transcriptionLanguage?: string
   sttProvider?: 'device' | 'server'
   createdAt: string
-  status: 'sending' | 'sent' | 'received' | 'seen'
+  status: 'sending' | 'sent' | 'received' | 'seen' | 'failed'
+  missedCall?: 'voice' | 'video'
   isLocalOnly?: boolean
   isSenAi?: boolean
   invokedBy?: string

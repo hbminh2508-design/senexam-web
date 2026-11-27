@@ -14,6 +14,21 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check Sen Chat schema before deployment
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          for endpoint in 'chat_call_invitations?select=call_id' 'chat_inbox_devices?select=device_id' 'chat_whiteboard_items?select=id'; do
+            if ! curl --fail --silent --show-error --max-time 15 --output /dev/null \
+              --header "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              "$SUPABASE_URL/rest/v1/$endpoint&limit=0"; then
+              echo "::error::Apply Sen Chat migrations 017 and 018 before deploying this release."
+              exit 1
+            fi
+          done
+
       - name: ⚡ Setup Node.js 20
         uses: actions/setup-node@v4
         with:

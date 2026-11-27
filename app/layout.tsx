@@ -11,6 +11,7 @@ import "./globals.css";
 const SenChatFloatingBubble = dynamic(
   () => import("./components/SenChatFloatingBubble")
 );
+const SenChatRuntime = dynamic(() => import("./components/SenChatRuntime"));
 
 const ExamOrientationPrompt = dynamic(
   () => import("./components/ExamOrientationPrompt")
@@ -136,6 +137,7 @@ export default function RootLayout({
           {children}
         </main>
         <SenChatFloatingBubble />
+        <SenChatRuntime />
       </body>
     </html>
   );

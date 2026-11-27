@@ -143,7 +143,7 @@ export default function SenChatFloatingModal({
   }
 
   return (
-    <div className="fixed bottom-16 md:bottom-20 right-3 md:right-6 z-50 w-[calc(100vw-1.5rem)] sm:w-[380px] h-[520px] max-h-[75vh] sm:max-h-[82vh] rounded-[28px] border border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200 select-none">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3.5 border-b border-black/10 dark:border-white/10 bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-indigo-500/10 dark:from-pink-500/20 dark:to-indigo-500/20 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -153,10 +153,7 @@ export default function SenChatFloatingModal({
           </div>
           <div>
             <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-              Sen Chat
-              <span className="rounded-full bg-pink-500/15 text-pink-600 dark:text-pink-400 px-1.5 py-0.2 text-[9px] font-bold">
-                Q1 Beta
-              </span>
+              Sen AI
             </h4>
             <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
               <CheckCircle2 className="h-2.5 w-2.5" /> Tự lưu SenAI Studio

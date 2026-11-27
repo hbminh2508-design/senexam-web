@@ -229,9 +229,11 @@ test('Sen Chat: app/m/chat/page.tsx không chứa chuỗi cấm "SC" hoặc "Sen
   assert.equal(hasForbiddenSC, false, 'app/m/chat/page.tsx tuyệt đối không được chứa từ "SC"')
   assert.equal(hasForbiddenSenCash, false, 'app/m/chat/page.tsx tuyệt đối không được chứa từ "SenCash"')
 
-  // Kiểm tra mobile chat hỗ trợ nén tin nhắn gửi và giải nén realtime
-  assert.ok(mobileChatContent.includes('compressChatMessage'), 'Mobile chat tích hợp compressChatMessage')
-  assert.ok(mobileChatContent.includes('decompressChatMessage'), 'Mobile chat tích hợp decompressChatMessage')
-  assert.ok(mobileChatContent.includes('new_e2ee_message'), 'Mobile chat lắng nghe sự kiện new_e2ee_message realtime')
+  const inbox = fs.readFileSync(path.join(process.cwd(), 'lib/senChatInbox.ts'), 'utf8')
+  const runtime = fs.readFileSync(path.join(process.cwd(), 'app/components/SenChatRuntime.tsx'), 'utf8')
+  assert.ok(mobileChatContent.includes('deliverLocalMessage(newMessage, activeConversation)'))
+  assert.ok(inbox.includes('await compressChatMessage(message.content)'))
+  assert.ok(inbox.includes('await decompressChatMessage(incoming.content)'))
+  assert.ok(runtime.includes("event: 'inbox-change'") && runtime.includes('pullChatInbox(userId'))
   assert.ok(mobileChatContent.includes('getChatSendKey'), 'Mobile chat tôn trọng tùy chọn phím gửi Enter / Shift+Enter')
 })

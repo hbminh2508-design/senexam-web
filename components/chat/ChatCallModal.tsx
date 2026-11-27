@@ -29,10 +29,15 @@ import {
   ChevronRight,
   Clock,
   AlertTriangle,
+  Presentation,
   X,
 } from 'lucide-react'
+import type { RemoteTrack, Room } from 'livekit-client'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
+import { chatRequest } from '@/lib/senChatBrowser'
 import { SEN_CHAT_THEME } from '@/lib/senChatTheme'
+import ChatWhiteboard from './ChatWhiteboard'
 import { getCallDurationWarningLevel } from '@/lib/chatLimits'
 import {
   getRtcConfiguration,
@@ -58,7 +63,14 @@ export interface CallSignalPayload {
   groupName?: string
 }
 
-interface ChatCallModalProps {
+export interface ChatCallInvitation extends CallSignalPayload {
+  state: 'ringing' | 'accepted' | 'declined' | 'ended'
+  expiresAt: string
+  createdAt: string
+  acceptedAt: string | null
+}
+
+export interface ChatCallModalProps {
   callMode: 'voice' | 'video'
   isIncoming?: boolean
   initialCallId?: string
@@ -73,6 +85,21 @@ interface ChatCallModalProps {
   userRole?: 'owner' | 'admin' | 'member'
   groupMembers?: Array<{ userId: string; name: string; avatar?: string }>
   onClose: () => void
+}
+
+type PeerSignal =
+  | { type: 'offer' | 'answer'; sdp: RTCSessionDescriptionInit }
+  | { type: 'candidate'; candidate: RTCIceCandidateInit }
+
+function GroupVideo({ track }: { track: RemoteTrack }) {
+  const video = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    const element = video.current
+    if (!element) return
+    track.attach(element)
+    return () => { track.detach(element) }
+  }, [track])
+  return <video ref={video} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-contain" />
 }
 
 export default function ChatCallModal({
@@ -93,7 +120,7 @@ export default function ChatCallModal({
 }: ChatCallModalProps) {
   const [activeCallMode, setActiveCallMode] = useState<'voice' | 'video'>(initialCallMode)
   const [callStatus, setCallStatus] = useState<'requesting' | 'ringing' | 'connected' | 'reconnecting' | 'ended'>(
-    isIncoming ? 'connected' : 'requesting'
+    'requesting'
   )
   const [callDuration, setCallDuration] = useState(0)
   const [isMicMuted, setIsMicMuted] = useState(false)
@@ -114,6 +141,9 @@ export default function ChatCallModal({
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null)
   const [showParticipantsDrawer, setShowParticipantsDrawer] = useState(false)
   const [showDeviceDrawer, setShowDeviceDrawer] = useState(false)
+  const [showWhiteboard, setShowWhiteboard] = useState(false)
+  const [whiteboardNotice, setWhiteboardNotice] = useState(false)
+  const whiteboardOpen = useRef(false)
   const [currentPage, setCurrentPage] = useState(0)
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== 'undefined' ? window.innerWidth : 1280
@@ -134,6 +164,8 @@ export default function ChatCallModal({
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
   const [durationWarning, setDurationWarning] = useState<string | null>(null)
   const [joinLeaveNotice, setJoinLeaveNotice] = useState<string | null>(null)
+  const [groupVideos, setGroupVideos] = useState<Record<string, RemoteTrack>>({})
+  const [audioBlocked, setAudioBlocked] = useState(false)
   const [groupParticipants, setGroupParticipants] = useState<CallParticipantInfo[]>(() => [
     {
       userId: currentUserId,
@@ -158,9 +190,13 @@ export default function ChatCallModal({
         ]),
   ])
 
-  const callIdRef = useRef<string>(
-    initialCallId || `call_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
-  )
+  const callIdRef = useRef(initialCallId || '')
+  const groupRoomRef = useRef<Room | null>(null)
+  const groupCallId = useRef<string | null>(null)
+  const groupAudio = useRef(new Set<HTMLMediaElement>())
+  const signalChannel = useRef<RealtimeChannel | null>(null)
+  const ending = useRef(false)
+  const mediaFlags = useRef({ micEnabled: true, cameraEnabled: initialCallMode === 'video', screenSharing: false })
   const modalContainerRef = useRef<HTMLDivElement | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const screenStreamRef = useRef<MediaStream | null>(null)
@@ -174,6 +210,19 @@ export default function ChatCallModal({
   const animationFrameRef = useRef<number | null>(null)
   const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([])
   const dismissedWarningsRef = useRef<Set<number>>(new Set())
+  const attachLocalVideo = useCallback((element: HTMLVideoElement | null) => {
+    localVideoRef.current = element
+    if (element) element.srcObject = screenStreamRef.current || localStreamRef.current
+  }, [])
+  const attachRemoteVideo = useCallback((element: HTMLVideoElement | null) => {
+    remoteVideoRef.current = element
+    if (element) element.srcObject = remoteStreamRef.current
+  }, [])
+
+  useEffect(() => {
+    mediaFlags.current = { micEnabled: !isMicMuted, cameraEnabled: !isCameraOff, screenSharing: isScreenSharing }
+    if (isGroup) setGroupParticipants((people) => [{ ...people[0], ...mediaFlags.current }, ...people.slice(1)])
+  }, [isGroup, isMicMuted, isCameraOff, isScreenSharing])
 
   const transportInfo = useMemo(
     () => getCallTransportInfo(isGroup, sfuConfigured),
@@ -299,7 +348,12 @@ export default function ChatCallModal({
             : false,
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      const stream = await navigator.mediaDevices.getUserMedia(constraints).catch(async (error: unknown) => {
+        if (!constraints.video) throw error
+        const fallback = await navigator.mediaDevices.getUserMedia({ audio: constraints.audio, video: false })
+        setErrorBanner('Không thể mở camera. Cuộc gọi đang dùng micrô.')
+        return fallback
+      })
       localStreamRef.current = stream
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream
@@ -321,441 +375,384 @@ export default function ChatCallModal({
     disposeMediaStream(localStreamRef.current)
     disposeMediaStream(screenStreamRef.current)
     disposePeerConnection(peerConnectionRef.current)
+    const room = groupRoomRef.current
+    groupRoomRef.current = null
+    if (room) void room.disconnect()
+    for (const element of groupAudio.current) element.remove()
+    groupAudio.current.clear()
+    remoteAudioRef.current?.remove()
+    remoteAudioRef.current = null
     localStreamRef.current = null
     screenStreamRef.current = null
     peerConnectionRef.current = null
   }, [])
 
-  // Rời hoặc kết thúc cuộc gọi
-  const handleLeaveOrEndCall = useCallback(
-    async (endForAll: boolean = false) => {
-      setCallStatus('ended')
-      setStatusMessage(endForAll ? 'Đã kết thúc cuộc gọi cho toàn nhóm' : 'Đã rời cuộc gọi')
+  const sendPeerSignal = useCallback(async (signal: PeerSignal) => {
+    const status = await signalChannel.current?.send({
+      type: 'broadcast', event: 'call_signal',
+      payload: { senderId: currentUserId, receiverId: partnerId, signal },
+    })
+    if (status !== 'ok') throw new Error('Không thể gửi tín hiệu cuộc gọi.')
+  }, [currentUserId, partnerId])
 
-      try {
-        const { data: sessionData } = await supabase.auth.getSession()
-        const token = sessionData.session?.access_token
-        if (isGroup && token) {
-          await fetch('/api/chat/calls', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              action: endForAll ? 'end_for_all' : 'leave',
-              callId: callIdRef.current,
-              conversationId,
-            }),
-          }).catch(() => {})
-        }
+  const handleLeaveOrEndCall = useCallback(async (endForAll = false) => {
+    if (ending.current) return
+    ending.current = true
+    try {
+      if (isGroup && groupCallId.current) {
+        await chatRequest('calls', { action: endForAll ? 'end_for_all' : 'leave', callId: groupCallId.current })
+      } else if (!isGroup && callIdRef.current) {
+        await chatRequest('call-alerts', { action: 'end', callId: callIdRef.current })
+      }
+    } catch (error) {
+      if (endForAll) {
+        setErrorBanner(error instanceof Error ? error.message : 'Không thể kết thúc cho toàn nhóm.')
+        ending.current = false
+        return
+      }
+    }
+    cleanupCall()
+    onClose()
+  }, [isGroup, cleanupCall, onClose])
 
-        if (!isGroup || endForAll) {
-          await supabase.channel('sen-chat-realtime-transit').send({
-            type: 'broadcast',
-            event: 'call_end',
-            payload: {
-              callId: callIdRef.current,
-              conversationId,
-              senderId: currentUserId,
-              receiverId: partnerId,
-              endForAll,
-            },
-          })
-        } else {
-          await supabase.channel(`sen-chat-group-call:${conversationId}`).send({
-            type: 'broadcast',
-            event: 'group_call_presence',
-            payload: {
-              callId: callIdRef.current,
-              userId: currentUserId,
-              name: currentUserName,
-              status: 'left',
-            },
-          })
-        }
-      } catch {}
-
-      cleanupCall()
-      setTimeout(() => {
-        onClose()
-      }, 350)
-    },
-    [isGroup, conversationId, currentUserId, currentUserName, partnerId, cleanupCall, onClose]
-  )
-
-  // Khởi tạo cuộc gọi (1-1 P2P hoặc Group SFU + Backend Enforcement)
   useEffect(() => {
-    let isCancelled = false
+    let cancelled = false
+    let heartbeat: ReturnType<typeof setInterval> | undefined
+    let poll: ReturnType<typeof setTimeout> | undefined
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    let closeTimer: ReturnType<typeof setTimeout> | undefined
+    let readyChannel: RealtimeChannel | undefined
+    let groupRoom: Room | undefined
+    let groupStarted = false
+    let peerConnected = false
+    let peerAccepted = isIncoming
+    let makingOffer = false
+    let ignoreOffer = false
+    const id = callIdRef.current || crypto.randomUUID()
+    callIdRef.current = id
 
-    const startGroupCallBackend = async () => {
-      if (!isGroup) return true
+    const remoteEnded = (message: string) => {
+      if (cancelled || ending.current) return
+      ending.current = true
+      setCallStatus('ended')
+      setStatusMessage(message)
+      cleanupCall()
+      closeTimer = setTimeout(onClose, 900)
+    }
+
+    const validateGroup = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession()
-        const token = sessionData.session?.access_token
-        if (!token) {
-          setErrorBanner('Chưa xác thực tài khoản để gọi nhóm')
-          return false
-        }
-
-        const res = await fetch('/api/chat/calls', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            action: 'start_or_join',
-            conversationId,
-            callType: initialCallMode,
-            idempotencyKey: callIdRef.current,
-            userName: currentUserName,
-          }),
+        const state = await chatRequest<{ ended?: boolean; remainingSeconds?: number }>('calls', {
+          action: 'heartbeat', callId: groupCallId.current, ...mediaFlags.current,
         })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok || !data.success) {
-          setErrorBanner(data.error || 'Không thể khởi tạo cuộc gọi nhóm')
-          setCallStatus('ended')
-          return false
-        }
-
-        if (data.callId) callIdRef.current = data.callId
-        setSfuConfigured(Boolean(data.sfuConfigured))
-        if (data.maxParticipants) setMaxParticipants(data.maxParticipants)
-        if (data.maxDurationSeconds) {
-          const startedMs = data.startedAt ? new Date(data.startedAt).getTime() : Date.now()
-          const elapsed = Math.max(0, Math.floor((Date.now() - startedMs) / 1000))
-          setRemainingSeconds(Math.max(0, data.maxDurationSeconds - elapsed))
-        }
-        setCallStatus('connected')
-        setStatusMessage(
-          data.sfuConfigured ? 'Đã kết nối phòng SFU' : 'Phòng gọi nhóm đang hoạt động (Realtime Signaling)'
-        )
-        return true
-      } catch (err: any) {
-        setErrorBanner(err?.message || 'Lỗi kết nối máy chủ cuộc gọi')
-        return false
+        if (state.ended) remoteEnded('Cuộc gọi nhóm đã kết thúc.')
+        else if (typeof state.remainingSeconds === 'number') setRemainingSeconds(state.remainingSeconds)
+      } catch (reason) {
+        if (!cancelled) setErrorBanner(reason instanceof Error ? reason.message : 'Không thể cập nhật trạng thái gọi nhóm.')
       }
     }
 
-    let pc: RTCPeerConnection | null = null
-    if (!isGroup && typeof RTCPeerConnection !== 'undefined') {
-      try {
-        pc = new RTCPeerConnection(getRtcConfiguration())
-        peerConnectionRef.current = pc
-
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            supabase
-              .channel('sen-chat-realtime-transit')
-              .send({
-                type: 'broadcast',
-                event: 'call_signal',
-                payload: {
-                  callId: callIdRef.current,
-                  conversationId,
-                  senderId: currentUserId,
-                  receiverId: partnerId,
-                  signal: { type: 'candidate', candidate: event.candidate },
-                },
-              })
-              .catch(() => {})
+    const initGroup = async () => {
+      const data = await chatRequest<{
+        callId: string; sfuToken: string; sfuUrl: string; joinedExisting: boolean
+        maxParticipants: number; expiresAt?: string
+      }>('calls', {
+        action: 'start_or_join', conversationId, callType: initialCallMode, idempotencyKey: id,
+        callId: isIncoming ? id : undefined, userName: currentUserName,
+      })
+      groupCallId.current = data.callId
+      callIdRef.current = data.callId
+      if (cancelled || ending.current) {
+        if (!groupStarted) await chatRequest('calls', { action: 'leave', callId: data.callId }).catch(() => {})
+        return
+      }
+      const { Room, RoomEvent, Track } = await import('livekit-client')
+      if (cancelled || ending.current) return
+      const room = new Room({ adaptiveStream: true, dynacast: true })
+      groupRoom = room
+      groupRoomRef.current = room
+      const refreshParticipants = () => {
+        if (cancelled || ending.current) return
+        const people = Array.from(room.remoteParticipants.values()).map((person) => {
+          const camera = person.getTrackPublication(Track.Source.Camera)
+          const screen = person.getTrackPublication(Track.Source.ScreenShare)
+          return {
+            userId: person.identity, name: person.name || 'Thành viên', isSpeaking: person.isSpeaking,
+            micEnabled: Boolean(person.getTrackPublication(Track.Source.Microphone) && !person.getTrackPublication(Track.Source.Microphone)?.isMuted),
+            cameraEnabled: Boolean(camera && !camera.isMuted),
+            screenSharing: Boolean(screen && !screen.isMuted),
           }
-        }
-
-        pc.ontrack = (event) => {
-          let stream = event.streams && event.streams[0]
-          if (!stream) {
-            if (!remoteStreamRef.current) remoteStreamRef.current = new MediaStream()
-            remoteStreamRef.current.addTrack(event.track)
-            stream = remoteStreamRef.current
-          } else {
-            remoteStreamRef.current = stream
+        })
+        setGroupParticipants((previous) => [previous[0], ...people])
+        setGroupVideos(Object.fromEntries(Array.from(room.remoteParticipants.values()).flatMap((person) => {
+          const screen = person.getTrackPublication(Track.Source.ScreenShare)
+          const camera = person.getTrackPublication(Track.Source.Camera)
+          const track = (screen?.isMuted ? undefined : screen?.track) || (camera?.isMuted ? undefined : camera?.track)
+          return track ? [[person.identity, track]] : []
+        })))
+      }
+      room
+        .on(RoomEvent.TrackSubscribed, (track) => {
+          if (track.kind === Track.Kind.Audio) {
+            const element = track.attach()
+            element.hidden = true
+            groupAudio.current.add(element)
+            document.body.append(element)
           }
-          if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== stream) {
-            remoteVideoRef.current.srcObject = stream
+          refreshParticipants()
+        })
+        .on(RoomEvent.TrackUnsubscribed, (track) => {
+          track.detach().forEach((element) => {
+            groupAudio.current.delete(element)
+            if (element instanceof HTMLAudioElement) element.remove()
+          })
+          refreshParticipants()
+        })
+        .on(RoomEvent.TrackPublished, refreshParticipants)
+        .on(RoomEvent.TrackUnpublished, refreshParticipants)
+        .on(RoomEvent.TrackMuted, refreshParticipants)
+        .on(RoomEvent.TrackUnmuted, refreshParticipants)
+        .on(RoomEvent.ParticipantConnected, (person) => {
+          refreshParticipants()
+          if (whiteboardOpen.current) {
+            void room.localParticipant.publishData(new Uint8Array([1]), {
+              reliable: true, topic: 'sen-whiteboard-open', destinationIdentities: [person.identity],
+            }).catch(() => {})
           }
-          if (remoteAudioRef.current && remoteAudioRef.current.srcObject !== stream) {
-            remoteAudioRef.current.srcObject = stream
-          }
-          if (event.track.kind === 'video') {
-            setHasRemoteVideo(true)
-          }
+        })
+        .on(RoomEvent.ParticipantDisconnected, refreshParticipants)
+        .on(RoomEvent.ActiveSpeakersChanged, refreshParticipants)
+        .on(RoomEvent.DataReceived, (_data, participant, _kind, topic) => {
+          if (participant && topic === 'sen-whiteboard-open' && !whiteboardOpen.current) setWhiteboardNotice(true)
+        })
+        .on(RoomEvent.AudioPlaybackStatusChanged, () => setAudioBlocked(!room.canPlaybackAudio))
+        .on(RoomEvent.Reconnecting, () => {
+          setCallStatus('reconnecting')
+          setNetworkState('reconnecting')
+          setStatusMessage('Đang kết nối lại phòng gọi nhóm')
+        })
+        .on(RoomEvent.Reconnected, () => {
           setCallStatus('connected')
           setNetworkState('good')
-          setStatusMessage('Đã kết nối mã hóa E2EE P2P')
-        }
-
-        pc.onconnectionstatechange = () => {
-          if (pc?.connectionState === 'connected') {
-            setCallStatus('connected')
-            setNetworkState('good')
-            setStatusMessage('Đã kết nối mã hóa E2EE P2P')
-          } else if (pc?.connectionState === 'disconnected' || pc?.connectionState === 'failed') {
-            setNetworkState('reconnecting')
-            setCallStatus('reconnecting')
-            setStatusMessage('Kết nối gián đoạn — đang thực hiện ICE Restart...')
-            try {
-              pc.restartIce?.()
-            } catch {}
-          }
-        }
-      } catch {}
-    }
-
-    const transitChannel = supabase.channel('sen-chat-realtime-transit')
-    const groupCallChannel = isGroup ? supabase.channel(`sen-chat-group-call:${conversationId}`) : null
-
-    if (groupCallChannel) {
-      groupCallChannel
-        .on('broadcast', { event: 'group_call_presence' }, ({ payload }: any) => {
-          if (!payload || payload.userId === currentUserId) return
-          if (payload.status === 'joined') {
-            setJoinLeaveNotice(`${payload.name || 'Thành viên'} đã tham gia cuộc gọi`)
-            setGroupParticipants((prev) => {
-              if (prev.some((p) => p.userId === payload.userId)) return prev
-              return [
-                ...prev,
-                {
-                  userId: payload.userId,
-                  name: payload.name || 'Thành viên',
-                  avatar: payload.avatar,
-                  micEnabled: payload.micEnabled ?? true,
-                  cameraEnabled: payload.cameraEnabled ?? false,
-                  screenSharing: payload.screenSharing ?? false,
-                },
-              ]
-            })
-          } else if (payload.status === 'left') {
-            setJoinLeaveNotice(`${payload.name || 'Thành viên'} đã rời cuộc gọi`)
-            setGroupParticipants((prev) => prev.filter((p) => p.userId !== payload.userId))
-          } else if (payload.status === 'media_update') {
-            setGroupParticipants((prev) =>
-              prev.map((p) =>
-                p.userId === payload.userId
-                  ? {
-                      ...p,
-                      micEnabled: payload.micEnabled ?? p.micEnabled,
-                      cameraEnabled: payload.cameraEnabled ?? p.cameraEnabled,
-                      screenSharing: payload.screenSharing ?? p.screenSharing,
-                    }
-                  : p
-              )
-            )
+          refreshParticipants()
+          void validateGroup()
+        })
+        .on(RoomEvent.Disconnected, () => {
+          if (groupStarted && !cancelled && !ending.current) {
+            void chatRequest('calls', { action: 'leave', callId: data.callId }).catch(() => {})
+            remoteEnded('Đã mất kết nối với phòng gọi nhóm.')
           }
         })
-        .subscribe()
-    }
-
-    const init = async () => {
-      const ok = await startGroupCallBackend()
-      if (!ok || isCancelled) return
-
-      const stream = await setupLocalMedia()
-      if (isCancelled || !stream) return
-
-      if (pc) {
-        stream.getTracks().forEach((track) => {
-          try {
-            pc?.addTrack(track, stream)
-          } catch {}
-        })
+      await room.connect(data.sfuUrl, data.sfuToken, { autoSubscribe: false })
+      if (cancelled || ending.current) { await room.disconnect(); return }
+      groupStarted = true
+      setSfuConfigured(true)
+      setMaxParticipants(data.maxParticipants)
+      if (data.expiresAt) setRemainingSeconds(Math.max(0, Math.ceil((Date.parse(data.expiresAt) - Date.now()) / 1000)))
+      setCallStatus('connected')
+      setStatusMessage('Đã kết nối cuộc gọi nhóm')
+      refreshParticipants()
+      heartbeat = setInterval(() => void validateGroup(), 8000)
+      for (const person of room.remoteParticipants.values()) {
+        for (const publication of person.audioTrackPublications.values()) publication.setSubscribed(true)
       }
-
-      if (!isGroup) {
-        if (!isIncoming) {
-          transitChannel
-            .send({
-              type: 'broadcast',
-              event: 'call_request',
-              payload: {
-                callId: callIdRef.current,
-                conversationId,
-                callerId: currentUserId,
-                callerName: currentUserName,
-                callerAvatar: currentUserAvatar,
-                receiverId: partnerId,
-                callMode: initialCallMode,
-              },
-            })
-            .catch(() => {})
-          setStatusMessage('Đang đổ chuông đối phương...')
-        } else {
-          transitChannel
-            .send({
-              type: 'broadcast',
-              event: 'call_response',
-              payload: {
-                callId: callIdRef.current,
-                conversationId,
-                senderId: currentUserId,
-                callerId: partnerId,
-                receiverId: partnerId,
-                accepted: true,
-              },
-            })
-            .catch(() => {})
-          setCallStatus('connected')
-        }
-      } else if (groupCallChannel) {
-        groupCallChannel
-          .send({
-            type: 'broadcast',
-            event: 'group_call_presence',
-            payload: {
-              callId: callIdRef.current,
-              userId: currentUserId,
-              name: currentUserName,
-              avatar: currentUserAvatar,
-              status: 'joined',
-              micEnabled: !isMicMuted,
-              cameraEnabled: !isCameraOff,
-            },
-          })
-          .catch(() => {})
-
-        if (!isIncoming) {
-          // Thông báo cuộc gọi nhóm cho các thành viên hợp lệ
-          transitChannel
-            .send({
-              type: 'broadcast',
-              event: 'call_request',
-              payload: {
-                callId: callIdRef.current,
-                conversationId,
-                callerId: currentUserId,
-                callerName: currentUserName,
-                callerAvatar: currentUserAvatar,
-                receiverId: conversationId,
-                callMode: initialCallMode,
-                isGroup: true,
-                groupName: partnerName,
-              },
-            })
-            .catch(() => {})
-        }
-      }
-    }
-
-    init()
-
-    // Lắng nghe signaling P2P & kết thúc cuộc gọi
-    const signalSub = supabase
-      .channel(`sen-chat-call-signaling:${callIdRef.current}`)
-      .on('broadcast', { event: 'call_signal' }, async ({ payload }: any) => {
-        if (!payload || payload.callId !== callIdRef.current || payload.senderId === currentUserId || !pc) return
-        const { signal } = payload
-        try {
-          if (signal.type === 'offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
-            const answer = await pc.createAnswer()
-            await pc.setLocalDescription(answer)
-            transitChannel
-              .send({
-                type: 'broadcast',
-                event: 'call_signal',
-                payload: {
-                  callId: callIdRef.current,
-                  conversationId,
-                  senderId: currentUserId,
-                  receiverId: partnerId,
-                  signal: { type: 'answer', sdp: answer },
-                },
-              })
-              .catch(() => {})
-            while (iceCandidateQueueRef.current.length > 0) {
-              const cand = iceCandidateQueueRef.current.shift()
-              if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand))
-            }
-          } else if (signal.type === 'answer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
-            while (iceCandidateQueueRef.current.length > 0) {
-              const cand = iceCandidateQueueRef.current.shift()
-              if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand))
-            }
-          } else if (signal.type === 'candidate' && signal.candidate) {
-            if (pc.remoteDescription) {
-              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate))
-            } else {
-              iceCandidateQueueRef.current.push(signal.candidate)
-            }
-          }
-        } catch {}
+      room.on(RoomEvent.TrackPublished, (publication) => {
+        if (publication.kind === Track.Kind.Audio) publication.setSubscribed(true)
       })
-      .on('broadcast', { event: 'call_response' }, async ({ payload }: any) => {
-        if (!payload || payload.callId !== callIdRef.current) return
-        if (!payload.accepted) {
-          setStatusMessage('Đối phương đã từ chối cuộc gọi')
-          setCallStatus('ended')
-          setTimeout(onClose, 1200)
+      if (!data.joinedExisting && !isIncoming) {
+        void chatRequest('call-alerts', { action: 'invite', callId: data.callId, conversationId, isGroup: true })
+          .catch((reason) => { if (!cancelled) setErrorBanner(reason.message) })
+      }
+      const stream = await setupLocalMedia()
+      if (cancelled || ending.current) { disposeMediaStream(stream); return }
+      setIsMicMuted(!stream?.getAudioTracks().length)
+      setIsCameraOff(!stream?.getVideoTracks().length)
+      for (const track of stream?.getTracks() || []) {
+        await room.localParticipant.publishTrack(track, {
+          source: track.kind === 'audio' ? Track.Source.Microphone : Track.Source.Camera,
+        })
+      }
+    }
+
+    const initPeer = async () => {
+      if (typeof RTCPeerConnection === 'undefined') throw new Error('Trình duyệt chưa hỗ trợ cuộc gọi WebRTC.')
+      const config = getRtcConfiguration()
+      const { iceServers } = await chatRequest<{ iceServers: RTCIceServer[] }>('call-alerts?ice')
+        .catch(() => ({ iceServers: [] }))
+      if (cancelled || ending.current) return
+      const pc = new RTCPeerConnection({ ...config, iceServers: [...(config.iceServers || []), ...iceServers] })
+      peerConnectionRef.current = pc
+      const audio = document.createElement('audio')
+      audio.autoplay = true
+      audio.hidden = true
+      document.body.append(audio)
+      remoteAudioRef.current = audio
+      const offer = async () => {
+        if (!peerAccepted || makingOffer || pc.signalingState !== 'stable') return
+        try {
+          makingOffer = true
+          await pc.setLocalDescription()
+          if (pc.localDescription?.type === 'offer') await sendPeerSignal({ type: 'offer', sdp: pc.localDescription.toJSON() })
+        } finally { makingOffer = false }
+      }
+      const failSignal = () => { if (!cancelled) setErrorBanner('Tín hiệu cuộc gọi gián đoạn. Hãy gọi lại nếu kết nối không phục hồi.') }
+      pc.onnegotiationneeded = () => { if (peerConnected) void offer().catch(failSignal) }
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) void sendPeerSignal({ type: 'candidate', candidate: candidate.toJSON() }).catch(failSignal)
+      }
+      pc.ontrack = ({ track, streams }) => {
+        const stream = streams[0] || remoteStreamRef.current || new MediaStream()
+        if (!stream.getTrackById(track.id)) stream.addTrack(track)
+        remoteStreamRef.current = stream
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = stream
+          void remoteAudioRef.current.play().catch(() => setAudioBlocked(true))
+        }
+        if (track.kind === 'video') setHasRemoteVideo(true)
+      }
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          peerConnected = true
+          clearTimeout(timeout)
+          setCallStatus('connected')
+          setNetworkState('good')
+          setStatusMessage('Đã kết nối cuộc gọi')
+        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          setNetworkState('reconnecting')
+          setCallStatus('reconnecting')
+          setStatusMessage('Đang kết nối lại cuộc gọi')
+          if (!isIncoming) pc.restartIce()
+        }
+      }
+
+      if (!isIncoming) {
+        await chatRequest('call-alerts', { action: 'invite', callId: id, recipientId: partnerId, callMode: initialCallMode })
+        if (cancelled || ending.current) {
+          await chatRequest('call-alerts', { action: 'end', callId: id }).catch(() => {})
           return
         }
-        if (pc && !isIncoming) {
-          try {
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            transitChannel
-              .send({
-                type: 'broadcast',
-                event: 'call_signal',
-                payload: {
-                  callId: callIdRef.current,
-                  conversationId,
-                  senderId: currentUserId,
-                  receiverId: partnerId,
-                  signal: { type: 'offer', sdp: offer },
-                },
-              })
-              .catch(() => {})
-          } catch {}
-        }
-      })
-      .on('broadcast', { event: 'call_end' }, ({ payload }: any) => {
-        if (!payload || payload.callId !== callIdRef.current) return
-        if (!isGroup || payload.endForAll) {
-          setCallStatus('ended')
-          setStatusMessage(payload.endForAll ? 'Quản trị viên đã kết thúc cuộc gọi nhóm' : 'Cuộc gọi đã kết thúc')
-          cleanupCall()
-          setTimeout(onClose, 900)
-        }
-      })
-      .subscribe()
+        setCallStatus('ringing')
+        setStatusMessage('Đang chờ đối phương trả lời')
+      }
 
-    // Heartbeat định kỳ cho cuộc gọi nhóm (kiểm tra hết hạn từ server)
-    const heartbeatTimer = isGroup
-      ? setInterval(async () => {
-          try {
-            const { data: s } = await supabase.auth.getSession()
-            const token = s.session?.access_token
-            if (!token) return
-            const hbRes = await fetch('/api/chat/calls', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({
-                action: 'heartbeat',
-                callId: callIdRef.current,
-                micEnabled: !isMicMuted,
-                cameraEnabled: !isCameraOff,
-                screenSharing: isScreenSharing,
-              }),
-            })
-            const hbData = await hbRes.json().catch(() => ({}))
-            if (hbData.ended) {
-              setErrorBanner('Phiên gọi đã đạt giới hạn thời lượng và tự động kết thúc.')
-              cleanupCall()
-              setTimeout(onClose, 1800)
-            } else if (typeof hbData.remainingSeconds === 'number') {
-              setRemainingSeconds(hbData.remainingSeconds)
+      const auth = (await supabase.auth.getSession()).data.session
+      if (!auth) throw new Error('Hãy đăng nhập để thực hiện cuộc gọi.')
+      await supabase.realtime.setAuth(auth.access_token)
+      if (cancelled || ending.current) return
+      let signalQueue = Promise.resolve()
+      readyChannel = supabase.channel('sen-call:' + id, { config: { private: true, broadcast: { ack: true } } })
+        .on('broadcast', { event: 'call_signal' }, ({ payload }) => {
+          if (payload.senderId !== partnerId || payload.receiverId !== currentUserId) return
+          const signal = payload.signal as PeerSignal
+          signalQueue = signalQueue.then(async () => {
+            if (cancelled || ending.current) return
+            if (signal.type === 'candidate') {
+              if (ignoreOffer) return
+              if (pc.remoteDescription) await pc.addIceCandidate(signal.candidate)
+              else iceCandidateQueueRef.current.push(signal.candidate)
+              return
             }
-          } catch {}
-        }, 20000)
-      : null
+            if (signal.type !== 'offer' && signal.type !== 'answer') return
+            const collision = signal.type === 'offer' && (makingOffer || pc.signalingState !== 'stable')
+            ignoreOffer = collision && !isIncoming
+            if (ignoreOffer) return
+            await pc.setRemoteDescription(signal.sdp)
+            for (const candidate of iceCandidateQueueRef.current.splice(0)) await pc.addIceCandidate(candidate).catch(() => {})
+            if (signal.type === 'offer') {
+              await pc.setLocalDescription()
+              if (pc.localDescription?.type === 'answer') await sendPeerSignal({ type: 'answer', sdp: pc.localDescription.toJSON() })
+            }
+          }).catch(failSignal)
+        })
+      signalChannel.current = readyChannel
+      const subscribed = new Promise<void>((resolve, reject) => {
+        readyChannel!.subscribe((status) => {
+          if (status === 'SUBSCRIBED') resolve()
+          else if (status !== 'CLOSED') reject(new Error('Không thể kết nối kênh tín hiệu cuộc gọi.'))
+        })
+      })
+      const [stream] = await Promise.all([setupLocalMedia(), subscribed])
+      if (cancelled || ending.current) { disposeMediaStream(stream); return }
+      if (!stream?.getAudioTracks().length) throw new Error('Hãy cho phép truy cập micrô để thực hiện cuộc gọi.')
+      setIsCameraOff(!stream.getVideoTracks().length)
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      if (!isIncoming && !stream.getVideoTracks().length) pc.addTransceiver('video', { direction: 'sendrecv' })
+
+      const waitForConnection = () => {
+        clearTimeout(timeout)
+        timeout = setTimeout(() => {
+          if (!peerConnected && !cancelled) {
+            setCallStatus('ended')
+            setErrorBanner('Chưa thể thiết lập âm thanh hoặc video. Hãy kiểm tra mạng rồi gọi lại.')
+            void chatRequest('call-alerts', { action: 'end', callId: id }).catch(() => {})
+            cleanupCall()
+          }
+        }, 30000)
+      }
+      if (isIncoming) {
+        await chatRequest('call-alerts', { action: 'accept', callId: id })
+        setStatusMessage('Đang thiết lập âm thanh và video')
+        waitForConnection()
+      }
+
+      const syncState = async () => {
+        if (cancelled || ending.current) return
+        try {
+          const { calls } = await chatRequest<{ calls: ChatCallInvitation[] }>('call-alerts?callId=' + id)
+          if (cancelled || ending.current) return
+          const call = calls[0]
+          if (call?.state === 'declined' || call?.state === 'ended') {
+            remoteEnded(call.state === 'declined' ? 'Đối phương đã từ chối cuộc gọi.' : 'Cuộc gọi đã kết thúc.')
+            return
+          }
+          if (call?.state === 'ringing' && Date.parse(call.expiresAt) <= Date.now()) {
+            setCallStatus('ended')
+            setStatusMessage('Không có người trả lời')
+            setErrorBanner('Không có người trả lời.')
+            cleanupCall()
+            return
+          }
+          if (call?.state === 'accepted' && !peerAccepted) {
+            peerAccepted = true
+            setStatusMessage('Đang thiết lập âm thanh và video')
+            waitForConnection()
+            await offer()
+          }
+        } catch { failSignal() }
+        if (!cancelled && !ending.current) poll = setTimeout(syncState, peerConnected ? 2500 : 900)
+      }
+      void syncState()
+    }
+
+    void Promise.resolve().then(() => {
+      if (!cancelled) return isGroup ? initGroup() : initPeer()
+    }).catch((reason) => {
+      if (cancelled || ending.current) return
+      if (isGroup && groupCallId.current && !groupStarted) {
+        void chatRequest('calls', { action: 'leave', callId: groupCallId.current }).catch(() => {})
+        cleanupCall()
+      } else if (!isGroup) {
+        void chatRequest('call-alerts', { action: 'end', callId: id }).catch(() => {})
+        cleanupCall()
+      }
+      if (!groupStarted) setCallStatus('ended')
+      setErrorBanner(reason instanceof Error ? reason.message : 'Không thể kết nối cuộc gọi.')
+    })
 
     return () => {
-      isCancelled = true
-      if (heartbeatTimer) clearInterval(heartbeatTimer)
-      if (groupCallChannel) supabase.removeChannel(groupCallChannel)
-      supabase.removeChannel(signalSub)
+      cancelled = true
+      clearInterval(heartbeat)
+      clearTimeout(poll)
+      clearTimeout(timeout)
+      clearTimeout(closeTimer)
+      if (!ending.current) {
+        if (groupStarted && groupCallId.current) void chatRequest('calls', { action: 'leave', callId: groupCallId.current }).catch(() => {})
+        else if (readyChannel) void chatRequest('call-alerts', { action: 'end', callId: id }).catch(() => {})
+      }
+      if (readyChannel) void supabase.removeChannel(readyChannel)
+      if (signalChannel.current === readyChannel) signalChannel.current = null
+      if (groupRoom) void groupRoom.disconnect()
       cleanupCall()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -774,7 +771,33 @@ export default function ChatCallModal({
     localStreamRef.current?.getAudioTracks().forEach((t) => {
       t.enabled = !nextMuted
     })
+    if (groupRoomRef.current) {
+      void groupRoomRef.current.localParticipant.setMicrophoneEnabled(!nextMuted)
+        .catch(() => { setIsMicMuted(!nextMuted); setErrorBanner('Không thể thay đổi micrô.') })
+    }
   }
+
+  const toggleWhiteboard = (open: boolean) => {
+    whiteboardOpen.current = open
+    setShowWhiteboard(open)
+    setWhiteboardNotice(false)
+    if (open) void groupRoomRef.current?.localParticipant.publishData(new Uint8Array([1]), {
+      reliable: true, topic: 'sen-whiteboard-open',
+    }).catch(() => {})
+  }
+
+  const setDirectVideoTrack = useCallback(async (track: MediaStreamTrack | null, stream?: MediaStream) => {
+    const pc = peerConnectionRef.current
+    if (!pc) return
+    const video = pc.getTransceivers().find((entry) => entry.receiver.track.kind === 'video')
+    if (video) {
+      if (track && video.direction === 'recvonly') video.direction = 'sendrecv'
+      if (track && stream) video.sender.setStreams?.(stream)
+      await video.sender.replaceTrack(track)
+    } else if (track && stream) {
+      pc.addTrack(track, stream)
+    }
+  }, [])
 
   // Nâng cấp Cuộc gọi Âm thanh -> Video tại chỗ (không tạo phiên gọi mới, không tự bật cam đối phương)
   const upgradeToVideoInPlace = async () => {
@@ -795,29 +818,12 @@ export default function ChatCallModal({
         localVideoRef.current.srcObject = localStreamRef.current
       }
 
-      const pc = peerConnectionRef.current
-      if (pc) {
-        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
-        if (sender) {
-          await sender.replaceTrack(videoTrack)
-        } else {
-          pc.addTrack(videoTrack, localStreamRef.current)
-          // Thương lượng lại kết nối trên phiên gọi hiện tại
-          const offer = await pc.createOffer()
-          await pc.setLocalDescription(offer)
-          await supabase.channel('sen-chat-realtime-transit').send({
-            type: 'broadcast',
-            event: 'call_signal',
-            payload: {
-              callId: callIdRef.current,
-              conversationId,
-              senderId: currentUserId,
-              receiverId: partnerId,
-              signal: { type: 'offer', sdp: offer },
-            },
-          })
-        }
+      const room = groupRoomRef.current
+      if (room) {
+        const { Track } = await import('livekit-client')
+        await room.localParticipant.publishTrack(videoTrack, { source: Track.Source.Camera })
       }
+      await setDirectVideoTrack(videoTrack, localStreamRef.current)
 
       setActiveCallMode('video')
       setIsCameraOff(false)
@@ -829,7 +835,7 @@ export default function ChatCallModal({
 
   // Bật / Tắt Camera
   const toggleCamera = async () => {
-    if (activeCallMode === 'voice') {
+    if (!localStreamRef.current?.getVideoTracks().length) {
       await upgradeToVideoInPlace()
       return
     }
@@ -838,6 +844,10 @@ export default function ChatCallModal({
     localStreamRef.current?.getVideoTracks().forEach((t) => {
       t.enabled = !nextOff
     })
+    if (groupRoomRef.current) {
+      await groupRoomRef.current.localParticipant.setCameraEnabled(!nextOff)
+        .catch(() => { setIsCameraOff(!nextOff); setErrorBanner('Không thể thay đổi camera.') })
+    }
   }
 
   // Đổi Camera trước / sau trên di động
@@ -852,6 +862,13 @@ export default function ChatCallModal({
       if (!newTrack) return
 
       const oldTracks = localStreamRef.current?.getVideoTracks() || []
+      const room = groupRoomRef.current
+      if (room) {
+        const { Track } = await import('livekit-client')
+        const published = room.localParticipant.getTrackPublication(Track.Source.Camera)?.track
+        if (published) await published.replaceTrack(newTrack)
+        else await room.localParticipant.publishTrack(newTrack, { source: Track.Source.Camera })
+      }
       oldTracks.forEach((t) => {
         localStreamRef.current?.removeTrack(t)
         t.stop()
@@ -860,8 +877,7 @@ export default function ChatCallModal({
       if (localVideoRef.current && localStreamRef.current) {
         localVideoRef.current.srcObject = localStreamRef.current
       }
-      const sender = peerConnectionRef.current?.getSenders().find((s) => s.track?.kind === 'video')
-      if (sender) await sender.replaceTrack(newTrack)
+      if (localStreamRef.current) await setDirectVideoTrack(newTrack, localStreamRef.current)
     } catch {
       setErrorBanner('Thiết bị không hỗ trợ đổi camera trước/sau')
     }
@@ -869,35 +885,20 @@ export default function ChatCallModal({
 
   // Chia sẻ màn hình + Tự động khôi phục camera khi dừng
   const stopScreenShareAndRestoreCamera = useCallback(async () => {
+    const screenTrack = screenStreamRef.current?.getVideoTracks()[0]
+    if (screenTrack && groupRoomRef.current) await groupRoomRef.current.localParticipant.unpublishTrack(screenTrack)
     disposeMediaStream(screenStreamRef.current)
     screenStreamRef.current = null
     setIsScreenSharing(false)
 
-    if (!isCameraOff && navigator.mediaDevices?.getUserMedia) {
-      try {
-        const camStream = await navigator.mediaDevices.getUserMedia({
-          video: getOptimalVideoConstraints(facingMode, selectedVideoIn || undefined),
-        })
-        const camTrack = camStream.getVideoTracks()[0]
-        if (camTrack) {
-          localStreamRef.current?.getVideoTracks().forEach((t) => {
-            localStreamRef.current?.removeTrack(t)
-            t.stop()
-          })
-          localStreamRef.current?.addTrack(camTrack)
-          if (localVideoRef.current && localStreamRef.current) {
-            localVideoRef.current.srcObject = localStreamRef.current
-          }
-          const sender = peerConnectionRef.current?.getSenders().find((s) => s.track?.kind === 'video')
-          if (sender) await sender.replaceTrack(camTrack)
-        }
-      } catch {}
-    }
-  }, [isCameraOff, facingMode, selectedVideoIn])
+    const localStream = localStreamRef.current
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream
+    await setDirectVideoTrack(localStream?.getVideoTracks()[0] || null, localStream || undefined)
+  }, [setDirectVideoTrack])
 
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      await stopScreenShareAndRestoreCamera()
+      await stopScreenShareAndRestoreCamera().catch(() => setErrorBanner('Không thể dừng chia sẻ màn hình.'))
       return
     }
     try {
@@ -914,18 +915,17 @@ export default function ChatCallModal({
       if (activeCallMode === 'voice') setActiveCallMode('video')
 
       screenTrack.onended = () => {
-        stopScreenShareAndRestoreCamera()
+        void stopScreenShareAndRestoreCamera().catch(() => setErrorBanner('Không thể dừng chia sẻ màn hình.'))
       }
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = displayStream
       }
-      const sender = peerConnectionRef.current?.getSenders().find((s) => s.track?.kind === 'video')
-      if (sender) {
-        await sender.replaceTrack(screenTrack)
-      } else if (peerConnectionRef.current) {
-        peerConnectionRef.current.addTrack(screenTrack, displayStream)
+      if (groupRoomRef.current) {
+        const { Track } = await import('livekit-client')
+        await groupRoomRef.current.localParticipant.publishTrack(screenTrack, { source: Track.Source.ScreenShare })
       }
+      await setDirectVideoTrack(screenTrack, displayStream)
     } catch (err: any) {
       if (err?.name !== 'AbortError') {
         setErrorBanner('Không thể bắt đầu chia sẻ màn hình.')
@@ -969,6 +969,10 @@ export default function ChatCallModal({
   const handleSelectAudioOutput = async (sinkId: string) => {
     setSelectedAudioOut(sinkId)
     try {
+      if (groupRoomRef.current) {
+        await groupRoomRef.current.switchActiveDevice('audiooutput', sinkId || 'default')
+        return
+      }
       const el = remoteAudioRef.current as any
       if (el && typeof el.setSinkId === 'function') {
         await el.setSinkId(sinkId)
@@ -994,8 +998,8 @@ export default function ChatCallModal({
     () =>
       selectVisibleVideoSubscriptions(groupParticipants, {
         pinnedUserId,
-        activeSpeakerId: isSpeakingLocal ? currentUserId : null,
-        screenSharingUserId: isScreenSharing ? currentUserId : null,
+        activeSpeakerId: groupParticipants.find((participant) => participant.isSpeaking)?.userId || (isSpeakingLocal ? currentUserId : null),
+        screenSharingUserId: groupParticipants.find((participant) => participant.screenSharing)?.userId || (isScreenSharing ? currentUserId : null),
         page: gridLayout.currentPage,
         pageSize: gridLayout.pageSize,
       }),
@@ -1007,13 +1011,24 @@ export default function ChatCallModal({
     [groupParticipants, visibleIds]
   )
 
+  useEffect(() => {
+    const room = groupRoomRef.current
+    if (!room) return
+    for (const person of room.remoteParticipants.values()) {
+      for (const publication of person.videoTrackPublications.values()) {
+        const visible = !isMinimized && visibleIds.includes(person.identity)
+        if (publication.isDesired !== visible) publication.setSubscribed(visible)
+      }
+    }
+  }, [visibleIds, isMinimized])
+
   if (typeof document === 'undefined') return null
 
   // Thu nhỏ thành thẻ nổi để tiếp tục nhắn tin
   if (isMinimized) {
     return createPortal(
       <div
-        className={`fixed bottom-4 right-4 z-[9999] flex items-center gap-3 rounded-2xl border border-blue-500/40 bg-slate-900/95 px-4 py-3 text-white shadow-2xl backdrop-blur-xl ${SEN_CHAT_THEME.surface.safeAreaBottom}`}
+        className={`fixed bottom-[calc(8.25rem+env(safe-area-inset-bottom,0px))] right-4 z-[9999] flex items-center gap-3 rounded-2xl border border-blue-500/40 bg-slate-900/95 px-4 py-3 text-white shadow-2xl backdrop-blur-xl md:bottom-20 ${SEN_CHAT_THEME.surface.safeAreaBottom}`}
       >
         <div
           className={`flex h-10 w-10 items-center justify-center rounded-full ${SEN_CHAT_THEME.brand.avatarGradient} font-bold text-white ${
@@ -1061,7 +1076,6 @@ export default function ChatCallModal({
       ref={modalContainerRef}
       className={`fixed inset-0 z-[9999] flex flex-col ${SEN_CHAT_THEME.surface.callSurface} ${SEN_CHAT_THEME.surface.safeAreaTop} ${SEN_CHAT_THEME.surface.safeAreaBottom} animate-in fade-in duration-200`}
     >
-      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
       {/* Header gọn gàng, căn giữa chuẩn xác, không che khuất */}
       <header className="relative z-20 flex items-center justify-between gap-2 border-b border-white/10 bg-slate-950/60 px-4 py-3 backdrop-blur-md">
@@ -1104,6 +1118,12 @@ export default function ChatCallModal({
         <div className="flex items-center gap-1.5">
           {isGroup && (
             <>
+              <button type="button" aria-label={whiteboardNotice ? 'Bảng trắng đang được chia sẻ' : 'Bảng trắng'} aria-pressed={showWhiteboard} disabled={callStatus !== 'connected'}
+                onClick={() => toggleWhiteboard(!showWhiteboard)}
+                className={`relative flex items-center gap-1 rounded-xl bg-white/10 p-2 text-xs font-semibold text-white hover:bg-white/20 aria-pressed:bg-sky-600 disabled:opacity-40 ${whiteboardNotice ? 'ring-2 ring-amber-300' : ''}`}>
+                <Presentation className="h-4 w-4" />
+                <span className="hidden sm:inline">Bảng trắng</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setViewMode((v) => (v === 'gallery' ? 'speaker' : 'gallery'))}
@@ -1182,6 +1202,9 @@ export default function ChatCallModal({
 
       {/* Main Stage */}
       <main className="relative flex-1 flex items-center justify-center overflow-hidden p-3 sm:p-5">
+        {showWhiteboard && isGroup && groupCallId.current && (
+          <ChatWhiteboard callId={groupCallId.current} userId={currentUserId} onClose={() => toggleWhiteboard(false)} />
+        )}
         {isGroup ? (
           /* GIAO DIỆN CUỘC GỌI NHÓM DYNAMIC GRID */
           <div className="w-full h-full flex flex-col gap-3">
@@ -1205,15 +1228,15 @@ export default function ChatCallModal({
                         : 'border-white/10'
                     }`}
                   >
-                    {p.isLocal && !isCameraOff ? (
+                    {p.isLocal && (!isCameraOff || isScreenSharing) ? (
                       <video
-                        ref={localVideoRef}
+                        ref={attachLocalVideo}
                         autoPlay
                         playsInline
                         muted
                         className="absolute inset-0 w-full h-full object-cover"
                       />
-                    ) : (
+                    ) : groupVideos[p.userId] ? <GroupVideo track={groupVideos[p.userId]} /> : (
                       <div className="flex flex-col items-center justify-center gap-2 z-10">
                         <div
                           className={`flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-full ${SEN_CHAT_THEME.brand.avatarGradient} text-xl sm:text-2xl font-black text-white shadow-lg`}
@@ -1276,13 +1299,14 @@ export default function ChatCallModal({
               </div>
             )}
           </div>
-        ) : activeCallMode === 'video' ? (
+        ) : activeCallMode === 'video' || hasRemoteVideo ? (
           /* GIAO DIỆN VIDEO 1-1 TỐI ƯU: KHÔNG LỆCH AVATAR, KHÔNG CHE TÊN */
           <div className="relative w-full h-full flex items-center justify-center rounded-3xl overflow-hidden bg-slate-900/70 border border-white/10">
             <video
-              ref={remoteVideoRef}
+              ref={attachRemoteVideo}
               autoPlay
               playsInline
+              muted
               className={`w-full h-full object-cover ${hasRemoteVideo ? 'block' : 'hidden'}`}
             />
 
@@ -1306,7 +1330,7 @@ export default function ChatCallModal({
             {/* Local Camera PiP: Góc trên phải hoặc góc dưới phải có safe margin, không đè tên ở center */}
             <div className="absolute bottom-3 right-3 z-20 w-24 h-36 sm:w-36 sm:h-48 rounded-2xl overflow-hidden border-2 border-sky-400/40 shadow-2xl bg-slate-950">
               <video
-                ref={localVideoRef}
+                ref={attachLocalVideo}
                 autoPlay
                 playsInline
                 muted
@@ -1442,6 +1466,10 @@ export default function ChatCallModal({
 
       {/* Footer Điều khiển đầy đủ tính năng */}
       <footer className="relative z-20 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 px-4 py-4 bg-slate-950/75 border-t border-white/10 backdrop-blur-md">
+        {audioBlocked && <button type="button" className="rounded-lg bg-sky-700 px-3 py-2 text-sm font-semibold" onClick={() => {
+          const play = groupRoomRef.current?.startAudio() || remoteAudioRef.current?.play()
+          void play?.then(() => setAudioBlocked(false)).catch(() => {})
+        }}>Bật âm thanh cuộc gọi</button>}
         <button
           type="button"
           onClick={toggleMic}
@@ -1559,7 +1587,7 @@ export function ChatIncomingCallDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in">
-      <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-blue-500/30 text-white shadow-2xl p-6 flex flex-col items-center space-y-5 text-center">
+      <div role="alertdialog" aria-modal="true" aria-label="Cuộc gọi đến" className="w-full max-w-sm rounded-3xl bg-slate-900 border border-blue-500/30 text-white shadow-2xl p-6 flex flex-col items-center space-y-5 text-center">
         <div className={`relative flex h-20 w-20 items-center justify-center rounded-full ${SEN_CHAT_THEME.brand.avatarGradient} text-white text-2xl font-black ring-4 ring-sky-400/35 shadow-xl`}>
           {payload.callerAvatar ? (
             <img src={payload.callerAvatar} alt={payload.callerName} className="h-full w-full rounded-full object-cover" />

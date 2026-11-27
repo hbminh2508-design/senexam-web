@@ -3,14 +3,18 @@
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { X, Sparkles, Loader2 } from 'lucide-react'
+import { X, MessageCircle, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
+import { getLocalConversations } from '@/lib/senChatStorage'
+import { isAppLockConfigured } from '@/lib/senChatMobileSecurity'
+import SenChatQuickMessages from './SenChatQuickMessages'
 import type { ChatMessage } from './SenChatFloatingModal'
 
 const SenChatFloatingModal = dynamic(
   () => import('./SenChatFloatingModal'),
   {
     loading: () => (
-      <div className="fixed bottom-16 md:bottom-20 right-3 md:right-6 z-50 p-4 rounded-2xl bg-white/95 dark:bg-slate-900/95 shadow-xl border border-black/10 dark:border-white/10 text-xs flex items-center gap-2">
+      <div className="p-4 text-sm flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin text-pink-500" /> Đang tải Sen Chat...
       </div>
     ),
@@ -21,6 +25,25 @@ const SenChatFloatingModal = dynamic(
 export default function SenChatFloatingBubble() {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
+  const [tab, setTab] = useState<'messages' | 'ai'>('messages')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setUserId(session?.user.id || null))
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const refresh = () => setUnread(userId && !isAppLockConfigured() ? getLocalConversations().reduce((sum, item) => sum + item.unreadCount, 0) : 0)
+    refresh()
+    window.addEventListener('sen-chat-update', refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener('sen-chat-update', refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [userId])
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -70,6 +93,9 @@ export default function SenChatFloatingBubble() {
   const isExamRoom = Boolean(
     (pathname?.startsWith('/new-exams/') && pathname !== '/new-exams') ||
     (pathname?.startsWith('/legacy-exams/') && pathname !== '/legacy-exams') ||
+    pathname?.startsWith('/m/exams/') ||
+    pathname?.startsWith('/university-exams/') ||
+    pathname?.startsWith('/exams/university-exams/') ||
     pathname?.startsWith('/seb-exam')
   )
 
@@ -158,7 +184,7 @@ export default function SenChatFloatingBubble() {
   }, [])
 
   useEffect(() => {
-    const handleOpen = () => setIsOpen(true)
+    const handleOpen = () => { setTab('ai'); setIsOpen(true) }
     const handleToggle = () => setIsOpen((prev) => !prev)
     window.addEventListener('open-sen-chat', handleOpen)
     window.addEventListener('toggle-sen-chat', handleToggle)
@@ -171,42 +197,24 @@ export default function SenChatFloatingBubble() {
   if (isExcluded || disabledBySetting || isPageLoading) return null
 
   return (
-    <>
-      {/* CỬA SỔ CHAT MINI (KHI MỞ) - Dynamic lazy-loaded */}
-      {isOpen && (
-        <SenChatFloatingModal
-          messages={messages}
-          setMessages={setMessages}
-          sessionId={sessionId}
-          setSessionId={setSessionId}
-          onClose={() => setIsOpen(false)}
-        />
-      )}
-
-      {/* NÚT SENAI TRÊN DESKTOP: Dạng Capsule Pill chữ "SenAI", thích ứng để tránh che các nút */}
-      <div className="hidden md:block fixed bottom-6 right-6 z-40 select-none">
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          aria-label="Mở SenAI Chat"
-          className="group relative inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:to-indigo-700 text-white shadow-[0_8px_25px_rgba(236,72,153,0.35)] transition-all duration-300 hover:scale-105 active:scale-95 border border-white/20 select-none"
-        >
-          {isOpen ? (
-            <>
-              <X className="h-4 w-4 transition group-hover:rotate-90 duration-200" />
-              <span className="text-xs font-black uppercase tracking-wider font-sans">Đóng</span>
-            </>
-          ) : (
-            <>
-              <div className="relative flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-amber-300 animate-pulse" />
-                <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900" />
-              </div>
-              <span className="text-xs font-black uppercase tracking-wider font-sans">SenAI</span>
-            </>
-          )}
-        </button>
-      </div>
-    </>
+    <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] right-4 z-40 md:bottom-6 md:right-6">
+      {isOpen && <section aria-label="Sen Chat" className="absolute bottom-14 right-0 flex h-[min(31rem,calc(100dvh-10rem))] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-950 dark:text-white">
+        <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+          <span className="mr-1 text-sm font-bold">Sen Chat</span>
+          <button type="button" aria-pressed={tab === 'messages'} onClick={() => setTab('messages')} className="rounded-lg px-2 py-1.5 text-sm aria-pressed:bg-sky-100 aria-pressed:text-sky-800">Tin nhắn</button>
+          <button type="button" aria-pressed={tab === 'ai'} onClick={() => setTab('ai')} className="rounded-lg px-2 py-1.5 text-sm aria-pressed:bg-sky-100 aria-pressed:text-sky-800">Sen AI</button>
+          <button type="button" aria-label="Đóng Sen Chat" onClick={() => setIsOpen(false)} className="ml-auto rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
+        </div>
+        {tab === 'messages' ? <SenChatQuickMessages userId={userId} /> : <SenChatFloatingModal messages={messages} setMessages={setMessages}
+          sessionId={sessionId} setSessionId={setSessionId} onClose={() => setIsOpen(false)} />}
+      </section>}
+      <button type="button" aria-label={isOpen ? 'Đóng Sen Chat' : 'Mở Sen Chat'} aria-expanded={isOpen}
+        onClick={() => { setTab('messages'); setIsOpen(!isOpen) }}
+        className="flex min-h-11 items-center gap-2 rounded-full bg-sky-700 px-4 text-sm font-bold text-white shadow-lg transition hover:bg-sky-800 active:scale-95">
+        {isOpen ? <X size={18} /> : <MessageCircle size={18} />}
+        Sen Chat
+        {!isOpen && unread > 0 && <span aria-label={unread + ' tin chưa đọc'} className="rounded-full bg-white px-1.5 text-xs text-sky-800">{unread > 99 ? '99+' : unread}</span>}
+      </button>
+    </div>
   )
 }

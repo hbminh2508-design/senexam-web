@@ -5,6 +5,7 @@ import {
   X,
   User,
   Shield,
+  ShieldCheck,
   Smartphone,
   HardDrive,
   Trash2,
@@ -30,6 +31,7 @@ import {
   Music,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { BrowserPushButton } from './ChatNotificationControls'
 import {
   SenChatUser,
   isEphemeralStorageEnabled,
@@ -519,6 +521,7 @@ export default function ChatSettingsModal({
                 </div>
 
                 <div className="space-y-3 pt-1">
+                  {currentUser && <BrowserPushButton userId={currentUser.id} />}
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Âm báo tin nhắn mới</p>

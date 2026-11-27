@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'Sen Chat Mobile | Nhắn Tin Mã Hóa E2EE',
   description: 'Trò chuyện mã hóa đầu cuối E2EE, nhóm bảo mật MLS và trợ lý học tập SenAI trên di động',
+  manifest: '/sen-chat.webmanifest',
 }
 
 export default function MobileChatLayout({

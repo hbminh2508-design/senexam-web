@@ -72,14 +72,14 @@ import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
 import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
-import ChatCallModal, { ChatIncomingCallDialog, CallSignalPayload } from '@/components/chat/ChatCallModal'
+import { ConversationMuteButton } from '@/components/chat/ChatNotificationControls'
+import { chatConversationKey, deliverLocalMessage, getChatConversation, sendInboxMessage, startChatCall } from '@/lib/senChatInbox'
 import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
 import ChatMessageContent from '@/components/chat/ChatMessageContent'
 import ChatSenAiStudioView from '@/components/chat/ChatSenAiStudioView'
 import ChatContextMenu from '@/components/chat/ChatContextMenu'
-import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
 import {
   hasSenAiMention,
   extractSenAiQuery,
@@ -118,7 +118,6 @@ import {
   SENAI_STUDIO_CONVERSATION_ID,
   CHAT_RETENTION_POLICY_NOTICE,
   getChatSendKey,
-  getChatNotificationSettings,
   togglePinConversation,
   markConversationUnread,
   toggleMessageReaction,
@@ -212,13 +211,8 @@ export default function SenChatPage() {
   const [showSenAiAutocomplete, setShowSenAiAutocomplete] = useState(false)
 
   // Offline send queue
-  const [offlineQueue, setOfflineQueue] = useState<SenChatMessage[]>([])
 
   // 📞 WebRTC E2EE Calls
-  const [activeCallMode, setActiveCallMode] = useState<'none' | 'voice' | 'video'>('none')
-  const [incomingCall, setIncomingCall] = useState<CallSignalPayload | null>(null)
-  const [activeCallIsIncoming, setActiveCallIsIncoming] = useState(false)
-  const [activeCallId, setActiveCallId] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -406,33 +400,6 @@ export default function SenChatPage() {
     },
     [currentUser?.id]
   )
-
-  // Xử lý cuộc gọi đến WebRTC
-  const handleAcceptIncomingCall = useCallback((call: CallSignalPayload) => {
-    setIncomingCall(null)
-    setActiveCallId(call.callId)
-    setActiveCallIsIncoming(true)
-    setActiveCallMode(call.callMode)
-    if (call.conversationId) {
-      setSelectedConvId(call.conversationId)
-    }
-  }, [])
-
-  const handleDeclineIncomingCall = useCallback((call: CallSignalPayload) => {
-    supabase.channel('sen-chat-realtime-transit').send({
-      type: 'broadcast',
-      event: 'call_response',
-      payload: {
-        callId: call.callId,
-        conversationId: call.conversationId,
-        senderId: currentUser?.id,
-        callerId: call.callerId,
-        receiverId: call.callerId,
-        accepted: false,
-      },
-    }).catch(() => {})
-    setIncomingCall(null)
-  }, [currentUser])
 
   // 1. Khởi tạo & Kiểm tra Dark Mode / Theme / Online Status
   useEffect(() => {
@@ -709,118 +676,46 @@ export default function SenChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // 5. Kết nối Supabase Realtime Channel (Chỉ truyền Ciphertext & Metadata tối thiểu)
   useEffect(() => {
-    if (!currentUser) return
-
-    const channel = supabase
-      .channel('sen-chat-realtime-transit')
-      .on('broadcast', { event: 'new_e2ee_message' }, async ({ payload }) => {
-        if (!payload) return
-
-        // Bỏ qua tin nhắn chính mình vừa gửi (nếu echo lại từ kênh transit)
-        if (payload.deviceId === deviceId || payload.senderId === currentUser.id) return
-
-        // Kiểm tra xem tin nhắn có hướng tới tôi hoặc nhóm tôi đang tham gia không
-        const activeOrMatchedConv = conversations.find(
-          (c) => c.id === payload.conversationId || c.id === payload.receiverId || c.partnerId === payload.receiverId
-        )
-        const isTargetedToMe =
-          payload.receiverId === currentUser.id ||
-          Boolean(activeOrMatchedConv)
-        if (!isTargetedToMe) return
-
-        if (isUserBlocked(payload.senderId)) return
-
-        const isGroupTarget = activeOrMatchedConv?.isGroup
-        const targetConvId = isGroupTarget
-          ? (payload.conversationId || activeOrMatchedConv?.id || payload.receiverId)
-          : (payload.isSenAi || payload.senderId === 'senai' || payload.senderId === 'system')
-            ? (payload.invokedBy || payload.senderId)
-            : payload.senderId
-
-        // Giải nén tự động và minh bạch nếu tin nhắn gửi dạng nén
-        const decompressedContent = await decompressChatMessage(payload.content || '')
-
-        const incomingMsg: SenChatMessage = {
-          id: payload.id || `msg_${Date.now()}`,
-          conversationId: targetConvId,
-          senderId: payload.senderId,
-          senderName: payload.senderName || (payload.isSenAi ? 'SenAI' : 'Bạn bè'),
-          receiverId: currentUser.id,
-          content: decompressedContent,
-          type: payload.type || 'text',
-          isSenAi: !!payload.isSenAi,
-          invokedBy: payload.invokedBy,
-          attachmentUrl: payload.attachmentUrl,
-          attachmentName: payload.attachmentName,
-          attachmentSize: payload.attachmentSize,
-          attachmentId: payload.attachmentId,
-          driveFileId: payload.driveFileId,
-          storageProvider: payload.storageProvider,
-          storagePath: payload.storagePath,
-          fileKeyBase64: payload.fileKeyBase64,
-          mimeType: payload.mimeType,
-          duration: payload.duration,
-          waveform: payload.waveform,
-          transcription: payload.transcription,
-          transcriptionLanguage: payload.transcriptionLanguage,
-          createdAt: payload.createdAt || new Date().toISOString(),
-          status: 'received',
-        }
-
-        saveLocalMessage(targetConvId, incomingMsg)
-        refreshConversations()
-        if (selectedConvId === targetConvId) {
-          setMessages((prev) => [...prev, incomingMsg])
-        }
-
-        // Thông báo âm thanh tin nhắn mới
-        try {
-          const notifs = getChatNotificationSettings()
-          if (notifs.messageSound && typeof window !== 'undefined') {
-            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
-            const osc = audioCtx.createOscillator()
-            const gain = audioCtx.createGain()
-            osc.type = 'sine'
-            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime)
-            osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12)
-            gain.gain.setValueAtTime(0.08, audioCtx.currentTime)
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25)
-            osc.connect(gain)
-            gain.connect(audioCtx.destination)
-            osc.start()
-            osc.stop(audioCtx.currentTime + 0.25)
-          }
-        } catch {}
-      })
-      .on('broadcast', { event: 'call_request' }, ({ payload }) => {
-        if (!payload || !currentUser) return
-        if (payload.receiverId === currentUser.id) {
-          setIncomingCall(payload)
-        }
-      })
-      .on('broadcast', { event: 'call_end' }, ({ payload }) => {
-        if (!payload) return
-        setIncomingCall((prev) => (prev?.callId === payload.callId ? null : prev))
-      })
-      .subscribe()
-
+    if (!currentUser?.id) return
+    const refresh = () => {
+      setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+      const activeId = selectedConvIdRef.current
+      if (activeId) syncMessagesStateIfChanged(activeId, getLocalMessages(activeId))
+    }
+    window.addEventListener('sen-chat-update', refresh)
+    window.addEventListener('storage', refresh)
+    refresh()
     return () => {
-      supabase.removeChannel(channel)
+      window.removeEventListener('sen-chat-update', refresh)
+      window.removeEventListener('storage', refresh)
     }
-  }, [currentUser, selectedConvId])
+  }, [currentUser?.id, syncMessagesStateIfChanged])
 
-  // 6. Xử lý hàng đợi gửi tin khi offline
   useEffect(() => {
-    if (isOnline && offlineQueue.length > 0) {
-      const queueToProcess = [...offlineQueue]
-      setOfflineQueue([])
-      queueToProcess.forEach((queuedMsg) => {
-        handleSendMessage(queuedMsg.content, queuedMsg.type, queuedMsg.attachmentUrl)
-      })
+    const conversationId = selectedConvId
+    if (conversationId) {
+      const conversation = getChatConversation(conversationId)
+      if (conversation && conversation.unreadCount > 0) {
+        const next = { ...conversation, unreadCount: 0 }
+        saveLocalConversation(next)
+        window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: conversationId }))
+      }
     }
-  }, [isOnline, offlineQueue])
+    window.dispatchEvent(new CustomEvent('sen-chat-view', { detail: conversationId }))
+    return () => { window.dispatchEvent(new CustomEvent('sen-chat-view', { detail: null })) }
+  }, [selectedConvId])
+
+  const handledConversationQuery = useRef<string | null>(null)
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get('conversation')
+    const match = target ? getChatConversation(target) : null
+    if (target && match && handledConversationQuery.current !== target) {
+      handledConversationQuery.current = target
+      setSelectedConvId(match.id)
+      setActiveRailTab('messages')
+    }
+  }, [conversations])
 
   // 7. Gửi tin nhắn mới
   const handleSendMessage = async (
@@ -860,7 +755,7 @@ export default function SenChatPage() {
       type: type,
       attachmentUrl: mediaUrl,
       createdAt: new Date().toISOString(),
-      status: isOnline ? 'sent' : 'sending',
+      status: 'sending',
     }
 
     // Nếu có trả lời tin nhắn (Trích dẫn chuẩn)
@@ -871,11 +766,6 @@ export default function SenChatPage() {
         content: replyingToMessage.content || (replyingToMessage.attachmentName ? `[Tệp: ${replyingToMessage.attachmentName}]` : '[Tin nhắn]'),
       }
       setReplyingToMessage(null)
-    }
-
-    // Nếu đang offline, lưu vào hàng đợi gửi lại
-    if (!isOnline) {
-      setOfflineQueue((prev) => [...prev, newMsg])
     }
 
     // Lưu cục bộ ngay tức thì (Local-First)
@@ -898,25 +788,7 @@ export default function SenChatPage() {
     })
     refreshConversations()
 
-    // Gửi qua Server Realtime Broadcast / Transit Queue nếu có mạng (Nén tin nhắn văn bản)
-    if (isOnline) {
-      try {
-        const compressedContent =
-          newMsg.type === 'text' && newMsg.content ? await compressChatMessage(newMsg.content) : newMsg.content
-
-        await supabase.channel('sen-chat-realtime-transit').send({
-          type: 'broadcast',
-          event: 'new_e2ee_message',
-          payload: {
-            ...newMsg,
-            content: compressedContent,
-            deviceId,
-          },
-        })
-      } catch (e) {
-        console.warn('Realtime broadcast error, fallbacked to local:', e)
-      }
-    }
+    if (isOnline) await deliverLocalMessage(newMsg, activeConv).catch(() => {})
   }
 
   // 7b. Gửi tin nhắn thoại bảo mật E2EE (P5)
@@ -963,7 +835,7 @@ export default function SenChatPage() {
       transcription: voiceData.transcription,
       transcriptionLanguage: voiceData.transcriptionLanguage,
       createdAt: new Date().toISOString(),
-      status: isOnline ? 'sent' : 'sending',
+      status: 'sending',
     }
 
     saveLocalMessage(selectedConvId, newMsg)
@@ -980,20 +852,7 @@ export default function SenChatPage() {
     })
     refreshConversations()
 
-    if (isOnline) {
-      try {
-        await supabase.channel('sen-chat-realtime-transit').send({
-          type: 'broadcast',
-          event: 'new_e2ee_message',
-          payload: {
-            ...newMsg,
-            deviceId,
-          },
-        })
-      } catch (e) {
-        console.warn('Realtime broadcast error, fallbacked to local:', e)
-      }
-    }
+    if (isOnline) await deliverLocalMessage(newMsg, activeConv).catch(() => {})
   }
 
   // 7c. Xác nhận gửi câu hỏi tới SenAI (P6: E2EE Disclosure & Context)
@@ -1035,11 +894,7 @@ export default function SenChatPage() {
 
         if (isOnline) {
           try {
-            await supabase.channel('sen-chat-realtime-transit').send({
-              type: 'broadcast',
-              event: 'new_e2ee_message',
-              payload: { ...sysMsg, deviceId },
-            })
+            await sendInboxMessage({ ...sysMsg, senderId: currentUser.id }, activeConv)
           } catch (e) {
             console.warn('Lỗi broadcast thông báo nhóm:', e)
           }
@@ -1133,11 +988,7 @@ export default function SenChatPage() {
       // Phát realtime qua Supabase Realtime Transit
       if (isOnline) {
         try {
-          await supabase.channel('sen-chat-realtime-transit').send({
-            type: 'broadcast',
-            event: 'new_e2ee_message',
-            payload: { ...senAiMsg, deviceId },
-          })
+            await sendInboxMessage({ ...senAiMsg, senderId: currentUser.id }, activeConv)
         } catch (e) {
           console.warn('Lỗi broadcast tin nhắn SenAI:', e)
         }
@@ -1886,13 +1737,10 @@ export default function SenChatPage() {
                   <Search className="h-4 w-4" />
                 </button>
 
+                <ConversationMuteButton key={activeConv.id} conversation={chatConversationKey(activeConv)} />
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveCallId(null)
-                    setActiveCallIsIncoming(false)
-                    setActiveCallMode('voice')
-                  }}
+                  onClick={() => startChatCall(activeConv, 'voice')}
                   title="Gọi thoại mã hóa"
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-blue-600 dark:hover:bg-slate-800"
                 >
@@ -1901,11 +1749,7 @@ export default function SenChatPage() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveCallId(null)
-                    setActiveCallIsIncoming(false)
-                    setActiveCallMode('video')
-                  }}
+                  onClick={() => startChatCall(activeConv, 'video')}
                   title="Gọi video mã hóa"
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-blue-600 dark:hover:bg-slate-800"
                 >
@@ -2037,6 +1881,7 @@ export default function SenChatPage() {
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100/90 dark:bg-slate-800/90 text-[11px] text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 shadow-xs max-w-[85%] text-center">
                           <Info className="h-3.5 w-3.5 text-purple-500 shrink-0" />
                           <span>{msg.content}</span>
+                          {msg.missedCall && activeConv && <button type="button" className="font-semibold text-sky-700 underline dark:text-sky-300" onClick={() => startChatCall(activeConv, msg.missedCall!)}>Gọi lại</button>}
                         </div>
                       ) : (
                         <div className="flex items-end gap-1.5 max-w-[80%]">
@@ -2081,7 +1926,9 @@ export default function SenChatPage() {
 
                                 {isMe && (
                                   <span>
-                                    {msg.status === 'sending' ? (
+                                    {msg.status === 'failed' ? (
+                                      <button type="button" className="font-semibold underline" title="Gửi thất bại" onClick={() => { if (activeConv) void deliverLocalMessage(msg, activeConv).catch(() => {}) }}>Thử lại</button>
+                                    ) : msg.status === 'sending' ? (
                                       <Clock className="h-3 w-3" />
                                     ) : msg.status === 'received' || msg.status === 'seen' ? (
                                       <CheckCheck
@@ -2188,7 +2035,9 @@ export default function SenChatPage() {
 
                               {isMe && (
                                 <span>
-                                  {msg.status === 'sending' ? (
+                                  {msg.status === 'failed' ? (
+                                      <button type="button" className="font-semibold underline" title="Gửi thất bại" onClick={() => { if (activeConv) void deliverLocalMessage(msg, activeConv).catch(() => {}) }}>Thử lại</button>
+                                    ) : msg.status === 'sending' ? (
                                     <Clock className="h-3 w-3" />
                                   ) : msg.status === 'received' || msg.status === 'seen' ? (
                                     <CheckCheck
@@ -2727,7 +2576,7 @@ export default function SenChatPage() {
               expiresAt: att.expiresAt,
               isPinnedPermanent: false,
               createdAt: new Date().toISOString(),
-              status: isOnline ? 'sent' : 'sending',
+              status: 'sending',
             }
 
             saveLocalMessage(selectedConvId, newMsg)
@@ -2744,11 +2593,7 @@ export default function SenChatPage() {
             refreshConversations()
 
             if (isOnline) {
-              supabase.channel('sen-chat-realtime-transit').send({
-                type: 'broadcast',
-                event: 'new_e2ee_message',
-                payload: { ...newMsg, deviceId },
-              }).catch(() => {})
+              void deliverLocalMessage(newMsg, activeConv).catch(() => {})
 
               broadcastFileTransitReady({
                 attachmentId: att.id,
@@ -2775,38 +2620,6 @@ export default function SenChatPage() {
         recentMessages={messages}
         isLoading={isSenAiCalling}
       />
-
-      {/* Hộp thoại chuông cuộc gọi đến WebRTC E2EE */}
-      {incomingCall && (
-        <ChatIncomingCallDialog
-          payload={incomingCall}
-          onAccept={() => handleAcceptIncomingCall(incomingCall)}
-          onDecline={() => handleDeclineIncomingCall(incomingCall)}
-        />
-      )}
-
-      {/* Giao diện cuộc gọi thoại & video WebRTC E2EE */}
-      {activeCallMode !== 'none' && currentUser && (activeConv || incomingCall) && (
-        <ChatCallModal
-          callMode={activeCallMode}
-          isIncoming={activeCallIsIncoming}
-          initialCallId={activeCallId || undefined}
-          conversationId={activeConv?.id || incomingCall?.conversationId || selectedConvId || ''}
-          partnerId={activeConv?.partnerId || incomingCall?.callerId || selectedConvId || ''}
-          partnerName={activeConv?.partnerName || incomingCall?.groupName || incomingCall?.callerName || 'Bạn bè'}
-          partnerAvatar={activeConv?.partnerAvatar || incomingCall?.callerAvatar}
-          currentUserId={currentUser.id}
-          currentUserName={currentUser.name}
-          currentUserAvatar={currentUser.avatar}
-          isGroup={Boolean(activeConv?.isGroup || incomingCall?.isGroup)}
-          userRole={(activeConv?.role as 'owner' | 'admin' | 'member') || 'member'}
-          onClose={() => {
-            setActiveCallMode('none')
-            setActiveCallIsIncoming(false)
-            setActiveCallId(null)
-          }}
-        />
-      )}
 
       {/* Modal Cài Đặt Sen Chat */}
       <ChatSettingsModal
