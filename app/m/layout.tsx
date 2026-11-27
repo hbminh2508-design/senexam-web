@@ -36,9 +36,9 @@ export default function MobileRootLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-start antialiased selection:bg-sky-500 selection:text-white">
+    <div className="min-h-dvh w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-start antialiased selection:bg-sky-500 selection:text-white">
       {/* Khung giả lập điện thoại khi mở trên màn hình máy tính rộng (> 768px) kèm Safe-Area Notch/Navigation */}
-      <div className="w-full max-w-[480px] min-h-screen bg-white dark:bg-slate-900 shadow-2xl flex flex-col relative border-x border-black/5 dark:border-white/5 pt-[env(safe-area-inset-top,0px)] pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))]">
+      <div className="sen-mobile-shell w-full max-w-[480px] min-h-dvh bg-white dark:bg-slate-900 shadow-2xl flex flex-col relative border-x border-black/5 dark:border-white/5 pt-[env(safe-area-inset-top,0px)]">
         <main className="flex-1 w-full flex flex-col">
           <Suspense fallback={<div className="p-6 text-center text-xs text-sky-500 font-medium">Đang tải giao diện di động...</div>}>
             {children}

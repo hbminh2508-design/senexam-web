@@ -1433,8 +1433,8 @@ function MobileChatPageInner() {
       {view === 'list' && (
         <div className="flex-1 flex flex-col w-full h-full overflow-hidden">
           {/* Header Bar */}
-          <header className="p-3.5 border-b border-black/5 dark:border-white/5 flex items-center justify-between gap-2 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
-            <div className="flex items-center gap-2">
+          <header className="p-2 border-b border-black/5 dark:border-white/5 flex items-center justify-between gap-1 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+            <div className="flex min-w-0 items-center gap-1.5">
               <Link
                 href="/m"
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-300 active:scale-95 transition"
@@ -1446,25 +1446,17 @@ function MobileChatPageInner() {
                 type="button"
                 onClick={() => setShowVersionModal(true)}
                 title={`Sen Chat v${SEN_CHAT_CURRENT_VERSION} — Bấm để xem thông tin phiên bản & nhật ký cập nhật`}
-                className="flex items-center gap-2 text-left active:scale-95 transition"
+                className="flex min-w-0 items-center gap-1.5 text-left active:scale-95 transition"
               >
-                <SenChatLogo size={36} className="shrink-0" />
-                <div>
-                  <h1 className="text-base font-black flex items-center gap-1.5">
-                    <span>Sen Chat</span>
-                    <span className="px-1.5 py-0.2 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[9px] font-black tracking-wider uppercase">
-                      E2EE
-                    </span>
-                    <ChatDeviceComplianceBadge />
-                  </h1>
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    {flagSecureActive ? '🛡️ FLAG_SECURE Đang bật' : 'Mã hóa đầu cuối'}
-                  </span>
+                <SenChatLogo size={30} className="hidden shrink-0 min-[370px]:block" />
+                <div className="min-w-0">
+                  <h1 className="truncate text-base font-black">Sen Chat</h1>
+                  <span className="hidden min-[420px]:block"><ChatDeviceComplianceBadge /></span>
                 </div>
               </button>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 onClick={() => setShowSettingsModal(true)}
@@ -1795,7 +1787,7 @@ function MobileChatPageInner() {
 
           {/* Danh Sách Tin Nhắn */}
           <div
-            className="flex-1 overflow-y-auto overscroll-contain transform-gpu p-3 space-y-3"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 space-y-3"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {/* Huy hiệu bảo mật mã hóa */}
@@ -2124,7 +2116,7 @@ function MobileChatPageInner() {
             <div
               className="p-2 border-t border-black/10 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-end gap-1.5 shrink-0"
               style={{
-                paddingBottom: viewportBottomOffset > 0 ? '0.5rem' : 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))',
+                paddingBottom: '0.5rem',
               }}
             >
               {/* Input file ẩn cho Mobile */}

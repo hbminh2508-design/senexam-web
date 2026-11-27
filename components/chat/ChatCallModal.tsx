@@ -736,7 +736,10 @@ export default function ChatCallModal({
         void chatRequest('call-alerts', { action: 'end', callId: id }).catch(() => {})
         cleanupCall()
       }
-      if (!groupStarted) setCallStatus('ended')
+      if (!groupStarted) {
+        setCallStatus('ended')
+        setStatusMessage(isGroup ? 'Không thể mở phòng gọi nhóm' : 'Không thể kết nối cuộc gọi')
+      }
       setErrorBanner(reason instanceof Error ? reason.message : 'Không thể kết nối cuộc gọi.')
     })
 

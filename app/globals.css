@@ -761,3 +761,14 @@ html.dark[data-eco-mode="true"] .dark\:bg-slate-800\/90 {
   transform: translateY(-3px);
   box-shadow: 0 10px 22px rgba(2, 6, 23, 0.08);
 }
+body:has([data-sen-mobile-nav]) .sen-mobile-shell {
+  padding-bottom: calc(4rem + max(.5rem, env(safe-area-inset-bottom)));
+}
+body:has([data-sen-mobile-nav]) .sen-chat-launcher {
+  bottom: max(.5rem, env(safe-area-inset-bottom));
+  right: max(1rem, calc((100vw - 448px) / 2));
+  z-index: 45;
+}
+body:has([data-sen-mobile-nav]) [data-sen-floating-button] {
+  display: none;
+}

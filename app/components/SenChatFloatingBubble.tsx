@@ -186,18 +186,21 @@ export default function SenChatFloatingBubble() {
   useEffect(() => {
     const handleOpen = () => { setTab('ai'); setIsOpen(true) }
     const handleToggle = () => setIsOpen((prev) => !prev)
+    const handleNavOpen = () => { setTab('messages'); setIsOpen((open) => !open) }
     window.addEventListener('open-sen-chat', handleOpen)
     window.addEventListener('toggle-sen-chat', handleToggle)
+    window.addEventListener('open-sen-chat-from-nav', handleNavOpen)
     return () => {
       window.removeEventListener('open-sen-chat', handleOpen)
       window.removeEventListener('toggle-sen-chat', handleToggle)
+      window.removeEventListener('open-sen-chat-from-nav', handleNavOpen)
     }
   }, [])
 
-  if (isExcluded || disabledBySetting || isPageLoading) return null
+  if (isExcluded || (disabledBySetting && !isOpen) || isPageLoading) return null
 
   return (
-    <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] right-4 z-40 md:bottom-6 md:right-6">
+    <div className="sen-chat-launcher fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] right-4 z-40 md:bottom-6 md:right-6">
       {isOpen && <section aria-label="Sen Chat" className="absolute bottom-14 right-0 flex h-[min(31rem,calc(100dvh-10rem))] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-950 dark:text-white">
         <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
           <span className="mr-1 text-sm font-bold">Sen Chat</span>
@@ -208,7 +211,7 @@ export default function SenChatFloatingBubble() {
         {tab === 'messages' ? <SenChatQuickMessages userId={userId} /> : <SenChatFloatingModal messages={messages} setMessages={setMessages}
           sessionId={sessionId} setSessionId={setSessionId} onClose={() => setIsOpen(false)} />}
       </section>}
-      <button type="button" aria-label={isOpen ? 'Đóng Sen Chat' : 'Mở Sen Chat'} aria-expanded={isOpen}
+      <button data-sen-floating-button type="button" aria-label={isOpen ? 'Đóng Sen Chat' : 'Mở Sen Chat'} aria-expanded={isOpen}
         onClick={() => { setTab('messages'); setIsOpen(!isOpen) }}
         className="flex min-h-11 items-center gap-2 rounded-full bg-sky-700 px-4 text-sm font-bold text-white shadow-lg transition hover:bg-sky-800 active:scale-95">
         {isOpen ? <X size={18} /> : <MessageCircle size={18} />}

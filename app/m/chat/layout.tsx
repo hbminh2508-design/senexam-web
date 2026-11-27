@@ -12,7 +12,7 @@ export default function MobileChatLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="-mb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] flex-1 flex flex-col w-full h-[calc(100dvh-env(safe-area-inset-top,0px))] overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="shrink-0 flex flex-col w-full h-[calc(100dvh-env(safe-area-inset-top,0px))] min-h-0 overflow-hidden pb-[env(safe-area-inset-bottom,0px)] bg-slate-50 dark:bg-slate-950">
       {children}
     </div>
   )
