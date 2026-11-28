@@ -1,3 +1,5 @@
+import { getSenChatAccount, senChatAccountKey } from './senChatAccount.mjs'
+
 /**
  * Sen Chat Local-First Storage Engine
  * Thiết kế cho Sen Chat (chat.senexam.me).
@@ -180,11 +182,71 @@ export function getOrCreateDeviceId(): string {
   return deviceId
 }
 
+function readAccountStorage(key: string) {
+  const scoped = senChatAccountKey(key)
+  return scoped ? localStorage.getItem(scoped) : null
+}
+
+function writeAccountStorage(key: string, value: string) {
+  const scoped = senChatAccountKey(key)
+  if (scoped) localStorage.setItem(scoped, value)
+}
+
+function removeAccountStorage(key: string) {
+  const scoped = senChatAccountKey(key)
+  if (scoped) localStorage.removeItem(scoped)
+}
+
+export function replaceLocalConversations(list: SenChatConversation[]) {
+  writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
+}
+
+export function restoreLegacySenChatHistory(userId: string, groups?: SenChatConversation[]) {
+  if (getSenChatAccount() !== userId) return
+  const marker = groups ? 'legacy-groups-checked' : 'legacy-direct-checked'
+  try {
+    if (readAccountStorage(marker)) return
+    const legacy = groups || JSON.parse(localStorage.getItem(STORAGE_KEYS.CONVERSATIONS) || '[]') as SenChatConversation[]
+    const conversations = getLocalConversations()
+    for (const conversation of legacy) {
+      if (!conversation?.id || (!groups && (conversation.isGroup || !conversation.partnerId || conversation.partnerId === userId))) continue
+      const raw = localStorage.getItem(STORAGE_KEYS.MESSAGES_PREFIX + conversation.id)
+      if (!raw) continue
+      const messages: SenChatMessage[] = JSON.parse(raw)
+      if (!Array.isArray(messages)) continue
+      const verified = messages.filter((message) => {
+        if (!message?.id || message.conversationId !== conversation.id) return false
+        if (groups) return message.senderId === userId || message.receiverId === userId
+        return (message.senderId === userId && message.receiverId === conversation.partnerId) ||
+          (message.receiverId === userId && message.senderId === conversation.partnerId)
+      })
+      if (!verified.length) continue
+      const merged = new Map(verified.map((message) => [message.id, message]))
+      for (const message of getLocalMessages(conversation.id)) merged.set(message.id, message)
+      const sorted = [...merged.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+      const last = sorted[sorted.length - 1]
+      if (!conversations.some(({ id }) => id === conversation.id)) {
+        conversations.push({
+          id: conversation.id, partnerId: conversation.partnerId,
+          partnerIdentifier: conversation.partnerId, partnerName: conversation.partnerName,
+          updatedAt: Date.parse(last.createdAt) || 0, unreadCount: 0,
+          lastMessage: last.type === 'text' ? last.content : 'Tệp đính kèm',
+        })
+      }
+      writeAccountStorage(STORAGE_KEYS.MESSAGES_PREFIX + conversation.id, JSON.stringify(sorted))
+    }
+    replaceLocalConversations(conversations)
+    writeAccountStorage(marker, '1')
+  } catch {
+    // Keep historical data available for a later migration attempt if storage is unavailable.
+  }
+}
+
 // 2. Quản lý Người Dùng Hiện Tại (User Session)
 export function getLocalSenChatUser(): SenChatUser | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.USER)
+    const raw = readAccountStorage(STORAGE_KEYS.USER)
     return raw ? JSON.parse(raw) : null
   } catch (e) {
     return null
@@ -193,19 +255,19 @@ export function getLocalSenChatUser(): SenChatUser | null {
 
 export function saveLocalSenChatUser(user: SenChatUser): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user))
+  writeAccountStorage(STORAGE_KEYS.USER, JSON.stringify(user))
 }
 
 export function clearLocalSenChatUser(): void {
   if (typeof window === 'undefined') return
-  localStorage.removeItem(STORAGE_KEYS.USER)
+  removeAccountStorage(STORAGE_KEYS.USER)
 }
 
 // 3. Quản lý Danh Sách Cuộc Trò Chuyện (Conversations)
 export function getLocalConversations(): SenChatConversation[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.CONVERSATIONS)
+    const raw = readAccountStorage(STORAGE_KEYS.CONVERSATIONS)
     const list: SenChatConversation[] = raw ? JSON.parse(raw) : []
     return list.sort((a, b) => {
       const pinDiff = (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0)
@@ -226,15 +288,15 @@ export function saveLocalConversation(conv: SenChatConversation): void {
   } else {
     list.unshift({ ...conv, updatedAt: Date.now() })
   }
-  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
+  writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
 }
 
 export function deleteLocalConversation(convId: string): void {
   if (typeof window === 'undefined') return
   if (convId === SENAI_STUDIO_CONVERSATION_ID) return // SenAI Studio vĩnh viễn không bị xóa
   const list = getLocalConversations().filter((c) => c.id !== convId)
-  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
-  localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${convId}`)
+  writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
+  removeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${convId}`)
 }
 
 export function togglePinConversation(convId: string): SenChatConversation[] {
@@ -245,7 +307,7 @@ export function togglePinConversation(convId: string): SenChatConversation[] {
   const list = getLocalConversations().map((c) =>
     c.id === convId ? { ...c, isPinned: !c.isPinned } : c
   )
-  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
+  writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
   return ensureSenAiStudioInConversations(list)
 }
 
@@ -257,7 +319,7 @@ export function markConversationUnread(convId: string, count = 1): SenChatConver
   const list = getLocalConversations().map((c) =>
     c.id === convId ? { ...c, unreadCount: Math.max(1, count) } : c
   )
-  localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
+  writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(list))
   return ensureSenAiStudioInConversations(list)
 }
 
@@ -288,14 +350,14 @@ export function toggleMessageReaction(
     }
     return { ...m, reactions }
   })
-  localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(updated))
+  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(updated))
   return updated
 }
 
 export function getConversationDraft(conversationId: string): string {
   if (typeof window === 'undefined' || !conversationId) return ''
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.DRAFTS)
+    const raw = readAccountStorage(STORAGE_KEYS.DRAFTS)
     const drafts = raw ? JSON.parse(raw) : {}
     return typeof drafts[conversationId] === 'string' ? drafts[conversationId] : ''
   } catch {
@@ -306,25 +368,25 @@ export function getConversationDraft(conversationId: string): string {
 export function saveConversationDraft(conversationId: string, text: string): void {
   if (typeof window === 'undefined' || !conversationId) return
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.DRAFTS)
+    const raw = readAccountStorage(STORAGE_KEYS.DRAFTS)
     const drafts = raw ? JSON.parse(raw) : {}
     if (!text || !text.trim()) {
       delete drafts[conversationId]
     } else {
       drafts[conversationId] = text
     }
-    localStorage.setItem(STORAGE_KEYS.DRAFTS, JSON.stringify(drafts))
+    writeAccountStorage(STORAGE_KEYS.DRAFTS, JSON.stringify(drafts))
   } catch {}
 }
 
 export function clearConversationDraft(conversationId: string): void {
   if (typeof window === 'undefined' || !conversationId) return
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.DRAFTS)
+    const raw = readAccountStorage(STORAGE_KEYS.DRAFTS)
     if (!raw) return
     const drafts = JSON.parse(raw)
     delete drafts[conversationId]
-    localStorage.setItem(STORAGE_KEYS.DRAFTS, JSON.stringify(drafts))
+    writeAccountStorage(STORAGE_KEYS.DRAFTS, JSON.stringify(drafts))
   } catch {}
 }
 
@@ -332,7 +394,7 @@ export function clearConversationDraft(conversationId: string): void {
 export function getLocalMessages(conversationId: string): SenChatMessage[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)
+    const raw = readAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)
     const list: SenChatMessage[] = raw ? JSON.parse(raw) : []
 
     return list.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
@@ -351,7 +413,7 @@ export function saveLocalMessage(conversationId: string, message: SenChatMessage
     list.push(message)
   }
 
-  localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(list))
+  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(list))
 
   // Cập nhật lastMessage cho Conversation
   const convs = getLocalConversations()
@@ -367,13 +429,13 @@ export function saveLocalMessage(conversationId: string, message: SenChatMessage
         : message.content
     c.lastMessageTime = new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     c.updatedAt = Date.now()
-    localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
+    writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
   }
 }
 
 export function saveLocalMessages(conversationId: string, messages: SenChatMessage[]): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(messages))
+  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(messages))
 
   if (messages.length > 0) {
     const last = messages[messages.length - 1]
@@ -390,7 +452,7 @@ export function saveLocalMessages(conversationId: string, messages: SenChatMessa
           : last.content
       c.lastMessageTime = new Date(last.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
       c.updatedAt = Date.now()
-      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
+      writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
     }
   }
 }
@@ -399,12 +461,12 @@ export function deleteLocalMessage(conversationId: string, messageId: string): v
   if (typeof window === 'undefined') return
   const list = getLocalMessages(conversationId)
   const filtered = list.filter((m) => m.id !== messageId)
-  localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(filtered))
+  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(filtered))
 }
 
 export function clearAllLocalMessages(conversationId: string): void {
   if (typeof window === 'undefined') return
-  localStorage.removeItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)
+  removeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)
   try {
     const convs = getLocalConversations()
     const c = convs.find((item) => item.id === conversationId)
@@ -412,7 +474,7 @@ export function clearAllLocalMessages(conversationId: string): void {
       c.lastMessage = undefined
       c.lastMessageTime = undefined
       c.unreadCount = 0
-      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
+      writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
     }
   } catch (e) {
     console.warn('Lỗi cập nhật hội thoại khi xóa tin nhắn:', e)
@@ -427,10 +489,12 @@ export function clearAllLocalMessages(conversationId: string): void {
 export function clearAllEphemeralMessages(): void {
   if (typeof window === 'undefined') return
   try {
+    const prefix = senChatAccountKey(STORAGE_KEYS.MESSAGES_PREFIX)
+    if (!prefix) return
     const keysToRemove: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key && key.startsWith(STORAGE_KEYS.MESSAGES_PREFIX)) {
+      if (key && key.startsWith(prefix)) {
         keysToRemove.push(key)
       }
     }
@@ -446,7 +510,7 @@ export function clearAllEphemeralMessages(): void {
         lastMessageTime: undefined,
         unreadCount: 0,
       }))
-      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(sanitizedConvs))
+      writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(sanitizedConvs))
     }
   } catch (e) {
     console.warn('Lỗi dọn dẹp tin nhắn tạm thời:', e)
@@ -459,14 +523,14 @@ export function clearAllEphemeralMessages(): void {
  */
 export function isEphemeralStorageEnabled(): boolean {
   if (typeof window === 'undefined') return false
-  const saved = localStorage.getItem(STORAGE_KEYS.EPHEMERAL_ENABLED)
+  const saved = readAccountStorage(STORAGE_KEYS.EPHEMERAL_ENABLED)
   if (saved === null) return false // Mặc định tắt: Lưu trữ bền vững
   return saved === 'true'
 }
 
 export function setEphemeralStorageEnabled(enabled: boolean): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEYS.EPHEMERAL_ENABLED, enabled ? 'true' : 'false')
+  writeAccountStorage(STORAGE_KEYS.EPHEMERAL_ENABLED, enabled ? 'true' : 'false')
 }
 
 /**
@@ -482,9 +546,9 @@ export function clearAllLocalChatData(): void {
     clearAllEphemeralMessages()
     clearLocalSenChatUser()
     // Lưu ý: Danh sách hội thoại CONVERSATIONS vẫn được giữ lại theo đúng thứ tự
-    localStorage.removeItem(STORAGE_KEYS.NICKNAMES)
-    localStorage.removeItem(STORAGE_KEYS.WALLPAPERS)
-    localStorage.removeItem(STORAGE_KEYS.BLOCKED_USERS)
+    removeAccountStorage(STORAGE_KEYS.NICKNAMES)
+    removeAccountStorage(STORAGE_KEYS.WALLPAPERS)
+    removeAccountStorage(STORAGE_KEYS.BLOCKED_USERS)
     try {
       sessionStorage.removeItem('sen_chat_active_session')
     } catch {}
@@ -509,6 +573,8 @@ export function getStorageUsageSummary(): {
   let totalBytes = 0
   let messageCount = 0
   const convs = getLocalConversations()
+  const accountPrefix = senChatAccountKey('')
+  const prefix = senChatAccountKey(STORAGE_KEYS.MESSAGES_PREFIX)
 
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -607,14 +673,14 @@ export type ChatFontSize = 'small' | 'normal' | 'large'
 
 export function getChatFontSize(): ChatFontSize {
   if (typeof localStorage === 'undefined') return 'normal'
-  const saved = localStorage.getItem(STORAGE_KEYS.FONT_SIZE)
+  const saved = readAccountStorage(STORAGE_KEYS.FONT_SIZE)
   if (saved === 'small' || saved === 'large') return saved
   return 'normal'
 }
 
 export function setChatFontSize(size: ChatFontSize): void {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(STORAGE_KEYS.FONT_SIZE, size)
+  writeAccountStorage(STORAGE_KEYS.FONT_SIZE, size)
   try {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('senchat:font-size-changed', { detail: { size } }))
@@ -626,14 +692,14 @@ export type ChatSendKey = 'enter' | 'shift_enter'
 
 export function getChatSendKey(): ChatSendKey {
   if (typeof localStorage === 'undefined') return 'enter'
-  const saved = localStorage.getItem(STORAGE_KEYS.SEND_KEY)
+  const saved = readAccountStorage(STORAGE_KEYS.SEND_KEY)
   if (saved === 'shift_enter') return 'shift_enter'
   return 'enter'
 }
 
 export function setChatSendKey(key: ChatSendKey): void {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(STORAGE_KEYS.SEND_KEY, key)
+  writeAccountStorage(STORAGE_KEYS.SEND_KEY, key)
 }
 
 export interface ChatNotificationSettings {
@@ -647,7 +713,7 @@ export function getChatNotificationSettings(): ChatNotificationSettings {
     return { messageSound: true, callSound: true, mentionSen: true }
   }
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS)
+    const raw = readAccountStorage(STORAGE_KEYS.NOTIFICATIONS)
     if (raw) return JSON.parse(raw)
   } catch {}
   return { messageSound: true, callSound: true, mentionSen: true }
@@ -657,7 +723,7 @@ export function setChatNotificationSettings(settings: Partial<ChatNotificationSe
   if (typeof localStorage === 'undefined') return
   const current = getChatNotificationSettings()
   const updated = { ...current, ...settings }
-  localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated))
+  writeAccountStorage(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated))
 }
 
 /**
@@ -707,7 +773,7 @@ export function setupEphemeralCleanupListener(): () => void {
 export function getLocalNicknames(): Record<string, string> {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.NICKNAMES)
+    const raw = readAccountStorage(STORAGE_KEYS.NICKNAMES)
     return raw ? JSON.parse(raw) : {}
   } catch (e) {
     return {}
@@ -727,14 +793,14 @@ export function setNicknameFor(partnerId: string, nickname: string): void {
   } else {
     nicknames[partnerId] = nickname.trim()
   }
-  localStorage.setItem(STORAGE_KEYS.NICKNAMES, JSON.stringify(nicknames))
+  writeAccountStorage(STORAGE_KEYS.NICKNAMES, JSON.stringify(nicknames))
 }
 
 // 6. Tính Năng Chặn Người Dùng (Block Users)
 export function getBlockedUsers(): string[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.BLOCKED_USERS)
+    const raw = readAccountStorage(STORAGE_KEYS.BLOCKED_USERS)
     return raw ? JSON.parse(raw) : []
   } catch (e) {
     return []
@@ -751,21 +817,21 @@ export function blockUser(userId: string): void {
   const blocked = getBlockedUsers()
   if (!blocked.includes(userId)) {
     blocked.push(userId)
-    localStorage.setItem(STORAGE_KEYS.BLOCKED_USERS, JSON.stringify(blocked))
+    writeAccountStorage(STORAGE_KEYS.BLOCKED_USERS, JSON.stringify(blocked))
   }
 }
 
 export function unblockUser(userId: string): void {
   if (typeof window === 'undefined') return
   const blocked = getBlockedUsers().filter((id) => id !== userId)
-  localStorage.setItem(STORAGE_KEYS.BLOCKED_USERS, JSON.stringify(blocked))
+  writeAccountStorage(STORAGE_KEYS.BLOCKED_USERS, JSON.stringify(blocked))
 }
 
 // 7. Tính Năng Đổi Nền Nhắn Tin (Wallpapers)
 export function getLocalWallpapers(): Record<string, ChatWallpaperId> {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.WALLPAPERS)
+    const raw = readAccountStorage(STORAGE_KEYS.WALLPAPERS)
     return raw ? JSON.parse(raw) : {}
   } catch (e) {
     return {}
@@ -781,7 +847,7 @@ export function setWallpaperFor(conversationId: string, wallpaperId: ChatWallpap
   if (typeof window === 'undefined') return
   const wallpapers = getLocalWallpapers()
   wallpapers[conversationId] = wallpaperId
-  localStorage.setItem(STORAGE_KEYS.WALLPAPERS, JSON.stringify(wallpapers))
+  writeAccountStorage(STORAGE_KEYS.WALLPAPERS, JSON.stringify(wallpapers))
 }
 
 // 8. Sao Lưu & Đồng Bộ Dữ Liệu
@@ -817,21 +883,21 @@ export function importLocalData(jsonString: string): boolean {
   try {
     const data = JSON.parse(jsonString)
     if (data.conversations && Array.isArray(data.conversations)) {
-      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(data.conversations))
+      writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(data.conversations))
     }
     if (data.messages && typeof data.messages === 'object') {
       Object.keys(data.messages).forEach((convId) => {
-        localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${convId}`, JSON.stringify(data.messages[convId]))
+        writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${convId}`, JSON.stringify(data.messages[convId]))
       })
     }
     if (data.nicknames && typeof data.nicknames === 'object') {
-      localStorage.setItem(STORAGE_KEYS.NICKNAMES, JSON.stringify(data.nicknames))
+      writeAccountStorage(STORAGE_KEYS.NICKNAMES, JSON.stringify(data.nicknames))
     }
     if (data.blocked && Array.isArray(data.blocked)) {
-      localStorage.setItem(STORAGE_KEYS.BLOCKED_USERS, JSON.stringify(data.blocked))
+      writeAccountStorage(STORAGE_KEYS.BLOCKED_USERS, JSON.stringify(data.blocked))
     }
     if (data.wallpapers && typeof data.wallpapers === 'object') {
-      localStorage.setItem(STORAGE_KEYS.WALLPAPERS, JSON.stringify(data.wallpapers))
+      writeAccountStorage(STORAGE_KEYS.WALLPAPERS, JSON.stringify(data.wallpapers))
     }
     if (data.user && !getLocalSenChatUser()) {
       saveLocalSenChatUser(data.user)

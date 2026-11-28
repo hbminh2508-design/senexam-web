@@ -1,5 +1,7 @@
 'use client'
 
+import { bindSenChatAccount, getSenChatAccount, senChatAccountKey } from '@/lib/senChatAccount.mjs'
+
 import { senChatLoginReturnUrl, useSenChatConversationLink } from '@/lib/senChatConversationLink'
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
@@ -100,7 +102,7 @@ import {
   getOrCreateDeviceId,
   getLocalSenChatUser,
   saveLocalSenChatUser,
-  clearLocalSenChatUser,
+  restoreLegacySenChatHistory,
   getLocalConversations,
   saveLocalConversation,
   deleteLocalConversation,
@@ -496,10 +498,12 @@ export default function SenChatPage() {
     // Đăng ký bộ dọn dẹp tin nhắn tạm thời cục bộ khi đóng tab / thoát trang
     const cleanupEphemeral = setupEphemeralCleanupListener()
 
+    let stopped = false
     const initAuthAndSync = async () => {
       try {
         const { data: auth } = await supabase.auth.getUser()
         if (auth?.user) {
+          if (stopped || !bindSenChatAccount(auth.user.id)) return
           const { data: profile } = await supabase
             .from('profiles')
             .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled, plan_tier, vip_expires_at')
@@ -523,6 +527,8 @@ export default function SenChatPage() {
             createdAt: new Date().toISOString(),
           }
 
+          if (stopped || getSenChatAccount() !== synchedUser.id) return
+          restoreLegacySenChatHistory(synchedUser.id)
           saveLocalSenChatUser(synchedUser)
           setCurrentUser(synchedUser)
           if (profile?.read_receipts_enabled !== undefined) {
@@ -552,6 +558,7 @@ export default function SenChatPage() {
               accessToken: token,
             })
               .then(() => {
+                if (stopped || getSenChatAccount() !== synchedUser.id) return
                 setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
               })
               .catch(() => {})
@@ -573,12 +580,15 @@ export default function SenChatPage() {
     initAuthAndSync()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
+      if (!bindSenChatAccount(session?.user.id) || event === 'SIGNED_OUT' || !session) {
+        setCurrentUser(null)
+        if (session) return
         router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
       }
     })
 
     return () => {
+      stopped = true
       cleanupEphemeral()
       subscription.unsubscribe()
     }
@@ -668,7 +678,8 @@ export default function SenChatPage() {
       })
 
       // Đọc trạng thái xác minh từ localStorage
-      const verified = localStorage.getItem(`senchat_verified_${partnerId}`) === 'true'
+      const verificationKey = senChatAccountKey(`senchat_verified_${partnerId}`)
+      const verified = !!verificationKey && localStorage.getItem(verificationKey) === 'true'
       setIsPartnerVerified(verified)
     }
   }, [selectedConvId])
@@ -1135,6 +1146,8 @@ export default function SenChatPage() {
     setActiveRailTab('messages')
   })
   const wallpaperObj = CHAT_WALLPAPERS.find((w) => w.id === currentWallpaper) || CHAT_WALLPAPERS[0]
+
+  if (!currentUser || getSenChatAccount() !== currentUser.id) return null
 
   return (
     <div
@@ -2420,7 +2433,8 @@ export default function SenChatPage() {
           onMarkVerified={(verified) => {
             setIsPartnerVerified(verified)
             if (activeConv?.partnerId) {
-              localStorage.setItem(`senchat_verified_${activeConv.partnerId}`, String(verified))
+              const key = senChatAccountKey(`senchat_verified_${activeConv.partnerId}`)
+              if (key) localStorage.setItem(key, String(verified))
             }
           }}
           disappearingTtl={disappearingTtl}

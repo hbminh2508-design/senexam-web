@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { bindSenChatAccount, getSenChatAccount } from '@/lib/senChatAccount.mjs'
+
+import { useState, useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { X, MessageCircle, Loader2 } from 'lucide-react'
@@ -28,14 +30,26 @@ export default function SenChatFloatingBubble() {
   const [tab, setTab] = useState<'messages' | 'ai'>('messages')
   const [userId, setUserId] = useState<string | null>(null)
   const [unread, setUnread] = useState(0)
+  const previousUser = useRef<string | null>(null)
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setUserId(session?.user.id || null))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const next = bindSenChatAccount(session?.user.id) ? session?.user.id || null : null
+      if (previousUser.current !== next) {
+        previousUser.current = next
+        setIsOpen(false)
+        setTab('messages')
+        setMessages((current) => current.slice(0, 1))
+        setSessionId(null)
+        setUnread(0)
+      }
+      setUserId(next)
+    })
     return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
-    const refresh = () => setUnread(userId && !isAppLockConfigured() ? getLocalConversations().reduce((sum, item) => sum + item.unreadCount, 0) : 0)
+    const refresh = () => setUnread(userId && getSenChatAccount() === userId && !isAppLockConfigured() ? getLocalConversations().reduce((sum, item) => sum + item.unreadCount, 0) : 0)
     refresh()
     window.addEventListener('sen-chat-update', refresh)
     window.addEventListener('storage', refresh)
@@ -209,7 +223,7 @@ export default function SenChatFloatingBubble() {
           <button type="button" aria-pressed={tab === 'ai'} onClick={() => setTab('ai')} className="rounded-lg px-2 py-1.5 text-sm aria-pressed:bg-sky-100 aria-pressed:text-sky-800">Sen AI</button>
           <button type="button" aria-label="Đóng Sen Chat" onClick={() => setIsOpen(false)} className="ml-auto rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
         </div>
-        {tab === 'messages' ? <SenChatQuickMessages userId={userId} /> : <SenChatFloatingModal messages={messages} setMessages={setMessages}
+        {tab === 'messages' ? <SenChatQuickMessages key={userId} userId={userId} /> : <SenChatFloatingModal messages={messages} setMessages={setMessages}
           sessionId={sessionId} setSessionId={setSessionId} onClose={() => setIsOpen(false)} />}
       </section>}
       <button data-sen-floating-button type="button" aria-label={isOpen ? 'Đóng Sen Chat' : 'Mở Sen Chat'} aria-expanded={isOpen}

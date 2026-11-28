@@ -37,7 +37,7 @@ import {
   isEphemeralStorageEnabled,
   setEphemeralStorageEnabled,
   clearAllEphemeralMessages,
-  clearAllLocalChatData,
+  clearLocalSenChatUser,
   getStorageUsageSummary,
   getDetailedStorageBreakdown,
   DetailedStorageBreakdown,
@@ -269,10 +269,10 @@ export default function ChatSettingsModal({
     }
   }
 
-  // Đăng xuất an toàn: Xóa sạch bộ nhớ tạm và chuyển hướng
+  // Xóa hồ sơ phiên cục bộ. Lịch sử vẫn nằm trong kho riêng của tài khoản.
   const handleLogout = async () => {
     try {
-      clearAllLocalChatData()
+      clearLocalSenChatUser()
       await supabase.auth.signOut()
     } catch (e) {
       console.warn('Lỗi đăng xuất:', e)

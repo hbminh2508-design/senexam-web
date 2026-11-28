@@ -72,7 +72,39 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ friends, incoming, outgoing })
+    const suggestions: Array<{ id: string; name: string; avatar: string; mutualCount: number }> = []
+    const directFriends = friends.slice(0, 50).map((friend) => friend.id)
+    if (request.nextUrl.searchParams.get('suggestions') === '1' && directFriends.length) {
+      const friendIds = new Set(directFriends)
+      const excluded = new Set([user.id, ...partnerIds])
+      const mutuals = new Map<string, Set<string>>()
+      const joined = directFriends.join(',')
+      const { data: links } = await supabaseAdmin.from('chat_friendships')
+        .select('user_id, friend_id').eq('status', 'accepted')
+        .or(`user_id.in.(${joined}),friend_id.in.(${joined})`)
+        .order('updated_at', { ascending: false }).limit(400)
+      for (const link of links || []) {
+        const [mutual, candidate] = friendIds.has(link.user_id)
+          ? [link.user_id, link.friend_id] : [link.friend_id, link.user_id]
+        if (excluded.has(candidate)) continue
+        if (!mutuals.has(candidate)) mutuals.set(candidate, new Set())
+        mutuals.get(candidate)?.add(mutual)
+      }
+      const ranked = [...mutuals.entries()].sort((a, b) => b[1].size - a[1].size).slice(0, 60)
+      if (ranked.length) {
+        const { data: profiles } = await supabaseAdmin.from('profiles')
+          .select('id, full_name, avatar_url').eq('allow_search_by_email', true)
+          .in('id', ranked.map(([id]) => id))
+        const available = new Map((profiles || []).map((profile) => [profile.id, profile]))
+        for (const [id, mutualFriends] of ranked) {
+          const profile = available.get(id)
+          if (!profile) continue
+          suggestions.push({ id, name: profile.full_name || 'Học viên SenExam', avatar: profile.avatar_url || '', mutualCount: mutualFriends.size })
+          if (suggestions.length === 15) break
+        }
+      }
+    }
+    return NextResponse.json({ friends, incoming, outgoing, suggestions })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Lỗi tải danh sách bạn bè' }, { status: 500 })
   }

@@ -4,6 +4,7 @@ import { chatRequest } from '@/lib/senChatBrowser'
 import { getSecureCryptoKey, saveSecureCryptoKey } from '@/lib/senChatSignalProtocol'
 import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
 import { supabase } from '@/lib/supabaseClient'
+import { getSenChatAccount } from '@/lib/senChatAccount.mjs'
 import { generateInboxKeyPair, openInboxPayload, sealInboxPayload } from './senChatInboxCrypto.mjs'
 import {
   getLocalConversations, getLocalMessages, isUserBlocked, saveLocalConversation, saveLocalMessage,
@@ -33,7 +34,7 @@ export function registerInboxDevice(userId: string) {
       device = { id: crypto.randomUUID(), publicKey: await crypto.subtle.exportKey('jwk', pair.publicKey), privateKey: pair.privateKey }
       await saveSecureCryptoKey(keyName, device)
     }
-    await chatRequest('inbox', { action: 'register', device: device.id, key: device.publicKey })
+    await chatRequest('inbox', { action: 'register', device: device.id, key: device.publicKey }, 'POST', userId)
     return device
   }
   const loadWithLock = async () => navigator.locks ? await navigator.locks.request(keyName, load) : await load()
@@ -51,19 +52,21 @@ function messageContext(sender: string, message: string, group: string | null | 
 
 export async function sendInboxMessage(message: SenChatMessage, conversation: SenChatConversation) {
   const address = conversation.isGroup ? { group: conversation.id } : { recipient: conversation.partnerId }
-  const { devices: targets } = await chatRequest<{ devices: PublicDevice[] }>('inbox', { action: 'keys', ...address })
+  const { devices: targets } = await chatRequest<{ devices: PublicDevice[] }>('inbox', { action: 'keys', ...address }, 'POST', message.senderId)
   if (!targets.length) throw new RecipientDevicePending()
   const context = messageContext(message.senderId, message.id, address.group)
   const payload = { ...message, content: await compressChatMessage(message.content) }
   const envelope = await sealInboxPayload(JSON.stringify(payload), context, targets)
-  await chatRequest('inbox', { action: 'send', ...address, id: message.id, ...envelope })
+  await chatRequest('inbox', { action: 'send', ...address, id: message.id, ...envelope }, 'POST', message.senderId)
 }
 
 export function deliverLocalMessage(message: SenChatMessage, conversation: SenChatConversation) {
+  if (getSenChatAccount() !== message.senderId) return Promise.reject(new Error('Tài khoản Sen Chat đã thay đổi.'))
   const id = message.senderId + ':' + message.id
   const ongoing = outbox.get(id)
   if (ongoing) return ongoing
   const save = (status: SenChatMessage['status']) => {
+    if (getSenChatAccount() !== message.senderId) return
     saveLocalMessage(conversation.id, { ...message, status })
     window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: conversation.id }))
   }
@@ -117,7 +120,7 @@ export function startChatCall(conversation: SenChatConversation, mode: 'voice' |
 
 export async function pullChatInbox(userId: string, activeConversation: string | null) {
   const device = await registerInboxDevice(userId)
-  const { deliveries } = await chatRequest<{ deliveries: Delivery[] }>('inbox?device=' + device.id)
+  const { deliveries } = await chatRequest<{ deliveries: Delivery[] }>('inbox?device=' + device.id, undefined, 'GET', userId)
   if ((await supabase.auth.getSession()).data.session?.user.id !== userId) return []
   const stored: { id: string; conversation: string }[] = []
   const receipts: { sender: string; id: string }[] = []
@@ -128,6 +131,7 @@ export async function pullChatInbox(userId: string, activeConversation: string |
     const key = encrypted.group_id || sender
     const existing = getChatConversation(key)
     const conversationId = existing?.id || key
+    if (getSenChatAccount() !== userId) return []
     if (getLocalMessages(conversationId).some((message) => message.id === id)) { receipts.push(receipt); continue }
     let incoming: SenChatMessage
     try {
@@ -142,6 +146,7 @@ export async function pullChatInbox(userId: string, activeConversation: string |
       continue
     }
     if (getLocalMessages(conversationId).some((message) => message.id === id)) { receipts.push(receipt); continue }
+    if (getSenChatAccount() !== userId) return []
     const conversation: SenChatConversation = existing || {
       id: conversationId, partnerId: key, partnerName: encrypted.group_id ? 'Nhóm Sen Chat' : incoming.senderName || 'Bạn bè',
       partnerIdentifier: key, unreadCount: 0, updatedAt: Date.now(), isGroup: Boolean(encrypted.group_id),
@@ -155,6 +160,6 @@ export async function pullChatInbox(userId: string, activeConversation: string |
     stored.push({ id, conversation: key })
     receipts.push(receipt)
   }
-  if (receipts.length) await chatRequest('inbox', { action: 'ack', device: device.id, receipts }).catch(() => {})
+  if (receipts.length) await chatRequest('inbox', { action: 'ack', device: device.id, receipts }, 'POST', userId).catch(() => {})
   return stored
 }

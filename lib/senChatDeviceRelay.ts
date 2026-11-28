@@ -7,9 +7,12 @@
  * và tự động đối soát, hợp nhất tin nhắn (Message Reconciliation) chuẩn xác nhất.
  */
 
+import { getSenChatAccount } from './senChatAccount.mjs'
 import { supabase as defaultSupabase } from '@/lib/supabaseClient'
 import {
   getLocalConversations,
+  replaceLocalConversations,
+  restoreLegacySenChatHistory,
   getLocalMessages,
   saveLocalMessages,
   deleteLocalConversation,
@@ -518,7 +521,7 @@ export function initDeviceRelay({
 
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('sen_chat_conversations', JSON.stringify(reconciled))
+        replaceLocalConversations(reconciled)
       }
     } catch {}
 
@@ -756,7 +759,7 @@ export async function checkDeviceSyncStatus(
   let lastSyncAt: number | null = null
   try {
     if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem('senchat_last_sync_timestamp')
+      const raw = localStorage.getItem(`senchat_last_sync_timestamp_${userId}`)
       if (raw) lastSyncAt = parseInt(raw, 10) || null
     }
   } catch {}
@@ -903,6 +906,11 @@ export async function triggerFullDeviceSync(
     accessToken?: string
   }
 ): Promise<TriggerDeviceSyncResult> {
+  const cancelled: TriggerDeviceSyncResult = {
+    success: false, syncedMessagesCount: 0, syncedConversationsCount: 0, deviceCount: 0,
+    message: 'Tài khoản Sen Chat đã thay đổi.',
+  }
+  if (getSenChatAccount() !== userId) return cancelled
   const currDevId = currentDeviceId || getDeviceId()
 
   // 1. Phát yêu cầu broadcast để các thiết bị online gửi tin nhắn & nhóm đối soát
@@ -915,6 +923,7 @@ export async function triggerFullDeviceSync(
 
   if (userId && typeof fetch !== 'undefined') {
     const token = await resolveAccessToken(options)
+    if (getSenChatAccount() !== userId) return cancelled
     const groupHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
 
     const [groupSettled, pullSettled] = await Promise.allSettled([
@@ -933,12 +942,15 @@ export async function triggerFullDeviceSync(
       }),
     ])
 
+    if (getSenChatAccount() !== userId) return cancelled
+
     // 2a. Hợp nhất danh sách nhóm & hội thoại từ Server
     try {
       let remoteConvs: any[] = []
       let hasAuthoritativeServerGroups = false
       if (groupSettled.status === 'fulfilled' && groupSettled.value?.ok) {
         const groupData = await groupSettled.value.json().catch(() => null)
+        if (getSenChatAccount() !== userId) return cancelled
         if (Array.isArray(groupData?.conversations)) {
           remoteConvs = groupData.conversations
           remoteConvsForStatus = remoteConvs
@@ -964,7 +976,8 @@ export async function triggerFullDeviceSync(
         const reconciledConvs = reconcileConversations(localConvs, remoteConvs)
         if (typeof localStorage !== 'undefined') {
           try {
-            localStorage.setItem('sen_chat_conversations', JSON.stringify(reconciledConvs))
+            replaceLocalConversations(reconciledConvs)
+            if (hasAuthoritativeServerGroups) restoreLegacySenChatHistory(userId, remoteConvs)
           } catch {}
         }
         if (typeof window !== 'undefined') {
@@ -985,6 +998,7 @@ export async function triggerFullDeviceSync(
     try {
       if (pullSettled.status === 'fulfilled' && pullSettled.value?.ok) {
         const data = await pullSettled.value.json().catch(() => null)
+        if (getSenChatAccount() !== userId) return cancelled
         const pulledMessages: any[] = Array.isArray(data?.messages) ? data.messages : []
         syncedMessagesCount = pulledMessages.length
 
@@ -1035,7 +1049,7 @@ export async function triggerFullDeviceSync(
             const reconciledAll = reconcileConversations(convs, discoveredConvs)
             if (typeof localStorage !== 'undefined') {
               try {
-                localStorage.setItem('sen_chat_conversations', JSON.stringify(reconciledAll))
+                replaceLocalConversations(reconciledAll)
               } catch {}
             }
             if (typeof window !== 'undefined') {
@@ -1059,7 +1073,7 @@ export async function triggerFullDeviceSync(
   const now = Date.now()
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('senchat_last_sync_timestamp', now.toString())
+      localStorage.setItem(`senchat_last_sync_timestamp_${userId}`, now.toString())
     }
     if (typeof window !== 'undefined') {
       ;(window as any).__senchat_needs_sync = false

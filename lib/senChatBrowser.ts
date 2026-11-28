@@ -3,9 +3,10 @@
 import { supabase } from '@/lib/supabaseClient'
 import { getChatNotificationSettings } from '@/lib/senChatStorage'
 
-export async function chatRequest<T>(path: string, body?: object, method = 'POST'): Promise<T> {
+export async function chatRequest<T>(path: string, body?: object, method = 'POST', expectedUserId?: string): Promise<T> {
   const { data } = await supabase.auth.getSession()
   if (!data.session) throw new Error('Hãy đăng nhập để sử dụng Sen Chat.')
+  if (expectedUserId && data.session.user.id !== expectedUserId) throw new Error('Tài khoản Sen Chat đã thay đổi.')
   const response = await fetch(`/api/chat/${path}`, {
     method: body ? method : 'GET',
     headers: { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' },

@@ -1,5 +1,7 @@
 'use client'
 
+import { bindSenChatAccount } from '@/lib/senChatAccount.mjs'
+
 import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -9,7 +11,7 @@ import { chatRequest, playChatSound, unlockChatAudio } from '@/lib/senChatBrowse
 import { getChatConversation, pullChatInbox, resumeChatOutbox } from '@/lib/senChatInbox'
 import { isSenChatPage } from '@/lib/senChatConversationLink'
 import { isSessionLocked } from '@/lib/senChatMobileSecurity'
-import { getLocalMessages, getLocalSenChatUser, isUserBlocked, saveLocalConversation, saveLocalMessage } from '@/lib/senChatStorage'
+import { getLocalMessages, getLocalSenChatUser, isUserBlocked, saveLocalConversation, saveLocalMessage, restoreLegacySenChatHistory } from '@/lib/senChatStorage'
 import { supabase } from '@/lib/supabaseClient'
 
 const ChatCallModal = dynamic(() => import('@/components/chat/ChatCallModal'), { ssr: false })
@@ -48,7 +50,9 @@ export default function SenChatRuntime() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
+      const accepted = bindSenChatAccount(session?.user.id)
+      setUser(accepted ? session?.user || null : null)
+      if (!accepted && session) window.location.reload()
     })
     const unlock = () => unlockChatAudio()
     window.addEventListener('pointerdown', unlock, { passive: true })
@@ -72,6 +76,7 @@ export default function SenChatRuntime() {
       registration?.active?.postMessage({ type: 'sen-chat-user', user: userId || '' })
     }).catch(() => {})
     if (!userId) return
+    restoreLegacySenChatHistory(userId)
     let stopped = false
     let callsPending: Promise<void> | null = null
     let inboxPending: Promise<void> | null = null
