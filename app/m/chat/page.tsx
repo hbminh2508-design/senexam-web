@@ -1,5 +1,7 @@
 'use client'
 
+import { senChatLoginReturnUrl, useSenChatConversationLink } from '@/lib/senChatConversationLink'
+
 import React, { Suspense, useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import {
   MessageSquare,
@@ -710,7 +712,7 @@ function MobileChatPageInner() {
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP
-          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
           return
         }
       } catch (err) {
@@ -720,7 +722,7 @@ function MobileChatPageInner() {
           resolvedAuthUserId = cachedUser.id
           setCurrentUser(cachedUser)
         } else {
-          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
           return
         }
       }
@@ -798,7 +800,7 @@ function MobileChatPageInner() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
-        router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
+        router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
       }
     })
 
@@ -920,6 +922,13 @@ function MobileChatPageInner() {
   }, [conversations, selectedConvId])
 
   // Nền phòng chat
+  useSenChatConversationLink(
+    isLocked ? undefined : currentUser?.id,
+    conversations,
+    view === 'conversation' ? activeConversation : null,
+    handleSelectConversation,
+  )
+
   const activeWallpaperId = useMemo(() => {
     return selectedConvId ? getWallpaperFor(selectedConvId) : 'default'
   }, [selectedConvId])
@@ -2575,7 +2584,7 @@ function MobileChatPageInner() {
           setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
         }}
         onLoggedOut={() => {
-          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
         }}
       />
 

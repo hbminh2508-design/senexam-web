@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js'
 import type { ChatCallInvitation, ChatCallModalProps } from '@/components/chat/ChatCallModal'
 import { chatRequest, playChatSound, unlockChatAudio } from '@/lib/senChatBrowser'
 import { getChatConversation, pullChatInbox, resumeChatOutbox } from '@/lib/senChatInbox'
+import { isSenChatPage } from '@/lib/senChatConversationLink'
 import { isSessionLocked } from '@/lib/senChatMobileSecurity'
 import { getLocalMessages, getLocalSenChatUser, isUserBlocked, saveLocalConversation, saveLocalMessage } from '@/lib/senChatStorage'
 import { supabase } from '@/lib/supabaseClient'
@@ -19,7 +20,7 @@ function chatDocumentCanCall() {
   if (policy) return policy.allowsFeature('microphone')
   const navigation = performance.getEntriesByType('navigation')[0]
   const initial = new URL(navigation?.name || location.href)
-  return initial.hostname === 'chat.senexam.me' || ['/chat', '/m/chat'].includes(initial.pathname)
+  return initial.hostname === 'chat.senexam.me' || isSenChatPage(initial.pathname)
 }
 
 export default function SenChatRuntime() {
@@ -37,7 +38,7 @@ export default function SenChatRuntime() {
     !path?.startsWith('/new-focus') && !path?.startsWith('/legacy-focus') &&
     !path?.startsWith('/fepn-') && !path?.startsWith('/baucu') && !path?.startsWith('/nopquylop') &&
     !path?.startsWith('/breathe-u')
-  const isChat = path === '/chat' || path === '/m/chat'
+  const isChat = isSenChatPage(path)
 
   useEffect(() => {
     suppressed.current = !canShow

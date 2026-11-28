@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import { isSenChatPage } from '@/lib/senChatConversationLink'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
@@ -14,7 +15,7 @@ export default function MobileNav() {
   const gesture = useRef<{ id: number; x: number; dragging: boolean } | null>(null)
   const suppressClick = useRef(false)
   useEffect(() => setMounted(true), [])
-  if (!mounted || ['/chat', '/m/chat'].includes(pathname) || /\/(?:m\/)?exams\//.test(pathname)) return null
+  if (!mounted || isSenChatPage(pathname) || /\/(?:m\/)?exams\//.test(pathname)) return null
   const isHome = ['/', '/m', '/m/'].includes(pathname)
   const isGround = ['/m/sen-ground', '/sen-ground'].includes(pathname)
   const tab = params.get('tab') || (params.has('library') ? 'library' : params.has('history') ? 'history' : 'exams')

@@ -254,6 +254,17 @@ export function middleware(request: NextRequest) {
     hostname.startsWith('chat.') ||
     hostname.includes('chat.localhost')
 
+  const isConversationLink = /^\/(?:chat|m\/chat)\/e2ee\/[0-9a-f]{64}\/?$/.test(pathname) ||
+    (isChatSubdomain && /^\/e2ee\/[0-9a-f]{64}\/?$/.test(pathname))
+  if (isConversationLink) {
+    const mobile = /android|iphone|ipad|ipod|mobile/i.test(userAgent) && !url.searchParams.has('desktop')
+    url.pathname = isMobileSubdomain || mobile ? '/m/chat' : '/chat'
+    const response = applyChatSecurityHeaders(NextResponse.rewrite(url))
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+    response.headers.set('Cache-Control', 'private, no-store')
+    return response
+  }
+
   // 4.5.1 DỰ ÁN LỚN: M.SENEXAM.ME - GIAO DIỆN THUẦN MOBILE 100%
   if (isMobileSubdomain) {
     // Miễn trừ hoàn toàn hệ thống Bầu cử FEPN (không bắt đăng nhập, không rewrite)
@@ -703,6 +714,7 @@ export function middleware(request: NextRequest) {
     const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(userAgent)
     if (
       isMobileDevice &&
+      pathname !== '/new-idp' &&
       !url.searchParams.has('desktop') &&
       !hostname.includes('localhost') &&
       !hostname.includes('127.0.0.1')
