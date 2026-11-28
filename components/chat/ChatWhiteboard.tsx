@@ -4,7 +4,7 @@ import { Download, Hand, Maximize2, Minimize2, Minus, Pencil, Plus, RotateCcw, S
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { RoomEvent, type Room, type RemoteParticipant } from 'livekit-client'
 import { chatRequest } from '@/lib/senChatBrowser'
-import { boardColors, boardDataTopic, boardPointLimit, readBoardPacket, type BoardEntry, type BoardItem, type BoardPacket, type BoardPoint, type BoardView } from '@/lib/senChatWhiteboard'
+import { boardColors, boardDataTopic, boardPointLimit, boardStrokeEndsAtRelease, readBoardPacket, traceBoardStroke, type BoardEntry, type BoardItem, type BoardPacket, type BoardPoint, type BoardView } from '@/lib/senChatWhiteboard'
 import { saveBoardPdf } from '@/lib/senChatBoardPdf'
 
 type BoardMode = 'shared' | 'private'
@@ -20,6 +20,10 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
   onClose: () => void
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const committedCanvas = useRef<HTMLCanvasElement>(null)
+  const bounds = useRef<DOMRect | null>(null)
+  const revision = useRef(0)
+  const committedFrame = useRef<{ element: HTMLCanvasElement; key: string } | null>(null)
   const entries = useRef(new Map<string, BoardEntry>())
   const previews = useRef(new Map<string, { points: BoardPoint[]; color: string; author: string }>())
   const strokePaths = useRef(new WeakMap<BoardPoint[], Path2D>())
@@ -54,18 +58,19 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     }).catch(() => {})
   }, [shared, room])
 
-  const draw = useCallback((output?: HTMLCanvasElement, exportView?: typeof view.current) => {
-    const element = output || canvas.current
+  const paint = useCallback((element: HTMLCanvasElement, width: number, height: number, ratio: number,
+    { x, y, scale }: typeof view.current, layer: 'committed' | 'active') => {
     const ctx = element?.getContext('2d')
-    if (!element || !ctx) return
-    const { width, height } = output || element.getBoundingClientRect()
-    const ratio = output ? 1 : Math.min(window.devicePixelRatio || 1, 2)
+    if (!ctx) return
     if (element.width !== Math.round(width * ratio)) element.width = Math.round(width * ratio)
     if (element.height !== Math.round(height * ratio)) element.height = Math.round(height * ratio)
-    const { x, y, scale } = exportView || view.current
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-    ctx.fillStyle = '#f8fafc'
-    ctx.fillRect(0, 0, width, height)
+    if (layer === 'committed') {
+      ctx.fillStyle = '#f8fafc'
+      ctx.fillRect(0, 0, width, height)
+    } else {
+      ctx.clearRect(0, 0, width, height)
+    }
     ctx.translate(x, y)
     ctx.scale(scale, scale)
     ctx.lineCap = 'round'
@@ -77,12 +82,16 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
       let path = complete ? strokePaths.current.get(points) : undefined
       if (!path) {
         path = new Path2D()
-        path.moveTo(...points[0])
-        if (points.length === 1) path.lineTo(points[0][0] + 0.01, points[0][1])
-        for (let index = 1; index < points.length; index += 1) path.lineTo(...points[index])
+        traceBoardStroke(path, points)
         if (complete) strokePaths.current.set(points, path)
       }
       ctx.stroke(path)
+    }
+    if (layer === 'active') {
+      for (const preview of previews.current.values()) drawStroke(preview.points, preview.color)
+      const stroke = drag.current?.stroke
+      if (stroke) drawStroke(stroke.points, stroke.color)
+      return
     }
     const hidden = new Set(Array.from(entries.current.values()).flatMap(({ item }) => item.kind === 'undo' ? [item.target] : []))
     for (const { id, item } of entries.current.values()) {
@@ -98,12 +107,23 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
         lines.forEach((line, index) => ctx.fillText(line.trim(), left + 11, top + 23 + index * 22, 222))
       }
     }
-    if (!output) {
-      for (const preview of previews.current.values()) drawStroke(preview.points, preview.color)
-      const stroke = drag.current?.stroke
-      if (stroke) drawStroke(stroke.points, stroke.color)
-    }
   }, [])
+
+  const draw = useCallback(() => {
+    const active = canvas.current
+    const committed = committedCanvas.current
+    const size = bounds.current
+    if (!active || !committed || !size?.width || !size.height) return
+    const { width, height } = size
+    const ratio = Math.min(window.devicePixelRatio || 1, 2)
+    const { x, y, scale } = view.current
+    const key = [width, height, ratio, x, y, scale, revision.current].join(':')
+    if (committedFrame.current?.element !== committed || committedFrame.current.key !== key) {
+      paint(committed, width, height, ratio, view.current, 'committed')
+      committedFrame.current = { element: committed, key }
+    }
+    paint(active, width, height, ratio, view.current, 'active')
+  }, [paint])
 
   const flushStroke = useCallback((stroke: Stroke) => {
     while (shared && room && stroke.sent < stroke.points.length) {
@@ -114,10 +134,10 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
   }, [publish, room, shared])
 
   const placeView = useCallback(({ center, size, scale }: BoardView) => {
-    const bounds = canvas.current?.getBoundingClientRect()
-    if (!bounds?.width || !bounds.height) return
-    const fittedScale = Math.max(0.05, scale * Math.min(1, bounds.width / size[0], bounds.height / size[1]))
-    view.current = { x: bounds.width / 2 - center[0] * fittedScale, y: bounds.height / 2 - center[1] * fittedScale, scale: fittedScale }
+    const local = bounds.current
+    if (!local?.width || !local.height) return
+    const fittedScale = Math.max(0.05, scale * Math.min(1, local.width / size[0], local.height / size[1]))
+    view.current = { x: local.width / 2 - center[0] * fittedScale, y: local.height / 2 - center[1] * fittedScale, scale: fittedScale }
   }, [])
 
   const scheduleDraw = useCallback(() => {
@@ -161,10 +181,12 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
           previews.current.delete(packet.id)
           if (packet.type === 'finish' && preview?.points.length) {
             entries.current.set(packet.id, { id: packet.id, author_id: author, item: { kind: 'stroke', points: preview.points, color: preview.color }, created_at: '' })
+            revision.current += 1
           }
         } else if (packet.type === 'item') {
           if (packet.item.kind === 'undo' && entries.current.get(packet.item.target)?.author_id !== author) return
           entries.current.set(packet.id, { id: packet.id, author_id: author, item: packet.item, created_at: '' })
+          revision.current += 1
         } else if (packet.type === 'points' && packet.offset === (preview?.points.length ?? 0)) {
           if (preview) preview.points.push(...packet.points)
           else previews.current.set(packet.id, { points: packet.points, color: packet.color, author })
@@ -189,6 +211,7 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
   useEffect(() => {
     if (!visible) return
     const refresh = () => {
+      bounds.current = canvas.current?.getBoundingClientRect() ?? null
       if (shared && follows.current && remoteView.current) placeView(remoteView.current)
       scheduleDraw()
     }
@@ -219,9 +242,12 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
         const { entries: latest } = await chatRequest<{ entries: BoardEntry[] }>(path + offset)
         if (stopped) return
         latest.forEach((entry) => { entries.current.set(entry.id, entry); previews.current.delete(entry.id) })
-        if (latest.length) cursor.current = latest[latest.length - 1]
+        if (latest.length) {
+          cursor.current = latest[latest.length - 1]
+          revision.current += 1
+          scheduleDraw()
+        }
         if (latest.length === 200) delay = 0
-        if (latest.length) scheduleDraw()
       } catch (reason) {
         if (!stopped) setError(reason instanceof Error ? reason.message : 'Không thể đồng bộ bảng trắng.')
       }
@@ -233,7 +259,10 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
 
   const save = async (item: BoardItem, id = crypto.randomUUID()) => {
     const fresh = !entries.current.has(id)
-    if (!entries.current.has(id)) entries.current.set(id, { id, author_id: userId, item, created_at: '' })
+    if (fresh) {
+      entries.current.set(id, { id, author_id: userId, item, created_at: '' })
+      revision.current += 1
+    }
     scheduleDraw()
     if (!shared) return
     if (fresh && item.kind !== 'stroke') publish({ type: 'item', id, item })
@@ -272,7 +301,7 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     const output = document.createElement('canvas')
     output.width = Math.ceil((right - left) * scale)
     output.height = Math.ceil((bottom - top) * scale)
-    draw(output, { x: -left * scale, y: -top * scale, scale })
+    paint(output, output.width, output.height, 1, { x: -left * scale, y: -top * scale, scale }, 'committed')
     saveBoardPdf(output)
   }
 
@@ -283,11 +312,11 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     (x - view.current.x) / view.current.scale, (y - view.current.y) / view.current.scale,
   ]
   const shareView = () => {
-    const bounds = canvas.current?.getBoundingClientRect()
-    if (shared && bounds?.width && bounds.height) {
+    const size = bounds.current
+    if (shared && size?.width && size.height) {
       sharedView.current = {
-        center: world([bounds.width / 2, bounds.height / 2]),
-        size: [bounds.width, bounds.height],
+        center: world([size.width / 2, size.height / 2]),
+        size: [size.width, size.height],
         scale: view.current.scale,
       }
       remoteView.current = null
@@ -296,8 +325,8 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     scheduleDraw()
   }
   const zoom = (factor: number, at?: BoardPoint) => {
-    const bounds = canvas.current?.getBoundingClientRect()
-    const center = at || [(bounds?.width || 0) / 2, (bounds?.height || 0) / 2]
+    const size = bounds.current
+    const center = at || [(size?.width || 0) / 2, (size?.height || 0) / 2]
     const anchor = world(center)
     const scale = Math.min(6, Math.max(0.05, view.current.scale * factor))
     view.current = { scale, x: center[0] - anchor[0] * scale, y: center[1] - anchor[1] * scale }
@@ -335,9 +364,11 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     if (gesture?.id !== event.pointerId) return
     drag.current = null
     if (gesture.stroke) {
-      if (commit) {
-        appendPoint(gesture, point(event, event.currentTarget.getBoundingClientRect()))
-        if (gesture.stroke) commitStroke(gesture.stroke)
+      if (commit || (gesture.pointerType === 'pen' && gesture.stroke.points.length > 1)) {
+        if (commit && bounds.current && boardStrokeEndsAtRelease(gesture.pointerType)) {
+          appendPoint(gesture, point(event, bounds.current))
+        }
+        commitStroke(gesture.stroke)
       } else if (gesture.stroke.sent) publish({ type: 'cancel', id: gesture.stroke.id })
     }
     if (commit && tool === 'note' && note.trim()) void save({ kind: 'note', at: world(gesture.local), color, text: note.trim() })
@@ -385,11 +416,21 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
       {error && <p role="status" className="bg-amber-50 px-3 py-1 text-sm text-amber-900">{error} {pending &&
         <button type="button" className="font-semibold underline" disabled={saving} onClick={() => void save(pending.item, pending.id)}>Thử lại</button>}
       </p>}
-      <canvas ref={canvas} aria-label="Vùng vẽ và đặt ghi chú" className="min-h-0 w-full flex-1 touch-none"
+      <div className="relative min-h-0 flex-1">
+      <canvas ref={committedCanvas} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" />
+      <canvas ref={canvas} aria-label="Vùng vẽ và đặt ghi chú" className="absolute inset-0 h-full w-full touch-none select-none"
         style={{ cursor: tool === 'pan' ? 'grab' : 'crosshair' }}
+        onContextMenu={(event) => event.preventDefault()}
         onPointerDown={(event) => {
-          if (event.button !== 0 || (drag.current?.pointerType === 'pen' && event.pointerType === 'touch')) return
-          const local = point(event, event.currentTarget.getBoundingClientRect())
+          if (event.button !== 0 || drag.current?.pointerType === 'pen') return
+          bounds.current = event.currentTarget.getBoundingClientRect()
+          const local = point(event, bounds.current)
+          if (event.pointerType === 'pen') {
+            const interrupted = drag.current?.stroke
+            if (interrupted?.sent) publish({ type: 'cancel', id: interrupted.id })
+            pointers.current.clear()
+            panningWithTwoFingers.current = false
+          }
           event.currentTarget.setPointerCapture(event.pointerId)
           pointers.current.set(event.pointerId, local)
           if (pointers.current.size > 1) {
@@ -409,9 +450,9 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
         }}
         onPointerMove={(event) => {
           const previous = pointers.current.get(event.pointerId)
-          if (!previous) return
-          const bounds = event.currentTarget.getBoundingClientRect()
-          const local = point(event, bounds)
+          const size = bounds.current
+          if (!previous || !size) return
+          const local = point(event, size)
           pointers.current.set(event.pointerId, local)
           if (panningWithTwoFingers.current && pointers.current.size > 1) {
             view.current.x += (local[0] - previous[0]) / pointers.current.size
@@ -422,8 +463,12 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
           const gesture = drag.current
           if (gesture?.id !== event.pointerId) return
           if (gesture.stroke) {
-            for (const sample of event.nativeEvent.getCoalescedEvents?.() ?? []) appendPoint(gesture, point(sample, bounds))
-            appendPoint(gesture, local)
+            const samples = event.nativeEvent.getCoalescedEvents?.()
+            if (samples?.length) {
+              for (const sample of samples) appendPoint(gesture, point(sample, size))
+            } else {
+              appendPoint(gesture, local)
+            }
             scheduleDraw()
           } else if (tool === 'pan') {
             view.current.x += local[0] - gesture.local[0]
@@ -436,9 +481,10 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
         onPointerCancel={(event) => finish(event, false)}
         onLostPointerCapture={(event) => finish(event, false)}
         onWheel={(event) => {
-          const bounds = event.currentTarget.getBoundingClientRect()
-          zoom(event.deltaY > 0 ? 0.9 : 1.1, [event.clientX - bounds.left, event.clientY - bounds.top])
+          bounds.current = event.currentTarget.getBoundingClientRect()
+          zoom(event.deltaY > 0 ? 0.9 : 1.1, point(event, bounds.current))
         }} />
+      </div>
     </section>
   )
 }

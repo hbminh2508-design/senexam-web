@@ -2,6 +2,29 @@ export const boardColors = ['#1e293b', '#0369a1', '#be123c', '#047857', '#a16207
 export const boardPointLimit = 1000
 
 export type BoardPoint = [number, number]
+
+export function traceBoardStroke(
+  path: Pick<Path2D, 'moveTo' | 'lineTo' | 'quadraticCurveTo'>,
+  points: BoardPoint[],
+) {
+  if (!points.length) return
+  path.moveTo(...points[0])
+  if (points.length === 1) {
+    path.lineTo(points[0][0] + 0.01, points[0][1])
+    return
+  }
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const [x, y] = points[index]
+    const [nextX, nextY] = points[index + 1]
+    path.quadraticCurveTo(x, y, (x + nextX) / 2, (y + nextY) / 2)
+  }
+  path.lineTo(...points[points.length - 1])
+}
+
+export function boardStrokeEndsAtRelease(pointerType: string) {
+  // Pencil lift can report a hover coordinate after the last contact sample.
+  return pointerType !== 'pen'
+}
 export type BoardItem =
   | { kind: 'stroke'; color: string; points: BoardPoint[] }
   | { kind: 'note'; color: string; at: BoardPoint; text: string }

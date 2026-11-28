@@ -5,10 +5,26 @@ import ts from 'typescript'
 
 const source = readFileSync(new URL('../lib/senChatWhiteboard.ts', import.meta.url), 'utf8')
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } })
-const { boardPointLimit, readBoardPacket, validBoardItem } = await import(
+const { boardPointLimit, boardStrokeEndsAtRelease, readBoardPacket, traceBoardStroke, validBoardItem } = await import(
   'data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')
 )
 const encode = (packet) => new TextEncoder().encode(JSON.stringify(packet))
+
+test('whiteboard rounds handwritten turns and ends at the last contact sample', () => {
+  const commands = []
+  const path = {
+    moveTo: (...args) => commands.push(['move', ...args]),
+    lineTo: (...args) => commands.push(['line', ...args]),
+    quadraticCurveTo: (...args) => commands.push(['curve', ...args]),
+  }
+  traceBoardStroke(path, [[2, 3], [6, 3], [8, 7], [10, 8]])
+  assert.deepEqual(commands, [
+    ['move', 2, 3], ['curve', 6, 3, 7, 5], ['curve', 8, 7, 9, 7.5], ['line', 10, 8],
+  ])
+  assert.equal(boardStrokeEndsAtRelease('pen'), false)
+  assert.equal(boardStrokeEndsAtRelease('touch'), true)
+  assert.equal(boardStrokeEndsAtRelease('mouse'), true)
+})
 
 test('mobile room info binds its disappearing message controls to state', () => {
   const page = readFileSync(new URL('../app/m/chat/page.tsx', import.meta.url), 'utf8')
