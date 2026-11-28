@@ -396,8 +396,7 @@ export default function ChatAttachmentBubble({
         fileName={fileName}
         fileSize={fileSize}
         mimeType={mimeType}
-        expiresAt={currentExpiresAt}
-        isPinnedPermanent={currentIsPermanent}
+        isPinnedPermanent
         onDownload={() => handleDownload()}
       />
 
