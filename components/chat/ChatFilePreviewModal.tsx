@@ -1,5 +1,7 @@
 'use client'
 
+import ChatPdfPreview from './ChatPdfPreview'
+
 import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -378,13 +380,7 @@ export default function ChatFilePreviewModal({
 
           {/* 4. TÀI LIỆU PDF */}
           {isPdf && fileUrl && (
-            <div className="h-full w-full overflow-hidden rounded-2xl border border-slate-800 bg-white">
-              <iframe
-                src={`${fileUrl}#toolbar=1`}
-                title={fileName}
-                className="h-full w-full border-0"
-              />
-            </div>
+            <ChatPdfPreview key={fileUrl} url={fileUrl} />
           )}
 
           {/* 5. VĂN BẢN & CODE */}

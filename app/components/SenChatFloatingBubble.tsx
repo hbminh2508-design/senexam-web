@@ -33,7 +33,8 @@ export default function SenChatFloatingBubble() {
   const previousUser = useRef<string | null>(null)
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' && !session) return
       const next = bindSenChatAccount(session?.user.id) ? session?.user.id || null : null
       if (previousUser.current !== next) {
         previousUser.current = next

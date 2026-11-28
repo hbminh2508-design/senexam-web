@@ -130,6 +130,7 @@ export interface ReactionEventEntry {
   emoji: string
   userId: string
   action: 'add' | 'remove'
+  count?: number
   updatedAt: number
 }
 
@@ -155,6 +156,7 @@ export function mergeMessageReactions(curr: any, inc: any): {
           emoji: ev.emoji,
           userId: ev.userId,
           action: ev.action === 'remove' ? 'remove' : 'add',
+          count: Number.isInteger(ev.count) ? Math.max(0, Math.min(99, ev.count)) : undefined,
           updatedAt: ts,
         })
       }
@@ -166,10 +168,10 @@ export function mergeMessageReactions(curr: any, inc: any): {
     if (!reactionsObj || typeof reactionsObj !== 'object') return
     for (const [emoji, users] of Object.entries(reactionsObj)) {
       if (!Array.isArray(users)) continue
-      for (const uid of users) {
+      for (const uid of new Set(users)) {
         const key = `${emoji}::${uid}`
         if (!eventMap.has(key)) {
-          eventMap.set(key, { emoji, userId: uid, action: 'add', updatedAt: fallbackTs })
+          eventMap.set(key, { emoji, userId: uid, action: 'add', count: users.filter((id) => id === uid).length, updatedAt: fallbackTs })
         }
       }
     }
@@ -189,9 +191,7 @@ export function mergeMessageReactions(curr: any, inc: any): {
     reactionEvents.push(ev)
     if (ev.action === 'add') {
       if (!reactions[ev.emoji]) reactions[ev.emoji] = []
-      if (!reactions[ev.emoji].includes(ev.userId)) {
-        reactions[ev.emoji].push(ev.userId)
-      }
+      reactions[ev.emoji].push(...Array(ev.count ?? 1).fill(ev.userId))
     }
   }
 

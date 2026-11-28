@@ -33,6 +33,15 @@ const bodyFont = Nunito({ subsets: ['latin', 'vietnamese'], variable: '--font-ch
 export default function NewChangePasswordPage() {
   const router = useRouter()
   const [isDark, setIsDark] = useState(false)
+  const [recoveryUserId, setRecoveryUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && session) setRecoveryUserId(session.user.id)
+      if (event === 'SIGNED_OUT') setRecoveryUserId(null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   // Form inputs
   const [email, setEmail] = useState('')
@@ -303,6 +312,33 @@ export default function NewChangePasswordPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (recoveryUserId) {
+    return <main className="grid min-h-dvh place-items-center bg-slate-100 p-4 dark:bg-slate-950 dark:text-white">
+      <form className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow dark:bg-slate-900" onSubmit={async (event) => {
+        event.preventDefault()
+        if (!isPasswordValid) { setFeedbackMsg({ type: 'error', text: 'Dùng ít nhất 8 ký tự, có chữ hoa, chữ thường và số hoặc ký tự đặc biệt. Hai mật khẩu phải khớp.' }); return }
+        setSubmitting(true)
+        setFeedbackMsg(null)
+        try {
+          const { data } = await supabase.auth.getUser()
+          if (data.user?.id !== recoveryUserId) throw new Error('Phiên khôi phục đã hết hạn.')
+          const { error } = await supabase.auth.updateUser({ password: newPassword })
+          if (error) throw error
+          setRecoveryUserId(null)
+          router.replace('/new-dashboard')
+        } catch (error) {
+          setFeedbackMsg({ type: 'error', text: error instanceof Error ? error.message : 'Không thể đổi mật khẩu.' })
+        } finally { setSubmitting(false) }
+      }}>
+        <h1 className="text-xl font-bold">Đặt lại mật khẩu</h1>
+        <label className="block text-sm">Mật khẩu mới<input required minLength={8} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mt-1 block w-full rounded-lg border bg-transparent p-2" /></label>
+        <label className="block text-sm">Xác nhận mật khẩu<input required minLength={8} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1 block w-full rounded-lg border bg-transparent p-2" /></label>
+        {feedbackMsg && <p role="alert" className="text-sm text-rose-600">{feedbackMsg.text}</p>}
+        <button type="submit" disabled={submitting} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Đổi mật khẩu</button>
+      </form>
+    </main>
   }
 
   return (

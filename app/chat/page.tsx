@@ -48,8 +48,6 @@ import {
   Maximize2,
   Minimize2,
   ExternalLink,
-  Sun,
-  Moon,
   Reply,
   CornerDownRight,
   ShieldAlert,
@@ -73,12 +71,13 @@ import ChatDrmProtection, { ChatDeviceComplianceBadge } from '@/components/chat/
 import ChatVersionModal from '@/components/chat/ChatVersionModal'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import ChatReactionChips from '@/components/chat/ChatReactionChips'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
 import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
 import { ConversationMuteButton } from '@/components/chat/ChatNotificationControls'
-import { chatConversationKey, deliverLocalMessage, getChatConversation, sendInboxMessage, startChatCall } from '@/lib/senChatInbox'
+import { changeChatReaction, chatConversationKey, deliverLocalMessage, getChatConversation, sendInboxMessage, startChatCall } from '@/lib/senChatInbox'
 import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
 import ChatSenAiConfirmModal from '@/components/chat/ChatSenAiConfirmModal'
@@ -125,7 +124,6 @@ import {
   getChatSendKey,
   togglePinConversation,
   markConversationUnread,
-  toggleMessageReaction,
   getConversationDraft,
   saveConversationDraft,
   clearConversationDraft,
@@ -173,7 +171,7 @@ export default function SenChatPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [chatSearchQuery, setChatSearchQuery] = useState('')
   const [showChatSearch, setShowChatSearch] = useState(false)
-  const [filterMode, setFilterMode] = useState<'all' | 'unread'>('all')
+  const [filterMode, setFilterMode] = useState<'all' | 'unread' | 'groups'>('all')
 
   // Gói dịch vụ & Đính kèm tệp / Tin nhắn thoại (P5)
   const [userPlanTier, setUserPlanTier] = useState<string | null>(null)
@@ -580,6 +578,7 @@ export default function SenChatPage() {
     initAuthAndSync()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' && !session) return
       if (!bindSenChatAccount(session?.user.id) || event === 'SIGNED_OUT' || !session) {
         setCurrentUser(null)
         if (session) return
@@ -1080,10 +1079,14 @@ export default function SenChatPage() {
   }
 
   // 9. Thả biểu cảm cảm xúc (Reactions)
-  const handleAddReaction = (msgId: string, emoji: string) => {
+  const handleAddReaction = (msgId: string, emoji: string, remove = false) => {
     if (!selectedConvId || !currentUser?.id) return
-    const updated = toggleMessageReaction(selectedConvId, msgId, emoji, currentUser.id)
-    setMessages(updated)
+    const conversation = conversations.find(({ id }) => id === selectedConvId)
+    if (!conversation) return
+    const result = changeChatReaction(conversation, msgId, emoji, currentUser.id, remove)
+    if (!result) return
+    setMessages(result.messages)
+    void result.delivery.catch(() => alert('Chưa đồng bộ được cảm xúc. Hãy thử lại khi kết nối ổn định.'))
   }
 
   // 10. Chặn & Bỏ chặn
@@ -1123,7 +1126,7 @@ export default function SenChatPage() {
       if (c.id === SENAI_STUDIO_CONVERSATION_ID && !q) return true
       const matchName = c.partnerName.toLowerCase().includes(q)
       const matchLast = (c.lastMessage || '').toLowerCase().includes(q)
-      const matchFilter = filterMode === 'all' || (filterMode === 'unread' && c.unreadCount > 0) || c.id === SENAI_STUDIO_CONVERSATION_ID
+      const matchFilter = filterMode === 'groups' ? Boolean(c.isGroup) : filterMode === 'all' || (filterMode === 'unread' && c.unreadCount > 0) || c.id === SENAI_STUDIO_CONVERSATION_ID
       return (matchName || matchLast) && matchFilter
     })
   }, [conversations, searchQuery, filterMode])
@@ -1147,7 +1150,11 @@ export default function SenChatPage() {
   })
   const wallpaperObj = CHAT_WALLPAPERS.find((w) => w.id === currentWallpaper) || CHAT_WALLPAPERS[0]
 
-  if (!currentUser || getSenChatAccount() !== currentUser.id) return null
+  if (!currentUser || getSenChatAccount() !== currentUser.id) {
+    return <div className="grid min-h-[50dvh] flex-1 place-items-center p-6 text-center">
+      <div><p role="status">Đang kết nối Sen Chat…</p><button type="button" className="mt-3 text-sm font-semibold text-sky-700 underline" onClick={() => window.location.reload()}>Tải lại Sen Chat</button></div>
+    </div>
+  }
 
   return (
     <div
@@ -1238,8 +1245,8 @@ export default function SenChatPage() {
             {/* Tạo nhóm MLS RFC 9420 */}
             <button
               type="button"
-              onClick={() => setShowCreateGroupModal(true)}
-              title="Tạo nhóm chat mới (MLS RFC 9420)"
+              onClick={() => { setActiveRailTab('messages'); setFilterMode('groups'); setSearchQuery(''); setIsMobileListVisible(true) }}
+              title="Quản lý nhóm"
               className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-teal-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-teal-400"
             >
               <Users className="h-5 w-5" />
@@ -1255,15 +1262,6 @@ export default function SenChatPage() {
               <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-sky-400" />
             </button>
 
-            {/* Cài đặt */}
-            <button
-              type="button"
-              onClick={() => setShowSettingsModal(true)}
-              title="Cài đặt Sen Chat"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            >
-              <Settings className="h-5 w-5" />
-            </button>
           </div>
         </div>
 
@@ -1272,11 +1270,11 @@ export default function SenChatPage() {
           {/* Theme Toggle */}
           <button
             type="button"
-            onClick={toggleTheme}
-            title={isDarkMode ? 'Chuyển sang Chế độ Sáng' : 'Chuyển sang Chế độ Tối'}
+            onClick={() => setShowSettingsModal(true)}
+            title="Cài đặt Sen Chat"
             className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-500 transition hover:bg-white hover:text-amber-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-amber-400"
           >
-            {isDarkMode ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5" />}
+            <Settings className="h-5 w-5" />
           </button>
 
           {/* User Avatar */}
@@ -1319,7 +1317,7 @@ export default function SenChatPage() {
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 dark:border-slate-800">
           <div>
             <h2 className="font-extrabold text-base tracking-tight text-slate-800 dark:text-slate-100">
-              {activeRailTab === 'contacts' ? 'Bạn bè' : 'Đoạn chat'}
+              {activeRailTab === 'contacts' ? 'Bạn bè' : filterMode === 'groups' ? 'Quản lý nhóm' : 'Đoạn chat'}
             </h2>
             <p className="text-[11px] text-slate-400 font-medium truncate max-w-[180px]">
               {currentUser?.name || 'Đang kết nối...'}
@@ -1337,6 +1335,10 @@ export default function SenChatPage() {
               className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-sky-300 transition-colors"
             >
               <UserPlus className="h-4 w-4" />
+            </button>
+            <button type="button" title="Tạo nhóm" aria-label="Tạo nhóm" onClick={() => setShowCreateGroupModal(true)}
+              className="flex min-h-9 min-w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200">
+              <Users className="h-4 w-4" /><Plus className="h-3 w-3" />
             </button>
           </div>
         </div>
@@ -2069,28 +2071,9 @@ export default function SenChatPage() {
 
                             {/* Hiển thị huy hiệu biểu cảm cảm xúc (Emoji Reactions) */}
                             {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                {Object.entries(msg.reactions).map(([emoji, users]) => {
-                                  if (!Array.isArray(users) || users.length === 0) return null
-                                  const reactedByMe = currentUser?.id ? users.includes(currentUser.id) : false
-                                  return (
-                                    <button
-                                      key={emoji}
-                                      type="button"
-                                      onClick={() => handleAddReaction(msg.id, emoji)}
-                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition ${
-                                        reactedByMe
-                                          ? 'bg-blue-500/20 border border-blue-400/60 text-blue-900 dark:text-sky-200'
-                                          : 'bg-white/80 border border-slate-200/80 text-slate-700 dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-200'
-                                      }`}
-                                    >
-                                      <span>{emoji}</span>
-                                      <span className="text-[10px]">{users.length}</span>
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            )}
+                      <ChatReactionChips reactions={msg.reactions} userId={currentUser.id}
+                        onChange={(emoji, remove) => handleAddReaction(msg.id, emoji, remove)} />
+                    )}
                           </div>
                         )}
 
@@ -2530,11 +2513,14 @@ export default function SenChatPage() {
         currentUserEmail={currentUser?.email || ''}
         userPlanTier={userPlanTier}
         isCreatingNew={true}
-        onGroupCreated={(convId, title) => {
+        onGroupCreated={(convId, title, avatar) => {
           saveLocalConversation({
             id: convId,
             partnerId: convId,
             partnerName: title,
+              avatarUrl: avatar,
+              partnerAvatar: avatar,
+              role: 'owner',
             partnerIdentifier: 'MLS_GROUP',
             unreadCount: 0,
             updatedAt: Date.now(),
@@ -2625,6 +2611,8 @@ export default function SenChatPage() {
       <ChatSettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
+        darkTheme={isDarkMode}
+        onToggleTheme={toggleTheme}
         currentUser={currentUser}
         userPlanTier={userPlanTier}
         deviceId={deviceId}

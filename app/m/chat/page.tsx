@@ -43,6 +43,7 @@ import {
   WifiOff,
   Radio,
   ArrowLeft,
+  Plus,
   SlidersHorizontal,
   Settings,
   Reply,
@@ -61,13 +62,14 @@ import ChatDrmProtection, { ChatDeviceComplianceBadge } from '@/components/chat/
 import ChatVersionModal from '@/components/chat/ChatVersionModal'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import ChatReactionChips from '@/components/chat/ChatReactionChips'
 import ChatFriendModal from '@/components/chat/ChatFriendModal'
 import ChatMobileFriends, { type ChatFriendProfile } from '@/components/chat/ChatMobileFriends'
 import ChatMlsGroupModal from '@/components/chat/ChatMlsGroupModal'
 import ChatAttachmentModal from '@/components/chat/ChatAttachmentModal'
 import ChatAttachmentBubble from '@/components/chat/ChatAttachmentBubble'
 import { ConversationMuteButton } from '@/components/chat/ChatNotificationControls'
-import { chatConversationKey, deliverLocalMessage, getChatConversation, sendInboxMessage, startChatCall } from '@/lib/senChatInbox'
+import { changeChatReaction, chatConversationKey, deliverLocalMessage, getChatConversation, sendInboxMessage, startChatCall } from '@/lib/senChatInbox'
 import { chatRequest } from '@/lib/senChatBrowser'
 import ChatVoiceRecorder from '@/components/chat/ChatVoiceRecorder'
 import ChatVoiceMessageBubble from '@/components/chat/ChatVoiceMessageBubble'
@@ -115,7 +117,6 @@ import {
   getChatSendKey,
   togglePinConversation,
   markConversationUnread,
-  toggleMessageReaction,
   getConversationDraft,
   saveConversationDraft,
   clearConversationDraft,
@@ -240,6 +241,16 @@ function MobileChatPageInner() {
 
   // Các Modal hỗ trợ
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [chatDark, setChatDark] = useState(false)
+  useEffect(() => {
+    if (showSettingsModal) setChatDark(document.documentElement.classList.contains('dark'))
+  }, [showSettingsModal])
+  const toggleChatTheme = () => {
+    const dark = !document.documentElement.classList.contains('dark')
+    document.documentElement.classList.toggle('dark', dark)
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
+    setChatDark(dark)
+  }
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false)
   const [userPlanTier, setUserPlanTier] = useState<string | null>(null)
   const [showSecurityModal, setShowSecurityModal] = useState(false)
@@ -803,6 +814,7 @@ function MobileChatPageInner() {
     initMobileChat()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' && !session) return
       if (!bindSenChatAccount(session?.user.id) || event === 'SIGNED_OUT' || !session) {
         setCurrentUser(null)
         if (session) return
@@ -1024,10 +1036,14 @@ function MobileChatPageInner() {
   }
 
   // Thả biểu cảm nhanh trên tin nhắn Mobile
-  const handleAddReaction = (msgId: string, emoji: string) => {
+  const handleAddReaction = (msgId: string, emoji: string, remove = false) => {
     if (!selectedConvId || !currentUser?.id) return
-    const updated = toggleMessageReaction(selectedConvId, msgId, emoji, currentUser.id)
-    setMessages(updated)
+    const conversation = conversations.find(({ id }) => id === selectedConvId)
+    if (!conversation) return
+    const result = changeChatReaction(conversation, msgId, emoji, currentUser.id, remove)
+    if (!result) return
+    setMessages(result.messages)
+    void result.delivery.catch(() => alert('Chưa đồng bộ được cảm xúc. Hãy thử lại khi kết nối ổn định.'))
   }
 
   // Thu hồi / Xóa tin nhắn trên Mobile
@@ -1379,7 +1395,11 @@ function MobileChatPageInner() {
   // ============================================================================
   // MÀN HÌNH KHÓA BẢO MẬT (PIN & BIOMETRIC APP LOCK OVERLAY)
   // ============================================================================
-  if (!currentUser || getSenChatAccount() !== currentUser.id) return null
+  if (!currentUser || getSenChatAccount() !== currentUser.id) {
+    return <div className="grid min-h-[50dvh] flex-1 place-items-center p-6 text-center">
+      <div><p role="status">Đang kết nối Sen Chat…</p><button type="button" className="mt-3 text-sm font-semibold text-sky-700 underline" onClick={() => window.location.reload()}>Tải lại Sen Chat</button></div>
+    </div>
+  }
 
   if (isLocked) {
     return (
@@ -1543,6 +1563,10 @@ function MobileChatPageInner() {
                 <Users className="h-5 w-5" />
                 {incomingFriends > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 min-w-4 rounded-full bg-rose-600 px-1 text-[10px] font-bold">{Math.min(incomingFriends, 99)}</span>}
               </button>
+              <button type="button" aria-label="Tạo nhóm" onClick={() => setShowMlsGroupModal(true)}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200">
+                <Users className="h-4 w-4" /><Plus className="h-3 w-3" />
+              </button>
             </div>
           </header>
 
@@ -1583,13 +1607,11 @@ function MobileChatPageInner() {
 
             <button
               type="button"
-              onClick={() => {
-                setShowMlsGroupModal(true)
-              }}
+              onClick={() => setActiveFilterTab('group')}
               className="ml-auto min-h-[44px] px-3 rounded-xl border border-sky-500/30 text-sky-600 dark:text-sky-400 text-xs font-bold flex items-center gap-1 active:scale-95 transition"
             >
               <Users className="h-3.5 w-3.5" />
-              <span>Tạo Nhóm</span>
+              <span>Quản lý nhóm</span>
             </button>
           </div>
 
@@ -2008,30 +2030,8 @@ function MobileChatPageInner() {
                     )}
                     {/* Hiển thị huy hiệu biểu cảm nhanh */}
                     {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {Object.entries(msg.reactions).map(([emoji, users]) => {
-                          if (!Array.isArray(users) || users.length === 0) return null
-                          const reactedByMe = currentUser?.id ? users.includes(currentUser.id) : false
-                          return (
-                            <button
-                              key={emoji}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleAddReaction(msg.id, emoji)
-                              }}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                reactedByMe
-                                  ? 'bg-sky-500/20 border border-sky-400 text-sky-900 dark:text-sky-200'
-                                  : 'bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-200'
-                              }`}
-                            >
-                              <span>{emoji}</span>
-                              <span>{users.length}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
+                      <ChatReactionChips reactions={msg.reactions} userId={currentUser.id}
+                        onChange={(emoji, remove) => handleAddReaction(msg.id, emoji, remove)} />
                     )}
                   </div>
 
@@ -2483,12 +2483,15 @@ function MobileChatPageInner() {
           currentUserEmail={currentUser?.email || ''}
           userPlanTier={userPlanTier}
           isCreatingNew
-          onGroupCreated={(convId, title) => {
+          onGroupCreated={(convId, title, avatar) => {
             setShowMlsGroupModal(false)
             const newConv: SenChatConversation = {
               id: convId,
               partnerId: convId,
               partnerName: title,
+              avatarUrl: avatar,
+              partnerAvatar: avatar,
+              role: 'owner',
               partnerIdentifier: 'MLS_GROUP',
               lastMessage: 'Đã tạo nhóm trò chuyện MLS E2EE',
               lastMessageTime: 'Vừa xong',
@@ -2595,6 +2598,8 @@ function MobileChatPageInner() {
       <ChatSettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
+        darkTheme={chatDark}
+        onToggleTheme={toggleChatTheme}
         currentUser={currentUser}
         userPlanTier={userPlanTier}
         deviceId={getOrCreateDeviceId()}

@@ -69,6 +69,8 @@ interface ChatSettingsModalProps {
   deviceId: string
   onOpenDeviceManager?: () => void
   onLoggedOut?: () => void
+  darkTheme?: boolean
+  onToggleTheme?: () => void
   onMessagesCleared?: () => void
   isMobile?: boolean
 }
@@ -83,6 +85,8 @@ export default function ChatSettingsModal({
   deviceId,
   onOpenDeviceManager,
   onLoggedOut,
+  darkTheme,
+  onToggleTheme,
   onMessagesCleared,
   isMobile = false,
 }: ChatSettingsModalProps) {
@@ -454,6 +458,10 @@ export default function ChatSettingsModal({
           {activeTab === 'preferences' && (
             <div className="space-y-6">
               {/* Cỡ chữ hiển thị tin nhắn */}
+              {onToggleTheme && <button type="button" onClick={onToggleTheme} aria-pressed={darkTheme}
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 p-4 text-sm font-semibold dark:border-slate-700">
+                <span>Giao diện</span><span>{darkTheme ? 'Chế độ tối' : 'Chế độ sáng'}</span>
+              </button>}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 space-y-3">
                 <div className="flex items-center gap-2">
                   <Type className="h-4 w-4 text-blue-600 dark:text-sky-400" />
@@ -641,7 +649,7 @@ export default function ChatSettingsModal({
                   Mật khẩu Sen IDP bảo vệ quyền đăng nhập tập trung trên mọi dịch vụ SenExam.
                 </p>
                 <a
-                  href="/new-reset-password"
+                  href="/new-change-password"
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"

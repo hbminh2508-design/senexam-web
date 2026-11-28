@@ -341,14 +341,14 @@ test('Sen Chat v1.0.4 & SenExam: Kiểm tra API sync nhóm, UI Desktop/Mobile, q
   const desktopChat = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')
   assert.ok(desktopChat.includes('togglePinConversation'))
   assert.ok(desktopChat.includes('markConversationUnread'))
-  assert.ok(desktopChat.includes('toggleMessageReaction'))
+  assert.ok(desktopChat.includes('changeChatReaction'))
   assert.ok(desktopChat.includes('saveConversationDraft'))
   assert.ok(desktopChat.includes('senchat-conversations-reconciled'))
 
   const mobileChat = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
   assert.ok(mobileChat.includes('togglePinConversation'))
   assert.ok(mobileChat.includes('markConversationUnread'))
-  assert.ok(mobileChat.includes('toggleMessageReaction'))
+  assert.ok(mobileChat.includes('changeChatReaction'))
   assert.ok(mobileChat.includes('saveConversationDraft'))
   assert.ok(mobileChat.includes('senchat-conversations-reconciled'))
 

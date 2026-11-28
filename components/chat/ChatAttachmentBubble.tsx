@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Download,
   FileText,
@@ -58,6 +58,7 @@ export default function ChatAttachmentBubble({
   isGroup = false,
   isMe = false,
 }: ChatAttachmentBubbleProps) {
+  const pendingFile = useRef<Promise<string> | null>(null)
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,7 +70,7 @@ export default function ChatAttachmentBubble({
     try {
       if (!decryptedUrl) {
         setIsLoading(true)
-        const url = await fetchAndDecryptBlob()
+        const url = await loadDecryptedFile()
         setDecryptedUrl(url)
       }
       setShowPreviewModal(true)
@@ -91,7 +92,7 @@ export default function ChatAttachmentBubble({
 
     if (isImage && fileKeyBase64 && (attachmentId || driveFileId)) {
       setIsLoading(true)
-      fetchAndDecryptBlob()
+      loadDecryptedFile()
         .then((url) => {
           if (active && url) {
             setDecryptedUrl(url)
@@ -105,13 +106,15 @@ export default function ChatAttachmentBubble({
         })
     }
 
-    return () => {
-      active = false
-      if (decryptedUrl) {
-        URL.revokeObjectURL(decryptedUrl)
-      }
-    }
+    return () => { active = false }
   }, [attachmentId, driveFileId, isImage, fileKeyBase64])
+
+  useEffect(() => () => { if (decryptedUrl) URL.revokeObjectURL(decryptedUrl) }, [decryptedUrl])
+
+  const loadDecryptedFile = () => {
+    pendingFile.current ??= fetchAndDecryptBlob().catch((error) => { pendingFile.current = null; throw error })
+    return pendingFile.current
+  }
 
   // Tải stream nhị phân mã hóa từ API và giải mã bằng fileKey phía client
   const fetchAndDecryptBlob = async (): Promise<string> => {
@@ -185,7 +188,7 @@ export default function ChatAttachmentBubble({
     try {
       setIsLoading(true)
       setError(null)
-      const url = await fetchAndDecryptBlob()
+      const url = await loadDecryptedFile()
       setDecryptedUrl(url)
     } catch (err: any) {
       setError(err?.message || 'Lỗi khi giải mã video')
@@ -209,7 +212,8 @@ export default function ChatAttachmentBubble({
 
       let blobUrl = decryptedUrl
       if (!blobUrl) {
-        blobUrl = await fetchAndDecryptBlob()
+        blobUrl = await loadDecryptedFile()
+        setDecryptedUrl(blobUrl)
       }
 
       openSafeDownload(blobUrl, fileName)

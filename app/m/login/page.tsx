@@ -337,7 +337,7 @@ export default function MobileLoginPage() {
             <span>Mở Cổng Đăng Nhập SenExam IDP Đầy Đủ (QR / Khôi phục)</span>
           </Link>
           <Link
-            href="/new-reset-password"
+            href="/new-change-password"
             className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           >
             Quên mật khẩu?

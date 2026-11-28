@@ -5,6 +5,15 @@ import { canUserCreateGroup, validateGroupMemberLimit } from '@/lib/chatLimits'
 
 export const dynamic = 'force-dynamic'
 
+function validGroupAvatar(avatar: unknown) {
+  if (avatar === null || avatar === '') return true
+  if (typeof avatar !== 'string') return false
+  if (avatar.startsWith('data:')) {
+    return avatar.length <= 48000 && /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(avatar)
+  }
+  return avatar.length <= 2048 && URL.canParse(avatar) && new URL(avatar).protocol === 'https:'
+}
+
 /**
  * Quản lý Nhóm Chat MLS (RFC 9420)
  * GET: Lấy danh sách nhóm & cuộc trò chuyện của người dùng hiện tại từ Supabase
@@ -90,6 +99,9 @@ export async function POST(req: Request) {
       ratchetTree = '',
       memberEmails = [],
     } = body
+    if (typeof title !== 'string' || !title.trim() || title.trim().length > 100 || !validGroupAvatar(avatarUrl)) {
+      return NextResponse.json({ error: 'Tên nhóm hoặc ảnh nhóm không hợp lệ.' }, { status: 400 })
+    }
 
     const db = getSupabaseAdmin()
 
@@ -161,11 +173,8 @@ export async function PATCH(req: Request) {
   if (!['edit', 'delete', 'transfer'].includes(operation)) return NextResponse.json({ error: 'Thao tác không hợp lệ.' }, { status: 400 })
   const title = typeof body.title === 'string' ? body.title.trim() : ''
   const avatar = typeof body.avatarUrl === 'string' ? body.avatarUrl.trim() : ''
-  if (operation === 'edit' && (!title || title.length > 100 || avatar.length > 2048 || (avatar && !URL.canParse(avatar)))) {
-    return NextResponse.json({ error: 'Tên nhóm hoặc địa chỉ ảnh không hợp lệ.' }, { status: 400 })
-  }
-  if (operation === 'edit' && avatar && new URL(avatar).protocol !== 'https:') {
-    return NextResponse.json({ error: 'Địa chỉ ảnh cần bắt đầu bằng https://.' }, { status: 400 })
+  if (operation === 'edit' && (!title || title.length > 100 || !validGroupAvatar(avatar))) {
+    return NextResponse.json({ error: 'Tên nhóm hoặc ảnh nhóm không hợp lệ.' }, { status: 400 })
   }
   if (operation === 'transfer' && !validId(body.successor)) return NextResponse.json({ error: 'Hãy chọn thành viên nhận quyền.' }, { status: 400 })
   const db = getSupabaseAdmin() as import('@supabase/supabase-js').SupabaseClient

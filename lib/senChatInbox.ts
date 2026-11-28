@@ -4,10 +4,10 @@ import { chatRequest } from '@/lib/senChatBrowser'
 import { getSecureCryptoKey, saveSecureCryptoKey } from '@/lib/senChatSignalProtocol'
 import { compressChatMessage, decompressChatMessage } from '@/lib/senChatCompression'
 import { supabase } from '@/lib/supabaseClient'
-import { getSenChatAccount } from '@/lib/senChatAccount.mjs'
+import { getSenChatAccount, senChatAccountKey } from '@/lib/senChatAccount.mjs'
 import { generateInboxKeyPair, openInboxPayload, sealInboxPayload } from './senChatInboxCrypto.mjs'
 import {
-  getLocalConversations, getLocalMessages, isUserBlocked, saveLocalConversation, saveLocalMessage,
+  applyChatReaction, getLocalConversations, getLocalMessages, isUserBlocked, saveLocalConversation, saveLocalMessage,
   type SenChatConversation, type SenChatMessage,
 } from '@/lib/senChatStorage'
 
@@ -22,6 +22,14 @@ type Delivery = {
 const devices = new Map<string, Promise<RegisteredDevice>>()
 const outbox = new Map<string, Promise<void>>()
 const draining = new Set<string>()
+type DelayedReaction = { key: string; messageId: string; sender: string; emoji: string; count: number; updatedAt: number }
+
+function delayedReactions(change: (current: DelayedReaction[]) => DelayedReaction[]) {
+  const key = senChatAccountKey('inbox-delayed-reactions')
+  if (!key) return
+  const current: DelayedReaction[] = JSON.parse(localStorage.getItem(key) || '[]')
+  localStorage.setItem(key, JSON.stringify(change(current).slice(-400)))
+}
 class RecipientDevicePending extends Error {}
 export function registerInboxDevice(userId: string) {
   const current = devices.get(userId)
@@ -110,6 +118,21 @@ export function chatConversationKey(conversation: SenChatConversation) {
   return conversation.isGroup ? conversation.id : conversation.partnerId
 }
 
+export function changeChatReaction(conversation: SenChatConversation, messageId: string, emoji: string, userId: string, remove = false) {
+  const message = getLocalMessages(conversation.id).find((item) => item.id === messageId)
+  if (!message || getSenChatAccount() !== userId) return null
+  const previous = message.reactionEvents?.find((item) => item.emoji === emoji && item.userId === userId)
+  const count = Math.max(0, Math.min(99, ((message.reactions?.[emoji] || []).filter((id) => id === userId).length) + (remove ? -1 : 1)))
+  const update = { emoji, count, updatedAt: Math.max(Date.now(), (previous?.updatedAt || 0) + 1) }
+  const messages = applyChatReaction(conversation.id, messageId, userId, update)
+  const delivery = sendInboxMessage({
+    id: crypto.randomUUID(), conversationId: conversation.id, senderId: userId,
+    senderName: '', receiverId: conversation.partnerId, content: '', type: 'system',
+    createdAt: new Date().toISOString(), status: 'sending', reactionUpdate: { ...update, messageId },
+  }, conversation)
+  return { messages, delivery }
+}
+
 export function getChatConversation(key: string) {
   return getLocalConversations().find((conversation) => chatConversationKey(conversation) === key || conversation.id === key)
 }
@@ -147,6 +170,23 @@ export async function pullChatInbox(userId: string, activeConversation: string |
     }
     if (getLocalMessages(conversationId).some((message) => message.id === id)) { receipts.push(receipt); continue }
     if (getSenChatAccount() !== userId) return []
+    if (incoming.reactionUpdate) {
+      const { messageId, emoji, count, updatedAt } = incoming.reactionUpdate
+      if (typeof messageId === 'string' && messageId.length <= 100 && typeof emoji === 'string' && emoji.length <= 24 &&
+        /\p{Extended_Pictographic}/u.test(emoji) &&
+        Number.isInteger(count) && count >= 0 && count <= 99 && Number.isSafeInteger(updatedAt) && updatedAt <= Date.now() + 300000) {
+        if (getLocalMessages(conversationId).some((message) => message.id === messageId)) {
+          applyChatReaction(conversationId, messageId, sender, { emoji, count, updatedAt })
+          window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: conversationId }))
+        } else {
+          try {
+            delayedReactions((current) => [...current, { key, messageId, sender, emoji, count, updatedAt }])
+          } catch { continue }
+        }
+      }
+      receipts.push(receipt)
+      continue
+    }
     const conversation: SenChatConversation = existing || {
       id: conversationId, partnerId: key, partnerName: encrypted.group_id ? 'Nhóm Sen Chat' : incoming.senderName || 'Bạn bè',
       partnerIdentifier: key, unreadCount: 0, updatedAt: Date.now(), isGroup: Boolean(encrypted.group_id),
@@ -156,6 +196,13 @@ export async function pullChatInbox(userId: string, activeConversation: string |
     saveLocalMessage(conversationId, {
       ...incoming, conversationId, senderId: sender, receiverId: userId, createdAt: encrypted.created_at, status: 'received',
     })
+    try {
+      delayedReactions((current) => current.filter((reaction) => {
+        if (reaction.key !== key || reaction.messageId !== id) return true
+        applyChatReaction(conversationId, id, reaction.sender, reaction)
+        return false
+      }))
+    } catch {}
     window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: conversationId }))
     stored.push({ id, conversation: key })
     receipts.push(receipt)

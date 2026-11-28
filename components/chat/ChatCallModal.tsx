@@ -85,6 +85,7 @@ export interface ChatCallModalProps {
   userRole?: 'owner' | 'admin' | 'member'
   groupMembers?: Array<{ userId: string; name: string; avatar?: string }>
   onClose: () => void
+  onSummary?: (callId: string, mode: 'voice' | 'video', seconds: number | null) => void
 }
 
 type PeerSignal =
@@ -117,12 +118,14 @@ export default function ChatCallModal({
   userRole = 'member',
   groupMembers = [],
   onClose,
+  onSummary,
 }: ChatCallModalProps) {
   const [activeCallMode, setActiveCallMode] = useState<'voice' | 'video'>(initialCallMode)
   const [callStatus, setCallStatus] = useState<'requesting' | 'ringing' | 'connected' | 'reconnecting' | 'ended'>(
     'requesting'
   )
   const [callDuration, setCallDuration] = useState(0)
+  const connectedSince = useRef<number | null>(null)
   const [isMicMuted, setIsMicMuted] = useState(false)
   const [isCameraOff, setIsCameraOff] = useState(initialCallMode === 'voice')
   const [isScreenSharing, setIsScreenSharing] = useState(false)
@@ -398,6 +401,13 @@ export default function ChatCallModal({
     if (status !== 'ok') throw new Error('Không thể gửi tín hiệu cuộc gọi.')
   }, [currentUserId, partnerId])
 
+  const writeSummary = useCallback(() => {
+    const id = callIdRef.current
+    if (!id || (!connectedSince.current && (isIncoming || isGroup))) return
+    const seconds = connectedSince.current ? Math.max(1, Math.round((Date.now() - connectedSince.current) / 1000)) : null
+    onSummary?.(id, initialCallMode, seconds)
+  }, [initialCallMode, isGroup, isIncoming, onSummary])
+
   const handleLeaveOrEndCall = useCallback(async (endForAll = false) => {
     if (ending.current) return
     ending.current = true
@@ -414,9 +424,10 @@ export default function ChatCallModal({
         return
       }
     }
+    writeSummary()
     cleanupCall()
     onClose()
-  }, [isGroup, cleanupCall, onClose])
+  }, [isGroup, cleanupCall, onClose, writeSummary])
 
   useEffect(() => {
     let cancelled = false
@@ -439,6 +450,7 @@ export default function ChatCallModal({
       ending.current = true
       setCallStatus('ended')
       setStatusMessage(message)
+      writeSummary()
       cleanupCall()
       closeTimer = setTimeout(onClose, 900)
     }
@@ -471,7 +483,11 @@ export default function ChatCallModal({
       }
       const { Room, RoomEvent, Track } = await import('livekit-client')
       if (cancelled || ending.current) return
-      const room = new Room({ adaptiveStream: true, dynacast: true })
+      const room = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        publishDefaults: { videoEncoding: { maxBitrate: 900_000, maxFramerate: 24 } },
+      })
       groupRoom = room
       groupRoomRef.current = room
       const refreshParticipants = () => {
@@ -554,6 +570,7 @@ export default function ChatCallModal({
       setMaxParticipants(data.maxParticipants)
       if (data.expiresAt) setRemainingSeconds(Math.max(0, Math.ceil((Date.parse(data.expiresAt) - Date.now()) / 1000)))
       setCallStatus('connected')
+      connectedSince.current ??= Date.now()
       setStatusMessage('Đã kết nối cuộc gọi nhóm')
       refreshParticipants()
       heartbeat = setInterval(() => void validateGroup(), 8000)
@@ -621,6 +638,7 @@ export default function ChatCallModal({
           peerConnected = true
           clearTimeout(timeout)
           setCallStatus('connected')
+          connectedSince.current ??= Date.now()
           setNetworkState('good')
           setStatusMessage('Đã kết nối cuộc gọi')
         } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {

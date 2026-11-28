@@ -56,7 +56,7 @@ interface ChatMlsGroupModalProps {
   currentUserEmail: string
   userPlanTier?: string | null
   isCreatingNew?: boolean
-  onGroupCreated?: (convId: string, title: string) => void
+  onGroupCreated?: (convId: string, title: string, avatar?: string) => void
   onGroupUpdated?: () => void
   onGroupLeft?: (convId: string) => void
 }
@@ -221,7 +221,7 @@ export default function ChatMlsGroupModal({
         await saveLocalMlsGroupState(data.conversation_id, groupSession.serializedState, groupSession.epoch)
 
         setSuccessMsg('Tạo nhóm MLS thành công!')
-        if (onGroupCreated) onGroupCreated(data.conversation_id, newTitle.trim())
+        if (onGroupCreated) onGroupCreated(data.conversation_id, newTitle.trim(), newAvatar || undefined)
         setTimeout(() => {
           onClose()
         }, 800)
@@ -536,18 +536,42 @@ export default function ChatMlsGroupModal({
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Đường dẫn ảnh đại diện (Tùy chọn)
+            <div className="flex flex-wrap items-center gap-3">
+              {newAvatar && <img src={newAvatar} alt="Ảnh nhóm" className="h-12 w-12 rounded-xl object-cover" />}
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Ảnh nhóm
+                <input type="file" accept="image/jpeg,image/png,image/webp" disabled={isLoading || (!isCreatingNew && myRole === 'member')}
+                  className="mt-1 block max-w-full text-xs" onChange={async (event) => {
+                    const input = event.currentTarget
+                    const file = input.files?.[0]
+                    input.value = ''
+                    if (!file) return
+                    setErrorMsg(null)
+                    setIsLoading(true)
+                    const url = URL.createObjectURL(file)
+                    try {
+                      if (file.size > 10 * 1024 * 1024) throw new Error('Hãy chọn ảnh dưới 10 MB.')
+                      const image = new Image()
+                      image.src = url
+                      await image.decode()
+                      const size = Math.min(image.naturalWidth, image.naturalHeight)
+                      const canvas = document.createElement('canvas')
+                      canvas.width = canvas.height = 192
+                      const ctx = canvas.getContext('2d')
+                      if (!ctx || !size) throw new Error('Không đọc được ảnh đã chọn.')
+                      ctx.fillStyle = '#fff'
+                      ctx.fillRect(0, 0, 192, 192)
+                      ctx.drawImage(image, (image.naturalWidth - size) / 2, (image.naturalHeight - size) / 2, size, size, 0, 0, 192, 192)
+                      setNewAvatar(canvas.toDataURL('image/jpeg', 0.75))
+                    } catch (error) {
+                      setErrorMsg(error instanceof Error ? error.message : 'Không đọc được ảnh đã chọn.')
+                    } finally {
+                      URL.revokeObjectURL(url)
+                      setIsLoading(false)
+                    }
+                  }} />
               </label>
-              <input
-                type="text"
-                placeholder="https://..."
-                value={newAvatar}
-                onChange={(e) => setNewAvatar(e.target.value)}
-                disabled={!isCreatingNew && myRole === 'member'}
-                className="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-xs disabled:opacity-60"
-              />
+              {newAvatar && (isCreatingNew || myRole !== 'member') && <button type="button" className="text-xs text-rose-600" onClick={() => setNewAvatar('')}>Gỡ ảnh</button>}
             </div>
 
             {!isCreatingNew && (myRole === 'owner' || myRole === 'admin') && (

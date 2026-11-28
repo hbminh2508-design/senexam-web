@@ -57,6 +57,8 @@ export interface SenChatMessage {
     content: string
   }
   reactions?: Record<string, string[]>
+  reactionEvents?: Array<ChatReactionUpdate & { userId: string; action: 'add' | 'remove' }>
+  reactionUpdate?: ChatReactionUpdate & { messageId: string }
 }
 
 export interface SenChatConversation {
@@ -323,34 +325,32 @@ export function markConversationUnread(convId: string, count = 1): SenChatConver
   return ensureSenAiStudioInConversations(list)
 }
 
-export function toggleMessageReaction(
-  conversationId: string,
-  messageId: string,
-  emoji: string,
-  userId: string
-): SenChatMessage[] {
-  if (typeof window === 'undefined' || !conversationId || !messageId || !emoji || !userId) {
-    return []
-  }
+export type ChatReactionUpdate = { emoji: string; count: number; updatedAt: number }
+
+export function applyChatReaction(conversationId: string, messageId: string, userId: string, update: ChatReactionUpdate) {
   const list = getLocalMessages(conversationId)
   const updated = list.map((m) => {
     if (m.id !== messageId) return m
+    const events = m.reactionEvents || []
+    const previous = events.find((event) => event.emoji === update.emoji && event.userId === userId)
+    if (previous && previous.updatedAt >= update.updatedAt) return m
+    const { emoji, count } = update
     const reactions: Record<string, string[]> = { ...(m.reactions || {}) }
-    const users = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : []
-    const idx = users.indexOf(userId)
-    if (idx >= 0) {
-      users.splice(idx, 1)
-    } else {
-      users.push(userId)
+    const users = (reactions[emoji] || []).filter((id) => id !== userId)
+    if (count) users.push(...Array<string>(count).fill(userId))
+    if (users.length) reactions[emoji] = users
+    else delete reactions[emoji]
+    return {
+      ...m, reactions,
+      reactionEvents: [
+        ...events.filter((event) => event.emoji !== emoji || event.userId !== userId),
+        { emoji, count, updatedAt: update.updatedAt, userId, action: count ? 'add' as const : 'remove' as const },
+      ],
     }
-    if (users.length === 0) {
-      delete reactions[emoji]
-    } else {
-      reactions[emoji] = users
-    }
-    return { ...m, reactions }
   })
-  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(updated))
+  if (updated.some((message, index) => message !== list[index])) {
+    writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(updated))
+  }
   return updated
 }
 

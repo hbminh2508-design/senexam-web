@@ -1,6 +1,6 @@
 'use client'
 
-import { bindSenChatAccount } from '@/lib/senChatAccount.mjs'
+import { bindSenChatAccount, getSenChatAccount } from '@/lib/senChatAccount.mjs'
 
 import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
@@ -13,6 +13,26 @@ import { isSenChatPage } from '@/lib/senChatConversationLink'
 import { isSessionLocked } from '@/lib/senChatMobileSecurity'
 import { getLocalMessages, getLocalSenChatUser, isUserBlocked, saveLocalConversation, saveLocalMessage, restoreLegacySenChatHistory } from '@/lib/senChatStorage'
 import { supabase } from '@/lib/supabaseClient'
+import type { SenChatConversation } from '@/lib/senChatStorage'
+
+function recordCall(conversation: SenChatConversation, userId: string, callId: string, mode: 'voice' | 'video', seconds: number | null) {
+  if (getSenChatAccount() !== userId) return
+  const label = mode === 'video' ? 'Cuộc gọi video' : 'Cuộc gọi thoại'
+  const duration = seconds === null ? '' : [
+    Math.floor(seconds / 60) > 0 ? Math.floor(seconds / 60) + ' phút' : '',
+    seconds % 60 > 0 ? seconds % 60 + ' giây' : '',
+  ].filter(Boolean).join(' ')
+  const id = (seconds === null ? 'missed_' : 'completed_') + callId
+  if (getLocalMessages(conversation.id).some((message) => message.id === id)) return
+  if (!getChatConversation(conversation.id)) saveLocalConversation(conversation)
+  saveLocalMessage(conversation.id, {
+    id, conversationId: conversation.id, senderId: userId, senderName: '',
+    receiverId: conversation.partnerId, type: 'system', createdAt: new Date().toISOString(),
+    status: 'sent', content: seconds === null ? label + ' không được trả lời' : label + ' · ' + duration,
+    ...(seconds === null ? { missedCall: mode } : {}),
+  })
+  window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: conversation.id }))
+}
 
 const ChatCallModal = dynamic(() => import('@/components/chat/ChatCallModal'), { ssr: false })
 const ChatIncomingCallDialog = dynamic(() => import('@/components/chat/ChatCallModal').then((module) => module.ChatIncomingCallDialog), { ssr: false })
@@ -49,7 +69,8 @@ export default function SenChatRuntime() {
   }, [canShow, isChat])
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' && !session) return
       const accepted = bindSenChatAccount(session?.user.id)
       setUser(accepted ? session?.user || null : null)
       if (!accepted && session) window.location.reload()
@@ -187,6 +208,7 @@ export default function SenChatRuntime() {
         isGroup: conversation.isGroup, userRole: conversation.role,
         currentUserId: user.id, currentUserName: getLocalSenChatUser()?.name || user.user_metadata.full_name || 'Thành viên',
         currentUserAvatar: getLocalSenChatUser()?.avatar, onClose,
+        onSummary: (id, callMode, seconds) => recordCall(conversation, user.id, id, callMode, seconds),
       })
     }
     const handleStart = (event: Event) => start((event as CustomEvent<Start>).detail)
@@ -265,6 +287,11 @@ export default function SenChatRuntime() {
         isGroup: call.isGroup, userRole: conversation?.role,
         currentUserId: user.id, currentUserName: getLocalSenChatUser()?.name || user.user_metadata.full_name || 'Thành viên',
         currentUserAvatar: getLocalSenChatUser()?.avatar, onClose,
+        onSummary: (id, callMode, seconds) => recordCall(conversation || {
+          id: call.conversationId, partnerId: call.isGroup ? call.conversationId : call.callerId,
+          partnerName: call.groupName || call.callerName, partnerIdentifier: call.conversationId,
+          isGroup: call.isGroup, unreadCount: 0, updatedAt: Date.now(),
+        }, user.id, id, callMode, seconds),
       })
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Không thể trả lời cuộc gọi.')
