@@ -208,7 +208,8 @@ function MobileChatPageInner() {
   }, [selectedConvId])
   const [messages, setMessages] = useState<SenChatMessage[]>([])
   const [currentUser, setCurrentUser] = useState<SenChatUser | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [startupError, setStartupError] = useState('')
+  const [startupAttempt, setStartupAttempt] = useState(0)
   const [isOnline, setIsOnline] = useState(true)
   const [offlinePendingCount, setOfflinePendingCount] = useState(0)
 
@@ -629,205 +630,113 @@ function MobileChatPageInner() {
     }
   }, [])
 
-  // Khởi tạo người dùng, khóa FLAG_SECURE, PIN lock & Danh bạ
   useEffect(() => {
-    // Đăng ký bộ dọn dẹp tin nhắn tạm thời cục bộ khi đóng tab / thoát trang
+    let stopped = false
+    let timeout: ReturnType<typeof setTimeout> | undefined
     const cleanupEphemeral = setupEphemeralCleanupListener()
 
     async function initMobileChat() {
-      setIsLoading(true)
-
-      // 1. Kiểm tra FLAG_SECURE
-      const isFlagOn = isFlagSecureEnabled()
-      setFlagSecureActive(isFlagOn)
-      setFlagSecure(isFlagOn, window)
-
-      // 2. Kiểm tra App Lock
-      if (isAppLockConfigured()) {
-        const conf = getAppLockConfig()
-        setAppLockConfig({ enabled: conf.enabled, pinLength: conf.pinLength || 6 })
-        if (isSessionLocked()) {
-          setIsLocked(true)
-        }
-      }
-
-      // 3. Tải phiên người dùng & Kiểm tra Supabase Auth bắt buộc
-      let resolvedAuthUserId: string | null = null
+      setStartupError('')
       try {
-        let authUser: any = null
-        const { data: userData } = await supabase.auth.getUser()
-        authUser = userData?.user || null
-        if (!authUser) {
-          const { data: sessData } = await supabase.auth.getSession()
-          authUser = sessData?.session?.user || null
+        const flagEnabled = isFlagSecureEnabled()
+        setFlagSecureActive(flagEnabled)
+        setFlagSecure(flagEnabled, window)
+        if (isAppLockConfigured()) {
+          const config = getAppLockConfig()
+          setAppLockConfig({ enabled: config.enabled, pinLength: config.pinLength || 6 })
+          setIsLocked(isSessionLocked())
         }
 
-        if (authUser) {
-          if (stopped || !bindSenChatAccount(authUser.id)) return
-          resolvedAuthUserId = authUser.id
-          let profile: any = null
-          try {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('full_name, email, phone_number, phone, avatar_url, school, class_name, grade, role, allow_search_by_email, read_receipts_enabled, plan_tier, vip_expires_at')
-              .eq('id', authUser.id)
-              .maybeSingle()
-            profile = profileData
-          } catch {}
-
-          if (profile) {
-            setUserPlanTier(getEffectivePlanTier(profile))
-          }
-
-          const synchedUser: SenChatUser = {
-            id: authUser.id,
-            name: profile?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Học viên SenExam',
-            identifier: authUser.email || profile?.phone_number || profile?.phone || authUser.id,
-            authType: 'senexam',
-            avatar: profile?.avatar_url || authUser.user_metadata?.avatar_url || '',
-            email: authUser.email || '',
-            phone: profile?.phone_number || profile?.phone || '',
-            school: profile?.school || '',
-            className: profile?.class_name || profile?.grade || '',
-            createdAt: authUser.created_at || new Date().toISOString(),
-          }
-          if (stopped || getSenChatAccount() !== synchedUser.id) return
-          restoreLegacySenChatHistory(synchedUser.id)
-          saveLocalSenChatUser(synchedUser)
-          setCurrentUser(synchedUser)
-
-          // Đảm bảo cặp khóa E2EE được bảo vệ an toàn trong Keystore (không crash trên iOS Private Mode)
-          try {
-            const existingKey = await retrieveIdentityPrivateKey('identity_e2ee:' + authUser.id, window)
-            if (!existingKey) {
-              const pair = generateIdentityKeyPair()
-              await storeIdentityPrivateKey('identity_e2ee:' + authUser.id, pair.privateKey, window)
-            }
-          } catch (ksErr) {
-            console.warn('Cảnh báo Keystore trên trình duyệt di động:', ksErr)
-          }
-
-          // Tự động đăng ký thiết bị hiện tại lên chat_devices
-          const { data: sessionData } = await supabase.auth.getSession()
-          const token = sessionData?.session?.access_token
-          if (token) {
-            const mDeviceId = getOrCreateDeviceId()
-            fetch('/api/chat/device-management', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ action: 'register', deviceId: mDeviceId, platform: 'android' }),
-            }).catch(() => {})
-
-            // Tự động đồng bộ nhóm & tin nhắn đa thiết bị ngay khi mở app
-            triggerFullDeviceSync(authUser.id, mDeviceId, {
-              supabaseClient: supabase,
-              accessToken: token,
-            })
-              .then(() => {
-                if (stopped || getSenChatAccount() !== synchedUser.id) return
-                setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-              })
-              .catch(() => {})
-          }
-        } else {
-          // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP
+        const { data, error } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(() => reject(new Error('Phiên đăng nhập phản hồi quá lâu. Hãy thử kết nối lại.')), 8000)
+          }),
+        ])
+        clearTimeout(timeout)
+        if (stopped) return
+        if (error) throw error
+        const session = data.session
+        if (!session) {
           router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
           return
         }
-      } catch (err) {
-        console.warn('Lỗi đồng bộ danh tính người dùng:', err)
-        if (!stopped) router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
-        return
-      }
 
-      if (stopped || getSenChatAccount() !== resolvedAuthUserId) return
-
-      // 4. Tải danh sách cuộc trò chuyện
-      let list = ensureSenAiStudioInConversations(getLocalConversations())
-      if (list.length === 0) {
-        // Khởi tạo cuộc trò chuyện chào mừng chuẩn E2EE
-        const welcomeConv: SenChatConversation = {
-          id: 'senai-welcome',
-          partnerId: 'senai-assistant',
-          partnerName: 'SenAI Trợ Lý Học Tập',
-          partnerIdentifier: 'senai@senexam.me',
-          lastMessage: 'Chào bạn! Mình là SenAI 2.0. Hãy nhắn tin hoặc gõ @Sen để nhận hỗ trợ giải bài!',
-          lastMessageTime: 'Vừa xong',
-          unreadCount: 1,
-          updatedAt: Date.now(),
-          isGroup: false,
+        const authUser = session.user
+        if (!bindSenChatAccount(authUser.id)) return
+        const isCurrent = () => !stopped && getSenChatAccount() === authUser.id
+        const localUser: SenChatUser = {
+          id: authUser.id,
+          name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Học viên SenExam',
+          identifier: authUser.email || authUser.id,
+          authType: 'senexam',
+          avatar: authUser.user_metadata?.avatar_url || '',
+          email: authUser.email || '',
+          createdAt: authUser.created_at || new Date().toISOString(),
         }
-        saveLocalConversation(welcomeConv)
-        list = [welcomeConv]
+        restoreLegacySenChatHistory(authUser.id)
+        saveLocalSenChatUser(localUser)
+        setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+        setOfflinePendingCount(globalOfflineChatQueue.getPendingCount())
+        setCurrentUser(localUser)
 
-        const welcomeMsg: SenChatMessage = {
-          id: 'msg_welcome_' + Date.now(),
-          conversationId: 'senai-welcome',
-          senderId: 'senai-assistant',
-          senderName: 'SenAI',
-          receiverId: resolvedAuthUserId || 'local_user',
-          content: 'Chào mừng bạn đến với **Sen Chat Mobile**! Tất cả tin nhắn đều được mã hóa đầu cuối (E2EE Signal Protocol) và lưu an toàn trên máy.',
-          type: 'text',
-          createdAt: new Date().toISOString(),
-          status: 'seen',
-          isSenAi: true,
-        }
-        saveLocalMessage('senai-welcome', welcomeMsg)
+        void (async () => {
+          const { data: profile } = await supabase.from('profiles')
+            .select('full_name, phone_number, phone, avatar_url, school, class_name, grade, plan_tier, vip_expires_at')
+            .eq('id', authUser.id).maybeSingle()
+          if (!profile || !isCurrent()) return
+          const user = {
+            ...localUser,
+            name: profile.full_name || localUser.name,
+            identifier: authUser.email || profile.phone_number || profile.phone || authUser.id,
+            phone: profile.phone_number || profile.phone || '',
+            avatar: profile.avatar_url || localUser.avatar,
+            school: profile.school || '',
+            className: profile.class_name || profile.grade || '',
+          }
+          saveLocalSenChatUser(user)
+          setCurrentUser(user)
+          setUserPlanTier(getEffectivePlanTier(profile))
+        })().catch(() => {})
+
+        void (async () => {
+          const keyId = 'identity_e2ee:' + authUser.id
+          const key = await retrieveIdentityPrivateKey(keyId, window)
+          if (!key && isCurrent()) await storeIdentityPrivateKey(keyId, generateIdentityKeyPair().privateKey, window)
+        })().catch(() => {})
+
+        const deviceId = getOrCreateDeviceId()
+        void fetch('/api/chat/device-management', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ action: 'register', deviceId, platform: 'android' }),
+        }).catch(() => {})
+        void triggerFullDeviceSync(authUser.id, deviceId, { supabaseClient: supabase, accessToken: session.access_token })
+          .then(() => {
+            if (isCurrent()) syncConversationsStateIfChanged(ensureSenAiStudioInConversations(getLocalConversations()))
+          }).catch(() => {})
+      } catch (error) {
+        clearTimeout(timeout)
+        if (!stopped) setStartupError(error instanceof Error ? error.message : 'Không thể kết nối Sen Chat.')
       }
-
-      setConversations(list)
-
-      // 5. Kiểm tra hàng đợi ngoại tuyến & tự động xả nếu đang online
-      const pendingCount = globalOfflineChatQueue.getPendingCount()
-      setOfflinePendingCount(pendingCount)
-      if (pendingCount > 0 && typeof navigator !== 'undefined' && navigator.onLine) {
-        try {
-          await globalOfflineChatQueue.drainQueue(async (queued) => {
-            const sentMsg: SenChatMessage = {
-              id: queued.idempotencyKey,
-              conversationId: queued.conversationId,
-              senderId: queued.senderId,
-              senderName: queued.senderName,
-              receiverId: queued.receiverId,
-              content: queued.content,
-              type: queued.type,
-              attachmentUrl: queued.attachmentUrl,
-              attachmentName: queued.attachmentName,
-              attachmentSize: queued.attachmentSize,
-              createdAt: new Date(queued.timestamp).toISOString(),
-              status: 'sent',
-            }
-            const conversation = getChatConversation(queued.conversationId)
-            if (!conversation) return { success: false, error: 'Không tìm thấy hội thoại' }
-            try {
-              await deliverLocalMessage(sentMsg, conversation)
-              return { success: true }
-            } catch { return { success: false, error: 'Chưa gửi được tin nhắn' } }
-          })
-          setOfflinePendingCount(globalOfflineChatQueue.getPendingCount())
-          setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-        } catch {}
-      }
-      setIsLoading(false)
     }
-
-    initMobileChat()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION' && !session) return
       if (!bindSenChatAccount(session?.user.id) || event === 'SIGNED_OUT' || !session) {
         setCurrentUser(null)
-        if (session) return
-        router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
+        if (!session) router.replace('/new-idp?returnUrl=' + encodeURIComponent(senChatLoginReturnUrl()))
       }
     })
+    void initMobileChat()
 
     return () => {
       stopped = true
+      clearTimeout(timeout)
       cleanupEphemeral()
       subscription.unsubscribe()
     }
-  }, [router])
+  }, [router, startupAttempt, syncConversationsStateIfChanged])
 
   // Khởi động Realtime Relay Node đồng bộ đa thiết bị (v1.0.2)
   useEffect(() => {
@@ -857,10 +766,12 @@ function MobileChatPageInner() {
   useEffect(() => {
     const handleOnline = async () => {
       setIsOnline(true)
+      if (!currentUser?.id || getSenChatAccount() !== currentUser.id) return
       const pending = globalOfflineChatQueue.getPendingCount()
       if (pending > 0) {
         await globalOfflineChatQueue.drainQueue(async (queued) => {
-          // Lưu tin nhắn thành công
+          const conversation = getChatConversation(queued.conversationId)
+          if (!conversation || getSenChatAccount() !== currentUser.id) return { success: false, error: 'Không tìm thấy hội thoại' }
           const sentMsg: SenChatMessage = {
             id: queued.idempotencyKey,
             conversationId: queued.conversationId,
@@ -875,12 +786,15 @@ function MobileChatPageInner() {
             createdAt: new Date(queued.timestamp).toISOString(),
             status: 'sent',
           }
-          saveLocalMessage(queued.conversationId, sentMsg)
-          return { success: true }
+          try {
+            await deliverLocalMessage(sentMsg, conversation)
+            return { success: true }
+          } catch { return { success: false, error: 'Chưa gửi được tin nhắn' } }
         })
+        if (getSenChatAccount() !== currentUser.id) return
         setOfflinePendingCount(globalOfflineChatQueue.getPendingCount())
-        if (selectedConvId) {
-          setMessages(getLocalMessages(selectedConvId))
+        if (selectedConvIdRef.current) {
+          setMessages(getLocalMessages(selectedConvIdRef.current))
         }
         setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
       }
@@ -892,13 +806,14 @@ function MobileChatPageInner() {
 
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
-    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true)
+    if (navigator.onLine) void handleOnline().catch(() => {})
+    else setIsOnline(false)
 
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [selectedConvId])
+  }, [currentUser?.id])
 
   // Chọn cuộc hội thoại
   const handleSelectConversation = useCallback((convId: string) => {
@@ -1397,7 +1312,10 @@ function MobileChatPageInner() {
   // ============================================================================
   if (!currentUser || getSenChatAccount() !== currentUser.id) {
     return <div className="grid min-h-[50dvh] flex-1 place-items-center p-6 text-center">
-      <div><p role="status">Đang kết nối Sen Chat…</p><button type="button" className="mt-3 text-sm font-semibold text-sky-700 underline" onClick={() => window.location.reload()}>Tải lại Sen Chat</button></div>
+      <div>
+        <p role="status">{startupError || 'Đang kết nối Sen Chat…'}</p>
+        {startupError && <button type="button" className="mt-3 text-sm font-semibold text-sky-700 underline" onClick={() => setStartupAttempt((attempt) => attempt + 1)}>Thử kết nối lại</button>}
+      </div>
     </div>
   }
 

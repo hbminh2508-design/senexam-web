@@ -310,6 +310,6 @@ test('v1.1.0 [26]: Điều hướng điện thoại về m.senexam.me/chat, mở
   const mobileChatSrc = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
   assert.ok(mobileChatSrc.includes('MobileChatErrorBoundary'), 'MobileChatPage phải có ErrorBoundary chống crash')
   assert.ok(mobileChatSrc.includes('<Suspense'), 'MobileChatPage phải bọc useSearchParams trong Suspense')
-  assert.ok(mobileChatSrc.includes('resolvedAuthUserId'), 'Phải dùng biến resolvedAuthUserId an toàn ngoài khối try')
+  assert.match(mobileChatSrc, /const authUser = session\.user\s+if \(!bindSenChatAccount\(authUser\.id\)\) return/)
   assert.ok(!/\bSC\b|SenCash/i.test(mobileChatSrc), 'app/m/chat/page.tsx tuyệt đối không chứa SC hoặc SenCash')
 })
