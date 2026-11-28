@@ -149,7 +149,7 @@ test('Sen Chat P11: Component ChatCallModal đầy đủ WebRTC MediaStream, Sig
   assert.ok(layout.includes('<SenChatRuntime />'), 'Lời mời gọi phải hoạt động ngoài trang Chat')
   assert.ok(runtime.includes('ChatIncomingCallDialog') && runtime.includes("event: 'call-change'"))
   assert.ok(callModalCode.includes('await room.connect(') && callModalCode.includes('room.localParticipant.publishTrack('))
-  assert.ok(callModalCode.includes('<ChatWhiteboard callId={groupCallId.current}'))
+  assert.match(callModalCode, /<ChatWhiteboard[^>]+callId=\{groupCallId\.current!?\}[^>]+room=\{groupRoomRef\.current\}/)
 
   const desktopChatCode = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')
   assert.ok(desktopChatCode.includes("startChatCall(activeConv, 'voice')"))

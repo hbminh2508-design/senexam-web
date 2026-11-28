@@ -2,16 +2,36 @@
 
 import { Download, Hand, Maximize2, Minimize2, Minus, Pencil, Plus, RotateCcw, StickyNote, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { RoomEvent, type Room, type RemoteParticipant } from 'livekit-client'
 import { chatRequest } from '@/lib/senChatBrowser'
-import { boardColors, type BoardEntry, type BoardItem, type BoardPoint } from '@/lib/senChatWhiteboard'
+import { boardColors, boardDataTopic, boardPointLimit, readBoardPacket, type BoardEntry, type BoardItem, type BoardPacket, type BoardPoint, type BoardView } from '@/lib/senChatWhiteboard'
 import { saveBoardPdf } from '@/lib/senChatBoardPdf'
 
-export default function ChatWhiteboard({ callId, userId, onClose }: { callId: string; userId: string; onClose: () => void }) {
+type BoardMode = 'shared' | 'private'
+type Stroke = { id: string; points: BoardPoint[]; color: string; sent: number }
+
+export default function ChatWhiteboard({ callId, userId, room, mode, visible, onMode, onClose }: {
+  callId: string
+  userId: string
+  room: Room | null
+  mode: BoardMode
+  visible: boolean
+  onMode: (mode: BoardMode) => void
+  onClose: () => void
+}) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const entries = useRef(new Map<string, BoardEntry>())
+  const previews = useRef(new Map<string, { points: BoardPoint[]; color: string; author: string }>())
+  const strokePaths = useRef(new WeakMap<BoardPoint[], Path2D>())
   const cursor = useRef<BoardEntry | null>(null)
   const view = useRef({ x: 0, y: 0, scale: 1 })
-  const drag = useRef<{ id: number; local: BoardPoint; points?: BoardPoint[] } | null>(null)
+  const remoteView = useRef<BoardView | null>(null)
+  const sharedView = useRef<BoardView | null>(null)
+  const follows = useRef(true)
+  const frame = useRef(0)
+  const lastPublish = useRef(0)
+  const viewDirty = useRef(false)
+  const drag = useRef<{ id: number; pointerType: string; local: BoardPoint; stroke?: Stroke } | null>(null)
   const pointers = useRef(new Map<number, BoardPoint>())
   const panningWithTwoFingers = useRef(false)
   const writes = useRef(new Map<string, BoardItem>())
@@ -23,42 +43,51 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
   const [error, setError] = useState('')
   const [pending, setPending] = useState<{ id: string; item: BoardItem } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [follow, setFollow] = useState(true)
   const path = `whiteboard?callId=${callId}`
+  const shared = mode === 'shared'
+
+  const publish = useCallback((packet: BoardPacket, destinationIdentities?: string[]) => {
+    if (!shared || !room) return
+    void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(packet)), {
+      reliable: true, topic: boardDataTopic, destinationIdentities,
+    }).catch(() => {})
+  }, [shared, room])
 
   const draw = useCallback((output?: HTMLCanvasElement, exportView?: typeof view.current) => {
     const element = output || canvas.current
     const ctx = element?.getContext('2d')
     if (!element || !ctx) return
     const { width, height } = output || element.getBoundingClientRect()
-    const ratio = output ? 1 : window.devicePixelRatio || 1
+    const ratio = output ? 1 : Math.min(window.devicePixelRatio || 1, 2)
     if (element.width !== Math.round(width * ratio)) element.width = Math.round(width * ratio)
     if (element.height !== Math.round(height * ratio)) element.height = Math.round(height * ratio)
     const { x, y, scale } = exportView || view.current
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
     ctx.fillStyle = '#f8fafc'
     ctx.fillRect(0, 0, width, height)
-    ctx.fillStyle = '#cbd5e1'
-    const step = Math.max(8, 28 * scale)
-    for (let px = ((x % step) + step) % step; px < width; px += step) {
-      for (let py = ((y % step) + step) % step; py < height; py += step) ctx.fillRect(px, py, 1.25, 1.25)
-    }
     ctx.translate(x, y)
     ctx.scale(scale, scale)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.lineWidth = 2.5
-    const drawStroke = (points: BoardPoint[], ink: string) => {
+    const drawStroke = (points: BoardPoint[], ink: string, complete = false) => {
+      if (!points.length) return
       ctx.strokeStyle = ink
-      ctx.beginPath()
-      ctx.moveTo(...points[0])
-      if (points.length === 1) ctx.lineTo(points[0][0] + 0.01, points[0][1])
-      for (const point of points.slice(1)) ctx.lineTo(...point)
-      ctx.stroke()
+      let path = complete ? strokePaths.current.get(points) : undefined
+      if (!path) {
+        path = new Path2D()
+        path.moveTo(...points[0])
+        if (points.length === 1) path.lineTo(points[0][0] + 0.01, points[0][1])
+        for (let index = 1; index < points.length; index += 1) path.lineTo(...points[index])
+        if (complete) strokePaths.current.set(points, path)
+      }
+      ctx.stroke(path)
     }
     const hidden = new Set(Array.from(entries.current.values()).flatMap(({ item }) => item.kind === 'undo' ? [item.target] : []))
     for (const { id, item } of entries.current.values()) {
       if (hidden.has(id)) continue
-      if (item.kind === 'stroke') drawStroke(item.points, item.color)
+      if (item.kind === 'stroke') drawStroke(item.points, item.color, true)
       if (item.kind === 'note') {
         const [left, top] = item.at
         ctx.font = '600 15px system-ui'
@@ -69,17 +98,117 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
         lines.forEach((line, index) => ctx.fillText(line.trim(), left + 11, top + 23 + index * 22, 222))
       }
     }
-    if (drag.current?.points?.length) drawStroke(drag.current.points, color)
-  }, [color])
+    if (!output) {
+      for (const preview of previews.current.values()) drawStroke(preview.points, preview.color)
+      const stroke = drag.current?.stroke
+      if (stroke) drawStroke(stroke.points, stroke.color)
+    }
+  }, [])
+
+  const flushStroke = useCallback((stroke: Stroke) => {
+    while (shared && room && stroke.sent < stroke.points.length) {
+      const points = stroke.points.slice(stroke.sent, stroke.sent + 120)
+      publish({ type: 'points', id: stroke.id, offset: stroke.sent, color: stroke.color, points })
+      stroke.sent += points.length
+    }
+  }, [publish, room, shared])
+
+  const placeView = useCallback(({ center, size, scale }: BoardView) => {
+    const bounds = canvas.current?.getBoundingClientRect()
+    if (!bounds?.width || !bounds.height) return
+    const fittedScale = Math.max(0.05, scale * Math.min(1, bounds.width / size[0], bounds.height / size[1]))
+    view.current = { x: bounds.width / 2 - center[0] * fittedScale, y: bounds.height / 2 - center[1] * fittedScale, scale: fittedScale }
+  }, [])
+
+  const scheduleDraw = useCallback(() => {
+    if (!visible || frame.current) return
+    frame.current = requestAnimationFrame((time) => {
+      frame.current = 0
+      draw()
+      const stroke = drag.current?.stroke
+      if (!viewDirty.current && (!stroke || stroke.sent === stroke.points.length)) return
+      if (!shared || !room) { viewDirty.current = false; return }
+      if (time - lastPublish.current < 40) { scheduleDraw(); return }
+      lastPublish.current = time
+      if (viewDirty.current && sharedView.current) {
+        viewDirty.current = false
+        publish({ type: 'view', view: sharedView.current })
+      }
+      if (stroke) flushStroke(stroke)
+    })
+  }, [draw, flushStroke, publish, room, shared, visible])
 
   useEffect(() => {
-    const observer = new ResizeObserver(() => draw())
+    if (!shared || !room) return
+    const receive = (data: Uint8Array, participant?: RemoteParticipant, _kind?: unknown, topic?: string) => {
+      if (!participant || topic !== boardDataTopic) return
+      const packet = readBoardPacket(data)
+      if (!packet) return
+      if (packet.type === 'request-view') {
+        if (visible && sharedView.current) publish({ type: 'view', view: sharedView.current }, [participant.identity])
+        return
+      }
+      if (packet.type === 'view') {
+        remoteView.current = packet.view
+        sharedView.current = null
+        viewDirty.current = false
+        if (follows.current && !drag.current && !pointers.current.size) placeView(packet.view)
+      } else if (!entries.current.has(packet.id)) {
+        const author = participant.identity
+        const preview = previews.current.get(packet.id)
+        if (preview && preview.author !== author) return
+        if (packet.type === 'cancel' || packet.type === 'finish') {
+          previews.current.delete(packet.id)
+          if (packet.type === 'finish' && preview?.points.length) {
+            entries.current.set(packet.id, { id: packet.id, author_id: author, item: { kind: 'stroke', points: preview.points, color: preview.color }, created_at: '' })
+          }
+        } else if (packet.type === 'item') {
+          if (packet.item.kind === 'undo' && entries.current.get(packet.item.target)?.author_id !== author) return
+          entries.current.set(packet.id, { id: packet.id, author_id: author, item: packet.item, created_at: '' })
+        } else if (packet.type === 'points' && packet.offset === (preview?.points.length ?? 0)) {
+          if (preview) preview.points.push(...packet.points)
+          else previews.current.set(packet.id, { points: packet.points, color: packet.color, author })
+        }
+      }
+      scheduleDraw()
+    }
+    const sendView = (participant: RemoteParticipant) => {
+      if (visible && sharedView.current) publish({ type: 'view', view: sharedView.current }, [participant.identity])
+    }
+    const clearPreviews = (participant: RemoteParticipant) => {
+      for (const [id, preview] of previews.current) if (preview.author === participant.identity) previews.current.delete(id)
+      scheduleDraw()
+    }
+    room.on(RoomEvent.DataReceived, receive).on(RoomEvent.ParticipantConnected, sendView).on(RoomEvent.ParticipantDisconnected, clearPreviews)
+    if (visible) publish({ type: 'request-view' })
+    return () => {
+      room.off(RoomEvent.DataReceived, receive).off(RoomEvent.ParticipantConnected, sendView).off(RoomEvent.ParticipantDisconnected, clearPreviews)
+    }
+  }, [placeView, publish, room, scheduleDraw, shared, visible])
+
+  useEffect(() => {
+    if (!visible) return
+    const refresh = () => {
+      if (shared && follows.current && remoteView.current) placeView(remoteView.current)
+      scheduleDraw()
+    }
+    const observer = new ResizeObserver(refresh)
     if (canvas.current) observer.observe(canvas.current)
-    draw()
-    return () => observer.disconnect()
-  }, [draw])
+    refresh()
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame.current)
+      frame.current = 0
+      const stroke = drag.current?.stroke
+      if (stroke?.sent) publish({ type: 'cancel', id: stroke.id })
+      drag.current = null
+      pointers.current.clear()
+      panningWithTwoFingers.current = false
+    }
+  }, [placeView, publish, scheduleDraw, shared, visible])
 
   useEffect(() => {
+    if (!shared || !visible) return
     let stopped = false
     let timer: ReturnType<typeof setTimeout>
     async function sync() {
@@ -89,10 +218,10 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
         const offset = last ? `&at=${encodeURIComponent(last.created_at)}&id=${last.id}` : ''
         const { entries: latest } = await chatRequest<{ entries: BoardEntry[] }>(path + offset)
         if (stopped) return
-        latest.forEach((entry) => entries.current.set(entry.id, entry))
+        latest.forEach((entry) => { entries.current.set(entry.id, entry); previews.current.delete(entry.id) })
         if (latest.length) cursor.current = latest[latest.length - 1]
         if (latest.length === 200) delay = 0
-        draw()
+        if (latest.length) scheduleDraw()
       } catch (reason) {
         if (!stopped) setError(reason instanceof Error ? reason.message : 'Không thể đồng bộ bảng trắng.')
       }
@@ -100,12 +229,15 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
     }
     void sync()
     return () => { stopped = true; clearTimeout(timer) }
-  }, [path, draw])
+  }, [path, scheduleDraw, shared, visible])
 
   const save = async (item: BoardItem, id = crypto.randomUUID()) => {
-    writes.current.set(id, item)
+    const fresh = !entries.current.has(id)
     if (!entries.current.has(id)) entries.current.set(id, { id, author_id: userId, item, created_at: '' })
-    draw()
+    scheduleDraw()
+    if (!shared) return
+    if (fresh && item.kind !== 'stroke') publish({ type: 'item', id, item })
+    writes.current.set(id, item)
     if (sending.current) return
     sending.current = true
     setSaving(true)
@@ -144,20 +276,54 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
     saveBoardPdf(output)
   }
 
-  const point = (event: React.PointerEvent): BoardPoint => {
-    const bounds = event.currentTarget.getBoundingClientRect()
+  const point = (event: { clientX: number; clientY: number }, bounds: DOMRect): BoardPoint => {
     return [event.clientX - bounds.left, event.clientY - bounds.top]
   }
   const world = ([x, y]: BoardPoint): BoardPoint => [
     (x - view.current.x) / view.current.scale, (y - view.current.y) / view.current.scale,
   ]
+  const shareView = () => {
+    const bounds = canvas.current?.getBoundingClientRect()
+    if (shared && bounds?.width && bounds.height) {
+      sharedView.current = {
+        center: world([bounds.width / 2, bounds.height / 2]),
+        size: [bounds.width, bounds.height],
+        scale: view.current.scale,
+      }
+      remoteView.current = null
+      viewDirty.current = true
+    }
+    scheduleDraw()
+  }
   const zoom = (factor: number, at?: BoardPoint) => {
     const bounds = canvas.current?.getBoundingClientRect()
     const center = at || [(bounds?.width || 0) / 2, (bounds?.height || 0) / 2]
     const anchor = world(center)
-    const scale = Math.min(6, Math.max(0.3, view.current.scale * factor))
+    const scale = Math.min(6, Math.max(0.05, view.current.scale * factor))
     view.current = { scale, x: center[0] - anchor[0] * scale, y: center[1] - anchor[1] * scale }
-    draw()
+    shareView()
+  }
+  const commitStroke = (stroke: Stroke) => {
+    if (viewDirty.current && sharedView.current) {
+      viewDirty.current = false
+      publish({ type: 'view', view: sharedView.current })
+    }
+    flushStroke(stroke)
+    publish({ type: 'finish', id: stroke.id })
+    void save({ kind: 'stroke', color: stroke.color, points: stroke.points }, stroke.id)
+  }
+  const appendPoint = (gesture: NonNullable<typeof drag.current>, local: BoardPoint) => {
+    const stroke = gesture.stroke
+    if (!stroke) return
+    const next = world(local)
+    const last = stroke.points[stroke.points.length - 1]
+    if (next[0] === last[0] && next[1] === last[1]) return
+    if (stroke.points.length === boardPointLimit) {
+      commitStroke(stroke)
+      gesture.stroke = { id: crypto.randomUUID(), points: [last, next], color: stroke.color, sent: 0 }
+    } else {
+      stroke.points.push(next)
+    }
   }
   const finish = (event: React.PointerEvent, commit: boolean) => {
     pointers.current.delete(event.pointerId)
@@ -168,9 +334,14 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
     const gesture = drag.current
     if (gesture?.id !== event.pointerId) return
     drag.current = null
-    if (commit && gesture.points?.length) void save({ kind: 'stroke', color, points: gesture.points })
+    if (gesture.stroke) {
+      if (commit) {
+        appendPoint(gesture, point(event, event.currentTarget.getBoundingClientRect()))
+        if (gesture.stroke) commitStroke(gesture.stroke)
+      } else if (gesture.stroke.sent) publish({ type: 'cancel', id: gesture.stroke.id })
+    }
     if (commit && tool === 'note' && note.trim()) void save({ kind: 'note', at: world(gesture.local), color, text: note.trim() })
-    draw()
+    scheduleDraw()
   }
   const undo = () => {
     const hidden = new Set(Array.from(entries.current.values()).flatMap(({ item }) => item.kind === 'undo' ? [item.target] : []))
@@ -180,11 +351,21 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
     if (latest && !saving && !pending) void save({ kind: 'undo', target: latest.id })
   }
   const control = 'rounded-md border border-slate-300 p-2 hover:bg-sky-50 aria-pressed:bg-sky-200 disabled:opacity-50'
+  if (!visible) return null
 
   return (
     <section aria-label="Bảng trắng cuộc gọi" className={`${expanded ? 'fixed inset-0 z-[10010] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]' : 'absolute inset-2 z-30 rounded-xl'} flex flex-col overflow-hidden bg-white text-slate-900 shadow-xl`}>
       <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 p-2">
         <h2 className="mr-1 font-semibold">Bảng trắng</h2>
+        <div className="flex gap-1 text-xs" aria-label="Chế độ bảng trắng">
+          <button type="button" className={control} aria-pressed={shared} onClick={() => onMode('shared')}>Bảng chung</button>
+          <button type="button" className={control} aria-pressed={!shared} onClick={() => onMode('private')}>Bảng riêng</button>
+        </div>
+        {shared && <button type="button" className={`${control} text-xs`} aria-pressed={follow} onClick={() => {
+          follows.current = !follow
+          setFollow(!follow)
+          if (!follow && remoteView.current) { placeView(remoteView.current); scheduleDraw() }
+        }}>Theo dõi vùng nhìn</button>}
         <button type="button" className={control} onClick={exportPdf} aria-label="Lưu bảng trắng thành PDF"><Download size={16} /></button>
         <button type="button" className={control} onClick={() => setExpanded(!expanded)} aria-label={expanded ? 'Thoát toàn màn hình' : 'Bảng trắng toàn màn hình'}>{expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
         <button type="button" className={control} aria-label="Vẽ" aria-pressed={tool === 'stroke'} onClick={() => setTool('stroke')}><Pencil size={16} /></button>
@@ -193,7 +374,7 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
         <button type="button" className={control} aria-label="Hoàn tác nội dung của tôi" disabled={saving || !!pending} onClick={undo}><Undo2 size={16} /></button>
         <button type="button" className={control} aria-label="Thu nhỏ bảng" onClick={() => zoom(0.8)}><Minus size={16} /></button>
         <button type="button" className={control} aria-label="Phóng to bảng" onClick={() => zoom(1.25)}><Plus size={16} /></button>
-        <button type="button" className={control} aria-label="Về vị trí ban đầu" onClick={() => { view.current = { x: 0, y: 0, scale: 1 }; draw() }}><RotateCcw size={16} /></button>
+        <button type="button" className={control} aria-label="Về vị trí ban đầu" onClick={() => { view.current = { x: 0, y: 0, scale: 1 }; shareView() }}><RotateCcw size={16} /></button>
         {boardColors.map((ink) => <button type="button" key={ink} aria-label={`Màu ${ink}`} aria-pressed={color === ink}
           className="h-6 w-6 rounded-full border border-slate-200 aria-pressed:ring-2 aria-pressed:ring-sky-600" style={{ background: ink }} onClick={() => setColor(ink)} />)}
         <button type="button" className={`${control} ml-auto`} aria-label="Đóng bảng trắng" onClick={onClose}><X size={16} /></button>
@@ -207,40 +388,49 @@ export default function ChatWhiteboard({ callId, userId, onClose }: { callId: st
       <canvas ref={canvas} aria-label="Vùng vẽ và đặt ghi chú" className="min-h-0 w-full flex-1 touch-none"
         style={{ cursor: tool === 'pan' ? 'grab' : 'crosshair' }}
         onPointerDown={(event) => {
-          if (event.button !== 0) return
-          const local = point(event)
+          if (event.button !== 0 || (drag.current?.pointerType === 'pen' && event.pointerType === 'touch')) return
+          const local = point(event, event.currentTarget.getBoundingClientRect())
           event.currentTarget.setPointerCapture(event.pointerId)
           pointers.current.set(event.pointerId, local)
           if (pointers.current.size > 1) {
+            const stroke = drag.current?.stroke
+            if (stroke?.sent) publish({ type: 'cancel', id: stroke.id })
             drag.current = null
             panningWithTwoFingers.current = true
-            draw()
+            scheduleDraw()
             return
           }
-          drag.current = { id: event.pointerId, local, points: tool === 'stroke' ? [world(local)] : undefined }
-          draw()
+          drag.current = {
+            id: event.pointerId, pointerType: event.pointerType, local,
+            stroke: tool === 'stroke' ? { id: crypto.randomUUID(), color, points: [world(local)], sent: 0 } : undefined,
+          }
+          if (tool === 'stroke' || tool === 'note') shareView()
+          else scheduleDraw()
         }}
         onPointerMove={(event) => {
-          const local = point(event)
           const previous = pointers.current.get(event.pointerId)
-          if (previous) pointers.current.set(event.pointerId, local)
-          if (previous && panningWithTwoFingers.current && pointers.current.size > 1) {
+          if (!previous) return
+          const bounds = event.currentTarget.getBoundingClientRect()
+          const local = point(event, bounds)
+          pointers.current.set(event.pointerId, local)
+          if (panningWithTwoFingers.current && pointers.current.size > 1) {
             view.current.x += (local[0] - previous[0]) / pointers.current.size
             view.current.y += (local[1] - previous[1]) / pointers.current.size
-            draw()
+            shareView()
             return
           }
           const gesture = drag.current
           if (gesture?.id !== event.pointerId) return
-          if (gesture.points) {
-            if (gesture.points.length >= 1000) return
-            gesture.points.push(world(local))
+          if (gesture.stroke) {
+            for (const sample of event.nativeEvent.getCoalescedEvents?.() ?? []) appendPoint(gesture, point(sample, bounds))
+            appendPoint(gesture, local)
+            scheduleDraw()
           } else if (tool === 'pan') {
             view.current.x += local[0] - gesture.local[0]
             view.current.y += local[1] - gesture.local[1]
+            shareView()
           }
           gesture.local = local
-          draw()
         }}
         onPointerUp={(event) => finish(event, true)}
         onPointerCancel={(event) => finish(event, false)}

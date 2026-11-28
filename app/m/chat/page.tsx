@@ -245,6 +245,7 @@ function MobileChatPageInner() {
   const [showAttachmentModal, setShowAttachmentModal] = useState(false)
   const [showSenAiConfirmModal, setShowSenAiConfirmModal] = useState(false)
   const [pendingSenAiQuery, setPendingSenAiQuery] = useState<string>('')
+  const [disappearingTtl, setDisappearingTtl] = useState(0)
   const [showDisappearingSettings, setShowDisappearingSettings] = useState(false)
   const [showSafetyModal, setShowSafetyModal] = useState(false)
   const [safetyNumber, setSafetyNumber] = useState('')
@@ -925,7 +926,7 @@ function MobileChatPageInner() {
   useSenChatConversationLink(
     isLocked ? undefined : currentUser?.id,
     conversations,
-    view === 'conversation' ? activeConversation : null,
+    view !== 'list' ? activeConversation : null,
     handleSelectConversation,
   )
 

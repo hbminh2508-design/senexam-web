@@ -141,10 +141,13 @@ export default function ChatCallModal({
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null)
   const [showParticipantsDrawer, setShowParticipantsDrawer] = useState(false)
   const [showDeviceDrawer, setShowDeviceDrawer] = useState(false)
-  const [showWhiteboard, setShowWhiteboard] = useState(false)
+  const [boardMode, setBoardMode] = useState<'shared' | 'private' | null>(null)
+  const showWhiteboard = boardMode !== null && !isMinimized
+  const [groupMediaReady, setGroupMediaReady] = useState(false)
   const [expandedShare, setExpandedShare] = useState<string | null>(null)
-  const [whiteboardNotice, setWhiteboardNotice] = useState(false)
-  const whiteboardOpen = useRef(false)
+  const presentingWhiteboard = useRef(false)
+  const restoreBoardCamera = useRef(false)
+  const boardCameraQueue = useRef(Promise.resolve())
   const [currentPage, setCurrentPage] = useState(0)
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== 'undefined' ? window.innerWidth : 1280
@@ -514,7 +517,7 @@ export default function ChatCallModal({
         .on(RoomEvent.TrackUnmuted, refreshParticipants)
         .on(RoomEvent.ParticipantConnected, (person) => {
           refreshParticipants()
-          if (whiteboardOpen.current) {
+          if (presentingWhiteboard.current) {
             void room.localParticipant.publishData(new Uint8Array([1]), {
               reliable: true, topic: 'sen-whiteboard-open', destinationIdentities: [person.identity],
             }).catch(() => {})
@@ -523,7 +526,9 @@ export default function ChatCallModal({
         .on(RoomEvent.ParticipantDisconnected, refreshParticipants)
         .on(RoomEvent.ActiveSpeakersChanged, refreshParticipants)
         .on(RoomEvent.DataReceived, (_data, participant, _kind, topic) => {
-          if (participant && topic === 'sen-whiteboard-open' && !whiteboardOpen.current) setWhiteboardNotice(true)
+          if (participant && topic === 'sen-whiteboard-open') {
+            setBoardMode((current) => current ?? 'shared')
+          }
         })
         .on(RoomEvent.Reconnecting, () => {
           setCallStatus('reconnecting')
@@ -571,6 +576,7 @@ export default function ChatCallModal({
           source: track.kind === 'audio' ? Track.Source.Microphone : Track.Source.Camera,
         })
       }
+      setGroupMediaReady(true)
     }
 
     const initPeer = async () => {
@@ -779,11 +785,48 @@ export default function ChatCallModal({
     }
   }
 
-  const toggleWhiteboard = (open: boolean) => {
-    whiteboardOpen.current = open
-    setShowWhiteboard(open)
-    setWhiteboardNotice(false)
-    if (open) void groupRoomRef.current?.localParticipant.publishData(new Uint8Array([1]), {
+  useEffect(() => {
+    const room = groupRoomRef.current
+    if (!room || !groupMediaReady || callStatus !== 'connected') return
+    boardCameraQueue.current = boardCameraQueue.current.then(async () => {
+      if (groupRoomRef.current !== room) return
+      const participant = room.localParticipant
+      if (showWhiteboard && participant.isCameraEnabled) {
+        const stream = localStreamRef.current
+        const track = stream?.getVideoTracks()[0]
+        if (track) {
+          await participant.unpublishTrack(track, true)
+          track.stop()
+          stream?.removeTrack(track)
+        } else {
+          await participant.setCameraEnabled(false)
+        }
+        restoreBoardCamera.current = true
+        if (groupRoomRef.current === room) setIsCameraOff(true)
+      } else if (!showWhiteboard && restoreBoardCamera.current) {
+        const camera = await participant.setCameraEnabled(true, {
+          facingMode,
+          deviceId: selectedVideoIn || undefined,
+        })
+        const track = camera?.videoTrack?.mediaStreamTrack
+        if (!track) throw new Error('Camera unavailable')
+        if (groupRoomRef.current !== room) return
+        if (!localStreamRef.current) localStreamRef.current = new MediaStream()
+        localStreamRef.current.addTrack(track)
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current
+        restoreBoardCamera.current = false
+        setIsCameraOff(false)
+      }
+    }).catch(() => {
+      if (groupRoomRef.current === room) setErrorBanner('Không thể thay đổi camera khi chuyển bảng trắng.')
+    })
+  }, [callStatus, facingMode, groupMediaReady, selectedVideoIn, showWhiteboard])
+
+  const openBoard = (mode: 'shared' | 'private' | null) => {
+    if (mode === boardMode) return
+    presentingWhiteboard.current = mode === 'shared'
+    setBoardMode(mode)
+    if (mode === 'shared') void groupRoomRef.current?.localParticipant.publishData(new Uint8Array([1]), {
       reliable: true, topic: 'sen-whiteboard-open',
     }).catch(() => {})
   }
@@ -837,11 +880,16 @@ export default function ChatCallModal({
 
   // Bật / Tắt Camera
   const toggleCamera = async () => {
+    if (groupRoomRef.current) {
+      await boardCameraQueue.current
+      if (showWhiteboard) return
+      restoreBoardCamera.current = false
+    }
     if (!localStreamRef.current?.getVideoTracks().length) {
       await upgradeToVideoInPlace()
       return
     }
-    const nextOff = !isCameraOff
+    const nextOff = groupRoomRef.current?.localParticipant.isCameraEnabled ?? !isCameraOff
     setIsCameraOff(nextOff)
     localStreamRef.current?.getVideoTracks().forEach((t) => {
       t.enabled = !nextOff
@@ -1027,8 +1075,7 @@ export default function ChatCallModal({
   if (typeof document === 'undefined') return null
 
   // Thu nhỏ thành thẻ nổi để tiếp tục nhắn tin
-  if (isMinimized) {
-    return createPortal(
+  const minimizedContent = isMinimized && (
       <div
         className={`fixed bottom-[calc(8.25rem+env(safe-area-inset-bottom,0px))] right-4 z-[9999] flex items-center gap-3 rounded-2xl border border-blue-500/40 bg-slate-900/95 px-4 py-3 text-white shadow-2xl backdrop-blur-xl md:bottom-20 ${SEN_CHAT_THEME.surface.safeAreaBottom}`}
       >
@@ -1068,10 +1115,8 @@ export default function ChatCallModal({
         >
           <PhoneOff className="h-4 w-4" />
         </button>
-      </div>,
-      document.body
-    )
-  }
+      </div>
+  )
 
   const content = (
     <div
@@ -1082,7 +1127,7 @@ export default function ChatCallModal({
         const audio = remoteAudioRef.current
         if (audio?.paused && audio.srcObject) void audio.play().catch(() => {})
       }}
-      className={`fixed inset-0 z-[9999] flex flex-col ${SEN_CHAT_THEME.surface.callSurface} ${SEN_CHAT_THEME.surface.safeAreaTop} ${SEN_CHAT_THEME.surface.safeAreaBottom} animate-in fade-in duration-200`}
+      className={`fixed inset-0 z-[9999] ${isMinimized ? 'hidden' : 'flex'} flex-col ${SEN_CHAT_THEME.surface.callSurface} ${SEN_CHAT_THEME.surface.safeAreaTop} ${SEN_CHAT_THEME.surface.safeAreaBottom} animate-in fade-in duration-200`}
     >
 
       {/* Header gọn gàng, căn giữa chuẩn xác, không che khuất */}
@@ -1126,9 +1171,9 @@ export default function ChatCallModal({
         <div className="flex items-center gap-1.5">
           {isGroup && (
             <>
-              <button type="button" aria-label={whiteboardNotice ? 'Bảng trắng đang được chia sẻ' : 'Bảng trắng'} aria-pressed={showWhiteboard} disabled={callStatus !== 'connected'}
-                onClick={() => toggleWhiteboard(!showWhiteboard)}
-                className={`relative flex items-center gap-1 rounded-xl bg-white/10 p-2 text-xs font-semibold text-white hover:bg-white/20 aria-pressed:bg-sky-600 disabled:opacity-40 ${whiteboardNotice ? 'ring-2 ring-amber-300' : ''}`}>
+              <button type="button" aria-label="Bảng trắng" aria-pressed={showWhiteboard} disabled={callStatus !== 'connected'}
+                onClick={() => openBoard(showWhiteboard ? null : 'private')}
+                className="relative flex items-center gap-1 rounded-xl bg-white/10 p-2 text-xs font-semibold text-white hover:bg-white/20 aria-pressed:bg-sky-600 disabled:opacity-40">
                 <Presentation className="h-4 w-4" />
                 <span className="hidden sm:inline">Bảng trắng</span>
               </button>
@@ -1223,9 +1268,10 @@ export default function ChatCallModal({
             )}
           </section>
         )}
-        {showWhiteboard && isGroup && groupCallId.current && (
-          <ChatWhiteboard callId={groupCallId.current} userId={currentUserId} onClose={() => toggleWhiteboard(false)} />
-        )}
+        {isGroup && groupCallId.current && groupRoomRef.current && (['shared', 'private'] as const).map((mode) => (
+          <ChatWhiteboard key={mode} callId={groupCallId.current!} userId={currentUserId} room={groupRoomRef.current}
+            mode={mode} visible={showWhiteboard && boardMode === mode} onMode={openBoard} onClose={() => openBoard(null)} />
+        ))}
         {isGroup ? (
           /* GIAO DIỆN CUỘC GỌI NHÓM DYNAMIC GRID */
           <div className="w-full h-full flex flex-col gap-3">
@@ -1592,7 +1638,7 @@ export default function ChatCallModal({
     </div>
   )
 
-  return createPortal(content, document.body)
+  return createPortal(<>{minimizedContent}{content}</>, document.body)
 }
 
 /**
