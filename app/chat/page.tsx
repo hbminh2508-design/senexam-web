@@ -1073,6 +1073,7 @@ export default function SenChatPage() {
     } else {
       if (selectedConvId) {
         deleteLocalMessage(selectedConvId, msgId)
+        window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: selectedConvId }))
       }
       setMessages((prev) => prev.filter((m) => m.id !== msgId))
     }
@@ -1685,7 +1686,7 @@ export default function SenChatPage() {
                   <ChevronLeft className="h-4 w-4" /> Quay lại danh sách
                 </button>
               </div>
-              <ChatSenAiStudioView userId={currentUser?.id} />
+              <ChatSenAiStudioView key={currentUser?.id} userId={currentUser?.id} />
             </div>
           ) : (
           <>

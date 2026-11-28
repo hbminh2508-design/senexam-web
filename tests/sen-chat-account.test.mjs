@@ -61,6 +61,16 @@ test('changing account retires the current tab and legacy mixed history stays se
     reopened.restoreLegacySenChatHistory('a')
     assert.deepEqual(reopened.getLocalMessages('friend').map(({ id }) => id), ['only-a'])
     assert.equal(reopened.getConversationDraft('friend'), 'Bản nháp A')
+    const latest = { ...message('newest', 'a', 'friend'), createdAt: '2026-11-28T01:00:00Z' }
+    reopened.saveLocalMessage('friend', latest)
+    const updatedAt = reopened.getLocalConversations()[0].updatedAt
+    reopened.saveLocalMessage('friend', { ...message('only-a', 'friend', 'a'), status: 'seen' })
+    assert.equal(reopened.getLocalConversations()[0].lastMessage, 'newest')
+    assert.equal(reopened.getLocalConversations()[0].updatedAt, updatedAt)
+    reopened.deleteLocalMessage('friend', 'newest')
+    assert.equal(reopened.getLocalConversations()[0].lastMessage, 'only-a')
+    reopened.deleteLocalMessage('friend', 'only-a')
+    assert.equal(reopened.getLocalConversations()[0].lastMessage, undefined)
   } finally {
     if (oldWindow === undefined) delete globalThis.window
     else globalThis.window = oldWindow

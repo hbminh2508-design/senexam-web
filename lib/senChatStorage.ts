@@ -403,65 +403,46 @@ export function getLocalMessages(conversationId: string): SenChatMessage[] {
   }
 }
 
+function updateConversationPreview(conversationId: string, last?: SenChatMessage) {
+  const conversations = getLocalConversations()
+  const conversation = conversations.find((item) => item.id === conversationId)
+  if (!conversation) return
+
+  const timestamp = last ? Date.parse(last.createdAt) : NaN
+  conversation.lastMessage = last?.type === 'image' ? '[Hình ảnh]' :
+    last?.type === 'audio' ? (last.transcription ? '🎤 ' + last.transcription : '[Tin nhắn thoại]') :
+    last?.type === 'like' ? '👍' : last?.content
+  conversation.lastMessageTime = Number.isFinite(timestamp)
+    ? new Date(timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    : undefined
+  if (Number.isFinite(timestamp)) conversation.updatedAt = Math.max(conversation.updatedAt || 0, timestamp)
+  replaceLocalConversations(conversations)
+}
+
 export function saveLocalMessage(conversationId: string, message: SenChatMessage): void {
   if (typeof window === 'undefined') return
-  const list = getLocalMessages(conversationId)
-  const existingIdx = list.findIndex((m) => m.id === message.id)
-  if (existingIdx >= 0) {
-    list[existingIdx] = message
-  } else {
-    list.push(message)
-  }
-
-  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(list))
-
-  // Cập nhật lastMessage cho Conversation
-  const convs = getLocalConversations()
-  const c = convs.find((item) => item.id === conversationId)
-  if (c) {
-    c.lastMessage =
-      message.type === 'image'
-        ? '[Hình ảnh]'
-        : message.type === 'audio'
-        ? (message.transcription ? `🎤 ${message.transcription}` : '[Tin nhắn thoại]')
-        : message.type === 'like'
-        ? '👍'
-        : message.content
-    c.lastMessageTime = new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    c.updatedAt = Date.now()
-    writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
-  }
+  const messages = getLocalMessages(conversationId)
+  const index = messages.findIndex((item) => item.id === message.id)
+  if (index >= 0) messages[index] = message
+  else messages.push(message)
+  saveLocalMessages(conversationId, messages)
 }
 
 export function saveLocalMessages(conversationId: string, messages: SenChatMessage[]): void {
   if (typeof window === 'undefined') return
-  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(messages))
-
-  if (messages.length > 0) {
-    const last = messages[messages.length - 1]
-    const convs = getLocalConversations()
-    const c = convs.find((item) => item.id === conversationId)
-    if (c && last) {
-      c.lastMessage =
-        last.type === 'image'
-          ? '[Hình ảnh]'
-          : last.type === 'audio'
-          ? (last.transcription ? `🎤 ${last.transcription}` : '[Tin nhắn thoại]')
-          : last.type === 'like'
-          ? '👍'
-          : last.content
-      c.lastMessageTime = new Date(last.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-      c.updatedAt = Date.now()
-      writeAccountStorage(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(convs))
-    }
-  }
+  writeAccountStorage(STORAGE_KEYS.MESSAGES_PREFIX + conversationId, JSON.stringify(messages))
+  const latest = messages.reduce<SenChatMessage | undefined>((previous, message) => {
+    if (!previous || Date.parse(message.createdAt) >= (Date.parse(previous.createdAt) || 0)) return message
+    return previous
+  }, undefined)
+  updateConversationPreview(conversationId, latest)
 }
 
 export function deleteLocalMessage(conversationId: string, messageId: string): void {
   if (typeof window === 'undefined') return
-  const list = getLocalMessages(conversationId)
-  const filtered = list.filter((m) => m.id !== messageId)
-  writeAccountStorage(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(filtered))
+  const messages = getLocalMessages(conversationId)
+  const remaining = messages.filter((message) => message.id !== messageId)
+  if (remaining.length !== messages.length) saveLocalMessages(conversationId, remaining)
 }
 
 export function clearAllLocalMessages(conversationId: string): void {

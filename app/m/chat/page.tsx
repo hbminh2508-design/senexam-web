@@ -994,6 +994,7 @@ function MobileChatPageInner() {
     } else {
       if (selectedConvId) {
         deleteLocalMessage(selectedConvId, msgId)
+        window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: selectedConvId }))
       }
       setMessages((prev) => prev.filter((m) => m.id !== msgId))
     }
@@ -1713,7 +1714,7 @@ function MobileChatPageInner() {
                 </div>
               </div>
             </div>
-            <ChatSenAiStudioView userId={currentUser?.id} isMobile={true} />
+            <ChatSenAiStudioView key={currentUser?.id} userId={currentUser?.id} isMobile={true} />
           </div>
         ) : (
         <div

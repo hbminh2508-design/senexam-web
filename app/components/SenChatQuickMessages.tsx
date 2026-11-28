@@ -69,18 +69,22 @@ export default function SenChatQuickMessages({ userId }: { userId: string | null
       <form className="flex items-center gap-2 border-t border-slate-200 p-3 dark:border-slate-800" onSubmit={async (event) => {
         event.preventDefault()
         if (!draft.trim() || sending || (!selected.isGroup && isUserBlocked(selected.partnerId))) return
+        const submittedDraft = draft
+        const id = crypto.randomUUID()
         setSending(true)
         setError('')
         try {
           await deliverLocalMessage({
-            id: crypto.randomUUID(), conversationId: selected.id, senderId: userId,
+            id, conversationId: selected.id, senderId: userId,
             senderName: getLocalSenChatUser()?.name || 'Bạn bè', receiverId: selected.partnerId,
-            content: draft.trim(), type: 'text', createdAt: new Date().toISOString(), status: 'sending',
+            content: submittedDraft.trim(), type: 'text', createdAt: new Date().toISOString(), status: 'sending',
           }, selected)
-          setDraft('')
+          setDraft((current) => current === submittedDraft ? '' : current)
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : 'Không gửi được tin nhắn.')
-          setDraft('')
+          if (getLocalMessages(selected.id).some((message) => message.id === id)) {
+            setDraft((current) => current === submittedDraft ? '' : current)
+          }
         } finally { setSending(false) }
       }}>
         <input aria-label="Nhắn tin" placeholder="Nhắn tin…" maxLength={8000} value={draft} onChange={(event) => setDraft(event.target.value)}

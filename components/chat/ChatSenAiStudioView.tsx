@@ -79,6 +79,7 @@ export default function ChatSenAiStudioView({
   const attachment = useSenAiFiles()
   const deepThink = mode === 'orchid'
   const [isSending, setIsSending] = useState(false)
+  const [loadingSession, setLoadingSession] = useState(false)
   const [showSessionDropdown, setShowSessionDropdown] = useState(false)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editTitleText, setEditTitleText] = useState('')
@@ -86,15 +87,20 @@ export default function ChatSenAiStudioView({
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const selectionVersion = useRef(0)
+  const sessionListKey = 'senai-studio:' + userId + ':sessions'
+  const messagesKey = (id: string) => 'senai-studio:' + userId + ':messages:' + id
 
   // 1. Tải danh sách phiên trò chuyện từ Supabase & LocalStorage
   useEffect(() => {
+    if (!userId) return
     let active = true
+    const initialSelection = selectionVersion.current
 
     const loadSessions = async () => {
       // Đọc từ localStorage cache trước
       try {
-        const localCached = localStorage.getItem('senai_studio_sessions_cache')
+        const localCached = localStorage.getItem(sessionListKey)
         if (localCached && active) {
           setSessions(JSON.parse(localCached))
         }
@@ -105,12 +111,13 @@ export default function ChatSenAiStudioView({
         const { data, error } = await supabase
           .from('senai_studio_sessions')
           .select('id, title, updated_at')
+          .eq('user_id', userId)
           .order('updated_at', { ascending: false })
 
         if (!error && data && active) {
           setSessions(data)
-          localStorage.setItem('senai_studio_sessions_cache', JSON.stringify(data))
-          if (data.length > 0 && !activeSessionId) {
+          localStorage.setItem(sessionListKey, JSON.stringify(data))
+          if (data.length > 0 && selectionVersion.current === initialSelection) {
             handleSelectSession(data[0].id)
           }
         }
@@ -123,6 +130,7 @@ export default function ChatSenAiStudioView({
 
     return () => {
       active = false
+      selectionVersion.current += 1
     }
   }, [userId])
 
@@ -144,40 +152,53 @@ export default function ChatSenAiStudioView({
 
   // Chọn một phiên
   const handleSelectSession = async (sessionId: string) => {
-    if (isSending) return
+    if (isSending || !userId) return
+    const selection = ++selectionVersion.current
     attachment.clear()
+    setInputText('')
+    setLoadingSession(true)
+    setMessages([])
     setActiveSessionId(sessionId)
     setShowSessionDropdown(false)
 
     // Đọc cache local trước
     try {
-      const cached = localStorage.getItem(`senai_studio_msgs_${sessionId}`)
+      const cached = localStorage.getItem(messagesKey(sessionId))
       if (cached) {
         setMessages(JSON.parse(cached))
       }
     } catch {}
 
-    // Tải từ Supabase
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 6500)
     try {
       const { data, error } = await supabase
         .from('senai_studio_messages')
         .select('*')
         .eq('session_id', sessionId)
+        .eq('user_id', userId)
         .order('created_at', { ascending: true })
+        .abortSignal(controller.signal)
 
-      if (!error && data) {
+      if (!error && data && selectionVersion.current === selection) {
         setMessages(data as StudioMessage[])
-        localStorage.setItem(`senai_studio_msgs_${sessionId}`, JSON.stringify(data))
+        localStorage.setItem(messagesKey(sessionId), JSON.stringify(data))
       }
     } catch (err) {
       console.warn('Lỗi tải tin nhắn phiên:', err)
+    } finally {
+      clearTimeout(timeout)
+      if (selectionVersion.current === selection) setLoadingSession(false)
     }
   }
 
   // Tạo phiên mới
   const handleNewSession = () => {
     if (isSending) return
+    selectionVersion.current += 1
+    setLoadingSession(false)
     attachment.clear()
+    setInputText('')
     setActiveSessionId(null)
     setMessages([])
     setShowSessionDropdown(false)
@@ -194,12 +215,12 @@ export default function ChatSenAiStudioView({
 
     try {
       await supabase.from('senai_studio_sessions').update({ title: trimmed }).eq('id', sessionId)
-      const cached = localStorage.getItem('senai_studio_sessions_cache')
+      const cached = localStorage.getItem(sessionListKey)
       if (cached) {
         const list = JSON.parse(cached)
         const item = list.find((s: any) => s.id === sessionId)
         if (item) item.title = trimmed
-        localStorage.setItem('senai_studio_sessions_cache', JSON.stringify(list))
+        localStorage.setItem(sessionListKey, JSON.stringify(list))
       }
     } catch (e) {
       console.warn('Lỗi đổi tên phiên:', e)
@@ -213,7 +234,8 @@ export default function ChatSenAiStudioView({
 
     setSessions((prev) => prev.filter((s) => s.id !== sessionId))
     try {
-      localStorage.removeItem(`senai_studio_msgs_${sessionId}`)
+      localStorage.removeItem(messagesKey(sessionId))
+      localStorage.setItem(sessionListKey, JSON.stringify(sessions.filter(({ id }) => id !== sessionId)))
       await supabase.from('senai_studio_sessions').delete().eq('id', sessionId)
     } catch {}
 
@@ -225,7 +247,8 @@ export default function ChatSenAiStudioView({
   // Gửi tin nhắn
   const handleSendMessage = async (textToSend?: string) => {
     const question = (textToSend || inputText).trim()
-    if ((!question && !attachment.files.length) || isSending) return
+    if ((!question && !attachment.files.length) || isSending || loadingSession) return
+    selectionVersion.current += 1
     const text = question || attachment.files.map((file) => file.name).join(', ')
 
     setInputText('')
@@ -265,7 +288,7 @@ export default function ChatSenAiStudioView({
         currentSessionId = newSessionObj.id
         setActiveSessionId(newSessionObj.id)
         setSessions((prev) => [newSessionObj, ...prev])
-        localStorage.setItem('senai_studio_sessions_cache', JSON.stringify([newSessionObj, ...sessions]))
+        localStorage.setItem(sessionListKey, JSON.stringify([newSessionObj, ...sessions]))
       }
 
       // 2. Lưu tin nhắn người dùng vào Supabase & LocalStorage
@@ -316,7 +339,7 @@ export default function ChatSenAiStudioView({
       setMessages((prev) => {
         const updated = [...prev, modelMsg]
         if (currentSessionId) {
-          localStorage.setItem(`senai_studio_msgs_${currentSessionId}`, JSON.stringify(updated))
+          localStorage.setItem(messagesKey(currentSessionId), JSON.stringify(updated))
         }
         return updated
       })
@@ -653,7 +676,7 @@ export default function ChatSenAiStudioView({
 
           <button
             type="submit"
-            disabled={(!inputText.trim() && !attachment.files.length) || isSending}
+            disabled={(!inputText.trim() && !attachment.files.length) || isSending || loadingSession}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/30 hover:bg-emerald-500 disabled:opacity-40 transition"
           >
             {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
