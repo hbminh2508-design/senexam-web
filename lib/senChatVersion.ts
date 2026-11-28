@@ -4,7 +4,7 @@
  * Quy ước: Phiên bản chỉ sửa lỗi ghi tiêu đề "Bắt lại những con bò đang bay trên các vì sao".
  */
 
-export const SEN_CHAT_CURRENT_VERSION = '1.1.0'
+export const SEN_CHAT_CURRENT_VERSION = '1.1.1'
 
 export interface SenChatChangelogEntry {
   version: string
@@ -17,10 +17,22 @@ export interface SenChatChangelogEntry {
 
 export const SEN_CHAT_CHANGELOG: SenChatChangelogEntry[] = [
   {
+    version: '1.1.1',
+    releaseDate: '28/11/2026',
+    title: 'Trải nghiệm Sen Chat trên di động',
+    isLatest: true,
+    changes: [
+      'Tìm bạn bè chưa có hội thoại và mở tin nhắn trực tiếp từ danh sách.',
+      'Thanh điều hướng di động có vùng chọn trượt theo thao tác kéo.',
+      'Phản chiếu bản xem trước camera trước và giữ tỷ lệ video khi gọi.',
+      'Sửa lỗi mở đề thi và đồng nhất danh mục, giá ưu đãi trên điện thoại.',
+    ],
+  },
+  {
     version: '1.1.0',
     releaseDate: '26/11/2026',
     title: 'Communication & Stability Update',
-    isLatest: true,
+    isLatest: false,
     isBugFixOnly: false,
     changes: [
       'Thiết kế lại toàn diện giao diện cuộc gọi âm thanh, video 1-1 và cuộc gọi nhóm (Dynamic Grid Layout tối đa 4×4, Speaker/Gallery View, PiP, Fullscreen, chia sẻ màn hình & tự khôi phục camera)',

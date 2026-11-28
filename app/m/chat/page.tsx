@@ -1304,9 +1304,41 @@ function MobileChatPageInner() {
   }
 
   // Lọc cuộc trò chuyện theo tab (SenAI Studio luôn luôn hiển thị ở đầu)
+  const [friends, setFriends] = useState<Array<{ id: string; name: string; avatar?: string }>>([])
+  useEffect(() => {
+    if (!currentUser?.id || showFriendModal) return
+    let active = true
+    void chatRequest<{ friends: typeof friends }>('friend-invitation').then((data) => {
+      if (active) setFriends(data.friends || [])
+    }).catch(() => {})
+    return () => { active = false }
+  }, [currentUser?.id, showFriendModal])
+
+  const openFriendConversation = (friend: { id: string; name: string; avatar?: string; identifier?: string }) => {
+    setShowFriendModal(false)
+    const existing = conversations.find((conversation) => !conversation.isGroup && conversation.partnerId === friend.id)
+    if (existing) { handleSelectConversation(existing.id); return }
+    saveLocalConversation({
+      id: friend.id, partnerId: friend.id, partnerName: friend.name, partnerAvatar: friend.avatar,
+      partnerIdentifier: friend.identifier || friend.id, unreadCount: 0, updatedAt: Date.now(),
+    })
+    setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
+    handleSelectConversation(friend.id)
+  }
+
+  const friendsWithoutHistory = useMemo(() => {
+    const recent = new Set(conversations.filter((c) => !c.isGroup && getLocalMessages(c.id).length > 0).map((c) => c.partnerId))
+    return friends.filter((friend) => !recent.has(friend.id))
+  }, [friends, conversations, messages])
+  const friendIdsWithoutHistory = new Set(friendsWithoutHistory.map((friend) => friend.id))
+  const visibleFriends = activeFilterTab === 'group' ? [] : friendsWithoutHistory.filter(
+    (friend) => friend.name.toLocaleLowerCase('vi').includes(searchQuery.trim().toLocaleLowerCase('vi')),
+  )
+
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
       if (c.id === SENAI_STUDIO_CONVERSATION_ID && !searchQuery.trim()) return true
+      if (!c.isGroup && friendIdsWithoutHistory.has(c.partnerId)) return false
       const matchQuery =
         !searchQuery.trim() ||
         c.partnerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1321,7 +1353,7 @@ function MobileChatPageInner() {
           : !Boolean(c.isGroup)
       return matchQuery && matchTab
     })
-  }, [conversations, searchQuery, activeFilterTab])
+  }, [conversations, searchQuery, activeFilterTab, friendsWithoutHistory])
 
   // ============================================================================
   // MÀN HÌNH KHÓA BẢO MẬT (PIN & BIOMETRIC APP LOCK OVERLAY)
@@ -1537,7 +1569,7 @@ function MobileChatPageInner() {
             className="flex-1 overflow-y-auto overscroll-contain transform-gpu divide-y divide-black/5 dark:divide-white/5 px-2 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
-            {filteredConversations.length === 0 ? (
+            {filteredConversations.length === 0 && visibleFriends.length > 0 ? null : filteredConversations.length === 0 ? (
               <div className="p-8 text-center space-y-3 my-auto">
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-black/5 dark:bg-white/5 text-slate-400 flex items-center justify-center">
                   <MessageSquare className="h-6 w-6" />
@@ -1672,6 +1704,14 @@ function MobileChatPageInner() {
                 )
               })
             )}
+            {visibleFriends.length > 0 && <section aria-label="Bạn bè" className="space-y-1 py-3">
+              <h2 className="px-3 text-xs font-bold text-slate-500">Bạn bè</h2>
+              {visibleFriends.map((friend) => <div key={friend.id} className="flex items-center gap-3 px-3 py-2">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sky-100 font-bold text-sky-800">{friend.name[0]}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{friend.name}</span>
+                <button type="button" onClick={() => openFriendConversation(friend)} className="rounded-full bg-sky-100 px-3 py-2 text-xs font-bold text-sky-800">Nhắn tin</button>
+              </div>)}
+            </section>}
           </div>
         </div>
       )}
@@ -2393,29 +2433,7 @@ function MobileChatPageInner() {
           isOpen={showFriendModal}
           onClose={() => setShowFriendModal(false)}
           currentUserId={currentUser?.id || ''}
-          onSelectFriend={(friend) => {
-            setShowFriendModal(false)
-            const convId = 'direct_' + friend.id
-            const existing = conversations.find((c) => c.partnerId === friend.id)
-            if (existing) {
-              handleSelectConversation(existing.id)
-            } else {
-              const newConv: SenChatConversation = {
-                id: convId,
-                partnerId: friend.id,
-                partnerName: friend.name,
-                partnerIdentifier: friend.identifier,
-                lastMessage: 'Đã kết nối mã hóa E2EE',
-                lastMessageTime: 'Vừa xong',
-                unreadCount: 0,
-                updatedAt: Date.now(),
-                isGroup: false,
-              }
-              saveLocalConversation(newConv)
-              setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-              handleSelectConversation(convId)
-            }
-          }}
+          onSelectFriend={openFriendConversation}
         />
       )}
 

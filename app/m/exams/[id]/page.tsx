@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -391,6 +391,15 @@ export default function MobileExamPage() {
   }
 
   // KIỂM TRA ĐỀ THI ĐẠI HỌC PORTAL UET (ĐỂ HIỂN THỊ NÚT TÙY CHỌN TẠI SẢNH CHỜ MOBILE)
+  if (!exam) {
+    return (
+      <div className="space-y-4 p-5">
+        <p role="status">Không thể tải đề thi.</p>
+        <Link href="/m/sen-ground?tab=exams" className="font-semibold text-sky-700 underline dark:text-sky-300">Về kho đề</Link>
+      </div>
+    )
+  }
+
   const isUniversityFormat = isUniversityExam(exam)
 
   // PHÒNG THI VNU TEST (ĐHQGHN - 1 PHẦN DUY NHẤT, THỜI GIAN TỰ CHỌN, FULL SCREEN)

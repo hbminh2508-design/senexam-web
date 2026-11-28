@@ -309,6 +309,7 @@ export function middleware(request: NextRequest) {
     }
     if (pathname === '/pay' || pathname === '/new-pay' || pathname === '/vip' || pathname === '/new-vip' || pathname === '/new-exclusive-store' || pathname === '/exclusive-store' || pathname === '/new-codes' || pathname === '/codes') {
       url.pathname = '/m/pay'
+      if (pathname === '/new-exclusive-store' || pathname === '/exclusive-store') url.searchParams.set('tab', 'exclusive')
       return applySecurityHeaders(NextResponse.rewrite(url))
     }
     if (pathname.startsWith('/new-submissions/') || pathname.startsWith('/submissions/')) {

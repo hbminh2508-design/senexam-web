@@ -165,7 +165,6 @@ export default function ChatCallModal({
   const [durationWarning, setDurationWarning] = useState<string | null>(null)
   const [joinLeaveNotice, setJoinLeaveNotice] = useState<string | null>(null)
   const [groupVideos, setGroupVideos] = useState<Record<string, RemoteTrack>>({})
-  const [audioBlocked, setAudioBlocked] = useState(false)
   const [groupParticipants, setGroupParticipants] = useState<CallParticipantInfo[]>(() => [
     {
       userId: currentUserId,
@@ -525,7 +524,6 @@ export default function ChatCallModal({
         .on(RoomEvent.DataReceived, (_data, participant, _kind, topic) => {
           if (participant && topic === 'sen-whiteboard-open' && !whiteboardOpen.current) setWhiteboardNotice(true)
         })
-        .on(RoomEvent.AudioPlaybackStatusChanged, () => setAudioBlocked(!room.canPlaybackAudio))
         .on(RoomEvent.Reconnecting, () => {
           setCallStatus('reconnecting')
           setNetworkState('reconnecting')
@@ -607,7 +605,7 @@ export default function ChatCallModal({
         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = stream
         if (remoteAudioRef.current) {
           remoteAudioRef.current.srcObject = stream
-          void remoteAudioRef.current.play().catch(() => setAudioBlocked(true))
+          void remoteAudioRef.current.play().catch(() => {})
         }
         if (track.kind === 'video') setHasRemoteVideo(true)
       }
@@ -1077,6 +1075,12 @@ export default function ChatCallModal({
   const content = (
     <div
       ref={modalContainerRef}
+      onPointerDown={() => {
+        const room = groupRoomRef.current
+        if (room && !room.canPlaybackAudio) void room.startAudio().catch(() => {})
+        const audio = remoteAudioRef.current
+        if (audio?.paused && audio.srcObject) void audio.play().catch(() => {})
+      }}
       className={`fixed inset-0 z-[9999] flex flex-col ${SEN_CHAT_THEME.surface.callSurface} ${SEN_CHAT_THEME.surface.safeAreaTop} ${SEN_CHAT_THEME.surface.safeAreaBottom} animate-in fade-in duration-200`}
     >
 
@@ -1237,7 +1241,7 @@ export default function ChatCallModal({
                         autoPlay
                         playsInline
                         muted
-                        className="absolute inset-0 w-full h-full object-cover"
+                        className={`absolute inset-0 w-full h-full object-contain ${facingMode === 'user' && !isScreenSharing ? '-scale-x-100' : ''}`}
                       />
                     ) : groupVideos[p.userId] ? <GroupVideo track={groupVideos[p.userId]} /> : (
                       <div className="flex flex-col items-center justify-center gap-2 z-10">
@@ -1310,7 +1314,7 @@ export default function ChatCallModal({
               autoPlay
               playsInline
               muted
-              className={`w-full h-full object-cover ${hasRemoteVideo ? 'block' : 'hidden'}`}
+              className={`w-full h-full object-contain ${hasRemoteVideo ? 'block' : 'hidden'}`}
             />
 
             {!hasRemoteVideo && (
@@ -1337,7 +1341,7 @@ export default function ChatCallModal({
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${isCameraOff && !isScreenSharing ? 'hidden' : 'block'}`}
+                className={`w-full h-full object-contain ${facingMode === 'user' && !isScreenSharing ? '-scale-x-100' : ''} ${isCameraOff && !isScreenSharing ? 'hidden' : 'block'}`}
               />
               {isCameraOff && !isScreenSharing && (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-400 p-2 text-center">
@@ -1469,10 +1473,6 @@ export default function ChatCallModal({
 
       {/* Footer Điều khiển đầy đủ tính năng */}
       <footer className="relative z-20 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 px-4 py-4 bg-slate-950/75 border-t border-white/10 backdrop-blur-md">
-        {audioBlocked && <button type="button" className="rounded-lg bg-sky-700 px-3 py-2 text-sm font-semibold" onClick={() => {
-          const play = groupRoomRef.current?.startAudio() || remoteAudioRef.current?.play()
-          void play?.then(() => setAudioBlocked(false)).catch(() => {})
-        }}>Bật âm thanh cuộc gọi</button>}
         <button
           type="button"
           onClick={toggleMic}

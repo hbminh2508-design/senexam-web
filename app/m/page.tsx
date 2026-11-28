@@ -165,30 +165,6 @@ export default function MobileDashboardPage() {
 
   return (
     <div className="flex-1 w-full p-4 space-y-4">
-      {/* 🌟 BANNER ĐỒNG BỘ ĐA NỀN TẢNG SENEXAM */}
-      <div className="relative overflow-hidden rounded-3xl p-4 bg-gradient-to-r from-sky-500/15 via-blue-500/15 to-indigo-600/15 border border-sky-400/30 backdrop-blur-md shadow-xs">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-400 to-blue-600 flex items-center justify-center text-white text-lg shadow-md shrink-0">
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                  Đồng Bộ Trực Tuyến
-                </span>
-                <span className="px-1.5 py-0.2 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white font-black text-[9px] uppercase shadow-xs">
-                  Realtime
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-600 dark:text-slate-300 mt-0.5">
-                Dữ liệu đề thi, điểm số và ví Cash Mobile được đồng bộ liền mạch với bản PC!
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* 1. TOP HEADER BAR */}
       <header className="flex items-center justify-between gap-3 pt-1">
         <div className="flex items-center gap-2.5">
@@ -293,7 +269,6 @@ export default function MobileDashboardPage() {
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-black uppercase text-slate-500">
           <span>Hệ Sinh Thái Tính Năng</span>
-          <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">Đồng bộ như PC</span>
         </div>
 
         <div className="grid grid-cols-4 gap-2">

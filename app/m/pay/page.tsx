@@ -470,60 +470,7 @@ export default function MobilePayPage() {
     }
   }
 
-  // Mua ưu đãi độc quyền bằng Cash Mobile (SCm)
-  const handleBuyExclusiveDeal = async (item: any) => {
-    const priceScm = (item.discountedPrice || item.priceSenCash || item.price || 0) * SCM_PER_SENCASH
-    if (priceScm > 0 && scmBalance < priceScm) {
-      alert(`Số dư Cash Mobile không đủ (${scmBalance.toLocaleString('vi-VN')} SCm < ${priceScm.toLocaleString('vi-VN')} SCm). Vui lòng nạp thêm Cash Mobile!`)
-      setActiveTab('wallet')
-      return
-    }
 
-    if (!confirm(`Bạn có chắc chắn muốn mở khóa ưu đãi "${item.title}" với ${priceScm.toLocaleString('vi-VN')} SCm?`)) {
-      return
-    }
-
-    setActionLoading(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        router.push('/new-idp?returnUrl=/m/pay?tab=exclusive')
-        return
-      }
-      const res = await fetch('/api/scm/purchase-deal', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-          'x-senexam-platform': 'mobile',
-        },
-        body: JSON.stringify({
-          dealId: item.id,
-          idempotencyKey: `scm_deal_${userId}_${item.id}_${Date.now()}`
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        alert(data.error || 'Không thể mở ưu đãi này.')
-        return
-      }
-      alert('Đã mở khóa ưu đãi thành công!')
-      if (userId) {
-        const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
-        if (prof) setUserProfile(prof)
-        const scm = await fetchScmBalance(userId)
-        setScmBalance(scm)
-        const txs = await fetchMyScmTransactions(userId)
-        setScmTransactions(txs)
-      }
-    } catch (err: any) {
-      alert(`Lỗi giao dịch: ${err.message}`)
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  // Giao diện loading chuẩn hóa theo đúng tên từng tính năng
   if (loading) {
     const loadingMeta =
       activeTab === 'vip'
@@ -921,7 +868,8 @@ export default function MobilePayPage() {
           </div>
 
           <div className="space-y-2.5">
-            {EXCLUSIVE_STORE_ITEMS.slice(0, 8).map((deal) => (
+            <p className="text-xs text-slate-500">Giá quy đổi theo danh mục hiện hành. Trang thanh toán dùng ví của cửa hàng chính.</p>
+            {EXCLUSIVE_STORE_ITEMS.map((deal) => (
               <div
                 key={deal.id}
                 className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-black/10 dark:border-white/10 shadow-xs flex items-center justify-between gap-3"
@@ -932,16 +880,12 @@ export default function MobilePayPage() {
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-xs font-black text-rose-500 block">
-                    {((deal.priceSenCash || 0) * SCM_PER_SENCASH).toLocaleString('vi-VN')} SCm
+                    {(deal.discountedPrice * SCM_PER_SENCASH).toLocaleString('vi-VN')} SCm
                   </span>
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={() => handleBuyExclusiveDeal(deal)}
-                    className="mt-1 px-3 py-1 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-white text-[10px] font-black active:scale-95 transition"
-                  >
-                    Đổi ngay
-                  </button>
+                  <a href="https://senexam.me/new-pay?tab=exclusive&desktop=true"
+                    className="mt-1 inline-block rounded-xl bg-rose-600 px-3 py-1 text-[10px] font-bold text-white">
+                    Mở trang thanh toán
+                  </a>
                 </div>
               </div>
             ))}

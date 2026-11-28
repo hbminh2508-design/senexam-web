@@ -177,27 +177,6 @@ export default function MobileProfilePage() {
 
   return (
     <div className="flex-1 w-full p-4 space-y-4 animate-in fade-in pb-16">
-      {/* 🌟 BANNER ĐẶC BIỆT: KỶ NIỆM 1 NĂM SINH NHẬT SENEXAM (2025 - 2026) */}
-      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-pink-500/15 to-purple-500/15 border border-amber-500/30 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="text-xl">🎂</span>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                Kỷ Niệm 1 Năm SenExam
-              </span>
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 font-black text-[9px]">
-                1st Year
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-              Cảm ơn bạn đã đồng hành cùng SenExam trong 365 ngày ôn luyện!
-            </p>
-          </div>
-        </div>
-        <Sparkles className="h-4 w-4 text-amber-500 animate-pulse shrink-0" />
-      </div>
-
       {/* 1. PROFILE HEADER CARD */}
       <div className="p-4 rounded-3xl bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 text-white shadow-lg space-y-3">
         <div className="flex items-center gap-3">
@@ -264,7 +243,6 @@ export default function MobileProfilePage() {
           <h3 className="text-xs font-black uppercase text-slate-500 flex items-center gap-1.5">
             <User className="h-4 w-4 text-sky-600" /> Hồ Sơ Thí Sinh
           </h3>
-          <span className="text-[10px] text-slate-400">Đồng bộ như PC</span>
         </div>
 
         {saveMsg && (
