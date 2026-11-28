@@ -36,6 +36,7 @@ import {
   Wallet,
   KeyRound,
 } from 'lucide-react'
+import ExamVersionButton from '@/app/components/ExamVersionButton'
 import { APP_VERSION as MOBILE_VERSION } from '@/lib/version'
 
 export default function MobileProfilePage() {
@@ -459,9 +460,7 @@ export default function MobileProfilePage() {
           <BadgeCheck className="h-4 w-4 text-sky-600 dark:text-sky-400" />
           <span className="font-bold text-slate-700 dark:text-slate-300">Phiên bản Mobile chuẩn</span>
         </div>
-        <span className="font-mono font-bold text-[11px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md">
-          {MOBILE_VERSION}
-        </span>
+        <ExamVersionButton version={MOBILE_VERSION} className="font-mono font-bold text-[11px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md" />
       </div>
 
       {/* 6. NÚT ĐĂNG XUẤT */}

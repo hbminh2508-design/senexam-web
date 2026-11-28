@@ -4,7 +4,7 @@
  * Quy ước: Phiên bản chỉ sửa lỗi ghi tiêu đề "Bắt lại những con bò đang bay trên các vì sao".
  */
 
-export const SEN_CHAT_CURRENT_VERSION = '1.2.0'
+export const SEN_CHAT_CURRENT_VERSION = '1.2.1'
 
 export interface SenChatChangelogEntry {
   version: string
@@ -17,10 +17,23 @@ export interface SenChatChangelogEntry {
 
 export const SEN_CHAT_CHANGELOG: SenChatChangelogEntry[] = [
   {
+    version: '1.2.1',
+    releaseDate: '28/11/2026',
+    title: 'SenAI 2 và cập nhật trải nghiệm Sen Chat',
+    isLatest: true,
+    changes: [
+      'SenAI 2 có Rose (Low), Tulip (Medium), Orchid (High) và kiến thức đã xác nhận về SenExam.',
+      'Dán ảnh, chọn ảnh, PDF và tệp văn bản để hỏi SenAI trong Studio hoặc bong bóng hợp nhất.',
+      'Tách lịch sử theo tài khoản, thêm danh sách bạn bè trên mobile và sửa lỗi khởi tạo chat.',
+      'Chọn ảnh nhóm từ máy, đồng bộ lượt thả cảm xúc và hiển thị thời lượng cuộc gọi.',
+      'Cải thiện nét bút bảng trắng và xem toàn bộ các trang PDF.',
+    ],
+  },
+  {
     version: '1.2.0',
     releaseDate: '28/11/2026',
     title: 'Bảng trắng, lưu trữ và quản lý nhóm',
-    isLatest: true,
+    isLatest: false,
     changes: [
       'Vẽ liên tục, di chuyển bảng trắng bằng hai ngón, lưu PDF và mở bảng hoặc màn hình chia sẻ toàn màn hình.',
       'Lưu tin nhắn và tệp đính kèm không có thời hạn mặc định, với nút lưu tệp ngay trong hội thoại.',

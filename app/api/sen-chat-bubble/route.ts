@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { generateSenAi, prepareSenAiRequest, SenAiInputError } from '@/lib/senAiGenerate'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getEffectiveDailyLimit } from '@/lib/senaiTiers'
@@ -9,15 +9,12 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req)
-    const { message, sessionId, deepThink } = (await req.json()) as {
-      message: string
-      sessionId?: string
-      deepThink?: boolean
-    }
-
-    if (!message || !message.trim()) {
-      return NextResponse.json({ error: 'Nội dung câu hỏi không được để trống' }, { status: 400 })
-    }
+    const body = await req.json().catch(() => null)
+    const input = prepareSenAiRequest(body)
+    const { message } = input
+    const sessionId = typeof body?.sessionId === 'string' && user ? body.sessionId : undefined
+    const deepThink = input.mode === 'orchid'
+    let history: unknown = body?.history
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
@@ -81,6 +78,15 @@ export async function POST(req: Request) {
         }
       }
 
+      if (sessionId) {
+        const { data: owner } = await supabaseAdmin.from('senai_studio_sessions').select('id').eq('id', sessionId).eq('user_id', user.id).maybeSingle()
+        if (!owner) return NextResponse.json({ error: 'Không tìm thấy phiên SenAI.' }, { status: 404 })
+        const { data: previous } = await supabaseAdmin.from('senai_studio_messages')
+          .select('role, content').eq('session_id', sessionId).eq('user_id', user.id)
+          .order('created_at', { ascending: false }).limit(12)
+        history = previous?.reverse()
+      }
+
       // Lưu tin nhắn user vào senai_studio_messages nếu có session
       if (activeSessionId) {
         await supabaseAdmin.from('senai_studio_messages').insert({
@@ -97,23 +103,7 @@ export async function POST(req: Request) {
       userUsed = currentCount + 1
     }
 
-    // Khởi tạo Gemini
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const modelName = deepThink ? 'gemini-3.8-flash' : 'gemini-3.5-flash-lite'
-    const model = genAI.getGenerativeModel({ model: modelName })
-
-    const systemPrompt = `Bạn là Sen Chat — Trợ lý AI học tập thông minh thuộc hệ sinh thái SenExam (senexam.me).
-Nhiệm vụ:
-- Giải đáp thắc mắc bài tập, tóm tắt lý thuyết, giải thích câu trắc nghiệm nhanh gọn, súc tích.
-- Định dạng toán học chuẩn: Luôn đặt công thức toán, lý, hóa trong cặp dấu $...$ (nội dòng) hoặc $$...$$ (khối).
-- Dùng dấu chấm "." cho phép nhân và dấu phẩy "," cho số thập phân.
-- Khi cần vẽ đồ thị hoặc mô hình hình học không gian, bạn có thể gợi ý người dùng truy cập SenGraph (sengraph.senexam.me).
-- Luôn giữ thái độ thân thiện, khích lệ tinh thần học tập của sĩ tử.`
-
-    const promptText = `${systemPrompt}\n\n${deepThink ? '[Chế độ Deep Think - Phân tích chuyên sâu]:\n' : ''}Câu hỏi từ học sinh: ${message.trim()}`
-
-    const result = await model.generateContent(promptText)
-    const replyText = result.response.text()
+    const replyText = await generateSenAi(apiKey, input, history)
 
     // Lưu câu trả lời của AI vào senai_studio_messages & update session
     if (user && activeSessionId) {
@@ -141,6 +131,7 @@ Nhiệm vụ:
       remaining: user ? Math.max(0, userLimit - userUsed) : null,
     })
   } catch (error: any) {
+    if (error instanceof SenAiInputError) return NextResponse.json({ error: error.message }, { status: 400 })
     console.error('Sen Chat Bubble API error:', error)
     return NextResponse.json(
       { error: error.message || 'Lỗi khi xử lý trò chuyện với Sen Chat' },

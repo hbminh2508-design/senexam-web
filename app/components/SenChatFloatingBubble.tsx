@@ -221,7 +221,7 @@ export default function SenChatFloatingBubble() {
         <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
           <span className="mr-1 text-sm font-bold">Sen Chat</span>
           <button type="button" aria-pressed={tab === 'messages'} onClick={() => setTab('messages')} className="rounded-lg px-2 py-1.5 text-sm aria-pressed:bg-sky-100 aria-pressed:text-sky-800">Tin nhắn</button>
-          <button type="button" aria-pressed={tab === 'ai'} onClick={() => setTab('ai')} className="rounded-lg px-2 py-1.5 text-sm aria-pressed:bg-sky-100 aria-pressed:text-sky-800">Sen AI</button>
+          <button type="button" aria-pressed={tab === 'ai'} onClick={() => setTab('ai')} className="rounded-lg px-2 py-1.5 text-sm aria-pressed:bg-sky-100 aria-pressed:text-sky-800">SenAI 2</button>
           <button type="button" aria-label="Đóng Sen Chat" onClick={() => setIsOpen(false)} className="ml-auto rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={18} /></button>
         </div>
         {tab === 'messages' ? <SenChatQuickMessages key={userId} userId={userId} /> : <SenChatFloatingModal messages={messages} setMessages={setMessages}

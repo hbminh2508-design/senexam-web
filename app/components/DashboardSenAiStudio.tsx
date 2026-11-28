@@ -1,5 +1,8 @@
 'use client'
 
+import { SenAiFileControls, SenAiModePicker, useSenAiFiles } from '@/components/chat/SenAiComposerTools'
+import type { SenAiMode } from '@/lib/senAiModes'
+
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
@@ -19,7 +22,6 @@ import {
   BookMarked,
   Lightbulb,
   ExternalLink,
-  Brain,
   BrainCircuit,
   Bot,
   User,
@@ -54,7 +56,8 @@ export default function DashboardSenAiStudio({
 }: DashboardSenAiStudioProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [deepThink, setDeepThink] = useState(false)
+  const [mode, setMode] = useState<SenAiMode>('rose')
+  const attachment = useSenAiFiles()
   const [sending, setSending] = useState(false)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -76,10 +79,10 @@ export default function DashboardSenAiStudio({
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || input).trim()
-    if (!text || sending) return
+    if ((!text && !attachment.files.length) || sending) return
 
     setInput('')
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text }
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text || attachment.files.map((file) => file.name).join(', ') }
     setMessages((prev) => [...prev, userMsg])
     setSending(true)
 
@@ -102,7 +105,8 @@ export default function DashboardSenAiStudio({
         headers,
         body: JSON.stringify({
           prompt: text,
-          deepThink,
+          mode,
+          attachments: await attachment.encode(),
           history: messages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
         }),
       })
@@ -137,6 +141,7 @@ export default function DashboardSenAiStudio({
   }
 
   const clearChat = () => {
+    attachment.clear()
     setMessages([])
   }
 
@@ -308,7 +313,9 @@ export default function DashboardSenAiStudio({
       </div>
 
       {/* INPUT BAR */}
+      <SenAiFileControls state={attachment} disabled={sending} />
       <form
+        onPaste={(event) => { if (!sending) attachment.paste(event) }}
         onSubmit={(e) => {
           e.preventDefault()
           handleSendMessage()
@@ -327,27 +334,14 @@ export default function DashboardSenAiStudio({
 
           <button
             type="submit"
-            disabled={sending || !input.trim()}
+            disabled={sending || (!input.trim() && !attachment.files.length)}
             className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white transition hover:scale-105 disabled:opacity-40"
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
 
-        {/* Deep Think Mode Toggle */}
-        <button
-          type="button"
-          onClick={() => setDeepThink(!deepThink)}
-          className={`flex items-center justify-center gap-1.5 h-12 px-4 rounded-2xl border text-xs font-black uppercase tracking-wider transition ${
-            deepThink
-              ? 'border-purple-500 bg-purple-500/15 text-purple-600 dark:text-purple-400 shadow-sm'
-              : 'border-black/10 dark:border-white/10 bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:bg-black/5'
-          }`}
-          title="Bật chế độ suy luận sâu để giải thích chi tiết từng bước"
-        >
-          <Brain className={`h-4 w-4 ${deepThink ? 'text-purple-500 fill-purple-500/20' : ''}`} />
-          <span>Deep Think</span>
-        </button>
+        <SenAiModePicker mode={mode} onChange={setMode} disabled={sending} />
       </form>
     </div>
   )

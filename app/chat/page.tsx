@@ -722,7 +722,7 @@ export default function SenChatPage() {
   const handledConversationQuery = useRef<string | null>(null)
   useEffect(() => {
     const target = new URLSearchParams(window.location.search).get('conversation')
-    const match = target ? getChatConversation(target) : null
+    const match = target ? (conversations.find(({ id }) => id === target) || getChatConversation(target)) : null
     if (target && match && handledConversationQuery.current !== target) {
       handledConversationQuery.current = target
       setSelectedConvId(match.id)
@@ -1123,7 +1123,7 @@ export default function SenChatPage() {
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
       const q = searchQuery.toLowerCase().trim()
-      if (c.id === SENAI_STUDIO_CONVERSATION_ID && !q) return true
+      if (c.id === SENAI_STUDIO_CONVERSATION_ID && !q) return filterMode !== 'groups'
       const matchName = c.partnerName.toLowerCase().includes(q)
       const matchLast = (c.lastMessage || '').toLowerCase().includes(q)
       const matchFilter = filterMode === 'groups' ? Boolean(c.isGroup) : filterMode === 'all' || (filterMode === 'unread' && c.unreadCount > 0) || c.id === SENAI_STUDIO_CONVERSATION_ID
@@ -1207,7 +1207,7 @@ export default function SenChatPage() {
               }}
               title="Tin nhắn hội thoại"
               className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl transition-all ${
-                activeRailTab === 'messages'
+                activeRailTab === 'messages' && filterMode !== 'groups'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25 scale-105'
                   : 'text-slate-600 hover:bg-white hover:text-blue-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-emerald-400'
               }`}
@@ -1247,7 +1247,8 @@ export default function SenChatPage() {
               type="button"
               onClick={() => { setActiveRailTab('messages'); setFilterMode('groups'); setSearchQuery(''); setIsMobileListVisible(true) }}
               title="Quản lý nhóm"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-teal-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-teal-400"
+              aria-pressed={activeRailTab === 'messages' && filterMode === 'groups'}
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-2xl text-slate-600 transition hover:bg-white hover:text-teal-600 aria-pressed:bg-blue-600 aria-pressed:text-white aria-pressed:shadow-md dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-teal-400 dark:aria-pressed:text-white"
             >
               <Users className="h-5 w-5" />
             </button>

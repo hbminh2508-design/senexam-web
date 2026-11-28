@@ -843,7 +843,7 @@ function MobileChatPageInner() {
   const handledConversationQuery = useRef<string | null>(null)
   useEffect(() => {
     const target = searchParams.get('conversation')
-    const match = target ? getChatConversation(target) : null
+    const match = target ? (conversations.find(({ id }) => id === target) || getChatConversation(target)) : null
     if (target && match && !isLocked && handledConversationQuery.current !== target) {
       handledConversationQuery.current = target
       handleSelectConversation(match.id)

@@ -1,5 +1,8 @@
 'use client'
 
+import { SenAiFileControls, SenAiModePicker, useSenAiFiles } from '@/components/chat/SenAiComposerTools'
+import type { SenAiMode } from '@/lib/senAiModes'
+
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
@@ -11,7 +14,6 @@ import {
   Send,
   Maximize2,
   Loader2,
-  Brain,
   ExternalLink,
   ChevronDown,
   CheckCircle2,
@@ -41,7 +43,8 @@ export default function SenChatFloatingModal({
 }: SenChatFloatingModalProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [deepThink, setDeepThink] = useState(false)
+  const [mode, setMode] = useState<SenAiMode>('rose')
+  const attachment = useSenAiFiles()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -52,12 +55,12 @@ export default function SenChatFloatingModal({
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     const text = input.trim()
-    if (!text || loading) return
+    if ((!text && !attachment.files.length) || loading) return
 
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
-      content: text,
+      content: text || attachment.files.map((file) => file.name).join(', '),
       timestamp: new Date(),
     }
 
@@ -87,7 +90,9 @@ export default function SenChatFloatingModal({
         body: JSON.stringify({
           message: text,
           sessionId: sessionId || undefined,
-          deepThink,
+          mode,
+          attachments: await attachment.encode(),
+          history: messages.slice(-12).map(({ role, content }) => ({ role, content })),
         }),
       })
 
@@ -152,18 +157,16 @@ export default function SenChatFloatingModal({
             <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
           </div>
           <div>
-            <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-              Sen AI
-            </h4>
+            <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">SenAI 2</h4>
             <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-              <CheckCircle2 className="h-2.5 w-2.5" /> Tự lưu SenAI Studio
+              <CheckCircle2 className="h-2.5 w-2.5" /> Cùng phiên với SenAI Studio
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-1">
           <Link
-            href="/new-senai-studio"
+            href="/chat?conversation=senai-studio"
             target="_blank"
             title="Mở toàn màn hình tại SenAI Studio"
             className="p-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition"
@@ -197,7 +200,7 @@ export default function SenChatFloatingModal({
               <div
                 className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
                   isUser
-                    ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm rounded-br-none'
+                    ? 'bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-sm rounded-br-none'
                     : 'bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 text-slate-800 dark:text-slate-100 rounded-bl-none'
                 }`}
               >
@@ -270,18 +273,7 @@ export default function SenChatFloatingModal({
       {/* Footer Controls & Input */}
       <div className="p-3 border-t border-black/10 dark:border-white/10 bg-white/50 dark:bg-slate-900/50">
         <div className="flex items-center justify-between mb-2">
-          <button
-            type="button"
-            onClick={() => setDeepThink(!deepThink)}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold transition ${
-              deepThink
-                ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30'
-                : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Brain className="h-3 w-3" />
-            <span>Deep Think {deepThink ? 'BẬT' : 'TẮT'}</span>
-          </button>
+          <SenAiModePicker mode={mode} onChange={setMode} disabled={loading} />
 
           <Link
             href="/new-senai"
@@ -291,18 +283,19 @@ export default function SenChatFloatingModal({
           </Link>
         </div>
 
-        <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+        <SenAiFileControls state={attachment} disabled={loading} />
+        <form onPaste={(event) => { if (!loading) attachment.paste(event) }} onSubmit={handleSendMessage} className="flex items-center gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Nhập câu hỏi với Sen Chat..."
-            className="flex-1 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-2 text-xs outline-none focus:border-pink-500 text-slate-900 dark:text-white"
+            placeholder="Hỏi SenAI 2…"
+            className="flex-1 rounded-xl border border-black/10 dark:border-white/15 bg-white dark:bg-slate-800 px-3 py-2 text-xs outline-none focus:border-sky-500 text-slate-900 dark:text-white"
           />
           <button
             type="submit"
-            disabled={!input.trim() || loading}
-            className="h-8 w-8 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white flex items-center justify-center transition hover:scale-105 active:scale-95 disabled:opacity-40 shrink-0"
+            disabled={(!input.trim() && !attachment.files.length) || loading}
+            className="h-8 w-8 rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 text-white flex items-center justify-center transition hover:scale-105 active:scale-95 disabled:opacity-40 shrink-0"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           </button>

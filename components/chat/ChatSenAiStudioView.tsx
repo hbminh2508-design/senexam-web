@@ -1,5 +1,8 @@
 'use client'
 
+import { SenAiFileControls, SenAiModePicker, useSenAiFiles } from '@/components/chat/SenAiComposerTools'
+import type { SenAiMode } from '@/lib/senAiModes'
+
 import React, { useState, useEffect, useRef } from 'react'
 import {
   Sparkles,
@@ -10,8 +13,6 @@ import {
   Edit2,
   Check,
   X,
-  Brain,
-  BrainCircuit,
   MessageSquare,
   Compass,
   Atom,
@@ -74,7 +75,9 @@ export default function ChatSenAiStudioView({
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<StudioMessage[]>([])
   const [inputText, setInputText] = useState('')
-  const [deepThink, setDeepThink] = useState(false)
+  const [mode, setMode] = useState<SenAiMode>('rose')
+  const attachment = useSenAiFiles()
+  const deepThink = mode === 'orchid'
   const [isSending, setIsSending] = useState(false)
   const [showSessionDropdown, setShowSessionDropdown] = useState(false)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
@@ -141,6 +144,8 @@ export default function ChatSenAiStudioView({
 
   // Chọn một phiên
   const handleSelectSession = async (sessionId: string) => {
+    if (isSending) return
+    attachment.clear()
     setActiveSessionId(sessionId)
     setShowSessionDropdown(false)
 
@@ -171,6 +176,8 @@ export default function ChatSenAiStudioView({
 
   // Tạo phiên mới
   const handleNewSession = () => {
+    if (isSending) return
+    attachment.clear()
     setActiveSessionId(null)
     setMessages([])
     setShowSessionDropdown(false)
@@ -217,8 +224,9 @@ export default function ChatSenAiStudioView({
 
   // Gửi tin nhắn
   const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend || inputText).trim()
-    if (!text || isSending) return
+    const question = (textToSend || inputText).trim()
+    if ((!question && !attachment.files.length) || isSending) return
+    const text = question || attachment.files.map((file) => file.name).join(', ')
 
     setInputText('')
     const tempUserMsg: StudioMessage = {
@@ -287,12 +295,15 @@ export default function ChatSenAiStudioView({
         method: 'POST',
         headers,
         body: JSON.stringify({
-          message: text,
-          deepThink,
+          message: question,
+          mode,
+          attachments: await attachment.encode(),
+          history: messages.slice(-12).map(({ role, content }) => ({ role, content })),
         }),
       })
 
       const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'SenAI không thể xử lý yêu cầu.')
       const replyContent = data.reply || data.text || 'Xin lỗi, SenAI không thể phản hồi câu hỏi lúc này.'
 
       const modelMsg: StudioMessage = {
@@ -479,20 +490,7 @@ export default function ChatSenAiStudioView({
 
         {/* Nút Tạo Phiên Mới & Công tắc DeepThink */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setDeepThink((prev) => !prev)}
-            className={`flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-xs font-bold transition border ${
-              deepThink
-                ? 'bg-purple-600 text-white border-purple-500 shadow-sm shadow-purple-500/30'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-            }`}
-            title="Bật/Tắt chế độ DeepThink suy nghĩ sâu"
-          >
-            {deepThink ? <BrainCircuit className="h-3.5 w-3.5" /> : <Brain className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">DeepThink:</span>
-            <span>{deepThink ? 'Bật' : 'Tắt'}</span>
-          </button>
+          <SenAiModePicker mode={mode} onChange={setMode} disabled={isSending} />
 
           <button
             type="button"
@@ -619,7 +617,9 @@ export default function ChatSenAiStudioView({
 
       {/* 3. Khung nhập liệu tin nhắn */}
       <div className="border-t border-slate-200/80 bg-white/90 p-3 sm:p-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 z-10">
+        <SenAiFileControls state={attachment} disabled={isSending} />
         <form
+          onPaste={(event) => { if (!isSending) attachment.paste(event) }}
           onSubmit={(e) => {
             e.preventDefault()
             handleSendMessage()
@@ -653,7 +653,7 @@ export default function ChatSenAiStudioView({
 
           <button
             type="submit"
-            disabled={!inputText.trim() || isSending}
+            disabled={(!inputText.trim() && !attachment.files.length) || isSending}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/30 hover:bg-emerald-500 disabled:opacity-40 transition"
           >
             {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}

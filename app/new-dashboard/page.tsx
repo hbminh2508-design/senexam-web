@@ -68,6 +68,7 @@ import { processAutoRenew } from '@/lib/autoRenewService'
 import { isEcoModeActive, setEcoModeActive } from '@/app/components/MobileBatteryManager'
 import { getPlanTierName, getTotalSenaiDailyLimit } from '@/lib/vipMembership'
 import { getEffectiveSenaiTier, SENAI_TIER_LABEL, SENAI_TIER_DAILY_LIMIT, type SenAiTierCode } from '@/lib/senaiTiers'
+import ExamVersionButton from '@/app/components/ExamVersionButton'
 import { APP_VERSION } from '@/lib/version'
 
 const DashboardSenAiStudio = dynamic(
@@ -373,7 +374,6 @@ function NewDashboardContent() {
   const [resendCooldown, setResendCooldown] = useState(0)
 
   // Hiển thị phiên bản Web (2.0 vs 2.0.2194023.4923.01)
-  const [showFullVersion, setShowFullVersion] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [chatBubbleEnabled, setChatBubbleEnabled] = useState(true)
 
@@ -1483,17 +1483,10 @@ function NewDashboardContent() {
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Nhấn vào số phiên bản để xem chi tiết build
+                  Nhấn vào số phiên bản để xem nhật ký cập nhật
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowFullVersion(!showFullVersion)}
-                title="Bấm để chuyển đổi mã build phiên bản"
-                className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
-              >
-                {showFullVersion ? `v${APP_VERSION} (Build ${APP_VERSION})` : `v${APP_VERSION}`}
-              </button>
+              <ExamVersionButton version={APP_VERSION} className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all" />
             </div>
 
             {/* Nút truy cập FEPN & SEB trên phiên bản web */}
@@ -2268,17 +2261,10 @@ function NewDashboardContent() {
                     </span>
                   </div>
                   <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
-                    Nhấn vào số phiên bản để xem chi tiết build
+                    Nhấn vào số phiên bản để xem nhật ký cập nhật
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowFullVersion(!showFullVersion)}
-                  title="Bấm để chuyển đổi mã build phiên bản"
-                  className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all"
-                >
-                  {showFullVersion ? `v${APP_VERSION} (Build ${APP_VERSION})` : `v${APP_VERSION}`}
-                </button>
+                <ExamVersionButton version={APP_VERSION} className="font-mono text-xs font-black px-2.5 py-1.5 rounded-xl border border-black/10 dark:border-white/15 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 transition-all cursor-pointer shadow-xs active:scale-95 select-all" />
               </div>
 
               {/* Nút truy cập FEPN & SEB trên phiên bản web */}

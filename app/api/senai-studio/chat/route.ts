@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { generateSenAi, prepareSenAiRequest, SenAiInputError } from '@/lib/senAiGenerate'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabaseAdmin'
 import { getEffectiveDailyLimit, getEffectiveSenaiTier } from '@/lib/senaiTiers'
@@ -6,12 +6,17 @@ import { getEffectivePlanTier, getTotalSenaiDailyLimit } from '@/lib/vipMembersh
 
 export const dynamic = 'force-dynamic'
 
-type Attachment = { base64: string, mimeType: string, name?: string }
-
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req)
     if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+
+    const body = await req.json().catch(() => null)
+    const input = prepareSenAiRequest(body)
+    const { message } = input
+    const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : undefined
+    const attachments = Array.isArray(body?.attachments) ? body.attachments : []
+    const deepThink = input.mode === 'orchid'
 
     const supabaseAdmin = getSupabaseAdmin()
     const { data: profile } = await supabaseAdmin
@@ -48,16 +53,6 @@ export async function POST(req: Request) {
 
     await supabaseAdmin.from('senai_question_log').insert({ user_id: user.id })
 
-    const { sessionId, message, attachments, deepThink } = (await req.json()) as {
-      sessionId?: string
-      message: string
-      attachments?: Attachment[]
-      deepThink?: boolean
-    }
-    if (!message?.trim() && !(attachments && attachments.length > 0)) {
-      return NextResponse.json({ error: 'Thiếu nội dung câu hỏi' }, { status: 400 })
-    }
-
     // Lấy hoặc tạo cuộc trò chuyện — không cho client tự insert để tránh giả mạo session của người khác
     let activeSessionId = sessionId
     if (!activeSessionId) {
@@ -77,7 +72,7 @@ export async function POST(req: Request) {
       .from('senai_studio_messages')
       .select('role, content')
       .eq('session_id', activeSessionId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(30)
 
     await supabaseAdmin.from('senai_studio_messages').insert({
@@ -92,25 +87,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'Chưa cấu hình API Key trên hệ thống' }, { status: 500 })
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    // Giữ nguyên model gemini-3.5-flash-lite theo yêu cầu hệ thống
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.5-flash-lite' })
-
-    const baseInstruction = `Bạn là SenAI Studio — phiên bản đầy đủ tính năng của trợ lý SenAI (SenExam, dữ liệu SenAI 3.1), dành riêng cho thành viên Ultra. Trả lời chính xác, chi tiết, có thể phân tích hình ảnh/tài liệu người dùng gửi kèm. Dùng dấu chấm "." cho phép nhân và dấu phẩy "," cho thập phân, luôn bọc công thức trong $ hoặc $$.`
-    const deepThinkInstruction = deepThink
-      ? `\n\nCHẾ ĐỘ DEEP THINK ĐANG BẬT: Hãy suy nghĩ từng bước thật kỹ lưỡng trước khi trả lời — phân tích đề bài/câu hỏi từ nhiều góc độ, liệt kê các giả thiết, kiểm tra lại logic và tính toán trước khi đưa ra kết luận cuối cùng. Trình bày rõ các bước suy luận quan trọng, sau đó chốt lại câu trả lời chính xác nhất.`
-      : ''
-
-    const historyText = (history || []).map(h => `${h.role === 'user' ? 'Người dùng' : 'SenAI'}: ${h.content}`).join('\n')
-    const finalPrompt = `${baseInstruction}${deepThinkInstruction}\n\nLịch sử trò chuyện:\n${historyText}\n\nCâu hỏi mới: ${message || '(xem tệp đính kèm)'}`
-
-    const parts: ({ text: string } | { inlineData: { data: string, mimeType: string } })[] = [{ text: finalPrompt }]
-    for (const a of attachments || []) {
-      parts.push({ inlineData: { data: a.base64, mimeType: a.mimeType } })
-    }
-
-    const result = await model.generateContent(parts)
-    const responseText = result.response.text()
+    const responseText = await generateSenAi(apiKey, input, [...(history || [])].reverse())
 
     await supabaseAdmin.from('senai_studio_messages').insert({
       session_id: activeSessionId,
@@ -129,6 +106,7 @@ export async function POST(req: Request) {
       remaining: Math.max(0, dailyLimit - currentCount - 1),
     })
   } catch (e) {
+    if (e instanceof SenAiInputError) return NextResponse.json({ error: e.message }, { status: 400 })
     console.error('SenAI Studio error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Đã có lỗi xảy ra' }, { status: 500 })
   }
