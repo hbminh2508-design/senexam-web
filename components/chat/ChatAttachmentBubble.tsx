@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import {
   Download,
   FileText,
@@ -14,9 +13,6 @@ import {
   ShieldCheck,
   Check,
   Play,
-  Clock,
-  Sparkles,
-  CalendarPlus,
 } from 'lucide-react'
 import {
   formatBytes,
@@ -59,22 +55,13 @@ export default function ChatAttachmentBubble({
   fileSize = 0,
   mimeType = 'application/octet-stream',
   fileType = 'file',
-  expiresAt,
-  isPinnedPermanent = false,
   isGroup = false,
-  canExtendRetention = false,
-  onRetentionExtended,
   isMe = false,
 }: ChatAttachmentBubbleProps) {
   const [decryptedUrl, setDecryptedUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showExeConfirm, setShowExeConfirm] = useState(false)
-  const [showExtendModal, setShowExtendModal] = useState(false)
-  const [isExtending, setIsExtending] = useState(false)
-  const [currentExpiresAt, setCurrentExpiresAt] = useState<string | undefined>(expiresAt)
-  const [currentIsPermanent, setCurrentIsPermanent] = useState<boolean>(isPinnedPermanent)
-  const [extendFeedback, setExtendFeedback] = useState<string | null>(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
 
   const handleOpenPreview = async (e?: React.MouseEvent) => {
@@ -97,56 +84,6 @@ export default function ChatAttachmentBubble({
   const isRestricted = isRestrictedInlineFile(fileName, mimeType)
   const isImage = fileType === 'image' && !isRestricted
   const isVideo = fileType === 'video'
-
-  // Tính toán thời gian lưu trữ còn lại
-  const getRetentionInfo = () => {
-    if (currentIsPermanent) {
-      return { text: 'Lưu trữ vĩnh viễn', isExpired: false, isPermanent: true }
-    }
-    if (!currentExpiresAt) {
-      return { text: 'Bảo lưu 30 ngày', isExpired: false, isPermanent: false }
-    }
-    const diffMs = new Date(currentExpiresAt).getTime() - Date.now()
-    if (diffMs <= 0) {
-      return { text: 'Đã hết hạn lưu trữ', isExpired: true, isPermanent: false }
-    }
-    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-    return { text: `Bảo lưu: còn ${days} ngày`, isExpired: false, isPermanent: false, days }
-  }
-
-  const retention = getRetentionInfo()
-
-  const handleExtendRetention = async (days: number, permanent = false) => {
-    if (!attachmentId) return
-    setIsExtending(true)
-    setExtendFeedback(null)
-    try {
-      const res = await fetch('/api/chat/attachments/extend-retention', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attachmentId, days, permanent }),
-      })
-      const data = await res.json()
-      if (res.ok && data.success) {
-        setCurrentExpiresAt(data.expires_at)
-        setCurrentIsPermanent(Boolean(data.is_pinned_permanent))
-        setExtendFeedback(data.message || 'Đã gia hạn thành công!')
-        if (onRetentionExtended) {
-          onRetentionExtended(attachmentId, data.expires_at, Boolean(data.is_pinned_permanent))
-        }
-        setTimeout(() => {
-          setShowExtendModal(false)
-          setExtendFeedback(null)
-        }, 1500)
-      } else {
-        setExtendFeedback(data.error || 'Không thể gia hạn')
-      }
-    } catch {
-      setExtendFeedback('Lỗi kết nối máy chủ')
-    } finally {
-      setIsExtending(false)
-    }
-  }
 
   // Đối với ảnh: Tự động tải và giải mã để hiển thị inline an toàn (nếu có fileKey và không phải SVG/HTML)
   useEffect(() => {
@@ -477,106 +414,7 @@ export default function ChatAttachmentBubble({
         </div>
       )}
 
-      {/* Thông tin bảo lưu tệp 30 ngày & Nút gia hạn bởi Trưởng nhóm / Admin */}
-      <div
-        className={`flex items-center justify-between gap-2 px-1 text-[10px] mt-1 ${
-          isMe ? 'text-sky-100/90' : 'text-slate-400'
-        }`}
-      >
-        <div className="flex items-center gap-1">
-          <Clock className={`h-3 w-3 shrink-0 ${isMe ? 'text-sky-200/80' : 'text-slate-400'}`} />
-          <span
-            className={
-              retention.isPermanent
-                ? isMe
-                  ? 'text-white font-bold'
-                  : 'text-sky-500 font-semibold'
-                : retention.isExpired
-                ? isMe
-                  ? 'text-rose-200 font-semibold'
-                  : 'text-rose-500 font-semibold'
-                : isMe
-                ? 'text-sky-100/90'
-                : 'text-slate-400'
-            }
-          >
-            {retention.text}
-          </span>
-        </div>
-        {canExtendRetention && !retention.isPermanent && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowExtendModal(true)
-            }}
-            className={`flex items-center gap-0.5 font-semibold hover:underline cursor-pointer ${
-              isMe
-                ? 'text-white hover:text-sky-100'
-                : 'text-blue-600 hover:text-blue-700 dark:text-sky-400'
-            }`}
-          >
-            <CalendarPlus className="h-3 w-3" />
-            Gia hạn
-          </button>
-        )}
-      </div>
-
-      {/* Modal gia hạn lưu trữ cho tệp tin */}
-      {showExtendModal && typeof document !== 'undefined' && createPortal(
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-        >
-          <div className="w-full max-w-xs rounded-2xl bg-white p-4 shadow-xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
-              <div className="flex items-center gap-1.5 font-bold text-xs">
-                <CalendarPlus className="h-4 w-4 text-blue-600" />
-                <span>Gia hạn lưu trữ tệp</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowExtendModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {fileName}
-            </p>
-
-            {extendFeedback && (
-              <p className="text-xs font-semibold text-blue-600 dark:text-sky-400">
-                {extendFeedback}
-              </p>
-            )}
-
-            <div className="space-y-2 pt-1">
-              <button
-                type="button"
-                disabled={isExtending}
-                onClick={() => handleExtendRetention(30, false)}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                Thêm 30 ngày bảo lưu
-              </button>
-              <button
-                type="button"
-                disabled={isExtending}
-                onClick={() => handleExtendRetention(0, true)}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-blue-500/40 text-blue-600 dark:text-sky-400 text-xs font-bold hover:bg-blue-50 dark:hover:bg-blue-950/20 disabled:opacity-50 transition"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Bảo lưu vĩnh viễn
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <button type="button" onClick={handleDownload} disabled={isLoading} className="inline-flex items-center gap-1 self-start rounded-lg px-2 py-1 text-xs font-semibold underline"><Download size={14} /> Lưu tệp</button>
     </div>
   )
 }

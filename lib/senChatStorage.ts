@@ -139,7 +139,7 @@ const STORAGE_KEYS = {
 
 export const TEXT_MESSAGE_RETENTION_DAYS = 30
 export const TEXT_MESSAGE_RETENTION_MS = TEXT_MESSAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000
-export const CHAT_RETENTION_POLICY_NOTICE = 'Tin nhắn văn bản được bảo mật lưu trữ 30 ngày. Nhóm trò chuyện và liên lạc được lưu giữ vĩnh viễn.'
+export const CHAT_RETENTION_POLICY_NOTICE = 'Tin nhắn và tệp đính kèm không có thời hạn lưu trữ mặc định.'
 
 export const SENAI_STUDIO_CONVERSATION_ID = 'senai-studio'
 export const SENAI_STUDIO_CONVERSATION: SenChatConversation = {
@@ -335,32 +335,7 @@ export function getLocalMessages(conversationId: string): SenChatMessage[] {
     const raw = localStorage.getItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`)
     const list: SenChatMessage[] = raw ? JSON.parse(raw) : []
 
-    // 1. SenAI Studio: Tin nhắn vĩnh viễn không bao giờ bị dọn dẹp theo chính sách 30 ngày
-    if (conversationId === SENAI_STUDIO_CONVERSATION_ID) {
-      return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-    }
-
-    // 2. Các cuộc hội thoại khác: Tin nhắn văn bản tuân theo vòng đời 30 ngày
-    // Tệp đính kèm có vòng đời riêng biệt và có thể được gia hạn bởi trưởng nhóm
-    const cutoff = Date.now() - TEXT_MESSAGE_RETENTION_MS
-    let hasExpired = false
-    const valid = list.filter((m) => {
-      if (m.attachmentId || m.storagePath || m.driveFileId) {
-        return true // Tệp đính kèm tuân theo retention của storage
-      }
-      const msgTime = new Date(m.createdAt).getTime()
-      if (msgTime < cutoff) {
-        hasExpired = true
-        return false
-      }
-      return true
-    })
-
-    if (hasExpired) {
-      localStorage.setItem(`${STORAGE_KEYS.MESSAGES_PREFIX}${conversationId}`, JSON.stringify(valid))
-    }
-
-    return valid.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    return list.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
   } catch (e) {
     return []
   }

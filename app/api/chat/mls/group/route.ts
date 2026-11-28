@@ -152,37 +152,27 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  try {
-    const user = await getUserFromRequest(req)
-    if (!user) {
-      return NextResponse.json({ error: 'Chưa xác thực người dùng' }, { status: 401 })
-    }
-
-    const body = await req.json().catch(() => null)
-    if (!body || !body.conversationId) {
-      return NextResponse.json({ error: 'Thiếu conversationId' }, { status: 400 })
-    }
-
-    const { conversationId, title, avatarUrl } = body
-    const db = getSupabaseAdmin()
-
-    const { data, error } = await db.rpc('update_mls_group_info', {
-      p_conversation_id: conversationId,
-      p_title: title || null,
-      p_avatar_url: avatarUrl || null,
-      p_caller_id: user.id,
-    })
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    if (!data?.success) {
-      return NextResponse.json({ error: data?.error || 'Không thể cập nhật thông tin nhóm' }, { status: 400 })
-    }
-
-    return NextResponse.json(data)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Lỗi server' }, { status: 500 })
+  const user = await getUserFromRequest(req)
+  if (!user) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 })
+  const body = await req.json().catch(() => null)
+  const validId = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)
+  if (!validId(body?.conversationId)) return NextResponse.json({ error: 'Mã nhóm không hợp lệ.' }, { status: 400 })
+  const operation = body.operation || 'edit'
+  if (!['edit', 'delete', 'transfer'].includes(operation)) return NextResponse.json({ error: 'Thao tác không hợp lệ.' }, { status: 400 })
+  const title = typeof body.title === 'string' ? body.title.trim() : ''
+  const avatar = typeof body.avatarUrl === 'string' ? body.avatarUrl.trim() : ''
+  if (operation === 'edit' && (!title || title.length > 100 || avatar.length > 2048 || (avatar && !URL.canParse(avatar)))) {
+    return NextResponse.json({ error: 'Tên nhóm hoặc địa chỉ ảnh không hợp lệ.' }, { status: 400 })
   }
+  if (operation === 'edit' && avatar && new URL(avatar).protocol !== 'https:') {
+    return NextResponse.json({ error: 'Địa chỉ ảnh cần bắt đầu bằng https://.' }, { status: 400 })
+  }
+  if (operation === 'transfer' && !validId(body.successor)) return NextResponse.json({ error: 'Hãy chọn thành viên nhận quyền.' }, { status: 400 })
+  const db = getSupabaseAdmin() as import('@supabase/supabase-js').SupabaseClient
+  const { data, error } = await db.rpc('sen_chat_change_group', {
+    group_id: body.conversationId, actor: user.id, operation, successor: body.successor || null,
+    title_value: title || null, avatar_value: avatar || null,
+  })
+  if (error || !data?.success) return NextResponse.json({ error: data?.error || 'Không thể lưu thay đổi của nhóm.' }, { status: error ? 503 : 403 })
+  return NextResponse.json(data)
 }

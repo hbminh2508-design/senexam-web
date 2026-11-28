@@ -94,27 +94,15 @@ test('Sen Chat: SenAI Studio luôn được ghim ở đầu (index 0) và không
 // ==============================================================================
 // 3. KIỂM THỬ VÒNG ĐỜI TIN NHẮN 30 NGÀY & BẢO TOÀN NHÓM VĨNH VIỄN
 // ==============================================================================
-test('Sen Chat: Quy định 30 ngày cho tin nhắn văn bản và bảo tồn nhóm vĩnh viễn', () => {
-  assert.equal(TEXT_MESSAGE_RETENTION_MS, 30 * 24 * 60 * 60 * 1000)
-
-  // Kiểm tra mã nguồn senChatStorage.ts và senChatStorage.mjs
-  const tsStorage = fs.readFileSync(path.join(process.cwd(), 'lib/senChatStorage.ts'), 'utf8')
-  assert.ok(tsStorage.includes('TEXT_MESSAGE_RETENTION_DAYS = 30'))
-  assert.ok(tsStorage.includes('TEXT_MESSAGE_RETENTION_MS'))
-  assert.ok(
-    tsStorage.includes('SENAI_STUDIO_CONVERSATION_ID') &&
-    (tsStorage.includes('conversationId === SENAI_STUDIO_CONVERSATION_ID') || tsStorage.includes("conversationId === 'senai-studio'")),
-    'Tin nhắn SenAI Studio được bảo lưu vĩnh viễn'
-  )
-  assert.ok(tsStorage.includes('attachmentId || m.storagePath || m.driveFileId'), 'Tin nhắn chứa tệp đính kèm tuân theo vòng đời độc lập')
-
-  // Kiểm tra thông báo hiển thị trên giao diện chat
-  const chatPage = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')
-  assert.ok(chatPage.includes('CHAT_RETENTION_POLICY_NOTICE') || chatPage.includes('30 ngày'), 'Hiển thị chính sách bảo mật 30 ngày')
-  assert.ok(tsStorage.includes('CHAT_RETENTION_POLICY_NOTICE'), 'Định nghĩa CHAT_RETENTION_POLICY_NOTICE')
-
-  const mobileChatPage = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
-  assert.ok(mobileChatPage.includes('CHAT_RETENTION_POLICY_NOTICE') || mobileChatPage.includes('30 ngày'), 'Mobile chat hiển thị thông báo chính sách bảo mật 30 ngày')
+test('Sen Chat 1.2.0: normal chat reads do not prune text or attachment history', () => {
+  for (const file of ['lib/senChatStorage.ts', 'lib/senChatStorage.mjs']) {
+    const source = fs.readFileSync(file, 'utf8')
+    const read = source.slice(source.indexOf('export function getLocalMessages'), source.indexOf('export function saveLocalMessage'))
+    assert.ok(!read.includes('TEXT_MESSAGE_RETENTION_MS'))
+  }
+  const migration = fs.readFileSync('migrations/019_sen_chat_permanent_storage.sql', 'utf8')
+  assert.ok(migration.includes('SET expires_at = NULL, is_pinned_permanent = true'))
+  assert.ok(!migration.includes('DELETE FROM public.chat_inbox_messages'))
 })
 
 // ==============================================================================

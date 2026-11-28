@@ -76,8 +76,8 @@ test('Sen Chat P9: Bắt buộc đăng nhập Supabase và chuyển hướng san
   // Kiểm tra route desktop: app/chat/page.tsx
   const desktopChat = fs.readFileSync(path.join(process.cwd(), 'app/chat/page.tsx'), 'utf8')
   assert.ok(
-    desktopChat.includes("router.replace('/new-idp?returnUrl=/chat')"),
-    'Desktop Chat phải tự động chuyển sang /new-idp?returnUrl=/chat nếu chưa đăng nhập'
+    desktopChat.includes("router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))"),
+    'Desktop Chat giữ tham số liên kết mời khi chuyển sang đăng nhập'
   )
   assert.ok(
     desktopChat.includes("onAuthStateChange"),
@@ -91,8 +91,8 @@ test('Sen Chat P9: Bắt buộc đăng nhập Supabase và chuyển hướng san
   // Kiểm tra route mobile: app/m/chat/page.tsx
   const mobileChat = fs.readFileSync(path.join(process.cwd(), 'app/m/chat/page.tsx'), 'utf8')
   assert.ok(
-    mobileChat.includes("router.replace('/new-idp?returnUrl=/m/chat')"),
-    'Mobile Chat phải tự động chuyển sang /new-idp?returnUrl=/m/chat nếu chưa đăng nhập'
+    mobileChat.includes("router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))"),
+    'Mobile Chat giữ tham số liên kết mời khi chuyển sang đăng nhập'
   )
   assert.ok(
     mobileChat.includes("ChatSettingsModal"),

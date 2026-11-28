@@ -5,7 +5,6 @@ import {
   validateChatFileSize,
   validateGroupStorageQuota,
   GROUP_STORAGE_QUOTA_BYTES,
-  ATTACHMENT_RETENTION_DAYS,
   formatBytes,
 } from '@/lib/chatLimits'
 import { uploadEncryptedImageToDrive } from '@/lib/senChatDriveService'
@@ -238,8 +237,8 @@ export async function POST(request: NextRequest) {
             mime_type_encrypted: encryptedMimeType || null,
             thumbnail_encrypted: encryptedThumbnail || null,
             is_deleted: false,
-            expires_at: new Date(Date.now() + ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-            is_pinned_permanent: false,
+            expires_at: null,
+            is_pinned_permanent: true,
           })
           .select()
           .single()
@@ -452,8 +451,8 @@ export async function POST(request: NextRequest) {
         mime_type_encrypted: encryptedMimeType || null,
         thumbnail_encrypted: encryptedThumbnail || null,
         is_deleted: false,
-        expires_at: new Date(Date.now() + ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-        is_pinned_permanent: false,
+        expires_at: null,
+        is_pinned_permanent: true,
       })
       .select()
       .single()

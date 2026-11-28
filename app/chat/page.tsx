@@ -64,6 +64,7 @@ import SenChatLogo from '@/components/SenChatLogo'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
 import ChatInfoDrawer from '@/components/chat/ChatInfoDrawer'
+import { ChatGroupInviteJoin } from '@/components/chat/ChatGroupInvites'
 import ChatDrmProtection, { ChatDeviceComplianceBadge } from '@/components/chat/ChatDrmProtection'
 import ChatVersionModal from '@/components/chat/ChatVersionModal'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
@@ -196,7 +197,6 @@ export default function SenChatPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showFriendModal, setShowFriendModal] = useState(false)
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false)
-  const [showManageGroupModal, setShowManageGroupModal] = useState(false)
   const [showDeviceManagerModal, setShowDeviceManagerModal] = useState(false)
   const [showNicknameModal, setShowNicknameModal] = useState(false)
   const [showWallpaperModal, setShowWallpaperModal] = useState(false)
@@ -556,12 +556,12 @@ export default function SenChatPage() {
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP với returnUrl=/chat
-          router.replace('/new-idp?returnUrl=/chat')
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
           return
         }
       } catch (err) {
         console.warn('Lỗi đồng bộ hồ sơ SenExam:', err)
-        router.replace('/new-idp?returnUrl=/chat')
+        router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
         return
       } finally {
         setIsInitializing(false)
@@ -572,7 +572,7 @@ export default function SenChatPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
-        router.replace('/new-idp?returnUrl=/chat')
+        router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
       }
     })
 
@@ -1136,6 +1136,7 @@ export default function SenChatPage() {
         isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
       }`}
     >
+      <ChatGroupInviteJoin />
       {/* =========================================================================
           CỘT TẬN CÙNG BÊN TRÁI: THANH DỌC TÁC VỤ (FAR-LEFT VERTICAL DOCK)
          ========================================================================= */}
@@ -1696,7 +1697,7 @@ export default function SenChatPage() {
                     {activeConv.isGroup ? (
                       <button
                         type="button"
-                        onClick={() => setShowManageGroupModal(true)}
+                        onClick={() => setShowInfoSidebar(true)}
                         className="flex items-center gap-1 text-blue-600 dark:text-sky-400 hover:underline font-medium"
                       >
                         <Users className="h-3 w-3" /> Nhóm MLS RFC 9420 (Quản lý)
@@ -1719,16 +1720,6 @@ export default function SenChatPage() {
 
               {/* Call & Tool Actions */}
               <div className="flex items-center gap-1">
-                {activeConv.isGroup && (
-                  <button
-                    type="button"
-                    onClick={() => setShowManageGroupModal(true)}
-                    title="Quản lý thành viên nhóm MLS"
-                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-slate-800"
-                  >
-                    <Users className="h-4 w-4" />
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => setShowChatSearch(!showChatSearch)}
@@ -2390,6 +2381,15 @@ export default function SenChatPage() {
           isOpen={showInfoSidebar}
           onClose={() => setShowInfoSidebar(false)}
           conversation={activeConv}
+          renderGroupManagement={activeConv.isGroup ? (section) => (
+            <ChatMlsGroupModal key={activeConv.id + section} embedded section={section} isOpen
+              onClose={() => setShowInfoSidebar(false)} conversationId={activeConv.id}
+              groupTitle={activeConv.partnerName} groupAvatar={activeConv.avatarUrl}
+              currentUserId={currentUser?.id || ''} currentUserEmail={currentUser?.email || ''}
+              onGroupUpdated={() => setConversations(ensureSenAiStudioInConversations(getLocalConversations()))}
+              onGroupLeft={() => { setShowInfoSidebar(false); setSelectedConvId(SENAI_STUDIO_CONVERSATION_ID); setConversations(ensureSenAiStudioInConversations(getLocalConversations())) }}
+            />
+          ) : undefined}
           messages={messages}
           currentUserId={currentUser?.id || ''}
           currentNickname={currentNickname}
@@ -2421,7 +2421,6 @@ export default function SenChatPage() {
           onChangeDisappearingTtl={(ttl) => setDisappearingTtl(ttl)}
           isCurrentBlocked={isCurrentBlocked}
           onToggleBlock={handleToggleBlock}
-          onOpenManageGroup={() => setShowManageGroupModal(true)}
           onLeaveGroup={() => {
             if (activeConv?.id && confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
               handleLeaveGroup(activeConv.id)
@@ -2526,30 +2525,6 @@ export default function SenChatPage() {
         }}
       />
 
-      {/* Quản lý thành viên & thông tin nhóm MLS */}
-      {activeConv && activeConv.isGroup && (
-        <ChatMlsGroupModal
-          isOpen={showManageGroupModal}
-          onClose={() => setShowManageGroupModal(false)}
-          conversationId={activeConv.id}
-          groupTitle={activeConv.partnerName}
-          groupAvatar={activeConv.avatarUrl || ''}
-          currentUserId={currentUser?.id || ''}
-          currentUserEmail={currentUser?.email || ''}
-          isCreatingNew={false}
-          onGroupUpdated={() => {
-            refreshConversations()
-          }}
-          onGroupLeft={(leftConvId) => {
-            setShowManageGroupModal(false)
-            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-            if (selectedConvIdRef.current === leftConvId) {
-              setSelectedConvId(SENAI_STUDIO_CONVERSATION_ID)
-            }
-          }}
-        />
-      )}
-
       {/* Modal Tải Lên & Mã Hóa Tệp Đính Kèm (P4) */}
       {selectedAttachmentFile && selectedConvId && (
         <ChatAttachmentModal
@@ -2639,7 +2614,7 @@ export default function SenChatPage() {
           refreshConversations()
         }}
         onLoggedOut={() => {
-          router.replace('/new-idp?returnUrl=/chat')
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
         }}
       />
 

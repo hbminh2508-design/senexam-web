@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const { data, error } = await chatDb().from('chat_inbox_deliveries')
     .select('sender_id, message_id, wrapped_key, wrap_iv, chat_inbox_messages!inner(group_id,ciphertext,iv,ephemeral_key,created_at)')
     .eq('user_id', user.id).eq('device_id', device).is('delivered_at', null)
-    .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).order('created_at').limit(30)
+    .order('created_at').limit(30)
   if (error) return fail('Không thể tải tin nhắn mới.', 503)
   return Response.json({ deliveries: data }, { headers: { 'Cache-Control': 'no-store' } })
 }

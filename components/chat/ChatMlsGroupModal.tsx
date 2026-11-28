@@ -30,7 +30,8 @@ import {
   serializeMls,
 } from '@/lib/senChatMlsProtocol'
 import { formatBytes, canUserCreateGroup, validateGroupMemberLimit } from '@/lib/chatLimits'
-import { deleteLocalConversation, clearAllLocalMessages } from '@/lib/senChatStorage'
+import { ChatGroupInvites } from './ChatGroupInvites'
+import { deleteLocalConversation, clearAllLocalMessages, getLocalConversations, saveLocalConversation } from '@/lib/senChatStorage'
 import { broadcastConversationRemoved } from '@/lib/senChatDeviceRelay'
 
 interface MlsMember {
@@ -44,6 +45,8 @@ interface MlsMember {
 }
 
 interface ChatMlsGroupModalProps {
+  embedded?: boolean
+  section?: 'settings' | 'members'
   isOpen: boolean
   onClose: () => void
   conversationId?: string | null
@@ -59,6 +62,8 @@ interface ChatMlsGroupModalProps {
 }
 
 export default function ChatMlsGroupModal({
+  embedded = false,
+  section,
   isOpen,
   onClose,
   conversationId,
@@ -249,6 +254,12 @@ export default function ChatMlsGroupModal({
       const data = await res.json()
       if (data.success) {
         setSuccessMsg('Đã cập nhật thông tin nhóm!')
+        const stored = getLocalConversations().find((entry) => entry.id === conversationId)
+        if (stored) saveLocalConversation({
+          ...stored, partnerName: data.title, partnerAvatar: data.avatar_url ?? undefined,
+          avatarUrl: data.avatar_url ?? undefined, updatedAt: Date.now(),
+        })
+        window.dispatchEvent(new CustomEvent('sen-chat-update', { detail: conversationId }))
         if (onGroupUpdated) onGroupUpdated()
         setTimeout(() => setSuccessMsg(null), 2500)
       } else {
@@ -406,6 +417,34 @@ export default function ChatMlsGroupModal({
   }
 
   // 5. Đổi vai trò thành viên
+  const changeOwnership = async (operation: 'transfer' | 'delete', successor?: string) => {
+    if (!conversationId || !confirm(operation === 'delete'
+      ? 'Xóa nhóm và lịch sử của nhóm trên máy chủ?'
+      : 'Chuyển quyền chủ nhóm cho thành viên này?')) return
+    setIsLoading(true)
+    setErrorMsg(null)
+    try {
+      const response = await fetch('/api/chat/mls/group', {
+        method: 'PATCH', headers: await getAuthHeaders(),
+        body: JSON.stringify({ operation, conversationId, successor }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Không thể lưu thay đổi.')
+      if (operation === 'delete') {
+        deleteLocalConversation(conversationId)
+        broadcastConversationRemoved(conversationId)
+        onGroupLeft?.(conversationId)
+        onClose()
+      } else {
+        setSuccessMsg('Đã chuyển quyền chủ nhóm.')
+        loadMembers()
+        onGroupUpdated?.()
+      }
+    } catch (reason) {
+      setErrorMsg(reason instanceof Error ? reason.message : 'Không thể lưu thay đổi.')
+    } finally { setIsLoading(false) }
+  }
+
   const handleRoleChange = async (targetUserId: string, newRole: 'admin' | 'member' | 'owner') => {
     if (!conversationId) return
     setIsLoading(true)
@@ -438,10 +477,9 @@ export default function ChatMlsGroupModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg overflow-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-blue-600/10 via-sky-500/5 to-cyan-500/10">
+    <div className={embedded ? 'w-full' : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in'}>
+      <div className={embedded ? 'flex min-w-0 flex-col' : 'relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 flex flex-col max-h-[90vh]'}>
+        {!embedded && <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-blue-600/10 via-sky-500/5 to-cyan-500/10">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-blue-500/15 text-blue-600 dark:text-sky-400">
               <Users className="w-5 h-5" />
@@ -462,7 +500,7 @@ export default function ChatMlsGroupModal({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+        </div>}
 
         {/* Thông báo lỗi / thành công */}
         {errorMsg && (
@@ -479,9 +517,9 @@ export default function ChatMlsGroupModal({
         )}
 
         {/* Nội dung Modal */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className={embedded ? 'space-y-4' : 'flex-1 overflow-y-auto p-6 space-y-5'}>
           {/* Tên nhóm & Ảnh nhóm */}
-          <div className="space-y-3">
+          {section !== 'members' && <div className="space-y-3">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 Tên nhóm học tập
@@ -545,16 +583,14 @@ export default function ChatMlsGroupModal({
                   />
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Giới hạn tối đa 15GB cho hình ảnh, video, âm thanh và tệp của mỗi nhóm. Tệp bảo lưu 30 ngày (Trưởng nhóm có thể gia hạn thêm).
+                  Giới hạn tối đa 15GB cho hình ảnh, video, âm thanh và tệp của mỗi nhóm. Tệp được giữ theo dung lượng của nhóm.
                 </p>
               </div>
             )}
-          </div>
-
-          <div className="border-t border-slate-100 dark:border-slate-800 my-2" />
+          </div>}
 
           {/* Tab 1: Tạo nhóm mới (Thêm email bạn bè) */}
-          {isCreatingNew ? (
+          {section === 'settings' ? null : isCreatingNew ? (
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
@@ -614,6 +650,7 @@ export default function ChatMlsGroupModal({
           ) : (
             /* Tab 2: Quản lý nhóm hiện tại (Danh sách thành viên, thêm/xóa) */
             <div className="space-y-4">
+              {conversationId && (myRole === 'owner' || myRole === 'admin') && <ChatGroupInvites conversationId={conversationId} owner={myRole === 'owner'} />}
               {/* Thêm thành viên mới (nếu là Owner/Admin) */}
               {(myRole === 'owner' || myRole === 'admin') && (
                 <div>
@@ -698,6 +735,8 @@ export default function ChatMlsGroupModal({
                       <div className="flex items-center gap-1 shrink-0">
                         {myRole === 'owner' && !isMe && (
                           <>
+                            <button type="button" disabled={isLoading} onClick={() => void changeOwnership('transfer', m.userId)}
+                              className="rounded-lg px-2 py-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">Chuyển quyền</button>
                             {m.role === 'member' ? (
                               <button
                                 onClick={() => handleRoleChange(m.userId, 'admin')}
@@ -757,12 +796,14 @@ export default function ChatMlsGroupModal({
           )}
 
           <div className="flex items-center gap-3">
-            <button
+            {!isCreatingNew && myRole === 'owner' && <button type="button" disabled={isLoading}
+              onClick={() => void changeOwnership('delete')} className="rounded-xl px-3 py-2 text-sm font-semibold text-rose-600">Xóa nhóm</button>}
+            {!embedded && <button
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 text-sm font-medium transition-colors"
             >
               Đóng
-            </button>
+            </button>}
             {isCreatingNew && (
               <button
                 onClick={handleCreateGroup}

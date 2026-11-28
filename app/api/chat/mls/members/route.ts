@@ -175,40 +175,13 @@ export async function DELETE(req: Request) {
 
     const db = getSupabaseAdmin()
 
-    // Nếu người dùng tự rời nhóm (isSelfLeave): tự động chuyển quyền owner nếu caller là owner và còn thành viên khác
     if (isSelfLeave) {
-      const { data: callerMember } = await db
-        .from('chat_members')
-        .select('id, role')
-        .eq('conversation_id', conversationId)
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (callerMember?.role === 'owner') {
-        const { data: otherMembers } = await db
-          .from('chat_members')
-          .select('id, user_id, role, joined_at')
-          .eq('conversation_id', conversationId)
-          .neq('user_id', user.id)
-          .order('joined_at', { ascending: true })
-
-        if (otherMembers && otherMembers.length > 0) {
-          const adminCandidate = otherMembers.find((m: any) => m.role === 'admin')
-          const successor = adminCandidate || otherMembers[0]
-          if (successor) {
-            await db
-              .from('chat_members')
-              .update({ role: 'owner' })
-              .eq('id', successor.id)
-            await db
-              .from('chat_members')
-              .update({ role: 'member' })
-              .eq('id', callerMember.id)
-          }
-        }
-      }
+      const { data, error } = await (db as import('@supabase/supabase-js').SupabaseClient).rpc('sen_chat_change_group', {
+        group_id: conversationId, actor: user.id, operation: 'leave',
+      })
+      if (error || !data?.success) return NextResponse.json({ error: data?.error || 'Không thể rời nhóm.' }, { status: error ? 503 : 403 })
+      return NextResponse.json(data)
     }
-
     const { data, error } = await db.rpc('remove_mls_group_member', {
       p_conversation_id: conversationId,
       p_target_user_id: targetUserId,
@@ -219,49 +192,10 @@ export async function DELETE(req: Request) {
     })
 
     if (error || !data?.success) {
-      if (isSelfLeave) {
-        // Fallback xóa trực tiếp dòng chat_members và cập nhật mls_epoch để đảm bảo rời nhóm luôn thành công 100%
-        const { error: deleteErr } = await db
-          .from('chat_members')
-          .delete()
-          .eq('conversation_id', conversationId)
-          .eq('user_id', user.id)
-
-        if (deleteErr) {
-          return NextResponse.json({ error: deleteErr.message }, { status: 500 })
-        }
-
-        const safeEpoch =
-          Number.isFinite(Number(newEpoch)) && Number(newEpoch) > 0 && Number(newEpoch) <= 2147483647
-            ? Math.floor(Number(newEpoch))
-            : Math.floor(Date.now() / 1000)
-
-        await db
-          .from('chat_conversations')
-          .update({ mls_epoch: safeEpoch })
-          .eq('id', conversationId)
-
-        return NextResponse.json({ success: true, left: true, fallback: true })
-      }
-
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
       return NextResponse.json({ error: data?.error || 'Không thể xóa thành viên' }, { status: 400 })
-    }
-
-    if (isSelfLeave) {
-      // Đảm bảo tuyệt đối bản ghi chat_members của người rời nhóm đã được xóa
-      const { data: leftover } = await db
-        .from('chat_members')
-        .select('id')
-        .eq('conversation_id', conversationId)
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (leftover?.id) {
-        await db.from('chat_members').delete().eq('id', leftover.id)
-      }
     }
 
     return NextResponse.json(data)

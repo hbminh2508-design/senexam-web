@@ -53,6 +53,7 @@ import { supabase } from '@/lib/supabaseClient'
 import ChatSafetyWidget from '@/components/chat/ChatSafetyWidget'
 import ChatDisappearingMessages from '@/components/chat/ChatDisappearingMessages'
 import ChatInfoDrawer from '@/components/chat/ChatInfoDrawer'
+import { ChatGroupInviteJoin } from '@/components/chat/ChatGroupInvites'
 import ChatDrmProtection, { ChatDeviceComplianceBadge } from '@/components/chat/ChatDrmProtection'
 import ChatVersionModal from '@/components/chat/ChatVersionModal'
 import ChatDeviceManagerModal from '@/components/chat/ChatDeviceManagerModal'
@@ -239,7 +240,6 @@ function MobileChatPageInner() {
   const [showSecurityModal, setShowSecurityModal] = useState(false)
   const [showFriendModal, setShowFriendModal] = useState(false)
   const [showMlsGroupModal, setShowMlsGroupModal] = useState(false)
-  const [isManagingGroup, setIsManagingGroup] = useState(false)
   const [showAttachmentModal, setShowAttachmentModal] = useState(false)
   const [showSenAiConfirmModal, setShowSenAiConfirmModal] = useState(false)
   const [pendingSenAiQuery, setPendingSenAiQuery] = useState<string>('')
@@ -710,7 +710,7 @@ function MobileChatPageInner() {
           }
         } else {
           // Chưa đăng nhập -> Tự động chuyển hướng sang Sen IDP
-          router.replace('/new-idp?returnUrl=/chat')
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
           return
         }
       } catch (err) {
@@ -720,7 +720,7 @@ function MobileChatPageInner() {
           resolvedAuthUserId = cachedUser.id
           setCurrentUser(cachedUser)
         } else {
-          router.replace('/new-idp?returnUrl=/chat')
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
           return
         }
       }
@@ -798,7 +798,7 @@ function MobileChatPageInner() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
-        router.replace('/new-idp?returnUrl=/m/chat')
+        router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
       }
     })
 
@@ -1446,6 +1446,7 @@ function MobileChatPageInner() {
 
   return (
     <div className="relative flex-1 flex flex-col w-full h-full overflow-hidden select-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+      <ChatGroupInviteJoin />
       {/* ⚠️ BANNER THÔNG BÁO MẤT MẠNG & HÀNG ĐỢI GỬI LẠI IDEMPOTENT */}
       {!isOnline && (
         <div className="w-full bg-amber-500/90 text-white px-3 py-1.5 flex items-center justify-between text-xs font-bold z-30 shadow-xs backdrop-blur-md">
@@ -1554,7 +1555,6 @@ function MobileChatPageInner() {
             <button
               type="button"
               onClick={() => {
-                setIsManagingGroup(false)
                 setShowMlsGroupModal(true)
               }}
               className="ml-auto min-h-[44px] px-3 rounded-xl border border-sky-500/30 text-sky-600 dark:text-sky-400 text-xs font-bold flex items-center gap-1 active:scale-95 transition"
@@ -2259,6 +2259,15 @@ function MobileChatPageInner() {
           isOpen={true}
           onClose={() => setView('conversation')}
           conversation={activeConversation}
+          renderGroupManagement={activeConversation.isGroup ? (section) => (
+            <ChatMlsGroupModal key={activeConversation.id + section} embedded section={section} isOpen
+              onClose={() => setView('list')} conversationId={activeConversation.id}
+              groupTitle={activeConversation.partnerName} groupAvatar={activeConversation.avatarUrl}
+              currentUserId={currentUser?.id || ''} currentUserEmail={currentUser?.email || ''}
+              onGroupUpdated={() => setConversations(ensureSenAiStudioInConversations(getLocalConversations()))}
+              onGroupLeft={() => { setView('list'); setSelectedConvId(null); setConversations(ensureSenAiStudioInConversations(getLocalConversations())) }}
+            />
+          ) : undefined}
           messages={messages}
           currentUserId={currentUser?.id || ''}
           currentNickname={activeConversation.partnerName}
@@ -2285,10 +2294,6 @@ function MobileChatPageInner() {
           }}
           disappearingTtl={disappearingTtl}
           onChangeDisappearingTtl={(ttl) => setDisappearingTtl(ttl)}
-          onOpenManageGroup={() => {
-            setIsManagingGroup(true)
-            setShowMlsGroupModal(true)
-          }}
           onLeaveGroup={() => {
             if (activeConversation?.id && confirm('Bạn có chắc chắn muốn rời khỏi nhóm này không?')) {
               handleLeaveGroup(activeConversation.id)
@@ -2443,18 +2448,13 @@ function MobileChatPageInner() {
           isOpen={showMlsGroupModal}
           onClose={() => {
             setShowMlsGroupModal(false)
-            setIsManagingGroup(false)
           }}
-          conversationId={isManagingGroup ? activeConversation?.id : undefined}
-          groupTitle={isManagingGroup ? activeConversation?.partnerName : ''}
-          groupAvatar={isManagingGroup ? activeConversation?.avatarUrl || '' : ''}
           currentUserId={currentUser?.id || ''}
           currentUserEmail={currentUser?.email || ''}
           userPlanTier={userPlanTier}
-          isCreatingNew={!isManagingGroup}
+          isCreatingNew
           onGroupCreated={(convId, title) => {
             setShowMlsGroupModal(false)
-            setIsManagingGroup(false)
             const newConv: SenChatConversation = {
               id: convId,
               partnerId: convId,
@@ -2469,18 +2469,6 @@ function MobileChatPageInner() {
             saveLocalConversation(newConv)
             setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
             handleSelectConversation(convId)
-          }}
-          onGroupUpdated={() => {
-            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-          }}
-          onGroupLeft={(leftConvId) => {
-            setShowMlsGroupModal(false)
-            setIsManagingGroup(false)
-            setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
-            if (selectedConvIdRef.current === leftConvId) {
-              setView('list')
-              setSelectedConvId(null)
-            }
           }}
         />
       )}
@@ -2587,7 +2575,7 @@ function MobileChatPageInner() {
           setConversations(ensureSenAiStudioInConversations(getLocalConversations()))
         }}
         onLoggedOut={() => {
-          router.replace('/new-idp?returnUrl=/m/chat')
+          router.replace('/new-idp?returnUrl=' + encodeURIComponent('/chat' + window.location.search))
         }}
       />
 

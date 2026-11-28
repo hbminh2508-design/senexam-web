@@ -50,6 +50,7 @@ export interface ChatInfoDrawerProps {
   onChangeDisappearingTtl?: (ttl: number) => void
   isCurrentBlocked?: boolean
   onToggleBlock?: () => void
+  renderGroupManagement?: (section: 'settings' | 'members') => React.ReactNode
   onOpenManageGroup?: () => void
   groupMembers?: Array<{
     memberId: string
@@ -81,6 +82,7 @@ export default function ChatInfoDrawer({
   onChangeDisappearingTtl,
   isCurrentBlocked = false,
   onToggleBlock,
+  renderGroupManagement,
   onOpenManageGroup,
   groupMembers = [],
   onRemoveMember,
@@ -366,6 +368,7 @@ export default function ChatInfoDrawer({
         {/* TAB 1: CÀI ĐẶT & BẢO MẬT */}
         {activeTab === 'info' && (
           <div className="space-y-4">
+            {isGroup && renderGroupManagement?.('settings')}
             {/* Widget Mã an toàn Safety Number (Signal / MLS) */}
             <ChatSafetyWidget
               partnerId={conversation.partnerId || conversation.id}
@@ -617,7 +620,7 @@ export default function ChatInfoDrawer({
         )}
 
         {/* TAB 4: QUẢN LÝ THÀNH VIÊN NHÓM MLS */}
-        {activeTab === 'members' && isGroup && (
+        {activeTab === 'members' && isGroup && (renderGroupManagement ? renderGroupManagement('members') : (
           <div className="space-y-3">
             {/* Hạn mức dung lượng nhóm 15GB */}
             <div className="p-3 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40">
@@ -628,7 +631,7 @@ export default function ChatInfoDrawer({
                 <span>Hạn mức 15GB</span>
               </div>
               <p className="mt-1 text-[11px] text-indigo-700/80 dark:text-indigo-400">
-                Tất cả hình ảnh, tài liệu chia sẻ trong nhóm được bảo lưu 30 ngày mặc định theo RFC 9420.
+                Tệp được giữ theo dung lượng của nhóm.
               </p>
             </div>
 
@@ -713,7 +716,7 @@ export default function ChatInfoDrawer({
               </div>
             )}
           </div>
-        )}
+        ))}
       </div>
     </aside>
   </>

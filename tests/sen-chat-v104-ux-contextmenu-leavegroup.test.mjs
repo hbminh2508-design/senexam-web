@@ -53,14 +53,10 @@ test('Sen Chat v1.0.4 UX: DELETE /api/chat/mls/members và ChatMlsGroupModal x�
     'utf8'
   )
   assert.ok(routeCode.includes('isSelfLeave'), 'Route DELETE phải phân biệt tự rời nhóm (isSelfLeave)')
-  assert.ok(
-    routeCode.includes("callerMember?.role === 'owner'") && routeCode.includes("update({ role: 'owner' })"),
-    'Route DELETE phải tự động chuyển quyền owner cho thành viên kỳ cựu trước khi owner rời nhóm'
-  )
-  assert.ok(
-    routeCode.includes(".from('chat_members')") && routeCode.includes('.delete()') && routeCode.includes('mls_epoch'),
-    'Route DELETE phải có fallback xóa trực tiếp chat_members và cập nhật mls_epoch để rời nhóm thành công 100%'
-  )
+  const lifecycle = fs.readFileSync('migrations/020_sen_chat_group_lifecycle.sql', 'utf8')
+  assert.ok(routeCode.includes('sen_chat_change_group') && routeCode.includes("operation: 'leave'"))
+  assert.ok(lifecycle.includes('FOR UPDATE') && lifecycle.includes("role = 'owner'"))
+  assert.ok(lifecycle.includes('DELETE FROM public.chat_members') && lifecycle.includes('IF remaining = 0'))
 
   const modalCode = fs.readFileSync(
     path.join(process.cwd(), 'components/chat/ChatMlsGroupModal.tsx'),

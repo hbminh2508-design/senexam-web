@@ -251,7 +251,7 @@ test('MLS Route Handlers: group and members routes pass user.id to RPC', () => {
 
   // Kiểm tra route group POST và PATCH chuyển tiếp user.id
   assert.ok(groupRoute.includes('p_creator_id: user.id'))
-  assert.ok(groupRoute.includes('p_caller_id: user.id'))
+  assert.ok(groupRoute.includes('actor: user.id'))
 
   // Kiểm tra route members POST, DELETE và PATCH chuyển tiếp user.id
   assert.ok(membersRoute.includes('p_caller_id: user.id'))

@@ -19,12 +19,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          for endpoint in 'chat_call_invitations?select=call_id' 'chat_inbox_devices?select=device_id' 'chat_whiteboard_items?select=id'; do
+          for endpoint in 'chat_call_invitations?select=call_id' 'chat_inbox_devices?select=device_id' 'chat_whiteboard_items?select=id' 'chat_group_invites?select=conversation_id'; do
             if ! curl --fail --silent --show-error --max-time 15 --output /dev/null \
               --header "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
               --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
               "$SUPABASE_URL/rest/v1/$endpoint&limit=0"; then
-              echo "::error::Apply Sen Chat migrations 017 and 018 before deploying this release."
+              echo "::error::Apply Sen Chat migrations 017 through 021 before deploying this release."
               exit 1
             fi
           done

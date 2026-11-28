@@ -267,7 +267,7 @@ test('Sen Chat v1.0.2: initDeviceRelay, broadcastRequestMessageSync và broadcas
   )
 })
 
-test('Sen Chat v1.0.2: ChatFilePreviewModal và ChatAttachmentBubble (showExtendModal) dùng createPortal tránh bị kẹp trong message backdrop-filter', () => {
+test('Sen Chat v1.0.2: Xem trước mở ngoài hội thoại và tệp có nút lưu', () => {
   const previewModalCode = fs.readFileSync(path.join(process.cwd(), 'components/chat/ChatFilePreviewModal.tsx'), 'utf8')
   const bubbleCode = fs.readFileSync(path.join(process.cwd(), 'components/chat/ChatAttachmentBubble.tsx'), 'utf8')
 
@@ -276,8 +276,8 @@ test('Sen Chat v1.0.2: ChatFilePreviewModal và ChatAttachmentBubble (showExtend
     'ChatFilePreviewModal phải sử dụng createPortal vào document.body'
   )
   assert.ok(
-    bubbleCode.includes('createPortal(') && bubbleCode.includes('document.body'),
-    'ChatAttachmentBubble phải sử dụng createPortal cho modal gia hạn lưu trữ'
+    bubbleCode.includes('Lưu tệp') && !bubbleCode.includes('showExtendModal'),
+    'ChatAttachmentBubble dùng nút lưu tệp'
   )
 })
 

@@ -142,6 +142,7 @@ export default function ChatCallModal({
   const [showParticipantsDrawer, setShowParticipantsDrawer] = useState(false)
   const [showDeviceDrawer, setShowDeviceDrawer] = useState(false)
   const [showWhiteboard, setShowWhiteboard] = useState(false)
+  const [expandedShare, setExpandedShare] = useState<string | null>(null)
   const [whiteboardNotice, setWhiteboardNotice] = useState(false)
   const whiteboardOpen = useRef(false)
   const [currentPage, setCurrentPage] = useState(0)
@@ -1209,6 +1210,19 @@ export default function ChatCallModal({
 
       {/* Main Stage */}
       <main className="relative flex-1 flex items-center justify-center overflow-hidden p-3 sm:p-5">
+        {expandedShare && (
+          <section aria-label="Chia sẻ màn hình toàn màn hình" className="fixed inset-0 z-[10010] bg-black">
+            <button type="button" aria-label="Thoát toàn màn hình" onClick={() => setExpandedShare(null)}
+              className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 rounded-full bg-slate-800 p-3"><Minimize2 size={18} /></button>
+            {expandedShare !== currentUserId && expandedShare !== 'direct' && groupVideos[expandedShare] ? (
+              <GroupVideo track={groupVideos[expandedShare]} />
+            ) : (
+              <video autoPlay playsInline muted className="h-full w-full object-contain" ref={(element) => {
+                if (element) element.srcObject = expandedShare === currentUserId ? screenStreamRef.current : remoteStreamRef.current
+              }} />
+            )}
+          </section>
+        )}
         {showWhiteboard && isGroup && groupCallId.current && (
           <ChatWhiteboard callId={groupCallId.current} userId={currentUserId} onClose={() => toggleWhiteboard(false)} />
         )}
@@ -1261,7 +1275,10 @@ export default function ChatCallModal({
                     <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between gap-2 rounded-xl bg-slate-950/75 px-2.5 py-1.5 backdrop-blur-sm">
                       <span className="text-xs font-semibold text-white truncate">{p.name}</span>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {p.screenSharing && <MonitorUp className="h-3.5 w-3.5 text-sky-400" />}
+                        {p.screenSharing && (
+                          <button type="button" aria-label={`Xem chia sẻ của ${p.name} toàn màn hình`} onClick={() => setExpandedShare(p.userId)}
+                            className="rounded-md p-1 text-sky-300 hover:bg-white/15"><Maximize2 size={15} /></button>
+                        )}
                         {p.micEnabled ? (
                           <Mic className="h-3.5 w-3.5 text-sky-400" />
                         ) : (
@@ -1309,6 +1326,10 @@ export default function ChatCallModal({
         ) : activeCallMode === 'video' || hasRemoteVideo ? (
           /* GIAO DIỆN VIDEO 1-1 TỐI ƯU: KHÔNG LỆCH AVATAR, KHÔNG CHE TÊN */
           <div className="relative w-full h-full flex items-center justify-center rounded-3xl overflow-hidden bg-slate-900/70 border border-white/10">
+            {hasRemoteVideo && <button type="button" aria-label="Xem video đối phương toàn màn hình" onClick={() => setExpandedShare('direct')}
+              className="absolute right-3 top-3 z-20 rounded-lg bg-black/60 p-2"><Maximize2 size={16} /></button>}
+            {isScreenSharing && <button type="button" aria-label="Xem màn hình đang chia sẻ toàn màn hình" onClick={() => setExpandedShare(currentUserId)}
+              className="absolute left-3 top-3 z-20 rounded-lg bg-black/60 p-2"><Maximize2 size={16} /></button>}
             <video
               ref={attachRemoteVideo}
               autoPlay

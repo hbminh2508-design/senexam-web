@@ -293,9 +293,9 @@ test('v1.1.0 [25]: Kiểm thử tải Dynamic Grid & Selective Video Subscriptio
 })
 
 // Phiên bản 1.1.0
-test('v1.1.1: Mobile release retains the 1.1.0 changelog', () => {
-  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.1.1')
-  assert.equal(SEN_CHAT_CHANGELOG[0].version, '1.1.1')
+test('v1.2.0: Group update retains the 1.1.0 changelog', () => {
+  assert.equal(SEN_CHAT_CURRENT_VERSION, '1.2.0')
+  assert.equal(SEN_CHAT_CHANGELOG[0].version, '1.2.0')
   assert.equal(SEN_CHAT_CHANGELOG.find((entry) => entry.version === '1.1.0')?.title, 'Communication & Stability Update')
 })
 

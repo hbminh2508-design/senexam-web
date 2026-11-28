@@ -4,7 +4,7 @@
  * Quy ước: Phiên bản chỉ sửa lỗi ghi tiêu đề "Bắt lại những con bò đang bay trên các vì sao".
  */
 
-export const SEN_CHAT_CURRENT_VERSION = '1.1.1'
+export const SEN_CHAT_CURRENT_VERSION = '1.2.0'
 
 export interface SenChatChangelogEntry {
   version: string
@@ -17,10 +17,23 @@ export interface SenChatChangelogEntry {
 
 export const SEN_CHAT_CHANGELOG: SenChatChangelogEntry[] = [
   {
+    version: '1.2.0',
+    releaseDate: '28/11/2026',
+    title: 'Bảng trắng, lưu trữ và quản lý nhóm',
+    isLatest: true,
+    changes: [
+      'Vẽ liên tục, di chuyển bảng trắng bằng hai ngón, lưu PDF và mở bảng hoặc màn hình chia sẻ toàn màn hình.',
+      'Lưu tin nhắn và tệp đính kèm không có thời hạn mặc định, với nút lưu tệp ngay trong hội thoại.',
+      'Đổi tên hoặc ảnh nhóm trong phần Cài đặt; quản lý thành viên trong ngăn thông tin.',
+      'Chuyển quyền, xóa nhóm và xử lý rời nhóm trên máy chủ.',
+      'Chia sẻ liên kết tham gia nhóm và quản lý yêu cầu trong phòng chờ tùy chọn.',
+    ],
+  },
+  {
     version: '1.1.1',
     releaseDate: '28/11/2026',
     title: 'Trải nghiệm Sen Chat trên di động',
-    isLatest: true,
+    isLatest: false,
     changes: [
       'Tìm bạn bè chưa có hội thoại và mở tin nhắn trực tiếp từ danh sách.',
       'Thanh điều hướng di động có vùng chọn trượt theo thao tác kéo.',
