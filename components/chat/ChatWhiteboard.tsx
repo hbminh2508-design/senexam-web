@@ -23,7 +23,9 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
   const committedCanvas = useRef<HTMLCanvasElement>(null)
   const bounds = useRef<DOMRect | null>(null)
   const revision = useRef(0)
+  const pendingPaint = useRef<BoardEntry[]>([])
   const committedFrame = useRef<{ element: HTMLCanvasElement; key: string } | null>(null)
+  const activeFrame = useRef<{ element: HTMLCanvasElement; key: string; lengths: Map<BoardPoint[], number> } | null>(null)
   const entries = useRef(new Map<string, BoardEntry>())
   const previews = useRef(new Map<string, { points: BoardPoint[]; color: string; author: string }>())
   const strokePaths = useRef(new WeakMap<BoardPoint[], Path2D>())
@@ -51,6 +53,13 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
   const path = `whiteboard?callId=${callId}`
   const shared = mode === 'shared'
 
+  const keepEntry = useCallback((entry: BoardEntry) => {
+    const previous = entries.current.get(entry.id)
+    entries.current.set(entry.id, entry)
+    if (!previous && entry.item.kind !== 'undo') pendingPaint.current.push(entry)
+    else revision.current += 1
+  }, [])
+
   const publish = useCallback((packet: BoardPacket, destinationIdentities?: string[]) => {
     if (!shared || !room) return
     void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(packet)), {
@@ -59,16 +68,17 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
   }, [shared, room])
 
   const paint = useCallback((element: HTMLCanvasElement, width: number, height: number, ratio: number,
-    { x, y, scale }: typeof view.current, layer: 'committed' | 'active') => {
+    { x, y, scale }: typeof view.current, layer: 'committed' | 'active',
+    additions?: BoardEntry[], priorLengths?: Map<BoardPoint[], number>) => {
     const ctx = element?.getContext('2d')
     if (!ctx) return
     if (element.width !== Math.round(width * ratio)) element.width = Math.round(width * ratio)
     if (element.height !== Math.round(height * ratio)) element.height = Math.round(height * ratio)
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-    if (layer === 'committed') {
+    if (layer === 'committed' && !additions) {
       ctx.fillStyle = '#f8fafc'
       ctx.fillRect(0, 0, width, height)
-    } else {
+    } else if (layer === 'active' && !priorLengths) {
       ctx.clearRect(0, 0, width, height)
     }
     ctx.translate(x, y)
@@ -77,12 +87,13 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     ctx.lineJoin = 'round'
     ctx.lineWidth = 2.5
     const drawStroke = (points: BoardPoint[], ink: string, complete = false) => {
-      if (!points.length) return
+      const drawn = priorLengths?.get(points) ?? 0
+      if (points.length <= drawn) return
       ctx.strokeStyle = ink
       let path = complete ? strokePaths.current.get(points) : undefined
       if (!path) {
         path = new Path2D()
-        traceBoardStroke(path, points)
+        traceBoardStroke(path, points, drawn)
         if (complete) strokePaths.current.set(points, path)
       }
       ctx.stroke(path)
@@ -93,8 +104,8 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
       if (stroke) drawStroke(stroke.points, stroke.color)
       return
     }
-    const hidden = new Set(Array.from(entries.current.values()).flatMap(({ item }) => item.kind === 'undo' ? [item.target] : []))
-    for (const { id, item } of entries.current.values()) {
+    const hidden = new Set(additions ? [] : Array.from(entries.current.values()).flatMap(({ item }) => item.kind === 'undo' ? [item.target] : []))
+    for (const { id, item } of additions ?? entries.current.values()) {
       if (hidden.has(id)) continue
       if (item.kind === 'stroke') drawStroke(item.points, item.color, true)
       if (item.kind === 'note') {
@@ -117,12 +128,27 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     const { width, height } = size
     const ratio = Math.min(window.devicePixelRatio || 1, 2)
     const { x, y, scale } = view.current
-    const key = [width, height, ratio, x, y, scale, revision.current].join(':')
+    const viewportKey = [width, height, ratio, x, y, scale].join(':')
+    const key = viewportKey + ':' + revision.current
     if (committedFrame.current?.element !== committed || committedFrame.current.key !== key) {
       paint(committed, width, height, ratio, view.current, 'committed')
       committedFrame.current = { element: committed, key }
+    } else if (pendingPaint.current.length) {
+      paint(committed, width, height, ratio, view.current, 'committed', pendingPaint.current)
     }
-    paint(active, width, height, ratio, view.current, 'active')
+    pendingPaint.current = []
+    const lengths = new Map<BoardPoint[], number>()
+    for (const { points } of previews.current.values()) lengths.set(points, points.length)
+    const stroke = drag.current?.stroke
+    if (stroke) lengths.set(stroke.points, stroke.points.length)
+    const previous = activeFrame.current
+    const intact = previous?.element === active && previous.key === viewportKey &&
+      Array.from(previous.lengths.keys()).every((points) => lengths.has(points))
+    if (!intact || lengths.size !== previous.lengths.size ||
+      Array.from(lengths).some(([points, length]) => previous.lengths.get(points) !== length)) {
+      paint(active, width, height, ratio, view.current, 'active', undefined, intact ? previous.lengths : undefined)
+      activeFrame.current = { element: active, key: viewportKey, lengths }
+    }
   }, [paint])
 
   const flushStroke = useCallback((stroke: Stroke) => {
@@ -180,13 +206,11 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
         if (packet.type === 'cancel' || packet.type === 'finish') {
           previews.current.delete(packet.id)
           if (packet.type === 'finish' && preview?.points.length) {
-            entries.current.set(packet.id, { id: packet.id, author_id: author, item: { kind: 'stroke', points: preview.points, color: preview.color }, created_at: '' })
-            revision.current += 1
+            keepEntry({ id: packet.id, author_id: author, item: { kind: 'stroke', points: preview.points, color: preview.color }, created_at: '' })
           }
         } else if (packet.type === 'item') {
           if (packet.item.kind === 'undo' && entries.current.get(packet.item.target)?.author_id !== author) return
-          entries.current.set(packet.id, { id: packet.id, author_id: author, item: packet.item, created_at: '' })
-          revision.current += 1
+          keepEntry({ id: packet.id, author_id: author, item: packet.item, created_at: '' })
         } else if (packet.type === 'points' && packet.offset === (preview?.points.length ?? 0)) {
           if (preview) preview.points.push(...packet.points)
           else previews.current.set(packet.id, { points: packet.points, color: packet.color, author })
@@ -206,7 +230,7 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     return () => {
       room.off(RoomEvent.DataReceived, receive).off(RoomEvent.ParticipantConnected, sendView).off(RoomEvent.ParticipantDisconnected, clearPreviews)
     }
-  }, [placeView, publish, room, scheduleDraw, shared, visible])
+  }, [keepEntry, placeView, publish, room, scheduleDraw, shared, visible])
 
   useEffect(() => {
     if (!visible) return
@@ -241,10 +265,14 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
         const offset = last ? `&at=${encodeURIComponent(last.created_at)}&id=${last.id}` : ''
         const { entries: latest } = await chatRequest<{ entries: BoardEntry[] }>(path + offset)
         if (stopped) return
-        latest.forEach((entry) => { entries.current.set(entry.id, entry); previews.current.delete(entry.id) })
+        latest.forEach((entry) => {
+          const local = entries.current.get(entry.id)
+          if (local && JSON.stringify(local.item) === JSON.stringify(entry.item)) local.created_at = entry.created_at
+          else keepEntry(entry)
+          previews.current.delete(entry.id)
+        })
         if (latest.length) {
           cursor.current = latest[latest.length - 1]
-          revision.current += 1
           scheduleDraw()
         }
         if (latest.length === 200) delay = 0
@@ -255,13 +283,12 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
     }
     void sync()
     return () => { stopped = true; clearTimeout(timer) }
-  }, [path, scheduleDraw, shared, visible])
+  }, [keepEntry, path, scheduleDraw, shared, visible])
 
   const save = async (item: BoardItem, id = crypto.randomUUID()) => {
     const fresh = !entries.current.has(id)
     if (fresh) {
-      entries.current.set(id, { id, author_id: userId, item, created_at: '' })
-      revision.current += 1
+      keepEntry({ id, author_id: userId, item, created_at: '' })
     }
     scheduleDraw()
     if (!shared) return
@@ -466,6 +493,7 @@ export default function ChatWhiteboard({ callId, userId, room, mode, visible, on
             const samples = event.nativeEvent.getCoalescedEvents?.()
             if (samples?.length) {
               for (const sample of samples) appendPoint(gesture, point(sample, size))
+              if (event.timeStamp > samples[samples.length - 1].timeStamp) appendPoint(gesture, local)
             } else {
               appendPoint(gesture, local)
             }

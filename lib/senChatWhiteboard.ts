@@ -6,19 +6,23 @@ export type BoardPoint = [number, number]
 export function traceBoardStroke(
   path: Pick<Path2D, 'moveTo' | 'lineTo' | 'quadraticCurveTo'>,
   points: BoardPoint[],
+  drawn = 0,
 ) {
-  if (!points.length) return
-  path.moveTo(...points[0])
+  if (points.length <= drawn) return
+  path.moveTo(...points[Math.max(0, drawn - 1)])
   if (points.length === 1) {
     path.lineTo(points[0][0] + 0.01, points[0][1])
     return
   }
-  for (let index = 1; index < points.length - 1; index += 1) {
+  for (let index = Math.max(1, drawn); index < points.length; index += 1) {
     const [x, y] = points[index]
-    const [nextX, nextY] = points[index + 1]
-    path.quadraticCurveTo(x, y, (x + nextX) / 2, (y + nextY) / 2)
+    const [lastX, lastY] = points[index - 1]
+    const [beforeX, beforeY] = points[Math.max(0, index - 2)]
+    // Keep the curve inside the bounds of its samples and end at the current tip.
+    const control = (last: number, before: number, next: number) =>
+      Math.min(Math.max(last, next), Math.max(Math.min(last, next), (last + next) / 2 + (last - before) / 4))
+    path.quadraticCurveTo(control(lastX, beforeX, x), control(lastY, beforeY, y), x, y)
   }
-  path.lineTo(...points[points.length - 1])
 }
 
 export function boardStrokeEndsAtRelease(pointerType: string) {

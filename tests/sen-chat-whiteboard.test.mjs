@@ -19,8 +19,12 @@ test('whiteboard rounds handwritten turns and ends at the last contact sample', 
   }
   traceBoardStroke(path, [[2, 3], [6, 3], [8, 7], [10, 8]])
   assert.deepEqual(commands, [
-    ['move', 2, 3], ['curve', 6, 3, 7, 5], ['curve', 8, 7, 9, 7.5], ['line', 10, 8],
+    ['move', 2, 3], ['curve', 4, 3, 6, 3], ['curve', 8, 5, 8, 7], ['curve', 9.5, 8, 10, 8],
   ])
+  const tail = commands.at(-1)
+  commands.length = 0
+  traceBoardStroke(path, [[2, 3], [6, 3], [8, 7], [10, 8]], 3)
+  assert.deepEqual(commands, [['move', 8, 7], tail])
   assert.equal(boardStrokeEndsAtRelease('pen'), false)
   assert.equal(boardStrokeEndsAtRelease('touch'), true)
   assert.equal(boardStrokeEndsAtRelease('mouse'), true)
